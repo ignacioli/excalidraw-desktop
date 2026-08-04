@@ -1,11 +1,12 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.0.0 → 1.1.0
-Modified principles: none renamed
-Added sections:
-  - Core Principle VI（版本控制与协作规范 / Git & Pull Request Discipline）
-Governance: 追加对原则 VI 的合规交叉引用
+Version change: 1.1.0 → 1.2.0
+Modified principles:
+  - Core Principle IV（性能与资源预算 / Performance Requirements）：增加固定参考硬件、
+    CPU/RSS/长时稳定性/空闲写盘预算与固定机硬门禁
+Added sections: none
+Governance: no semantic change
 Removed sections: none
 Templates requiring updates: none reviewed as blocking —
   .specify/templates/plan-template.md / spec-template.md / tasks-template.md 在运行时读取本宪法，无需修改
@@ -61,14 +62,22 @@ E2E 与故障注入才能证明"零损坏、零静默覆盖"的产品承诺。
 
 ### IV. 性能与资源预算（Performance Requirements）
 
-PRD（specs/0001-spec-claude.md）的 Success Criteria 为性能预算红线，性能回归等同于
+权威 PRD（`specs/001-excalidraw-desktop/spec.md`）的 Success Criteria 为性能预算红线，性能回归等同于
 功能缺陷：
 
-- 冷启动至画布可编辑 ≤ 2 秒；空载常驻内存 ≤ 150MB（参考硬件基线，随版本回归跟踪）。
+- 固定性能参考机为 Apple M1 / 8GB；其首次基线 MUST 记录并锁定准确的 macOS 与 WebView
+  版本。冷启动至画布可编辑 ≤ 2 秒；空载应用进程树 RSS ≤ 150MB。
+- 空闲 CPU P95 ≤ 单逻辑核的 1%；10,000 图元场景稳定后应用进程树 RSS ≤ 350MB；
+  30 分钟脚本编辑后，RSS 相对热身基线增长 MUST 同时 ≤ 50MB 且 ≤ 15%；应用静置
+  60 秒时，其管理的数据目录与已挂载工作区 MUST 无持续写入。
 - 10,000+ 图元场景下平移/缩放保持可用流畅度，编辑无 >100ms 可感知冻结。
 - 高频编辑路径 MUST NOT 逐事件执行完整场景序列化、IPC 传输或磁盘写入；持久化 MUST
   经过防抖/合并调度（相对逐事件写盘削峰 ≥95%）。
 - 涉及性能敏感路径的变更 MUST 附带测量数据（前后对比），不得以主观判断替代。
+- 绝对性能预算 MUST 在标签为 `self-hosted`、`macOS`、`ARM64`、`excalidraw-perf` 的固定
+  参考机上作为合并硬门禁执行；Intel Mac 与 Linux 在本版本仅记录非阻断趋势。参考机硬件、
+  OS 或 WebView 变化 MUST 使原基线失效，并通过测量证据与 ADR 显式重建，MUST NOT
+  静默放宽阈值。
 
 **Rationale**: 选择轻量桌面架构的全部意义在于性能与资源优势；没有预算约束的性能目标
 会在迭代中被逐步侵蚀。
@@ -159,4 +168,4 @@ PRD（specs/0001-spec-claude.md）的 Success Criteria 为性能预算红线，�
 - 提交与 PR 流程合规性以原则 VI 为准；例外 MUST 书面记录并限期回收。
 - 复杂度与偏离（新增依赖、抽象层、权限扩张）MUST 有书面正当性说明，否则视为违规。
 
-**Version**: 1.1.0 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-04
+**Version**: 1.2.0 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-04

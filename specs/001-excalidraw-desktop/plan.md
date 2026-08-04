@@ -19,15 +19,15 @@
 
 **Storage**: 双层——热层 SQLite（WAL 模式：drafts/workspaces/file_index/file_meta 表）+ 冷层标准 `.excalidraw` JSON 文件（`.tmp` + fsync + POSIX rename 原子替换）；恢复快照为应用数据目录下的轮换 JSON 文件
 
-**Testing**: 前端 Vitest + React Testing Library；后端 `cargo test` + clippy；端到端 Playwright 桌面套件（`APP_E2E=1` 测试构建）+ 故障注入（保存中强杀、外部写冲突、损坏文件恢复）
+**Testing**: 前端 Vitest + React Testing Library；后端 `cargo test` + clippy；浏览器可见 UI 使用 Playwright；Tauri 进程级桌面套件使用 `APP_E2E=1` 测试构建与故障注入；平台打包/IME/文件关联使用 macOS/Linux 真机矩阵。三类证据 MUST 分开报告，浏览器覆盖不得替代原生壳或故障注入验证。
 
 **Target Platform**: macOS 12+（Apple Silicon + Intel，Universal Binary）；Linux（Ubuntu/Debian、Fedora；X11 + Wayland；WebKitGTK）
 
 **Project Type**: desktop-app（Tauri：`src/` 前端 + `src-tauri/` Rust 后端）
 
-**Performance Goals**: 对齐 spec Success Criteria——冷启动至可编辑 ≤2s（SC-002）；10,000+ 图元平移/缩放 ≥30fps 目标 60fps、编辑无 >100ms 冻结（SC-005）；高频绘制期磁盘写入次数 ≤ 编辑事件数 1%（SC-006）；万级文件侧边栏滚动 ≥50fps（SC-007）
+**Performance Goals**: 对齐 spec Success Criteria——固定 Apple M1 / 8GB 参考机冷启动 P95 ≤2s（SC-002）；10,000+ 图元平移/缩放 ≥30fps 目标 60fps、编辑无 >100ms 冻结（SC-005）；高频绘制期磁盘写入次数 ≤编辑事件数 1%（SC-006）；万级文件侧边栏滚动 ≥50fps（SC-007）；空闲 CPU、10k 场景 RSS、30 分钟内存增长与静置写盘满足 SC-013。
 
-**Constraints**: 空载内存 ≤150MB（SC-002）；完全离线运行（SC-001）；保存中断文件损坏率 0（SC-003）；崩溃恢复窗口 ≤5s（SC-004）；外部变更 3s 内感知、零静默覆盖（SC-008）
+**Constraints**: 固定参考机应用进程树空载 RSS P95 ≤150MB、空闲 CPU P95 ≤单逻辑核 1%、10k 场景 RSS ≤350MB、30 分钟 RSS 增长同时 ≤50MB 且 ≤15%、静置 60s 零持续写入（SC-002/013）；完全离线运行（SC-001）；保存中断文件损坏率 0（SC-003）；崩溃恢复窗口 ≤5s（SC-004）；外部变更 3s 内感知、零静默覆盖（SC-008）
 
 **Scale/Scope**: 单用户；单实例多标签；工作区可含 10,000+ 文件；单文档 10,000+ 图元；7 个用户故事、33 条功能需求
 
@@ -35,14 +35,14 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-对照宪法 v1.0.0（`.specify/memory/constitution.md`）：
+对照宪法 v1.2.0（`.specify/memory/constitution.md`）：
 
 | 宪法条款 | 本计划符合性 | 说明 |
 |---------|------------|------|
 | I. 代码质量（SOLID/DRY、单一权威层、TS strict、Rust 禁 unwrap） | PASS（设计层面） | 领域不变量集中于 Rust 后端（原子写、路径校验、冲突判定）；前端仅持编辑态；IPC 契约强类型（contracts/）；`tsconfig.json` 已 strict；lint/clippy 门禁列入 Phase 1 Setup |
 | II. 测试标准（桌面 E2E 优先 + 故障注入） | PASS（设计层面） | 测试分层与三类必测故障场景已进入本计划与 quickstart；E2E 骨架为 Phase 1 Setup / Phase 2 Foundational 交付物，先于首个功能 PR |
 | III. UX 一致性（跨平台一致、可访问性、状态完备） | PASS | spec FR/Edge Cases 已覆盖冲突/离线/错误状态；平台惯例差异（快捷键修饰键等）在模块划分 app/ 层集中处理；a11y 最低线随各用户故事任务交付 |
-| IV. 性能预算（SC 红线、削峰、测量数据） | PASS | Technical Context 引用 SC 数值为预算；性能夹具（帧率/写盘计数）列入 Phase 10 Polish；高频路径设计禁止逐事件 IPC（数据流图 1） |
+| IV. 性能预算（SC 红线、固定参考机、削峰、测量数据） | PASS | Technical Context 引用 SC 数值为预算；T089/T091 在 Foundational 建立固定机测量基础设施与硬门禁，T090/T108 在 US1 Checkpoint 前执行首次 SC 硬验收与 soak；高频路径设计禁止逐事件 IPC（数据流图 1） |
 | V. 文档规范 + 架构图标准（Mermaid 分层图/数据流图） | PASS | 本文件含 Mermaid 分层图 1 幅、数据流图 2 幅；ADR 决策记录于 research.md；`docs/` 目录随实现阶段建立 |
 | 文档代码同步门禁 | PASS | 本次为纯文档交付；实现阶段起 PR 检查清单执行同步项 |
 
@@ -106,7 +106,14 @@
 | CJK 字体 | 构建期 fonttools 合并 Virgil/Excalifont + 小赖字体 → `Virgil-CJK.woff2` | 运行时字体回退（破坏手绘风格，FR-004 不满足） |
 | 缩略图 | 前端 Web Worker + OffscreenCanvas 懒生成，WebP 存磁盘缓存 + SQLite 元数据，内容寻址键 | 后端 Rust 渲染（需复刻 rough.js 渲染，成本过高） |
 | 单实例/文件关联 | tauri-plugin-single-instance + 平台声明（CFBundleDocumentTypes / MIME + .desktop） | 无（FR-028 直接要求） |
-| E2E | Playwright + `APP_E2E=1` 专用构建 + 进程级故障注入 Harness | WebDriver（Tauri 支持弱） |
+| 测试分层 | Playwright 浏览器 UI + `APP_E2E=1` Tauri 进程级 Harness + macOS/Linux 真机矩阵 | 单一浏览器套件（无法证明原生壳与文件系统可靠性） |
+| 性能门禁 | Apple M1 / 8GB 固定 runner 硬门禁；聚合 Tauri/WebView/GPU 进程树；Intel/Linux 非阻断趋势 | GitHub 托管机绝对阈值（硬件噪声不可控） |
+
+### D6. 性能证据与故障注入边界
+
+性能报告必须记录 schema 版本、commit、硬件型号、内存、准确的 OS/WebView 版本、样本、统计量、预算与 verdict，且不得包含机器唯一标识或秘密。绝对预算仅在标签为 `self-hosted`、`macOS`、`ARM64`、`excalidraw-perf` 的固定 Apple M1 / 8GB runner 上阻断合并；runner 硬件、OS 或 WebView 改变时，原基线失效，须以测量证据和 ADR 显式重建。
+
+`APP_E2E=1` Harness 仅允许测试构建编译和注册，生产构建必须不存在该接口。原子写故障枚举固定为 `temp_created`、`mid_write`、`temp_synced`、`json_validated`、`before_rename`、`after_rename`、`before_parent_sync`、`parent_synced`。每个 PR 确定性覆盖全部八点，固定机夜间任务额外运行 100 个记录 seed 的随机故障用例。
 
 ## 架构设计
 
@@ -242,7 +249,7 @@ src-tauri/                    # Rust 后端
 ├── capabilities/             # 最小权限声明（default.json 收紧）
 └── migrations/               # SQLite schema 迁移
 
-e2e/                          # Playwright 桌面套件 + 故障注入 Harness
+e2e/                          # 浏览器 UI、Tauri 桌面可靠性与 perf 固定机夹具（分目录）
 public/fonts/                 # 离线字体（含构建期合并的 Virgil-CJK.woff2）
 scripts/                      # 字体合并（fonttools）、构建辅助
 docs/                         # 架构文档与 ADR（实现阶段建立）
@@ -296,4 +303,5 @@ docs/                         # 架构文档与 ADR（实现阶段建立）
 - 架构图标准：本文件含 Mermaid 分层图与两幅数据流图，覆盖宪法要求的最低集合。
 - 单一权威层：数据模型与校验规则唯一定义于 data-model.md 并由 Rust 侧实现，contracts 仅描述边界形状，无业务规则重复。
 - E2E 与故障注入：quickstart.md 将三类必测故障场景映射为可执行验证入口。
+- 性能与资源：T089/T091 在 Foundational 建立固定机测量基础设施与门禁；因画布尚未实现，Phase 2 只记录 scaffold 诊断结果，不作 SC verdict。T090/T108 在 US1 Checkpoint 前执行首次完整硬验收与长时基线，后续性能敏感 PR 必须附带同机前后对比。
 - 无新增未证成复杂度；Complexity Tracking 保持为空。

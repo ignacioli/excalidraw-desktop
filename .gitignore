@@ -1,0 +1,57 @@
+# macOS
+.DS_Store
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+
+# JavaScript / TypeScript
+node_modules/
+dist/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Rust / Tauri
+target/
+src-tauri/target/
+
+# Tests and browser automation
+playwright-report/
+test-results/
+blob-report/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*~
+
+# IDE-local settings
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# ignore .specify directory and all its contents
+.specify/**
+
+# force track feature.json in .specify
+!.specify/feature.json
+
+# force track constitution.md in memory folder
+!.specify/memory
+!.specify/memory/constitution.md
+
+# cursor
+.cursor/
+
+# Codex
+.codex/
+
+# agents
+.agents/
+
+# chats
+.chats/

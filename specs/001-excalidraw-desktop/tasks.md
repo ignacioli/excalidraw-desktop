@@ -18,6 +18,23 @@
 
 Tauri 双端布局（plan.md Project Structure）：前端 `src/`，后端 `src-tauri/src/`，E2E `e2e/`，构建脚本 `scripts/`，SQLite 迁移 `src-tauri/migrations/`。
 
+## Agent Routing
+
+The following names describe logical capability roles for planning and review. They do not require shared `.codex/agents/` files; contributors may map the roles to their preferred local agents or engineering workflow.
+
+| 工作轨道 | 主责 agent | 验收/协作边界 |
+|---------|------------|---------------|
+| Tauri IPC、Capabilities/CSP、生命周期 | `tauri-dev` | Rust 内部交给 `rust-expert`；平台差异交给 `desktop-platform-dev` |
+| Rust 持久化、SQLite、索引、监听、并发 | `rust-expert` | 进程级故障证据由 `desktop-reliability-tester` 提供 |
+| React、Excalidraw、虚拟列表、a11y | `ui-dev` | 浏览器 UI E2E 由 `e2e-tester`；性能 verdict 由 `performance-engineer` |
+| 普通且契约已定的跨层故事 | `fullstack-developer` | 不承接核心 IPC、可靠性、平台或性能门禁 |
+| CPU/RSS/FPS/IPC/磁盘与 soak | `performance-engineer` | 只负责测量、profiling、基线和 verdict；修复回到所属实现 agent |
+| SIGKILL、原子写、恢复、冲突、磁盘故障 | `desktop-reliability-tester` | Harness 仅测试构建；产品修复回到所属实现 agent |
+| macOS/Linux 原生集成与 US6 | `desktop-platform-dev` | `tauri-dev` 审查共享 Tauri 契约；Windows 不在范围内 |
+| 跨 Rust/TS/IPC Checkpoint 审查 | `fs-reviewer` | `code-reviewer` 仅用于小型单层 diff |
+
+仅在存在至少两个相互独立且文件不重叠的轨道时并行委派；同一文件的任务严格串行，主 agent 负责契约整合与最终验证。
+
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)
@@ -31,7 +48,7 @@ Tauri 双端布局（plan.md Project Structure）：前端 `src/`，后端 `src-
 - [ ] T005 [P] 实现字体合并管线 scripts/build-fonts.py（fonttools：Virgil/Excalifont + 小赖字体 → public/fonts/Virgil-CJK.woff2，R10）并接入 `fonts:build` script
 - [ ] T006 将 src-tauri/tauri.conf.json 的 `"csp": null` 替换为严格 CSP（`default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: blob: data:`，R13，宪法存量缺口 1）
 - [ ] T007 [P] 收紧 src-tauri/capabilities/default.json 为最小权限集（core:default + 受限 dialog，随功能增量追加）
-- [ ] T008 [P] 更新 AGENTS.md 的 Commands and Validation 章节为实际命令（pnpm lint/typecheck/test/e2e、cargo fmt/clippy/test，宪法存量缺口 4）
+- [ ] T008 更新 AGENTS.md 的 Commands and Validation 章节为 T003 落地后的实际命令（pnpm lint/typecheck/test/e2e、cargo fmt/clippy/test，宪法存量缺口 4；依赖 T003）
 
 ---
 
@@ -52,9 +69,11 @@ Tauri 双端布局（plan.md Project Structure）：前端 `src/`，后端 `src-
 - [ ] T017 建立 Rust DTO src-tauri/src/commands/dto.rs（serde camelCase，与 contracts.ts 字段一致）
 - [ ] T018 实现 `app_handshake` 命令 src-tauri/src/commands/session.rs 与会话锁 src-tauri/src/documents/session_lock.rs（session.lock 创建/清理/异常判定，data-model SessionLock）
 - [ ] T019 [P] 配置 Vitest + React Testing Library（vitest.config.ts、src/test-setup.ts）与首个冒烟测试
-- [ ] T020 [P] 配置 Playwright 桌面 E2E 骨架 e2e/playwright.config.ts + e2e/helpers/app.ts（启动/关闭 Tauri 测试构建）
-- [ ] T021 实现 `APP_E2E=1` 故障注入 Harness：src-tauri/src/e2e_harness.rs（注入点：原子写中途 SIGKILL 信标、快照破坏接口、仅测试构建编译）+ e2e/helpers/fault.ts
+- [ ] T020 [P] 配置测试分层骨架：Playwright 浏览器 UI 配置 + Tauri 进程级桌面 fixture 于 e2e/playwright.config.ts、e2e/helpers/app.ts（启动/关闭隔离的 Tauri 测试构建；明确浏览器与原生壳证据边界）
+- [ ] T021 实现 `APP_E2E=1` 故障注入 Harness：src-tauri/src/e2e_harness.rs + e2e/helpers/fault.ts，固定 `AtomicWriteFaultPoint` 为 `temp_created`/`mid_write`/`temp_synced`/`json_validated`/`before_rename`/`after_rename`/`before_parent_sync`/`parent_synced`，另含快照破坏接口；仅测试构建编译和注册，并增加生产构建接口缺失断言
 - [ ] T022 [P] 建立 zustand store 骨架 src/app/store.ts（文档标签 registry、isDirty 标记、活动 Tab）与标签页容器组件 src/app/TabBar.tsx
+- [ ] T089 实现固定机性能测量基础设施 e2e/perf/helpers/processMetrics.ts + e2e/perf/startup-idle.spec.ts：支持聚合 Tauri/WebView/GPU 进程树、清空测试数据、冷启动重复采样、稳定/采样窗口和应用管理路径写入观察；输出含 schemaVersion/commit/hardware/memory/osVersion/webviewVersion/samples/statistic/budget/verdict 且无机器唯一标识的 JSON 报告。Phase 2 仅对 scaffold 运行诊断基线，不对“画布可编辑”作 SC verdict；SC-002/013 首次硬验收在 T090 完成（依赖 T020）
+- [ ] T091 配置固定性能 runner 硬门禁 .github/workflows/performance.yml：仅标签 `self-hosted`/`macOS`/`ARM64`/`excalidraw-perf` 执行绝对预算并阻止合并，归档报告；Intel Mac/Linux 仅非阻断趋势；环境变化必须失败并要求 ADR 重建基线（依赖 T089）
 
 **Checkpoint**: 基建就绪——用户故事可开始（US1 建议先行）
 
@@ -90,6 +109,8 @@ Tauri 双端布局（plan.md Project Structure）：前端 `src/`，后端 `src-
 - [ ] T036 [US1] E2E：官方格式兼容 e2e/tests/us1-format-compat.spec.ts（保存文件 JSON schema 断言 type/version/elements + 官方 dist 解析器加载验证，FR-002）
 - [ ] T105 [US1] E2E：多文档并发持久化 e2e/tests/us1-concurrent-tabs-save.spec.ts——同时打开 ≥2 文档并编辑，断言各文档 checkpoint 独立完成、UI 无互相阻塞、文件内容互不串写（FR-014）
 - [ ] T107 [US1] E2E/故障注入：模拟磁盘满/`DISK_FULL` e2e/tests/us1-disk-full.spec.ts——断言原文件完好、草稿仍可恢复、UI 有明确错误（Edge Case）
+- [ ] T090 [US1] 性能硬验收 e2e/perf/startup-idle.spec.ts + e2e/perf/canvas-io.spec.ts：清空测试数据后冷启动 10 次验证至画布可编辑 P95 ≤2s，稳定 30s 后 60s 窗口验证空载进程树 RSS P95 ≤150MB；固定 10k 图元 fixture 验证平移/缩放 ≥30fps、编辑无 >100ms 冻结、稳定后 RSS ≤350MB；持续绘制 60s 验证写次数 ≤事件数 1% 且无持久化掉帧尖峰（SC-002/005/006/013；依赖 T028/T031/T089）
+- [ ] T108 [US1] 长时资源稳定性夹具 e2e/perf/edit-soak.spec.ts：热身后脚本编辑 30min，RSS 增长同时 ≤50MB 且 ≤15%；随后静置 60s，CPU P95 ≤单逻辑核 1% 且应用管理的数据目录/工作区零持续写入（SC-013；依赖 T090）
 - [ ] T097 [US1] a11y 最低线：保存状态标识、快捷键、文件对话框具备 accessible name / 可见焦点，于 src/app/TabBar.tsx、src/app/fileDialogs.ts（宪法原则 III）
 
 **Checkpoint**: US1 独立可交付（MVP）——离线编辑器 + 可靠保存闭环
@@ -104,7 +125,7 @@ Tauri 双端布局（plan.md Project Structure）：前端 `src/`，后端 `src-
 
 ### Tests for User Story 2
 
-- [ ] T037 [P] [US2] 故障注入 E2E：保存中 SIGKILL e2e/tests/us2-kill-during-save.spec.ts（Harness 在 fsync 与 rename 间强杀 → 重启断言文件可解析且为完整旧/新版本，SC-003——先写并确认失败）
+- [ ] T037 [P] [US2] 参数化故障注入 E2E e2e/tests/us2-kill-during-save.spec.ts：对 T021 八个 `AtomicWriteFaultPoint` 逐点 SIGKILL，重启后断言目标文件为可解析的完整旧/新版本、无静默覆盖且恢复 UI 正确；PR 确定性覆盖全部八点，固定机夜间 workflow 额外运行并记录 100 个随机 seed（SC-003/012——先写并确认失败）
 - [ ] T038 [P] [US2] 恢复快照轮换与自损回退单测 src-tauri/src/documents/recovery_test.rs（Ring 覆盖、损坏跳过取次新）
 
 ### Implementation for User Story 2
@@ -189,7 +210,7 @@ Tauri 双端布局（plan.md Project Structure）：前端 `src/`，后端 `src-
 - [ ] T068 [P] [US5] 实现导出服务 src/editor/exportService.ts（exportToBlob/exportToSvg 封装、倍率/背景/主题选项、SVG 字体内嵌确认）
 - [ ] T069 [US5] 实现 `doc_export` 命令 src-tauri/src/commands/export.rs（前端产物字节 → 原子写目标路径、DISK_FULL/IO_ERROR 无残留清理，contracts §1.3）
 - [ ] T070 [US5] 导出对话框 UI src/app/ExportDialog.tsx（格式/倍率/背景选择、目标路径 dialog、失败原因展示）
-- [ ] T071 [US5] E2E：SVG 字体自包含 e2e/tests/us5-export-fidelity.spec.ts（无字体容器内打开 SVG 断言 @font-face 内嵌 + 渲染截图对比，SC-009）
+- [ ] T071 [US5] E2E：SVG 字体自包含 e2e/tests/us5-export-fidelity.spec.ts（固定无字体干净环境断言内嵌 WOFF2、无字体回退，并以 Playwright 固定截图基线验证 `maxDiffPixelRatio <= 0.001`，SC-009）
 - [ ] T072 [US5] E2E：导出失败无残留 e2e/tests/us5-export-failure.spec.ts（只读目录 → 明确错误 + 目标目录无 .tmp/半成品，FR-027）
 - [ ] T101 [US5] a11y 最低线：ExportDialog 表单控件标签与错误提示关联（aria-describedby），于 src/app/ExportDialog.tsx（宪法原则 III）
 
@@ -242,15 +263,12 @@ Tauri 双端布局（plan.md Project Structure）：前端 `src/`，后端 `src-
 
 ## Phase 10: Polish & Cross-Cutting Concerns
 
-**Purpose**: 性能基线、文档、可访问性回归与全量回归
+**Purpose**: 已建立性能基线的最终回归汇总、文档、可访问性与全量回归
 
-- [ ] T089 [P] 性能夹具：冷启动计时 + 空载 RSS 采样 e2e/perf/startup-memory.spec.ts（≤2s / ≤150MB，SC-002，JSON 报告存档）
-- [ ] T090 [P] 性能夹具：10k 图元帧率 + 60s 绘制写盘计数 e2e/perf/canvas-io.spec.ts（≥30fps / 写次数 ≤事件数 1%，SC-005/006）
-- [ ] T091 CI 基线对比：性能报告历史归档与回归阈值告警于 .github/workflows/ci.yml（宪法原则 IV：回归=缺陷）
-- [ ] T092 [P] 建立 docs/adr/ 首批 ADR（从 research.md R1–R17 提炼 ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件）+ docs/architecture.md（迁移 plan.md Mermaid 图源，宪法原则 V）
+- [ ] T092 [P] 建立 docs/adr/ 首批 ADR（从 research.md R1–R18 提炼 ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 固定机性能门禁与重建基线规则）+ docs/architecture.md（迁移 plan.md Mermaid 图源，宪法原则 V）
 - [ ] T093 [P] 跨故事 a11y 回归审计 + reduced motion 抽检（依赖 T097–T102 已完成；于 src/app/ 与各对话框抽检，宪法原则 III）
 - [ ] T094 Linux IME 验证矩阵执行（验证 T103/T104 已落地）：Ubuntu GNOME + Fedora KDE × X11/Wayland × Fcitx5/IBus 中文输入候选框跟随（FR-005），结果记录 docs/native-verification.md
-- [ ] T095 quickstart.md 全场景回归执行并修订文档偏差（宪法文档同步门禁终审）
+- [ ] T095 quickstart.md 全场景回归执行并修订文档偏差，汇总 T089/T090/T108 固定机最终性能报告与 T091 硬门禁结果（宪法文档同步门禁终审）
 - [ ] T096 [P] 补充 README.md（安装、开发、构建、贡献指引与文档索引）
 
 ---
@@ -260,11 +278,11 @@ Tauri 双端布局（plan.md Project Structure）：前端 `src/`，后端 `src-
 ### Phase Dependencies
 
 - **Phase 1 → Phase 2**：T001/T002（依赖声明）先于全部 Foundational 编码
-- **Phase 2 BLOCKS 一切用户故事**：T009（security）、T014（atomic_write）、T015–T017（契约）、T018（会话锁）为多故事共同前置
+- **Phase 2 BLOCKS 一切用户故事**：T009（security）、T014（atomic_write）、T015–T017（契约）、T018（会话锁）、T020/T089/T091（测试与固定机性能基础设施）为多故事共同前置
 - **用户故事顺序**：US1 → US2 强依赖（恢复建立在草稿链路上）；US3–US7 在 Phase 2 后可并行，但 US4 依赖 US3 的工作区监听根、US7 依赖 US3 的文件树
-- **Phase 10** 依赖全部所需故事完成（性能夹具最早可在 US1 后启动冷启动项）；T093 依赖各故事 a11y 任务 T097–T102；T094 依赖 IME 实现 T103/T104
+- **Phase 10** 依赖全部所需故事完成；性能基础设施在 Phase 2 建立，大场景与 soak 在 US1 Checkpoint 前由 T090/T108 建立，Phase 10 仅汇总最终回归；T093 依赖各故事 a11y 任务 T097–T102；T094 依赖 IME 实现 T103/T104
 
-### Analyze 补丁任务挂靠（T097–T107）
+### Analyze 补丁任务挂靠（T097–T108）
 
 | 任务 | 故事 | 目的 |
 |------|------|------|
@@ -273,8 +291,9 @@ Tauri 双端布局（plan.md Project Structure）：前端 `src/`，后端 `src-
 | T105 | US1 | FR-014 多文档并发持久化测试 |
 | T106 | US1 | FR-032 不可信输入对抗测试 |
 | T107 | US1 | 磁盘满 Edge Case |
+| T108 | US1 | 30 分钟 soak、内存增长、空闲 CPU 与静置写盘资源预算（SC-013） |
 
-**总任务数**: 107（T001–T107）
+**总任务数**: 108（T001–T108）
 
 ```mermaid
 flowchart LR
@@ -299,8 +318,8 @@ flowchart LR
 
 ### Parallel Opportunities
 
-- Phase 1：T002/T003/T004/T005/T007/T008 全部可并行
-- Phase 2：T010、T015、T016、T019、T020、T022 可并行（T011/T012 依赖 T010；T014 依赖 T013；T017 依赖 T016）
+- Phase 1：T002/T003/T004/T005/T007 可并行；T008 依赖 T003
+- Phase 2：T010、T015、T016、T019、T020、T022 可并行（T011/T012 依赖 T010；T014 依赖 T013；T017 依赖 T016；T089 依赖 T020；T091 依赖 T089）
 - Phase 2 完成后：US1 与 US3、US5、US6 四条线可由不同成员并行
 - 各故事内标注 [P] 的测试与不同文件实现任务可并行
 
@@ -331,8 +350,8 @@ Task: "T103 IME 桥接 src/editor/imeBridge.ts"
 ### Incremental Delivery
 
 - US1 → US2：可靠单文档编辑器（内部 Alpha）
-- - US3 → US4：文件管理 + 协作安全（公开 Beta 候选）
-- - US5/US6/US7 + Polish：成熟桌面产品（正式发布）
+- US3 → US4：文件管理 + 协作安全（公开 Beta 候选）
+- US5/US6/US7 + Polish：成熟桌面产品（正式发布）
 
 ### Parallel Team Strategy
 
@@ -343,5 +362,5 @@ Foundational 完成后：开发者 A 走 US1→US2 主线；开发者 B 走 US3�
 ## Notes
 
 - [P] = 不同文件且无未完成依赖；同文件任务（如 commands/documents.rs 的 T026/T040/T062/T063）严格串行
-- 每任务/逻辑组完成后提交，提交信息含任务 ID；行为/契约变更须同 PR 更新对应文档（宪法同步门禁）
+- 仅在用户明确要求时创建 commit；若获授权，提交须聚焦单一任务/逻辑组并在说明中包含任务 ID。行为/契约变更须同 PR 更新对应文档（宪法同步门禁）
 - 测试先行确认失败后再实现；任何 Checkpoint 可停下独立验证当前故事

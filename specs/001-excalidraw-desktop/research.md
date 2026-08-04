@@ -9,7 +9,7 @@
 ## R1. 桌面框架
 
 - **Decision**: Tauri 2.x（Rust Core + 系统 WebView：macOS WKWebView / Linux WebKitGTK）。
-- **Rationale**: 性能预算硬约束——SC-002 要求空载内存 ≤150MB、冷启动 ≤2s。Tauri 空载 30–80MB、启动 <1s、包体 10–25MB，均留有余量；Electron 空载 120–400MB、包体 80–200MB，直接击穿预算。可靠性核心能力（原子写、SQLite、文件监听、路径 ACL）在 Rust 侧实现最稳健，且 Tauri 2 Capabilities 提供默认最小权限的安全模型。
+- **Rationale**: 性能预算硬约束——SC-002/013 要求固定 Apple M1 / 8GB 参考机空载应用进程树 RSS ≤150MB、冷启动 P95 ≤2s、空闲 CPU P95 ≤单逻辑核 1%，并约束大场景与长时内存增长。Tauri 空载 30–80MB、启动 <1s、包体 10–25MB 的研究量级为预算留有余量；Electron 空载 120–400MB、包体 80–200MB，存在直接击穿预算的高风险。可靠性核心能力（原子写、SQLite、文件监听、路径 ACL）在 Rust 侧实现最稳健，且 Tauri 2 Capabilities 提供默认最小权限的安全模型；最终结论以固定机实测为准。
 - **Alternatives considered**:
   - **Electron**：渲染一致性最好、生态最全，但资源开销与启动速度不满足 SC；安全模型需手工加固。
   - **Wails (Go)**：NineRec 路线；Go 后端可行，但 Tauri 的权限模型、插件生态（single-instance、updater）与社区规模更适合生产级目标。
@@ -42,6 +42,7 @@
 
 - **Decision**: 六步流水线：同卷 `.tmp` 创建 → 写入 + `sync_all()`（fsync）→ 重读反序列化校验 JSON 完整性 → `std::fs::rename` 原子替换 → 父目录 fsync → 异常路径清理 `.tmp`。
 - **Rationale**: APFS/ext4/btrfs 下 rename 原子性保证文件要么旧完整、要么新完整（SC-003 损坏率 0 的唯一可靠实现）；同卷要求排除跨卷 rename 退化为 copy 的风险；写后校验拦截截断。
+- **故障验证边界**: `APP_E2E=1` 测试构建在 `temp_created`、`mid_write`、`temp_synced`、`json_validated`、`before_rename`、`after_rename`、`before_parent_sync`、`parent_synced` 八个可观察点提供确定性中断；生产构建不得编译或注册 Harness。每个 PR 全点执行，固定机夜间任务额外运行 100 个记录 seed 的随机用例。
 - **Alternatives considered**: 直接覆盖写（tyrchen/excaliapp 30s 全量覆盖模式——半写损坏窗口，被研究文档明确否定）；写前备份副本（双倍 IO 且不解决写入中断原子性）。
 
 ## R6. 崩溃恢复机制
@@ -94,8 +95,8 @@
 
 ## R14. 测试与故障注入
 
-- **Decision**: 三层——Vitest + RTL（调度器状态机、序列化、冲突分流逻辑）；cargo test + clippy（原子写并发、路径 ACL、迁移、恢复轮换）；Playwright 桌面 E2E（`APP_E2E=1` 测试构建暴露 Harness 接口）+ 三类必测故障注入：保存中 SIGKILL 验证文件完好、外部写冲突验证弹窗、损坏冷层文件验证 Recovery UI。
-- **Rationale**: 宪法原则 II 与 SC-003/012；故障场景只能在进程级 E2E 证明。
+- **Decision**: 分离三类证据——Vitest/RTL 与 Playwright 验证浏览器可见 UI、状态机、a11y 和视觉；cargo test 验证 Rust 领域单元/集成行为；`APP_E2E=1` Tauri 测试构建验证进程强杀、文件系统故障、恢复与冲突；macOS/Linux 真机矩阵验证窗口、IME、剪贴板、拖放、文件关联、签名与安装。浏览器套件不得替代后两类。
+- **Rationale**: 宪法原则 II 与 SC-003/012；故障场景只能在进程级 E2E 证明，原生平台行为只能由对应桌面环境闭环。
 - **Alternatives considered**: WebDriver/tauri-driver（Linux 可用但 macOS 支持弱、生态小）；仅单元测试（无法证明断电/强杀行为）。
 
 ## R15. 打包与分发
@@ -115,3 +116,11 @@
 - **Decision**: 使用 `trash` crate（MIT/Apache-2.0）实现 `file_delete`：将文件移入系统回收站，而非物理删除（FR-016）。
 - **Rationale**: 桌面应用惯例；误删可恢复；跨 macOS/Linux 统一 API，避免手写各平台回收站路径。
 - **Alternatives considered**: 物理 `std::fs::remove_file`（不可恢复，UX 差）；自研平台分支（维护成本高）。
+
+## R18. 性能与资源回归门禁
+
+- **Decision**: 以固定 Apple M1 / 8GB 机器作为绝对预算硬门禁，runner 标签固定为 `self-hosted`、`macOS`、`ARM64`、`excalidraw-perf`。聚合 Tauri 主进程及关联 WebView/GPU 进程的 RSS/CPU，分别测量冷启动、稳定空闲、10k 图元场景、60 秒高频编辑与 30 分钟 soak；Intel Mac 与 Linux 仅归档非阻断趋势。
+- **报告契约**: 机器可读报告记录 schema 版本、commit、硬件型号、内存、准确的 OS/WebView 版本、样本、统计量、预算与 verdict，不记录机器唯一标识或秘密。
+- **Rationale**: GitHub 托管 runner 的硬件与邻居负载不可控，不适合作为绝对性能阈值；固定机硬门禁才能满足宪法“性能回归等同功能缺陷”的可重复性要求。
+- **重建基线**: runner 硬件、OS 或 WebView 版本变化即使原基线失效；必须附同负载测量证据并新增 ADR，禁止通过提高阈值静默消除失败。
+- **Alternatives considered**: 托管 runner 绝对门禁（噪声和误报高）；仅报告不阻断（无法执行预算红线）；三平台同时硬门禁（当前基础设施和校准成本过高）。
