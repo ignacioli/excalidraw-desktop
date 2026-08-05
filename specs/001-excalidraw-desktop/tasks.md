@@ -62,8 +62,8 @@ The following names describe logical capability roles for planning and review. T
 - [ ] T010 [P] 实现 SQLite 迁移框架 src-tauri/src/database/migrations.rs（事务化应用、PRAGMA user_version、失败拒绝启动）与 src-tauri/migrations/0001_init.sql（workspaces/file_index/drafts/file_meta 四表 + PRAGMA 基线，data-model §2）
 - [ ] T011 定义仓储 trait 与 SQLite 实现 src-tauri/src/database/repository.rs（drafts/workspaces/file_index/file_meta 访问接口，隔离存储实现，R2）
 - [ ] T012 实现数据库专用写线程与队列 src-tauri/src/database/writer.rs（spawn_blocking 队列化，R4）
-- [ ] T013 编写原子写并发单测 src-tauri/src/documents/atomic_write_test.rs（写入中断残留 .tmp 清理、并发 rename 安全——先写测试，确认失败）
-- [ ] T014 实现六步原子写流水线 src-tauri/src/documents/atomic_write.rs（同卷 .tmp → fsync → JSON 校验 → rename → 父目录 fsync → 异常清理，R5）
+- [ ] T013 编写原子写并发单测 src-tauri/src/documents/atomic_write_test.rs（覆盖 `temp_created`/`mid_write`/`temp_synced`/`json_validated`/`before_rename`/`after_rename`/`before_parent_sync`/`parent_synced` 八个中断点、残留 `.tmp` 清理与并发 rename 安全——先写测试，确认失败）
+- [ ] T014 实现原子写流水线 src-tauri/src/documents/atomic_write.rs（六个逻辑阶段：同卷 `.tmp` 写入、临时文件 fsync、JSON 校验、rename、父目录 fsync、异常清理；必须暴露并覆盖八个 `AtomicWriteFaultPoint`，R5）
 - [ ] T015 [P] 定义统一错误枚举 src-tauri/src/commands/error.rs（thiserror，13 个 ErrorCode 映射 IpcError 形状，contracts §0）
 - [ ] T016 [P] 建立 TS 契约文件 src/ipc/contracts.ts（IPC_CONTRACT_VERSION=1、全部命令/事件/错误类型，contracts §0–2）
 - [ ] T017 建立 Rust DTO src-tauri/src/commands/dto.rs（serde camelCase，与 contracts.ts 字段一致）
@@ -210,7 +210,7 @@ The following names describe logical capability roles for planning and review. T
 - [ ] T068 [P] [US5] 实现导出服务 src/editor/exportService.ts（exportToBlob/exportToSvg 封装、倍率/背景/主题选项、SVG 字体内嵌确认）
 - [ ] T069 [US5] 实现 `doc_export` 命令 src-tauri/src/commands/export.rs（前端产物字节 → 原子写目标路径、DISK_FULL/IO_ERROR 无残留清理，contracts §1.3）
 - [ ] T070 [US5] 导出对话框 UI src/app/ExportDialog.tsx（格式/倍率/背景选择、目标路径 dialog、失败原因展示）
-- [ ] T071 [US5] E2E：SVG 字体自包含 e2e/tests/us5-export-fidelity.spec.ts（固定无字体干净环境断言内嵌 WOFF2、无字体回退，并以 Playwright 固定截图基线验证 `maxDiffPixelRatio <= 0.001`，SC-009）
+- [ ] T071 [US5] E2E：PNG/SVG 导出 fidelity e2e/tests/us5-export-fidelity.spec.ts——PNG 覆盖倍率与透明/纯色背景并验证固定截图一致性；SVG 断言内嵌 WOFF2、无字体回退，并以 Playwright 固定截图基线验证 `maxDiffPixelRatio <= 0.001`（SC-009，FR-026）
 - [ ] T072 [US5] E2E：导出失败无残留 e2e/tests/us5-export-failure.spec.ts（只读目录 → 明确错误 + 目标目录无 .tmp/半成品，FR-027）
 - [ ] T101 [US5] a11y 最低线：ExportDialog 表单控件标签与错误提示关联（aria-describedby），于 src/app/ExportDialog.tsx（宪法原则 III）
 
@@ -220,9 +220,9 @@ The following names describe logical capability roles for planning and review. T
 
 ## Phase 8: User Story 6 - 原生桌面系统集成 (Priority: P3)
 
-**Goal**: 双击 .excalidraw 打开、单实例复用、平台标准分发包零安全拦截
+**Goal**: 双击 .excalidraw 打开、单实例复用、本地 macOS 与 Linux 原生集成验证；正式 macOS 签名/公证发布属于后续版本
 
-**Independent Test**: 安装正式包验证文件关联、二次打开复用实例、多文件连续打开（quickstart US6）
+**Independent Test**: 运行或安装本地构建验证文件关联、二次打开复用实例、多文件连续打开；正式 macOS 签名、公证和零拦截发布不属于当前版本（quickstart US6）
 
 ### Implementation for User Story 6
 
@@ -231,11 +231,11 @@ The following names describe logical capability roles for planning and review. T
 - [ ] T075 [P] [US6] macOS 文件关联：CFBundleDocumentTypes + 文件图标于 src-tauri/tauri.conf.json bundle.macOS 与 Info.plist 模板（.excalidraw/.excalidraw.json）
 - [ ] T076 [P] [US6] Linux 文件关联：MIME `application/x-excalidraw` 定义 + .desktop 模板于 src-tauri/tauri.conf.json bundle.linux
 - [ ] T077 [US6] macOS Universal Binary 构建流水线（aarch64 + x86_64 target 编译 + lipo 合并）于 CI 工作流 .github/workflows/release.yml
-- [ ] T078 [US6] macOS 签名与公证：codesign 深度签名 + notarytool + stapler 步骤于 .github/workflows/release.yml（无 Developer ID 证书时以 secrets 缺失跳过并在产物说明记录缺口，SC-010）
+- [ ] T078 [US6] 当前版本 macOS 本地验证：运行未签名/未公证构建，记录本机启动、文件关联、单实例和 Gatekeeper 手动放行结果于 docs/native-verification.md；Developer ID 签名、公证与零拦截正式发布标记为后续版本 out of scope，不作为当前版本完成门禁（SC-010）
 - [ ] T079 [P] [US6] Linux 打包产物：AppImage + deb + rpm 配置于 src-tauri/tauri.conf.json bundle 与 release.yml
-- [ ] T080 [US6] 原生壳手动验证清单 docs/native-verification.md——必须覆盖 FR-030 全矩阵：画布渲染、拖放、剪贴板、IME，以及双击关联、单实例、Gatekeeper、各发行版安装（浏览器 E2E 不可证明项；执行结果记录矩阵）
+- [ ] T080 [US6] 原生壳手动验证清单 docs/native-verification.md——当前版本覆盖 FR-030 全矩阵：画布渲染、拖放、剪贴板、IME，以及本地构建的双击关联、单实例、Gatekeeper 手动放行、各发行版安装；正式签名/公证/零拦截验证单独标记为后续版本（浏览器 E2E 不可证明项；执行结果记录矩阵）
 
-**Checkpoint**: 可分发的成熟桌面应用形态
+**Checkpoint**: 当前版本本地可验证的成熟桌面应用形态；正式 macOS 签名、公证和零拦截发布已明确出范围
 
 ---
 
@@ -249,7 +249,7 @@ The following names describe logical capability roles for planning and review. T
 
 - [ ] T081 [US7] 多工作区并列 UI：WorkspacePanel 多分区折叠/独立移除 src/workspaces/WorkspacePanel.tsx + FileTree 多根支持 src/sidebar/FileTree.tsx
 - [ ] T082 [P] [US7] 实现缩略图 Worker src/sidebar/thumbnailWorker.ts（OffscreenCanvas + exportToBlob → 320×200 WebP、并发 1–2 低优先级队列、可视区触发）
-- [ ] T083 [US7] 实现缩略图命令 src-tauri/src/commands/thumbnails.rs：`thumb_lookup`/`thumb_store`（cache/thumbnails/aa/bb/<key>.webp 磁盘布局 + file_meta 表，contracts §1.4）
+- [ ] T083 [US7] 实现缩略图 IPC 命令适配器 src-tauri/src/commands/thumbnails.rs 与领域服务 src-tauri/src/thumbnails/：`thumb_lookup`/`thumb_store`（cache/thumbnails/aa/bb/<key>.webp 磁盘布局 + file_meta 表，contracts §1.4）
 - [ ] T084 [US7] 缩略图接入文件树：可视节点懒请求 + asset 协议加载 + 内容寻址键 SHA256(content+renderer_version+theme) 于 src/sidebar/FileTree.tsx（R11）
 - [ ] T085 [US7] 实现图片资产去重 src-tauri/src/documents/assets.rs（SHA-256 剥离至 `.excalidraw_assets/<hash>`、文档持引用、孤儿延迟回收，R12）
 - [ ] T086 [US7] 画布图片 asset 协议加载 + 导出/对外保存重组内嵌 src/editor/ExcalidrawAdapter.ts + src-tauri/src/commands/documents.rs（convertFileSrc，FR-024/FR-002 兼容）
@@ -268,7 +268,7 @@ The following names describe logical capability roles for planning and review. T
 - [ ] T092 [P] 建立 docs/adr/ 首批 ADR（从 research.md R1–R18 提炼 ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 固定机性能门禁与重建基线规则）+ docs/architecture.md（迁移 plan.md Mermaid 图源，宪法原则 V）
 - [ ] T093 [P] 跨故事 a11y 回归审计 + reduced motion 抽检（依赖 T097–T102 已完成；于 src/app/ 与各对话框抽检，宪法原则 III）
 - [ ] T094 Linux IME 验证矩阵执行（验证 T103/T104 已落地）：Ubuntu GNOME + Fedora KDE × X11/Wayland × Fcitx5/IBus 中文输入候选框跟随（FR-005），结果记录 docs/native-verification.md
-- [ ] T095 quickstart.md 全场景回归执行并修订文档偏差，汇总 T089/T090/T108 固定机最终性能报告与 T091 硬门禁结果（宪法文档同步门禁终审）
+- [ ] T095 quickstart.md 全场景回归执行并修订文档偏差；汇总 T037/T045/T066 三类可靠性故障测试为统一阻断门禁（SC-012），汇总 T089/T090/T108 固定机最终性能报告与 T091 硬门禁结果；记录 SC-010 为后续版本 out of scope（宪法文档同步门禁终审）
 - [ ] T096 [P] 补充 README.md（安装、开发、构建、贡献指引与文档索引）
 
 ---

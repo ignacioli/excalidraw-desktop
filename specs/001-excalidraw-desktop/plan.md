@@ -115,6 +115,8 @@
 
 `APP_E2E=1` Harness 仅允许测试构建编译和注册，生产构建必须不存在该接口。原子写故障枚举固定为 `temp_created`、`mid_write`、`temp_synced`、`json_validated`、`before_rename`、`after_rename`、`before_parent_sync`、`parent_synced`。每个 PR 确定性覆盖全部八点，固定机夜间任务额外运行 100 个记录 seed 的随机故障用例。
 
+当前版本的 macOS 发布范围止于本地构建、文件关联和原生行为验证；Developer ID 签名、公证及零安全拦截正式发布为后续版本范围，不阻塞当前版本 Checkpoint。
+
 ## 架构设计
 
 ### 分层图（Layered View）
@@ -237,12 +239,12 @@ src/                          # 前端 React 应用
 
 src-tauri/                    # Rust 后端
 ├── src/
-│   ├── commands/             # IPC 命令入口（薄层：反序列化→校验→调领域服务）
+│   ├── commands/             # IPC 命令入口（薄层：反序列化→校验→调领域服务；含 thumbnails.rs 适配器）
 │   ├── documents/            # atomic_write.rs / recovery.rs / validation.rs
 │   ├── database/             # 连接池、写线程、迁移、仓储 trait（隔离 SQLite/redb）
 │   ├── indexing/             # 工作区异步扫描与增量索引
 │   ├── watcher/              # notify 封装 + 去抖 + 回声抑制
-│   ├── thumbnails/           # 缩略图缓存元数据与磁盘管理
+│   ├── thumbnails/           # 缩略图缓存元数据与磁盘管理（领域服务）
 │   ├── security/             # 路径规范化、工作区 ACL 白名单
 │   ├── lib.rs                # 生命周期、单实例、会话锁
 │   └── main.rs
