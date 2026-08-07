@@ -44,7 +44,7 @@ The following names describe logical capability roles for planning and review. T
 - [ ] T001 安装并锁定前端依赖（`@excalidraw/excalidraw` 正式版、`zustand`、`@tanstack/react-virtual`、`@tauri-apps/plugin-dialog`）于 package.json，锁定 pnpm 为唯一包管理器（packageManager 字段 + pnpm-lock.yaml）
 - [ ] T002 [P] 添加后端依赖（`rusqlite` bundled、`notify`、`tokio`、`thiserror`、`sha2`、`uuid`、`trash`、`tauri-plugin-single-instance`）于 src-tauri/Cargo.toml
 - [ ] T003 [P] 配置前端质量门禁：eslint + prettier + `lint`/`typecheck`/`test`/`e2e` scripts 于 package.json、eslint.config.js、.prettierrc
-- [ ] T004 [P] 建立目录骨架：src/{app,editor,documents,sidebar,workspaces,ipc}/、src-tauri/src/{commands,documents,database,indexing,watcher,thumbnails,security}/、e2e/、scripts/、docs/（各含占位 mod/index 文件）
+- [ ] T004 [P] 建立目录骨架：src/{app,editor,documents,sidebar,workspaces,ipc}/、src/app/theme/、src-tauri/src/{commands,documents,database,indexing,watcher,thumbnails,security}/、e2e/、scripts/、docs/（各含占位 mod/index 文件）
 - [ ] T005 [P] 实现字体合并管线 scripts/build-fonts.py（fonttools：Virgil/Excalifont + 小赖字体 → public/fonts/Virgil-CJK.woff2，R10）并接入 `fonts:build` script
 - [ ] T006 将 src-tauri/tauri.conf.json 的 `"csp": null` 替换为严格 CSP（`default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: blob: data:`，R13，宪法存量缺口 1）
 - [ ] T007 [P] 收紧 src-tauri/capabilities/default.json 为最小权限集（core:default + 受限 dialog，随功能增量追加）
@@ -70,8 +70,10 @@ The following names describe logical capability roles for planning and review. T
 - [ ] T018 实现 `app_handshake` 命令 src-tauri/src/commands/session.rs 与会话锁 src-tauri/src/documents/session_lock.rs（session.lock 创建/清理/异常判定，data-model SessionLock）
 - [ ] T019 [P] 配置 Vitest + React Testing Library（vitest.config.ts、src/test-setup.ts）与首个冒烟测试
 - [ ] T020 [P] 配置测试分层骨架：Playwright 浏览器 UI 配置 + Tauri 进程级桌面 fixture 于 e2e/playwright.config.ts、e2e/helpers/app.ts（启动/关闭隔离的 Tauri 测试构建；明确浏览器与原生壳证据边界）
+- [ ] T109 [P] 为主题解析器编写单元测试 src/app/theme/themeController.test.ts：覆盖 light/dark/system 初始解析、system 运行时变化、手动模式忽略系统变化、版本化偏好恢复与损坏值回退（FR-035/036，先写并确认失败；依赖 T019）
+- [ ] T110 实现主题基础设施 src/app/theme/types.ts、src/app/theme/themeRegistry.ts、src/app/theme/themeController.ts、src/app/theme/tokens.css 与 src/main.tsx：第一版仅注册 `excalidraw` 家族，偏好分离 `themeId`/`modePreference`，启动前设置解析后的明暗模式并统一驱动语义 token（FR-035~037、R19；依赖 T109）
 - [ ] T021 实现 `APP_E2E=1` 故障注入 Harness：src-tauri/src/e2e_harness.rs + e2e/helpers/fault.ts，固定 `AtomicWriteFaultPoint` 为 `temp_created`/`mid_write`/`temp_synced`/`json_validated`/`before_rename`/`after_rename`/`before_parent_sync`/`parent_synced`，另含快照破坏接口；仅测试构建编译和注册，并增加生产构建接口缺失断言
-- [ ] T022 [P] 建立 zustand store 骨架 src/app/store.ts（文档标签 registry、isDirty 标记、活动 Tab）与标签页容器组件 src/app/TabBar.tsx
+- [ ] T022 [P] 建立 zustand store 骨架 src/app/store.ts（文档标签 registry、isDirty 标记、活动 Tab）与桌面壳层 src/app/AppShell.tsx、src/app/TabBar.tsx：系统原生窗口内容区固定为顶部标签、左侧文件管理区域、右侧画布；未挂载工作区时提供连接 T034 新建/打开流程的明确空状态，不实现 PWA/浏览器顶栏或范围外服务入口（FR-034、DESIGN.md）
 - [ ] T089 实现固定机性能测量基础设施 e2e/perf/helpers/processMetrics.ts + e2e/perf/startup-idle.spec.ts：支持聚合 Tauri/WebView/GPU 进程树、清空测试数据、冷启动重复采样、稳定/采样窗口和应用管理路径写入观察；输出含 schemaVersion/commit/hardware/memory/osVersion/webviewVersion/samples/statistic/budget/verdict 且无机器唯一标识的 JSON 报告。Phase 2 仅对 scaffold 运行诊断基线，不对“画布可编辑”作 SC verdict；SC-002/013 首次硬验收在 T090 完成（依赖 T020）
 - [ ] T091 配置固定性能 runner 硬门禁 .github/workflows/performance.yml：仅标签 `self-hosted`/`macOS`/`ARM64`/`excalidraw-perf` 执行绝对预算并阻止合并，归档报告；Intel Mac/Linux 仅非阻断趋势；环境变化必须失败并要求 ADR 重建基线（依赖 T089）
 
@@ -90,19 +92,21 @@ The following names describe logical capability roles for planning and review. T
 - [ ] T023 [P] [US1] 契约测试 doc_open/doc_save_draft/doc_checkpoint/doc_close 四类用例（合法/越界路径/非法 JSON/超限）于 src-tauri/tests/contract_documents.rs（先写并确认失败）
 - [ ] T024 [P] [US1] draftScheduler 三级削峰状态机单测 src/documents/draftScheduler.test.ts（300ms 防抖、5 类 Checkpoint 触发、Conflicted 禁写）
 - [ ] T106 [P] [US1] 不可信输入对抗测试 src-tauri/tests/untrusted_scene.rs——恶意 scene fixture（嵌入脚本字段、越权路径引用、超大/畸形 JSON），断言 `FILE_CORRUPTED`/`INVALID_SCENE`/`PATH_ACCESS_DENIED` 且无副作用文件写入（FR-032；先写并确认失败）
+- [ ] T111 [P] [US1] 编写外观 E2E 与视觉基线 e2e/tests/us1-appearance.spec.ts：覆盖 light/dark/system、运行中系统变化、重启恢复、损坏偏好回退、壳层/画布同步、首帧无相反主题闪现及浅色/深色截图差异阈值（FR-034~037、SC-014；依赖 T020）
 
 ### Implementation for User Story 1
 
 - [ ] T025 [P] [US1] 实现 scene 结构校验 src-tauri/src/documents/validation.rs（type/version/elements 校验、256MB 上限、FILE_CORRUPTED/FILE_TOO_LARGE 错误态）
 - [ ] T026 [US1] 实现文档命令 src-tauri/src/commands/documents.rs：`doc_open`（含 hasNewerDraft 判定）/`doc_save_draft`（WAL 写 drafts 表）/`doc_checkpoint`（原子写 + is_dirty=0 + base_hash 更新）/`doc_close`（contracts §1.3）
 - [ ] T027 [P] [US1] 实现 ExcalidrawAdapter src/editor/ExcalidrawAdapter.ts（隔离官方 API：场景读写、onChange 订阅、只读切换）
-- [ ] T028 [US1] 实现画布组件 src/editor/ExcalidrawEditor.tsx（挂载 Adapter、注入 onChange → store isDirty）
+- [ ] T028 [US1] 实现画布组件 src/editor/ExcalidrawEditor.tsx（挂载 Adapter、注入 onChange → store isDirty，并将 T110 解析后的 `light | dark` 传入官方主题接口，使画布与壳层同步）
 - [ ] T029 [P] [US1] 离线资源接入：`src/editor/fontLoader.ts` 注册字体 + 入口注入 `window.EXCALIDRAW_ASSET_PATH="/fonts/"`（src/main.tsx）+ 构建期拷贝官方字体与 Virgil-CJK 产物至 public/fonts/（vite.config.ts / scripts）
 - [ ] T030 [P] [US1] 实现场景序列化器 src/editor/sceneSerializer.ts（scene ↔ 标准 .excalidraw JSON、序列化往返测试）
 - [ ] T031 [US1] 实现三级削峰保存调度器 src/documents/draftScheduler.ts（L1 内存标记 → L2 300ms 防抖 save_draft → L3 Checkpoint：手动 S/切 Tab/空闲 3s/退出阻塞/60s 兜底，plan 数据流图 1）
 - [ ] T032 [US1] 实现文档会话 store src/documents/documentStore.ts（打开/关闭/切换、base_hash 跟踪、与 draftScheduler 联动）
 - [ ] T033 [US1] 保存状态 UI：未保存标识 + Cmd/Ctrl+S 快捷键 + 菜单项于 src/app/（TabBar 徽标 + 快捷键注册）
 - [ ] T034 [US1] 新建/打开文件对话框流程 src/app/fileDialogs.ts（tauri dialog + doc_open 接线；US3 之前以系统对话框为唯一入口）
+- [ ] T112 [US1] 实现外观选择控件 src/app/AppearanceControl.tsx 并接入 src/app/AppShell.tsx：提供浅色/深色/跟随系统三项、可访问选中状态与键盘操作，调用 T110 主题控制器且不写入文档状态（FR-035~037；使 T111 通过）
 - [ ] T103 [P] [US1] 实现画布 IME 桥接 src/editor/imeBridge.ts（Excalidraw 隐形 textarea 绝对坐标随缩放/平移同步，FR-005 / R16）
 - [ ] T104 [US1] Linux 启动入口按需设置 `GTK_IM_MODULE`（及 Wayland 相关修正）于 src-tauri/src/lib.rs，与 imeBridge 联调（FR-005）
 - [ ] T035 [US1] E2E：离线全流程 e2e/tests/us1-offline-edit-save.spec.ts（断网 fixture、绘制中文文本、保存重开一致、零外部网络请求断言）
@@ -111,7 +115,7 @@ The following names describe logical capability roles for planning and review. T
 - [ ] T107 [US1] E2E/故障注入：模拟磁盘满/`DISK_FULL` e2e/tests/us1-disk-full.spec.ts——断言原文件完好、草稿仍可恢复、UI 有明确错误（Edge Case）
 - [ ] T090 [US1] 性能硬验收 e2e/perf/startup-idle.spec.ts + e2e/perf/canvas-io.spec.ts：清空测试数据后冷启动 10 次验证至画布可编辑 P95 ≤2s，稳定 30s 后 60s 窗口验证空载进程树 RSS P95 ≤150MB；固定 10k 图元 fixture 验证平移/缩放 ≥30fps、编辑无 >100ms 冻结、稳定后 RSS ≤350MB；持续绘制 60s 验证写次数 ≤事件数 1% 且无持久化掉帧尖峰（SC-002/005/006/013；依赖 T028/T031/T089）
 - [ ] T108 [US1] 长时资源稳定性夹具 e2e/perf/edit-soak.spec.ts：热身后脚本编辑 30min，RSS 增长同时 ≤50MB 且 ≤15%；随后静置 60s，CPU P95 ≤单逻辑核 1% 且应用管理的数据目录/工作区零持续写入（SC-013；依赖 T090）
-- [ ] T097 [US1] a11y 最低线：保存状态标识、快捷键、文件对话框具备 accessible name / 可见焦点，于 src/app/TabBar.tsx、src/app/fileDialogs.ts（宪法原则 III）
+- [ ] T097 [US1] a11y 最低线：桌面壳层、标签页、保存状态、快捷键、外观选择与文件对话框具备语义结构、accessible name、非颜色唯一状态、可见焦点、WCAG 2.2 AA 适用对比度与 reduced motion，于 src/app/AppShell.tsx、src/app/TabBar.tsx、src/app/AppearanceControl.tsx、src/app/fileDialogs.ts（FR-038、SC-015、宪法原则 III、DESIGN.md）
 
 **Checkpoint**: US1 独立可交付（MVP）——离线编辑器 + 可靠保存闭环
 
@@ -265,10 +269,10 @@ The following names describe logical capability roles for planning and review. T
 
 **Purpose**: 已建立性能基线的最终回归汇总、文档、可访问性与全量回归
 
-- [ ] T092 [P] 建立 docs/adr/ 首批 ADR（从 research.md R1–R18 提炼 ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 固定机性能门禁与重建基线规则）+ docs/architecture.md（迁移 plan.md Mermaid 图源，宪法原则 V）
-- [ ] T093 [P] 跨故事 a11y 回归审计 + reduced motion 抽检（依赖 T097–T102 已完成；于 src/app/ 与各对话框抽检，宪法原则 III）
+- [ ] T092 [P] 建立 docs/adr/ 首批 ADR（从 research.md R1–R19 提炼 ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 固定机性能门禁与重建基线规则、ADR-005 官方画布样式与可扩展主题边界）+ docs/architecture.md（迁移 plan.md Mermaid 图源，宪法原则 V）
+- [ ] T093 [P] 跨故事 a11y 回归审计 + reduced motion/主题对比度抽检（依赖 T097–T102 已完成；于 src/app/ 与各对话框验证浅色/深色的键盘闭环、焦点顺序、非颜色唯一状态、WCAG 2.2 AA 适用对比度及严重/致命自动扫描问题为 0，FR-038/SC-015、宪法原则 III、DESIGN.md）
 - [ ] T094 Linux IME 验证矩阵执行（验证 T103/T104 已落地）：Ubuntu GNOME + Fedora KDE × X11/Wayland × Fcitx5/IBus 中文输入候选框跟随（FR-005），结果记录 docs/native-verification.md
-- [ ] T095 quickstart.md 全场景回归执行并修订文档偏差；汇总 T037/T045/T066 三类可靠性故障测试为统一阻断门禁（SC-012），汇总 T089/T090/T108 固定机最终性能报告与 T091 硬门禁结果；记录 SC-010 为后续版本 out of scope（宪法文档同步门禁终审）
+- [ ] T095 quickstart.md 全场景回归执行并修订文档偏差；汇总 T037/T045/T066 三类可靠性故障测试为统一阻断门禁（SC-012），汇总 T111 外观矩阵与视觉基线（SC-014）及 T097/T093 无障碍证据（SC-015），汇总 T089/T090/T108 固定机最终性能报告与 T091 硬门禁结果；记录 SC-010 为后续版本 out of scope（宪法文档同步门禁终审）
 - [ ] T096 [P] 补充 README.md（安装、开发、构建、贡献指引与文档索引）
 
 ---
@@ -278,11 +282,11 @@ The following names describe logical capability roles for planning and review. T
 ### Phase Dependencies
 
 - **Phase 1 → Phase 2**：T001/T002（依赖声明）先于全部 Foundational 编码
-- **Phase 2 BLOCKS 一切用户故事**：T009（security）、T014（atomic_write）、T015–T017（契约）、T018（会话锁）、T020/T089/T091（测试与固定机性能基础设施）为多故事共同前置
+- **Phase 2 BLOCKS 一切用户故事**：T009（security）、T014（atomic_write）、T015–T017（契约）、T018（会话锁）、T020/T089/T091（测试与固定机性能基础设施）、T109/T110（主题解析测试与基础设施）为多故事共同前置
 - **用户故事顺序**：US1 → US2 强依赖（恢复建立在草稿链路上）；US3–US7 在 Phase 2 后可并行，但 US4 依赖 US3 的工作区监听根、US7 依赖 US3 的文件树
 - **Phase 10** 依赖全部所需故事完成；性能基础设施在 Phase 2 建立，大场景与 soak 在 US1 Checkpoint 前由 T090/T108 建立，Phase 10 仅汇总最终回归；T093 依赖各故事 a11y 任务 T097–T102；T094 依赖 IME 实现 T103/T104
 
-### Analyze 补丁任务挂靠（T097–T108）
+### Analyze 与 UI 设计补丁任务挂靠（T097–T112）
 
 | 任务 | 故事 | 目的 |
 |------|------|------|
@@ -292,8 +296,10 @@ The following names describe logical capability roles for planning and review. T
 | T106 | US1 | FR-032 不可信输入对抗测试 |
 | T107 | US1 | 磁盘满 Edge Case |
 | T108 | US1 | 30 分钟 soak、内存增长、空闲 CPU 与静置写盘资源预算（SC-013） |
+| T109–T110 | Foundational | 三态主题解析、版本化偏好、启动前应用与语义 token（FR-035~037） |
+| T111–T112 | US1 | 外观 E2E/视觉基线与可访问主题选择（SC-014） |
 
-**总任务数**: 108（T001–T108）
+**总任务数**: 112（T001–T112）
 
 ```mermaid
 flowchart LR
@@ -319,7 +325,7 @@ flowchart LR
 ### Parallel Opportunities
 
 - Phase 1：T002/T003/T004/T005/T007 可并行；T008 依赖 T003
-- Phase 2：T010、T015、T016、T019、T020、T022 可并行（T011/T012 依赖 T010；T014 依赖 T013；T017 依赖 T016；T089 依赖 T020；T091 依赖 T089）
+- Phase 2：T010、T015、T016、T019、T020、T022 可并行；T109 在 T019 后启动，T110 依赖 T109（T011/T012 依赖 T010；T014 依赖 T013；T017 依赖 T016；T089 依赖 T020；T091 依赖 T089）
 - Phase 2 完成后：US1 与 US3、US5、US6 四条线可由不同成员并行
 - 各故事内标注 [P] 的测试与不同文件实现任务可并行
 
@@ -330,6 +336,7 @@ flowchart LR
 Task: "T023 契约测试 doc_* 四类用例 src-tauri/tests/contract_documents.rs"
 Task: "T024 draftScheduler 状态机单测 src/documents/draftScheduler.test.ts"
 Task: "T106 不可信输入对抗测试 src-tauri/tests/untrusted_scene.rs"
+Task: "T111 外观 E2E 与视觉基线 e2e/tests/us1-appearance.spec.ts"
 
 # 再并行启动不同文件的实现：
 Task: "T025 scene 校验 src-tauri/src/documents/validation.rs"
@@ -337,14 +344,15 @@ Task: "T027 ExcalidrawAdapter src/editor/ExcalidrawAdapter.ts"
 Task: "T029 离线资源接入 fontLoader.ts + src/main.tsx + vite.config.ts"
 Task: "T030 场景序列化器 src/editor/sceneSerializer.ts"
 Task: "T103 IME 桥接 src/editor/imeBridge.ts"
+Task: "T112 外观选择控件 src/app/AppearanceControl.tsx"
 ```
 
 ## Implementation Strategy
 
 ### MVP First（Phase 1 + 2 + US1）
 
-1. 完成 Setup 与 Foundational（含 CSP/capabilities 安全清偿与测试基建）
-2. 完成 US1 → 独立验证（离线编辑 + 可靠保存 + 格式兼容）→ 可演示 MVP
+1. 完成 Setup 与 Foundational（含 CSP/capabilities 安全清偿、测试基建、DESIGN.md 对应的主题解析与桌面壳层）
+2. 完成 US1 → 独立验证（离线编辑 + 可靠保存 + 格式兼容 + 三态主题与视觉基线）→ 可演示 MVP
 3. 立即接 US2（P1 可靠性承诺闭环）后才具备对外试用资格
 
 ### Incremental Delivery

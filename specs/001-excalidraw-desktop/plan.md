@@ -1,6 +1,6 @@
 # Implementation Plan: 跨平台 Excalidraw Desktop 应用
 
-**Branch**: `001-excalidraw-desktop` | **Date**: 2026-08-04 | **Spec**: [spec.md](./spec.md)
+**Branch**: `001-excalidraw-desktop` | **Date**: 2026-08-04 | **Last updated**: 2026-08-06 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/001-excalidraw-desktop/spec.md`
 
@@ -9,7 +9,7 @@
 
 ## Summary
 
-构建本地优先、离线可用的跨平台（macOS + Linux）Excalidraw 桌面应用。核心技术路线：Tauri 2.x（Rust 后端 + 系统 WebView）承载 React 19 + TypeScript strict 前端，官方 `@excalidraw/excalidraw` 以 npm 依赖方式集成（非 Fork）；持久化采用"热层 SQLite（WAL）草稿 + 冷层标准 `.excalidraw` 文件原子写"的双层架构，配合会话锁 + 多版本轮换快照实现崩溃恢复；`notify` 文件监听 + 三元组（mtime/size/hash）乐观并发实现外部变更感知与冲突消解。质量保证以 Playwright 桌面 E2E 与故障注入测试为中心。
+构建本地优先、离线可用的跨平台（macOS + Linux）Excalidraw 桌面应用。核心技术路线：Tauri 2.x（Rust 后端 + 系统 WebView）承载 React 19 + TypeScript strict 前端，官方 `@excalidraw/excalidraw` 以 npm 依赖方式集成（非 Fork）；系统原生窗口承载顶部多标签、左侧文件管理与右侧画布，壳层通过语义 token 对齐官方浅色/深色视觉并支持浅色、深色、跟随系统；持久化采用"热层 SQLite（WAL）草稿 + 冷层标准 `.excalidraw` 文件原子写"的双层架构，配合会话锁 + 多版本轮换快照实现崩溃恢复；`notify` 文件监听 + 三元组（mtime/size/hash）乐观并发实现外部变更感知与冲突消解。质量保证以 Playwright 桌面 E2E 与故障注入测试为中心。
 
 ## Technical Context
 
@@ -29,7 +29,7 @@
 
 **Constraints**: 固定参考机应用进程树空载 RSS P95 ≤150MB、空闲 CPU P95 ≤单逻辑核 1%、10k 场景 RSS ≤350MB、30 分钟 RSS 增长同时 ≤50MB 且 ≤15%、静置 60s 零持续写入（SC-002/013）；完全离线运行（SC-001）；保存中断文件损坏率 0（SC-003）；崩溃恢复窗口 ≤5s（SC-004）；外部变更 3s 内感知、零静默覆盖（SC-008）
 
-**Scale/Scope**: 单用户；单实例多标签；工作区可含 10,000+ 文件；单文档 10,000+ 图元；7 个用户故事、33 条功能需求
+**Scale/Scope**: 单用户；单实例多标签；工作区可含 10,000+ 文件；单文档 10,000+ 图元；7 个用户故事、38 条功能需求；1 个内置主题家族与 3 种模式偏好
 
 ## Constitution Check
 
@@ -41,9 +41,9 @@
 |---------|------------|------|
 | I. 代码质量（SOLID/DRY、单一权威层、TS strict、Rust 禁 unwrap） | PASS（设计层面） | 领域不变量集中于 Rust 后端（原子写、路径校验、冲突判定）；前端仅持编辑态；IPC 契约强类型（contracts/）；`tsconfig.json` 已 strict；lint/clippy 门禁列入 Phase 1 Setup |
 | II. 测试标准（桌面 E2E 优先 + 故障注入） | PASS（设计层面） | 测试分层与三类必测故障场景已进入本计划与 quickstart；E2E 骨架为 Phase 1 Setup / Phase 2 Foundational 交付物，先于首个功能 PR |
-| III. UX 一致性（跨平台一致、可访问性、状态完备） | PASS | spec FR/Edge Cases 已覆盖冲突/离线/错误状态；平台惯例差异（快捷键修饰键等）在模块划分 app/ 层集中处理；a11y 最低线随各用户故事任务交付 |
+| III. UX 一致性（跨平台一致、可访问性、状态完备） | PASS | 根目录 `DESIGN.md` 固化桌面布局、语义 token、主题与状态规则；spec FR/Edge Cases 覆盖主题回退、冲突/离线/错误状态；平台惯例差异在 app/ 层集中处理；a11y 最低线随各用户故事任务交付 |
 | IV. 性能预算（SC 红线、固定参考机、削峰、测量数据） | PASS | Technical Context 引用 SC 数值为预算；T089/T091 在 Foundational 建立固定机测量基础设施与硬门禁，T090/T108 在 US1 Checkpoint 前执行首次 SC 硬验收与 soak；高频路径设计禁止逐事件 IPC（数据流图 1） |
-| V. 文档规范 + 架构图标准（Mermaid 分层图/数据流图） | PASS | 本文件含 Mermaid 分层图 1 幅、数据流图 2 幅；ADR 决策记录于 research.md；`docs/` 目录随实现阶段建立 |
+| V. 文档规范 + 架构图标准（Mermaid 分层图/数据流图） | PASS | 本文件含 Mermaid 分层图 1 幅、数据流图 2 幅；产品设计契约在根目录 `DESIGN.md`，ADR 决策记录于 research.md；`docs/` 目录随实现阶段建立 |
 | 文档代码同步门禁 | PASS | 本次为纯文档交付；实现阶段起 PR 检查清单执行同步项 |
 
 **存量缺口（非本计划豁免项，列为实施前置清偿任务，进入 tasks.md Phase 1 Setup / Phase 2 Foundational）**：
@@ -117,6 +117,12 @@
 
 当前版本的 macOS 发布范围止于本地构建、文件关联和原生行为验证；Developer ID 签名、公证及零安全拦截正式发布为后续版本范围，不阻塞当前版本 Checkpoint。
 
+### D7. 桌面壳层与主题（选定）
+
+**决策**：保留系统原生装饰窗口；内容区采用顶部多文件标签、左侧文件管理、右侧官方画布。画布直接使用锁定 `@excalidraw/excalidraw` 包的公开样式和 `theme` 接口，壳层只消费 `DESIGN.md` 定义的语义 token，不复制上游私有组件或内部 CSS。主题状态分为 `themeId` 与 `modePreference`，第一版固定 `themeId = excalidraw`，模式支持 `light | dark | system`，解析结果 `light | dark` 同时驱动壳层和画布。
+
+外观偏好使用版本化的前端本地设置保存并在 React 挂载前应用，避免启动主题闪烁；未知值回退 `system`。未来主题通过受校验的 token registry 扩展，禁止任意 CSS/脚本/远程资源。外观不属于文档领域，导出与缩略图仍只接受基础 `light | dark`，不修改现有 IPC 与 SQLite schema。
+
 ## 架构设计
 
 ### 分层图（Layered View）
@@ -125,6 +131,7 @@
 flowchart TB
     subgraph frontend [前端 React 19 + TypeScript strict]
         UI["app/ 布局·标签页·对话框·平台惯例"]
+        Theme["app/theme/ 主题注册·偏好解析·语义 token"]
         Editor["editor/ ExcalidrawAdapter + 画布组件"]
         Docs["documents/ 保存调度器·冲突·恢复 UI 状态机"]
         Sidebar["sidebar/ + workspaces/ 虚拟化文件树"]
@@ -147,6 +154,8 @@ flowchart TB
         Cold["冷层 文件系统: *.excalidraw (原子替换)"]
         Recovery["恢复快照: recovery/*.json 轮换"]
     end
+    UI --> Theme
+    Theme --> Editor
     UI --> Editor --> Store
     UI --> Docs
     UI --> Sidebar
@@ -166,7 +175,7 @@ flowchart TB
     Thumbs --> Hot
 ```
 
-依赖方向自上而下单向；前端不直接触达文件系统或数据库；所有路径进入后端后先经 `security/` 规范化并校验工作区白名单（FR-031）。
+依赖方向自上而下单向；主题模块仅管理非文档外观偏好并向壳层/画布提供解析结果，不进入 IPC 或文档模型；前端不直接触达文件系统或数据库；所有路径进入后端后先经 `security/` 规范化并校验工作区白名单（FR-031）。
 
 ### 数据流图 1：编辑 → 草稿 → 落盘（三级削峰）
 
@@ -208,6 +217,8 @@ flowchart TB
 
 ### Documentation (this feature)
 
+仓库根目录 `DESIGN.md` 是 UI 视觉与交互契约；以下 SpecKit 工件定义产品行为、工程决策与验证。
+
 ```text
 specs/001-excalidraw-desktop/
 ├── spec.md              # 权威 PRD（原 0001-spec-claude.md）
@@ -227,6 +238,7 @@ specs/001-excalidraw-desktop/
 ```text
 src/                          # 前端 React 应用
 ├── app/                      # 布局、标签页、全局对话框、菜单/快捷键（平台惯例集中层）
+│   └── theme/                # 主题类型、registry、偏好解析、语义 token 与启动前应用
 ├── editor/                   # ExcalidrawAdapter.ts / ExcalidrawEditor.tsx /
 │                             # sceneSerializer.ts / exportService.ts /
 │                             # fontLoader.ts（EXCALIDRAW_ASSET_PATH 与字体注册）/
@@ -257,7 +269,7 @@ scripts/                      # 字体合并（fonttools）、构建辅助
 docs/                         # 架构文档与 ADR（实现阶段建立）
 ```
 
-**Structure Decision**: 采用 Tauri 标准双端布局（现有脚手架目录骨架保留，内容按上述模块重写）。前端按领域（editor/documents/sidebar/workspaces）而非技术类型分包；后端 `database/` 以仓储 trait 隔离存储实现以支持 D2 的 redb 备选路径。
+**Structure Decision**: 采用 Tauri 标准双端布局（现有脚手架目录骨架保留，内容按上述模块重写）。前端按领域（editor/documents/sidebar/workspaces）而非技术类型分包；仅跨所有前端领域的外观状态集中于 `app/theme/`。后端 `database/` 以仓储 trait 隔离存储实现以支持 D2 的 redb 备选路径。
 
 ## 第三方依赖清单
 
@@ -296,7 +308,7 @@ docs/                         # 架构文档与 ADR（实现阶段建立）
 
 ## Complexity Tracking
 
-> 无需要豁免的宪法违规项。双层持久化与仓储抽象由 spec 可靠性需求（FR-008~014）直接驱动，非投机复杂度；redb 备选仅保留触发条件，不预先实现。
+> 无需要豁免的宪法违规项。双层持久化与仓储抽象由 spec 可靠性需求（FR-008~014）直接驱动，非投机复杂度；主题 registry 由 FR-035~037 的当前三态偏好与后续扩展边界共同驱动，但第一版仅注册一个内置家族，不实现主题导入/编辑；FR-038/SC-015 的无障碍要求复用既定语义组件与测试基础设施，不新增 UI 框架；redb 备选仅保留触发条件，不预先实现。
 
 ## Constitution Check（Phase 1 设计后复评）
 
@@ -305,5 +317,6 @@ docs/                         # 架构文档与 ADR（实现阶段建立）
 - 架构图标准：本文件含 Mermaid 分层图与两幅数据流图，覆盖宪法要求的最低集合。
 - 单一权威层：数据模型与校验规则唯一定义于 data-model.md 并由 Rust 侧实现，contracts 仅描述边界形状，无业务规则重复。
 - E2E 与故障注入：quickstart.md 将三类必测故障场景映射为可执行验证入口。
+- UX 一致性：根目录 `DESIGN.md` 与 R19/D7 共同定义原生窗口边界、桌面信息架构、官方画布样式归属、主题状态及扩展安全边界；quickstart.md 提供浅色/深色/跟随系统验证矩阵。
 - 性能与资源：T089/T091 在 Foundational 建立固定机测量基础设施与门禁；因画布尚未实现，Phase 2 只记录 scaffold 诊断结果，不作 SC verdict。T090/T108 在 US1 Checkpoint 前执行首次完整硬验收与长时基线，后续性能敏感 PR 必须附带同机前后对比。
 - 无新增未证成复杂度；Complexity Tracking 保持为空。
