@@ -290,5 +290,10 @@ test("measures cold start to editable canvas and idle process-tree RSS", async (
     },
   });
 
+  if (!measurementsAvailable) {
+    throw new Error(
+      `The native startup performance contract was unavailable or incomplete. ${contractError ?? ""}`.trim(),
+    );
+  }
   hardGateRequiresEvaluatedVerdict(overall);
 });

@@ -223,13 +223,13 @@ test("measures 30 minute editing stability and subsequent quiescence", async () 
   }
 
   const fullDuration = editDurationMs >= REQUIRED_SOAK_DURATION_MS;
-  const measurementsAvailable =
-    fullDuration &&
+  const diagnosticMeasurementsAvailable =
     warmedBaselineSamples.length > 0 &&
     soakSamples.length > 0 &&
     quiescentSamples.length > 0 &&
     soakResult !== undefined &&
     writeObservation !== undefined;
+  const measurementsAvailable = fullDuration && diagnosticMeasurementsAvailable;
   const warmedRssP95 =
     warmedBaselineSamples.length > 0
       ? percentile(
@@ -325,5 +325,10 @@ test("measures 30 minute editing stability and subsequent quiescence", async () 
     },
   });
 
+  if (!diagnosticMeasurementsAvailable) {
+    throw new Error(
+      `The native soak performance contract was unavailable or incomplete. ${contractError ?? ""}`.trim(),
+    );
+  }
   hardGateRequiresEvaluatedVerdict(overall);
 });

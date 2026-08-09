@@ -56,3 +56,9 @@ blob-report/
 
 # chats
 .chats/
+
+# pnpm
+.pnpm-store/
+
+# local handoff notes
+.handoff

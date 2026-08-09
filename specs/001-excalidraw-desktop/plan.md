@@ -42,7 +42,7 @@
 | I. 代码质量（SOLID/DRY、单一权威层、TS strict、Rust 禁 unwrap） | PASS（设计层面） | 领域不变量集中于 Rust 后端（原子写、路径校验、冲突判定）；前端仅持编辑态；IPC 契约强类型（contracts/）；`tsconfig.json` 已 strict；lint/clippy 门禁列入 Phase 1 Setup |
 | II. 测试标准（桌面 E2E 优先 + 故障注入） | PASS（设计层面） | 测试分层与三类必测故障场景已进入本计划与 quickstart；E2E 骨架为 Phase 1 Setup / Phase 2 Foundational 交付物，先于首个功能 PR |
 | III. UX 一致性（跨平台一致、可访问性、状态完备） | PASS | 根目录 `DESIGN.md` 固化桌面布局、语义 token、主题与状态规则；spec FR/Edge Cases 覆盖主题回退、冲突/离线/错误状态；平台惯例差异在 app/ 层集中处理；a11y 最低线随各用户故事任务交付 |
-| IV. 性能预算（SC 红线、固定参考机、削峰、测量数据） | PASS | Technical Context 引用 SC 数值为预算；T089/T091 在 Foundational 建立固定机测量基础设施与硬门禁，T090/T108 在 US1 Checkpoint 前执行首次 SC 硬验收与 soak；高频路径设计禁止逐事件 IPC（数据流图 1） |
+| IV. 性能预算（SC 红线、固定参考机、削峰、测量数据） | PASS | Technical Context 引用 SC 数值为预算；T089/T091 在 Foundational 建立固定机测量基础设施与硬门禁，T090/T108 在 US1 Checkpoint 前执行首次 SC 硬验收与 soak；两者阻止 US1 合并/发布，但不构成 Phase 2 后独立 US4/US5 开发线的调度依赖；高频路径设计禁止逐事件 IPC（数据流图 1） |
 | V. 文档规范 + 架构图标准（Mermaid 分层图/数据流图） | PASS | 本文件含 Mermaid 分层图 1 幅、数据流图 2 幅；产品设计契约在根目录 `DESIGN.md`，ADR 决策记录于 research.md；`docs/` 目录随实现阶段建立 |
 | 文档代码同步门禁 | PASS | 本次为纯文档交付；实现阶段起 PR 检查清单执行同步项 |
 
@@ -318,5 +318,5 @@ docs/                         # 架构文档与 ADR（实现阶段建立）
 - 单一权威层：数据模型与校验规则唯一定义于 data-model.md 并由 Rust 侧实现，contracts 仅描述边界形状，无业务规则重复。
 - E2E 与故障注入：quickstart.md 将三类必测故障场景映射为可执行验证入口。
 - UX 一致性：根目录 `DESIGN.md` 与 R19/D7 共同定义原生窗口边界、桌面信息架构、官方画布样式归属、主题状态及扩展安全边界；quickstart.md 提供浅色/深色/跟随系统验证矩阵。
-- 性能与资源：T089/T091 在 Foundational 建立固定机测量基础设施与门禁；因画布尚未实现，Phase 2 只记录 scaffold 诊断结果，不作 SC verdict。T090/T108 在 US1 Checkpoint 前执行首次完整硬验收与长时基线，后续性能敏感 PR 必须附带同机前后对比。
+- 性能与资源：T089/T091 在 Foundational 建立固定机测量基础设施与门禁；因画布尚未实现，Phase 2 只记录 scaffold 诊断结果，不作 SC verdict。T090/T108 在 US1 Checkpoint 前执行首次完整硬验收与长时基线，只有固定 Apple M1 / 8GB runner 的 `pass` 可完成任务并放行 US1 合并/发布；其他硬件仅能产出诊断证据。该外部硬验收不构成 Phase 2 后依赖已满足的 US4/US5 开发线调度依赖。后续性能敏感 PR 必须附带同机前后对比。
 - 无新增未证成复杂度；Complexity Tracking 保持为空。

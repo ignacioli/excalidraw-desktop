@@ -102,3 +102,29 @@ Never claim a check passed unless it actually ran successfully. If validation re
 The primary branch is `main`. Do not commit unless explicitly requested. Keep changes focused, use short imperative commit subjects when asked to commit, and never bypass hooks or force-push the primary branch. Do not discard or overwrite user changes.
 
 A task is complete only when the requested outcome works across the affected path, relevant tests and documentation are updated, applicable checks pass or exact gaps are reported, no secrets are introduced, and the final handoff lists changed files, validation, assumptions, and residual risks.
+
+## Spec-Driven Development (SpecKit) Workflow Protection
+
+These rules govern every SpecKit development round, whether driven by `speckit-implement` or controlled manually by the user. They override the default "commit only when requested" behavior only at the explicit triggers below; the user may always narrow or broaden the scope.
+
+### Pre-work uncommitted-change audit
+
+Before starting any new development round, run `git status --short` and `git diff --stat`, then classify every change as tracked modification, untracked file, or staged content. Record the list in the plan and do not proceed until the state is understood. Treat all existing uncommitted changes as user-owned: never discard, reset, or overwrite them without explicit confirmation.
+
+### Backup before destructive worktree operations
+
+The following operations MAY silently destroy or overwrite uncommitted work and MUST be preceded by a WIP-branch commit backup (create a `wip/` or `codex/wip-*` branch and commit the full worktree state), or by explicit user confirmation to discard:
+
+- Worktree-level merge, checkout, branch switch, or worktree add/remove when the worktree is dirty.
+- `git reset --hard`, `git checkout -- <path>`, `git clean -fd`, and any archive extraction that overwrites tracked files (for example `git archive | tar -x`).
+- Bulk file copies or scripted rewrites that touch files outside the current task's ownership.
+
+Prefer native Git operations (`git merge`, `git cherry-pick`) over archive extraction or manual copying; native operations either preserve uncommitted work or fail loudly instead of silently replacing it.
+
+### Commit triggers
+
+- **Checkpoint level (primary)**: commit once at each story/phase Checkpoint after its validation gates pass. Intermediate TDD states (tests written and failing before implementation) may stay uncommitted until the checkpoint.
+- **Safety trigger**: commit the full worktree to a WIP branch before any destructive operation listed above, even mid-checkpoint.
+- **Boundary trigger**: commit when a session is handed off (for example a `.handoff` note is generated) and whenever a task changes from `[ ]` to `[X]` in `tasks.md`.
+
+`tasks.md` checkboxes MUST be committed together with, or immediately after, the code that satisfies them; never commit task checkmarks ahead of their implementation. Integration of parallel branches uses merges only and never archive extraction over a dirty worktree.

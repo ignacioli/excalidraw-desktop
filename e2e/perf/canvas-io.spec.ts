@@ -296,5 +296,10 @@ test("measures the 10k canvas and 60 second persistence workload", async () => {
     },
   });
 
+  if (!measurementsAvailable) {
+    throw new Error(
+      `The native canvas performance contract was unavailable or incomplete. ${contractError ?? ""}`.trim(),
+    );
+  }
   hardGateRequiresEvaluatedVerdict(overall);
 });

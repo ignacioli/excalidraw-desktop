@@ -100,6 +100,35 @@ async function collectMacWebViewVersion(): Promise<string> {
   return `WebKit ${version}`;
 }
 
+function parseMacHardwareProfile(
+  profileJson: string | undefined,
+): { model: string; cpuBrand: string } | undefined {
+  if (!profileJson) {
+    return undefined;
+  }
+  try {
+    const profile = JSON.parse(profileJson) as {
+      SPHardwareDataType?: Array<{
+        machine_model?: unknown;
+        chip_type?: unknown;
+      }>;
+    };
+    const hardware = profile.SPHardwareDataType?.[0];
+    if (
+      typeof hardware?.machine_model !== "string" ||
+      typeof hardware.chip_type !== "string"
+    ) {
+      return undefined;
+    }
+    return {
+      model: hardware.machine_model,
+      cpuBrand: hardware.chip_type,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 async function collectLinuxWebViewVersion(): Promise<string> {
   const version =
     (await runOptional("pkg-config", ["--modversion", "webkit2gtk-4.1"])) ??
@@ -119,12 +148,24 @@ export async function collectEnvironmentMetadata(): Promise<EnvironmentMetadata>
   let webviewVersion = "unsupported-platform";
 
   if (process.platform === "darwin") {
-    const [model, cpuBrand, productVersion, buildVersion] = await Promise.all([
-      runOptional("/usr/sbin/sysctl", ["-n", "hw.model"]),
-      runOptional("/usr/sbin/sysctl", ["-n", "machdep.cpu.brand_string"]),
-      runOptional("/usr/bin/sw_vers", ["-productVersion"]),
-      runOptional("/usr/bin/sw_vers", ["-buildVersion"]),
-    ]);
+    const [sysctlModel, sysctlCpuBrand, productVersion, buildVersion] =
+      await Promise.all([
+        runOptional("/usr/sbin/sysctl", ["-n", "hw.model"]),
+        runOptional("/usr/sbin/sysctl", ["-n", "machdep.cpu.brand_string"]),
+        runOptional("/usr/bin/sw_vers", ["-productVersion"]),
+        runOptional("/usr/bin/sw_vers", ["-buildVersion"]),
+      ]);
+    const hardwareProfile =
+      sysctlModel && sysctlCpuBrand
+        ? undefined
+        : parseMacHardwareProfile(
+            await runOptional("/usr/sbin/system_profiler", [
+              "SPHardwareDataType",
+              "-json",
+            ]),
+          );
+    const model = sysctlModel ?? hardwareProfile?.model;
+    const cpuBrand = sysctlCpuBrand ?? hardwareProfile?.cpuBrand;
     if (!model || !cpuBrand || !productVersion || !buildVersion) {
       throw new Error(
         "Unable to collect the fixed-runner hardware or exact macOS metadata.",
