@@ -70,16 +70,22 @@ Keep high-risk ownership explicit:
 
 ## Commands and Validation
 
-The current manifests establish only the following workflows:
+The manifests establish the following workflows:
 
 - `pnpm dev`: run the Vite development server.
-- `pnpm build`: run the current TypeScript and Vite production build.
+- `pnpm build`: run the strict TypeScript check and Vite production build.
+- `pnpm lint`: run the frontend ESLint gate.
+- `pnpm typecheck`: run the standalone strict TypeScript gate.
+- `pnpm test`: run the Vitest unit suite.
+- `APP_E2E=1 pnpm e2e`: run the Playwright suites; native-shell and fault-injection cases require the test-only Tauri build described by the E2E fixture.
+- `pnpm fonts:build`: build the bundled CJK hand-drawn font from the licensed local source fonts.
 - `pnpm tauri dev`: run the Tauri development application through the package script.
 - `pnpm tauri build`: build the current Tauri bundle through the package script.
-- `cargo check --manifest-path src-tauri/Cargo.toml`: check the Rust scaffold.
-- `cargo test --manifest-path src-tauri/Cargo.toml`: run currently available Rust tests.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: check Rust formatting.
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`: run the Rust lint gate.
+- `cargo test --manifest-path src-tauri/Cargo.toml`: run the Rust unit and integration tests.
 
-Lint, strict typecheck as a separate command, Vitest, desktop Playwright E2E, fault injection, performance fixtures, Clippy gates, signing, and release CI are planned tasks rather than current capabilities. Do not claim or document their planned command names as implemented until the corresponding manifests and workflows exist; update this section when those tasks land.
+The fixed-runner performance workflow and test-only fault-injection harness are implemented infrastructure, but their absolute verdicts are valid only on the configured Apple M1 / 8GB runner. Signing, notarization, and release CI remain outside the current local validation scope.
 
 Validation must be proportional to risk and should eventually include, as applicable:
 

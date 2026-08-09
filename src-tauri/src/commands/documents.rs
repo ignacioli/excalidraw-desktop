@@ -1,0 +1,570 @@
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    io::Read,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
+
+use sha2::{Digest, Sha256};
+use tauri::{AppHandle, Emitter, State};
+
+use crate::{
+    database::repository::{
+        DocumentRepository, DraftRecord, DraftRepository, FileIndexRecord, SqliteRepository,
+        WorkspaceRecord, WorkspaceRepository,
+    },
+    documents::{
+        atomic_write::atomic_write,
+        validation::{validate_scene, SceneValidationError},
+    },
+    security::{PathSecurityError, WorkspacePathPolicy},
+};
+
+use super::{
+    dto::{
+        CheckpointReason, CheckpointRequest, CheckpointResponse, CloseDocumentRequest,
+        DraftSavedEvent, EmptyResponse, PathRequest, SaveDraftRequest, SaveDraftResponse,
+        SceneOpenResponse,
+    },
+    error::{AppError, IpcError},
+};
+
+pub trait DirectFileGrant: Send + Sync {
+    fn is_allowed(&self, path: &Path) -> bool;
+}
+
+struct DenyDirectFiles;
+
+impl DirectFileGrant for DenyDirectFiles {
+    fn is_allowed(&self, _path: &Path) -> bool {
+        false
+    }
+}
+
+#[derive(Clone)]
+pub struct DocumentService {
+    repository: Arc<SqliteRepository>,
+    direct_file_grant: Arc<dyn DirectFileGrant>,
+    scene_limit_bytes: usize,
+    document_locks: Arc<tokio::sync::Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>>,
+}
+
+impl DocumentService {
+    pub const DEFAULT_SCENE_LIMIT_BYTES: usize = 256 * 1024 * 1024;
+
+    pub fn new(repository: Arc<SqliteRepository>) -> Self {
+        Self::with_grant_and_scene_limit(
+            repository,
+            Arc::new(DenyDirectFiles),
+            Self::DEFAULT_SCENE_LIMIT_BYTES,
+        )
+    }
+
+    pub fn with_scene_limit(repository: Arc<SqliteRepository>, scene_limit_bytes: usize) -> Self {
+        Self::with_grant_and_scene_limit(repository, Arc::new(DenyDirectFiles), scene_limit_bytes)
+    }
+
+    pub fn with_grant_and_scene_limit(
+        repository: Arc<SqliteRepository>,
+        direct_file_grant: Arc<dyn DirectFileGrant>,
+        scene_limit_bytes: usize,
+    ) -> Self {
+        Self {
+            repository,
+            direct_file_grant,
+            scene_limit_bytes,
+            document_locks: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub async fn doc_open(&self, request: PathRequest) -> Result<SceneOpenResponse, IpcError> {
+        self.open(request).await.map_err(Into::into)
+    }
+
+    pub async fn doc_save_draft(
+        &self,
+        request: SaveDraftRequest,
+    ) -> Result<SaveDraftResponse, IpcError> {
+        self.save_draft(request).await.map_err(Into::into)
+    }
+
+    pub async fn doc_checkpoint(
+        &self,
+        request: CheckpointRequest,
+    ) -> Result<CheckpointResponse, IpcError> {
+        self.checkpoint(request).await.map_err(Into::into)
+    }
+
+    pub async fn doc_close(
+        &self,
+        request: CloseDocumentRequest,
+    ) -> Result<EmptyResponse, IpcError> {
+        self.close(request).await.map_err(Into::into)
+    }
+
+    async fn open(&self, request: PathRequest) -> Result<SceneOpenResponse, AppError> {
+        let authorized = self
+            .authorize_path(Path::new(&request.path), PathMode::Existing)
+            .await?;
+        let _document_guard = self.lock_document(&authorized.path).await;
+        let limit = self.scene_limit_bytes;
+        let path = authorized.path.clone();
+        let bytes = run_blocking(move || read_bounded(&path, limit)).await?;
+        let scene = validate_persisted_scene(&bytes, limit)?;
+        let base_hash = content_hash(&bytes);
+        let draft = self
+            .repository
+            .draft_get(path_string(&authorized.path))
+            .await?;
+        let has_newer_draft =
+            draft.is_some_and(|record| record.is_dirty && record.content_hash != base_hash);
+
+        Ok(SceneOpenResponse {
+            scene,
+            base_hash,
+            has_newer_draft,
+        })
+    }
+
+    async fn save_draft(&self, request: SaveDraftRequest) -> Result<SaveDraftResponse, AppError> {
+        let authorized = self
+            .authorize_path(Path::new(&request.path), PathMode::Existing)
+            .await?;
+        let _document_guard = self.lock_document(&authorized.path).await;
+        let limit = self.scene_limit_bytes;
+        let scene_json = request.scene_json;
+        let (scene_json, hash) = run_blocking(move || {
+            validate_active_scene(scene_json.as_bytes(), limit)?;
+            let hash = content_hash(scene_json.as_bytes());
+            Ok((scene_json, hash))
+        })
+        .await?;
+
+        let canonical_path = path_string(&authorized.path);
+        let existing = self.repository.draft_get(canonical_path.clone()).await?;
+        let base_hash = match existing.and_then(|draft| draft.base_hash) {
+            Some(hash) => Some(hash),
+            None => {
+                let path = authorized.path;
+                let bytes = run_blocking(move || read_bounded(&path, limit)).await?;
+                Some(content_hash(&bytes))
+            }
+        };
+        let saved_at = unix_timestamp()?;
+        self.repository
+            .draft_upsert(DraftRecord {
+                file_path: canonical_path,
+                scene_json,
+                content_hash: hash.clone(),
+                base_hash,
+                updated_at: saved_at,
+                is_dirty: true,
+            })
+            .await?;
+        Ok(SaveDraftResponse {
+            content_hash: hash,
+            saved_at,
+        })
+    }
+
+    async fn checkpoint(&self, request: CheckpointRequest) -> Result<CheckpointResponse, AppError> {
+        let authorized = self
+            .authorize_path(Path::new(&request.path), PathMode::CreateOrReplace)
+            .await?;
+        let _document_guard = self.lock_document(&authorized.path).await;
+        let limit = self.scene_limit_bytes;
+        let scene_json = request.scene_json;
+        let (scene_json, hash) = run_blocking(move || {
+            validate_active_scene(scene_json.as_bytes(), limit)?;
+            let hash = content_hash(scene_json.as_bytes());
+            Ok((scene_json, hash))
+        })
+        .await?;
+
+        let write_path = authorized.path.clone();
+        let write_contents = scene_json.clone();
+        run_blocking(move || {
+            atomic_write(&write_path, write_contents.as_bytes()).map_err(AppError::from)
+        })
+        .await?;
+
+        let metadata_path = authorized.path.clone();
+        let (mtime, file_size) = run_blocking(move || file_metadata(&metadata_path)).await?;
+        let canonical_path = path_string(&authorized.path);
+        let indexed_file = authorized
+            .workspace
+            .map(|workspace| {
+                file_index_record(&workspace, &authorized.path, mtime, file_size, &hash)
+            })
+            .transpose()?;
+        self.repository
+            .document_checkpoint_commit(
+                DraftRecord {
+                    file_path: canonical_path,
+                    scene_json,
+                    content_hash: hash.clone(),
+                    base_hash: Some(hash.clone()),
+                    updated_at: mtime,
+                    is_dirty: false,
+                },
+                indexed_file,
+            )
+            .await?;
+        let _reason: CheckpointReason = request.reason;
+        Ok(CheckpointResponse {
+            new_base_hash: hash,
+            mtime,
+        })
+    }
+
+    async fn close(&self, request: CloseDocumentRequest) -> Result<EmptyResponse, AppError> {
+        let authorized = self
+            .authorize_path(Path::new(&request.path), PathMode::Existing)
+            .await?;
+        let _document_guard = self.lock_document(&authorized.path).await;
+        let canonical_path = path_string(&authorized.path);
+        if request.discard_draft {
+            self.repository.draft_delete(canonical_path).await?;
+            return Ok(EmptyResponse {});
+        }
+        if self
+            .repository
+            .draft_get(canonical_path)
+            .await?
+            .is_some_and(|draft| draft.is_dirty)
+        {
+            return Err(AppError::ConflictPending(authorized.path));
+        }
+        Ok(EmptyResponse {})
+    }
+
+    async fn authorize_path(
+        &self,
+        requested: &Path,
+        mode: PathMode,
+    ) -> Result<AuthorizedPath, AppError> {
+        if !is_supported_document_path(requested) {
+            return Err(AppError::PathAccessDenied(requested.to_path_buf()));
+        }
+        let workspaces = self.repository.workspace_list().await?;
+        let policy = WorkspacePathPolicy::new(
+            workspaces
+                .iter()
+                .map(|workspace| Path::new(&workspace.root_path)),
+        )?;
+
+        let authorization = match mode {
+            PathMode::Existing => policy.authorize_existing(requested),
+            PathMode::CreateOrReplace if requested.exists() => policy.authorize_existing(requested),
+            PathMode::CreateOrReplace => policy.authorize_for_creation(requested),
+        };
+        match authorization {
+            Ok(path) => Ok(AuthorizedPath {
+                workspace: owning_workspace(&workspaces, &path),
+                path,
+            }),
+            Err(PathSecurityError::AccessDenied(_))
+                if self.is_direct_file_allowed(requested, mode) =>
+            {
+                let path = normalize_granted_path(requested, mode)?;
+                Ok(AuthorizedPath {
+                    workspace: owning_workspace(&workspaces, &path),
+                    path,
+                })
+            }
+            Err(PathSecurityError::AccessDenied(_)) => {
+                Err(AppError::PathAccessDenied(requested.to_path_buf()))
+            }
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    fn is_direct_file_allowed(&self, requested: &Path, mode: PathMode) -> bool {
+        if self.direct_file_grant.is_allowed(requested) {
+            return true;
+        }
+
+        // The save dialog scopes the exact path selected by the user. The
+        // frontend adds the standard extension when the platform dialog does
+        // not, so accept only that single, deterministic sibling path.
+        matches!(mode, PathMode::CreateOrReplace)
+            && !requested.exists()
+            && requested
+                .extension()
+                .is_some_and(|value| value == "excalidraw")
+            && self
+                .direct_file_grant
+                .is_allowed(&requested.with_extension(""))
+    }
+
+    async fn lock_document(&self, path: &Path) -> tokio::sync::OwnedMutexGuard<()> {
+        let lock = {
+            let mut locks = self.document_locks.lock().await;
+            Arc::clone(
+                locks
+                    .entry(path.to_path_buf())
+                    .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(()))),
+            )
+        };
+        lock.lock_owned().await
+    }
+}
+
+fn is_supported_document_path(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(str::to_ascii_lowercase)
+        .is_some_and(|name| name.ends_with(".excalidraw") || name.ends_with(".excalidraw.json"))
+}
+
+#[derive(Clone)]
+pub struct DocumentState {
+    service: DocumentService,
+}
+
+impl DocumentState {
+    pub fn new(service: DocumentService) -> Self {
+        Self { service }
+    }
+}
+
+#[tauri::command]
+pub async fn doc_open(
+    path: String,
+    state: State<'_, DocumentState>,
+) -> Result<SceneOpenResponse, IpcError> {
+    state.service.doc_open(PathRequest { path }).await
+}
+
+#[tauri::command]
+pub async fn doc_save_draft(
+    path: String,
+    scene_json: String,
+    app: AppHandle,
+    state: State<'_, DocumentState>,
+) -> Result<SaveDraftResponse, IpcError> {
+    let response = state
+        .service
+        .doc_save_draft(SaveDraftRequest {
+            path: path.clone(),
+            scene_json,
+        })
+        .await?;
+    app.emit(
+        "draft-saved",
+        DraftSavedEvent {
+            path,
+            saved_at: response.saved_at,
+        },
+    )
+    .map_err(|error| IpcError::from(AppError::Internal(error.to_string())))?;
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn doc_checkpoint(
+    path: String,
+    scene_json: String,
+    reason: CheckpointReason,
+    state: State<'_, DocumentState>,
+) -> Result<CheckpointResponse, IpcError> {
+    state
+        .service
+        .doc_checkpoint(CheckpointRequest {
+            path,
+            scene_json,
+            reason,
+        })
+        .await
+}
+
+#[tauri::command]
+pub async fn doc_close(
+    path: String,
+    discard_draft: bool,
+    state: State<'_, DocumentState>,
+) -> Result<EmptyResponse, IpcError> {
+    state
+        .service
+        .doc_close(CloseDocumentRequest {
+            path,
+            discard_draft,
+        })
+        .await
+}
+
+#[derive(Clone, Copy)]
+enum PathMode {
+    Existing,
+    CreateOrReplace,
+}
+
+struct AuthorizedPath {
+    path: PathBuf,
+    workspace: Option<WorkspaceRecord>,
+}
+
+fn owning_workspace(workspaces: &[WorkspaceRecord], path: &Path) -> Option<WorkspaceRecord> {
+    workspaces
+        .iter()
+        .find(|workspace| path.starts_with(Path::new(&workspace.root_path)))
+        .cloned()
+}
+
+fn normalize_granted_path(path: &Path, mode: PathMode) -> Result<PathBuf, AppError> {
+    if path.exists() || matches!(mode, PathMode::Existing) {
+        return path.canonicalize().map_err(|source| AppError::Io {
+            path: Some(path.to_path_buf()),
+            source,
+        });
+    }
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| AppError::PathAccessDenied(path.to_path_buf()))?;
+    let canonical_parent = parent.canonicalize().map_err(|source| AppError::Io {
+        path: Some(parent.to_path_buf()),
+        source,
+    })?;
+    Ok(canonical_parent.join(file_name))
+}
+
+fn validate_persisted_scene(
+    bytes: &[u8],
+    maximum_bytes: usize,
+) -> Result<serde_json::Value, AppError> {
+    validate_scene(bytes, maximum_bytes).map_err(|error| match error {
+        SceneValidationError::TooLarge {
+            actual_bytes,
+            maximum_bytes,
+        } => AppError::FileTooLarge {
+            actual_bytes,
+            maximum_bytes,
+        },
+        other => AppError::FileCorrupted(other.to_string()),
+    })
+}
+
+fn validate_active_scene(bytes: &[u8], maximum_bytes: usize) -> Result<(), AppError> {
+    validate_scene(bytes, maximum_bytes)
+        .map(|_| ())
+        .map_err(|error| match error {
+            SceneValidationError::TooLarge {
+                actual_bytes,
+                maximum_bytes,
+            } => AppError::FileTooLarge {
+                actual_bytes,
+                maximum_bytes,
+            },
+            other => AppError::InvalidScene(other.to_string()),
+        })
+}
+
+fn read_bounded(path: &Path, maximum_bytes: usize) -> Result<Vec<u8>, AppError> {
+    let metadata = fs::metadata(path).map_err(|source| io_error(path, source))?;
+    if metadata.len() > maximum_bytes as u64 {
+        return Err(AppError::FileTooLarge {
+            actual_bytes: metadata.len(),
+            maximum_bytes: maximum_bytes as u64,
+        });
+    }
+    let maximum_read = maximum_bytes
+        .checked_add(1)
+        .ok_or_else(|| AppError::Internal("scene size limit overflowed".to_owned()))?;
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    File::open(path)
+        .map_err(|source| io_error(path, source))?
+        .take(maximum_read as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|source| io_error(path, source))?;
+    if bytes.len() > maximum_bytes {
+        return Err(AppError::FileTooLarge {
+            actual_bytes: bytes.len() as u64,
+            maximum_bytes: maximum_bytes as u64,
+        });
+    }
+    Ok(bytes)
+}
+
+fn file_metadata(path: &Path) -> Result<(i64, i64), AppError> {
+    let metadata = fs::metadata(path).map_err(|source| io_error(path, source))?;
+    let modified = metadata
+        .modified()
+        .map_err(|source| io_error(path, source))?
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| AppError::Internal(format!("file mtime predates Unix epoch: {error}")))?;
+    let mtime = i64::try_from(modified.as_secs())
+        .map_err(|_| AppError::Internal("file mtime exceeds the IPC range".to_owned()))?;
+    let file_size = i64::try_from(metadata.len())
+        .map_err(|_| AppError::Internal("file size exceeds the IPC range".to_owned()))?;
+    Ok((mtime, file_size))
+}
+
+fn file_index_record(
+    workspace: &WorkspaceRecord,
+    path: &Path,
+    mtime: i64,
+    file_size: i64,
+    hash: &str,
+) -> Result<FileIndexRecord, AppError> {
+    let workspace_root = Path::new(&workspace.root_path);
+    let relative = path
+        .strip_prefix(workspace_root)
+        .map_err(|_| AppError::PathAccessDenied(path.to_path_buf()))?;
+    let display_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| AppError::InvalidScene("document path has no UTF-8 file name".to_owned()))?;
+    Ok(FileIndexRecord {
+        canonical_path: path_string(path),
+        workspace_id: workspace.id.clone(),
+        display_name: display_name.to_owned(),
+        relative_path: relative.display().to_string(),
+        mtime,
+        file_size,
+        content_hash: Some(hash.to_owned()),
+    })
+}
+
+fn unix_timestamp() -> Result<i64, AppError> {
+    let seconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| AppError::Internal(format!("system clock predates Unix epoch: {error}")))?
+        .as_secs();
+    i64::try_from(seconds)
+        .map_err(|_| AppError::Internal("system time exceeds the IPC range".to_owned()))
+}
+
+fn content_hash(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+fn path_string(path: &Path) -> String {
+    path.display().to_string()
+}
+
+fn io_error(path: &Path, source: std::io::Error) -> AppError {
+    if source.kind() == std::io::ErrorKind::NotFound {
+        AppError::FileNotFound(path.to_path_buf())
+    } else {
+        AppError::Io {
+            path: Some(path.to_path_buf()),
+            source,
+        }
+    }
+}
+
+async fn run_blocking<T, F>(operation: F) -> Result<T, AppError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, AppError> + Send + 'static,
+{
+    tokio::task::spawn_blocking(operation)
+        .await
+        .map_err(|error| AppError::Internal(format!("blocking document task failed: {error}")))?
+}

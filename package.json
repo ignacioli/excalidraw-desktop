@@ -1,0 +1,52 @@
+{
+  "name": "excalidraw-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.20.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "pnpm typecheck && vite build",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --check package.json eslint.config.js .prettierrc tsconfig.json tsconfig.node.json vite.config.ts vitest.config.ts 'src/**/*.{ts,tsx,css}' public/fonts/README.md",
+    "format:write": "prettier --write package.json eslint.config.js .prettierrc tsconfig.json tsconfig.node.json vite.config.ts vitest.config.ts 'src/**/*.{ts,tsx,css}' public/fonts/README.md",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test --config e2e/playwright.config.ts",
+    "fonts:build": "python3 scripts/build-fonts.py",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
+    "@tanstack/react-virtual": "3.14.9",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "2.7.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zustand": "5.0.14"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.62.1",
+    "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "7.0.0",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.3",
+    "@types/node": "26.1.2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^6.0.2",
+    "eslint": "10.8.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.3",
+    "globals": "17.9.0",
+    "jsdom": "30.0.1",
+    "prettier": "3.9.6",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "8.66.0",
+    "vite": "^8.0.16",
+    "vitest": "4.1.10"
+  }
+}

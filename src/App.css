@@ -1,0 +1,304 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  color: var(--text-primary);
+  background: var(--app-background);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-commands button,
+.file-sidebar button,
+.tab {
+  min-height: 2rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-primary);
+  background: var(--surface-background);
+  font: inherit;
+  cursor: pointer;
+}
+
+.app-commands button:hover,
+.file-sidebar button:hover,
+.tab:hover {
+  background: var(--surface-hover);
+}
+
+.app-commands button:active,
+.file-sidebar button:active,
+.tab:active {
+  background: var(--surface-active);
+}
+
+.app-commands button:focus-visible,
+.file-sidebar button:focus-visible,
+.tab:focus-visible,
+.appearance-option input:focus-visible + span {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.app-commands button:disabled {
+  color: var(--text-disabled);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-rows: 3rem minmax(0, 1fr);
+  width: 100%;
+  height: 100dvh;
+  min-width: 40rem;
+  background: var(--app-background);
+}
+
+.app-shell-tabs {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--panel-background);
+}
+
+.tab-bar,
+.tab-list {
+  height: 100%;
+}
+
+.tab-bar {
+  min-width: 0;
+  flex: 1;
+}
+
+.tab-list {
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  overflow-x: auto;
+  padding: var(--space-1) var(--space-2) 0;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 7rem;
+  max-width: 15rem;
+  min-height: 0;
+  border-color: transparent;
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+  background: transparent;
+}
+
+.tab[aria-selected="true"] {
+  border-color: var(--border-subtle);
+  border-bottom-color: var(--canvas-background);
+  background: var(--canvas-background);
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dirty-indicator {
+  color: var(--warning);
+  font-size: 0.65rem;
+}
+
+.app-commands {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+}
+
+.save-status {
+  max-width: 15rem;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shortcut-hint {
+  margin-left: var(--space-2);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.appearance-control {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.appearance-control legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.appearance-options {
+  display: flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-background);
+}
+
+.appearance-option {
+  position: relative;
+  cursor: pointer;
+}
+
+.appearance-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.appearance-option span {
+  display: block;
+  padding: var(--space-2);
+  border-radius: calc(var(--radius-control) - 1px);
+  color: var(--text-secondary);
+  line-height: 1;
+}
+
+.appearance-option input:checked + span {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  font-weight: 600;
+}
+
+.app-shell-body {
+  display: grid;
+  grid-template-columns: minmax(14rem, 17.5rem) minmax(0, 1fr);
+  min-height: 0;
+}
+
+.file-sidebar {
+  overflow: auto;
+  border-right: 1px solid var(--border-subtle);
+  padding: var(--space-4);
+  background: var(--panel-background);
+}
+
+.workspace-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.workspace-empty-state h1 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.workspace-empty-state p,
+.sidebar-placeholder,
+.canvas-placeholder span {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.empty-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.primary-action {
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  background: var(--accent);
+}
+
+.primary-action:hover {
+  background: var(--accent-hover);
+}
+
+.canvas-region {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--canvas-background);
+}
+
+.canvas-document,
+.excalidraw-editor {
+  width: 100%;
+  height: 100%;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.canvas-empty-state,
+.canvas-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.canvas-placeholder p,
+.canvas-empty-state p {
+  margin: 0 0 var(--space-1);
+}
+
+@media (max-width: 48rem) {
+  .app-shell {
+    min-width: 0;
+  }
+
+  .app-shell-body {
+    grid-template-columns: minmax(11rem, 38vw) minmax(0, 1fr);
+  }
+
+  .save-status,
+  .shortcut-hint {
+    display: none;
+  }
+
+  .appearance-option span {
+    padding-inline: var(--space-1);
+  }
+}

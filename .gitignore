@@ -21,6 +21,7 @@ src-tauri/target/
 playwright-report/
 test-results/
 blob-report/
+.playwright-cli/
 
 # Logs and temporary files
 *.log

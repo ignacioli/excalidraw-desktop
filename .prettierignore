@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+public/fonts/
+src-tauri/target/
+playwright-report/
+test-results/
+pnpm-lock.yaml

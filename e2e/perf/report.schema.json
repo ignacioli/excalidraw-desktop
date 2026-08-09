@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://excalidraw-desktop.invalid/schemas/performance-report-1.0.0.json",
+  "title": "Excalidraw Desktop performance evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "commit",
+    "hardware",
+    "memory",
+    "architecture",
+    "logicalCores",
+    "osVersion",
+    "webviewVersion",
+    "workload",
+    "samples",
+    "statistic",
+    "budget",
+    "verdict"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "hardware": { "type": "string", "minLength": 1 },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bytes", "gibibytes"],
+      "properties": {
+        "bytes": { "type": "integer", "minimum": 1 },
+        "gibibytes": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "architecture": { "type": "string", "minLength": 1 },
+    "logicalCores": { "type": "integer", "minimum": 1 },
+    "osVersion": { "type": "string", "minLength": 1 },
+    "webviewVersion": { "type": "string", "minLength": 1 },
+    "workload": { "type": "object" },
+    "processTreeAccounting": { "type": "object" },
+    "samples": { "type": "object" },
+    "statistic": { "type": "object" },
+    "budget": { "type": "object" },
+    "verdict": {
+      "type": "object",
+      "required": ["overall", "scope", "reason"],
+      "properties": {
+        "overall": { "enum": ["pass", "fail", "not_evaluated"] },
+        "scope": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    }
+  }
+}
