@@ -8,6 +8,8 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     sync::Arc,
+    thread,
+    time::{Duration, Instant},
 };
 
 use serde::Serialize;
@@ -17,15 +19,24 @@ use tauri::Manager;
 use crate::{
     commands::{
         documents::DocumentService,
-        dto::{CheckpointReason, CheckpointRequest, PathRequest, SaveDraftRequest},
+        dto::{
+            CheckpointReason, CheckpointRequest, PathRequest, RecoveryAction, RecoveryApplyRequest,
+            SaveDraftRequest,
+        },
         error::IpcError,
+        recovery::RecoveryService,
     },
     database::repository::{
         DraftRepository, SqliteRepository, WorkspaceRecord, WorkspaceRepository,
     },
-    documents::atomic_write::{
-        clear_fault_point, set_before_rename_barrier, set_disk_full_fault, set_fault_point,
-        AtomicWriteFaultPoint,
+    documents::{
+        atomic_write::{
+            atomic_write_with_injector, clear_fault_point, set_before_rename_barrier,
+            set_disk_full_fault, set_fault_point, AtomicWriteError, AtomicWriteFaultInjector,
+            AtomicWriteFaultPoint,
+        },
+        recovery::{document_id_for_path, unix_timestamp, RecoveryStore},
+        session_lock::SessionLock,
     },
 };
 
@@ -107,8 +118,320 @@ async fn run_scenario(scenario: &str, root: &Path) -> Result<String, String> {
     match scenario {
         "concurrent-checkpoints" => serialize_evidence(run_concurrent_checkpoints(root).await?),
         "disk-full-checkpoint" => serialize_evidence(run_disk_full_checkpoint(root).await?),
+        "atomic-write-kill" => serialize_evidence(run_atomic_write_kill(root)?),
+        "snapshot-corruption" => serialize_evidence(run_snapshot_corruption(root).await?),
+        "recovery-window" => serialize_evidence(run_recovery_window(root).await?),
         other => Err(format!("unknown E2E reliability scenario: {other}")),
     }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SnapshotCorruptionEvidence {
+    scenario: &'static str,
+    target_path: String,
+    latest_snapshot_path: String,
+    fallback_snapshot_path: String,
+    latest_snapshot_corrupted: bool,
+    recovered_snapshot_saved_at: i64,
+    expected_fallback_saved_at: i64,
+    /// Native candidate evidence; the frontend dialog remains a separate UI
+    /// assertion until AppShell wires RecoveryManager into startup.
+    recovery_dialog_visible: bool,
+    recovered_scene_json: String,
+    target_scene_json: String,
+    snapshots_remaining: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RecoveryWindowEvidence {
+    scenario: &'static str,
+    normal_exit_dialog_visible: bool,
+    forced_exit_dialog_visible: bool,
+    recovery_elapsed_ms: u128,
+    expected_scene_json: String,
+    restored_scene_json: String,
+    normal_exit_abnormal_exit: bool,
+    forced_exit_abnormal_exit: bool,
+    recovery_candidate_count: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AtomicWriteKillReady {
+    scenario: &'static str,
+    fault_point: String,
+    seed: String,
+    target_path: String,
+    old_scene_json: String,
+    new_scene_json: String,
+    old_sha256: String,
+    new_sha256: String,
+}
+
+/// Runs one atomic write until the requested observable point, then blocks so
+/// the parent test can send SIGKILL. This is deliberately a process-level
+/// fixture: the target file is created and written by the test-only binary and
+/// the parent controls the interruption boundary with the operating system.
+fn run_atomic_write_kill(root: &Path) -> Result<AtomicWriteKillReady, String> {
+    let point = parse_fault_point(
+        &env::var("EXCALIDRAW_E2E_FAULT_POINT")
+            .map_err(|_| "EXCALIDRAW_E2E_FAULT_POINT is required".to_owned())?,
+    )?;
+    let seed = env::var("EXCALIDRAW_E2E_SEED").unwrap_or_else(|_| "deterministic".to_owned());
+    let control_directory = root.join("runtime").join("reliability");
+    fs::create_dir_all(&control_directory)
+        .map_err(|error| format!("failed to create reliability control directory: {error}"))?;
+
+    let workspace = root.join("workspace");
+    fs::create_dir_all(&workspace)
+        .map_err(|error| format!("failed to create reliability workspace: {error}"))?;
+    let target = workspace.join("fault-injection.excalidraw");
+    let old_scene_json = scene_json(&format!("old-{seed}"));
+    let new_scene_json = scene_json(&format!("new-{seed}"));
+    fs::write(&target, old_scene_json.as_bytes())
+        .map_err(|error| format!("failed to create old fixture document: {error}"))?;
+
+    let ready = AtomicWriteKillReady {
+        scenario: "atomic-write-kill",
+        fault_point: point.to_string(),
+        seed,
+        target_path: path_string(&target),
+        old_sha256: sha256(old_scene_json.as_bytes()),
+        new_sha256: sha256(new_scene_json.as_bytes()),
+        old_scene_json,
+        new_scene_json,
+    };
+    let injector = BlockingFaultInjector {
+        point,
+        control_directory: control_directory.clone(),
+        ready,
+    };
+    atomic_write_with_injector(&target, injector.ready.new_scene_json.as_bytes(), &injector)
+        .map_err(|error| format!("atomic write fixture failed before SIGKILL: {error}"))?;
+    Err("atomic-write-kill fixture resumed without SIGKILL".to_owned())
+}
+
+struct BlockingFaultInjector {
+    point: AtomicWriteFaultPoint,
+    control_directory: PathBuf,
+    ready: AtomicWriteKillReady,
+}
+
+impl AtomicWriteFaultInjector for BlockingFaultInjector {
+    fn interrupt(&self, point: AtomicWriteFaultPoint) -> Result<(), AtomicWriteError> {
+        if point != self.point {
+            return Ok(());
+        }
+
+        let marker = self.control_directory.join("atomic-write.ready.json");
+        let payload = serde_json::to_vec(&self.ready).map_err(|error| AtomicWriteError::Io {
+            operation: "serialize reliability marker",
+            path: marker.clone(),
+            source: std::io::Error::other(error),
+        })?;
+        fs::write(&marker, payload).map_err(|source| AtomicWriteError::Io {
+            operation: "publish reliability marker",
+            path: marker,
+            source,
+        })?;
+
+        // The test parent terminates this process at the marker. The bounded
+        // sleep keeps CPU usage negligible while retaining a deterministic
+        // barrier (no timing race or arbitrary retry count in the test).
+        loop {
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+}
+
+fn parse_fault_point(value: &str) -> Result<AtomicWriteFaultPoint, String> {
+    match value {
+        "temp_created" => Ok(AtomicWriteFaultPoint::TempCreated),
+        "mid_write" => Ok(AtomicWriteFaultPoint::MidWrite),
+        "temp_synced" => Ok(AtomicWriteFaultPoint::TempSynced),
+        "json_validated" => Ok(AtomicWriteFaultPoint::JsonValidated),
+        "before_rename" => Ok(AtomicWriteFaultPoint::BeforeRename),
+        "after_rename" => Ok(AtomicWriteFaultPoint::AfterRename),
+        "before_parent_sync" => Ok(AtomicWriteFaultPoint::BeforeParentSync),
+        "parent_synced" => Ok(AtomicWriteFaultPoint::ParentSynced),
+        other => Err(format!("unknown atomic write fault point: {other}")),
+    }
+}
+
+async fn run_snapshot_corruption(root: &Path) -> Result<SnapshotCorruptionEvidence, String> {
+    let (repository, _document_service, workspace) = open_scenario_service(root).await?;
+    let data = root.join("data");
+    let store = Arc::new(RecoveryStore::with_app_version(&data, "0.1.0"));
+    let service = RecoveryService::new(Arc::clone(&repository), Arc::clone(&store));
+    let target = workspace.join("snapshot-corruption.excalidraw");
+    let old_scene_json = scene_json("on-disk");
+    fs::write(&target, old_scene_json.as_bytes())
+        .map_err(|error| format!("failed to create recovery target: {error}"))?;
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize recovery target: {error}"))?;
+    let document_id = document_id_for_path(&target);
+    let base_hash = sha256(old_scene_json.as_bytes());
+    let now = unix_timestamp().map_err(|error| format!("failed to read clock: {error}"))?;
+    let fallback_scene_json = scene_json("fallback");
+    let latest_scene_json = scene_json("latest");
+    store
+        .write_snapshot(
+            &document_id,
+            Some(&target),
+            &base_hash,
+            now + 1,
+            &fallback_scene_json,
+        )
+        .map_err(|error| format!("failed to write fallback snapshot: {error}"))?;
+    let latest_snapshot_path = store
+        .write_snapshot(
+            &document_id,
+            Some(&target),
+            &base_hash,
+            now + 2,
+            &latest_scene_json,
+        )
+        .map_err(|error| format!("failed to write latest snapshot: {error}"))?;
+    fs::write(&latest_snapshot_path, b"{\"corrupted\":")
+        .map_err(|error| format!("failed to corrupt latest snapshot: {error}"))?;
+    let latest_snapshot_corrupted = serde_json::from_slice::<serde_json::Value>(
+        &fs::read(&latest_snapshot_path)
+            .map_err(|error| format!("failed to read corrupted snapshot: {error}"))?,
+    )
+    .is_err();
+
+    let candidates = service
+        .list()
+        .await
+        .map_err(|error| format!("recovery_list failed: {error}"))?;
+    let candidate = candidates
+        .first()
+        .ok_or_else(|| "recovery_list returned no fallback candidate".to_owned())?;
+    let fallback_snapshot_path = store
+        .list_snapshots()
+        .map_err(|error| format!("failed to enumerate fallback snapshot: {error}"))?
+        .into_iter()
+        .find(|(_, snapshot)| snapshot.saved_at == now + 1)
+        .map(|(path, _)| path)
+        .ok_or_else(|| "fallback snapshot path was not found".to_owned())?;
+    let response = service
+        .apply(RecoveryApplyRequest {
+            document_id,
+            action: RecoveryAction::Restore,
+            save_as_path: None,
+        })
+        .await
+        .map_err(|error| format!("recovery_apply restore failed: {error}"))?;
+    let recovered_scene = response
+        .scene
+        .ok_or_else(|| "restore response did not contain a scene".to_owned())?;
+    let recovered_scene_json = serde_json::to_string(&recovered_scene)
+        .map_err(|error| format!("failed to serialize recovered scene: {error}"))?;
+    let snapshots_remaining = store
+        .list_snapshots()
+        .map_err(|error| format!("failed to inspect snapshots after restore: {error}"))?
+        .len();
+    let target_scene_json = fs::read_to_string(&target)
+        .map_err(|error| format!("failed to read target after restore: {error}"))?;
+
+    Ok(SnapshotCorruptionEvidence {
+        scenario: "snapshot-corruption",
+        target_path: path_string(&target),
+        latest_snapshot_path: path_string(&latest_snapshot_path),
+        fallback_snapshot_path: path_string(&fallback_snapshot_path),
+        latest_snapshot_corrupted,
+        recovered_snapshot_saved_at: candidate.snapshot_saved_at,
+        expected_fallback_saved_at: now + 1,
+        recovery_dialog_visible: !candidates.is_empty(),
+        recovered_scene_json,
+        target_scene_json,
+        snapshots_remaining,
+    })
+}
+
+async fn run_recovery_window(root: &Path) -> Result<RecoveryWindowEvidence, String> {
+    let (repository, _document_service, workspace) = open_scenario_service(root).await?;
+    let data = root.join("data");
+    let store = Arc::new(RecoveryStore::with_app_version(&data, "0.1.0"));
+    let service = RecoveryService::new(Arc::clone(&repository), Arc::clone(&store));
+    let target = workspace.join("recovery-window.excalidraw");
+    let on_disk_scene_json = scene_json("on-disk");
+    let expected_scene_json = scene_json("last-edit");
+    fs::write(&target, on_disk_scene_json.as_bytes())
+        .map_err(|error| format!("failed to create recovery-window target: {error}"))?;
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize recovery-window target: {error}"))?;
+    let document_id = document_id_for_path(&target);
+    let base_hash = sha256(on_disk_scene_json.as_bytes());
+
+    let normal_lock = SessionLock::acquire(&data)
+        .map_err(|error| format!("normal session lock acquire failed: {error}"))?;
+    let normal_exit_abnormal_exit = normal_lock.abnormal_exit();
+    normal_lock
+        .release()
+        .map_err(|error| format!("normal session lock release failed: {error}"))?;
+    let normal_candidates = service
+        .list()
+        .await
+        .map_err(|error| format!("normal recovery_list failed: {error}"))?;
+    let normal_exit_dialog_visible = normal_exit_abnormal_exit && !normal_candidates.is_empty();
+
+    let now = unix_timestamp().map_err(|error| format!("failed to read clock: {error}"))?;
+    store
+        .write_snapshot(
+            &document_id,
+            Some(&target),
+            &base_hash,
+            now + 1,
+            &expected_scene_json,
+        )
+        .map_err(|error| format!("failed to write recovery-window snapshot: {error}"))?;
+    let stale_lock = SessionLock::acquire(&data)
+        .map_err(|error| format!("stale session lock acquire failed: {error}"))?;
+    std::mem::forget(stale_lock);
+
+    let recovery_started = Instant::now();
+    let forced_lock = SessionLock::acquire(&data)
+        .map_err(|error| format!("abnormal session lock acquire failed: {error}"))?;
+    let forced_exit_abnormal_exit = forced_lock.abnormal_exit();
+    let candidates = service
+        .list()
+        .await
+        .map_err(|error| format!("abnormal recovery_list failed: {error}"))?;
+    let forced_exit_dialog_visible = forced_exit_abnormal_exit && !candidates.is_empty();
+    let response = service
+        .apply(RecoveryApplyRequest {
+            document_id,
+            action: RecoveryAction::Restore,
+            save_as_path: None,
+        })
+        .await
+        .map_err(|error| format!("recovery-window restore failed: {error}"))?;
+    let restored_scene_json = serde_json::to_string(
+        &response
+            .scene
+            .ok_or_else(|| "recovery-window restore returned no scene".to_owned())?,
+    )
+    .map_err(|error| format!("failed to serialize restored scene: {error}"))?;
+    forced_lock
+        .release()
+        .map_err(|error| format!("abnormal session lock release failed: {error}"))?;
+
+    Ok(RecoveryWindowEvidence {
+        scenario: "recovery-window",
+        normal_exit_dialog_visible,
+        forced_exit_dialog_visible,
+        recovery_elapsed_ms: recovery_started.elapsed().as_millis(),
+        expected_scene_json,
+        restored_scene_json,
+        normal_exit_abnormal_exit,
+        forced_exit_abnormal_exit,
+        recovery_candidate_count: candidates.len(),
+    })
 }
 
 fn serialize_evidence<T: Serialize>(evidence: T) -> Result<String, String> {

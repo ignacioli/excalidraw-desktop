@@ -23,6 +23,7 @@ body {
 
 .app-commands button,
 .file-sidebar button,
+.recovery-dialog button,
 .tab {
   min-height: 2rem;
   border: 1px solid var(--border-strong);
@@ -36,18 +37,21 @@ body {
 
 .app-commands button:hover,
 .file-sidebar button:hover,
+.recovery-dialog button:hover,
 .tab:hover {
   background: var(--surface-hover);
 }
 
 .app-commands button:active,
 .file-sidebar button:active,
+.recovery-dialog button:active,
 .tab:active {
   background: var(--surface-active);
 }
 
 .app-commands button:focus-visible,
 .file-sidebar button:focus-visible,
+.recovery-dialog button:focus-visible,
 .tab:focus-visible,
 .appearance-option input:focus-visible + span {
   outline: 2px solid var(--focus-ring);
@@ -123,6 +127,18 @@ body {
 .dirty-indicator {
   color: var(--warning);
   font-size: 0.65rem;
+}
+
+.orphaned-indicator {
+  display: inline-grid;
+  width: 1rem;
+  height: 1rem;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: var(--warning);
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
 .app-commands {
@@ -205,7 +221,10 @@ body {
 }
 
 .file-sidebar {
-  overflow: auto;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
   border-right: 1px solid var(--border-subtle);
   padding: var(--space-4);
   background: var(--panel-background);
@@ -219,9 +238,191 @@ body {
   margin-top: var(--space-6);
 }
 
-.workspace-empty-state h1 {
+.workspace-empty-state h2,
+.workspace-panel h2,
+.workspace-panel h3 {
   margin: 0;
   font-size: 1rem;
+}
+
+.workspace-panel,
+.workspace-section,
+.file-tree {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.workspace-panel {
+  height: 100%;
+}
+
+.workspace-panel-header,
+.workspace-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.workspace-panel-header button,
+.workspace-section-header button,
+.file-tree-new-button {
+  min-height: 1.75rem;
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.75rem;
+}
+
+.workspace-section {
+  min-height: 0;
+  flex: 1 1 auto;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-2);
+}
+
+.workspace-section-header h3 {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree-scroll {
+  flex: 1 1 auto;
+  min-height: 8rem;
+  border-radius: var(--radius-control);
+}
+
+.file-tree-scroll:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.file-tree-row {
+  display: flex;
+  height: 2rem;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.file-sidebar .file-tree-label {
+  min-width: 0;
+  min-height: 1.75rem;
+  flex: 1;
+  overflow: hidden;
+  border-color: transparent;
+  padding: var(--space-1);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-sidebar .file-tree-menu-button {
+  min-height: 1.75rem;
+  padding: var(--space-1);
+}
+
+.file-tree-menu {
+  z-index: 20;
+  display: grid;
+  min-width: 9rem;
+  gap: 1px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  padding: var(--space-1);
+  background: var(--panel-background);
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 18%);
+}
+
+.recovery-dialog-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: rgb(0 0 0 / 48%);
+}
+
+.recovery-dialog {
+  width: min(48rem, 100%);
+  max-height: min(42rem, calc(100dvh - 3rem));
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: calc(var(--radius-control) * 2);
+  padding: var(--space-6);
+  background: var(--panel-background);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 28%);
+}
+
+.recovery-dialog h1,
+.recovery-dialog h2,
+.recovery-dialog p {
+  margin-top: 0;
+}
+
+.recovery-dialog h1 {
+  font-size: 1.25rem;
+}
+
+.recovery-dialog h2 {
+  margin-bottom: var(--space-1);
+  font-size: 1rem;
+}
+
+.recovery-candidate-list {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recovery-candidate {
+  display: grid;
+  gap: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  padding: var(--space-3);
+}
+
+.recovery-candidate-details p {
+  margin-bottom: var(--space-1);
+  color: var(--text-secondary);
+}
+
+.recovery-candidate-path {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+}
+
+.recovery-candidate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.recovery-dialog-error,
+.recovery-startup-error {
+  color: var(--warning);
+}
+
+.recovery-startup-error {
+  position: fixed;
+  z-index: 90;
+  top: var(--space-4);
+  left: 50%;
+  max-width: min(36rem, calc(100vw - 2rem));
+  margin: 0;
+  transform: translateX(-50%);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-control);
+  padding: var(--space-3);
+  background: var(--panel-background);
 }
 
 .workspace-empty-state p,

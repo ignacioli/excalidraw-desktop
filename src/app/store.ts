@@ -5,6 +5,7 @@ export interface DocumentTab {
   title: string;
   path: string | null;
   isDirty: boolean;
+  isOrphaned: boolean;
 }
 
 interface AppStoreState {
@@ -13,11 +14,16 @@ interface AppStoreState {
   activeTabId: string | null;
   hasMountedWorkspace: boolean;
   registerTab: (
-    tab: Omit<DocumentTab, "isDirty"> & { isDirty?: boolean },
+    tab: Omit<DocumentTab, "isDirty" | "isOrphaned"> & {
+      isDirty?: boolean;
+      isOrphaned?: boolean;
+    },
   ) => void;
   closeTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
   setDocumentDirty: (tabId: string, isDirty: boolean) => void;
+  updateDocumentLocation: (tabId: string, path: string, title: string) => void;
+  setDocumentOrphaned: (tabId: string, isOrphaned: boolean) => void;
   setHasMountedWorkspace: (hasMountedWorkspace: boolean) => void;
 }
 
@@ -33,7 +39,11 @@ export const useAppStore = create<AppStoreState>((set) => ({
       return {
         tabsById: {
           ...state.tabsById,
-          [tab.id]: { ...tab, isDirty: tab.isDirty ?? false },
+          [tab.id]: {
+            ...tab,
+            isDirty: tab.isDirty ?? false,
+            isOrphaned: tab.isOrphaned ?? false,
+          },
         },
         tabOrder: exists ? state.tabOrder : [...state.tabOrder, tab.id],
         activeTabId: tab.id,
@@ -79,6 +89,36 @@ export const useAppStore = create<AppStoreState>((set) => ({
         tabsById: {
           ...state.tabsById,
           [tabId]: { ...tab, isDirty },
+        },
+      };
+    });
+  },
+
+  updateDocumentLocation: (tabId, path, title) => {
+    set((state) => {
+      const tab = state.tabsById[tabId];
+      if (tab === undefined) {
+        return state;
+      }
+      return {
+        tabsById: {
+          ...state.tabsById,
+          [tabId]: { ...tab, path, title, isOrphaned: false },
+        },
+      };
+    });
+  },
+
+  setDocumentOrphaned: (tabId, isOrphaned) => {
+    set((state) => {
+      const tab = state.tabsById[tabId];
+      if (tab === undefined || tab.isOrphaned === isOrphaned) {
+        return state;
+      }
+      return {
+        tabsById: {
+          ...state.tabsById,
+          [tabId]: { ...tab, isOrphaned },
         },
       };
     });

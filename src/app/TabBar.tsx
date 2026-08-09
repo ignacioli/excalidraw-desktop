@@ -69,7 +69,7 @@ export function TabBar() {
               role="tab"
               type="button"
               aria-controls={`document-${tab.id}`}
-              aria-label={`${tab.title}${tab.isDirty ? ", unsaved changes" : ""}`}
+              aria-label={`${tab.title}${tab.isDirty ? ", unsaved changes" : ""}${tab.isOrphaned ? ", file unavailable" : ""}`}
               aria-selected={isActive}
               tabIndex={isActive ? 0 : -1}
             >
@@ -78,6 +78,12 @@ export function TabBar() {
                 <span className="dirty-indicator" title="Unsaved changes">
                   <span aria-hidden="true">●</span>
                   <span className="visually-hidden">Unsaved changes</span>
+                </span>
+              ) : null}
+              {tab.isOrphaned ? (
+                <span className="orphaned-indicator" title="File unavailable">
+                  <span aria-hidden="true">!</span>
+                  <span className="visually-hidden">File unavailable</span>
                 </span>
               ) : null}
             </button>

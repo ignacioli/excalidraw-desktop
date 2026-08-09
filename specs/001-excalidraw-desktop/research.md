@@ -47,8 +47,8 @@
 
 ## R6. 崩溃恢复机制
 
-- **Decision**: 会话锁（应用数据目录 `session.lock`，含 PID + 启动时间戳，正常退出清理）判定异常退出；每文档 3–5 份 Ring Buffer 轮换恢复快照（含 documentId、originalPath、baseFileHash、savedAt、appVersion、完整 scene）；启动时比对快照 `savedAt`/`baseFileHash` 与冷层 `mtime`/hash，较新则弹恢复对话框。
-- **Rationale**: 满足 FR-012/013 与 SC-004（≤5s 恢复窗口）；多版本轮换对冲快照自身损坏（Edge Case）；baseFileHash 比对避免把过期草稿误判为可恢复。
+- **Decision**: 会话锁（应用数据目录 `session.lock`，含 PID + 启动时间戳，正常退出清理）判定异常退出；每文档 3–5 份 Ring Buffer 轮换恢复快照（含 documentId、originalPath、baseFileHash、savedAt、appVersion、完整 scene）；启动时以 `savedAt > cold mtime` 和 scene 差异识别普通未保存草稿，并以 `baseFileHash` 与冷层 hash 的差异识别外部替换；冷层缺失或不可读时保留候选并引导另存。
+- **Rationale**: 满足 FR-012/013 与 SC-004（≤5s 恢复窗口）；多版本轮换对冲快照自身损坏（Edge Case）；scene 差异避免漏掉从同一冷层版本产生的普通未保存草稿，baseFileHash 比对则避免把外部替换后的过期草稿静默恢复到原文件。
 - **Alternatives considered**: 单快照（快照损坏即全失）；事件日志重放（实现复杂度高，Excalidraw scene 全量体量可控，无必要）。
 
 ## R7. 外部变更监听与冲突消解

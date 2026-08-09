@@ -46,7 +46,9 @@ pub struct RecoveryApplyRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecoveryApplyResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub scene: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub new_path: Option<String>,
 }
 

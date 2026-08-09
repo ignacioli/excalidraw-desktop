@@ -1,11 +1,21 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   documentManager,
+  registerDocumentFileChangeEvents,
   useDocumentStore,
   type DocumentSaveState,
 } from "../documents/documentStore";
+import { RecoveryStartup } from "../documents/RecoveryStartup";
 import { ExcalidrawEditor } from "../editor/ExcalidrawEditor";
 import type { ExcalidrawAdapter } from "../editor/ExcalidrawAdapter";
+import { hasTauriCommandRuntime } from "../ipc/client";
+import { WorkspacePanel } from "../workspaces/WorkspacePanel";
 import { AppearanceControl } from "./AppearanceControl";
 import {
   hasNativeWindowRuntime,
@@ -53,13 +63,17 @@ export function AppShell({
     | undefined
   >(undefined);
   const hasMountedWorkspace = useAppStore((state) => state.hasMountedWorkspace);
+  const setHasMountedWorkspace = useAppStore(
+    (state) => state.setHasMountedWorkspace,
+  );
   const activeTabId = useAppStore((state) => state.activeTabId);
   const activeTab = useAppStore((state) =>
     state.activeTabId === null ? undefined : state.tabsById[state.activeTabId],
   );
-  const activeSession = useDocumentStore((state) =>
-    activeTabId === null ? undefined : state.sessionsById[activeTabId],
-  );
+  const sessionsById = useDocumentStore((state) => state.sessionsById);
+  const activeSession =
+    activeTabId === null ? undefined : sessionsById[activeTabId];
+  const documentSessions = Object.values(sessionsById);
   const themeSnapshot = useSyncExternalStore(
     themeController.subscribe,
     themeController.getSnapshot,
@@ -83,6 +97,22 @@ export function AppShell({
   const openDocument = () => runAction(onOpenDocument ?? dialogs.openDocument);
   const saveDocument = () =>
     runAction(() => documentManager.checkpointActive("manualSave"));
+  const handleEditorReady = useCallback(
+    (
+      documentId: string,
+      adapter: ExcalidrawAdapter,
+      container: HTMLDivElement,
+    ) => {
+      attachPerformanceEditor(
+        readyEditorRef,
+        performanceDriverRef.current,
+        documentId,
+        adapter,
+        container,
+      );
+    },
+    [],
+  );
 
   useEffect(() => {
     if (import.meta.env.VITE_E2E_HARNESS !== "1") {
@@ -135,6 +165,27 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
+    if (!hasNativeWindowRuntime()) {
+      return;
+    }
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void registerDocumentFileChangeEvents(documentManager)
+      .then((nextUnlisten) => {
+        if (disposed) {
+          nextUnlisten();
+        } else {
+          unlisten = nextUnlisten;
+        }
+      })
+      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
     const handleSaveShortcut = (event: KeyboardEvent) => {
       if (
         event.key.toLowerCase() === "s" &&
@@ -151,6 +202,7 @@ export function AppShell({
 
   return (
     <div className="app-shell">
+      <RecoveryStartup enabled={hasNativeWindowRuntime()} />
       <header className="app-shell-tabs">
         <TabBar />
         <div
@@ -178,13 +230,17 @@ export function AppShell({
 
       <div className="app-shell-body">
         <aside className="file-sidebar" aria-label="Files">
-          {hasMountedWorkspace ? (
-            <p className="sidebar-placeholder">
-              Workspace files will appear here.
-            </p>
-          ) : (
+          {hasTauriCommandRuntime() ? (
+            <WorkspacePanel
+              onOpenFile={(entry) => {
+                void runAction(() => documentManager.open(entry.canonicalPath));
+              }}
+              onWorkspacePresenceChange={setHasMountedWorkspace}
+            />
+          ) : null}
+          {!hasMountedWorkspace ? (
             <div className="workspace-empty-state">
-              <h1>No workspace mounted</h1>
+              <h2>No workspace mounted</h2>
               <p>Open a drawing directly, or create a new local drawing.</p>
               <div className="empty-state-actions">
                 <button
@@ -199,37 +255,32 @@ export function AppShell({
                 </button>
               </div>
             </div>
-          )}
+          ) : null}
         </aside>
 
         <main className="canvas-region" aria-label="Drawing canvas">
-          {activeSession !== undefined ? (
-            <section
-              aria-labelledby={`tab-${activeSession.id}`}
-              className="canvas-document"
-              id={`document-${activeSession.id}`}
-              role="tabpanel"
-            >
-              <ExcalidrawEditor
-                documentId={activeSession.id}
-                initialScene={activeSession.scene}
-                key={activeSession.id}
-                onSceneChange={(scene) =>
-                  documentManager.updateScene(activeSession.id, scene)
-                }
-                onReady={(adapter, container) =>
-                  attachPerformanceEditor(
-                    readyEditorRef,
-                    performanceDriverRef.current,
-                    activeSession.id,
-                    adapter,
-                    container,
-                  )
-                }
-                readOnly={activeSession.saveState === "conflicted"}
-                theme={themeSnapshot.resolvedColorScheme}
-              />
-            </section>
+          {documentSessions.length > 0 ? (
+            documentSessions.map((session) => (
+              <section
+                aria-labelledby={`tab-${session.id}`}
+                className="canvas-document"
+                hidden={session.id !== activeTabId}
+                id={`document-${session.id}`}
+                key={session.id}
+                role="tabpanel"
+              >
+                <ExcalidrawEditor
+                  documentId={session.id}
+                  initialScene={session.scene}
+                  onSceneChange={(scene) =>
+                    documentManager.updateScene(session.id, scene)
+                  }
+                  onReady={handleEditorReady}
+                  readOnly={session.saveState === "conflicted"}
+                  theme={themeSnapshot.resolvedColorScheme}
+                />
+              </section>
+            ))
           ) : activeTab === undefined ? (
             <div className="canvas-empty-state">
               <p>Select a drawing to begin.</p>
@@ -294,6 +345,8 @@ function getSaveStatus(saveState: DocumentSaveState | undefined): string {
       return "Saving drawing…";
     case "conflicted":
       return "Save paused because the file changed elsewhere";
+    case "orphaned":
+      return "The file is unavailable. Save the drawing to a new location.";
     case "error":
       return "The drawing could not be saved";
     case "clean":

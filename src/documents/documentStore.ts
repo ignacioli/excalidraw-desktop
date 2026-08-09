@@ -3,7 +3,7 @@ import { useStore } from "zustand";
 import { getSceneVersion } from "@excalidraw/excalidraw";
 import { useAppStore } from "../app/store";
 import { createTauriCommandInvoker } from "../ipc/client";
-import type { CheckpointReason } from "../ipc/contracts";
+import type { CheckpointReason, IpcEvents, SceneData } from "../ipc/contracts";
 import {
   createEmptyScene,
   deserializeSceneData,
@@ -20,6 +20,7 @@ export type DocumentSaveState =
   | "draftSaved"
   | "checkpointing"
   | "conflicted"
+  | "orphaned"
   | "error";
 
 export interface DocumentSession {
@@ -83,6 +84,33 @@ export class DocumentManager {
     });
   }
 
+  async restore(path: string, sceneData: SceneData): Promise<string> {
+    const scene = deserializeSceneData(sceneData);
+    const existing = this.findByPath(path);
+    let documentId: string;
+    if (existing !== undefined) {
+      await this.activate(existing.id);
+      this.patchSession(existing.id, {
+        scene,
+        sceneVersion: getSceneVersion(scene.elements),
+        saveState: "dirty",
+        errorMessage: null,
+      });
+      documentId = existing.id;
+    } else {
+      const response = await this.gateway.open(path);
+      documentId = await this.registerSession({
+        path,
+        scene,
+        baseHash: response.baseHash,
+        saveState: "dirty",
+      });
+    }
+    useAppStore.getState().setDocumentDirty(documentId, true);
+    this.schedulers.get(documentId)?.recordChange(scene);
+    return documentId;
+  }
+
   updateScene(documentId: string, scene: SceneSnapshot): void {
     const session = this.store.getState().sessionsById[documentId];
     if (session === undefined) {
@@ -97,7 +125,7 @@ export class DocumentManager {
     this.patchSession(documentId, {
       scene,
       sceneVersion,
-      saveState: "dirty",
+      saveState: session.saveState === "orphaned" ? "orphaned" : "dirty",
       errorMessage: null,
     });
     useAppStore.getState().setDocumentDirty(documentId, true);
@@ -167,6 +195,33 @@ export class DocumentManager {
     });
   }
 
+  handleFileRenamed(path: string, newPath: string): void {
+    const session = this.findByPath(path);
+    if (session === undefined) {
+      return;
+    }
+    const title = getFileName(newPath);
+    if (session.saveState === "orphaned") {
+      this.schedulers.get(session.id)?.setConflicted(false);
+    }
+    this.patchSession(session.id, {
+      path: newPath,
+      title,
+      saveState: session.saveState === "orphaned" ? "dirty" : session.saveState,
+    });
+    useAppStore.getState().updateDocumentLocation(session.id, newPath, title);
+  }
+
+  handleFileRemoved(path: string): void {
+    const session = this.findByPath(path);
+    if (session === undefined) {
+      return;
+    }
+    this.schedulers.get(session.id)?.setConflicted(true);
+    this.patchSession(session.id, { saveState: "orphaned" });
+    useAppStore.getState().setDocumentOrphaned(session.id, true);
+  }
+
   dispose(): void {
     this.schedulers.forEach((scheduler) => scheduler.dispose());
     this.schedulers.clear();
@@ -199,15 +254,19 @@ export class DocumentManager {
     const scheduler = new DraftScheduler<SceneSnapshot>({
       persistDraft: async (nextScene) => {
         this.patchSession(id, { saveState: "savingDraft" });
-        await this.gateway.saveDraft(path, serializeScene(nextScene));
+        const currentPath =
+          this.store.getState().sessionsById[id]?.path ?? path;
+        await this.gateway.saveDraft(currentPath, serializeScene(nextScene));
         if (this.store.getState().sessionsById[id]?.scene === nextScene) {
           this.patchSession(id, { saveState: "draftSaved" });
         }
       },
       checkpoint: async (nextScene, reason) => {
         this.patchSession(id, { saveState: "checkpointing" });
+        const currentPath =
+          this.store.getState().sessionsById[id]?.path ?? path;
         const response = await this.gateway.checkpoint(
-          path,
+          currentPath,
           serializeScene(nextScene),
           reason,
         );
@@ -326,6 +385,28 @@ function getErrorMessage(error: unknown): string {
 export const documentManager = new DocumentManager(
   createDocumentGateway(createTauriCommandInvoker()),
 );
+
+type FileChangeEvent = { payload: IpcEvents["file-changed"] };
+type FileChangeListener = (
+  eventName: "file-changed",
+  handler: (event: FileChangeEvent) => void,
+) => Promise<() => void>;
+
+export async function registerDocumentFileChangeEvents(
+  manager: Pick<DocumentManager, "handleFileRemoved" | "handleFileRenamed">,
+  listenForEvent: FileChangeListener = async (eventName, handler) => {
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<IpcEvents["file-changed"]>(eventName, handler);
+  },
+): Promise<() => void> {
+  return listenForEvent("file-changed", ({ payload }) => {
+    if (payload.change === "renamed" && payload.newPath !== undefined) {
+      manager.handleFileRenamed(payload.path, payload.newPath);
+    } else if (payload.change === "removed") {
+      manager.handleFileRemoved(payload.path);
+    }
+  });
+}
 
 export function useDocumentStore<Selection>(
   selector: (state: DocumentStoreState) => Selection,

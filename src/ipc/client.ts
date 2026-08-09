@@ -7,6 +7,15 @@ export interface CommandInvoker {
   ): Promise<CommandResponse<Name>>;
 }
 
+export function hasTauriCommandRuntime(): boolean {
+  const internals = (
+    globalThis as typeof globalThis & {
+      __TAURI_INTERNALS__?: { invoke?: unknown };
+    }
+  ).__TAURI_INTERNALS__;
+  return typeof internals?.invoke === "function";
+}
+
 export function createTauriCommandInvoker(): CommandInvoker {
   return {
     async invoke<Name extends CommandName>(

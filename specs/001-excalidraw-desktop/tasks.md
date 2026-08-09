@@ -129,20 +129,20 @@ The following names describe logical capability roles for planning and review. T
 
 ### Tests for User Story 2
 
-- [ ] T037 [P] [US2] 参数化故障注入 E2E e2e/tests/us2-kill-during-save.spec.ts：对 T021 八个 `AtomicWriteFaultPoint` 逐点 SIGKILL，重启后断言目标文件为可解析的完整旧/新版本、无静默覆盖且恢复 UI 正确；PR 确定性覆盖全部八点，固定机夜间 workflow 额外运行并记录 100 个随机 seed（SC-003/012——先写并确认失败）
-- [ ] T038 [P] [US2] 恢复快照轮换与自损回退单测 src-tauri/src/documents/recovery_test.rs（Ring 覆盖、损坏跳过取次新）
+- [X] T037 [P] [US2] 参数化故障注入 E2E e2e/tests/us2-kill-during-save.spec.ts：对 T021 八个 `AtomicWriteFaultPoint` 逐点 SIGKILL，重启后断言目标文件为可解析的完整旧/新版本、无静默覆盖且恢复 UI 正确；PR 确定性覆盖全部八点，固定机夜间 workflow 额外运行并记录 100 个随机 seed（SC-003/012——先写并确认失败）
+- [X] T038 [P] [US2] 恢复快照轮换与自损回退单测 src-tauri/src/documents/recovery_test.rs（Ring 覆盖、损坏跳过取次新）
 
 ### Implementation for User Story 2
 
-- [ ] T039 [US2] 实现轮换恢复快照 src-tauri/src/documents/recovery.rs（recovery/<sha256(path)>/recovery-001..005.json Ring 写入、含 baseFileHash/savedAt 元数据，data-model RecoverySnapshot）
-- [ ] T040 [US2] 草稿写入路径挂接快照周期写（draftScheduler L2 触发节点调 recovery 写入）于 src-tauri/src/commands/documents.rs
-- [ ] T041 [US2] 实现恢复命令 src-tauri/src/commands/recovery.rs：`recovery_list`（快照/冷层比对判定 snapshotNewer）+ `recovery_apply`（restore/keepDisk/saveAsNew/discard 四路径，contracts §1.1）
-- [ ] T042 [P] [US2] 实现恢复对话框 src/documents/RecoveryDialog.tsx（展示时间与文档、四选项、handshake abnormalExit 触发）
-- [ ] T043 [US2] 实现恢复管理器 src/documents/recoveryManager.ts（启动流程接线：handshake → list → 对话框 → apply → 载入 scene）
-- [ ] T044 [US2] 应用退出阻塞 Flush：窗口关闭/退出事件拦截，等待全部非 Clean 文档 checkpoint 完成（src-tauri/src/lib.rs 生命周期 Hook + documentStore 退出协议）
-- [ ] T045 [US2] E2E：快照自损回退 e2e/tests/us2-snapshot-corruption.spec.ts（Harness 破坏最新快照 → 断言回退次新并提示实际时间点）
-- [ ] T046 [US2] E2E：正常退出无弹窗 + 恢复窗口 ≤5s e2e/tests/us2-recovery-window.spec.ts（编辑后 5s 内强杀 → 恢复内容等于最后编辑，SC-004）
-- [ ] T098 [US2] a11y 最低线：RecoveryDialog 键盘可操作（Esc/Enter）、焦点陷阱与 `aria-*`，于 src/documents/RecoveryDialog.tsx（宪法原则 III）
+- [X] T039 [US2] 实现轮换恢复快照 src-tauri/src/documents/recovery.rs（recovery/<sha256(path)>/recovery-001..005.json Ring 写入、含 baseFileHash/savedAt 元数据，data-model RecoverySnapshot）
+- [X] T040 [US2] 草稿写入路径挂接快照周期写（draftScheduler L2 触发节点调 recovery 写入）于 src-tauri/src/commands/documents.rs
+- [X] T041 [US2] 实现恢复命令 src-tauri/src/commands/recovery.rs：`recovery_list`（快照/冷层比对判定 snapshotNewer）+ `recovery_apply`（restore/keepDisk/saveAsNew/discard 四路径，contracts §1.1）
+- [X] T042 [P] [US2] 实现恢复对话框 src/documents/RecoveryDialog.tsx（展示时间与文档、四选项、handshake abnormalExit 触发）
+- [X] T043 [US2] 实现恢复管理器 src/documents/recoveryManager.ts（启动流程接线：handshake → list → 对话框 → apply → 载入 scene）
+- [X] T044 [US2] 应用退出阻塞 Flush：窗口关闭/退出事件拦截，等待全部非 Clean 文档 checkpoint 完成（src-tauri/src/lib.rs 生命周期 Hook + documentStore 退出协议）
+- [X] T045 [US2] E2E：快照自损回退 e2e/tests/us2-snapshot-corruption.spec.ts（Harness 破坏最新快照 → 断言回退次新并提示实际时间点）
+- [X] T046 [US2] E2E：正常退出无弹窗 + 恢复窗口 ≤5s e2e/tests/us2-recovery-window.spec.ts（编辑后 5s 内强杀 → 恢复内容等于最后编辑，SC-004）
+- [X] T098 [US2] a11y 最低线：RecoveryDialog 键盘可操作（Esc/Enter）、焦点陷阱与 `aria-*`，于 src/documents/RecoveryDialog.tsx（宪法原则 III）
 
 **Checkpoint**: US1+US2 = 可靠性承诺闭环（零损坏 + 可恢复）
 
@@ -156,22 +156,22 @@ The following names describe logical capability roles for planning and review. T
 
 ### Tests for User Story 3
 
-- [ ] T047 [P] [US3] 契约测试 workspace_*/dir_list/file_* 越界路径拒绝与嵌套工作区拒绝 src-tauri/tests/contract_workspace.rs（PATH_ACCESS_DENIED/WORKSPACE_OVERLAP——先写并确认失败）
+- [X] T047 [P] [US3] 契约测试 workspace_*/dir_list/file_* 越界路径拒绝与嵌套工作区拒绝 src-tauri/tests/contract_workspace.rs（PATH_ACCESS_DENIED/WORKSPACE_OVERLAP——先写并确认失败）
 
 ### Implementation for User Story 3
 
-- [ ] T048 [US3] 实现工作区命令 src-tauri/src/commands/workspace.rs：`workspace_add`（canonicalize + 嵌套校验 + 触发索引）/`workspace_remove`/`workspace_list`（contracts §1.2）
-- [ ] T049 [US3] 实现后台索引引擎 src-tauri/src/indexing/mod.rs（tokio 异步扫描、符号链接循环防护、file_index 增量更新、index-progress 事件）
-- [ ] T050 [US3] 实现 `dir_list` 懒加载命令于 src-tauri/src/commands/workspace.rs（单层目录、仅 .excalidraw/.excalidraw.json 与目录）
-- [ ] T051 [US3] 实现文件操作命令 src-tauri/src/commands/files.rs：`file_create`（原子写空白文档）/`file_rename`/`file_delete`（trash crate 回收站）
-- [ ] T052 [P] [US3] 实现工作区管理 UI src/workspaces/WorkspacePanel.tsx（挂载目录选择、列表、移除确认——移除不删文件文案）
-- [ ] T053 [US3] 实现虚拟化文件树 src/sidebar/FileTree.tsx（@tanstack/react-virtual + 懒展开调 dir_list + 右键菜单新建/重命名/删除）
-- [ ] T054 [US3] 多标签页完善 src/app/TabBar.tsx + documentStore：同文件唯一会话、每 Tab 独立撤销历史与脏标记、切换触发 L3 Checkpoint（FR-017）
-- [ ] T055 [US3] 标签页跟随文件变更：重命名同步标题、删除标示失联入口（接 file-changed 事件占位，US4 完成后自动激活）于 src/documents/documentStore.ts
-- [ ] T056 [P] [US3] 侧边栏文件操作单测 src/sidebar/FileTree.test.tsx（树渲染、懒加载触发、操作回调）
-- [ ] T057 [US3] E2E：文件管理闭环 e2e/tests/us3-workspace-files.spec.ts（挂载/新建/重命名/删除/多标签独立性）
-- [ ] T058 [US3] E2E：万级文件滚动性能 e2e/tests/us3-scale-scroll.spec.ts（fixture 生成 10k 文件、滚动帧率采样 ≥50fps、展开 ≤200ms，SC-007）
-- [ ] T099 [US3] a11y 最低线：文件树键盘导航（展开/选择/右键菜单替代路径）与侧边栏 accessible name，于 src/sidebar/FileTree.tsx（宪法原则 III）
+- [X] T048 [US3] 实现工作区命令 src-tauri/src/commands/workspace.rs：`workspace_add`（canonicalize + 嵌套校验 + 触发索引）/`workspace_remove`/`workspace_list`（contracts §1.2）
+- [X] T049 [US3] 实现后台索引引擎 src-tauri/src/indexing/mod.rs（tokio 异步扫描、符号链接循环防护、file_index 增量更新、index-progress 事件）
+- [X] T050 [US3] 实现 `dir_list` 懒加载命令于 src-tauri/src/commands/workspace.rs（单层目录、仅 .excalidraw/.excalidraw.json 与目录）
+- [X] T051 [US3] 实现文件操作命令 src-tauri/src/commands/files.rs：`file_create`（原子写空白文档）/`file_rename`/`file_delete`（trash crate 回收站）
+- [X] T052 [P] [US3] 实现工作区管理 UI src/workspaces/WorkspacePanel.tsx（挂载目录选择、列表、移除确认——移除不删文件文案）
+- [X] T053 [US3] 实现虚拟化文件树 src/sidebar/FileTree.tsx（@tanstack/react-virtual + 懒展开调 dir_list + 右键菜单新建/重命名/删除）
+- [X] T054 [US3] 多标签页完善 src/app/TabBar.tsx + documentStore：同文件唯一会话、每 Tab 独立撤销历史与脏标记、切换触发 L3 Checkpoint（FR-017）
+- [X] T055 [US3] 标签页跟随文件变更：重命名同步标题、删除标示失联入口（接 file-changed 事件占位，US4 完成后自动激活）于 src/documents/documentStore.ts
+- [X] T056 [P] [US3] 侧边栏文件操作单测 src/sidebar/FileTree.test.tsx（树渲染、懒加载触发、操作回调）
+- [X] T057 [US3] E2E：文件管理闭环 e2e/tests/us3-workspace-files.spec.ts（挂载/新建/重命名/删除/多标签独立性）
+- [X] T058 [US3] E2E：万级文件滚动性能 e2e/tests/us3-scale-scroll.spec.ts（fixture 生成 10k 文件、滚动帧率采样 ≥50fps、展开 ≤200ms，SC-007）
+- [X] T099 [US3] a11y 最低线：文件树键盘导航（展开/选择/右键菜单替代路径）与侧边栏 accessible name，于 src/sidebar/FileTree.tsx（宪法原则 III）
 
 **Checkpoint**: 单工作区文件管理完整可用
 

@@ -7,7 +7,7 @@ mod e2e_harness;
 mod e2e_performance;
 #[cfg(all(test, feature = "e2e-harness"))]
 mod e2e_performance_test;
-mod indexing;
+pub mod indexing;
 pub mod security;
 mod thumbnails;
 mod watcher;
@@ -22,9 +22,15 @@ use commands::{
         doc_checkpoint, doc_close, doc_open, doc_save_draft, DirectFileGrant, DocumentService,
         DocumentState,
     },
+    files::{file_create, file_delete, file_rename, FileState},
+    recovery::{
+        recovery_apply, recovery_list, RecoveryService, RecoveryState, TauriRecoveryPathGrant,
+    },
     session::{app_handshake, SessionState},
+    workspace::{dir_list, workspace_add, workspace_list, workspace_remove, WorkspaceState},
 };
 use database::repository::SqliteRepository;
+use documents::recovery::RecoveryStore;
 #[cfg(feature = "e2e-harness")]
 use e2e_performance::{
     e2e_perf_bootstrap, e2e_perf_next_command, e2e_perf_publish_ready, e2e_perf_publish_result,
@@ -55,20 +61,30 @@ pub fn run() {
             ))?;
             let session = SessionState::initialize(&app_data_directory)?;
             let shared_repository = Arc::new(repository.clone());
+            let recovery_store = Arc::new(RecoveryStore::new(&app_data_directory));
             #[cfg(feature = "e2e-harness")]
             let performance_state = tauri::async_runtime::block_on(
                 PerformanceHarnessState::from_environment(Arc::clone(&shared_repository)),
             )
             .map_err(std::io::Error::other)?;
-            let document_service = DocumentService::with_grant_and_scene_limit(
-                shared_repository,
+            let document_service = DocumentService::with_grant_and_scene_limit_and_recovery(
+                Arc::clone(&shared_repository),
                 Arc::new(TauriFileGrant(app.fs_scope())),
                 DocumentService::DEFAULT_SCENE_LIMIT_BYTES,
+                Arc::clone(&recovery_store),
+            );
+            let recovery_service = RecoveryService::with_path_grant(
+                Arc::clone(&shared_repository),
+                recovery_store,
+                Arc::new(TauriRecoveryPathGrant(app.fs_scope())),
             );
             app.manage(repository);
             #[cfg(feature = "e2e-harness")]
             app.manage(performance_state);
             app.manage(DocumentState::new(document_service));
+            app.manage(RecoveryState::new(recovery_service));
+            app.manage(WorkspaceState::new(Arc::clone(&shared_repository)));
+            app.manage(FileState::new(shared_repository));
             app.manage(session);
             Ok(())
         });
@@ -80,6 +96,15 @@ pub fn run() {
         doc_save_draft,
         doc_checkpoint,
         doc_close,
+        recovery_list,
+        recovery_apply,
+        workspace_add,
+        workspace_remove,
+        workspace_list,
+        dir_list,
+        file_create,
+        file_rename,
+        file_delete,
         e2e_harness::e2e_set_atomic_write_fault,
         e2e_harness::e2e_clear_atomic_write_fault,
         e2e_harness::e2e_corrupt_latest_snapshot,
@@ -95,12 +120,34 @@ pub fn run() {
         doc_open,
         doc_save_draft,
         doc_checkpoint,
-        doc_close
+        doc_close,
+        recovery_list,
+        recovery_apply,
+        workspace_add,
+        workspace_remove,
+        workspace_list,
+        dir_list,
+        file_create,
+        file_rename,
+        file_delete
     ]);
 
-    if let Err(error) = builder.run(tauri::generate_context!()) {
-        eprintln!("failed to run Excalidraw Desktop: {error}");
-    }
+    let app = match builder.build(tauri::generate_context!()) {
+        Ok(app) => app,
+        Err(error) => {
+            eprintln!("failed to build Excalidraw Desktop: {error}");
+            return;
+        }
+    };
+    app.run(|app_handle, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            if let Some(session) = app_handle.try_state::<SessionState>() {
+                if let Err(error) = session.release() {
+                    eprintln!("failed to release the session lock: {error}");
+                }
+            }
+        }
+    });
 }
 
 struct TauriFileGrant(tauri::fs::Scope);

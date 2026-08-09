@@ -13,7 +13,11 @@ interface ExcalidrawEditorProps {
   theme: ResolvedColorScheme;
   readOnly?: boolean;
   onSceneChange: (scene: SceneSnapshot) => void;
-  onReady?: (adapter: ExcalidrawAdapter, container: HTMLDivElement) => void;
+  onReady?: (
+    documentId: string,
+    adapter: ExcalidrawAdapter,
+    container: HTMLDivElement,
+  ) => void;
 }
 
 export function ExcalidrawEditor({
@@ -43,20 +47,23 @@ export function ExcalidrawEditor({
     [],
   );
 
-  const receiveApi = useCallback((api: ExcalidrawImperativeAPI) => {
-    adapterRef.current?.dispose();
-    imeBridgeRef.current?.dispose();
+  const receiveApi = useCallback(
+    (api: ExcalidrawImperativeAPI) => {
+      adapterRef.current?.dispose();
+      imeBridgeRef.current?.dispose();
 
-    const adapter = new ExcalidrawAdapter(api);
-    adapterRef.current = adapter;
+      const adapter = new ExcalidrawAdapter(api);
+      adapterRef.current = adapter;
 
-    if (containerRef.current !== null) {
-      imeBridgeRef.current = new ImeBridge(containerRef.current, api);
-    }
-    if (containerRef.current !== null) {
-      onReadyRef.current?.(adapter, containerRef.current);
-    }
-  }, []);
+      if (containerRef.current !== null) {
+        imeBridgeRef.current = new ImeBridge(containerRef.current, api);
+      }
+      if (containerRef.current !== null) {
+        onReadyRef.current?.(documentId, adapter, containerRef.current);
+      }
+    },
+    [documentId],
+  );
 
   const handleSceneChange = useCallback(
     (

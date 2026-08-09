@@ -17,6 +17,7 @@ use crate::{
     },
     documents::{
         atomic_write::atomic_write,
+        recovery::{document_id_for_path, RecoveryStore},
         validation::{validate_scene, SceneValidationError},
     },
     security::{PathSecurityError, WorkspacePathPolicy},
@@ -49,6 +50,7 @@ pub struct DocumentService {
     direct_file_grant: Arc<dyn DirectFileGrant>,
     scene_limit_bytes: usize,
     document_locks: Arc<tokio::sync::Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>>,
+    recovery: Option<Arc<RecoveryStore>>,
 }
 
 impl DocumentService {
@@ -76,6 +78,31 @@ impl DocumentService {
             direct_file_grant,
             scene_limit_bytes,
             document_locks: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            recovery: None,
+        }
+    }
+
+    pub fn with_recovery(repository: Arc<SqliteRepository>, recovery: Arc<RecoveryStore>) -> Self {
+        Self::with_grant_and_scene_limit_and_recovery(
+            repository,
+            Arc::new(DenyDirectFiles),
+            Self::DEFAULT_SCENE_LIMIT_BYTES,
+            recovery,
+        )
+    }
+
+    pub fn with_grant_and_scene_limit_and_recovery(
+        repository: Arc<SqliteRepository>,
+        direct_file_grant: Arc<dyn DirectFileGrant>,
+        scene_limit_bytes: usize,
+        recovery: Arc<RecoveryStore>,
+    ) -> Self {
+        Self {
+            repository,
+            direct_file_grant,
+            scene_limit_bytes,
+            document_locks: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            recovery: Some(recovery),
         }
     }
 
@@ -143,11 +170,12 @@ impl DocumentService {
         .await?;
 
         let canonical_path = path_string(&authorized.path);
+        let snapshot_scene_json = scene_json.clone();
         let existing = self.repository.draft_get(canonical_path.clone()).await?;
         let base_hash = match existing.and_then(|draft| draft.base_hash) {
             Some(hash) => Some(hash),
             None => {
-                let path = authorized.path;
+                let path = authorized.path.clone();
                 let bytes = run_blocking(move || read_bounded(&path, limit)).await?;
                 Some(content_hash(&bytes))
             }
@@ -158,11 +186,29 @@ impl DocumentService {
                 file_path: canonical_path,
                 scene_json,
                 content_hash: hash.clone(),
-                base_hash,
+                base_hash: base_hash.clone(),
                 updated_at: saved_at,
                 is_dirty: true,
             })
             .await?;
+        if let Some(recovery) = self.recovery.clone() {
+            let document_id = document_id_for_path(&authorized.path);
+            let original_path = authorized.path.clone();
+            let base_file_hash = base_hash.unwrap_or_default();
+            run_blocking(move || {
+                recovery
+                    .write_snapshot(
+                        &document_id,
+                        Some(&original_path),
+                        &base_file_hash,
+                        saved_at,
+                        &snapshot_scene_json,
+                    )
+                    .map(|_| ())
+                    .map_err(AppError::from)
+            })
+            .await?;
+        }
         Ok(SaveDraftResponse {
             content_hash: hash,
             saved_at,

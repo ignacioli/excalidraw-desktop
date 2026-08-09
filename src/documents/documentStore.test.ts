@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "../app/store";
 import type { SceneSnapshot } from "../editor/sceneSerializer";
 import type { DocumentGateway } from "./documentGateway";
-import { DocumentManager } from "./documentStore";
+import {
+  DocumentManager,
+  registerDocumentFileChangeEvents,
+} from "./documentStore";
 
 const { serializeAsJSON } = vi.hoisted(() => ({
   serializeAsJSON: vi.fn(
@@ -103,6 +106,137 @@ describe("DocumentManager", () => {
     );
     expect(manager.store.getState().sessionsById[firstId]?.saveState).toBe(
       "clean",
+    );
+    manager.dispose();
+  });
+
+  it("reuses the existing session when the same file is opened twice", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+
+    const firstId = await manager.open("/tmp/drawing.excalidraw");
+    const secondId = await manager.open("/tmp/drawing.excalidraw");
+
+    expect(secondId).toBe(firstId);
+    expect(gateway.open).toHaveBeenCalledOnce();
+    expect(Object.keys(manager.store.getState().sessionsById)).toEqual([
+      firstId,
+    ]);
+    manager.dispose();
+  });
+
+  it("retargets future saves after a file is renamed", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/before.excalidraw");
+    const scene = manager.store.getState().sessionsById[documentId]?.scene;
+    expect(scene).toBeDefined();
+
+    manager.handleFileRenamed(
+      "/tmp/before.excalidraw",
+      "/tmp/after.excalidraw",
+    );
+    manager.updateScene(documentId, {
+      ...scene!,
+      elements: [{ version: 1 } as SceneSnapshot["elements"][number]],
+    });
+    await manager.checkpoint(documentId);
+
+    expect(manager.store.getState().sessionsById[documentId]).toMatchObject({
+      path: "/tmp/after.excalidraw",
+      title: "after.excalidraw",
+    });
+    expect(useAppStore.getState().tabsById[documentId]).toMatchObject({
+      path: "/tmp/after.excalidraw",
+      title: "after.excalidraw",
+    });
+    expect(gateway.checkpoint).toHaveBeenCalledWith(
+      "/tmp/after.excalidraw",
+      expect.any(String),
+      "manualSave",
+    );
+    manager.dispose();
+  });
+
+  it("marks an open document as orphaned when its file is removed", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/drawing.excalidraw");
+
+    manager.handleFileRemoved("/tmp/drawing.excalidraw");
+
+    expect(manager.store.getState().sessionsById[documentId]?.saveState).toBe(
+      "orphaned",
+    );
+    expect(useAppStore.getState().tabsById[documentId]?.isOrphaned).toBe(true);
+    manager.dispose();
+  });
+
+  it("connects rename and removal events to open document sessions", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/before.excalidraw");
+    let handleEvent:
+      | ((event: {
+          payload: {
+            path: string;
+            change: "removed" | "renamed";
+            newPath?: string;
+          };
+        }) => void)
+      | undefined;
+    const unlisten = vi.fn();
+
+    await registerDocumentFileChangeEvents(manager, async (_name, handler) => {
+      handleEvent = handler;
+      return unlisten;
+    });
+    handleEvent?.({
+      payload: {
+        path: "/tmp/before.excalidraw",
+        change: "renamed",
+        newPath: "/tmp/after.excalidraw",
+      },
+    });
+    handleEvent?.({
+      payload: {
+        path: "/tmp/after.excalidraw",
+        change: "removed",
+      },
+    });
+
+    expect(manager.store.getState().sessionsById[documentId]).toMatchObject({
+      path: "/tmp/after.excalidraw",
+      saveState: "orphaned",
+    });
+    manager.dispose();
+  });
+
+  it("loads a recovered snapshot as dirty and immediately resumes draft protection", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const recoveredScene = {
+      type: "excalidraw",
+      version: 2,
+      elements: [{ version: 7 }],
+      appState: { name: "Recovered" },
+      files: {},
+    };
+
+    const documentId = await manager.restore(
+      "/tmp/recovered.excalidraw",
+      recoveredScene,
+    );
+
+    expect(manager.store.getState().sessionsById[documentId]).toMatchObject({
+      path: "/tmp/recovered.excalidraw",
+      saveState: "dirty",
+    });
+    expect(useAppStore.getState().tabsById[documentId]?.isDirty).toBe(true);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(gateway.saveDraft).toHaveBeenCalledWith(
+      "/tmp/recovered.excalidraw",
+      expect.any(String),
     );
     manager.dispose();
   });

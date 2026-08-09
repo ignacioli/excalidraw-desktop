@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS file_meta (
 
 - 每文档目录 `recovery/<sha256(originalPath)>/` 下保留 `recovery-001..005.json`，Ring 覆盖最旧。
 - 读取时逐个反序列化校验，损坏则跳过取次新（Edge Case：快照自损）。
-- 恢复判定：`snapshot.savedAt > coldFile.mtime` 且 `snapshot.baseFileHash != coldFile.hash` 时提示恢复。
+- 恢复判定：冷层存在时，`snapshot.savedAt > coldFile.mtime` 且快照 scene 与冷层 scene 不同或 `snapshot.baseFileHash != coldFile.hash` 时提示恢复；冷层缺失或不可读时保留候选并引导另存。`baseFileHash` 用于发现外部替换，不能抑制从同一冷层版本产生的普通未保存草稿。
 
 ### ImageAsset
 

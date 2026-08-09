@@ -1,2 +1,2 @@
-// Workspace management is added in User Story 3.
-export {};
+export { WorkspacePanel } from "./WorkspacePanel";
+export type { WorkspacePanelProps } from "./WorkspacePanel";

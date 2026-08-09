@@ -88,12 +88,13 @@ describe("AppShell", () => {
       title: "Two",
       path: "/tmp/two.excalidraw",
       isDirty: true,
+      isOrphaned: true,
     });
     render(<AppShell />);
 
     const firstTab = screen.getByRole("tab", { name: "One" });
     const secondTab = screen.getByRole("tab", {
-      name: "Two, unsaved changes",
+      name: "Two, unsaved changes, file unavailable",
     });
     expect(secondTab).toHaveAttribute("aria-selected", "true");
 
@@ -145,6 +146,59 @@ describe("AppShell", () => {
 
     await user.keyboard("{Meta>}s{/Meta}");
     expect(save).toHaveBeenCalledWith("manualSave");
+  });
+
+  it("keeps each document editor mounted when switching tabs", async () => {
+    const user = userEvent.setup();
+    documentManager.store.setState({
+      sessionsById: {
+        first: {
+          id: "first",
+          path: "/tmp/first.excalidraw",
+          title: "first.excalidraw",
+          scene: { elements: [], appState: {}, files: {} },
+          sceneVersion: 0,
+          baseHash: "first-base",
+          saveState: "clean",
+          errorMessage: null,
+        },
+        second: {
+          id: "second",
+          path: "/tmp/second.excalidraw",
+          title: "second.excalidraw",
+          scene: { elements: [], appState: {}, files: {} },
+          sceneVersion: 0,
+          baseHash: "second-base",
+          saveState: "clean",
+          errorMessage: null,
+        },
+      },
+    });
+    useAppStore.getState().registerTab({
+      id: "first",
+      title: "first.excalidraw",
+      path: "/tmp/first.excalidraw",
+    });
+    useAppStore.getState().registerTab({
+      id: "second",
+      title: "second.excalidraw",
+      path: "/tmp/second.excalidraw",
+    });
+
+    render(<AppShell />);
+    expect(screen.getAllByTestId("excalidraw-editor")).toHaveLength(2);
+
+    await user.click(screen.getByRole("tab", { name: "first.excalidraw" }));
+
+    const editors = screen.getAllByTestId("excalidraw-editor");
+    const firstEditor = editors.find(
+      (editor) => editor.getAttribute("data-document-id") === "first",
+    );
+    const secondEditor = editors.find(
+      (editor) => editor.getAttribute("data-document-id") === "second",
+    );
+    expect(firstEditor?.closest("section")).not.toHaveAttribute("hidden");
+    expect(secondEditor?.closest("section")).toHaveAttribute("hidden");
   });
 
   it("reports disk-full failures while preserving the recovery expectation", async () => {
