@@ -1,9 +1,11 @@
 import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "@excalidraw/excalidraw/index.css";
 import type { ResolvedColorScheme } from "../app/theme/types";
+import { useAppStore } from "../app/store";
 import { ExcalidrawAdapter } from "./ExcalidrawAdapter";
+import { resolveAssetFiles } from "./assetResolver";
 import { ImeBridge } from "./imeBridge";
 import type { SceneSnapshot } from "./sceneSerializer";
 
@@ -31,6 +33,9 @@ export function ExcalidrawEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   const adapterRef = useRef<ExcalidrawAdapter | undefined>(undefined);
   const imeBridgeRef = useRef<ImeBridge | undefined>(undefined);
+  const [initialData, setInitialData] = useState<SceneSnapshot | undefined>(
+    undefined,
+  );
   const onSceneChangeRef = useRef(onSceneChange);
   const onReadyRef = useRef(onReady);
 
@@ -38,6 +43,26 @@ export function ExcalidrawEditor({
     onSceneChangeRef.current = onSceneChange;
     onReadyRef.current = onReady;
   }, [onReady, onSceneChange]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const documentPath =
+      useAppStore.getState().tabsById[documentId]?.path ?? undefined;
+    void resolveAssetFiles(initialScene.files, documentPath)
+      .then((files) => {
+        if (!cancelled) {
+          setInitialData({ ...initialScene, files });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setInitialData(initialScene);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [documentId, initialScene]);
 
   useEffect(
     () => () => {
@@ -52,7 +77,12 @@ export function ExcalidrawEditor({
       adapterRef.current?.dispose();
       imeBridgeRef.current?.dispose();
 
-      const adapter = new ExcalidrawAdapter(api);
+      const adapter = new ExcalidrawAdapter(api, (files) =>
+        resolveAssetFiles(
+          files,
+          useAppStore.getState().tabsById[documentId]?.path ?? undefined,
+        ),
+      );
       adapterRef.current = adapter;
 
       if (containerRef.current !== null) {
@@ -74,6 +104,16 @@ export function ExcalidrawEditor({
     [],
   );
 
+  if (initialData === undefined) {
+    return (
+      <div
+        className="excalidraw-editor"
+        data-document-id={documentId}
+        ref={containerRef}
+      />
+    );
+  }
+
   return (
     <div
       className="excalidraw-editor"
@@ -84,7 +124,7 @@ export function ExcalidrawEditor({
         aiEnabled={false}
         autoFocus
         excalidrawAPI={receiveApi}
-        initialData={initialScene}
+        initialData={initialData}
         onChange={handleSceneChange}
         theme={theme}
         validateEmbeddable={false}

@@ -16,14 +16,19 @@ use super::{
 
 pub struct SessionState {
     abnormal_exit: bool,
+    pending_open_paths: Vec<String>,
     lock: Mutex<Option<SessionLock>>,
 }
 
 impl SessionState {
-    pub fn initialize(app_data_directory: &Path) -> Result<Self, AppError> {
+    pub fn initialize(
+        app_data_directory: &Path,
+        pending_open_paths: Vec<String>,
+    ) -> Result<Self, AppError> {
         let lock = SessionLock::acquire(app_data_directory).map_err(session_lock_error)?;
         Ok(Self {
             abnormal_exit: lock.abnormal_exit(),
+            pending_open_paths,
             lock: Mutex::new(Some(lock)),
         })
     }
@@ -33,6 +38,7 @@ impl SessionState {
             contract_version: IPC_CONTRACT_VERSION,
             app_version: env!("CARGO_PKG_VERSION").to_owned(),
             abnormal_exit: self.abnormal_exit,
+            pending_open_paths: self.pending_open_paths.clone(),
         }
     }
 

@@ -230,14 +230,14 @@ The following names describe logical capability roles for planning and review. T
 
 ### Implementation for User Story 6
 
-- [ ] T073 [US6] 集成 tauri-plugin-single-instance：二次启动参数转发 `open-file-request` 事件 + 窗口聚焦于 src-tauri/src/lib.rs（FR-028）
-- [ ] T074 [US6] 前端接线 open-file-request → 新开标签聚焦 src/app/openFileHandler.ts（含启动参数首开处理）
-- [ ] T075 [P] [US6] macOS 文件关联：CFBundleDocumentTypes + 文件图标于 src-tauri/tauri.conf.json bundle.macOS 与 Info.plist 模板（.excalidraw/.excalidraw.json）
-- [ ] T076 [P] [US6] Linux 文件关联：MIME `application/x-excalidraw` 定义 + .desktop 模板于 src-tauri/tauri.conf.json bundle.linux
-- [ ] T077 [US6] macOS Universal Binary 构建流水线（aarch64 + x86_64 target 编译 + lipo 合并）于 CI 工作流 .github/workflows/release.yml
-- [ ] T078 [US6] 当前版本 macOS 本地验证：运行未签名/未公证构建，记录本机启动、文件关联、单实例和 Gatekeeper 手动放行结果于 docs/native-verification.md；Developer ID 签名、公证与零拦截正式发布标记为后续版本 out of scope，不作为当前版本完成门禁（SC-010）
-- [ ] T079 [P] [US6] Linux 打包产物：AppImage + deb + rpm 配置于 src-tauri/tauri.conf.json bundle 与 release.yml
-- [ ] T080 [US6] 原生壳手动验证清单 docs/native-verification.md——当前版本覆盖 FR-030 全矩阵：画布渲染、拖放、剪贴板、IME，以及本地构建的双击关联、单实例、Gatekeeper 手动放行、各发行版安装；正式签名/公证/零拦截验证单独标记为后续版本（浏览器 E2E 不可证明项；执行结果记录矩阵）
+- [X] T073 [US6] 集成 tauri-plugin-single-instance：二次启动参数转发 `open-file-request` 事件 + 窗口聚焦于 src-tauri/src/lib.rs（FR-028）
+- [X] T074 [US6] 前端接线 open-file-request → 新开标签聚焦 src/app/openFileHandler.ts（含启动参数首开处理）
+- [X] T075 [P] [US6] macOS 文件关联：CFBundleDocumentTypes + 文件图标于 src-tauri/tauri.conf.json bundle.macOS 与 Info.plist 模板（.excalidraw/.excalidraw.json）
+- [X] T076 [P] [US6] Linux 文件关联：MIME `application/x-excalidraw` 定义 + .desktop 模板于 src-tauri/tauri.conf.json bundle.linux
+- [X] T077 [US6] macOS Universal Binary 构建流水线（aarch64 + x86_64 target 编译 + lipo 合并）于 CI 工作流 .github/workflows/release.yml
+- [X] T078 [US6] 当前版本 macOS 本地验证：运行未签名/未公证构建，记录本机启动、文件关联、单实例和 Gatekeeper 手动放行结果于 docs/native-verification.md；Developer ID 签名、公证与零拦截正式发布标记为后续版本 out of scope，不作为当前版本完成门禁（SC-010）
+- [X] T079 [P] [US6] Linux 打包产物：AppImage + deb + rpm 配置于 src-tauri/tauri.conf.json bundle 与 release.yml
+- [X] T080 [US6] 原生壳手动验证清单 docs/native-verification.md——当前版本覆盖 FR-030 全矩阵：画布渲染、拖放、剪贴板、IME，以及本地构建的双击关联、单实例、Gatekeeper 手动放行、各发行版安装；正式签名/公证/零拦截验证单独标记为后续版本（浏览器 E2E 不可证明项；执行结果记录矩阵）
 
 **Checkpoint**: 当前版本本地可验证的成熟桌面应用形态；正式 macOS 签名、公证和零拦截发布已明确出范围
 
@@ -251,15 +251,15 @@ The following names describe logical capability roles for planning and review. T
 
 ### Implementation for User Story 7
 
-- [ ] T081 [US7] 多工作区并列 UI：WorkspacePanel 多分区折叠/独立移除 src/workspaces/WorkspacePanel.tsx + FileTree 多根支持 src/sidebar/FileTree.tsx
-- [ ] T082 [P] [US7] 实现缩略图 Worker src/sidebar/thumbnailWorker.ts（OffscreenCanvas + exportToBlob → 320×200 WebP、并发 1–2 低优先级队列、可视区触发）
-- [ ] T083 [US7] 实现缩略图 IPC 命令适配器 src-tauri/src/commands/thumbnails.rs 与领域服务 src-tauri/src/thumbnails/：`thumb_lookup`/`thumb_store`（cache/thumbnails/aa/bb/<key>.webp 磁盘布局 + file_meta 表，contracts §1.4）
-- [ ] T084 [US7] 缩略图接入文件树：可视节点懒请求 + asset 协议加载 + 内容寻址键 SHA256(content+renderer_version+theme) 于 src/sidebar/FileTree.tsx（R11）
-- [ ] T085 [US7] 实现图片资产去重 src-tauri/src/documents/assets.rs（SHA-256 剥离至 `.excalidraw_assets/<hash>`、文档持引用、孤儿延迟回收，R12）
-- [ ] T086 [US7] 画布图片 asset 协议加载 + 导出/对外保存重组内嵌 src/editor/ExcalidrawAdapter.ts + src-tauri/src/commands/documents.rs（convertFileSrc，FR-024/FR-002 兼容）
-- [ ] T087 [US7] E2E：缩略图缓存 e2e/tests/us7-thumbnails.spec.ts（懒生成、重启 thumb_lookup.hit=true 零重复生成）
-- [ ] T088 [US7] E2E：资产去重 e2e/tests/us7-asset-dedup.spec.ts（10MB 图粘贴 10 次 → 文档体积增幅 ≤5%，SC-011）
-- [ ] T102 [US7] a11y 最低线：缩略图/多工作区区域不剥夺键盘焦点，装饰图 `alt=""` 或 `aria-hidden`，于 src/sidebar/FileTree.tsx、src/workspaces/WorkspacePanel.tsx（宪法原则 III）
+- [X] T081 [US7] 多工作区并列 UI：WorkspacePanel 多分区折叠/独立移除 src/workspaces/WorkspacePanel.tsx + FileTree 多根支持 src/sidebar/FileTree.tsx
+- [X] T082 [P] [US7] 实现缩略图 Worker src/sidebar/thumbnailWorker.ts（OffscreenCanvas + exportToBlob → 320×200 WebP、并发 1–2 低优先级队列、可视区触发）
+- [X] T083 [US7] 实现缩略图 IPC 命令适配器 src-tauri/src/commands/thumbnails.rs 与领域服务 src-tauri/src/thumbnails/：`thumb_lookup`/`thumb_store`（cache/thumbnails/aa/bb/<key>.webp 磁盘布局 + file_meta 表，contracts §1.4）
+- [X] T084 [US7] 缩略图接入文件树：可视节点懒请求 + asset 协议加载 + 内容寻址键 SHA256(content+renderer_version+theme) 于 src/sidebar/FileTree.tsx（R11）
+- [X] T085 [US7] 实现图片资产去重 src-tauri/src/documents/assets.rs（SHA-256 剥离至 `.excalidraw_assets/<hash>`、文档持引用、孤儿延迟回收，R12）
+- [X] T086 [US7] 画布图片 asset 协议加载 + 导出/对外保存重组内嵌 src/editor/ExcalidrawAdapter.ts + src-tauri/src/commands/documents.rs（convertFileSrc，FR-024/FR-002 兼容）
+- [X] T087 [US7] E2E：缩略图缓存 e2e/tests/us7-thumbnails.spec.ts（懒生成、重启 thumb_lookup.hit=true 零重复生成）
+- [X] T088 [US7] E2E：资产去重 e2e/tests/us7-asset-dedup.spec.ts（10MB 图粘贴 10 次 → 文档体积增幅 ≤5%，SC-011）
+- [X] T102 [US7] a11y 最低线：缩略图/多工作区区域不剥夺键盘焦点，装饰图 `alt=""` 或 `aria-hidden`，于 src/sidebar/FileTree.tsx、src/workspaces/WorkspacePanel.tsx（宪法原则 III）
 
 **Checkpoint**: 全部 7 个用户故事独立可验证
 

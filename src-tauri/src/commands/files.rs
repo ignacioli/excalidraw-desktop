@@ -19,6 +19,7 @@ use crate::{
         FileIndexRecord, FileIndexRepository, FileMetaRepository, SqliteRepository,
         WorkspaceRepository,
     },
+    documents::assets::{asset_garbage_error, collect_garbage, scan_referenced_hashes},
     documents::atomic_write::atomic_write,
 };
 
@@ -145,7 +146,24 @@ impl FileService {
         let canonical = target.display().to_string();
         self.repository.file_index_delete(canonical.clone()).await?;
         self.repository.file_meta_delete(canonical).await?;
+        self.collect_workspace_garbage(&target).await?;
         Ok(EmptyResponse {})
+    }
+
+    async fn collect_workspace_garbage(&self, deleted_path: &Path) -> Result<(), AppError> {
+        let workspace = owning_workspace(&self.repository, deleted_path).await?;
+        let root = PathBuf::from(&workspace.root_path);
+        let scan_root = root.clone();
+        let referenced = tokio::task::spawn_blocking(move || scan_referenced_hashes(&scan_root))
+            .await
+            .map_err(|error| AppError::Internal(error.to_string()))?;
+        let garbage_root = root;
+        tokio::task::spawn_blocking(move || {
+            collect_garbage(&garbage_root, &referenced).map_err(asset_garbage_error)
+        })
+        .await
+        .map_err(|error| AppError::Internal(error.to_string()))??;
+        Ok(())
     }
 
     async fn entry_for_path(

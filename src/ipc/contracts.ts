@@ -30,6 +30,7 @@ export interface AppHandshakeResponse {
   contractVersion: number;
   appVersion: string;
   abnormalExit: boolean;
+  pendingOpenPaths: string[];
 }
 
 export interface RecoveryCandidate {

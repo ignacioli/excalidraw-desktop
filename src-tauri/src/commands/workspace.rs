@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     database::repository::{SqliteRepository, WorkspaceRecord, WorkspaceRepository},
+    documents::assets::{asset_garbage_error, collect_garbage, scan_referenced_hashes},
     indexing::Indexer,
     security::WorkspacePathPolicy,
     watcher::WatcherState,
@@ -87,6 +88,17 @@ impl WorkspaceService {
             .await
             .map_err(AppError::from)?
             .ok_or(AppError::WorkspaceNotFound(request.workspace_id))?;
+        let root = PathBuf::from(&workspace.root_path);
+        let scan_root = root.clone();
+        let referenced = tokio::task::spawn_blocking(move || scan_referenced_hashes(&scan_root))
+            .await
+            .map_err(|error| AppError::Internal(error.to_string()))?;
+        let garbage_root = root;
+        tokio::task::spawn_blocking(move || {
+            collect_garbage(&garbage_root, &referenced).map_err(asset_garbage_error)
+        })
+        .await
+        .map_err(|error| AppError::Internal(error.to_string()))??;
         self.repository
             .workspace_delete(workspace.id)
             .await

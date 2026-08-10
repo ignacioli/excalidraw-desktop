@@ -25,6 +25,7 @@ import {
   registerExitCheckpoint,
 } from "./exitCheckpoint";
 import { fileDialogActions, type FileDialogActions } from "./fileDialogs";
+import { registerOpenFileHandler } from "./openFileHandler";
 import { TabBar } from "./TabBar";
 import { useAppStore } from "./store";
 import {
@@ -95,8 +96,7 @@ export function AppShell({
     ? "⌘S"
     : "Ctrl+S";
   const exportReady =
-    activeSession !== undefined &&
-    readyEditor?.documentId === activeSession.id;
+    activeSession !== undefined && readyEditor?.documentId === activeSession.id;
 
   const openExportDialog = () => {
     if (!exportReady || activeSession === undefined) {
@@ -208,6 +208,29 @@ export function AppShell({
     }
     let disposed = false;
     let unlisten: (() => void) | undefined;
+    void registerOpenFileHandler(documentManager, {
+      onError: (error) => setInteractionError(getErrorMessage(error)),
+    })
+      .then((nextUnlisten) => {
+        if (disposed) {
+          nextUnlisten();
+        } else {
+          unlisten = nextUnlisten;
+        }
+      })
+      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) {
+      return;
+    }
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
     void registerDocumentFileChangeEvents(documentManager)
       .then((nextUnlisten) => {
         if (disposed) {
@@ -238,9 +261,7 @@ export function AppShell({
           unlisten = nextUnlisten;
         }
       })
-      .catch((error: unknown) =>
-        setInteractionError(getErrorMessage(error)),
-      );
+      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
     return () => {
       disposed = true;
       unlisten?.();
@@ -340,6 +361,7 @@ export function AppShell({
                 void runAction(() => documentManager.open(entry.canonicalPath));
               }}
               onWorkspacePresenceChange={setHasMountedWorkspace}
+              theme={themeSnapshot.resolvedColorScheme}
             />
           ) : null}
           {!hasMountedWorkspace ? (

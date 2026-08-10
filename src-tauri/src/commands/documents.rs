@@ -16,6 +16,7 @@ use crate::{
         WorkspaceRecord, WorkspaceRepository,
     },
     documents::{
+        assets::{asset_root_for, externalize_files, reembed_files},
         atomic_write::atomic_write,
         recovery::{document_id_for_path, RecoveryStore},
         validation::{validate_scene, SceneValidationError},
@@ -216,9 +217,17 @@ impl DocumentService {
         }
         let _document_guard = self.lock_document(&authorized.path).await;
         let limit = self.scene_limit_bytes;
+        let asset_root = asset_root_for(
+            &authorized.path,
+            authorized
+                .workspace
+                .as_ref()
+                .map(|workspace| Path::new(&workspace.root_path)),
+        );
         let scene_json = request.scene_json;
         let (scene_json, hash) = run_blocking(move || {
             validate_active_scene(scene_json.as_bytes(), limit)?;
+            let scene_json = externalize_files(&scene_json, &asset_root)?;
             let hash = content_hash(scene_json.as_bytes());
             Ok((scene_json, hash))
         })
@@ -279,9 +288,17 @@ impl DocumentService {
         }
         let _document_guard = self.lock_document(&authorized.path).await;
         let limit = self.scene_limit_bytes;
+        let asset_root = asset_root_for(
+            &authorized.path,
+            authorized
+                .workspace
+                .as_ref()
+                .map(|workspace| Path::new(&workspace.root_path)),
+        );
         let scene_json = request.scene_json;
         let (scene_json, hash) = run_blocking(move || {
             validate_active_scene(scene_json.as_bytes(), limit)?;
+            let scene_json = externalize_files(&scene_json, &asset_root)?;
             let hash = content_hash(scene_json.as_bytes());
             Ok((scene_json, hash))
         })
@@ -392,10 +409,35 @@ impl DocumentService {
                 if target == authorized.path {
                     return Err(AppError::PathAccessDenied(target));
                 }
+                let workspaces = self.repository.workspace_list().await?;
+                let source_asset_root = asset_root_for(
+                    &authorized.path,
+                    authorized
+                        .workspace
+                        .as_ref()
+                        .map(|workspace| Path::new(&workspace.root_path)),
+                );
+                let target_workspace = owning_workspace(&workspaces, &target);
+                let target_asset_root = asset_root_for(
+                    &target,
+                    target_workspace
+                        .as_ref()
+                        .map(|workspace| Path::new(&workspace.root_path)),
+                );
                 let write_path = target.clone();
                 let scene_json = draft.scene_json.clone();
-                let local_hash = content_hash(scene_json.as_bytes());
-                let write_scene = scene_json.clone();
+                let (write_scene, stored_scene, local_hash) = run_blocking(move || {
+                    let reembedded = reembed_files(&scene_json, &source_asset_root)?;
+                    let stored_scene = if source_asset_root == target_asset_root {
+                        scene_json
+                    } else {
+                        externalize_files(&reembedded, &target_asset_root)?
+                    };
+                    let local_hash = content_hash(stored_scene.as_bytes());
+                    Ok((reembedded, stored_scene, local_hash))
+                })
+                .await?;
+                let disk_hash = content_hash(write_scene.as_bytes());
                 run_blocking(move || {
                     atomic_write(&write_path, write_scene.as_bytes()).map_err(AppError::from)
                 })
@@ -403,19 +445,18 @@ impl DocumentService {
                 let metadata_path = target.clone();
                 let (mtime, file_size) =
                     run_blocking(move || file_metadata(&metadata_path)).await?;
-                let workspaces = self.repository.workspace_list().await?;
-                let indexed_file = owning_workspace(&workspaces, &target)
+                let indexed_file = target_workspace
                     .map(|workspace| {
-                        file_index_record(&workspace, &target, mtime, file_size, &local_hash)
+                        file_index_record(&workspace, &target, mtime, file_size, &disk_hash)
                     })
                     .transpose()?;
                 self.repository
                     .document_checkpoint_commit(
                         DraftRecord {
                             file_path: path_string(&target),
-                            scene_json,
+                            scene_json: stored_scene,
                             content_hash: local_hash.clone(),
-                            base_hash: Some(local_hash.clone()),
+                            base_hash: Some(disk_hash.clone()),
                             updated_at: mtime,
                             is_dirty: false,
                         },
@@ -425,12 +466,12 @@ impl DocumentService {
                 self.repository.draft_delete(canonical_path).await?;
                 if let Some(watcher) = self.watcher.clone() {
                     watcher
-                        .note_own_write(target, mtime, file_size, local_hash.clone())
+                        .note_own_write(target, mtime, file_size, disk_hash.clone())
                         .await;
                 }
                 ResolveConflictResponse {
                     scene: None,
-                    new_base_hash: local_hash,
+                    new_base_hash: disk_hash,
                 }
             }
         };

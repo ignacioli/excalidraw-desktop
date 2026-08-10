@@ -13,6 +13,10 @@ pub struct AppHandshakeResponse {
     pub contract_version: u32,
     pub app_version: String,
     pub abnormal_exit: bool,
+    /// Drawing files handed to this launch by the OS (file association) or
+    /// forwarded by a single-instance handoff. Populated before the first
+    /// render so the frontend can open them without racing an event.
+    pub pending_open_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -263,6 +267,7 @@ pub struct ThumbnailLookupRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ThumbnailLookupResponse {
     pub hit: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub webp_path: Option<String>,
 }
 
@@ -344,11 +349,13 @@ mod tests {
             contract_version: IPC_CONTRACT_VERSION,
             app_version: "0.1.0".to_owned(),
             abnormal_exit: false,
+            pending_open_paths: vec!["/tmp/drawing.excalidraw".to_owned()],
         };
         let value = serde_json::to_value(response)
             .unwrap_or_else(|error| panic!("serialize handshake: {error}"));
         assert_eq!(value["contractVersion"], 1);
         assert_eq!(value["abnormalExit"], false);
+        assert_eq!(value["pendingOpenPaths"][0], "/tmp/drawing.excalidraw");
 
         let reason = serde_json::to_string(&CheckpointReason::ManualSave)
             .unwrap_or_else(|error| panic!("serialize checkpoint reason: {error}"));

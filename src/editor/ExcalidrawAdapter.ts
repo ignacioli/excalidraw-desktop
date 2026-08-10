@@ -8,13 +8,16 @@ import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { SceneSnapshot } from "./sceneSerializer";
 
 export type SceneChangeListener = (scene: SceneSnapshot) => void;
+export type AssetFileResolver = (files: BinaryFiles) => Promise<BinaryFiles>;
 
 export class ExcalidrawAdapter {
   private readonly api: ExcalidrawImperativeAPI;
   private readonly subscriptions = new Set<() => void>();
+  private readonly resolveFiles: AssetFileResolver | undefined;
 
-  constructor(api: ExcalidrawImperativeAPI) {
+  constructor(api: ExcalidrawImperativeAPI, resolveFiles?: AssetFileResolver) {
     this.api = api;
+    this.resolveFiles = resolveFiles;
   }
 
   readScene(): SceneSnapshot {
@@ -25,7 +28,10 @@ export class ExcalidrawAdapter {
     };
   }
 
-  replaceScene(scene: SceneSnapshot): void {
+  async replaceScene(scene: SceneSnapshot): Promise<void> {
+    const files = this.resolveFiles
+      ? await this.resolveFiles(scene.files)
+      : scene.files;
     this.api.updateScene({ elements: scene.elements });
     if (scene.appState.viewBackgroundColor !== undefined) {
       this.api.updateScene({
@@ -37,7 +43,7 @@ export class ExcalidrawAdapter {
     if (scene.appState.name !== undefined) {
       this.api.updateScene({ appState: { name: scene.appState.name } });
     }
-    this.api.addFiles(Object.values(scene.files));
+    this.api.addFiles(Object.values(files));
   }
 
   setReadOnly(readOnly: boolean): void {

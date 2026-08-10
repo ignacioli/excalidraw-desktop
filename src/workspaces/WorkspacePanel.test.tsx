@@ -36,8 +36,8 @@ describe("WorkspacePanel", () => {
     );
     await user.click(screen.getByRole("button", { name: "Mount folder…" }));
     expect(
-      await screen.findByRole("heading", { name: "Sketches" }),
-    ).toBeVisible();
+      await screen.findByRole("button", { name: "Sketches" }),
+    ).toHaveAttribute("aria-expanded", "true");
     expect(invoke).toHaveBeenCalledWith("workspace_add", {
       rootPath: "/workspace",
     });
@@ -52,5 +52,56 @@ describe("WorkspacePanel", () => {
       }),
     );
     expect(onWorkspacePresenceChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("renders multiple workspaces in parallel and collapses each independently", async () => {
+    const user = userEvent.setup();
+    const workspaces = [
+      {
+        id: "workspace-1",
+        name: "Sketches",
+        rootPath: "/workspace/one",
+        createdAt: 1,
+      },
+      {
+        id: "workspace-2",
+        name: "Blueprints",
+        rootPath: "/workspace/two",
+        createdAt: 2,
+      },
+    ];
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return workspaces;
+      if (command === "dir_list") return [];
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        selectDirectory={async () => null}
+      />,
+    );
+
+    const firstToggle = await screen.findByRole("button", {
+      name: "Sketches",
+    });
+    const secondToggle = screen.getByRole("button", {
+      name: "Blueprints",
+    });
+    expect(firstToggle).toHaveAttribute("aria-expanded", "true");
+    expect(secondToggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getAllByRole("tree")).toHaveLength(2);
+
+    await user.click(firstToggle);
+    expect(firstToggle).toHaveAttribute("aria-expanded", "false");
+    expect(secondToggle).toHaveAttribute("aria-expanded", "true");
+    const collapsedFiles = document.getElementById(
+      "workspace-files-workspace-1",
+    );
+    expect(collapsedFiles).toHaveAttribute("hidden");
+    expect(
+      document.getElementById("workspace-files-workspace-2"),
+    ).not.toHaveAttribute("hidden");
   });
 });

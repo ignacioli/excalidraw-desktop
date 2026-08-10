@@ -9,14 +9,15 @@ mod e2e_performance;
 mod e2e_performance_test;
 pub mod indexing;
 pub mod security;
-mod thumbnails;
+pub mod thumbnails;
 mod watcher;
 
 use std::{path::Path, path::PathBuf, sync::Arc};
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_fs::FsExt;
 
+use commands::dto::OpenFileRequestEvent;
 use commands::{
     documents::{
         doc_checkpoint, doc_close, doc_open, doc_resolve_conflict, doc_save_draft,
@@ -28,6 +29,7 @@ use commands::{
         recovery_apply, recovery_list, RecoveryService, RecoveryState, TauriRecoveryPathGrant,
     },
     session::{app_handshake, SessionState},
+    thumbnails::{thumb_lookup, thumb_store, ThumbnailService, ThumbnailState},
     workspace::{dir_list, workspace_add, workspace_list, workspace_remove, WorkspaceState},
 };
 use database::repository::SqliteRepository;
@@ -38,6 +40,8 @@ use e2e_performance::{
     PerformanceHarnessState,
 };
 use watcher::{WatcherService, WatcherState};
+
+use crate::thumbnails::ThumbnailCache;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -54,16 +58,27 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            let paths = drawing_paths_from_args(&argv);
+            if !paths.is_empty() {
+                let _ = app.emit("open-file-request", OpenFileRequestEvent { paths });
+            }
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
+        }))
         .setup(|app| {
             let app_data_directory = resolve_app_data_directory(app)?;
             std::fs::create_dir_all(&app_data_directory)?;
 
+            let pending_open_paths = drawing_paths_from_env_args();
             let repository = tauri::async_runtime::block_on(SqliteRepository::open(
                 &app_data_directory.join("excalidraw-desktop.sqlite3"),
             ))?;
-            let session = SessionState::initialize(&app_data_directory)?;
+            let session = SessionState::initialize(&app_data_directory, pending_open_paths)?;
             let shared_repository = Arc::new(repository.clone());
             let recovery_store = Arc::new(RecoveryStore::new(&app_data_directory));
+            let thumbnail_cache = Arc::new(ThumbnailCache::new(&app_data_directory));
             #[cfg(feature = "e2e-harness")]
             let performance_state = tauri::async_runtime::block_on(
                 PerformanceHarnessState::from_environment(Arc::clone(&shared_repository)),
@@ -98,6 +113,10 @@ pub fn run() {
                 Arc::new(TauriFileGrant(app.fs_scope())),
                 DocumentService::DEFAULT_SCENE_LIMIT_BYTES,
             )));
+            app.manage(ThumbnailState::new(ThumbnailService::new(
+                Arc::clone(&shared_repository),
+                Arc::clone(&thumbnail_cache),
+            )));
             app.manage(FileState::new(shared_repository));
             app.manage(session);
             app.manage(WatcherState::new(watcher_service.clone()));
@@ -123,6 +142,8 @@ pub fn run() {
         file_rename,
         file_delete,
         doc_export,
+        thumb_lookup,
+        thumb_store,
         e2e_harness::e2e_set_atomic_write_fault,
         e2e_harness::e2e_clear_atomic_write_fault,
         e2e_harness::e2e_corrupt_latest_snapshot,
@@ -149,7 +170,9 @@ pub fn run() {
         file_create,
         file_rename,
         file_delete,
-        doc_export
+        doc_export,
+        thumb_lookup,
+        thumb_store
     ]);
 
     let app = match builder.build(tauri::generate_context!()) {
@@ -171,6 +194,37 @@ pub fn run() {
 }
 
 struct TauriFileGrant(tauri::fs::Scope);
+
+fn drawing_paths_from_env_args() -> Vec<String> {
+    drawing_paths_from_args(&std::env::args().skip(1).collect::<Vec<_>>())
+}
+
+fn drawing_paths_from_args(args: &[String]) -> Vec<String> {
+    args.iter()
+        .filter(|argument| {
+            let path = Path::new(argument);
+            is_supported_drawing_path(path)
+        })
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute() && path.exists())
+        .map(|path| path_string(&path))
+        .collect()
+}
+
+fn is_supported_drawing_path(path: &Path) -> bool {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("excalidraw") => true,
+        Some("json") => path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(".excalidraw.json")),
+        _ => false,
+    }
+}
+
+fn path_string(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
+}
 
 impl DirectFileGrant for TauriFileGrant {
     fn is_allowed(&self, path: &Path) -> bool {
@@ -244,7 +298,7 @@ fn resolve_app_data_directory(app: &tauri::App) -> Result<PathBuf, Box<dyn std::
 
 #[cfg(test)]
 mod tests {
-    use super::inferred_linux_ime_module;
+    use super::{drawing_paths_from_args, inferred_linux_ime_module};
 
     #[test]
     fn infers_linux_ime_without_replacing_an_explicit_gtk_choice() {
@@ -261,5 +315,25 @@ mod tests {
             Some("ibus")
         );
         assert_eq!(inferred_linux_ime_module(None, None, false, false), None);
+    }
+
+    #[test]
+    fn filters_second_instance_arguments_to_drawing_files() {
+        let existing = std::env::temp_dir().join(format!(
+            "excalidraw-open-arg-{}.excalidraw.json",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::write(&existing, b"{}").expect("write fixture file");
+        let args = vec![
+            "excalidraw-desktop".to_owned(),
+            "/not/a/file.excalidraw".to_owned(),
+            "relative.excalidraw".to_owned(),
+            existing.display().to_string(),
+            "/tmp/notes.json".to_owned(),
+        ];
+        let paths = drawing_paths_from_args(&args);
+
+        assert_eq!(paths, vec![existing.display().to_string()]);
+        let _ = std::fs::remove_file(existing);
     }
 }

@@ -50,7 +50,7 @@ Rust 侧以 `thiserror` 枚举实现并映射到该形状；`unwrap`/`expect` �
 
 | 命令 | 请求 | 响应 | 说明 |
 |------|------|------|------|
-| `app_handshake` | `{}` | `{ contractVersion: number; appVersion: string; abnormalExit: boolean }` | 启动握手；`abnormalExit=true` 时前端进入恢复流程 |
+| `app_handshake` | `{}` | `{ contractVersion: number; appVersion: string; abnormalExit: boolean; pendingOpenPaths: string[] }` | 启动握手；`abnormalExit=true` 时前端进入恢复流程；`pendingOpenPaths` 携带本次启动由文件关联/单实例转交的图纸路径（首开不依赖事件竞态） |
 | `recovery_list` | `{}` | `RecoveryCandidate[]` | 列出可恢复草稿（已完成快照/冷层比对） |
 | `recovery_apply` | `{ documentId: string; action: "restore" \| "keepDisk" \| "saveAsNew" \| "discard"; saveAsPath?: string }` | `{ scene?: SceneData; newPath?: string }` | 用户决策执行；`restore` 返回 scene 供前端载入 |
 
@@ -116,6 +116,8 @@ type SceneData = unknown; // 官方 .excalidraw JSON，后端只做结构校验�
 | `draft-saved` | `{ path: string; savedAt: number }` | 热层写入成功（UI 保存状态标识） |
 | `conflict-detected` | `{ path: string; externalMtime: number; localDraftUpdatedAt: number }` | 变更命中 isDirty 文档 |
 | `open-file-request` | `{ paths: string[] }` | 单实例二次启动/系统文件关联转发（FR-028） |
+
+> **US6 兼容演进**：`app_handshake` 响应新增可选语义字段 `pendingOpenPaths`（新增字段 = 兼容，版本保持 1）。`open-file-request` 事件载荷与 `OpenFileRequestEvent` DTO 已存在，无需变更。
 
 事件仅通知状态事实，不携带业务决策；前端据 data-model 状态机分流。
 

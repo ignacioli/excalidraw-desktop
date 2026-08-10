@@ -24,6 +24,7 @@ function createGateway(
       contractVersion: 1,
       appVersion: "0.1.0",
       abnormalExit: false,
+      pendingOpenPaths: [],
     })),
     list: vi.fn(async () => []),
     apply: vi.fn(async () => ({ scene: undefined, newPath: undefined })),
@@ -49,6 +50,7 @@ describe("RecoveryManager", () => {
         contractVersion: 1,
         appVersion: "0.1.0",
         abnormalExit: true,
+        pendingOpenPaths: [],
       })),
       list: vi.fn(async () => [candidate()]),
       apply: vi.fn(async () => ({ scene, newPath: undefined })),
@@ -77,6 +79,7 @@ describe("RecoveryManager", () => {
         contractVersion: 1,
         appVersion: "0.1.0",
         abnormalExit: true,
+        pendingOpenPaths: [],
       })),
       list: vi.fn(async () => [candidate()]),
     });

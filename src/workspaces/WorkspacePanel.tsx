@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CommandInvoker } from "../ipc/client";
 import { createTauriCommandInvoker } from "../ipc/client";
-import type { Workspace } from "../ipc/contracts";
+import type { ColorScheme, Workspace } from "../ipc/contracts";
 import { FileTree } from "../sidebar/FileTree";
 
 export interface WorkspacePanelProps {
@@ -9,6 +9,7 @@ export interface WorkspacePanelProps {
   selectDirectory?: () => Promise<string | null>;
   onOpenFile?: (entry: import("../ipc/contracts").FileEntry) => void;
   onWorkspacePresenceChange?: (hasAny: boolean) => void;
+  theme?: ColorScheme;
 }
 
 export function WorkspacePanel({
@@ -16,6 +17,7 @@ export function WorkspacePanel({
   selectDirectory: providedSelectDirectory,
   onOpenFile,
   onWorkspacePresenceChange,
+  theme = "light",
 }: WorkspacePanelProps) {
   const fallbackInvoker = useMemo(() => createTauriCommandInvoker(), []);
   const invoker = providedInvoker ?? fallbackInvoker;
@@ -23,6 +25,9 @@ export function WorkspacePanel({
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -86,6 +91,11 @@ export function WorkspacePanel({
       await invoker.invoke("workspace_remove", { workspaceId: workspace.id });
       const next = workspaces.filter((item) => item.id !== workspace.id);
       setWorkspaces(next);
+      setCollapsedIds((current) => {
+        const withoutRemoved = new Set(current);
+        withoutRemoved.delete(workspace.id);
+        return withoutRemoved;
+      });
       onWorkspacePresenceChange?.(next.length > 0);
     } catch (nextError) {
       setError(
@@ -96,6 +106,18 @@ export function WorkspacePanel({
     } finally {
       setBusy(false);
     }
+  };
+
+  const toggleCollapsed = (workspaceId: string) => {
+    setCollapsedIds((current) => {
+      const next = new Set(current);
+      if (next.has(workspaceId)) {
+        next.delete(workspaceId);
+      } else {
+        next.add(workspaceId);
+      }
+      return next;
+    });
   };
 
   return (
@@ -117,7 +139,25 @@ export function WorkspacePanel({
       {workspaces.map((workspace) => (
         <article className="workspace-section" key={workspace.id}>
           <header className="workspace-section-header">
-            <h3 title={workspace.rootPath}>{workspace.name}</h3>
+            <button
+              type="button"
+              className="workspace-section-toggle"
+              aria-expanded={!collapsedIds.has(workspace.id)}
+              aria-controls={`workspace-files-${workspace.id}`}
+              title={workspace.rootPath}
+              onClick={() => toggleCollapsed(workspace.id)}
+              style={{
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span aria-hidden="true">
+                {collapsedIds.has(workspace.id) ? "▸" : "▾"}
+              </span>{" "}
+              <span className="workspace-section-name">{workspace.name}</span>
+            </button>
             <button
               type="button"
               disabled={busy}
@@ -126,12 +166,20 @@ export function WorkspacePanel({
               Remove
             </button>
           </header>
-          <FileTree
-            workspaceId={workspace.id}
-            workspaceRoot={workspace.rootPath}
-            invoker={invoker}
-            onOpenFile={onOpenFile}
-          />
+          <div
+            id={`workspace-files-${workspace.id}`}
+            className="workspace-files"
+            hidden={collapsedIds.has(workspace.id)}
+          >
+            <FileTree
+              workspaceId={workspace.id}
+              workspaceRoot={workspace.rootPath}
+              invoker={invoker}
+              onOpenFile={onOpenFile}
+              theme={theme}
+              ariaLabel={`Workspace files for ${workspace.name}`}
+            />
+          </div>
         </article>
       ))}
     </section>

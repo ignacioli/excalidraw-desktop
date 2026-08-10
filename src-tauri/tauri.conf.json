@@ -18,7 +18,18 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: blob: data:"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: blob: data:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": [
+            "$APPDATA/cache/thumbnails/**",
+            "$HOME/**/.excalidraw_assets/*",
+            "$HOME/.excalidraw_assets/*"
+          ],
+          "requireLiteralLeadingDot": false
+        }
+      }
     }
   },
   "bundle": {
@@ -30,6 +41,29 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "Productivity",
+    "shortDescription": "Local-first Excalidraw desktop drawing app",
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "infoPlist": "Info.plist"
+    },
+    "linux": {
+      "deb": {
+        "desktopTemplate": "./desktop/excalidraw-desktop.desktop",
+        "files": {
+          "/usr/share/mime/packages/excalidraw-desktop.xml": "./desktop/excalidraw-desktop.xml"
+        },
+        "postInstallScript": "./desktop/postinst.sh"
+      },
+      "rpm": {
+        "desktopTemplate": "./desktop/excalidraw-desktop.desktop",
+        "files": {
+          "/usr/share/mime/packages/excalidraw-desktop.xml": "./desktop/excalidraw-desktop.xml"
+        },
+        "postInstallScript": "./desktop/postinst.sh"
+      },
+      "appimage": {}
+    }
   }
 }

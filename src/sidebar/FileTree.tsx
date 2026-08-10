@@ -1,8 +1,12 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CommandInvoker } from "../ipc/client";
-import { createTauriCommandInvoker } from "../ipc/client";
-import type { DirEntry, FileEntry } from "../ipc/contracts";
+import {
+  createTauriCommandInvoker,
+  hasTauriCommandRuntime,
+} from "../ipc/client";
+import type { ColorScheme, DirEntry, FileEntry } from "../ipc/contracts";
+import { useThumbnails } from "./useThumbnails";
 
 interface TreeNode {
   entry: DirEntry;
@@ -15,6 +19,8 @@ export interface FileTreeProps {
   workspaceRoot?: string;
   invoker?: CommandInvoker;
   onOpenFile?: (entry: FileEntry) => void;
+  theme?: ColorScheme;
+  ariaLabel?: string;
 }
 
 export function FileTree({
@@ -22,9 +28,12 @@ export function FileTree({
   workspaceRoot,
   invoker: providedInvoker,
   onOpenFile,
+  theme = "light",
+  ariaLabel = "Workspace files",
 }: FileTreeProps) {
   const fallbackInvoker = useMemo(() => createTauriCommandInvoker(), []);
   const invoker = providedInvoker ?? fallbackInvoker;
+  const tauriRuntime = useMemo(() => hasTauriCommandRuntime(), []);
   const [entriesByPath, setEntriesByPath] = useState<
     Record<string, DirEntry[]>
   >({});
@@ -120,6 +129,20 @@ export function FileTree({
           .slice(0, 20)
           .map((node, index) => ({ node, index, start: index * 32 }));
 
+  const visibleFilePaths = useMemo(
+    () =>
+      rows
+        .filter((row) => row.node.entry.kind === "file")
+        .map((row) => absolutePath(workspaceRoot, row.node.entry.relativePath)),
+    [rows, workspaceRoot],
+  );
+  const thumbnailStates = useThumbnails({
+    invoker,
+    theme,
+    enabled: tauriRuntime,
+    visiblePaths: visibleFilePaths,
+  });
+
   const toggleDirectory = async (node: TreeNode) => {
     const path = node.entry.relativePath;
     setExpanded((current) => {
@@ -189,7 +212,7 @@ export function FileTree({
   };
 
   return (
-    <section className="file-tree" aria-label="Workspace files">
+    <section className="file-tree" aria-label={ariaLabel}>
       {error ? <p role="alert">{error}</p> : null}
       <button
         type="button"
@@ -216,6 +239,11 @@ export function FileTree({
             const node = virtualRow.node;
             const isDirectory = node.entry.kind === "dir";
             const isExpanded = expanded.has(node.entry.relativePath);
+            const thumbnailState = isDirectory
+              ? undefined
+              : thumbnailStates.get(
+                  absolutePath(workspaceRoot, node.entry.relativePath),
+                );
             return (
               <div
                 key={`${node.parentPath}:${node.entry.kind}:${node.entry.relativePath}`}
@@ -256,6 +284,24 @@ export function FileTree({
                       });
                   }}
                 >
+                  {thumbnailState?.phase === "ready" &&
+                  thumbnailState.webpPath !== undefined ? (
+                    <img
+                      className="file-tree-thumbnail"
+                      src={thumbnailState.webpPath}
+                      alt=""
+                      aria-hidden="true"
+                      loading="lazy"
+                      style={{
+                        width: "2rem",
+                        height: "1.25rem",
+                        objectFit: "cover",
+                        flex: "none",
+                        borderRadius: "0.25rem",
+                        border: "1px solid var(--border-subtle)",
+                      }}
+                    />
+                  ) : null}
                   <span aria-hidden="true">
                     {isDirectory ? (isExpanded ? "▾" : "▸") : "·"}
                   </span>{" "}

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Excalidraw Drawing</string>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSHandlerRank</key>
+      <string>Owner</string>
+      <key>LSIsAppleDefaultForType</key>
+      <true/>
+      <key>CFBundleTypeIconFile</key>
+      <string>icon.icns</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>excalidraw</string>
+        <string>excalidraw.json</string>
+      </array>
+    </dict>
+  </array>
+  <key>UTExportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>com.excalidraw.desktop.drawing</string>
+      <key>UTTypeDescription</key>
+      <string>Excalidraw Drawing</string>
+      <key>UTTypeConformsTo</key>
+      <array>
+        <string>public.json</string>
+      </array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array>
+          <string>excalidraw</string>
+          <string>excalidraw.json</string>
+        </array>
+        <key>public.mime-type</key>
+        <string>application/x-excalidraw</string>
+      </dict>
+    </dict>
+  </array>
+</dict>
+</plist>

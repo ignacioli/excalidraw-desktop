@@ -12,6 +12,7 @@ use tauri::State;
 use crate::{
     database::repository::{DraftRepository, SqliteRepository, WorkspaceRepository},
     documents::{
+        assets::{asset_root_for, reembed_files},
         atomic_write::atomic_write,
         recovery::{RecoverySnapshot, RecoveryStore},
         validation::{validate_scene, SceneValidationError},
@@ -215,9 +216,31 @@ impl RecoveryService {
                     return Err(AppError::PathAccessDenied(target));
                 }
                 let target_for_write = target.clone();
-                let bytes = scene_json.clone();
+                let write_bytes = match original_path.as_deref() {
+                    Some(original) => {
+                        let workspaces = self.repository.workspace_list().await?;
+                        let workspace_root = workspaces
+                            .iter()
+                            .find(|workspace| {
+                                Path::new(original).starts_with(Path::new(&workspace.root_path))
+                            })
+                            .map(|workspace| PathBuf::from(&workspace.root_path));
+                        let asset_root =
+                            asset_root_for(Path::new(original), workspace_root.as_deref());
+                        let snapshot_bytes = scene_json.clone();
+                        run_blocking(move || {
+                            let text = std::str::from_utf8(&snapshot_bytes)
+                                .map_err(|error| AppError::InvalidScene(error.to_string()))?;
+                            reembed_files(text, &asset_root)
+                                .map(String::into_bytes)
+                                .map_err(AppError::from)
+                        })
+                        .await?
+                    }
+                    None => scene_json.clone(),
+                };
                 run_blocking(move || {
-                    atomic_write(&target_for_write, &bytes).map_err(AppError::from)
+                    atomic_write(&target_for_write, &write_bytes).map_err(AppError::from)
                 })
                 .await?;
                 RecoveryApplyResponse {
