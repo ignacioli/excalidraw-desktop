@@ -117,7 +117,7 @@ The following names describe logical capability roles for planning and review. T
 - [ ] T108 [US1] 长时资源稳定性夹具 e2e/perf/edit-soak.spec.ts：热身后脚本编辑 30min，RSS 增长同时 ≤50MB 且 ≤15%；随后静置 60s，CPU P95 ≤单逻辑核 1% 且应用管理的数据目录/工作区零持续写入（SC-013；依赖 T090）
 - [X] T097 [US1] a11y 最低线：桌面壳层、标签页、保存状态、快捷键、外观选择与文件对话框具备语义结构、accessible name、非颜色唯一状态、可见焦点、WCAG 2.2 AA 适用对比度与 reduced motion，于 src/app/AppShell.tsx、src/app/TabBar.tsx、src/app/AppearanceControl.tsx、src/app/fileDialogs.ts（FR-038、SC-015、宪法原则 III、DESIGN.md）
 
-**Checkpoint**: US1 独立可交付（MVP）——离线编辑器 + 可靠保存闭环
+**Checkpoint**: US1 独立可交付（MVP）——离线编辑器 + 可靠保存闭环。T090/T108 只有在固定 Apple M1 / 8GB runner 产出 `pass` 报告后才能勾选，未通过前阻止 US1 合并/发布；该外部验收状态不构成 Phase 2 后 US4/US5 独立开发线的调度依赖。
 
 ---
 
@@ -185,19 +185,19 @@ The following names describe logical capability roles for planning and review. T
 
 ### Tests for User Story 4
 
-- [ ] T059 [P] [US4] watcher 去抖与回声抑制单测 src-tauri/src/watcher/watcher_test.rs（200ms 合并、自写 hash 抑制——先写并确认失败）
+- [X] T059 [P] [US4] watcher 去抖与回声抑制单测 src-tauri/src/watcher/watcher_test.rs（200ms 合并、自写 hash 抑制——先写并确认失败）
 
 ### Implementation for User Story 4
 
-- [ ] T060 [US4] 实现文件监听 src-tauri/src/watcher/mod.rs（notify 递归监听工作区根、200ms 合并去抖、三元组 mtime/size/hash 真实变更判定、自身写入回声抑制，R7）
-- [ ] T061 [US4] 事件发射接线：`file-changed`/`conflict-detected` 经 app_handle.emit 推送（isDirty 文档命中时发 conflict-detected）于 src-tauri/src/watcher/mod.rs + commands/documents.rs
-- [ ] T062 [US4] Conflicted 状态强制：`doc_save_draft`/`doc_checkpoint` 在冲突态返回 CONFLICT_PENDING（data-model 不变量 2）于 src-tauri/src/commands/documents.rs
-- [ ] T063 [US4] 实现 `doc_resolve_conflict` 命令（takeExternal/keepLocal/saveAsNew 三路径 + base_hash 更新，contracts §1.3）于 src-tauri/src/commands/documents.rs
-- [ ] T064 [P] [US4] 实现前端冲突分流 src/documents/conflictDetector.ts（file-changed → isDirty 判定 → 自动重载或弹窗，状态机 Reloaded/Conflicted 转换）+ 冲突对话框 src/documents/ConflictDialog.tsx（两版本时间展示 + 三选项）
-- [ ] T065 [US4] 失联（Orphaned）处理：外部删除/移动 → 标签失联标示 + 另存引导 src/documents/documentStore.ts（FR-020，激活 T055 占位）
-- [ ] T066 [US4] E2E：外部变更全场景 e2e/tests/us4-external-changes.spec.ts（无修改自动重载 3s 内、有修改弹窗且决策前零写入、删除失联另存，SC-008）
-- [ ] T067 [US4] E2E：事件风暴合并 e2e/tests/us4-event-storm.spec.ts（1s 内 20 次外部写 → 无重复弹窗/重载抖动，FR-018）
-- [ ] T100 [US4] a11y 最低线：ConflictDialog 键盘可操作（Esc/Enter）、焦点陷阱与 `aria-*`，于 src/documents/ConflictDialog.tsx（宪法原则 III）
+- [X] T060 [US4] 实现文件监听 src-tauri/src/watcher/mod.rs（notify 递归监听工作区根、200ms 合并去抖、三元组 mtime/size/hash 真实变更判定、自身写入回声抑制，R7）
+- [X] T061 [US4] 事件发射接线：`file-changed`/`conflict-detected` 经 app_handle.emit 推送（isDirty 文档命中时发 conflict-detected）于 src-tauri/src/watcher/mod.rs + commands/documents.rs
+- [X] T062 [US4] Conflicted 状态强制：`doc_save_draft`/`doc_checkpoint` 在冲突态返回 CONFLICT_PENDING（data-model 不变量 2）于 src-tauri/src/commands/documents.rs
+- [X] T063 [US4] 实现 `doc_resolve_conflict` 命令（takeExternal/keepLocal/saveAsNew 三路径 + base_hash 更新，contracts §1.3）于 src-tauri/src/commands/documents.rs
+- [X] T064 [P] [US4] 实现前端冲突分流 src/documents/conflictDetector.ts（file-changed → isDirty 判定 → 自动重载或弹窗，状态机 Reloaded/Conflicted 转换）+ 冲突对话框 src/documents/ConflictDialog.tsx（两版本时间展示 + 三选项）
+- [X] T065 [US4] 失联（Orphaned）处理：外部删除/移动 → 标签失联标示 + 另存引导 src/documents/documentStore.ts（FR-020，激活 T055 占位）
+- [X] T066 [US4] E2E：外部变更全场景 e2e/tests/us4-external-changes.spec.ts（无修改自动重载 3s 内、有修改弹窗且决策前零写入、删除失联另存，SC-008）
+- [X] T067 [US4] E2E：事件风暴合并 e2e/tests/us4-event-storm.spec.ts（1s 内 20 次外部写 → 无重复弹窗/重载抖动，FR-018）
+- [X] T100 [US4] a11y 最低线：ConflictDialog 键盘可操作（Esc/Enter）、焦点陷阱与 `aria-*`，于 src/documents/ConflictDialog.tsx（宪法原则 III）
 
 **Checkpoint**: 全部 P1+P2 故事完成——核心产品可靠性与协作安全闭环
 
@@ -211,12 +211,12 @@ The following names describe logical capability roles for planning and review. T
 
 ### Implementation for User Story 5
 
-- [ ] T068 [P] [US5] 实现导出服务 src/editor/exportService.ts（exportToBlob/exportToSvg 封装、倍率/背景/主题选项、SVG 字体内嵌确认）
-- [ ] T069 [US5] 实现 `doc_export` 命令 src-tauri/src/commands/export.rs（前端产物字节 → 原子写目标路径、DISK_FULL/IO_ERROR 无残留清理，contracts §1.3）
-- [ ] T070 [US5] 导出对话框 UI src/app/ExportDialog.tsx（格式/倍率/背景选择、目标路径 dialog、失败原因展示）
-- [ ] T071 [US5] E2E：PNG/SVG 导出 fidelity e2e/tests/us5-export-fidelity.spec.ts——PNG 覆盖倍率与透明/纯色背景并验证固定截图一致性；SVG 断言内嵌 WOFF2、无字体回退，并以 Playwright 固定截图基线验证 `maxDiffPixelRatio <= 0.001`（SC-009，FR-026）
-- [ ] T072 [US5] E2E：导出失败无残留 e2e/tests/us5-export-failure.spec.ts（只读目录 → 明确错误 + 目标目录无 .tmp/半成品，FR-027）
-- [ ] T101 [US5] a11y 最低线：ExportDialog 表单控件标签与错误提示关联（aria-describedby），于 src/app/ExportDialog.tsx（宪法原则 III）
+- [X] T068 [P] [US5] 实现导出服务 src/editor/exportService.ts（exportToBlob/exportToSvg 封装、倍率/背景/主题选项、SVG 字体内嵌确认）
+- [X] T069 [US5] 实现 `doc_export` 命令 src-tauri/src/commands/export.rs（前端产物字节 → 原子写目标路径、DISK_FULL/IO_ERROR 无残留清理，contracts §1.3）
+- [X] T070 [US5] 导出对话框 UI src/app/ExportDialog.tsx（格式/倍率/背景选择、目标路径 dialog、失败原因展示）
+- [X] T071 [US5] E2E：PNG/SVG 导出 fidelity e2e/tests/us5-export-fidelity.spec.ts——PNG 覆盖倍率与透明/纯色背景并验证固定截图一致性；SVG 断言内嵌 WOFF2、无字体回退，并以 Playwright 固定截图基线验证 `maxDiffPixelRatio <= 0.001`（SC-009，FR-026）
+- [X] T072 [US5] E2E：导出失败无残留 e2e/tests/us5-export-failure.spec.ts（只读目录 → 明确错误 + 目标目录无 .tmp/半成品，FR-027）
+- [X] T101 [US5] a11y 最低线：ExportDialog 表单控件标签与错误提示关联（aria-describedby），于 src/app/ExportDialog.tsx（宪法原则 III）
 
 **Checkpoint**: 成果交付通道可用
 
@@ -284,7 +284,7 @@ The following names describe logical capability roles for planning and review. T
 - **Phase 1 → Phase 2**：T001/T002（依赖声明）先于全部 Foundational 编码
 - **Phase 2 BLOCKS 一切用户故事**：T009（security）、T014（atomic_write）、T015–T017（契约）、T018（会话锁）、T020/T089/T091（测试与固定机性能基础设施）、T109/T110（主题解析测试与基础设施）为多故事共同前置
 - **用户故事顺序**：US1 → US2 强依赖（恢复建立在草稿链路上）；US3–US7 在 Phase 2 后可并行，但 US4 依赖 US3 的工作区监听根、US7 依赖 US3 的文件树
-- **Phase 10** 依赖全部所需故事完成；性能基础设施在 Phase 2 建立，大场景与 soak 在 US1 Checkpoint 前由 T090/T108 建立，Phase 10 仅汇总最终回归；T093 依赖各故事 a11y 任务 T097–T102；T094 依赖 IME 实现 T103/T104
+- **Phase 10** 依赖全部所需故事完成；性能基础设施在 Phase 2 建立，大场景与 soak 在 US1 Checkpoint 前由 T090/T108 建立并在固定 runner 取得 `pass` 后完成，Phase 10 仅汇总最终回归。T090/T108 阻止 US1 合并/发布但不阻止 Phase 2 后依赖已满足的 US4/US5 开发线启动；非固定机的诊断结果不得替代硬验收或勾选任务。T093 依赖各故事 a11y 任务 T097–T102；T094 依赖 IME 实现 T103/T104
 
 ### Analyze 与 UI 设计补丁任务挂靠（T097–T112）
 

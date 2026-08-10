@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::{self, File},
     io::Read,
     path::{Path, PathBuf},
@@ -21,13 +21,14 @@ use crate::{
         validation::{validate_scene, SceneValidationError},
     },
     security::{PathSecurityError, WorkspacePathPolicy},
+    watcher::WatcherService,
 };
 
 use super::{
     dto::{
         CheckpointReason, CheckpointRequest, CheckpointResponse, CloseDocumentRequest,
-        DraftSavedEvent, EmptyResponse, PathRequest, SaveDraftRequest, SaveDraftResponse,
-        SceneOpenResponse,
+        ConflictResolution, DraftSavedEvent, EmptyResponse, PathRequest, ResolveConflictRequest,
+        ResolveConflictResponse, SaveDraftRequest, SaveDraftResponse, SceneOpenResponse,
     },
     error::{AppError, IpcError},
 };
@@ -44,6 +45,28 @@ impl DirectFileGrant for DenyDirectFiles {
     }
 }
 
+/// Tracks paths where an external change hit a dirty document. It is the
+/// backend authority for data-model invariant 2: `Conflicted` documents must
+/// not accept automatic draft or checkpoint writes until the user resolves.
+#[derive(Clone, Default)]
+pub struct ConflictRegistry {
+    conflicted: Arc<tokio::sync::Mutex<HashSet<PathBuf>>>,
+}
+
+impl ConflictRegistry {
+    pub async fn mark_conflicted(&self, path: PathBuf) {
+        self.conflicted.lock().await.insert(path);
+    }
+
+    pub async fn clear_conflicted(&self, path: &Path) {
+        self.conflicted.lock().await.remove(path);
+    }
+
+    pub async fn is_conflicted(&self, path: &Path) -> bool {
+        self.conflicted.lock().await.contains(path)
+    }
+}
+
 #[derive(Clone)]
 pub struct DocumentService {
     repository: Arc<SqliteRepository>,
@@ -51,6 +74,8 @@ pub struct DocumentService {
     scene_limit_bytes: usize,
     document_locks: Arc<tokio::sync::Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>>,
     recovery: Option<Arc<RecoveryStore>>,
+    conflicts: ConflictRegistry,
+    watcher: Option<Arc<WatcherService>>,
 }
 
 impl DocumentService {
@@ -79,6 +104,8 @@ impl DocumentService {
             scene_limit_bytes,
             document_locks: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             recovery: None,
+            conflicts: ConflictRegistry::default(),
+            watcher: None,
         }
     }
 
@@ -103,7 +130,25 @@ impl DocumentService {
             scene_limit_bytes,
             document_locks: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             recovery: Some(recovery),
+            conflicts: ConflictRegistry::default(),
+            watcher: None,
         }
+    }
+
+    /// Wires the external-change pipeline after construction: the shared
+    /// conflict registry and the watcher sink for own-write echo suppression.
+    pub fn attach_external_change_handlers(
+        &mut self,
+        conflicts: ConflictRegistry,
+        watcher: Option<Arc<WatcherService>>,
+    ) {
+        self.conflicts = conflicts;
+        self.watcher = watcher;
+    }
+
+    /// Exposes the conflict registry for integration tests and wiring.
+    pub fn conflicts(&self) -> &ConflictRegistry {
+        &self.conflicts
     }
 
     pub async fn doc_open(&self, request: PathRequest) -> Result<SceneOpenResponse, IpcError> {
@@ -129,6 +174,13 @@ impl DocumentService {
         request: CloseDocumentRequest,
     ) -> Result<EmptyResponse, IpcError> {
         self.close(request).await.map_err(Into::into)
+    }
+
+    pub async fn doc_resolve_conflict(
+        &self,
+        request: ResolveConflictRequest,
+    ) -> Result<ResolveConflictResponse, IpcError> {
+        self.resolve_conflict(request).await.map_err(Into::into)
     }
 
     async fn open(&self, request: PathRequest) -> Result<SceneOpenResponse, AppError> {
@@ -159,6 +211,9 @@ impl DocumentService {
         let authorized = self
             .authorize_path(Path::new(&request.path), PathMode::Existing)
             .await?;
+        if self.conflicts.is_conflicted(&authorized.path).await {
+            return Err(AppError::ConflictPending(authorized.path));
+        }
         let _document_guard = self.lock_document(&authorized.path).await;
         let limit = self.scene_limit_bytes;
         let scene_json = request.scene_json;
@@ -219,6 +274,9 @@ impl DocumentService {
         let authorized = self
             .authorize_path(Path::new(&request.path), PathMode::CreateOrReplace)
             .await?;
+        if self.conflicts.is_conflicted(&authorized.path).await {
+            return Err(AppError::ConflictPending(authorized.path));
+        }
         let _document_guard = self.lock_document(&authorized.path).await;
         let limit = self.scene_limit_bytes;
         let scene_json = request.scene_json;
@@ -258,11 +316,127 @@ impl DocumentService {
                 indexed_file,
             )
             .await?;
+        if let Some(watcher) = self.watcher.clone() {
+            watcher
+                .note_own_write(authorized.path, mtime, file_size, hash.clone())
+                .await;
+        }
         let _reason: CheckpointReason = request.reason;
         Ok(CheckpointResponse {
             new_base_hash: hash,
             mtime,
         })
+    }
+
+    async fn resolve_conflict(
+        &self,
+        request: ResolveConflictRequest,
+    ) -> Result<ResolveConflictResponse, AppError> {
+        let authorized = self
+            .authorize_path(Path::new(&request.path), PathMode::Existing)
+            .await?;
+        let _document_guard = self.lock_document(&authorized.path).await;
+        let limit = self.scene_limit_bytes;
+        let canonical_path = path_string(&authorized.path);
+        let draft = self
+            .repository
+            .draft_get(canonical_path.clone())
+            .await?
+            .ok_or_else(|| {
+                AppError::Internal(
+                    "no recovery draft exists for the conflicted document".to_owned(),
+                )
+            })?;
+
+        let external_path = authorized.path.clone();
+        let external_bytes = run_blocking(move || read_bounded(&external_path, limit)).await?;
+        let external_hash = content_hash(&external_bytes);
+        let external_scene = validate_persisted_scene(&external_bytes, limit)?;
+        let external_json = String::from_utf8(external_bytes)
+            .map_err(|error| AppError::InvalidScene(error.to_string()))?;
+
+        let response = match request.resolution {
+            ConflictResolution::TakeExternal => {
+                self.repository
+                    .draft_upsert(DraftRecord {
+                        file_path: canonical_path,
+                        scene_json: external_json,
+                        content_hash: external_hash.clone(),
+                        base_hash: Some(external_hash.clone()),
+                        updated_at: unix_timestamp()?,
+                        is_dirty: false,
+                    })
+                    .await?;
+                ResolveConflictResponse {
+                    scene: Some(external_scene),
+                    new_base_hash: external_hash,
+                }
+            }
+            ConflictResolution::KeepLocal => {
+                self.repository
+                    .draft_upsert(DraftRecord {
+                        base_hash: Some(external_hash.clone()),
+                        ..draft
+                    })
+                    .await?;
+                ResolveConflictResponse {
+                    scene: None,
+                    new_base_hash: external_hash,
+                }
+            }
+            ConflictResolution::SaveAsNew => {
+                let save_as_path = request.save_as_path.as_deref().ok_or_else(|| {
+                    AppError::PathAccessDenied(PathBuf::from("<missing save-as path>"))
+                })?;
+                let target = self.authorize_save_as_path(save_as_path).await?;
+                if target == authorized.path {
+                    return Err(AppError::PathAccessDenied(target));
+                }
+                let write_path = target.clone();
+                let scene_json = draft.scene_json.clone();
+                let local_hash = content_hash(scene_json.as_bytes());
+                let write_scene = scene_json.clone();
+                run_blocking(move || {
+                    atomic_write(&write_path, write_scene.as_bytes()).map_err(AppError::from)
+                })
+                .await?;
+                let metadata_path = target.clone();
+                let (mtime, file_size) =
+                    run_blocking(move || file_metadata(&metadata_path)).await?;
+                let workspaces = self.repository.workspace_list().await?;
+                let indexed_file = owning_workspace(&workspaces, &target)
+                    .map(|workspace| {
+                        file_index_record(&workspace, &target, mtime, file_size, &local_hash)
+                    })
+                    .transpose()?;
+                self.repository
+                    .document_checkpoint_commit(
+                        DraftRecord {
+                            file_path: path_string(&target),
+                            scene_json,
+                            content_hash: local_hash.clone(),
+                            base_hash: Some(local_hash.clone()),
+                            updated_at: mtime,
+                            is_dirty: false,
+                        },
+                        indexed_file,
+                    )
+                    .await?;
+                self.repository.draft_delete(canonical_path).await?;
+                if let Some(watcher) = self.watcher.clone() {
+                    watcher
+                        .note_own_write(target, mtime, file_size, local_hash.clone())
+                        .await;
+                }
+                ResolveConflictResponse {
+                    scene: None,
+                    new_base_hash: local_hash,
+                }
+            }
+        };
+
+        self.conflicts.clear_conflicted(&authorized.path).await;
+        Ok(response)
     }
 
     async fn close(&self, request: CloseDocumentRequest) -> Result<EmptyResponse, AppError> {
@@ -343,6 +517,31 @@ impl DocumentService {
             && self
                 .direct_file_grant
                 .is_allowed(&requested.with_extension(""))
+    }
+
+    async fn authorize_save_as_path(&self, requested: &str) -> Result<PathBuf, AppError> {
+        let path = Path::new(requested);
+        if !is_supported_document_path(path) {
+            return Err(AppError::PathAccessDenied(path.to_path_buf()));
+        }
+        let workspaces = self.repository.workspace_list().await?;
+        let policy = WorkspacePathPolicy::new(
+            workspaces
+                .iter()
+                .map(|workspace| Path::new(&workspace.root_path)),
+        )?;
+        let authorization = if path.exists() {
+            policy.authorize_existing(path)
+        } else {
+            policy.authorize_for_creation(path)
+        };
+        match authorization {
+            Ok(path) => Ok(path),
+            Err(PathSecurityError::AccessDenied(_)) if self.direct_file_grant.is_allowed(path) => {
+                normalize_granted_path(path, PathMode::CreateOrReplace)
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 
     async fn lock_document(&self, path: &Path) -> tokio::sync::OwnedMutexGuard<()> {
@@ -437,6 +636,23 @@ pub async fn doc_close(
         .doc_close(CloseDocumentRequest {
             path,
             discard_draft,
+        })
+        .await
+}
+
+#[tauri::command]
+pub async fn doc_resolve_conflict(
+    path: String,
+    resolution: ConflictResolution,
+    save_as_path: Option<String>,
+    state: State<'_, DocumentState>,
+) -> Result<ResolveConflictResponse, IpcError> {
+    state
+        .service
+        .doc_resolve_conflict(ResolveConflictRequest {
+            path,
+            resolution,
+            save_as_path,
         })
         .await
 }

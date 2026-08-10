@@ -12,6 +12,7 @@ use crate::{
     database::repository::{SqliteRepository, WorkspaceRecord, WorkspaceRepository},
     indexing::Indexer,
     security::WorkspacePathPolicy,
+    watcher::WatcherState,
 };
 
 use super::{
@@ -207,6 +208,7 @@ pub async fn workspace_add(
     name: Option<String>,
     app: AppHandle,
     state: State<'_, WorkspaceState>,
+    watcher: State<'_, WatcherState>,
 ) -> Result<Workspace, IpcError> {
     let workspace = state
         .service
@@ -218,7 +220,15 @@ pub async fn workspace_add(
         root_path: workspace.root_path.clone(),
         created_at: workspace.created_at,
     };
-    state.service.start_index(record, Some(app)).await;
+    state
+        .service
+        .start_index(record.clone(), Some(app.clone()))
+        .await;
+    watcher
+        .service
+        .spawn_for_workspace(record, app)
+        .await
+        .map_err(IpcError::from)?;
     Ok(workspace)
 }
 
@@ -226,11 +236,16 @@ pub async fn workspace_add(
 pub async fn workspace_remove(
     workspace_id: String,
     state: State<'_, WorkspaceState>,
+    watcher: State<'_, WatcherState>,
 ) -> Result<EmptyResponse, IpcError> {
-    state
+    let response = state
         .service
-        .remove(WorkspaceRemoveRequest { workspace_id })
-        .await
+        .remove(WorkspaceRemoveRequest {
+            workspace_id: workspace_id.clone(),
+        })
+        .await?;
+    watcher.service.stop_for_workspace(&workspace_id).await;
+    Ok(response)
 }
 
 #[tauri::command]

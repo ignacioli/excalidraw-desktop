@@ -42,6 +42,7 @@ function createGateway(): DocumentGateway {
     })),
     saveDraft: vi.fn(async () => ({ contentHash: "draft", savedAt: 1 })),
     checkpoint: vi.fn(async () => ({ newBaseHash: "next", mtime: 1 })),
+    resolveConflict: vi.fn(async () => ({ newBaseHash: "resolved" })),
     close: vi.fn(async () => undefined),
   };
 }
@@ -238,6 +239,145 @@ describe("DocumentManager", () => {
       "/tmp/recovered.excalidraw",
       expect.any(String),
     );
+    manager.dispose();
+  });
+
+  it("reloads a clean document from disk and resets the base hash", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/drawing.excalidraw");
+    vi.mocked(gateway.open).mockResolvedValueOnce({
+      scene: {
+        type: "excalidraw",
+        version: 2,
+        elements: [{ version: 9 }],
+        appState: {},
+        files: {},
+      },
+      baseHash: "external-hash",
+      hasNewerDraft: false,
+    });
+
+    await manager.reloadFromDisk(documentId);
+
+    const session = manager.store.getState().sessionsById[documentId];
+    expect(session?.saveState).toBe("clean");
+    expect(session?.baseHash).toBe("external-hash");
+    expect(session?.sceneVersion).toBe(9);
+    expect(session?.lastReloadedAt).not.toBeNull();
+    expect(useAppStore.getState().tabsById[documentId]?.isDirty).toBe(false);
+    manager.dispose();
+  });
+
+  it("resolves takeExternal by adopting the external scene as clean", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/drawing.excalidraw");
+    manager.beginConflict(documentId, {
+      externalMtime: 1,
+      localDraftUpdatedAt: 2,
+    });
+    vi.mocked(gateway.resolveConflict).mockResolvedValueOnce({
+      scene: {
+        type: "excalidraw",
+        version: 2,
+        elements: [{ version: 5 }],
+        appState: {},
+        files: {},
+      },
+      newBaseHash: "external",
+    });
+
+    await manager.resolveConflict(documentId, "takeExternal");
+
+    const session = manager.store.getState().sessionsById[documentId];
+    expect(session?.saveState).toBe("clean");
+    expect(session?.baseHash).toBe("external");
+    expect(session?.sceneVersion).toBe(5);
+    expect(session?.conflictInfo).toBeNull();
+    manager.dispose();
+  });
+
+  it("resolves keepLocal by keeping the draft and rebasing on the external version", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/drawing.excalidraw");
+    const initial = manager.store.getState().sessionsById[documentId]?.scene;
+    manager.updateScene(documentId, {
+      ...initial!,
+      elements: [{ version: 3 } as SceneSnapshot["elements"][number]],
+    });
+    manager.beginConflict(documentId, {
+      externalMtime: 1,
+      localDraftUpdatedAt: 2,
+    });
+    vi.mocked(gateway.resolveConflict).mockResolvedValueOnce({
+      newBaseHash: "external",
+    });
+
+    await manager.resolveConflict(documentId, "keepLocal");
+
+    const session = manager.store.getState().sessionsById[documentId];
+    expect(session?.saveState).toBe("dirty");
+    expect(session?.baseHash).toBe("external");
+    expect(session?.conflictInfo).toBeNull();
+    expect(useAppStore.getState().tabsById[documentId]?.isDirty).toBe(true);
+    manager.dispose();
+  });
+
+  it("resolves saveAsNew by rebasing the session onto the new path as clean", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/drawing.excalidraw");
+    manager.beginConflict(documentId, {
+      externalMtime: 1,
+      localDraftUpdatedAt: 2,
+    });
+    vi.mocked(gateway.resolveConflict).mockResolvedValueOnce({
+      newBaseHash: "copy-hash",
+    });
+
+    await manager.resolveConflict(
+      documentId,
+      "saveAsNew",
+      "/tmp/copy.excalidraw",
+    );
+
+    expect(gateway.resolveConflict).toHaveBeenCalledWith(
+      "/tmp/drawing.excalidraw",
+      "saveAsNew",
+      "/tmp/copy.excalidraw",
+    );
+    const session = manager.store.getState().sessionsById[documentId];
+    expect(session?.saveState).toBe("clean");
+    expect(session?.path).toBe("/tmp/copy.excalidraw");
+    expect(session?.title).toBe("copy.excalidraw");
+    expect(session?.baseHash).toBe("copy-hash");
+    manager.dispose();
+  });
+
+  it("saves an orphaned document to a new location and marks it clean", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/gone.excalidraw");
+    manager.handleFileRemoved("/tmp/gone.excalidraw");
+    vi.mocked(gateway.checkpoint).mockResolvedValueOnce({
+      newBaseHash: "orphan-copy",
+      mtime: 3,
+    });
+
+    await manager.saveOrphanedAs(documentId, "/tmp/saved.excalidraw");
+
+    expect(gateway.checkpoint).toHaveBeenCalledWith(
+      "/tmp/saved.excalidraw",
+      expect.any(String),
+      "manualSave",
+    );
+    expect(gateway.close).toHaveBeenCalledWith("/tmp/gone.excalidraw", true);
+    const session = manager.store.getState().sessionsById[documentId];
+    expect(session?.saveState).toBe("clean");
+    expect(session?.path).toBe("/tmp/saved.excalidraw");
+    expect(useAppStore.getState().tabsById[documentId]?.isOrphaned).toBe(false);
     manager.dispose();
   });
 });

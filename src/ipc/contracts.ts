@@ -154,6 +154,7 @@ export interface IpcCommands {
       format: "png" | "svg";
       targetPath: string;
       options: ExportOptions;
+      bytes: number[];
     };
     response: { writtenPath: string };
   };

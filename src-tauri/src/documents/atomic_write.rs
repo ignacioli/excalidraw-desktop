@@ -159,14 +159,28 @@ fn before_rename_barrier() -> &'static Mutex<Option<Arc<Barrier>>> {
 }
 
 pub fn atomic_write(target: &Path, contents: &[u8]) -> Result<(), AtomicWriteError> {
+    atomic_write_with(target, contents, validate_json)
+}
+
+/// Atomically publish arbitrary bytes (rendered PNG/SVG exports) without the
+/// JSON content check that `atomic_write` performs for document scenes.
+pub fn atomic_write_bytes(target: &Path, contents: &[u8]) -> Result<(), AtomicWriteError> {
+    atomic_write_with(target, contents, validate_bytes)
+}
+
+fn atomic_write_with(
+    target: &Path,
+    contents: &[u8],
+    validate: impl Fn(&[u8]) -> Result<(), AtomicWriteError>,
+) -> Result<(), AtomicWriteError> {
     #[cfg(any(test, feature = "e2e-harness"))]
     {
-        atomic_write_with_injector(target, contents, &ConfiguredFault)
+        atomic_write_with_injector_and_validator(target, contents, &ConfiguredFault, &validate)
     }
 
     #[cfg(not(any(test, feature = "e2e-harness")))]
     {
-        atomic_write_with_injector(target, contents, &NoFault)
+        atomic_write_with_injector_and_validator(target, contents, &NoFault, &validate)
     }
 }
 
@@ -175,9 +189,26 @@ pub fn atomic_write_with_injector(
     contents: &[u8],
     injector: &dyn AtomicWriteFaultInjector,
 ) -> Result<(), AtomicWriteError> {
+    atomic_write_with_injector_and_validator(target, contents, injector, &validate_json)
+}
+
+pub fn atomic_write_bytes_with_injector(
+    target: &Path,
+    contents: &[u8],
+    injector: &dyn AtomicWriteFaultInjector,
+) -> Result<(), AtomicWriteError> {
+    atomic_write_with_injector_and_validator(target, contents, injector, &validate_bytes)
+}
+
+fn atomic_write_with_injector_and_validator(
+    target: &Path,
+    contents: &[u8],
+    injector: &dyn AtomicWriteFaultInjector,
+    validate: &dyn Fn(&[u8]) -> Result<(), AtomicWriteError>,
+) -> Result<(), AtomicWriteError> {
     let parent = normalized_parent(target);
     let temp_path = unique_temp_path(target)?;
-    let result = write_and_publish(target, &temp_path, parent, contents, injector);
+    let result = write_and_publish(target, &temp_path, parent, contents, injector, validate);
 
     if result.is_err() {
         match fs::remove_file(&temp_path) {
@@ -221,6 +252,7 @@ fn write_and_publish(
     parent: &Path,
     contents: &[u8],
     injector: &dyn AtomicWriteFaultInjector,
+    validate: &dyn Fn(&[u8]) -> Result<(), AtomicWriteError>,
 ) -> Result<(), AtomicWriteError> {
     let mut temp = OpenOptions::new()
         .write(true)
@@ -246,7 +278,7 @@ fn write_and_publish(
     File::open(temp_path)
         .and_then(|mut file| file.read_to_end(&mut persisted))
         .map_err(|source| io_error("read temporary file", temp_path, source))?;
-    serde_json::from_slice::<serde_json::Value>(&persisted)?;
+    validate(&persisted)?;
     injector.interrupt(AtomicWriteFaultPoint::JsonValidated)?;
     injector.interrupt(AtomicWriteFaultPoint::BeforeRename)?;
 
@@ -259,6 +291,15 @@ fn write_and_publish(
         .and_then(|directory| directory.sync_all())
         .map_err(|source| io_error("sync parent directory", parent, source))?;
     injector.interrupt(AtomicWriteFaultPoint::ParentSynced)?;
+    Ok(())
+}
+
+fn validate_json(bytes: &[u8]) -> Result<(), AtomicWriteError> {
+    serde_json::from_slice::<serde_json::Value>(bytes).map(|_| ())?;
+    Ok(())
+}
+
+fn validate_bytes(_bytes: &[u8]) -> Result<(), AtomicWriteError> {
     Ok(())
 }
 

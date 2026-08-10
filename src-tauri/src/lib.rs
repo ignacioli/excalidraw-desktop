@@ -19,9 +19,10 @@ use tauri_plugin_fs::FsExt;
 
 use commands::{
     documents::{
-        doc_checkpoint, doc_close, doc_open, doc_save_draft, DirectFileGrant, DocumentService,
-        DocumentState,
+        doc_checkpoint, doc_close, doc_open, doc_resolve_conflict, doc_save_draft,
+        ConflictRegistry, DirectFileGrant, DocumentService, DocumentState,
     },
+    export::{doc_export, ExportService, ExportState},
     files::{file_create, file_delete, file_rename, FileState},
     recovery::{
         recovery_apply, recovery_list, RecoveryService, RecoveryState, TauriRecoveryPathGrant,
@@ -36,6 +37,7 @@ use e2e_performance::{
     e2e_perf_bootstrap, e2e_perf_next_command, e2e_perf_publish_ready, e2e_perf_publish_result,
     PerformanceHarnessState,
 };
+use watcher::{WatcherService, WatcherState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -67,11 +69,18 @@ pub fn run() {
                 PerformanceHarnessState::from_environment(Arc::clone(&shared_repository)),
             )
             .map_err(std::io::Error::other)?;
-            let document_service = DocumentService::with_grant_and_scene_limit_and_recovery(
+            let conflicts = ConflictRegistry::default();
+            let watcher_service =
+                WatcherService::new(Arc::clone(&shared_repository), conflicts.clone());
+            let mut document_service = DocumentService::with_grant_and_scene_limit_and_recovery(
                 Arc::clone(&shared_repository),
                 Arc::new(TauriFileGrant(app.fs_scope())),
                 DocumentService::DEFAULT_SCENE_LIMIT_BYTES,
                 Arc::clone(&recovery_store),
+            );
+            document_service.attach_external_change_handlers(
+                conflicts,
+                Some(Arc::new(watcher_service.clone())),
             );
             let recovery_service = RecoveryService::with_path_grant(
                 Arc::clone(&shared_repository),
@@ -84,8 +93,15 @@ pub fn run() {
             app.manage(DocumentState::new(document_service));
             app.manage(RecoveryState::new(recovery_service));
             app.manage(WorkspaceState::new(Arc::clone(&shared_repository)));
+            app.manage(ExportState::new(ExportService::new(
+                Arc::clone(&shared_repository),
+                Arc::new(TauriFileGrant(app.fs_scope())),
+                DocumentService::DEFAULT_SCENE_LIMIT_BYTES,
+            )));
             app.manage(FileState::new(shared_repository));
             app.manage(session);
+            app.manage(WatcherState::new(watcher_service.clone()));
+            tauri::async_runtime::block_on(watcher_service.start_existing(app.handle().clone()))?;
             Ok(())
         });
 
@@ -96,6 +112,7 @@ pub fn run() {
         doc_save_draft,
         doc_checkpoint,
         doc_close,
+        doc_resolve_conflict,
         recovery_list,
         recovery_apply,
         workspace_add,
@@ -105,6 +122,7 @@ pub fn run() {
         file_create,
         file_rename,
         file_delete,
+        doc_export,
         e2e_harness::e2e_set_atomic_write_fault,
         e2e_harness::e2e_clear_atomic_write_fault,
         e2e_harness::e2e_corrupt_latest_snapshot,
@@ -121,6 +139,7 @@ pub fn run() {
         doc_save_draft,
         doc_checkpoint,
         doc_close,
+        doc_resolve_conflict,
         recovery_list,
         recovery_apply,
         workspace_add,
@@ -129,7 +148,8 @@ pub fn run() {
         dir_list,
         file_create,
         file_rename,
-        file_delete
+        file_delete,
+        doc_export
     ]);
 
     let app = match builder.build(tauri::generate_context!()) {

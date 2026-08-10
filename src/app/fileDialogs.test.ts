@@ -45,6 +45,7 @@ function createHarness(paths: { open?: string | null; save?: string | null }) {
     })),
     saveDraft: vi.fn(async () => ({ contentHash: "draft", savedAt: 1 })),
     checkpoint: vi.fn(async () => ({ newBaseHash: "new-hash", mtime: 1 })),
+    resolveConflict: vi.fn(async () => ({ newBaseHash: "resolved" })),
     close: vi.fn(async () => undefined),
   };
   const dialogs: FileDialogAdapter = {

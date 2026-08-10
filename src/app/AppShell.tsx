@@ -11,12 +11,15 @@ import {
   useDocumentStore,
   type DocumentSaveState,
 } from "../documents/documentStore";
+import { conflictDetector } from "../documents/conflictDetector";
+import { ConflictDialog } from "../documents/ConflictDialog";
 import { RecoveryStartup } from "../documents/RecoveryStartup";
 import { ExcalidrawEditor } from "../editor/ExcalidrawEditor";
 import type { ExcalidrawAdapter } from "../editor/ExcalidrawAdapter";
 import { hasTauriCommandRuntime } from "../ipc/client";
 import { WorkspacePanel } from "../workspaces/WorkspacePanel";
 import { AppearanceControl } from "./AppearanceControl";
+import { ExportDialog } from "./ExportDialog";
 import {
   hasNativeWindowRuntime,
   registerExitCheckpoint,
@@ -62,6 +65,15 @@ export function AppShell({
       }
     | undefined
   >(undefined);
+  const [readyEditor, setReadyEditor] = useState<
+    | {
+        documentId: string;
+        adapter: ExcalidrawAdapter;
+      }
+    | undefined
+  >(undefined);
+  const exportButtonRef = useRef<HTMLButtonElement>(null);
+  const [exportDocumentId, setExportDocumentId] = useState<string | null>(null);
   const hasMountedWorkspace = useAppStore((state) => state.hasMountedWorkspace);
   const setHasMountedWorkspace = useAppStore(
     (state) => state.setHasMountedWorkspace,
@@ -82,6 +94,21 @@ export function AppShell({
   const saveShortcutLabel = /Mac|iPhone|iPad/.test(navigator.platform)
     ? "⌘S"
     : "Ctrl+S";
+  const exportReady =
+    activeSession !== undefined &&
+    readyEditor?.documentId === activeSession.id;
+
+  const openExportDialog = () => {
+    if (!exportReady || activeSession === undefined) {
+      return;
+    }
+    setExportDocumentId(activeSession.id);
+  };
+
+  const closeExportDialog = () => {
+    setExportDocumentId(null);
+    exportButtonRef.current?.focus();
+  };
 
   const runAction = async (action: () => void | Promise<unknown>) => {
     setInteractionError(null);
@@ -97,6 +124,16 @@ export function AppShell({
   const openDocument = () => runAction(onOpenDocument ?? dialogs.openDocument);
   const saveDocument = () =>
     runAction(() => documentManager.checkpointActive("manualSave"));
+  const saveOrphanedAs = async (documentId: string) => {
+    const session = documentManager.store.getState().sessionsById[documentId];
+    if (session === undefined) {
+      return;
+    }
+    const selectedPath = await chooseSavePath(session.title);
+    if (selectedPath !== null) {
+      await documentManager.saveOrphanedAs(documentId, selectedPath);
+    }
+  };
   const handleEditorReady = useCallback(
     (
       documentId: string,
@@ -110,6 +147,7 @@ export function AppShell({
         adapter,
         container,
       );
+      setReadyEditor({ documentId, adapter });
     },
     [],
   );
@@ -186,6 +224,30 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
+    if (!hasNativeWindowRuntime()) {
+      return;
+    }
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void conflictDetector
+      .start()
+      .then((nextUnlisten) => {
+        if (disposed) {
+          nextUnlisten();
+        } else {
+          unlisten = nextUnlisten;
+        }
+      })
+      .catch((error: unknown) =>
+        setInteractionError(getErrorMessage(error)),
+      );
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
     const handleSaveShortcut = (event: KeyboardEvent) => {
       if (
         event.key.toLowerCase() === "s" &&
@@ -224,9 +286,51 @@ export function AppShell({
               {saveShortcutLabel}
             </span>
           </button>
+          <button
+            disabled={!exportReady}
+            onClick={openExportDialog}
+            ref={exportButtonRef}
+            type="button"
+          >
+            Export…
+          </button>
+          {activeSession?.saveState === "orphaned" ? (
+            <button
+              onClick={() =>
+                void runAction(() => saveOrphanedAs(activeSession.id))
+              }
+              type="button"
+            >
+              Save as…
+            </button>
+          ) : null}
           <AppearanceControl controller={themeController} />
         </div>
       </header>
+
+      {activeSession !== undefined && activeSession.lastReloadedAt !== null ? (
+        <p className="reload-notice" role="status">
+          Reloaded from disk
+        </p>
+      ) : null}
+
+      {activeSession?.saveState === "conflicted" &&
+      activeSession.conflictInfo !== null ? (
+        <ConflictDialog
+          externalMtime={activeSession.conflictInfo.externalMtime}
+          localDraftUpdatedAt={activeSession.conflictInfo.localDraftUpdatedAt}
+          onDismiss={() => documentManager.dismissConflict(activeSession.id)}
+          onResolve={(resolution, saveAsPath) =>
+            documentManager.resolveConflict(
+              activeSession.id,
+              resolution,
+              saveAsPath,
+            )
+          }
+          path={activeSession.path}
+          title={activeSession.title}
+        />
+      ) : null}
 
       <div className="app-shell-body">
         <aside className="file-sidebar" aria-label="Files">
@@ -303,6 +407,17 @@ export function AppShell({
           )}
         </main>
       </div>
+      {exportDocumentId !== null &&
+      readyEditor?.documentId === exportDocumentId &&
+      activeSession !== undefined ? (
+        <ExportDialog
+          adapter={readyEditor.adapter}
+          defaultTheme={themeSnapshot.resolvedColorScheme}
+          documentPath={activeSession.path}
+          documentTitle={activeSession.title}
+          onClose={closeExportDialog}
+        />
+      ) : null}
     </div>
   );
 }
@@ -370,4 +485,18 @@ function getErrorMessage(error: unknown): string {
     }
   }
   return "The requested file operation could not be completed.";
+}
+
+async function chooseSavePath(defaultTitle: string): Promise<string | null> {
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  return save({
+    defaultPath: defaultTitle,
+    filters: [
+      {
+        name: "Excalidraw drawing",
+        extensions: ["excalidraw", "excalidraw.json"],
+      },
+    ],
+    title: "Save drawing as",
+  });
 }

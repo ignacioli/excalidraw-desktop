@@ -7,13 +7,14 @@ use excalidraw_desktop_lib::{
     commands::{
         documents::{DirectFileGrant, DocumentService},
         dto::{
-            CheckpointReason, CheckpointRequest, CloseDocumentRequest, PathRequest,
-            SaveDraftRequest,
+            CheckpointReason, CheckpointRequest, CloseDocumentRequest, ConflictResolution,
+            PathRequest, ResolveConflictRequest, SaveDraftRequest,
         },
         error::ErrorCode,
     },
     database::repository::{DraftRepository, FileIndexRepository},
 };
+use sha2::{Digest, Sha256};
 use support::{read_scene, valid_scene, DocumentHarness};
 
 #[tokio::test]
@@ -104,6 +105,198 @@ async fn document_contract_round_trips_open_draft_checkpoint_and_close() {
         })
         .await
         .unwrap_or_else(|error| panic!("close checkpointed document: {error:?}"));
+}
+
+#[tokio::test]
+async fn conflicted_documents_reject_automatic_writes_until_resolution() {
+    let harness = DocumentHarness::new(1024 * 1024).await;
+    let original = valid_scene("original");
+    let local_draft = valid_scene("local-draft");
+    let external = valid_scene("external");
+    let path = harness.write_scene("drawing.excalidraw", &original);
+    let path_string = path.display().to_string();
+
+    harness
+        .service
+        .doc_open(PathRequest {
+            path: path_string.clone(),
+        })
+        .await
+        .unwrap_or_else(|error| panic!("open conflicted document: {error:?}"));
+    harness
+        .service
+        .doc_save_draft(SaveDraftRequest {
+            path: path_string.clone(),
+            scene_json: local_draft.clone(),
+        })
+        .await
+        .unwrap_or_else(|error| panic!("save conflicted draft: {error:?}"));
+
+    fs::write(&path, &external)
+        .unwrap_or_else(|error| panic!("replace document externally: {error}"));
+    let canonical = path
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("canonicalize conflicted document: {error}"));
+    harness
+        .service
+        .conflicts()
+        .mark_conflicted(canonical.clone())
+        .await;
+
+    let blocked_draft = harness
+        .service
+        .doc_save_draft(SaveDraftRequest {
+            path: path_string.clone(),
+            scene_json: local_draft.clone(),
+        })
+        .await
+        .expect_err("conflicted draft write must be rejected")
+        .code;
+    assert_eq!(blocked_draft, ErrorCode::ConflictPending);
+    let blocked_checkpoint = harness
+        .service
+        .doc_checkpoint(CheckpointRequest {
+            path: path_string.clone(),
+            scene_json: local_draft.clone(),
+            reason: CheckpointReason::Idle,
+        })
+        .await
+        .expect_err("conflicted checkpoint must be rejected")
+        .code;
+    assert_eq!(blocked_checkpoint, ErrorCode::ConflictPending);
+
+    let resolved = harness
+        .service
+        .doc_resolve_conflict(ResolveConflictRequest {
+            path: path_string.clone(),
+            resolution: ConflictResolution::KeepLocal,
+            save_as_path: None,
+        })
+        .await
+        .unwrap_or_else(|error| panic!("resolve conflict keep local: {error:?}"));
+    let external_hash = format!("{:x}", Sha256::digest(external.as_bytes()));
+    assert_eq!(resolved.new_base_hash, external_hash);
+    assert_eq!(read_scene(&path), external);
+    let draft = harness
+        .repository
+        .draft_get(canonical.display().to_string())
+        .await
+        .unwrap_or_else(|error| panic!("read resolved draft: {error}"))
+        .unwrap_or_else(|| panic!("resolved draft is missing"));
+    assert!(draft.is_dirty);
+    assert_eq!(draft.base_hash.as_deref(), Some(external_hash.as_str()));
+
+    harness
+        .service
+        .doc_checkpoint(CheckpointRequest {
+            path: path_string,
+            scene_json: local_draft,
+            reason: CheckpointReason::ManualSave,
+        })
+        .await
+        .unwrap_or_else(|error| panic!("checkpoint after keep-local resolution: {error:?}"));
+}
+
+#[tokio::test]
+async fn resolve_conflict_can_adopt_external_content_or_save_local_as_new() {
+    let harness = DocumentHarness::new(1024 * 1024).await;
+    let original = valid_scene("original");
+    let local_draft = valid_scene("local-draft");
+    let external = valid_scene("external");
+    let path = harness.write_scene("drawing.excalidraw", &original);
+    let path_string = path.display().to_string();
+    harness
+        .service
+        .doc_open(PathRequest {
+            path: path_string.clone(),
+        })
+        .await
+        .unwrap_or_else(|error| panic!("open document: {error:?}"));
+    harness
+        .service
+        .doc_save_draft(SaveDraftRequest {
+            path: path_string.clone(),
+            scene_json: local_draft.clone(),
+        })
+        .await
+        .unwrap_or_else(|error| panic!("save draft: {error:?}"));
+
+    fs::write(&path, &external)
+        .unwrap_or_else(|error| panic!("replace document externally: {error}"));
+    let canonical = path
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("canonicalize document: {error}"));
+    harness
+        .service
+        .conflicts()
+        .mark_conflicted(canonical.clone())
+        .await;
+
+    let adopted = harness
+        .service
+        .doc_resolve_conflict(ResolveConflictRequest {
+            path: path_string.clone(),
+            resolution: ConflictResolution::TakeExternal,
+            save_as_path: None,
+        })
+        .await
+        .unwrap_or_else(|error| panic!("resolve conflict take external: {error:?}"));
+    assert_eq!(adopted.scene.unwrap()["elements"][0]["id"], "external");
+    let draft = harness
+        .repository
+        .draft_get(canonical.display().to_string())
+        .await
+        .unwrap_or_else(|error| panic!("read adopted draft: {error}"))
+        .unwrap_or_else(|| panic!("adopted draft is missing"));
+    assert!(!draft.is_dirty);
+
+    // A fresh local edit plus external replacement, then save-as-new.
+    let second_draft = valid_scene("second-draft");
+    harness
+        .service
+        .doc_save_draft(SaveDraftRequest {
+            path: path_string.clone(),
+            scene_json: second_draft.clone(),
+        })
+        .await
+        .unwrap_or_else(|error| panic!("save second draft: {error:?}"));
+    fs::write(&path, external)
+        .unwrap_or_else(|error| panic!("replace document a second time: {error}"));
+    harness
+        .service
+        .conflicts()
+        .mark_conflicted(canonical.clone())
+        .await;
+    let copy_path = harness.document_path("copy.excalidraw");
+    harness
+        .service
+        .doc_resolve_conflict(ResolveConflictRequest {
+            path: path_string.clone(),
+            resolution: ConflictResolution::SaveAsNew,
+            save_as_path: Some(copy_path.display().to_string()),
+        })
+        .await
+        .unwrap_or_else(|error| panic!("resolve conflict save as new: {error:?}"));
+
+    assert_eq!(read_scene(&copy_path), second_draft);
+    assert!(harness
+        .repository
+        .draft_get(canonical.display().to_string())
+        .await
+        .unwrap_or_else(|error| panic!("read old draft: {error}"))
+        .is_none());
+    let copy_canonical = copy_path
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("canonicalize copy: {error}"))
+        .display()
+        .to_string();
+    let copy_draft = harness
+        .repository
+        .draft_get(copy_canonical)
+        .await
+        .unwrap_or_else(|error| panic!("read copy draft: {error}"))
+        .unwrap_or_else(|| panic!("copy draft is missing"));
+    assert!(!copy_draft.is_dirty);
 }
 
 #[tokio::test]

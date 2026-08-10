@@ -23,7 +23,9 @@ body {
 
 .app-commands button,
 .file-sidebar button,
+.export-dialog button,
 .recovery-dialog button,
+.conflict-dialog button,
 .tab {
   min-height: 2rem;
   border: 1px solid var(--border-strong);
@@ -37,28 +39,36 @@ body {
 
 .app-commands button:hover,
 .file-sidebar button:hover,
+.export-dialog button:hover,
 .recovery-dialog button:hover,
+.conflict-dialog button:hover,
 .tab:hover {
   background: var(--surface-hover);
 }
 
 .app-commands button:active,
 .file-sidebar button:active,
+.export-dialog button:active,
 .recovery-dialog button:active,
+.conflict-dialog button:active,
 .tab:active {
   background: var(--surface-active);
 }
 
 .app-commands button:focus-visible,
 .file-sidebar button:focus-visible,
+.export-dialog button:focus-visible,
 .recovery-dialog button:focus-visible,
+.conflict-dialog button:focus-visible,
 .tab:focus-visible,
+.export-option-group input:focus-visible + span,
 .appearance-option input:focus-visible + span {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-.app-commands button:disabled {
+.app-commands button:disabled,
+.export-dialog button:disabled {
   color: var(--text-disabled);
   cursor: not-allowed;
   opacity: 0.72;
@@ -347,6 +357,16 @@ body {
   background: rgb(0 0 0 / 48%);
 }
 
+.conflict-dialog-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: rgb(0 0 0 / 48%);
+}
+
 .recovery-dialog {
   width: min(48rem, 100%);
   max-height: min(42rem, calc(100dvh - 3rem));
@@ -358,19 +378,74 @@ body {
   box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 28%);
 }
 
+.conflict-dialog {
+  width: min(42rem, 100%);
+  max-height: min(38rem, calc(100dvh - 3rem));
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: calc(var(--radius-control) * 2);
+  padding: var(--space-6);
+  background: var(--panel-background);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 28%);
+}
+
 .recovery-dialog h1,
 .recovery-dialog h2,
-.recovery-dialog p {
+.recovery-dialog p,
+.conflict-dialog h1,
+.conflict-dialog h2,
+.conflict-dialog p {
   margin-top: 0;
 }
 
-.recovery-dialog h1 {
+.recovery-dialog h1,
+.conflict-dialog h1 {
   font-size: 1.25rem;
 }
 
-.recovery-dialog h2 {
+.recovery-dialog h2,
+.conflict-dialog h2 {
   margin-bottom: var(--space-1);
   font-size: 1rem;
+}
+
+.conflict-dialog-path {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.conflict-version-times {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+.conflict-version-times div {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  padding: var(--space-3);
+}
+
+.conflict-version-times dt {
+  font-weight: 600;
+}
+
+.conflict-version-times dd {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+}
+
+.conflict-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.conflict-dialog-error {
+  color: var(--warning);
 }
 
 .recovery-candidate-list {
@@ -407,9 +482,94 @@ body {
 }
 
 .recovery-dialog-error,
-.recovery-startup-error {
+.recovery-startup-error,
+.conflict-dialog-error {
   color: var(--warning);
 }
+
+.reload-notice {
+  position: fixed;
+  z-index: 80;
+  top: var(--space-4);
+  left: 50%;
+  margin: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  background: var(--panel-background);
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 18%);
+  transform: translateX(-50%);
+}
+
+.export-dialog-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: rgb(0 0 0 / 48%);
+}
+
+.export-dialog {
+  width: min(34rem, 100%);
+  max-height: min(42rem, calc(100dvh - 3rem));
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: calc(var(--radius-control) * 2);
+  padding: var(--space-6);
+  background: var(--panel-background);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 28%);
+}
+
+.export-dialog h1,
+.export-dialog p {
+  margin-top: 0;
+}
+
+.export-dialog h1 {
+  font-size: 1.25rem;
+}
+
+.export-option-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+}
+
+.export-option-group legend {
+  padding: 0 var(--space-1);
+  color: var(--text-secondary);
+}
+
+.export-option-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.export-dialog-error {
+  margin-bottom: var(--space-3);
+  color: var(--warning);
+}
+
+.export-dialog-success {
+  overflow-wrap: anywhere;
+  color: var(--success);
+}
+
+.export-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
 
 .recovery-startup-error {
   position: fixed;

@@ -119,6 +119,8 @@ describe("AppShell", () => {
           baseHash: "base",
           saveState: "dirty",
           errorMessage: null,
+          conflictInfo: null,
+          lastReloadedAt: null,
         },
       },
     });
@@ -161,6 +163,8 @@ describe("AppShell", () => {
           baseHash: "first-base",
           saveState: "clean",
           errorMessage: null,
+          conflictInfo: null,
+          lastReloadedAt: null,
         },
         second: {
           id: "second",
@@ -171,6 +175,8 @@ describe("AppShell", () => {
           baseHash: "second-base",
           saveState: "clean",
           errorMessage: null,
+          conflictInfo: null,
+          lastReloadedAt: null,
         },
       },
     });
@@ -214,6 +220,8 @@ describe("AppShell", () => {
           baseHash: "base",
           saveState: "dirty",
           errorMessage: null,
+          conflictInfo: null,
+          lastReloadedAt: null,
         },
       },
     });

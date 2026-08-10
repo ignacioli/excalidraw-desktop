@@ -23,6 +23,11 @@ export type DocumentSaveState =
   | "orphaned"
   | "error";
 
+export interface ConflictInfo {
+  externalMtime: number;
+  localDraftUpdatedAt: number;
+}
+
 export interface DocumentSession {
   id: string;
   path: string;
@@ -32,6 +37,8 @@ export interface DocumentSession {
   baseHash: string;
   saveState: DocumentSaveState;
   errorMessage: string | null;
+  conflictInfo: ConflictInfo | null;
+  lastReloadedAt: number | null;
 }
 
 export interface DocumentStoreState {
@@ -127,6 +134,7 @@ export class DocumentManager {
       sceneVersion,
       saveState: session.saveState === "orphaned" ? "orphaned" : "dirty",
       errorMessage: null,
+      lastReloadedAt: null,
     });
     useAppStore.getState().setDocumentDirty(documentId, true);
     this.schedulers.get(documentId)?.recordChange(scene);
@@ -222,6 +230,126 @@ export class DocumentManager {
     useAppStore.getState().setDocumentOrphaned(session.id, true);
   }
 
+  sessionByPath(path: string): DocumentSession | undefined {
+    return this.findByPath(path);
+  }
+
+  updateConflictInfo(path: string, info: ConflictInfo): void {
+    const session = this.findByPath(path);
+    if (session === undefined) {
+      return;
+    }
+    this.patchSession(session.id, { conflictInfo: info });
+  }
+
+  beginConflict(documentId: string, info: ConflictInfo): void {
+    this.setConflicted(documentId, true);
+    this.patchSession(documentId, { conflictInfo: info });
+  }
+
+  dismissConflict(documentId: string): void {
+    this.patchSession(documentId, { conflictInfo: null });
+  }
+
+  async reloadFromDisk(documentId: string): Promise<void> {
+    const session = this.store.getState().sessionsById[documentId];
+    if (session === undefined) {
+      return;
+    }
+    const response = await this.gateway.open(session.path);
+    const scene = deserializeSceneData(response.scene);
+    this.schedulers.get(documentId)?.setConflicted(false);
+    this.patchSession(documentId, {
+      scene,
+      sceneVersion: getSceneVersion(scene.elements),
+      baseHash: response.baseHash,
+      saveState: "clean",
+      conflictInfo: null,
+      lastReloadedAt: Date.now(),
+      errorMessage: null,
+    });
+    useAppStore.getState().setDocumentDirty(documentId, false);
+  }
+
+  async resolveConflict(
+    documentId: string,
+    resolution: "takeExternal" | "keepLocal" | "saveAsNew",
+    saveAsPath?: string,
+  ): Promise<void> {
+    const session = this.store.getState().sessionsById[documentId];
+    if (session === undefined) {
+      return;
+    }
+    const response = await this.gateway.resolveConflict(
+      session.path,
+      resolution,
+      saveAsPath,
+    );
+    this.schedulers.get(documentId)?.setConflicted(false);
+
+    if (resolution === "takeExternal" && response.scene !== undefined) {
+      const scene = deserializeSceneData(response.scene);
+      this.patchSession(documentId, {
+        scene,
+        sceneVersion: getSceneVersion(scene.elements),
+        baseHash: response.newBaseHash,
+        saveState: "clean",
+        conflictInfo: null,
+        errorMessage: null,
+      });
+      useAppStore.getState().setDocumentDirty(documentId, false);
+      return;
+    }
+    if (resolution === "keepLocal") {
+      this.patchSession(documentId, {
+        baseHash: response.newBaseHash,
+        saveState: "dirty",
+        conflictInfo: null,
+        errorMessage: null,
+      });
+      return;
+    }
+    if (saveAsPath === undefined) {
+      throw new Error("A destination is required to save the drawing as new.");
+    }
+    const title = getFileName(saveAsPath);
+    this.patchSession(documentId, {
+      path: saveAsPath,
+      title,
+      baseHash: response.newBaseHash,
+      saveState: "clean",
+      conflictInfo: null,
+      errorMessage: null,
+    });
+    useAppStore.getState().updateDocumentLocation(documentId, saveAsPath, title);
+    useAppStore.getState().setDocumentDirty(documentId, false);
+  }
+
+  async saveOrphanedAs(documentId: string, newPath: string): Promise<void> {
+    const session = this.store.getState().sessionsById[documentId];
+    if (session === undefined) {
+      return;
+    }
+    const response = await this.gateway.checkpoint(
+      newPath,
+      serializeScene(session.scene),
+      "manualSave",
+    );
+    await this.gateway.close(session.path, true);
+    this.schedulers.get(documentId)?.setConflicted(false);
+    const title = getFileName(newPath);
+    this.patchSession(documentId, {
+      path: newPath,
+      title,
+      baseHash: response.newBaseHash,
+      saveState: "clean",
+      conflictInfo: null,
+      errorMessage: null,
+    });
+    useAppStore.getState().updateDocumentLocation(documentId, newPath, title);
+    useAppStore.getState().setDocumentDirty(documentId, false);
+  }
+
   dispose(): void {
     this.schedulers.forEach((scheduler) => scheduler.dispose());
     this.schedulers.clear();
@@ -249,6 +377,8 @@ export class DocumentManager {
       baseHash,
       saveState,
       errorMessage: null,
+      conflictInfo: null,
+      lastReloadedAt: null,
     };
 
     const scheduler = new DraftScheduler<SceneSnapshot>({
