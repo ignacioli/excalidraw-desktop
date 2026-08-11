@@ -1,6 +1,6 @@
 # Quickstart & Validation Guide: 跨平台 Excalidraw Desktop
 
-**Date**: 2026-08-04 | **Last updated**: 2026-08-06 | **Plan**: [plan.md](./plan.md) | **设计契约**: [../../DESIGN.md](../../DESIGN.md) | **IPC 契约**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md)
+**Date**: 2026-08-04 | **Last updated**: 2026-08-10 | **Plan**: [plan.md](./plan.md) | **设计契约**: [../../DESIGN.md](../../DESIGN.md) | **IPC 契约**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md)
 
 本文件是端到端验证指南：环境前提、构建运行命令、按用户故事组织的验证场景与预期结果。实现细节见 tasks.md 与源码，此处不重复。
 
@@ -117,3 +117,19 @@ APP_E2E=1 pnpm e2e           # Playwright 桌面 E2E（测试专用构建，暴�
 ## 5. 中文 IME 验证（Linux 矩阵真机项）
 
 拼音输入组合中：候选框紧随画布文本光标（含缩放/平移后）；组合事件不丢字、不重复（FR-005）。在 Fcitx5 与 IBus 各验证一次并记录矩阵结果。
+
+## 6. 验证证据汇总与统一门禁
+
+Phase 10 起，全量回归结果、三类验证证据（浏览器 UI、`APP_E2E=1` 进程级可靠性、真机矩阵）与各 SC 门禁状态统一记录于 `docs/validation-summary.md`，本文件不再重复明细。
+
+**SC-012 统一可靠性阻断门禁**：以下三套故障测试合并为合并阻断门禁，任一失败即阻止合并，且不允许以本文件外的单套件结果替代：
+
+1. `e2e/tests/us2-kill-during-save.spec.ts`（T037）：原子写八个故障点逐点 SIGKILL，目标文件必须为完整旧/新版本且恢复 UI 正确；
+2. `e2e/tests/us2-snapshot-corruption.spec.ts`（T045）：快照自损回退次新并提示实际恢复时间点；
+3. `e2e/tests/us4-external-changes.spec.ts`（T066）：外部变更自动重载/冲突/失联另存，决策前零写入。
+
+执行方式：`APP_E2E=1 pnpm e2e` 且 `EXCALIDRAW_E2E_BINARY` 指向故障注入测试构建（生产构建无 Harness 接口）。
+
+**固定机性能门禁**：T090/T108 的绝对预算仅在 `self-hosted`/`macOS`/`ARM64`/`excalidraw-perf` runner 上作为合并硬门禁（T091）；其他硬件产出仅归档非阻断趋势，不得替代硬验收。
+
+**范围记录**：正式 macOS 签名、公证与零安全拦截分发为后续版本（SC-010）；当前版本 macOS 验证止于本地未签名构建。

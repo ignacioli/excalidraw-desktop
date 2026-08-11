@@ -47,7 +47,39 @@
    - 预期：安装后 `/usr/share/mime/packages/excalidraw-desktop.xml` 存在且 `update-mime-database` 已执行（`postinst.sh`），文件管理器对 `.excalidraw` 显示应用图标并可双击打开。
 4. 各发行版执行第 2 节 FR-030 矩阵并记录结果。
 
-## 5. 已知边界
+## 5. Linux IME 验证矩阵（FR-005，中文输入法）
+
+**实现状态（T103/T104 已落地，可验证）**：
+
+- 前端 `src/editor/imeBridge.ts`：Excalidraw 隐形 textarea 的绝对坐标随画布缩放/平移实时映射，保证组合输入候选框跟随画布文本光标。
+- 后端 `src-tauri/src/lib.rs` 的 `configure_linux_ime_environment()`：仅当 `GTK_IM_MODULE` 未设置时，按 `XMODIFIERS` / `QT_IM_MODULE` / `IBUS_ADDRESS` / `WAYLAND_DISPLAY` 推断并设置 `GTK_IM_MODULE`（fcitx/ibus），规避 WebKitGTK 兼容问题。
+
+**矩阵**：Ubuntu GNOME + Fedora KDE × X11/Wayland × Fcitx5/IBus 共 8 个组合。
+
+| 发行版/桌面 | 会话 | 输入法 | 候选框跟随（缩放/平移后） | 组合事件不丢字/不重复 | 状态 |
+|-------------|------|--------|--------------------------|------------------------|------|
+| Ubuntu GNOME | X11 | Fcitx5 | — | — | 待真机执行 |
+| Ubuntu GNOME | X11 | IBus | — | — | 待真机执行 |
+| Ubuntu GNOME | Wayland | Fcitx5 | — | — | 待真机执行 |
+| Ubuntu GNOME | Wayland | IBus | — | — | 待真机执行 |
+| Fedora KDE | X11 | Fcitx5 | — | — | 待真机执行 |
+| Fedora KDE | X11 | IBus | — | — | 待真机执行 |
+| Fedora KDE | Wayland | Fcitx5 | — | — | 待真机执行 |
+| Fedora KDE | Wayland | IBus | — | — | 待真机执行 |
+
+**验证步骤**：
+
+1. 安装输入法：Ubuntu 执行 `sudo apt install fcitx5` 或 `ibus`，Fedora 对应 `sudo dnf install fcitx5` 或 `ibus`；启用中文拼音输入法并设为系统默认输入法。
+2. 构建/运行：`pnpm tauri dev` 或本地未签名构建（当前版本不需要签名即可完成本矩阵）。
+3. 在画布插入文本元素并切换到中文输入法，输入拼音组合（如 "nihao"）。
+   - 预期：候选框紧跟画布文本光标；缩放/平移画布后候选框仍跟随正确位置（imeBridge 坐标同步）。
+4. 连续组合输入多个字符（含中文、英文混输）。
+   - 预期：组合事件不丢字、不重复（FR-005）。
+5. 在 Fcitx5 与 IBus 各执行一轮第 3–4 步，并在 X11 与 Wayland 会话各执行一轮，将结果填回上表。
+
+**记录要求**：每项执行完成后把结果、失败复现信息（截图/日志）填回矩阵对应单元格；未执行的组合保持"待真机执行"，不得标记为通过。
+
+## 6. 已知边界
 
 - macOS 文件关联基于 `CFBundleDocumentTypes` + `UTExportedTypeDeclarations`（`src-tauri/Info.plist` 模板）；`.excalidraw.json` 属于双扩展名文件，关联行为依赖系统对 `json` 扩展的处理，须按第 3.3 步复检。
 - 当前版本不进行 Developer ID 签名、公证、stapler 与零拦截验收（SC-010）；后续版本接入 `.github/workflows/release.yml` 的签名步骤后更新本文件。
