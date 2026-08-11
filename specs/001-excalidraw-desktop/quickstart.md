@@ -10,7 +10,7 @@
 
 | 平台 | 要求 |
 |------|------|
-| 通用 | Node.js 20+、pnpm（锁定为唯一包管理器）、Rust stable 1.80+（rustup）、Python 3.10+（仅构建期字体合并，需 `pip install fonttools brotli`） |
+| 通用 | Node.js 20+、pnpm（锁定为唯一包管理器）、Rust stable 1.80+（rustup）、Python 3.10+ 与 uv（仅构建期字体合并，解释器由 `.python-version` 固定，依赖由 `pyproject.toml` + `uv.lock` 声明，`uv run` 自动安装） |
 | macOS | Xcode Command Line Tools；签名/公证验证需 Developer ID 证书（无证书时跳过该项并报告缺口） |
 | Linux | `libwebkit2gtk-4.1-dev`、`libgtk-3-dev` 等 Tauri 2 系统依赖；验证矩阵：Ubuntu GNOME + Fedora KDE × X11/Wayland × Fcitx5/IBus |
 
@@ -18,7 +18,7 @@
 
 ```bash
 pnpm install                 # 前端依赖
-pnpm fonts:build             # 构建期合并 Virgil-CJK 字体（scripts/，产出 public/fonts/）
+pnpm fonts:build             # 构建期合并 Virgil-CJK 字体（uv 解析 pyproject.toml 依赖，产出 public/fonts/）
 pnpm tauri dev               # 开发运行
 pnpm tauri build             # 生产打包（dmg / AppImage / deb / rpm）
 

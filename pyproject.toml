@@ -1,0 +1,9 @@
+[project]
+name = "excalidraw-desktop-font-build"
+version = "0.1.0"
+description = "Build tooling for the offline Virgil-CJK font bundle."
+requires-python = ">=3.10"
+dependencies = [
+    "fonttools>=4.55",
+    "brotli>=1.1",
+]

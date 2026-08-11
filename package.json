@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test --config e2e/playwright.config.ts",
-    "fonts:build": "python3 scripts/build-fonts.py",
+    "fonts:build": "uv run --frozen scripts/build-fonts.py",
     "preview": "vite preview",
     "tauri": "tauri"
   },

@@ -30,14 +30,14 @@
 - Rust stable 1.80+
 - macOS：Xcode Command Line Tools
 - Linux：WebKitGTK 系统依赖
-- Python 3.10+（仅用于字体构建，即 `pnpm fonts:build`）
+- Python 3.10+ 与 uv（仅用于字体构建，即 `pnpm fonts:build`；解释器由 `.python-version` 固定为 3.14，依赖经 `pyproject.toml` + `uv.lock` 管理，`uv run` 自动创建 `.venv`）
 
 ## 开发与构建
 
 ```sh
 pnpm install
 pnpm dev            # 启动 Vite 开发服务器
-pnpm fonts:build    # 构建内置 CJK 手写字体
+pnpm fonts:build    # 构建内置 CJK 手写字体（uv 管理 fonttools/brotli，产出 public/fonts/）
 pnpm tauri dev      # 启动 Tauri 开发应用
 pnpm tauri build    # 构建当前 Tauri 安装包
 ```
