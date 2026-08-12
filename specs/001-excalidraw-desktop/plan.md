@@ -9,7 +9,7 @@
 
 ## Summary
 
-构建本地优先、离线可用的跨平台（macOS + Linux）Excalidraw 桌面应用。核心技术路线：Tauri 2.x（Rust 后端 + 系统 WebView）承载 React 19 + TypeScript strict 前端，官方 `@excalidraw/excalidraw` 以 npm 依赖方式集成（非 Fork）；系统原生窗口承载顶部多标签、左侧文件管理与右侧画布，壳层通过语义 token 对齐官方浅色/深色视觉并支持浅色、深色、跟随系统；持久化采用"热层 SQLite（WAL）草稿 + 冷层标准 `.excalidraw` 文件原子写"的双层架构，配合会话锁 + 多版本轮换快照实现崩溃恢复；`notify` 文件监听 + 三元组（mtime/size/hash）乐观并发实现外部变更感知与冲突消解。质量保证以 Playwright 桌面 E2E 与故障注入测试为中心。
+构建本地优先、离线可用的 macOS-first Excalidraw 桌面应用；Ubuntu 24.04 Desktop 仅作为可选社区验证环境。核心技术路线：Tauri 2.x（Rust 后端 + 系统 WebView）承载 React 19 + TypeScript strict 前端，官方 `@excalidraw/excalidraw` 以 npm 依赖方式集成（非 Fork）；系统原生窗口承载顶部多标签、左侧文件管理与右侧画布，壳层通过语义 token 对齐官方浅色/深色视觉并支持浅色、深色、跟随系统；持久化采用"热层 SQLite（WAL）草稿 + 冷层标准 `.excalidraw` 文件原子写"的双层架构，配合会话锁 + 多版本轮换快照实现崩溃恢复；`notify` 文件监听 + 三元组（mtime/size/hash）乐观并发实现外部变更感知与冲突消解。质量保证以 Playwright 桌面 E2E 与故障注入测试为中心。
 
 ## Technical Context
 
@@ -19,9 +19,9 @@
 
 **Storage**: 双层——热层 SQLite（WAL 模式：drafts/workspaces/file_index/file_meta 表）+ 冷层标准 `.excalidraw` JSON 文件（`.tmp` + fsync + POSIX rename 原子替换）；恢复快照为应用数据目录下的轮换 JSON 文件
 
-**Testing**: 前端 Vitest + React Testing Library；后端 `cargo test` + clippy；浏览器可见 UI 使用 Playwright；Tauri 进程级桌面套件使用 `APP_E2E=1` 测试构建与故障注入；平台打包/IME/文件关联使用记录完整配置的 macOS/Linux 目标 OS 环境矩阵（VM 或物理机）。三类证据 MUST 分开报告，浏览器覆盖不得替代原生壳或故障注入验证。
+**Testing**: 前端 Vitest + React Testing Library；后端 `cargo test` + clippy；浏览器可见 UI 使用 Playwright；Tauri 进程级桌面套件使用 `APP_E2E=1` 测试构建与故障注入；macOS 原生打包/IME/文件关联验收为必选，Ubuntu 24.04 Desktop 原生验收为可选社区证据，其他 Linux 发行版不在当前版本平台门禁内。三类证据 MUST 分开报告，浏览器覆盖不得替代原生壳或故障注入验证。
 
-**Target Platform**: macOS 12+（Apple Silicon + Intel，Universal Binary）；Linux（Ubuntu/Debian、Fedora；X11 + Wayland；WebKitGTK）
+**Target Platform**: macOS 12+（Apple Silicon + Intel，Universal Binary）；Ubuntu 24.04 Desktop 为可选社区验证；其他 Linux 发行版与 Windows 不在当前版本支持承诺内
 
 **Project Type**: desktop-app（Tauri：`src/` 前端 + `src-tauri/` Rust 后端）
 
@@ -35,12 +35,12 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-对照宪法 v2.0.0（`.specify/memory/constitution.md`）：
+对照宪法 v3.0.0（`.specify/memory/constitution.md`）：
 
 | 宪法条款 | 本计划符合性 | 说明 |
 |---------|------------|------|
 | I. 代码质量（SOLID/DRY、单一权威层、TS strict、Rust 禁 unwrap） | PASS（设计层面） | 领域不变量集中于 Rust 后端（原子写、路径校验、冲突判定）；前端仅持编辑态；IPC 契约强类型（contracts/）；`tsconfig.json` 已 strict；lint/clippy 门禁列入 Phase 1 Setup |
-| II. 测试标准（桌面 E2E 优先 + 故障注入） | PASS（设计层面） | 测试分层与三类必测故障场景已进入本计划与 quickstart；macOS/Linux 原生功能允许在记录完整配置的虚拟机验收，但不将其表述为真机覆盖 |
+| II. 测试标准（桌面 E2E 优先 + 故障注入） | PASS（设计层面） | 测试分层与三类必测故障场景已进入本计划与 quickstart；macOS 原生验收为必选，Ubuntu 24.04 Desktop 仅可选，VM 证据必须披露环境边界 |
 | III. UX 一致性（跨平台一致、可访问性、状态完备） | PASS | 根目录 `DESIGN.md` 固化桌面布局、语义 token、主题与状态规则；spec FR/Edge Cases 覆盖主题回退、冲突/离线/错误状态；平台惯例差异在 app/ 层集中处理；a11y 最低线随各用户故事任务交付 |
 | IV. 性能预算（SC 红线、参考环境、削峰、测量数据） | PASS | Technical Context 引用 SC 数值为预算；T089/T091 建立完整测量与报告基础设施，T090/T108 在声明的 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB VM 上生成真实 `pass`/`fail`；预算失败可见但不阻断合并/开源发布；高频路径禁止逐事件 IPC（数据流图 1） |
 | V. 文档规范 + 架构图标准（Mermaid 分层图/数据流图） | PASS | 本文件含 Mermaid 分层图 1 幅、数据流图 2 幅；产品设计契约在根目录 `DESIGN.md`，ADR 决策记录于 research.md；`docs/` 目录随实现阶段建立 |
@@ -64,11 +64,11 @@
 | 安装包体积 | 约 10–25MB | 约 80–200MB |
 | 空载内存 | 约 30–80MB（预算 ≤150MB 有充裕余量） | 120–400MB（直接击穿 SC-002） |
 | 冷启动 | <1s（预算 ≤2s） | 1–3s |
-| 渲染一致性 | WKWebView vs WebKitGTK 存在差异，需跨发行版验证 | Chromium 完全一致 |
+| 渲染一致性 | WKWebView 是必选发布路径；Ubuntu WebKitGTK 仅做可选社区验证，跨发行版差异不构成当前版本门禁 | Chromium 完全一致 |
 | 安全模型 | Rust 边界 + 细粒度 Capabilities，默认无 Node 暴露 | 需手工配置 Context Isolation |
 | 后端能力 | Rust 原生：原子写、SQLite、notify 监听高效可靠 | Node.js + native 模块 |
 
-**决策**：Tauri 2.x。SC-002 的内存/启动预算实质上排除了 Electron；可靠性核心（原子写、故障恢复）天然适合 Rust 实现。代价是 Linux WebKitGTK 兼容性风险，以 Phase 10 / T094 跨发行版验证矩阵对冲（Wayland/X11 × 主流发行版 × Fcitx5/IBus IME）。
+**决策**：Tauri 2.x。SC-002 的内存/启动预算实质上排除了 Electron；可靠性核心（原子写、故障恢复）天然适合 Rust 实现。Linux WebKitGTK 的发行版差异保留为已知社区风险；Ubuntu 24.04 Desktop 可做可选 smoke test，Fedora/其他发行版不作为当前版本门禁。
 
 ### D2. 热层存储：SQLite WAL（选定，先行） vs redb
 
@@ -106,7 +106,7 @@
 | CJK 字体 | 构建期 fonttools 合并 Virgil/Excalifont + 小赖字体 → `Virgil-CJK.woff2` | 运行时字体回退（破坏手绘风格，FR-004 不满足） |
 | 缩略图 | 前端 Web Worker + OffscreenCanvas 懒生成，WebP 存磁盘缓存 + SQLite 元数据，内容寻址键 | 后端 Rust 渲染（需复刻 rough.js 渲染，成本过高） |
 | 单实例/文件关联 | tauri-plugin-single-instance + 平台声明（CFBundleDocumentTypes / MIME + .desktop） | 无（FR-028 直接要求） |
-| 测试分层 | Playwright 浏览器 UI + `APP_E2E=1` Tauri 进程级 Harness + 记录配置的 macOS/Linux 原生环境矩阵（VM 或物理机） | 单一浏览器套件（无法证明原生壳与文件系统可靠性） |
+| 测试分层 | Playwright 浏览器 UI + `APP_E2E=1` Tauri 进程级 Harness + 必选 macOS 原生环境验收 + 可选 Ubuntu 24.04 Desktop 社区验收 | 单一浏览器套件（无法证明原生壳与文件系统可靠性） |
 | 性能验收 | Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB 参考 VM；聚合 Tauri/WebView/GPU 进程树；完整运行记录 `pass`/`fail` 但不阻断发布 | 固定 M1 真机硬门禁（开源维护成本不符合项目定位） |
 
 ### D6. 性能证据与故障注入边界

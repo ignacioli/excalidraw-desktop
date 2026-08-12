@@ -2,7 +2,7 @@
 
 ## Project Intent
 
-Build `excalidraw-desktop` as a macOS-first desktop application using Tauri 2.x, a React/TypeScript frontend, and a Rust backend. Preserve native desktop behavior, strong security boundaries, accessibility, and maintainable frontend/backend contracts. Do not assume the final packaging, persistence, update, synchronization, or upstream-Excalidraw integration strategy until repository code or an approved product decision establishes it.
+Build `excalidraw-desktop` as a macOS-first desktop application using Tauri 2.x, a React/TypeScript frontend, and a Rust backend. macOS is the required native acceptance platform; Ubuntu 24.04 Desktop is optional community validation, while Fedora/other Linux and Windows are outside the current support commitment. Preserve native desktop behavior, strong security boundaries, accessibility, and maintainable frontend/backend contracts. Do not assume the final packaging, persistence, update, synchronization, or upstream-Excalidraw integration strategy until repository code or an approved product decision establishes it.
 
 The repository currently contains a Tauri 2.x + Vite/React bootstrap scaffold and the complete SpecKit design set under `specs/001-excalidraw-desktop/`. Product features, project test infrastructure, and CI workflows have not yet been implemented. Treat the manifests and scaffold source as real current state, while paths described only by the plan remain expected future structure.
 

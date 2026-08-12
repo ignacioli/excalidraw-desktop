@@ -13,7 +13,7 @@
 - **Alternatives considered**:
   - **Electron**：渲染一致性最好、生态最全，但资源开销与启动速度不满足 SC；安全模型需手工加固。
   - **Wails (Go)**：NineRec 路线；Go 后端可行，但 Tauri 的权限模型、插件生态（single-instance、updater）与社区规模更适合生产级目标。
-- **风险与对冲**: WebKitGTK 在 Linux 的碎片化（发行版版本、Wayland/X11、GPU 驱动、IME）→ Phase 0 建立跨发行版验证矩阵（Ubuntu GNOME + Fedora KDE × X11/Wayland × Fcitx5/IBus），失败项记录进支持平台清单。
+- **风险与对冲**: WebKitGTK 在 Linux 的碎片化（发行版版本、Wayland/X11、GPU 驱动、IME）→ 当前版本仅保留 Ubuntu 24.04 Desktop 可选 smoke test，Fedora/其他 Linux 与完整显示协议/输入法矩阵移出当前门禁，失败项记录为社区兼容性边界。
 
 ## R2. 热层存储：SQLite first，redb 触发式重构
 
@@ -95,7 +95,7 @@
 
 ## R14. 测试与故障注入
 
-- **Decision**: 分离三类证据——Vitest/RTL 与 Playwright 验证浏览器可见 UI、状态机、a11y 和视觉；cargo test 验证 Rust 领域单元/集成行为；`APP_E2E=1` Tauri 测试构建验证进程强杀、文件系统故障、恢复与冲突；记录完整配置的 macOS/Linux 原生环境（虚拟机或物理机）验证窗口、IME、剪贴板、拖放、文件关联与安装。浏览器套件不得替代后两类。
+- **Decision**: 分离三类证据——Vitest/RTL 与 Playwright 验证浏览器可见 UI、状态机、a11y 和视觉；cargo test 验证 Rust 领域单元/集成行为；`APP_E2E=1` Tauri 测试构建验证进程强杀、文件系统故障、恢复与冲突；记录完整配置的 macOS 原生环境（虚拟机或物理机）验证窗口、IME、剪贴板、拖放、文件关联与安装，Ubuntu 24.04 可选补充。浏览器套件不得替代后两类。
 - **Rationale**: 宪法原则 II 与 SC-003/012；故障场景只能在进程级 E2E 证明，原生平台行为只能由对应桌面 OS 环境闭环。虚拟机可覆盖该 OS 中的功能与安装行为，但必须披露宿主、虚拟化层与未覆盖的物理硬件边界。
 - **Alternatives considered**: WebDriver/tauri-driver（Linux 可用但 macOS 支持弱、生态小）；仅单元测试（无法证明断电/强杀行为）。
 
@@ -107,7 +107,7 @@
 
 ## R16. IME（中文输入法）适配
 
-- **Decision**: 前端 `src/editor/imeBridge.ts` 保证 Excalidraw 隐形 textarea 的绝对坐标随画布缩放/平移实时映射（候选框跟随，FR-005）；Linux 端在 `src-tauri/src/lib.rs` 启动入口按需设置 `GTK_IM_MODULE`（及 Wayland 相关修正）规避 WebKitGTK/Fcitx5 兼容问题；纳入跨发行版验证矩阵（tasks T103/T104 实现，T094 验证）。
+- **Decision**: 前端 `src/editor/imeBridge.ts` 保证 Excalidraw 隐形 textarea 的绝对坐标随画布缩放/平移实时映射（候选框跟随，FR-005）；Linux 端在 `src-tauri/src/lib.rs` 启动入口按需设置 `GTK_IM_MODULE`（及 Wayland 相关修正）规避 WebKitGTK/Fcitx5 兼容问题；Ubuntu 24.04 可选验证（tasks T103/T104 实现，T094 可选验证）。
 - **Rationale**: FR-005 与 Edge Case"中文输入法组合输入"；WebKitGTK 的 IME 缺陷是已知风险点，需在对应 Linux 桌面 OS 原生环境（虚拟机或物理机）实际验证而非假设。
 - **Alternatives considered**: 自绘输入框拦截 IME 事件（侵入 Excalidraw 内部实现，违反适配层原则）。
 

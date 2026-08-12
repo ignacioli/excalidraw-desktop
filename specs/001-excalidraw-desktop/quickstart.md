@@ -4,7 +4,7 @@
 
 本文件是端到端验证指南：环境前提、构建运行命令、按用户故事组织的验证场景与预期结果。实现细节见 tasks.md 与源码，此处不重复。
 
-验证证据分为三类并分别报告：Playwright 浏览器 UI（交互/a11y/视觉）、`APP_E2E=1` Tauri 进程级可靠性（进程/文件系统/恢复）和 macOS/Linux 目标 OS 平台矩阵（窗口/IME/文件关联/Gatekeeper 手动放行/安装）。记录完整配置的虚拟机或物理机均可用于第三类验收；浏览器测试不得替代后两类。
+验证证据分为三类并分别报告：Playwright 浏览器 UI（交互/a11y/视觉）、`APP_E2E=1` Tauri 进程级可靠性（进程/文件系统/恢复）和 macOS 目标 OS 平台验收（窗口/IME/文件关联/Gatekeeper 手动放行/安装）。记录完整配置的 macOS 虚拟机或物理机均可用于必选原生验收；Ubuntu 24.04 Desktop 可选补充 smoke test，浏览器测试不得替代后两类。
 
 ## 1. 环境前提
 
@@ -12,7 +12,7 @@
 |------|------|
 | 通用 | Node.js 20+、pnpm（锁定为唯一包管理器）、Rust stable 1.80+（rustup）、Python 3.10+ 与 uv（仅构建期字体合并，解释器由 `.python-version` 固定，依赖由 `pyproject.toml` + `uv.lock` 声明，`uv run` 自动安装） |
 | macOS | Xcode Command Line Tools；项目不需要 Developer ID、签名或公证；首次运行未签名产物时按 README 的 Gatekeeper 手动放行步骤验证 |
-| Linux | `libwebkit2gtk-4.1-dev`、`libgtk-3-dev` 等 Tauri 2 系统依赖；验证矩阵：Ubuntu GNOME + Fedora KDE × X11/Wayland × Fcitx5/IBus |
+| Ubuntu 24.04 Desktop（可选） | `libwebkit2gtk-4.1-dev`、`libgtk-3-dev` 等 Tauri 2 系统依赖；可选单环境 smoke test，Fedora/其他 Linux 不在当前验收要求内 |
 
 ## 2. 构建与运行
 
@@ -85,11 +85,11 @@ APP_E2E=1 pnpm e2e           # Playwright 桌面 E2E（测试专用构建，暴�
 
 ### US6 系统集成（P3，目标 OS 原生壳验证——浏览器不可证明）
 
-1. 在记录配置的 macOS/Linux VM 或物理机安装 GitHub Release 同类产物 → Finder/文件管理器双击 `.excalidraw`。
+1. 在记录配置的 macOS VM 或物理机安装 GitHub Release 同类产物 → Finder 双击 `.excalidraw`；Ubuntu 24.04 可选执行对应 smoke test。
    - 预期：应用启动并打开该文件；应用已运行时复用实例新开标签（FR-028）。
 2. macOS 首次启动未签名、未公证产物。
    - 预期：Gatekeeper 可能拦截；README/Release 警告风险并提供用户主动手动放行步骤，放行后应用可运行（SC-010）。
-3. Linux 各发行版安装 AppImage/deb/rpm。
+3. Ubuntu 24.04 Desktop 可选安装 AppImage/deb；rpm 为 best-effort 产物，不要求其他 Linux 发行版验收。
    - 预期：应用菜单入口 + 文件图标关联生效。
 
 ### US7 多工作区与缩略图（P3）
@@ -116,7 +116,7 @@ T090/T108 在声明的 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8G
 
 ## 5. 中文 IME 验证（Linux 目标 OS 矩阵项）
 
-拼音输入组合中：候选框紧随画布文本光标（含缩放/平移后）；组合事件不丢字、不重复（FR-005）。在记录完整配置的 Ubuntu/Fedora VM 或物理机中，以 Fcitx5 与 IBus 各验证一次并记录矩阵结果。
+拼音输入组合中：候选框紧随画布文本光标（含缩放/平移后）；组合事件不丢字、不重复（FR-005）。macOS 原生验收为必选；Ubuntu 24.04 可选执行一次记录配置的 smoke test，Fedora/其他 Linux 与完整显示协议/输入法矩阵不属于当前版本要求。
 
 ## 6. 验证证据汇总与统一门禁
 

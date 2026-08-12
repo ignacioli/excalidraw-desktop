@@ -30,7 +30,7 @@ The following names describe logical capability roles for planning and review. T
 | 普通且契约已定的跨层故事 | `fullstack-developer` | 不承接核心 IPC、可靠性、平台或性能门禁 |
 | CPU/RSS/FPS/IPC/磁盘与 soak | `performance-engineer` | 只负责测量、profiling、基线和 verdict；修复回到所属实现 agent |
 | SIGKILL、原子写、恢复、冲突、磁盘故障 | `desktop-reliability-tester` | Harness 仅测试构建；产品修复回到所属实现 agent |
-| macOS/Linux 原生集成与 US6 | `desktop-platform-dev` | `tauri-dev` 审查共享 Tauri 契约；Windows 不在范围内 |
+| macOS 原生集成与 US6（Ubuntu 可选） | `desktop-platform-dev` | `tauri-dev` 审查共享 Tauri 契约；Fedora/其他 Linux 与 Windows 不在当前验收范围内 |
 | 跨 Rust/TS/IPC Checkpoint 审查 | `fs-reviewer` | `code-reviewer` 仅用于小型单层 diff |
 
 仅在存在至少两个相互独立且文件不重叠的轨道时并行委派；同一文件的任务严格串行，主 agent 负责契约整合与最终验证。
@@ -224,9 +224,9 @@ The following names describe logical capability roles for planning and review. T
 
 ## Phase 8: User Story 6 - 原生桌面系统集成 (Priority: P3)
 
-**Goal**: 双击 .excalidraw 打开、单实例复用、记录配置的 macOS/Linux 原生环境验收，以及 GitHub Releases 未签名/未公证开源分发
+**Goal**: 双击 .excalidraw 打开、单实例复用、记录配置的 macOS 原生环境必选验收（Ubuntu 24.04 可选社区 smoke test），以及 GitHub Releases 未签名/未公证开源分发
 
-**Independent Test**: 在记录配置的 macOS/Linux 虚拟机或物理机安装对应产物，验证 Gatekeeper 手动放行、文件关联、二次打开复用实例与多文件连续打开（quickstart US6）
+**Independent Test**: 在记录配置的 macOS 虚拟机或物理机安装对应产物，验证 Gatekeeper 手动放行、文件关联、二次打开复用实例与多文件连续打开（quickstart US6）；Ubuntu 24.04 Desktop smoke test 可作为可选社区证据
 
 ### Implementation for User Story 6
 
@@ -237,9 +237,9 @@ The following names describe logical capability roles for planning and review. T
 - [X] T077 [US6] macOS Universal Binary 构建流水线（aarch64 + x86_64 target 编译 + lipo 合并）与 `v*` tag GitHub Release 未签名/未公证产物上传于 .github/workflows/release.yml（FR-029/SC-010）
 - [ ] T078 [US6] macOS 原生环境验收：在记录完整配置的 macOS VM 或物理机下载并运行真实 `v*` GitHub Release 的未签名/未公证构建，记录 tag/commit、下载隔离、启动、文件关联、单实例、多文件与 Gatekeeper 用户手动放行结果于 docs/native-verification.md；workflow artifact 仅可预检，不能关闭本任务（SC-010）
 - [X] T079 [P] [US6] Linux 打包产物：AppImage + deb + rpm 配置于 src-tauri/tauri.conf.json bundle 与 release.yml
-- [ ] T080 [US6] 汇总并补齐原生壳手动验证清单 docs/native-verification.md：复用 T078 的 macOS Gatekeeper/文件关联证据与 T094 的 Linux IME 证据，在记录配置的 macOS/Linux VM 或物理机补测 FR-030 画布渲染、拖放、剪贴板、双击关联、单实例与安装矩阵，记录环境类型、结果与未覆盖边界（浏览器 E2E 不可替代；依赖 T078/T094）
+- [ ] T080 [US6] 汇总并补齐原生壳手动验证清单 docs/native-verification.md：在记录配置的 macOS VM 或物理机完成 FR-030 画布渲染、拖放、剪贴板、双击关联、单实例与安装矩阵；可附加 Ubuntu 24.04 Desktop smoke test，记录环境类型、结果与未覆盖边界（浏览器 E2E 不可替代；依赖 T078）
 
-**Checkpoint**: 可通过 GitHub Releases 分发的未签名/未公证开源桌面应用；原生环境矩阵在 T078/T080/T094 实际执行后才完成
+**Checkpoint**: 可通过 GitHub Releases 分发的未签名/未公证开源桌面应用；macOS 原生验收在 T078/T080 实际执行后完成，Ubuntu 证据不阻断阶段完成
 
 ---
 
@@ -271,8 +271,8 @@ The following names describe logical capability roles for planning and review. T
 
 - [X] T092 [P] 建立 docs/adr/ 首批 ADR（从 research.md R1–R19 提炼 ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 声明参考环境性能测量与基线分代规则、ADR-005 官方画布样式与可扩展主题边界）+ docs/architecture.md（迁移 plan.md Mermaid 图源，宪法原则 V）
 - [X] T093 [P] 跨故事 a11y 回归审计 + reduced motion/主题对比度抽检（依赖 T097–T102 已完成；于 src/app/ 与各对话框验证浅色/深色的键盘闭环、焦点顺序、非颜色唯一状态、WCAG 2.2 AA 适用对比度及严重/致命自动扫描问题为 0，FR-038/SC-015、宪法原则 III、DESIGN.md）
-- [ ] T094 Linux IME 验收矩阵执行（验证 T103/T104 已落地）：使用记录完整配置的 Ubuntu/Fedora VM 或物理机覆盖 GNOME/KDE × X11/Wayland × Fcitx5/IBus 中文输入候选框跟随（FR-005），结果记录 docs/native-verification.md
-- [X] T095 quickstart.md 全场景回归执行并修订文档偏差；汇总 T037/T045/T066 三类可靠性故障测试为统一阻断门禁（SC-012），汇总 T111 外观矩阵与视觉基线（SC-014）及 T097/T093 无障碍证据（SC-015）；T078/T080/T090/T094/T108 未执行的外部验收保持为明确缺口，不在汇总中伪造通过
+- [ ] T094 [可选] Ubuntu 24.04 Desktop IME smoke test（验证 T103/T104 已落地）：在一套记录完整配置的 Ubuntu VM 或物理机中验证中文输入候选框跟随（FR-005），结果记录 docs/native-verification.md；不构成阶段、合并或发布门禁，Fedora/其他 Linux 不在当前版本要求内
+- [X] T095 quickstart.md 全场景回归执行并修订文档偏差；汇总 T037/T045/T066 三类可靠性故障测试为统一阻断门禁（SC-012），汇总 T111 外观矩阵与视觉基线（SC-014）及 T097/T093 无障碍证据（SC-015）；T078/T080/T090/T108 未执行的外部验收保持为明确缺口，T094 仅作为可选 Ubuntu 证据，不在汇总中伪造通过
 - [X] T096 [P] 补充 README.md（安装、开发、构建、贡献指引与文档索引）
 
 ---
@@ -284,7 +284,7 @@ The following names describe logical capability roles for planning and review. T
 - **Phase 1 → Phase 2**：T001/T002（依赖声明）先于全部 Foundational 编码
 - **Phase 2 BLOCKS 一切用户故事**：T009（security）、T014（atomic_write）、T015–T017（契约）、T018（会话锁）、T020/T089/T091（测试与性能报告基础设施）、T109/T110（主题解析测试与基础设施）为多故事共同前置
 - **用户故事顺序**：US1 → US2 强依赖（恢复建立在草稿链路上）；US3–US7 在 Phase 2 后可并行，但 US4 依赖 US3 的工作区监听根、US7 依赖 US3 的文件树
-- **Phase 10** 依赖全部所需故事完成；性能基础设施在 Phase 2 建立，T090/T108 在声明的 macOS 参考 VM 完整执行并在真实 `pass` 或 `fail` 报告产生后完成，预算失败不阻断合并/发布。T078/T080/T094 只能在目标 OS 原生环境（VM 或物理机）实际执行后勾选；T080 汇总 T078/T094 并补齐其余 FR-030 矩阵，T093 依赖各故事 a11y 任务 T097–T102；T094 依赖 IME 实现 T103/T104
+- **Phase 10** 依赖全部所需故事完成；性能基础设施在 Phase 2 建立，T090/T108 在声明的 macOS 参考 VM 完整执行并在真实 `pass` 或 `fail` 报告产生后完成，预算失败不阻断合并/发布。T078/T080 必须在 macOS 原生环境（VM 或物理机）实际执行后勾选；T094 为可选 Ubuntu 证据，不阻断阶段、合并或发布；T080 汇总 macOS 证据并可附加 T094，T093 依赖各故事 a11y 任务 T097–T102；T094 依赖 IME 实现 T103/T104
 
 ### Analyze 与 UI 设计补丁任务挂靠（T097–T112）
 

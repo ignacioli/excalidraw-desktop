@@ -1,14 +1,14 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.2.0 → 2.0.0
+Version change: 2.0.0 → 3.0.0
 Modified principles:
-  - Core Principle II（测试标准 / Testing Standards）：明确虚拟机是 macOS/Linux
-    原生功能与安装验收的有效环境，同时要求披露虚拟化边界
-  - Core Principle IV（性能与资源预算 / Performance Requirements）：将固定 Apple M1 / 8GB
-    合并硬门禁改为记录配置的维护者 macOS 参考环境完整测量与趋势回归
+  - Core Principle II（测试标准 / Testing Standards）：将 macOS 设为必选原生验收平台，
+    Ubuntu 24.04 Desktop 设为可选社区验证，移除 Fedora/其他 Linux 矩阵的当前版本要求
+  - Core Principle III（用户体验一致性 / UX Consistency）：将平台一致性边界收敛为 macOS
+    与 macOS 优先支持范围，Ubuntu 仅作为可选社区验证环境
 Added sections: none
-Governance: MAJOR change; fixed-hardware release gate removed
+Governance: MAJOR change; supported-platform acceptance scope narrowed to macOS-first
 Removed sections: none
 Templates requiring updates: none; templates read this constitution at runtime
 Follow-up TODOs: none
@@ -43,9 +43,12 @@ Follow-up TODOs: none
   （保存中强杀、外部写冲突、损坏文件恢复三类场景为最低集合）。
 - 浏览器可测行为与原生壳验证 MUST 明确区分：窗口、菜单、对话框、文件关联、安装包等
   浏览器无法证明的行为，MUST 以目标操作系统的原生环境手动或自动化检查闭环。
-  对本非营利开源项目，配置并记录完整的 macOS/Linux 虚拟机是有效验收环境；
-  交付证据 MUST 记录宿主机、虚拟化软件及版本、客体 OS、虚拟 CPU/内存和显示协议，
-  不得将虚拟机结果表述为未实际执行的真机覆盖。
+- macOS 是当前版本唯一必选的原生验收平台；配置并记录完整的 macOS 虚拟机是有效验收
+  环境。Ubuntu 24.04 Desktop 仅作为可选社区验证环境，不阻断合并、发布或任务阶段完成。
+- Fedora、其他 Linux 发行版、桌面环境、显示协议与输入法组合不属于当前版本的必需验收
+  矩阵；项目 MUST NOT 宣称未执行平台的原生覆盖。
+- 所有 VM 交付证据 MUST 记录宿主机、虚拟化软件及版本、客体 OS、虚拟 CPU/内存和显示
+  协议，并如实披露 VM 未覆盖的物理硬件边界。
 - 修复缺陷 MUST 先补充能复现该缺陷的测试，再实施修复。
 
 **Rationale**: 桌面应用的失效模式（断电、强杀、外部并发写）无法靠单元测试覆盖，只有
@@ -53,8 +56,9 @@ E2E 与故障注入才能证明"零损坏、零静默覆盖"的产品承诺。
 
 ### III. 用户体验一致性（UX Consistency）
 
-- 交互行为 MUST 在 macOS 与受支持的 Linux 发行版之间保持功能一致；平台差异仅允许出现
-  在遵循各自平台惯例的场景（快捷键修饰键、菜单位置、系统对话框样式）。
+- macOS 是产品交互与发布验收的首要平台；Ubuntu 24.04 Desktop 的兼容性属于可选社区
+  验证。平台差异仅允许出现在遵循各自平台惯例的场景（快捷键修饰键、菜单位置、系统
+  对话框样式）。
 - 可访问性为强制项：语义化结构、完整键盘操作、可见焦点、accessible name、
   reduced motion 支持 MUST 随功能交付，不得作为后补项。
 - 加载、空、错误、冲突、离线、权限拒绝等状态 MUST 视为功能的组成部分并有明确 UI 呈现；
@@ -174,4 +178,4 @@ E2E 与故障注入才能证明"零损坏、零静默覆盖"的产品承诺。
 - 提交与 PR 流程合规性以原则 VI 为准；例外 MUST 书面记录并限期回收。
 - 复杂度与偏离（新增依赖、抽象层、权限扩张）MUST 有书面正当性说明，否则视为违规。
 
-**Version**: 2.0.0 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-12
+**Version**: 3.0.0 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-12

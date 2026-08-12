@@ -49,7 +49,7 @@
 - 校验结论（2026-08-03，第 1 轮通过）：
   - 正文（用户故事、FR-001~FR-033、SC-001~SC-012、Edge Cases、Key Entities）均以技术无关方式表述，未出现具体框架、数据库或系统调用名称。
   - 研究文档中的技术选型（Tauri v2、Rust、双层持久化等）仅记录于 Assumptions 的"技术方向（工程假设，非产品需求）"条目，作为推荐实现路径的假设声明，符合"实现细节不进入需求"的要求。
-  - 无 [NEEDS CLARIFICATION] 标记：平台范围（macOS + 主流 Linux，Windows 延后）、产品边界（无协作/云端）、格式策略（官方 `.excalidraw` 规范）均依据研究文档与仓库 AGENTS.md 采用合理默认值，并已记入 Assumptions。
+  - 无 [NEEDS CLARIFICATION] 标记：平台范围（macOS 必选；Ubuntu 24.04 可选社区验证；Fedora/其他 Linux 与 Windows 延后）、产品边界（无协作/云端）、格式策略（官方 `.excalidraw` 规范）均依据研究文档与仓库 AGENTS.md 采用合理默认值，并已记入 Assumptions。
   - SC-002/SC-005/SC-006/SC-007 含具体数值，Assumptions 中"性能基线"条目声明了 PoC 阶段的基线校准机制；"零损坏、零静默覆盖、离线全可用"为不可协商项。
 - 校验结论（2026-08-04，第 2 轮通过）：
   - 权威需求范围现为 FR-001~FR-033、SC-001~SC-013；SC-013 对空闲 CPU、10k 场景 RSS、30 分钟内存增长与静置写盘给出可自动验证的数值预算。
@@ -62,7 +62,7 @@
   - `DESIGN.md` 承担视觉实现契约，spec 保持用户行为与可验证结果；研究与计划文档承载具体主题模型和代码组织，职责未混淆。
   - 自定义主题导入、主题编辑器、任意 CSS、PWA/浏览器顶栏、账号/协作/云服务明确不在第一版范围。
 - 校验结论（2026-08-12，第 4 轮通过）：
-  - 记录完整配置的 macOS/Linux 虚拟机或物理机均为有效目标 OS 原生验收环境；证据必须披露环境类型与未覆盖边界。
+  - 记录完整配置的 macOS 虚拟机或物理机为必选原生验收环境；Ubuntu 24.04 Desktop 虚拟机或物理机可作为可选证据，证据必须披露环境类型与未覆盖边界。
   - macOS 开源产物长期经 GitHub Releases 以未签名、未公证形式发布；App Store、Developer ID 与 Apple 公证不属于当前或后续项目要求，Gatekeeper 风险与用户主动手动放行步骤已成为可验收要求。
   - T090/T108 在声明的 macOS 26.5.2、4 vCPU / 8GB Parallels Desktop Pro 参考 VM 完整执行并保留真实 `pass`/`fail`，但预算失败不阻断合并或开源发布。
 - Items marked incomplete require spec updates before `$speckit-clarify` or `$speckit-plan`

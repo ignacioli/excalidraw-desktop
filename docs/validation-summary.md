@@ -1,7 +1,7 @@
 # 验证证据汇总（Phase 10 / T095）
 
 **日期**：2026-08-10
-**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS/Linux 原生 OS 环境矩阵）的汇总；2026-08-12 已按宪法 v2.0.0 同步虚拟机验收、性能参考测量与未签名开源分发政策。
+**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。
 
 ## 1. 全量浏览器回归（T095 执行）
 
@@ -57,6 +57,6 @@
 ## 7. 残余风险
 
 - §1.1 两个 pre-existing 浏览器测试失败。
-- T078/T080/T094 原生环境矩阵（含 Linux IME 八组合）待在记录配置的 VM 或物理机执行。
+- T078/T080 macOS 原生验收待在记录配置的 VM 或物理机执行；T094 仅为可选 Ubuntu 24.04 IME smoke test，Fedora/其他 Linux 矩阵已移出当前门禁。
 - T090/T108 待 macOS 参考 VM 完整测量。
 - 上游 `@excalidraw/excalidraw` 内部 DOM 不在壳层 a11y 扫描范围（T093 残余说明）。

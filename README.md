@@ -11,7 +11,7 @@
 3. 工作区文件管理侧边栏
 4. 外部文件变更感知与冲突消解
 5. PNG/SVG 图纸导出
-6. macOS/Linux 原生桌面系统集成
+6. macOS 原生桌面系统集成（Ubuntu 24.04 可选社区验证）
 7. 多工作区浏览与缩略图、资产去重
 
 可靠性承诺贯穿全程：文件写入采用原子写，异常退出通过恢复快照保证不丢数据，并通过故障注入测试验证断电、强杀等中断场景下的恢复能力。
@@ -19,7 +19,7 @@
 ## 平台范围
 
 - macOS 12+（Apple Silicon 与 Intel）
-- Linux（Ubuntu/Debian 与 Fedora，X11/Wayland）
+- Ubuntu 24.04 Desktop（可选社区验证；Fedora/其他 Linux 不在当前版本支持承诺内）
 - Windows 不在支持范围
 - macOS 产物通过 GitHub Releases 以未签名、未公证形式提供；项目不规划 App Store、Developer ID 或 Apple 公证
 
@@ -64,7 +64,7 @@ APP_E2E=1 pnpm e2e                                   # Playwright E2E
 
 `APP_E2E=1 pnpm e2e` 覆盖浏览器可见的 E2E 流程；原生 shell 与故障注入用例需要测试专用 Tauri 构建。
 
-macOS/Linux 原生功能、安装和 IME 验收可在记录完整配置的虚拟机中执行。性能 T090/T108 的首个参考环境为 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB VM；完整测量必须记录真实 `pass`/`fail`，但预算失败不阻断开源发布。详见 [native-verification.md](docs/native-verification.md) 与 [ADR-004](docs/adr/ADR-004.md)。
+macOS 原生功能、安装和 IME 验收可在记录完整配置的虚拟机中执行且为当前版本必选；Ubuntu 24.04 Desktop 仅作可选社区验证，Fedora/其他 Linux 不形成当前门禁。性能 T090/T108 的首个参考环境为 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB VM；完整测量必须记录真实 `pass`/`fail`，但预算失败不阻断开源发布。详见 [native-verification.md](docs/native-verification.md) 与 [ADR-004](docs/adr/ADR-004.md)。
 
 ## 文档索引
 
