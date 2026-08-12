@@ -7,7 +7,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -16,8 +16,8 @@ concurrency:
 jobs:
   macos-universal:
     name: macOS Universal Binary
-    # Signing and notarization are deliberately out of scope for the current
-    # version (SC-010); the pipeline assembles the unsigned universal bundle.
+    # The project permanently distributes unsigned, unnotarized open-source
+    # bundles through GitHub Releases (SC-010).
     runs-on: macos-14
     steps:
       - name: Check out the tagged source
@@ -49,7 +49,6 @@ jobs:
           name: excalidraw-desktop-macos-universal
           path: |
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
           if-no-files-found: error
           retention-days: 30
@@ -98,3 +97,31 @@ jobs:
             src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
           retention-days: 30
+
+  publish-github-release:
+    name: Publish unsigned open-source release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos-universal, linux-bundles]
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download built bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: excalidraw-desktop-*
+          path: release-assets
+
+      - name: Create the GitHub release
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          --repo "$GITHUB_REPOSITORY"
+          --title "$GITHUB_REF_NAME"
+          --notes "macOS bundles are intentionally unsigned and unnotarized. Gatekeeper may block the first launch. After trying to open the app once, go to System Settings > Privacy & Security, choose Open Anyway for the app, and confirm. Do not disable Gatekeeper; download only from this repository's Releases page."
+
+      - name: Upload all release assets
+        shell: bash
+        run: |
+          while IFS= read -r -d '' asset; do
+            gh release upload "$GITHUB_REF_NAME" "$asset" --repo "$GITHUB_REPOSITORY"
+          done < <(find release-assets -type f -print0)

@@ -22,6 +22,14 @@ renaming a complete temporary file; readers must process each `commandId` once.
 The TypeScript interfaces and runtime validation in
 `helpers/nativePerformanceContract.ts` are authoritative. Missing, malformed,
 hidden-window, short-duration, wrong-element-count, or uncovered-frame results
-are `not_evaluated`; the fixed M1/8GB job treats that as a hard failure. This
-prevents process-alive timing or browser-only automation from being reported as
-native editable-canvas evidence.
+are `not_evaluated`, and the test exits with an error because incomplete native
+evidence cannot close T090/T108. Complete reference runs record honest `pass`
+or `fail` budget verdicts without turning a budget miss into a merge or release
+block. This prevents process-alive timing or browser-only automation from being
+reported as native editable-canvas evidence.
+
+Every report records `executionEnvironment.type`. Local diagnostic runs that do
+not explicitly set `PERF_EXECUTION_ENVIRONMENT=physical|virtual` use
+`unspecified`; they must not be interpreted as physical-machine evidence. A
+declared reference run requires `virtual` plus the recorded host hardware and
+exact Parallels Desktop Pro version.

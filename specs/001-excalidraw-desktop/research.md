@@ -9,7 +9,7 @@
 ## R1. 桌面框架
 
 - **Decision**: Tauri 2.x（Rust Core + 系统 WebView：macOS WKWebView / Linux WebKitGTK）。
-- **Rationale**: 性能预算硬约束——SC-002/013 要求固定 Apple M1 / 8GB 参考机空载应用进程树 RSS ≤150MB、冷启动 P95 ≤2s、空闲 CPU P95 ≤单逻辑核 1%，并约束大场景与长时内存增长。Tauri 空载 30–80MB、启动 <1s、包体 10–25MB 的研究量级为预算留有余量；Electron 空载 120–400MB、包体 80–200MB，存在直接击穿预算的高风险。可靠性核心能力（原子写、SQLite、文件监听、路径 ACL）在 Rust 侧实现最稳健，且 Tauri 2 Capabilities 提供默认最小权限的安全模型；最终结论以固定机实测为准。
+- **Rationale**: 性能预算约束——SC-002/013 要求声明的 macOS 参考环境中空载应用进程树 RSS ≤150MB、冷启动 P95 ≤2s、空闲 CPU P95 ≤单逻辑核 1%，并约束大场景与长时内存增长。Tauri 空载 30–80MB、启动 <1s、包体 10–25MB 的研究量级为预算留有余量；Electron 空载 120–400MB、包体 80–200MB，存在直接击穿预算的高风险。可靠性核心能力（原子写、SQLite、文件监听、路径 ACL）在 Rust 侧实现最稳健，且 Tauri 2 Capabilities 提供默认最小权限的安全模型；最终结论以声明的参考环境完整实测为准。
 - **Alternatives considered**:
   - **Electron**：渲染一致性最好、生态最全，但资源开销与启动速度不满足 SC；安全模型需手工加固。
   - **Wails (Go)**：NineRec 路线；Go 后端可行，但 Tauri 的权限模型、插件生态（single-instance、updater）与社区规模更适合生产级目标。
@@ -42,7 +42,7 @@
 
 - **Decision**: 六步流水线：同卷 `.tmp` 创建 → 写入 + `sync_all()`（fsync）→ 重读反序列化校验 JSON 完整性 → `std::fs::rename` 原子替换 → 父目录 fsync → 异常路径清理 `.tmp`。
 - **Rationale**: APFS/ext4/btrfs 下 rename 原子性保证文件要么旧完整、要么新完整（SC-003 损坏率 0 的唯一可靠实现）；同卷要求排除跨卷 rename 退化为 copy 的风险；写后校验拦截截断。
-- **故障验证边界**: `APP_E2E=1` 测试构建在 `temp_created`、`mid_write`、`temp_synced`、`json_validated`、`before_rename`、`after_rename`、`before_parent_sync`、`parent_synced` 八个可观察点提供确定性中断；生产构建不得编译或注册 Harness。每个 PR 全点执行，固定机夜间任务额外运行 100 个记录 seed 的随机用例。
+- **故障验证边界**: `APP_E2E=1` 测试构建在 `temp_created`、`mid_write`、`temp_synced`、`json_validated`、`before_rename`、`after_rename`、`before_parent_sync`、`parent_synced` 八个可观察点提供确定性中断；生产构建不得编译或注册 Harness。每个 PR 全点执行；声明的维护者环境可额外运行 100 个记录 seed 的随机用例。
 - **Alternatives considered**: 直接覆盖写（tyrchen/excaliapp 30s 全量覆盖模式——半写损坏窗口，被研究文档明确否定）；写前备份副本（双倍 IO 且不解决写入中断原子性）。
 
 ## R6. 崩溃恢复机制
@@ -95,20 +95,20 @@
 
 ## R14. 测试与故障注入
 
-- **Decision**: 分离三类证据——Vitest/RTL 与 Playwright 验证浏览器可见 UI、状态机、a11y 和视觉；cargo test 验证 Rust 领域单元/集成行为；`APP_E2E=1` Tauri 测试构建验证进程强杀、文件系统故障、恢复与冲突；macOS/Linux 真机矩阵验证窗口、IME、剪贴板、拖放、文件关联、签名与安装。浏览器套件不得替代后两类。
-- **Rationale**: 宪法原则 II 与 SC-003/012；故障场景只能在进程级 E2E 证明，原生平台行为只能由对应桌面环境闭环。
+- **Decision**: 分离三类证据——Vitest/RTL 与 Playwright 验证浏览器可见 UI、状态机、a11y 和视觉；cargo test 验证 Rust 领域单元/集成行为；`APP_E2E=1` Tauri 测试构建验证进程强杀、文件系统故障、恢复与冲突；记录完整配置的 macOS/Linux 原生环境（虚拟机或物理机）验证窗口、IME、剪贴板、拖放、文件关联与安装。浏览器套件不得替代后两类。
+- **Rationale**: 宪法原则 II 与 SC-003/012；故障场景只能在进程级 E2E 证明，原生平台行为只能由对应桌面 OS 环境闭环。虚拟机可覆盖该 OS 中的功能与安装行为，但必须披露宿主、虚拟化层与未覆盖的物理硬件边界。
 - **Alternatives considered**: WebDriver/tauri-driver（Linux 可用但 macOS 支持弱、生态小）；仅单元测试（无法证明断电/强杀行为）。
 
 ## R15. 打包与分发
 
-- **Decision**: macOS——Universal Binary（lipo 合并 arm64/x86_64）+ Developer ID 深度签名 + notarytool 公证 + stapler，产物 `.dmg` 与 `.app.tar.gz`（预留 updater）；Linux——AppImage（首选）+ deb + rpm，注册 MIME `application/x-excalidraw` 与 `.desktop`；文件关联 macOS 侧 `CFBundleDocumentTypes`。
-- **Rationale**: FR-028/029 与 SC-010（零安全拦截）；AppImage 覆盖最广，deb/rpm 服务原生包管理生态。
+- **Decision**: macOS——GitHub Actions 构建未签名、未公证的 Universal Binary（lipo 合并 arm64/x86_64），产物 `.dmg` 与 `.app.tar.gz` 上传 GitHub Releases；Linux——AppImage（首选）+ deb + rpm 同步上传，注册 MIME `application/x-excalidraw` 与 `.desktop`；文件关联 macOS 侧 `CFBundleDocumentTypes`。项目不规划 App Store、Developer ID 或 Apple 公证。
+- **Rationale**: FR-028/029 与 SC-010 将项目定位为非营利开源分发；发布说明必须披露 Gatekeeper 风险与手动放行方法。AppImage 覆盖最广，deb/rpm 服务原生包管理生态。
 - **Alternatives considered**: 仅 AppImage（放弃系统包管理集成，FR-029 不满足）；Flatpak/Snap（沙箱与文件关联复杂度高，列为后续评估项）。
 
 ## R16. IME（中文输入法）适配
 
 - **Decision**: 前端 `src/editor/imeBridge.ts` 保证 Excalidraw 隐形 textarea 的绝对坐标随画布缩放/平移实时映射（候选框跟随，FR-005）；Linux 端在 `src-tauri/src/lib.rs` 启动入口按需设置 `GTK_IM_MODULE`（及 Wayland 相关修正）规避 WebKitGTK/Fcitx5 兼容问题；纳入跨发行版验证矩阵（tasks T103/T104 实现，T094 验证）。
-- **Rationale**: FR-005 与 Edge Case"中文输入法组合输入"；WebKitGTK 的 IME 缺陷是已知风险点，需真机验证而非假设。
+- **Rationale**: FR-005 与 Edge Case"中文输入法组合输入"；WebKitGTK 的 IME 缺陷是已知风险点，需在对应 Linux 桌面 OS 原生环境（虚拟机或物理机）实际验证而非假设。
 - **Alternatives considered**: 自绘输入框拦截 IME 事件（侵入 Excalidraw 内部实现，违反适配层原则）。
 
 ## R17. 文件删除进回收站
@@ -117,13 +117,13 @@
 - **Rationale**: 桌面应用惯例；误删可恢复；跨 macOS/Linux 统一 API，避免手写各平台回收站路径。
 - **Alternatives considered**: 物理 `std::fs::remove_file`（不可恢复，UX 差）；自研平台分支（维护成本高）。
 
-## R18. 性能与资源回归门禁
+## R18. 性能与资源参考测量
 
-- **Decision**: 以固定 Apple M1 / 8GB 机器作为绝对预算硬门禁，runner 标签固定为 `self-hosted`、`macOS`、`ARM64`、`excalidraw-perf`。聚合 Tauri 主进程及关联 WebView/GPU 进程的 RSS/CPU，分别测量冷启动、稳定空闲、10k 图元场景、60 秒高频编辑与 30 分钟 soak；Intel Mac 与 Linux 仅归档非阻断趋势。
-- **报告契约**: 机器可读报告记录 schema 版本、commit、硬件型号、内存、准确的 OS/WebView 版本、样本、统计量、预算与 verdict，不记录机器唯一标识或秘密。
-- **Rationale**: GitHub 托管 runner 的硬件与邻居负载不可控，不适合作为绝对性能阈值；固定机硬门禁才能满足宪法“性能回归等同功能缺陷”的可重复性要求。
-- **重建基线**: runner 硬件、OS 或 WebView 版本变化即使原基线失效；必须附同负载测量证据并新增 ADR，禁止通过提高阈值静默消除失败。
-- **Alternatives considered**: 托管 runner 绝对门禁（噪声和误报高）；仅报告不阻断（无法执行预算红线）；三平台同时硬门禁（当前基础设施和校准成本过高）。
+- **Decision**: 以维护者声明的 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB 虚拟机作为首个性能参考环境。聚合 Tauri 主进程及关联 WebView/GPU 进程的 RSS/CPU，分别测量冷启动、稳定空闲、10k 图元场景、60 秒高频编辑与 30 分钟 soak。完整运行产生真实 `pass` 或 `fail`，但预算失败不阻断合并或开源发布。
+- **报告契约**: 机器可读报告记录 schema 版本、commit、宿主硬件、虚拟化软件与版本、客体硬件/内存/OS/WebView、样本、统计量、预算与 verdict，不记录机器唯一标识或秘密。
+- **Rationale**: 使用已有 Parallels 基础设施降低非营利开源项目的维护门槛；保留完整工作负载、数值预算和环境元数据，能暴露性能风险而不伪造跨硬件可比性。
+- **趋势分组**: 宿主硬件、Parallels、客体 OS/WebView 或虚拟资源改变时建立新趋势系列；不将不可比环境直接对比，预算调整必须附测量证据与 ADR，禁止静默放宽。
+- **Alternatives considered**: 固定 Apple M1 / 8GB 真机硬门禁（维护成本与项目定位不匹配）；GitHub 托管 runner 绝对门禁（噪声和误报高）；三平台同时硬门禁（校准成本过高）。
 
 ## R19. 桌面壳层与主题系统
 

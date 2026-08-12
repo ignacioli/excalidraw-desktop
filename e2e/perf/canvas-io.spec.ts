@@ -7,7 +7,7 @@ import {
   type PerformanceCommandResult,
 } from "./helpers/nativePerformanceContract";
 import {
-  assertFixedRunnerEnvironment,
+  assertReferenceEnvironment,
   collectCommit,
   collectEnvironmentMetadata,
   DirectoryWriteObserver,
@@ -23,7 +23,6 @@ import {
   collectProcessTreeWindow,
   createTenThousandElementFixture,
   frameStatistics,
-  hardGateRequiresEvaluatedVerdict,
   PERF_BUDGETS,
 } from "./helpers/workloads";
 
@@ -96,7 +95,7 @@ const WORKLOAD = {
 
 test("measures the 10k canvas and 60 second persistence workload", async () => {
   test.setTimeout(300_000);
-  const hardGate = process.env.PERF_HARD_GATE === "1";
+  const referenceRun = process.env.PERF_REFERENCE_RUN === "1";
   const [environment, commit, executable] = await Promise.all([
     collectEnvironmentMetadata(),
     collectCommit(),
@@ -104,9 +103,9 @@ test("measures the 10k canvas and 60 second persistence workload", async () => {
   ]);
   const fixture = await createTenThousandElementFixture();
 
-  if (hardGate) {
+  if (referenceRun) {
     try {
-      assertFixedRunnerEnvironment(environment);
+      assertReferenceEnvironment(environment);
     } catch (error) {
       await writePerformanceReport(REPORT_PATH, {
         schemaVersion: PERFORMANCE_REPORT_SCHEMA_VERSION,
@@ -259,20 +258,16 @@ test("measures the 10k canvas and 60 second persistence workload", async () => {
     : null;
   const allWithinBudget =
     comparisons !== null && Object.values(comparisons).every(Boolean);
-  const overall = !hardGate
+  const overall = !measurementsAvailable
     ? "not_evaluated"
-    : !measurementsAvailable
-      ? "not_evaluated"
-      : allWithinBudget
-        ? "pass"
-        : "fail";
-  const reason = !hardGate
-    ? "Absolute canvas budgets are diagnostic outside the pinned Apple M1 / 8GB runner."
-    : !measurementsAvailable
-      ? `The test-only native canvas workload contract was unavailable or incomplete. ${contractError ?? ""}`.trim()
-      : allWithinBudget
-        ? "All evaluated T090 10k canvas and write-coalescing budgets passed."
-        : "At least one evaluated T090 10k canvas or write-coalescing budget failed.";
+    : allWithinBudget
+      ? "pass"
+      : "fail";
+  const reason = !measurementsAvailable
+    ? `The test-only native canvas workload contract was unavailable or incomplete. ${contractError ?? ""}`.trim()
+    : allWithinBudget
+      ? "All evaluated T090 10k canvas and write-coalescing budgets passed."
+      : "At least one evaluated T090 10k canvas or write-coalescing budget failed.";
 
   await writePerformanceReport(REPORT_PATH, {
     schemaVersion: PERFORMANCE_REPORT_SCHEMA_VERSION,
@@ -290,7 +285,9 @@ test("measures the 10k canvas and 60 second persistence workload", async () => {
     budget: BUDGET,
     verdict: {
       overall,
-      scope: hardGate ? "fixed-runner T090 canvas and I/O" : "diagnostic",
+      scope: referenceRun
+        ? "declared-reference T090 canvas and I/O"
+        : "diagnostic T090 canvas and I/O",
       reason,
       comparisons,
     },
@@ -301,5 +298,4 @@ test("measures the 10k canvas and 60 second persistence workload", async () => {
       `The native canvas performance contract was unavailable or incomplete. ${contractError ?? ""}`.trim(),
     );
   }
-  hardGateRequiresEvaluatedVerdict(overall);
 });

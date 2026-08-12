@@ -7,7 +7,7 @@ import {
   type PerformanceCommandResult,
 } from "./helpers/nativePerformanceContract";
 import {
-  assertFixedRunnerEnvironment,
+  assertReferenceEnvironment,
   collectCommit,
   collectEnvironmentMetadata,
   DirectoryWriteObserver,
@@ -22,7 +22,6 @@ import {
 import {
   collectProcessTreeWindow,
   createTenThousandElementFixture,
-  hardGateRequiresEvaluatedVerdict,
   PERF_BUDGETS,
 } from "./helpers/workloads";
 
@@ -50,8 +49,8 @@ function soakDurationMs(hardGate: boolean): number {
 }
 
 test("measures 30 minute editing stability and subsequent quiescence", async () => {
-  const hardGate = process.env.PERF_HARD_GATE === "1";
-  const editDurationMs = soakDurationMs(hardGate);
+  const referenceRun = process.env.PERF_REFERENCE_RUN === "1";
+  const editDurationMs = soakDurationMs(referenceRun);
   test.setTimeout(editDurationMs + 300_000);
 
   const BUDGET = {
@@ -112,9 +111,9 @@ test("measures 30 minute editing stability and subsequent quiescence", async () 
     resolveDesktopBinary(),
   ]);
   const fixture = await createTenThousandElementFixture();
-  if (hardGate) {
+  if (referenceRun) {
     try {
-      assertFixedRunnerEnvironment(environment);
+      assertReferenceEnvironment(environment);
     } catch (error) {
       await writePerformanceReport(REPORT_PATH, {
         schemaVersion: PERFORMANCE_REPORT_SCHEMA_VERSION,
@@ -285,17 +284,13 @@ test("measures 30 minute editing stability and subsequent quiescence", async () 
     : null;
   const allWithinBudget =
     comparisons !== null && Object.values(comparisons).every(Boolean);
-  const overall = !hardGate
+  const overall = !measurementsAvailable
     ? "not_evaluated"
-    : !measurementsAvailable
-      ? "not_evaluated"
-      : allWithinBudget
-        ? "pass"
-        : "fail";
-  const reason = !hardGate
-    ? fullDuration
-      ? "Absolute soak budgets are diagnostic outside the pinned Apple M1 / 8GB runner."
-      : "A shortened diagnostic soak cannot evaluate the approved 30-minute budget."
+    : allWithinBudget
+      ? "pass"
+      : "fail";
+  const reason = !fullDuration
+    ? "A shortened diagnostic soak cannot evaluate the approved 30-minute budget."
     : !measurementsAvailable
       ? `The 30-minute native editing contract was unavailable or incomplete. ${contractError ?? ""}`.trim()
       : allWithinBudget
@@ -319,7 +314,9 @@ test("measures 30 minute editing stability and subsequent quiescence", async () 
     budget: BUDGET,
     verdict: {
       overall,
-      scope: hardGate ? "fixed-runner T108 soak" : "diagnostic",
+      scope: referenceRun
+        ? "declared-reference T108 soak"
+        : "diagnostic T108 soak",
       reason,
       comparisons,
     },
@@ -330,5 +327,4 @@ test("measures 30 minute editing stability and subsequent quiescence", async () 
       `The native soak performance contract was unavailable or incomplete. ${contractError ?? ""}`.trim(),
     );
   }
-  hardGateRequiresEvaluatedVerdict(overall);
 });

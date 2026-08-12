@@ -1,10 +1,7 @@
 name: Performance budgets
 
 on:
-  pull_request:
   workflow_dispatch:
-  schedule:
-    - cron: "17 10 * * *"
 
 permissions:
   contents: read
@@ -14,30 +11,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  fixed-m1-budget-gate:
-    name: Fixed Apple M1 / 8 GB gate
-    # Never execute untrusted fork code on the self-hosted runner. A maintainer
-    # must reproduce an external contribution on a repository-owned branch.
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+  macos-reference-measurement:
+    name: Declared macOS VM reference measurement
     runs-on: [self-hosted, macOS, ARM64, excalidraw-perf]
     # 30 minute edit soak + warm-up/baseline/quiescent windows + build margin.
     timeout-minutes: 60
     env:
       CI: "true"
       PERF_TEST: "1"
-      PERF_HARD_GATE: "1"
+      PERF_REFERENCE_RUN: "1"
+      PERF_EXECUTION_ENVIRONMENT: virtual
+      PERF_HOST_HARDWARE: ${{ vars.PERF_HOST_HARDWARE }}
+      PERF_VIRTUALIZATION_NAME: Parallels Desktop Pro
+      PERF_VIRTUALIZATION_VERSION: ${{ vars.PERF_VIRTUALIZATION_VERSION }}
       VITE_E2E_HARNESS: "1"
       PERF_STARTUP_REPORT_PATH: e2e/perf/results/startup-idle.json
       PERF_CANVAS_REPORT_PATH: e2e/perf/results/canvas-io.json
       PERF_SOAK_REPORT_PATH: e2e/perf/results/edit-soak.json
-      PERF_BASELINE_MEMORY_BYTES: "8589934592"
-      # These repository variables must exactly match the first approved report.
-      # A runner OS or WebView update requires comparable evidence and an ADR,
-      # followed by an intentional update to both pins.
-      PERF_BASELINE_OS_VERSION: ${{ vars.PERF_BASELINE_OS_VERSION }}
-      PERF_BASELINE_WEBVIEW_VERSION: ${{ vars.PERF_BASELINE_WEBVIEW_VERSION }}
 
     steps:
       - name: Check out the measured commit
@@ -60,7 +50,7 @@ jobs:
       - name: Build the isolated Tauri measurement binary
         run: pnpm tauri build --features e2e-harness
 
-      - name: Record fixed-runner performance evidence
+      - name: Record declared reference-environment performance evidence
         run: >-
           pnpm exec playwright test
           --config=e2e/playwright.config.ts
@@ -70,7 +60,7 @@ jobs:
           e2e/perf/canvas-io.spec.ts
           e2e/perf/edit-soak.spec.ts
 
-      - name: Require evaluated fixed-runner passes
+      - name: Require complete evaluated reports
         if: always()
         run: |
           node --input-type=module -e '
@@ -85,23 +75,23 @@ jobs:
                 throw new Error(`Missing performance report: ${path ?? "undefined"}`);
               }
               const report = JSON.parse(fs.readFileSync(path, "utf8"));
-              if (report.schemaVersion !== "1.0.0") {
+              if (report.schemaVersion !== "2.0.0") {
                 throw new Error(`Unexpected report schema in ${path}`);
               }
               if (report.commit !== process.env.GITHUB_SHA) {
                 throw new Error(`Report commit does not match GITHUB_SHA in ${path}`);
               }
-              if (
-                report.architecture !== "arm64" ||
-                report.memory?.bytes !== Number(process.env.PERF_BASELINE_MEMORY_BYTES) ||
-                report.osVersion !== process.env.PERF_BASELINE_OS_VERSION ||
-                report.webviewVersion !== process.env.PERF_BASELINE_WEBVIEW_VERSION
-              ) {
-                throw new Error(`Report environment does not match the pinned baseline in ${path}`);
+              if (report.executionEnvironment?.type !== "virtual") {
+                throw new Error(`Report does not identify a virtual reference environment in ${path}`);
               }
-              if (report.verdict?.overall !== "pass") {
+              if (report.executionEnvironment?.hostHardware !== "Apple M5 Pro / 48GB" ||
+                  report.executionEnvironment.virtualization?.name !== "Parallels Desktop Pro" ||
+                  report.executionEnvironment.virtualization?.version !== "26.4.1") {
+                throw new Error(`Report does not match the first declared reference series in ${path}`);
+              }
+              if (!["pass", "fail"].includes(report.verdict?.overall)) {
                 throw new Error(
-                  `${path} requires an evaluated pass; received ${report.verdict?.overall ?? "missing"}`,
+                  `${path} requires an evaluated pass/fail verdict; received ${report.verdict?.overall ?? "missing"}`,
                 );
               }
             }
@@ -111,14 +101,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: performance-fixed-m1-${{ github.run_id }}
+          name: performance-macos-vm-reference-${{ github.run_id }}
           path: |
             e2e/perf/results/*.json
             e2e/playwright-report/
             e2e/test-results/
           if-no-files-found: warn
           retention-days: 30
-
-  # Intel macOS and Linux measurements are deliberately excluded from the
-  # absolute gate. If trend jobs are added, they must use continue-on-error and
-  # must not reuse or alter the fixed M1 baseline pins or approved budgets.

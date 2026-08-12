@@ -39,7 +39,7 @@ The main agent owns requirements, integration, final edits, and validation. The 
 - `desktop-platform-dev`: macOS/Linux Tauri platform behavior, WKWebView/WebKitGTK, IME, clipboard/drag-drop, file association, signing/notarization, Universal Binary, and AppImage/deb/rpm delivery. Windows is out of scope.
 - `e2e-tester`: browser-visible workflows, accessibility, visual fidelity, and Playwright UI coverage; it does not prove native-shell or filesystem durability behavior.
 - `desktop-reliability-tester`: Tauri process-level E2E, SIGKILL, atomic-write fault points, disk/resource failures, recovery, conflicts, event storms, and long-running stability.
-- `performance-engineer`: performance budgets, deterministic fixtures, CPU/RSS/frame/IPC/disk measurement, profiling, soak tests, fixed-hardware baselines, and CI regression verdicts.
+- `performance-engineer`: performance budgets, deterministic fixtures, CPU/RSS/frame/IPC/disk measurement, profiling, soak tests, declared-reference baselines, and regression verdicts.
 - `code-reviewer`: language-agnostic review of a bounded diff or implementation path.
 - `fs-reviewer`: deep full-stack review across Rust, TypeScript, frontend/backend boundaries, IPC, or IaC.
 - `doc-writer`: user, developer, API, troubleshooting, and operational documentation.
@@ -81,11 +81,12 @@ The manifests establish the following workflows:
 - `pnpm fonts:build`: build the bundled CJK hand-drawn font from the licensed local source fonts.
 - `pnpm tauri dev`: run the Tauri development application through the package script.
 - `pnpm tauri build`: build the current Tauri bundle through the package script.
+- `VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness`: build the test-only native binary required by T090/T108; production releases MUST omit this feature.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: check Rust formatting.
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`: run the Rust lint gate.
 - `cargo test --manifest-path src-tauri/Cargo.toml`: run the Rust unit and integration tests.
 
-The fixed-runner performance workflow and test-only fault-injection harness are implemented infrastructure, but their absolute verdicts are valid only on the configured Apple M1 / 8GB runner. Signing, notarization, and release CI remain outside the current local validation scope.
+The reference-performance workflow and test-only fault-injection harness are implemented infrastructure. T090/T108 produce auditable `pass`/`fail` measurements on the declared macOS 26.5.2, 4 vCPU / 8GB Parallels Desktop Pro VM; budget failures remain visible but do not block merging or open-source releases. Reference runs set `PERF_TEST=1`, `PERF_REFERENCE_RUN=1`, `PERF_EXECUTION_ENVIRONMENT=virtual`, `PERF_HOST_HARDWARE`, `PERF_VIRTUALIZATION_NAME="Parallels Desktop Pro"`, and `PERF_VIRTUALIZATION_VERSION`; the GitHub workflow reads host hardware and Parallels version from repository variables. macOS bundles are permanently distributed unsigned and unnotarized through GitHub Releases; pushing a `v*` tag publishes them, while App Store, Developer ID, and Apple notarization are not project requirements.
 
 Validation must be proportional to risk and should eventually include, as applicable:
 
@@ -93,9 +94,9 @@ Validation must be proportional to risk and should eventually include, as applic
 - Rust formatting check, targeted compilation, Clippy, and focused tests.
 - Contract or IPC integration tests for changed frontend/backend boundaries.
 - Playwright CLI flows for browser-visible UI behavior.
-- Manual macOS/Tauri checks for windows, menus, dialogs, permissions, filesystem behavior, signing, and packaging that browser tests cannot prove.
+- Manual macOS/Tauri checks for windows, menus, dialogs, permissions, filesystem behavior, Gatekeeper user override, and packaging that browser tests cannot prove. A recorded target-OS VM or physical machine is acceptable evidence; never claim unexecuted physical-device coverage.
 
-Never claim a check passed unless it actually ran successfully. If validation requires unavailable credentials, services, signing identities, devices, or operating systems, report the exact gap without weakening code or tests.
+Never claim a check passed unless it actually ran successfully. If validation requires unavailable services, target operating systems, or declared VM configuration details, report the exact gap without weakening code or tests.
 
 ## Git and Completion
 

@@ -1,15 +1,16 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.1.0 → 1.2.0
+Version change: 1.2.0 → 2.0.0
 Modified principles:
-  - Core Principle IV（性能与资源预算 / Performance Requirements）：增加固定参考硬件、
-    CPU/RSS/长时稳定性/空闲写盘预算与固定机硬门禁
+  - Core Principle II（测试标准 / Testing Standards）：明确虚拟机是 macOS/Linux
+    原生功能与安装验收的有效环境，同时要求披露虚拟化边界
+  - Core Principle IV（性能与资源预算 / Performance Requirements）：将固定 Apple M1 / 8GB
+    合并硬门禁改为记录配置的维护者 macOS 参考环境完整测量与趋势回归
 Added sections: none
-Governance: no semantic change
+Governance: MAJOR change; fixed-hardware release gate removed
 Removed sections: none
-Templates requiring updates: none reviewed as blocking —
-  .specify/templates/plan-template.md / spec-template.md / tasks-template.md 在运行时读取本宪法，无需修改
+Templates requiring updates: none; templates read this constitution at runtime
 Follow-up TODOs: none
 -->
 
@@ -40,8 +41,11 @@ Follow-up TODOs: none
   PR 交付；测试未通过 MUST NOT 声明任务完成。
 - 数据可靠性路径（原子写入、崩溃恢复、外部变更冲突消解）MUST 具备自动化故障注入测试
   （保存中强杀、外部写冲突、损坏文件恢复三类场景为最低集合）。
-- 浏览器可测行为与原生壳验证 MUST 明确区分：窗口、菜单、对话框、文件关联、签名打包等
-  浏览器无法证明的行为，MUST 以原生环境的手动或自动化检查闭环，并在交付说明中标注。
+- 浏览器可测行为与原生壳验证 MUST 明确区分：窗口、菜单、对话框、文件关联、安装包等
+  浏览器无法证明的行为，MUST 以目标操作系统的原生环境手动或自动化检查闭环。
+  对本非营利开源项目，配置并记录完整的 macOS/Linux 虚拟机是有效验收环境；
+  交付证据 MUST 记录宿主机、虚拟化软件及版本、客体 OS、虚拟 CPU/内存和显示协议，
+  不得将虚拟机结果表述为未实际执行的真机覆盖。
 - 修复缺陷 MUST 先补充能复现该缺陷的测试，再实施修复。
 
 **Rationale**: 桌面应用的失效模式（断电、强杀、外部并发写）无法靠单元测试覆盖，只有
@@ -65,19 +69,21 @@ E2E 与故障注入才能证明"零损坏、零静默覆盖"的产品承诺。
 权威 PRD（`specs/001-excalidraw-desktop/spec.md`）的 Success Criteria 为性能预算红线，性能回归等同于
 功能缺陷：
 
-- 固定性能参考机为 Apple M1 / 8GB；其首次基线 MUST 记录并锁定准确的 macOS 与 WebView
-  版本。冷启动至画布可编辑 ≤ 2 秒；空载应用进程树 RSS ≤ 150MB。
+- 性能验收 MUST 在维护者声明的 macOS 参考环境执行完整工作负载。首个参考
+  环境为 Parallels Desktop Pro 26.4.1 中的 macOS 26.5.2 虚拟机（4 vCPU / 8GB RAM）；
+  报告 MUST 记录宿主硬件、虚拟化软件与版本、客体 OS/WebView 和虚拟资源。
+- 冷启动至画布可编辑 ≤ 2 秒；空载应用进程树 RSS ≤ 150MB。
 - 空闲 CPU P95 ≤ 单逻辑核的 1%；10,000 图元场景稳定后应用进程树 RSS ≤ 350MB；
   30 分钟脚本编辑后，RSS 相对热身基线增长 MUST 同时 ≤ 50MB 且 ≤ 15%；应用静置
   60 秒时，其管理的数据目录与已挂载工作区 MUST 无持续写入。
 - 10,000+ 图元场景下平移/缩放保持可用流畅度，编辑无 >100ms 可感知冻结。
 - 高频编辑路径 MUST NOT 逐事件执行完整场景序列化、IPC 传输或磁盘写入；持久化 MUST
   经过防抖/合并调度（相对逐事件写盘削峰 ≥95%）。
-- 涉及性能敏感路径的变更 MUST 附带测量数据（前后对比），不得以主观判断替代。
-- 绝对性能预算 MUST 在标签为 `self-hosted`、`macOS`、`ARM64`、`excalidraw-perf` 的固定
-  参考机上作为合并硬门禁执行；Intel Mac 与 Linux 在本版本仅记录非阻断趋势。参考机硬件、
-  OS 或 WebView 变化 MUST 使原基线失效，并通过测量证据与 ADR 显式重建，MUST NOT
-  静默放宽阈值。
+- 涉及性能敏感路径的变更 MUST 附带同一参考环境的前后对比数据，不得以主观判断替代。
+- T090/T108 MUST 在记录配置的参考环境完整执行并保留机器可读报告。预算结果
+  MUST 如实标记 `pass` 或 `fail`，但不再是合并、开源发布或安装包交付的硬门禁。
+  参考环境变化时 MUST 建立新的趋势系列，MUST NOT 将不可比环境的结果直接对比，
+  也 MUST NOT 通过静默放宽阈值伪造通过。
 
 **Rationale**: 选择轻量桌面架构的全部意义在于性能与资源优势；没有预算约束的性能目标
 会在迭代中被逐步侵蚀。
@@ -168,4 +174,4 @@ E2E 与故障注入才能证明"零损坏、零静默覆盖"的产品承诺。
 - 提交与 PR 流程合规性以原则 VI 为准；例外 MUST 书面记录并限期回收。
 - 复杂度与偏离（新增依赖、抽象层、权限扩张）MUST 有书面正当性说明，否则视为违规。
 
-**Version**: 1.2.0 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-04
+**Version**: 2.0.0 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-12

@@ -1,7 +1,7 @@
 # Specification Quality Checklist: 跨平台 Excalidraw Desktop 应用
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-08-03 | **Last reviewed**: 2026-08-06（第 3 轮）
+**Created**: 2026-08-03 | **Last reviewed**: 2026-08-12（第 4 轮）
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -53,7 +53,7 @@
   - SC-002/SC-005/SC-006/SC-007 含具体数值，Assumptions 中"性能基线"条目声明了 PoC 阶段的基线校准机制；"零损坏、零静默覆盖、离线全可用"为不可协商项。
 - 校验结论（2026-08-04，第 2 轮通过）：
   - 权威需求范围现为 FR-001~FR-033、SC-001~SC-013；SC-013 对空闲 CPU、10k 场景 RSS、30 分钟内存增长与静置写盘给出可自动验证的数值预算。
-  - SC-002 固定参考硬件、采样窗口与进程树口径；SC-003 覆盖原子写八个可观察故障阶段；SC-009 固定 SVG 字体与截图差异阈值，不再使用不可操作的“视觉还原率 100%”。
+  - 当时的 SC-002 固定参考硬件、采样窗口与进程树口径；SC-003 覆盖原子写八个可观察故障阶段；SC-009 固定 SVG 字体与截图差异阈值，不再使用不可操作的“视觉还原率 100%”。SC-002 的参考环境口径已由第 4 轮复核取代。
   - SC-009 中的 Playwright 仅定义确定性的验收方法，不约束产品实现；产品行为仍表述为内嵌字体、无回退和可复现视觉一致性。
   - 性能预算只能通过测量证据与 ADR 显式变更；零损坏、零静默覆盖、离线全可用仍为不可协商项。
 - 校验结论（2026-08-06，第 3 轮通过）：
@@ -61,4 +61,8 @@
   - UI 与主题质量条目 CHK001~CHK012 全部具备需求或假设追踪；未发现新的 [NEEDS CLARIFICATION] 标记。
   - `DESIGN.md` 承担视觉实现契约，spec 保持用户行为与可验证结果；研究与计划文档承载具体主题模型和代码组织，职责未混淆。
   - 自定义主题导入、主题编辑器、任意 CSS、PWA/浏览器顶栏、账号/协作/云服务明确不在第一版范围。
+- 校验结论（2026-08-12，第 4 轮通过）：
+  - 记录完整配置的 macOS/Linux 虚拟机或物理机均为有效目标 OS 原生验收环境；证据必须披露环境类型与未覆盖边界。
+  - macOS 开源产物长期经 GitHub Releases 以未签名、未公证形式发布；App Store、Developer ID 与 Apple 公证不属于当前或后续项目要求，Gatekeeper 风险与用户主动手动放行步骤已成为可验收要求。
+  - T090/T108 在声明的 macOS 26.5.2、4 vCPU / 8GB Parallels Desktop Pro 参考 VM 完整执行并保留真实 `pass`/`fail`，但预算失败不阻断合并或开源发布。
 - Items marked incomplete require spec updates before `$speckit-clarify` or `$speckit-plan`

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://excalidraw-desktop.invalid/schemas/performance-report-1.0.0.json",
+  "$id": "https://excalidraw-desktop.invalid/schemas/performance-report-2.0.0.json",
   "title": "Excalidraw Desktop performance evidence",
   "type": "object",
   "additionalProperties": false,
@@ -13,6 +13,7 @@
     "logicalCores",
     "osVersion",
     "webviewVersion",
+    "executionEnvironment",
     "workload",
     "samples",
     "statistic",
@@ -20,7 +21,7 @@
     "verdict"
   ],
   "properties": {
-    "schemaVersion": { "const": "1.0.0" },
+    "schemaVersion": { "const": "2.0.0" },
     "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "hardware": { "type": "string", "minLength": 1 },
     "memory": {
@@ -36,6 +37,29 @@
     "logicalCores": { "type": "integer", "minimum": 1 },
     "osVersion": { "type": "string", "minLength": 1 },
     "webviewVersion": { "type": "string", "minLength": 1 },
+    "executionEnvironment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "hostHardware", "virtualization"],
+      "properties": {
+        "type": { "enum": ["physical", "virtual", "unspecified"] },
+        "hostHardware": { "type": "string", "minLength": 1 },
+        "virtualization": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "version"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "version": { "type": "string", "minLength": 1 }
+              }
+            }
+          ]
+        }
+      }
+    },
     "workload": { "type": "object" },
     "processTreeAccounting": { "type": "object" },
     "samples": { "type": "object" },

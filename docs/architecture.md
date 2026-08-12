@@ -6,7 +6,7 @@
 
 ## 1. 总体结构
 
-Tauri 2.x 双端布局：`src/` 为 React 19 + TypeScript strict 前端，`src-tauri/` 为 Rust 后端；两端经 IPC 契约边界通信（`specs/001-excalidraw-desktop/contracts/ipc-contracts.md`）。完整技术选型见 ADR-001（框架）、ADR-002/003（持久化）、ADR-004（性能门禁）、ADR-005（主题边界）。
+Tauri 2.x 双端布局：`src/` 为 React 19 + TypeScript strict 前端，`src-tauri/` 为 Rust 后端；两端经 IPC 契约边界通信（`specs/001-excalidraw-desktop/contracts/ipc-contracts.md`）。完整技术选型见 ADR-001（框架）、ADR-002/003（持久化）、ADR-004（参考性能测量）、ADR-005（主题边界）。
 
 ## 2. 分层视图
 
@@ -144,7 +144,7 @@ flowchart TB
 
 ## 8. 相关文档
 
-- ADR：ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 固定机性能门禁、ADR-005 主题边界
+- ADR：ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 声明参考环境性能测量、ADR-005 主题边界
 - `DESIGN.md`（视觉与交互契约）
 - `specs/001-excalidraw-desktop/`（spec.md、plan.md、research.md、data-model.md、contracts/、quickstart.md）
-- `docs/native-verification.md`（真机验证矩阵）
+- `docs/native-verification.md`（记录配置的目标 OS 验证矩阵，VM 或物理机）

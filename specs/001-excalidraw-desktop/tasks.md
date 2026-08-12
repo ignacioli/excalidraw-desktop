@@ -74,8 +74,8 @@ The following names describe logical capability roles for planning and review. T
 - [X] T110 实现主题基础设施 src/app/theme/types.ts、src/app/theme/themeRegistry.ts、src/app/theme/themeController.ts、src/app/theme/tokens.css 与 src/main.tsx：第一版仅注册 `excalidraw` 家族，偏好分离 `themeId`/`modePreference`，启动前设置解析后的明暗模式并统一驱动语义 token（FR-035~037、R19；依赖 T109）
 - [X] T021 实现 `APP_E2E=1` 故障注入 Harness：src-tauri/src/e2e_harness.rs + e2e/helpers/fault.ts，固定 `AtomicWriteFaultPoint` 为 `temp_created`/`mid_write`/`temp_synced`/`json_validated`/`before_rename`/`after_rename`/`before_parent_sync`/`parent_synced`，另含快照破坏接口；仅测试构建编译和注册，并增加生产构建接口缺失断言
 - [X] T022 [P] 建立 zustand store 骨架 src/app/store.ts（文档标签 registry、isDirty 标记、活动 Tab）与桌面壳层 src/app/AppShell.tsx、src/app/TabBar.tsx：系统原生窗口内容区固定为顶部标签、左侧文件管理区域、右侧画布；未挂载工作区时提供连接 T034 新建/打开流程的明确空状态，不实现 PWA/浏览器顶栏或范围外服务入口（FR-034、DESIGN.md）
-- [X] T089 实现固定机性能测量基础设施 e2e/perf/helpers/processMetrics.ts + e2e/perf/startup-idle.spec.ts：支持聚合 Tauri/WebView/GPU 进程树、清空测试数据、冷启动重复采样、稳定/采样窗口和应用管理路径写入观察；输出含 schemaVersion/commit/hardware/memory/osVersion/webviewVersion/samples/statistic/budget/verdict 且无机器唯一标识的 JSON 报告。Phase 2 仅对 scaffold 运行诊断基线，不对“画布可编辑”作 SC verdict；SC-002/013 首次硬验收在 T090 完成（依赖 T020）
-- [X] T091 配置固定性能 runner 硬门禁 .github/workflows/performance.yml：仅标签 `self-hosted`/`macOS`/`ARM64`/`excalidraw-perf` 执行绝对预算并阻止合并，归档报告；Intel Mac/Linux 仅非阻断趋势；环境变化必须失败并要求 ADR 重建基线（依赖 T089）
+- [X] T089 实现性能测量基础设施 e2e/perf/helpers/processMetrics.ts + e2e/perf/startup-idle.spec.ts：支持聚合 Tauri/WebView/GPU 进程树、清空测试数据、冷启动重复采样、稳定/采样窗口和应用管理路径写入观察；输出含 schemaVersion/commit/宿主硬件/虚拟化软件/客体环境/samples/statistic/budget/verdict 且无机器唯一标识的 JSON 报告。Phase 2 仅对 scaffold 运行诊断，SC-002/013 首次完整评估在 T090 完成（依赖 T020）
+- [X] T091 配置参考环境性能报告工作流 .github/workflows/performance.yml：由维护者手动触发记录配置的 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB VM，要求完整 `pass`/`fail` 报告并归档，但预算失败不阻断合并或发布（依赖 T089）
 
 **Checkpoint**: 基建就绪——用户故事可开始（US1 建议先行）
 
@@ -113,11 +113,11 @@ The following names describe logical capability roles for planning and review. T
 - [X] T036 [US1] E2E：官方格式兼容 e2e/tests/us1-format-compat.spec.ts（保存文件 JSON schema 断言 type/version/elements + 官方 dist 解析器加载验证，FR-002）
 - [X] T105 [US1] E2E：多文档并发持久化 e2e/tests/us1-concurrent-tabs-save.spec.ts——同时打开 ≥2 文档并编辑，断言各文档 checkpoint 独立完成、UI 无互相阻塞、文件内容互不串写（FR-014）
 - [X] T107 [US1] E2E/故障注入：模拟磁盘满/`DISK_FULL` e2e/tests/us1-disk-full.spec.ts——断言原文件完好、草稿仍可恢复、UI 有明确错误（Edge Case）
-- [ ] T090 [US1] 性能硬验收 e2e/perf/startup-idle.spec.ts + e2e/perf/canvas-io.spec.ts：清空测试数据后冷启动 10 次验证至画布可编辑 P95 ≤2s，稳定 30s 后 60s 窗口验证空载进程树 RSS P95 ≤150MB；固定 10k 图元 fixture 验证平移/缩放 ≥30fps、编辑无 >100ms 冻结、稳定后 RSS ≤350MB；持续绘制 60s 验证写次数 ≤事件数 1% 且无持久化掉帧尖峰（SC-002/005/006/013；依赖 T028/T031/T089）
+- [ ] T090 [US1] 性能参考验收 e2e/perf/startup-idle.spec.ts + e2e/perf/canvas-io.spec.ts：在记录完整配置的 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB VM 中，清空测试数据后冷启动 10 次验证至画布可编辑 P95 ≤2s，稳定 30s 后 60s 窗口验证空载进程树 RSS P95 ≤150MB；固定 10k 图元 fixture 验证平移/缩放 ≥30fps、编辑无 >100ms 冻结、稳定后 RSS ≤350MB；持续绘制 60s 验证写次数 ≤事件数 1% 且无持久化掉帧尖峰。保留真实 `pass`/`fail` 报告，预算失败不阻断合并/发布（SC-002/005/006/013；依赖 T028/T031/T089）
 - [ ] T108 [US1] 长时资源稳定性夹具 e2e/perf/edit-soak.spec.ts：热身后脚本编辑 30min，RSS 增长同时 ≤50MB 且 ≤15%；随后静置 60s，CPU P95 ≤单逻辑核 1% 且应用管理的数据目录/工作区零持续写入（SC-013；依赖 T090）
 - [X] T097 [US1] a11y 最低线：桌面壳层、标签页、保存状态、快捷键、外观选择与文件对话框具备语义结构、accessible name、非颜色唯一状态、可见焦点、WCAG 2.2 AA 适用对比度与 reduced motion，于 src/app/AppShell.tsx、src/app/TabBar.tsx、src/app/AppearanceControl.tsx、src/app/fileDialogs.ts（FR-038、SC-015、宪法原则 III、DESIGN.md）
 
-**Checkpoint**: US1 独立可交付（MVP）——离线编辑器 + 可靠保存闭环。T090/T108 只有在固定 Apple M1 / 8GB runner 产出 `pass` 报告后才能勾选，未通过前阻止 US1 合并/发布；该外部验收状态不构成 Phase 2 后 US4/US5 独立开发线的调度依赖。
+**Checkpoint**: US1 独立可交付（MVP）——离线编辑器 + 可靠保存闭环。T090/T108 只有在声明的 macOS 参考 VM 完整执行并产生真实 `pass` 或 `fail` 报告后才能勾选；预算失败必须保留为已知风险，但不阻止合并或开源发布。
 
 ---
 
@@ -129,7 +129,7 @@ The following names describe logical capability roles for planning and review. T
 
 ### Tests for User Story 2
 
-- [X] T037 [P] [US2] 参数化故障注入 E2E e2e/tests/us2-kill-during-save.spec.ts：对 T021 八个 `AtomicWriteFaultPoint` 逐点 SIGKILL，重启后断言目标文件为可解析的完整旧/新版本、无静默覆盖且恢复 UI 正确；PR 确定性覆盖全部八点，固定机夜间 workflow 额外运行并记录 100 个随机 seed（SC-003/012——先写并确认失败）
+- [X] T037 [P] [US2] 参数化故障注入 E2E e2e/tests/us2-kill-during-save.spec.ts：对 T021 八个 `AtomicWriteFaultPoint` 逐点 SIGKILL，重启后断言目标文件为可解析的完整旧/新版本、无静默覆盖且恢复 UI 正确；PR 确定性覆盖全部八点，计划性可靠性 workflow 额外运行并记录 100 个随机 seed（SC-003/012——先写并确认失败）
 - [X] T038 [P] [US2] 恢复快照轮换与自损回退单测 src-tauri/src/documents/recovery_test.rs（Ring 覆盖、损坏跳过取次新）
 
 ### Implementation for User Story 2
@@ -224,9 +224,9 @@ The following names describe logical capability roles for planning and review. T
 
 ## Phase 8: User Story 6 - 原生桌面系统集成 (Priority: P3)
 
-**Goal**: 双击 .excalidraw 打开、单实例复用、本地 macOS 与 Linux 原生集成验证；正式 macOS 签名/公证发布属于后续版本
+**Goal**: 双击 .excalidraw 打开、单实例复用、记录配置的 macOS/Linux 原生环境验收，以及 GitHub Releases 未签名/未公证开源分发
 
-**Independent Test**: 运行或安装本地构建验证文件关联、二次打开复用实例、多文件连续打开；正式 macOS 签名、公证和零拦截发布不属于当前版本（quickstart US6）
+**Independent Test**: 在记录配置的 macOS/Linux 虚拟机或物理机安装对应产物，验证 Gatekeeper 手动放行、文件关联、二次打开复用实例与多文件连续打开（quickstart US6）
 
 ### Implementation for User Story 6
 
@@ -234,12 +234,12 @@ The following names describe logical capability roles for planning and review. T
 - [X] T074 [US6] 前端接线 open-file-request → 新开标签聚焦 src/app/openFileHandler.ts（含启动参数首开处理）
 - [X] T075 [P] [US6] macOS 文件关联：CFBundleDocumentTypes + 文件图标于 src-tauri/tauri.conf.json bundle.macOS 与 Info.plist 模板（.excalidraw/.excalidraw.json）
 - [X] T076 [P] [US6] Linux 文件关联：MIME `application/x-excalidraw` 定义 + .desktop 模板于 src-tauri/tauri.conf.json bundle.linux
-- [X] T077 [US6] macOS Universal Binary 构建流水线（aarch64 + x86_64 target 编译 + lipo 合并）于 CI 工作流 .github/workflows/release.yml
-- [X] T078 [US6] 当前版本 macOS 本地验证：运行未签名/未公证构建，记录本机启动、文件关联、单实例和 Gatekeeper 手动放行结果于 docs/native-verification.md；Developer ID 签名、公证与零拦截正式发布标记为后续版本 out of scope，不作为当前版本完成门禁（SC-010）
+- [X] T077 [US6] macOS Universal Binary 构建流水线（aarch64 + x86_64 target 编译 + lipo 合并）与 `v*` tag GitHub Release 未签名/未公证产物上传于 .github/workflows/release.yml（FR-029/SC-010）
+- [ ] T078 [US6] macOS 原生环境验收：在记录完整配置的 macOS VM 或物理机下载并运行真实 `v*` GitHub Release 的未签名/未公证构建，记录 tag/commit、下载隔离、启动、文件关联、单实例、多文件与 Gatekeeper 用户手动放行结果于 docs/native-verification.md；workflow artifact 仅可预检，不能关闭本任务（SC-010）
 - [X] T079 [P] [US6] Linux 打包产物：AppImage + deb + rpm 配置于 src-tauri/tauri.conf.json bundle 与 release.yml
-- [X] T080 [US6] 原生壳手动验证清单 docs/native-verification.md——当前版本覆盖 FR-030 全矩阵：画布渲染、拖放、剪贴板、IME，以及本地构建的双击关联、单实例、Gatekeeper 手动放行、各发行版安装；正式签名/公证/零拦截验证单独标记为后续版本（浏览器 E2E 不可证明项；执行结果记录矩阵）
+- [ ] T080 [US6] 汇总并补齐原生壳手动验证清单 docs/native-verification.md：复用 T078 的 macOS Gatekeeper/文件关联证据与 T094 的 Linux IME 证据，在记录配置的 macOS/Linux VM 或物理机补测 FR-030 画布渲染、拖放、剪贴板、双击关联、单实例与安装矩阵，记录环境类型、结果与未覆盖边界（浏览器 E2E 不可替代；依赖 T078/T094）
 
-**Checkpoint**: 当前版本本地可验证的成熟桌面应用形态；正式 macOS 签名、公证和零拦截发布已明确出范围
+**Checkpoint**: 可通过 GitHub Releases 分发的未签名/未公证开源桌面应用；原生环境矩阵在 T078/T080/T094 实际执行后才完成
 
 ---
 
@@ -269,10 +269,10 @@ The following names describe logical capability roles for planning and review. T
 
 **Purpose**: 已建立性能基线的最终回归汇总、文档、可访问性与全量回归
 
-- [X] T092 [P] 建立 docs/adr/ 首批 ADR（从 research.md R1–R19 提炼 ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 固定机性能门禁与重建基线规则、ADR-005 官方画布样式与可扩展主题边界）+ docs/architecture.md（迁移 plan.md Mermaid 图源，宪法原则 V）
+- [X] T092 [P] 建立 docs/adr/ 首批 ADR（从 research.md R1–R19 提炼 ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 声明参考环境性能测量与基线分代规则、ADR-005 官方画布样式与可扩展主题边界）+ docs/architecture.md（迁移 plan.md Mermaid 图源，宪法原则 V）
 - [X] T093 [P] 跨故事 a11y 回归审计 + reduced motion/主题对比度抽检（依赖 T097–T102 已完成；于 src/app/ 与各对话框验证浅色/深色的键盘闭环、焦点顺序、非颜色唯一状态、WCAG 2.2 AA 适用对比度及严重/致命自动扫描问题为 0，FR-038/SC-015、宪法原则 III、DESIGN.md）
-- [X] T094 Linux IME 验证矩阵执行（验证 T103/T104 已落地）：Ubuntu GNOME + Fedora KDE × X11/Wayland × Fcitx5/IBus 中文输入候选框跟随（FR-005），结果记录 docs/native-verification.md
-- [X] T095 quickstart.md 全场景回归执行并修订文档偏差；汇总 T037/T045/T066 三类可靠性故障测试为统一阻断门禁（SC-012），汇总 T111 外观矩阵与视觉基线（SC-014）及 T097/T093 无障碍证据（SC-015），汇总 T089/T090/T108 固定机最终性能报告与 T091 硬门禁结果；记录 SC-010 为后续版本 out of scope（宪法文档同步门禁终审）
+- [ ] T094 Linux IME 验收矩阵执行（验证 T103/T104 已落地）：使用记录完整配置的 Ubuntu/Fedora VM 或物理机覆盖 GNOME/KDE × X11/Wayland × Fcitx5/IBus 中文输入候选框跟随（FR-005），结果记录 docs/native-verification.md
+- [X] T095 quickstart.md 全场景回归执行并修订文档偏差；汇总 T037/T045/T066 三类可靠性故障测试为统一阻断门禁（SC-012），汇总 T111 外观矩阵与视觉基线（SC-014）及 T097/T093 无障碍证据（SC-015）；T078/T080/T090/T094/T108 未执行的外部验收保持为明确缺口，不在汇总中伪造通过
 - [X] T096 [P] 补充 README.md（安装、开发、构建、贡献指引与文档索引）
 
 ---
@@ -282,9 +282,9 @@ The following names describe logical capability roles for planning and review. T
 ### Phase Dependencies
 
 - **Phase 1 → Phase 2**：T001/T002（依赖声明）先于全部 Foundational 编码
-- **Phase 2 BLOCKS 一切用户故事**：T009（security）、T014（atomic_write）、T015–T017（契约）、T018（会话锁）、T020/T089/T091（测试与固定机性能基础设施）、T109/T110（主题解析测试与基础设施）为多故事共同前置
+- **Phase 2 BLOCKS 一切用户故事**：T009（security）、T014（atomic_write）、T015–T017（契约）、T018（会话锁）、T020/T089/T091（测试与性能报告基础设施）、T109/T110（主题解析测试与基础设施）为多故事共同前置
 - **用户故事顺序**：US1 → US2 强依赖（恢复建立在草稿链路上）；US3–US7 在 Phase 2 后可并行，但 US4 依赖 US3 的工作区监听根、US7 依赖 US3 的文件树
-- **Phase 10** 依赖全部所需故事完成；性能基础设施在 Phase 2 建立，大场景与 soak 在 US1 Checkpoint 前由 T090/T108 建立并在固定 runner 取得 `pass` 后完成，Phase 10 仅汇总最终回归。T090/T108 阻止 US1 合并/发布但不阻止 Phase 2 后依赖已满足的 US4/US5 开发线启动；非固定机的诊断结果不得替代硬验收或勾选任务。T093 依赖各故事 a11y 任务 T097–T102；T094 依赖 IME 实现 T103/T104
+- **Phase 10** 依赖全部所需故事完成；性能基础设施在 Phase 2 建立，T090/T108 在声明的 macOS 参考 VM 完整执行并在真实 `pass` 或 `fail` 报告产生后完成，预算失败不阻断合并/发布。T078/T080/T094 只能在目标 OS 原生环境（VM 或物理机）实际执行后勾选；T080 汇总 T078/T094 并补齐其余 FR-030 矩阵，T093 依赖各故事 a11y 任务 T097–T102；T094 依赖 IME 实现 T103/T104
 
 ### Analyze 与 UI 设计补丁任务挂靠（T097–T112）
 

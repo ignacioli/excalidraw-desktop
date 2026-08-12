@@ -1,17 +1,17 @@
 # Quickstart & Validation Guide: 跨平台 Excalidraw Desktop
 
-**Date**: 2026-08-04 | **Last updated**: 2026-08-10 | **Plan**: [plan.md](./plan.md) | **设计契约**: [../../DESIGN.md](../../DESIGN.md) | **IPC 契约**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md)
+**Date**: 2026-08-04 | **Last updated**: 2026-08-12 | **Plan**: [plan.md](./plan.md) | **设计契约**: [../../DESIGN.md](../../DESIGN.md) | **IPC 契约**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md)
 
 本文件是端到端验证指南：环境前提、构建运行命令、按用户故事组织的验证场景与预期结果。实现细节见 tasks.md 与源码，此处不重复。
 
-验证证据分为三类并分别报告：Playwright 浏览器 UI（交互/a11y/视觉）、`APP_E2E=1` Tauri 进程级可靠性（进程/文件系统/恢复）和 macOS/Linux 原生平台矩阵（窗口/IME/文件关联/签名/安装）。浏览器测试不得替代后两类。
+验证证据分为三类并分别报告：Playwright 浏览器 UI（交互/a11y/视觉）、`APP_E2E=1` Tauri 进程级可靠性（进程/文件系统/恢复）和 macOS/Linux 目标 OS 平台矩阵（窗口/IME/文件关联/Gatekeeper 手动放行/安装）。记录完整配置的虚拟机或物理机均可用于第三类验收；浏览器测试不得替代后两类。
 
 ## 1. 环境前提
 
 | 平台 | 要求 |
 |------|------|
 | 通用 | Node.js 20+、pnpm（锁定为唯一包管理器）、Rust stable 1.80+（rustup）、Python 3.10+ 与 uv（仅构建期字体合并，解释器由 `.python-version` 固定，依赖由 `pyproject.toml` + `uv.lock` 声明，`uv run` 自动安装） |
-| macOS | Xcode Command Line Tools；签名/公证验证需 Developer ID 证书（无证书时跳过该项并报告缺口） |
+| macOS | Xcode Command Line Tools；项目不需要 Developer ID、签名或公证；首次运行未签名产物时按 README 的 Gatekeeper 手动放行步骤验证 |
 | Linux | `libwebkit2gtk-4.1-dev`、`libgtk-3-dev` 等 Tauri 2 系统依赖；验证矩阵：Ubuntu GNOME + Fedora KDE × X11/Wayland × Fcitx5/IBus |
 
 ## 2. 构建与运行
@@ -49,7 +49,7 @@ APP_E2E=1 pnpm e2e           # Playwright 桌面 E2E（测试专用构建，暴�
 
 ### US2 崩溃恢复与原子写（P1，故障注入）
 
-1. **保存中强杀**：`APP_E2E=1` 构建下对 `temp_created`、`mid_write`、`temp_synced`、`json_validated`、`before_rename`、`after_rename`、`before_parent_sync`、`parent_synced` 八个原子写故障点逐点注入 `SIGKILL` → 重启。PR 全点确定性执行；固定机夜间任务额外运行并记录 100 个随机 seed。
+1. **保存中强杀**：`APP_E2E=1` 构建下对 `temp_created`、`mid_write`、`temp_synced`、`json_validated`、`before_rename`、`after_rename`、`before_parent_sync`、`parent_synced` 八个原子写故障点逐点注入 `SIGKILL` → 重启。PR 全点确定性执行；计划性可靠性任务额外运行并记录 100 个随机 seed。
    - 预期：每个故障点的目标文件均为可解析的完整旧版本或完整新版本；无静默覆盖；恢复对话框出现且草稿恢复后内容符合最后持久化窗口（SC-003/004/012）。生产构建中 Harness 接口不存在。
 2. **快照自损**：Harness 破坏最新 `recovery-00N.json` → 触发恢复。
    - 预期：自动回退次新快照并提示实际恢复时间点。
@@ -83,12 +83,12 @@ APP_E2E=1 pnpm e2e           # Playwright 桌面 E2E（测试专用构建，暴�
 2. 导出到只读目录。
    - 预期：明确错误提示，无残留半成品文件（FR-027）。
 
-### US6 系统集成（P3，原生壳验证——浏览器不可证明，需真机）
+### US6 系统集成（P3，目标 OS 原生壳验证——浏览器不可证明）
 
-1. 安装正式包 → Finder/文件管理器双击 `.excalidraw`。
+1. 在记录配置的 macOS/Linux VM 或物理机安装 GitHub Release 同类产物 → Finder/文件管理器双击 `.excalidraw`。
    - 预期：应用启动并打开该文件；应用已运行时复用实例新开标签（FR-028）。
-2. macOS 全新系统安装启动。
-   - 预期：无 Gatekeeper 拦截（需签名+公证，SC-010）。
+2. macOS 首次启动未签名、未公证产物。
+   - 预期：Gatekeeper 可能拦截；README/Release 警告风险并提供用户主动手动放行步骤，放行后应用可运行（SC-010）。
 3. Linux 各发行版安装 AppImage/deb/rpm。
    - 预期：应用菜单入口 + 文件图标关联生效。
 
@@ -110,17 +110,17 @@ APP_E2E=1 pnpm e2e           # Playwright 桌面 E2E（测试专用构建，暴�
 | 写盘削峰 | 60s 连续绘制脚本 + 应用管理路径写入计数 | 写次数 ≤事件数 1%，且无持久化掉帧尖峰（SC-006） |
 | 长时稳定性 | 热身后脚本编辑 30min，对比进程树 RSS；再静置 60s 观察 CPU 与应用管理路径/工作区写入 | RSS 增长同时 ≤50MB 且 ≤15%；空闲 CPU ≤1%；零持续写入（SC-013） |
 
-绝对预算只在固定 Apple M1 / 8GB runner 上作为合并硬门禁执行，runner 标签为 `self-hosted`、`macOS`、`ARM64`、`excalidraw-perf`；Intel Mac 与 Linux 仅记录非阻断趋势。首次报告锁定准确的 macOS 与 WebView 版本。硬件、OS 或 WebView 变化使原基线失效，必须以测量证据与 ADR 重建，禁止静默放宽预算。
+T090/T108 在声明的 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB 参考 VM 上完整执行；工作流仍使用 `self-hosted`、`macOS`、`ARM64`、`excalidraw-perf` 标签。报告记录宿主硬件、虚拟化软件/版本、客体 OS、WebView、vCPU 与内存并输出真实 `pass`/`fail`；预算失败不阻断合并或开源发布。参考配置变化时必须建立新的独立测量序列并更新 ADR，禁止把不可比结果混合或静默放宽预算。
 
 夹具输出 JSON 报告，包含 schema 版本、commit、硬件型号、内存、准确 OS/WebView 版本、样本、统计量、预算与 verdict，不得包含机器唯一标识或秘密。聚合口径必须覆盖 Tauri 主进程和关联 WebView/GPU 进程，并在报告中写明任何无法归属的排除项；性能回归 = 缺陷（宪法原则 IV）。
 
-## 5. 中文 IME 验证（Linux 矩阵真机项）
+## 5. 中文 IME 验证（Linux 目标 OS 矩阵项）
 
-拼音输入组合中：候选框紧随画布文本光标（含缩放/平移后）；组合事件不丢字、不重复（FR-005）。在 Fcitx5 与 IBus 各验证一次并记录矩阵结果。
+拼音输入组合中：候选框紧随画布文本光标（含缩放/平移后）；组合事件不丢字、不重复（FR-005）。在记录完整配置的 Ubuntu/Fedora VM 或物理机中，以 Fcitx5 与 IBus 各验证一次并记录矩阵结果。
 
 ## 6. 验证证据汇总与统一门禁
 
-Phase 10 起，全量回归结果、三类验证证据（浏览器 UI、`APP_E2E=1` 进程级可靠性、真机矩阵）与各 SC 门禁状态统一记录于 `docs/validation-summary.md`，本文件不再重复明细。
+Phase 10 起，全量回归结果、三类验证证据（浏览器 UI、`APP_E2E=1` 进程级可靠性、记录配置的原生 OS 环境矩阵）与各 SC 状态统一记录于 `docs/validation-summary.md`，本文件不再重复明细。
 
 **SC-012 统一可靠性阻断门禁**：以下三套故障测试合并为合并阻断门禁，任一失败即阻止合并，且不允许以本文件外的单套件结果替代：
 
@@ -130,6 +130,28 @@ Phase 10 起，全量回归结果、三类验证证据（浏览器 UI、`APP_E2E
 
 执行方式：`APP_E2E=1 pnpm e2e` 且 `EXCALIDRAW_E2E_BINARY` 指向故障注入测试构建（生产构建无 Harness 接口）。
 
-**固定机性能门禁**：T090/T108 的绝对预算仅在 `self-hosted`/`macOS`/`ARM64`/`excalidraw-perf` runner 上作为合并硬门禁（T091）；其他硬件产出仅归档非阻断趋势，不得替代硬验收。
+**性能参考测量**：T090/T108 在 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB VM 中完整执行；运行时设置 `PERF_REFERENCE_RUN=1`、`PERF_EXECUTION_ENVIRONMENT=virtual`、`PERF_HOST_HARDWARE`、`PERF_VIRTUALIZATION_NAME="Parallels Desktop Pro"` 与 `PERF_VIRTUALIZATION_VERSION`。报告必须产生真实 `pass`/`fail`，但预算失败不阻断合并或开源发布；不同环境结果不直接对比。
 
-**范围记录**：正式 macOS 签名、公证与零安全拦截分发为后续版本（SC-010）；当前版本 macOS 验证止于本地未签名构建。
+在参考 VM 内手动执行时，先把最后一项替换为已安装的准确 Parallels Desktop Pro 版本：
+
+```bash
+VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness
+
+PERF_TEST=1 \
+PERF_REFERENCE_RUN=1 \
+PERF_EXECUTION_ENVIRONMENT=virtual \
+PERF_HOST_HARDWARE="Apple M5 Pro / 48GB" \
+PERF_VIRTUALIZATION_NAME="Parallels Desktop Pro" \
+PERF_VIRTUALIZATION_VERSION="26.4.1" \
+pnpm exec playwright test \
+  --config=e2e/playwright.config.ts \
+  --project=browser-ui \
+  --retries=0 \
+  e2e/perf/startup-idle.spec.ts \
+  e2e/perf/canvas-io.spec.ts \
+  e2e/perf/edit-soak.spec.ts
+```
+
+若通过 GitHub Actions 执行，需先在该 macOS VM 安装 self-hosted runner 并赋予 `self-hosted`、`macOS`、`ARM64`、`excalidraw-perf` 标签，再配置仓库变量 `PERF_HOST_HARDWARE` 与 `PERF_VIRTUALIZATION_VERSION`，随后手动触发 `performance.yml`。
+
+**开源分发**：macOS 产物长期以未签名、未公证形式发布到 GitHub Releases；项目不规划 App Store、Developer ID 或 Apple 公证。README 与发布说明必须披露 Gatekeeper 风险与用户主动手动放行步骤（SC-010）。

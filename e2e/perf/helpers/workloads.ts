@@ -130,11 +130,3 @@ export async function createTenThousandElementFixture(): Promise<{
     },
   };
 }
-
-export function hardGateRequiresEvaluatedVerdict(overall: string): void {
-  if (process.env.PERF_HARD_GATE === "1" && overall !== "pass") {
-    throw new Error(
-      `Fixed-runner performance gate requires an evaluated pass; received ${overall}.`,
-    );
-  }
-}

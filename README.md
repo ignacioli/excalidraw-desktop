@@ -21,7 +21,15 @@
 - macOS 12+（Apple Silicon 与 Intel）
 - Linux（Ubuntu/Debian 与 Fedora，X11/Wayland）
 - Windows 不在支持范围
-- 正式签名与公证在后续版本提供
+- macOS 产物通过 GitHub Releases 以未签名、未公证形式提供；项目不规划 App Store、Developer ID 或 Apple 公证
+
+## macOS 安装与 Gatekeeper
+
+GitHub Release 中的 macOS 安装包没有 Developer ID 签名或 Apple 公证。macOS 因此无法验证开发者身份，也无法利用 Apple 公证票据确认产物未被篡改；首次启动可能被 Gatekeeper 拦截。请仅从本项目的 GitHub Releases 下载产物，并在理解这一风险后手动放行：
+
+1. 将应用拖入“应用程序”，并先尝试正常打开一次。
+2. 如被拦截，打开“系统设置 → 隐私与安全性”，在安全性区域为该应用选择“仍要打开”。
+3. 再次确认打开。该放行操作由用户主动执行，项目不要求禁用 Gatekeeper。
 
 ## 环境前提
 
@@ -55,6 +63,8 @@ APP_E2E=1 pnpm e2e                                   # Playwright E2E
 ```
 
 `APP_E2E=1 pnpm e2e` 覆盖浏览器可见的 E2E 流程；原生 shell 与故障注入用例需要测试专用 Tauri 构建。
+
+macOS/Linux 原生功能、安装和 IME 验收可在记录完整配置的虚拟机中执行。性能 T090/T108 的首个参考环境为 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB VM；完整测量必须记录真实 `pass`/`fail`，但预算失败不阻断开源发布。详见 [native-verification.md](docs/native-verification.md) 与 [ADR-004](docs/adr/ADR-004.md)。
 
 ## 文档索引
 

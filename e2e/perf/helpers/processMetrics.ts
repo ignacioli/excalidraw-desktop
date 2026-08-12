@@ -14,7 +14,16 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const PERFORMANCE_REPORT_SCHEMA_VERSION = "1.0.0";
+export const PERFORMANCE_REPORT_SCHEMA_VERSION = "2.0.0";
+const REFERENCE_HOST_HARDWARE = "Apple M5 Pro / 48GB";
+const REFERENCE_VIRTUALIZATION_NAME = "Parallels Desktop Pro";
+const REFERENCE_VIRTUALIZATION_VERSION = "26.4.1";
+
+export interface ExecutionEnvironmentMetadata {
+  type: "physical" | "virtual" | "unspecified";
+  hostHardware: string;
+  virtualization: { name: string; version: string } | null;
+}
 
 export interface EnvironmentMetadata {
   hardware: string;
@@ -23,6 +32,7 @@ export interface EnvironmentMetadata {
   logicalCores: number;
   osVersion: string;
   webviewVersion: string;
+  executionEnvironment: ExecutionEnvironmentMetadata;
 }
 
 export interface ProcessClassCounts {
@@ -168,7 +178,7 @@ export async function collectEnvironmentMetadata(): Promise<EnvironmentMetadata>
     const cpuBrand = sysctlCpuBrand ?? hardwareProfile?.cpuBrand;
     if (!model || !cpuBrand || !productVersion || !buildVersion) {
       throw new Error(
-        "Unable to collect the fixed-runner hardware or exact macOS metadata.",
+        "Unable to collect the reference-environment hardware or exact macOS metadata.",
       );
     }
     hardware = `${model} (${cpuBrand})`;
@@ -199,6 +209,33 @@ export async function collectEnvironmentMetadata(): Promise<EnvironmentMetadata>
     logicalCores: os.cpus().length,
     osVersion,
     webviewVersion,
+    executionEnvironment: collectExecutionEnvironmentMetadata(hardware),
+  };
+}
+
+function collectExecutionEnvironmentMetadata(
+  guestHardware: string,
+): ExecutionEnvironmentMetadata {
+  const declaredType = process.env.PERF_EXECUTION_ENVIRONMENT;
+  const type =
+    declaredType === "virtual" || declaredType === "physical"
+      ? declaredType
+      : "unspecified";
+  const hostHardware =
+    process.env.PERF_HOST_HARDWARE?.trim() ||
+    (type === "physical" ? guestHardware : "not-recorded");
+  return {
+    type,
+    hostHardware,
+    virtualization:
+      type === "virtual"
+        ? {
+            name:
+              process.env.PERF_VIRTUALIZATION_NAME?.trim() || "not-recorded",
+            version:
+              process.env.PERF_VIRTUALIZATION_VERSION?.trim() || "not-recorded",
+          }
+        : null,
   };
 }
 
@@ -496,42 +533,43 @@ export async function writePerformanceReport(
   await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 }
 
-export function assertFixedRunnerEnvironment(
+export function assertReferenceEnvironment(
   metadata: EnvironmentMetadata,
 ): void {
   if (process.platform !== "darwin" || metadata.architecture !== "arm64") {
     throw new Error(
-      "Absolute performance budgets require the fixed macOS ARM64 runner.",
+      "The declared performance reference run requires a macOS ARM64 guest.",
     );
   }
-  if (!metadata.hardware.includes("Apple M1")) {
+  if (!metadata.osVersion.startsWith("macOS 26.5.2 (")) {
     throw new Error(
-      `Fixed performance runner must use Apple M1; found ${metadata.hardware}.`,
+      `The declared reference guest must run macOS 26.5.2; found ${metadata.osVersion}.`,
     );
   }
-
-  const expectedMemory = Number(process.env.PERF_BASELINE_MEMORY_BYTES);
-  const expectedOs = process.env.PERF_BASELINE_OS_VERSION;
-  const expectedWebView = process.env.PERF_BASELINE_WEBVIEW_VERSION;
-  if (!Number.isFinite(expectedMemory) || !expectedOs || !expectedWebView) {
+  if (metadata.logicalCores !== 4) {
     throw new Error(
-      "Fixed-runner baseline pins are missing. Set exact memory, macOS, and WebView versions from an approved baseline artifact.",
+      `The declared reference guest must expose 4 logical CPUs; found ${metadata.logicalCores}.`,
     );
   }
-
-  const mismatches: string[] = [];
-  if (metadata.memory.bytes !== expectedMemory) {
-    mismatches.push(`memory ${metadata.memory.bytes} != ${expectedMemory}`);
-  }
-  if (metadata.osVersion !== expectedOs) {
-    mismatches.push(`OS ${metadata.osVersion} != ${expectedOs}`);
-  }
-  if (metadata.webviewVersion !== expectedWebView) {
-    mismatches.push(`WebView ${metadata.webviewVersion} != ${expectedWebView}`);
-  }
-  if (mismatches.length > 0) {
+  const minimumMemoryBytes = 7.5 * 1024 ** 3;
+  const maximumMemoryBytes = 8.5 * 1024 ** 3;
+  if (
+    metadata.memory.bytes < minimumMemoryBytes ||
+    metadata.memory.bytes > maximumMemoryBytes
+  ) {
     throw new Error(
-      `Fixed-runner environment changed (${mismatches.join("; ")}). The baseline is invalid; rebaseline with comparable evidence and an ADR.`,
+      `The declared reference guest must be configured with approximately 8 GiB of memory; the guest reports ${metadata.memory.bytes} bytes.`,
+    );
+  }
+  const execution = metadata.executionEnvironment;
+  if (
+    execution.type !== "virtual" ||
+    execution.hostHardware !== REFERENCE_HOST_HARDWARE ||
+    execution.virtualization?.name !== REFERENCE_VIRTUALIZATION_NAME ||
+    execution.virtualization.version !== REFERENCE_VIRTUALIZATION_VERSION
+  ) {
+    throw new Error(
+      `The first reference series requires ${REFERENCE_HOST_HARDWARE} with ${REFERENCE_VIRTUALIZATION_NAME} ${REFERENCE_VIRTUALIZATION_VERSION}. Record a changed environment as a new series through an ADR before updating the reference pins.`,
     );
   }
 }

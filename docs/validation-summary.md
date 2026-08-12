@@ -1,7 +1,7 @@
 # 验证证据汇总（Phase 10 / T095）
 
 **日期**：2026-08-10
-**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS/Linux 真机矩阵）的汇总；SC-012/SC-014/SC-015/SC-010 门禁状态终审。
+**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS/Linux 原生 OS 环境矩阵）的汇总；2026-08-12 已按宪法 v2.0.0 同步虚拟机验收、性能参考测量与未签名开源分发政策。
 
 ## 1. 全量浏览器回归（T095 执行）
 
@@ -44,19 +44,19 @@
 - 各故事 a11y 最低线 T097–T102 随功能交付（壳层/标签/外观选择/文件对话框、恢复/冲突对话框、文件树键盘导航、缩略图/多工作区区域、导出对话框表单关联）。
 - T093 跨故事审计：axe-core 4.12.1（`@axe-core/playwright`），标签 `wcag2a/wcag2aa/wcag21aa/wcag22aa`，浅色与深色各表面 serious/critical 均为 0；15 个用例全部通过。修复：`--warning`/`--success` 浅色值（白底 2.99:1 → 5.47:1、4.36:1 → 5.40:1）。完整矩阵与键盘/焦点/reduced motion 结论见 [a11y-audit.md](./a11y-audit.md)。
 
-## 5. 固定机性能门禁（T089/T090/T108/T091）
+## 5. 参考环境性能测量（T089/T090/T108/T091）
 
-- 基础设施：T089 测量夹具与报告契约、T091 `performance.yml` 硬门禁工作流均已落地（仅 `self-hosted`/`macOS`/`ARM64`/`excalidraw-perf` runner 阻断合并并归档报告）。
-- T090/T108 硬验收未执行：需要配置的 Apple M1 / 8GB runner；本会话无该 runner，也未构建本地测试二进制。该外部验收状态阻止 US1 合并/发布，但不构成其余独立开发线的调度依赖（plan.md）。
-- 本会话未运行 `PERF_TEST=1` 套件；非固定机的诊断结果不得替代硬验收或勾选任务。
+- 基础设施：T089 测量夹具与报告 schema v2.0.0 记录宿主、虚拟化层与客体环境；T091 `performance.yml` 由维护者手动触发参考 VM 完整测量并归档报告。
+- 首个参考环境：Apple M5 Pro / 48GB 宿主上的 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB VM；客体 WebView 仍需在执行时记录。
+- T090/T108 未执行，不得勾选。完整运行必须产生真实 `pass` 或 `fail`；预算失败保留为已知风险，但不再阻断合并或开源发布。
 
-## 6. SC-010 范围记录
+## 6. SC-010 开源分发记录
 
-正式 macOS 签名、公证与零安全拦截分发为后续版本范围（spec Clarification 2026-08-05）；当前版本以本地未签名构建验证 macOS 启动、文件关联、单实例与原生行为（T078/T080，矩阵见 [native-verification.md](./native-verification.md)）。
+2026-08-12 决策取代 2026-08-05 的“延后签名/公证”设想：项目不规划 App Store、Developer ID 或 Apple 公证。`.github/workflows/release.yml` 在 `v*` tag 构建并创建 GitHub Release，上传未签名/未公证 macOS 与 Linux 产物；README 和发布说明披露 Gatekeeper 风险与用户主动手动放行步骤。本会话未触发真实 tag/Release。
 
 ## 7. 残余风险
 
 - §1.1 两个 pre-existing 浏览器测试失败。
-- T078/T080/T094 真机矩阵（含 Linux IME 八组合）待对应平台执行。
-- T090/T108 固定机性能硬验收待 runner。
+- T078/T080/T094 原生环境矩阵（含 Linux IME 八组合）待在记录配置的 VM 或物理机执行。
+- T090/T108 待 macOS 参考 VM 完整测量。
 - 上游 `@excalidraw/excalidraw` 内部 DOM 不在壳层 a11y 扫描范围（T093 残余说明）。

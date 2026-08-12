@@ -4,7 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { launchTauriTestApp, resolveDesktopBinary } from "../helpers/app";
 import { NativePerformanceControl } from "./helpers/nativePerformanceContract";
 import {
-  assertFixedRunnerEnvironment,
+  assertReferenceEnvironment,
   collectCommit,
   collectEnvironmentMetadata,
   collectProcessTreeSample,
@@ -17,11 +17,7 @@ import {
   type ProcessTreeSample,
   type WriteObservation,
 } from "./helpers/processMetrics";
-import {
-  collectProcessTreeWindow,
-  hardGateRequiresEvaluatedVerdict,
-  PERF_BUDGETS,
-} from "./helpers/workloads";
+import { collectProcessTreeWindow, PERF_BUDGETS } from "./helpers/workloads";
 
 const COLD_START_REPETITIONS = 10;
 const READY_TIMEOUT_MS = 5_000;
@@ -96,16 +92,16 @@ async function firstObservableProcessSample(
 
 test("measures cold start to editable canvas and idle process-tree RSS", async () => {
   test.setTimeout(240_000);
-  const hardGate = process.env.PERF_HARD_GATE === "1";
+  const referenceRun = process.env.PERF_REFERENCE_RUN === "1";
   const [environment, commit, executable] = await Promise.all([
     collectEnvironmentMetadata(),
     collectCommit(),
     resolveDesktopBinary(),
   ]);
 
-  if (hardGate) {
+  if (referenceRun) {
     try {
-      assertFixedRunnerEnvironment(environment);
+      assertReferenceEnvironment(environment);
     } catch (error) {
       await writePerformanceReport(REPORT_PATH, {
         schemaVersion: PERFORMANCE_REPORT_SCHEMA_VERSION,
@@ -253,20 +249,16 @@ test("measures cold start to editable canvas and idle process-tree RSS", async (
       statistic.idleProcessTreeRssP95.value <= BUDGET.idleProcessTreeRss.value,
   };
   const allWithinBudget = Object.values(comparisons).every(Boolean);
-  const overall = !hardGate
+  const overall = !measurementsAvailable
     ? "not_evaluated"
-    : !measurementsAvailable
-      ? "not_evaluated"
-      : allWithinBudget
-        ? "pass"
-        : "fail";
-  const reason = !hardGate
-    ? "Absolute startup and RSS budgets are diagnostic outside the pinned Apple M1 / 8GB runner."
-    : !measurementsAvailable
-      ? `The native editable-canvas contract was unavailable, so process-alive timing cannot substitute for startup readiness. ${contractError ?? ""}`.trim()
-      : allWithinBudget
-        ? "All evaluated T090 startup and idle RSS budgets passed."
-        : "At least one evaluated T090 startup or idle RSS budget failed.";
+    : allWithinBudget
+      ? "pass"
+      : "fail";
+  const reason = !measurementsAvailable
+    ? `The native editable-canvas contract was unavailable, so process-alive timing cannot substitute for startup readiness. ${contractError ?? ""}`.trim()
+    : allWithinBudget
+      ? "All evaluated T090 startup and idle RSS budgets passed."
+      : "At least one evaluated T090 startup or idle RSS budget failed.";
 
   await writePerformanceReport(REPORT_PATH, {
     schemaVersion: PERFORMANCE_REPORT_SCHEMA_VERSION,
@@ -284,7 +276,9 @@ test("measures cold start to editable canvas and idle process-tree RSS", async (
     budget: BUDGET,
     verdict: {
       overall,
-      scope: hardGate ? "fixed-runner T090 startup and idle RSS" : "diagnostic",
+      scope: referenceRun
+        ? "declared-reference T090 startup and idle RSS"
+        : "diagnostic T090 startup and idle RSS",
       reason,
       comparisons,
     },
@@ -295,5 +289,4 @@ test("measures cold start to editable canvas and idle process-tree RSS", async (
       `The native startup performance contract was unavailable or incomplete. ${contractError ?? ""}`.trim(),
     );
   }
-  hardGateRequiresEvaluatedVerdict(overall);
 });
