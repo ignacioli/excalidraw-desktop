@@ -2,21 +2,34 @@
 
 ## Project Intent
 
-Build `excalidraw-desktop` as a macOS-first desktop application using Tauri 2.x, a React/TypeScript frontend, and a Rust backend. macOS is the required native acceptance platform; Ubuntu 24.04 Desktop is optional community validation, while Fedora/other Linux and Windows are outside the current support commitment. Preserve native desktop behavior, strong security boundaries, accessibility, and maintainable frontend/backend contracts. Do not assume the final packaging, persistence, update, synchronization, or upstream-Excalidraw integration strategy until repository code or an approved product decision establishes it.
+Build `excalidraw-desktop` as a macOS-first desktop application using Tauri 2.x, a React/TypeScript frontend, and a Rust backend. macOS is the required native acceptance platform; Ubuntu 24.04 Desktop is optional community validation, while Fedora/other Linux and Windows are outside the current support commitment. Preserve native desktop behavior, strong security boundaries, accessibility, and maintainable frontend/backend contracts.
 
-The repository currently contains a Tauri 2.x + Vite/React bootstrap scaffold and the complete SpecKit design set under `specs/001-excalidraw-desktop/`. Product features, project test infrastructure, and CI workflows have not yet been implemented. Treat the manifests and scaffold source as real current state, while paths described only by the plan remain expected future structure.
+The repository is a working Tauri 2.x + Vite/React application implementing seven user stories: offline editing and saving, crash-safe persistence, a workspace file sidebar, external-change detection and conflict resolution, PNG/SVG export, macOS native integration, and multi-workspace browsing with thumbnails and asset deduplication. The persistence core is reliability-first: atomic writes, recovery snapshots, and fault-injection testing.
 
 ## Expected Structure
 
-- `.codex/`: developer-local Codex configuration. It is ignored by Git and MUST NOT be required to build, test, review, or contribute to the project.
-- `src/`: current Vite/React scaffold; expected to evolve into the domain-oriented frontend described by the approved plan.
-- `src-tauri/`: current Tauri 2.x Rust scaffold and configuration; expected to evolve into the approved backend modules.
+- `src/`: React 19 + TypeScript strict frontend.
+- `src-tauri/`: Rust backend (Tauri 2.x).
 - `specs/001-excalidraw-desktop/`: authoritative feature specification, plan, research, data model, IPC contracts, tasks, and validation guide.
-- Tests should follow the conventions of the selected frontend, Rust, and end-to-end tooling rather than a structure invented in advance.
+- `docs/`: implementation-facing architecture records and ADRs.
+- `.codex/`: developer-local Codex configuration. It is ignored by Git and MUST NOT be required to build, test, review, or contribute to the project.
 
-Treat these paths as expectations, not verified current structure. Inspect the repository before every task.
+Tests follow the conventions of the selected frontend, Rust, and end-to-end tooling rather than a structure invented in advance.
 
-## Vibe-Coding Workflow
+## Architecture and Ownership
+
+The application is a Tauri 2.x dual-process layout: `src/` (React 19 + TypeScript strict frontend) and `src-tauri/` (Rust backend), communicating across an IPC contract boundary. See `docs/architecture.md` for the layered view, data flows, and trust boundaries; `docs/adr/` for decision records; and `specs/001-excalidraw-desktop/contracts/ipc-contracts.md` for the IPC contract.
+
+The main agent owns requirements, integration, final edits, and validation. Ownership boundaries below describe the capabilities a change requires, not any named agent; each coding tool maps these roles to its own local configuration (for example Codex `.codex/agents/*.toml`, opencode `.agents/`).
+
+- For a Tauri feature crossing React and Rust, use a Tauri-contract role when IPC, permissions, shared native APIs, or lifecycle is central. Use a desktop-platform role when OS compatibility or packaging is central. Use a general full-stack role for ordinary application-level vertical slices. Use UI or Rust specialist roles alone only for work contained within that layer.
+- Performance-sensitive work MUST include measurement and a regression verdict in its acceptance track. Implementation stays with the owning role; measurement methodology and the verdict stay with a performance-measurement role.
+- Atomic persistence, abnormal-exit recovery, conflict resolution, and native desktop E2E MUST include desktop-reliability testing. Browser-only evidence is insufficient.
+- Platform integration and release packaging are owned by a desktop-platform role; the Tauri-contract role reviews the shared Tauri contract but does not duplicate platform implementation.
+- Use a single-layer reviewer role for small, predominantly single-layer diffs. Use a full-stack reviewer role for Rust/TypeScript, IPC, persistence, infrastructure, reliability, or performance-boundary review.
+- A general full-stack role MUST NOT own core IPC architecture, crash recovery, atomic persistence, native packaging, platform compatibility, or performance/reliability gates.
+
+## Spec-Driven Development (SDD) Workflow
 
 1. Translate a fuzzy request into the smallest coherent user-visible outcome. Identify assumptions, affected boundaries, and what success looks like.
 2. Inspect relevant code, configuration, tests, and established conventions before editing. Never invent commands, APIs, paths, Tauri permissions, or repository behavior.
@@ -26,36 +39,6 @@ Treat these paths as expectations, not verified current structure. Inspect the r
 6. Review the final diff for correctness, security, accessibility, compatibility, and unrelated churn before handoff.
 
 Do not add speculative abstractions, dependencies, services, configuration formats, or platform support. Do not rewrite working architecture to solve a local problem.
-
-## Agent Routing
-
-The main agent owns requirements, integration, final edits, and validation. The names below describe logical capability roles and ownership boundaries, not repository-required Codex configurations. Contributors may map them to their own agents, tools, or review process:
-
-- `prod-arch`: requirements, product specification, MVP scope, user stories, and delivery phases.
-- `fullstack-developer`: one bounded feature spanning ordinary frontend and backend behavior.
-- `ui-dev`: React/TypeScript UI, accessibility, responsive behavior, Tailwind, shadcn/ui, and frontend performance.
-- `rust-expert`: Rust persistence, atomic writes, recovery primitives, SQLite, indexing, watcher internals, concurrency, backpressure, and measured performance fixes.
-- `tauri-dev`: Tauri architecture, typed IPC, commands/events, managed state, capabilities, CSP, lifecycle, and coordinated React/Rust security boundaries.
-- `desktop-platform-dev`: macOS/Linux Tauri platform behavior, WKWebView/WebKitGTK, IME, clipboard/drag-drop, file association, signing/notarization, Universal Binary, and AppImage/deb/rpm delivery. Windows is out of scope.
-- `e2e-tester`: browser-visible workflows, accessibility, visual fidelity, and Playwright UI coverage; it does not prove native-shell or filesystem durability behavior.
-- `desktop-reliability-tester`: Tauri process-level E2E, SIGKILL, atomic-write fault points, disk/resource failures, recovery, conflicts, event storms, and long-running stability.
-- `performance-engineer`: performance budgets, deterministic fixtures, CPU/RSS/frame/IPC/disk measurement, profiling, soak tests, declared-reference baselines, and regression verdicts.
-- `code-reviewer`: language-agnostic review of a bounded diff or implementation path.
-- `fs-reviewer`: deep full-stack review across Rust, TypeScript, frontend/backend boundaries, IPC, or IaC.
-- `doc-writer`: user, developer, API, troubleshooting, and operational documentation.
-- `arch-doc-gener`: evidence-based architecture documentation and diagrams.
-
-Use no subagents for straightforward single-track work. When work splits into at least two independent tracks, delegate all independent tracks together and give each agent a non-overlapping scope and concrete return format. Never launch exactly one subagent as a sequential handoff. Do not let multiple agents edit the same files concurrently. The main agent must reconcile contracts and validate the integrated result.
-
-For a Tauri feature crossing React and Rust, prefer `tauri-dev` when IPC, permissions, shared native APIs, or lifecycle is central. Prefer `desktop-platform-dev` when OS compatibility or packaging is central, and `fullstack-developer` for ordinary application-level vertical slices. Use `ui-dev` or `rust-expert` alone only for work contained within that layer.
-
-Keep high-risk ownership explicit:
-
-- Performance-sensitive work MUST include `performance-engineer` in its acceptance track. Implementation stays with the owning UI, Rust, Tauri, or platform agent; measurement methodology and the regression verdict stay with `performance-engineer`.
-- Atomic persistence, abnormal exit, recovery, conflict resolution, or native desktop E2E MUST include `desktop-reliability-tester`. Browser-only evidence is insufficient.
-- User Story 6 platform integration and release packaging is owned by `desktop-platform-dev`; `tauri-dev` reviews the shared Tauri contract but does not duplicate platform implementation.
-- Use `code-reviewer` only for small predominantly single-layer diffs. Use `fs-reviewer` for Rust/TypeScript, IPC, persistence, infrastructure, reliability, or performance-boundary review.
-- `fullstack-developer` MUST NOT own core IPC architecture, crash recovery, atomic persistence, native packaging, platform compatibility, or performance/reliability gates.
 
 ## Engineering Boundaries
 
@@ -106,7 +89,7 @@ A task is complete only when the requested outcome works across the affected pat
 
 ## Worktree Safety and SDD Commit Cadence
 
-The global user-level `~/.codex/AGENTS.md` defines two related policies that apply here:
+Two related policies apply here and are defined in the global user-level agent instructions. They are deliberately tool-agnostic: they bind every coding agent (Codex, opencode, Cursor, and others), because destructive worktree operations and commit cadence are failure modes shared by all AI coding agents, not by any single tool.
 
 - **Worktree Safety (all development modes)**: pre-work uncommitted-change audit, WIP-branch backup before destructive worktree operations, and native-Git integration. This applies to every repository and every development mode, including manual spec → plan → task → implement → validate loops that do not use SpecKit tools.
 - **Spec-Driven Development Commit Cadence**: checkpoint-level commits with safety and boundary triggers, plus task-tracking checkboxes committed with the code that satisfies them. This applies whenever work is driven by this repository's `specs/001-excalidraw-desktop/` spec/plan/tasks artifacts, whether executed with SpecKit tools or manually.
