@@ -120,7 +120,7 @@ T090/T108 在声明的 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8G
 
 ## 6. 验证证据汇总与统一门禁
 
-Phase 10 起，全量回归结果、三类验证证据（浏览器 UI、`APP_E2E=1` 进程级可靠性、记录配置的原生 OS 环境矩阵）与各 SC 状态统一记录于 `docs/validation-summary.md`，本文件不再重复明细。
+Phase 10 起，全量回归结果、三类验证证据（浏览器 UI、`APP_E2E=1` 进程级可靠性、记录配置的原生 OS 环境矩阵）与各 SC 状态统一记录于 `docs/evidence/validation-summary.md`，本文件不再重复明细。
 
 **SC-012 统一可靠性阻断门禁**：以下三套故障测试合并为合并阻断门禁，任一失败即阻止合并，且不允许以本文件外的单套件结果替代：
 

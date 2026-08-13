@@ -10,7 +10,7 @@ The repository is a working Tauri 2.x + Vite/React application implementing seve
 
 - `src/`: React 19 + TypeScript strict frontend.
 - `src-tauri/`: Rust backend (Tauri 2.x).
-- `specs/001-excalidraw-desktop/`: authoritative feature specification, plan, research, data model, IPC contracts, tasks, and validation guide.
+- `specs/`: symlink to the private specs repository holding the authoritative feature specification, plan, research, data model, tasks, and checklists (ignored by Git, not part of this public repo).
 - `docs/`: implementation-facing architecture records and ADRs.
 - `.codex/`: developer-local Codex configuration. It is ignored by Git and MUST NOT be required to build, test, review, or contribute to the project.
 
@@ -18,7 +18,7 @@ Tests follow the conventions of the selected frontend, Rust, and end-to-end tool
 
 ## Architecture and Ownership
 
-The application is a Tauri 2.x dual-process layout: `src/` (React 19 + TypeScript strict frontend) and `src-tauri/` (Rust backend), communicating across an IPC contract boundary. See `docs/architecture.md` for the layered view, data flows, and trust boundaries; `docs/adr/` for decision records; and `specs/001-excalidraw-desktop/contracts/ipc-contracts.md` for the IPC contract.
+The application is a Tauri 2.x dual-process layout: `src/` (React 19 + TypeScript strict frontend) and `src-tauri/` (Rust backend), communicating across an IPC contract boundary. See `docs/architecture.md` for the layered view, data flows, and trust boundaries; `docs/adr/` for decision records; and `docs/contracts/ipc-contracts.md` for the IPC contract.
 
 The main agent owns requirements, integration, final edits, and validation. Ownership boundaries below describe the capabilities a change requires, not any named agent; each coding tool maps these roles to its own local configuration (for example Codex `.codex/agents/*.toml`, opencode `.agents/`).
 
@@ -92,6 +92,6 @@ A task is complete only when the requested outcome works across the affected pat
 Two related policies apply here and are defined in the global user-level agent instructions. They are deliberately tool-agnostic: they bind every coding agent (Codex, opencode, Cursor, and others), because destructive worktree operations and commit cadence are failure modes shared by all AI coding agents, not by any single tool.
 
 - **Worktree Safety (all development modes)**: pre-work uncommitted-change audit, WIP-branch backup before destructive worktree operations, and native-Git integration. This applies to every repository and every development mode, including manual spec → plan → task → implement → validate loops that do not use SpecKit tools.
-- **Spec-Driven Development Commit Cadence**: checkpoint-level commits with safety and boundary triggers, plus task-tracking checkboxes committed with the code that satisfies them. This applies whenever work is driven by this repository's `specs/001-excalidraw-desktop/` spec/plan/tasks artifacts, whether executed with SpecKit tools or manually.
+- **Spec-Driven Development Commit Cadence**: checkpoint-level commits with safety and boundary triggers, plus task-tracking checkboxes committed with the code that satisfies them. This applies whenever work is driven by this repository's private `specs/` spec/plan/tasks artifacts, whether executed with SpecKit tools or manually.
 
 This project adds no conflicting rules; if a future project-specific exception is needed, document it here explicitly rather than duplicating the global policy.

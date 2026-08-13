@@ -64,28 +64,25 @@ APP_E2E=1 pnpm e2e                                   # Playwright E2E
 
 `APP_E2E=1 pnpm e2e` 覆盖浏览器可见的 E2E 流程；原生 shell 与故障注入用例需要测试专用 Tauri 构建。
 
-macOS 原生功能、安装和 IME 验收可在记录完整配置的虚拟机中执行且为当前版本必选；Ubuntu 24.04 Desktop 仅作可选社区验证，Fedora/其他 Linux 不形成当前门禁。性能 T090/T108 的首个参考环境为 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB VM；完整测量必须记录真实 `pass`/`fail`，但预算失败不阻断开源发布。详见 [native-verification.md](docs/native-verification.md) 与 [ADR-004](docs/adr/ADR-004.md)。
+macOS 原生功能、安装和 IME 验收可在记录完整配置的虚拟机中执行且为当前版本必选；Ubuntu 24.04 Desktop 仅作可选社区验证，Fedora/其他 Linux 不形成当前门禁。性能 T090/T108 的首个参考环境为 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB VM；完整测量必须记录真实 `pass`/`fail`，但预算失败不阻断开源发布。详见 [native-verification.md](docs/evidence/native-verification.md) 与 [ADR-004](docs/adr/ADR-004.md)。
 
 ## 文档索引
 
 - [DESIGN.md](DESIGN.md) — 桌面 UI 主题与视觉契约
-- [specs/001-excalidraw-desktop/](specs/001-excalidraw-desktop/) — 权威功能设计集
-  - [spec.md](specs/001-excalidraw-desktop/spec.md) — 特性规格
-  - [plan.md](specs/001-excalidraw-desktop/plan.md) — 实现计划
-  - [research.md](specs/001-excalidraw-desktop/research.md) — 技术决策与约束
-  - [data-model.md](specs/001-excalidraw-desktop/data-model.md) — 数据模型
-  - [quickstart.md](specs/001-excalidraw-desktop/quickstart.md) — 快速上手
-  - [contracts/ipc-contracts.md](specs/001-excalidraw-desktop/contracts/ipc-contracts.md) — IPC 契约
-  - [tasks.md](specs/001-excalidraw-desktop/tasks.md) — 任务清单
 - [docs/](docs/) — 实现文档
-  - [native-verification.md](docs/native-verification.md) — 原生平台验证
+  - [quickstart.md](docs/quickstart.md) — 快速上手
   - [architecture.md](docs/architecture.md) — 架构说明
+  - [contracts/ipc-contracts.md](docs/contracts/ipc-contracts.md) — IPC 契约
   - [adr/](docs/adr/) — 架构决策记录
-  - [a11y-audit.md](docs/a11y-audit.md) — 无障碍审计
-  - [validation-summary.md](docs/validation-summary.md) — 验证摘要
+  - [evidence/](docs/evidence/) — 验证与审计证据
+    - [native-verification.md](docs/evidence/native-verification.md) — 原生平台验证
+    - [a11y-audit.md](docs/evidence/a11y-audit.md) — 无障碍审计
+    - [validation-summary.md](docs/evidence/validation-summary.md) — 验证摘要
+
+规格驱动（SDD）生命周期工件（spec、plan、research、data-model、tasks、checklists）保存在独立的私有 specs 仓库，经 gitignored 的 `specs/` 软链接供维护者访问，不随本仓库开源。
 
 ## 贡献指引
 
-- 遵循 [specs/001-excalidraw-desktop/tasks.md](specs/001-excalidraw-desktop/tasks.md) 的任务编号与仓库 `AGENTS.md` 的约束
+- 遵循仓库 `AGENTS.md` 的约束；核心维护者按私有 specs 仓库中的任务编号驱动实现
 - 仅在被明确要求时提交代码
 - 修改行为或契约时，同步更新相关设计、契约与验证文档

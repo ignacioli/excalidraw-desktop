@@ -6,7 +6,7 @@
 
 **适用范围**：应用壳层、桌面专属界面与内嵌 Excalidraw 编辑器
 
-本文档是仓库内供人类与 Coding Agent 共同遵守的视觉和交互事实来源。产品行为以 `specs/001-excalidraw-desktop/spec.md` 为准，实施顺序以 `specs/001-excalidraw-desktop/tasks.md` 为准。
+本文档是仓库内供人类与 Coding Agent 共同遵守的视觉和交互事实来源。产品行为以私有 specs 仓库的 `spec.md` 为准，实施顺序以其 `tasks.md` 为准。
 
 ## 产品气质
 

@@ -2,11 +2,11 @@
 
 **最后更新**：2026-08-10
 
-本文档描述 Excalidraw Desktop 的实现架构：分层视图、两条关键数据流、模块职责、依赖方向与信任边界、安全路径与存储层。产品行为以 `specs/001-excalidraw-desktop/spec.md` 为准；决策记录见 `docs/adr/`；视觉与交互契约见根目录 `DESIGN.md`。
+本文档描述 Excalidraw Desktop 的实现架构：分层视图、两条关键数据流、模块职责、依赖方向与信任边界、安全路径与存储层。产品行为以私有 specs 仓库的 `spec.md` 为准；决策记录见 `docs/adr/`；视觉与交互契约见根目录 `DESIGN.md`。
 
 ## 1. 总体结构
 
-Tauri 2.x 双端布局：`src/` 为 React 19 + TypeScript strict 前端，`src-tauri/` 为 Rust 后端；两端经 IPC 契约边界通信（`specs/001-excalidraw-desktop/contracts/ipc-contracts.md`）。完整技术选型见 ADR-001（框架）、ADR-002/003（持久化）、ADR-004（参考性能测量）、ADR-005（主题边界）。
+Tauri 2.x 双端布局：`src/` 为 React 19 + TypeScript strict 前端，`src-tauri/` 为 Rust 后端；两端经 IPC 契约边界通信（`docs/contracts/ipc-contracts.md`）。完整技术选型见 ADR-001（框架）、ADR-002/003（持久化）、ADR-004（参考性能测量）、ADR-005（主题边界）。
 
 ## 2. 分层视图
 
@@ -128,7 +128,7 @@ flowchart TB
 
 ## 6. IPC 信任边界
 
-- 契约：命令/事件 Schema + 错误分类 + 输入校验，唯一定义于 `contracts/ipc-contracts.md`；前端不得绕过。
+- 契约：命令/事件 Schema + 错误分类 + 输入校验，唯一定义于 `docs/contracts/ipc-contracts.md`；前端不得绕过。
 - 所有前端传入路径在后端经 `security/` 的 `std::fs::canonicalize` + 工作区白名单校验（FR-031）；文档 JSON 视为不可信输入（结构校验 + 尺寸上限，FR-032）。
 - 最小权限：Tauri Capabilities 最小集（core:default + 受限 dialog/fs scope），严格 CSP（FR-033）。
 
@@ -146,5 +146,6 @@ flowchart TB
 
 - ADR：ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 声明参考环境性能测量、ADR-005 主题边界
 - `DESIGN.md`（视觉与交互契约）
-- `specs/001-excalidraw-desktop/`（spec.md、plan.md、research.md、data-model.md、contracts/、quickstart.md）
-- `docs/native-verification.md`（记录配置的目标 OS 验证矩阵，VM 或物理机）
+- `docs/quickstart.md`（快速上手）、`docs/contracts/ipc-contracts.md`（IPC 契约）
+- 私有 specs 仓库（spec.md、plan.md、research.md、data-model.md、checklists，经 `specs/` 软链接访问）
+- `docs/evidence/`（原生验证矩阵、无障碍审计与验证汇总，VM 或物理机）
