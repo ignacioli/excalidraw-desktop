@@ -49,6 +49,9 @@ blob-report/
 # cursor
 .cursor/
 
+# claude
+.claude
+
 # Codex
 .codex/
 
