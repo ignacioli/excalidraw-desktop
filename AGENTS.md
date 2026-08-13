@@ -85,6 +85,8 @@ The manifests establish the following workflows:
 
 The reference-performance workflow and test-only fault-injection harness are implemented infrastructure. T090/T108 produce auditable `pass`/`fail` measurements on the declared macOS 26.5.2, 4 vCPU / 8GB Parallels Desktop Pro VM; budget failures remain visible but do not block merging or open-source releases. Reference runs set `PERF_TEST=1`, `PERF_REFERENCE_RUN=1`, `PERF_EXECUTION_ENVIRONMENT=virtual`, `PERF_HOST_HARDWARE`, `PERF_VIRTUALIZATION_NAME="Parallels Desktop Pro"`, and `PERF_VIRTUALIZATION_VERSION`; the GitHub workflow reads host hardware and Parallels version from repository variables. macOS bundles are permanently distributed unsigned and unnotarized through GitHub Releases; pushing a `v*` tag publishes them, while App Store, Developer ID, and Apple notarization are not project requirements.
 
+Performance validation order: after feature development, run the physical-macOS functional and performance measurements first (fast iteration that surfaces product regressions and workload-design flaws before the slow VM gate), then the declared-reference VM measurement (T090/T108) as the auditable gate. The VM report is authoritative evidence, but the physical run precedes it.
+
 Validation must be proportional to risk and should eventually include, as applicable:
 
 - Frontend formatter, lint, strict typecheck, focused tests, and production build.
