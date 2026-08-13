@@ -47,12 +47,13 @@
 ## 5. 参考环境性能测量（T089/T090/T108/T091）
 
 - 基础设施：T089 测量夹具与报告 schema v2.0.0 记录宿主、虚拟化层与客体环境；T091 `performance.yml` 由维护者手动触发参考 VM 完整测量并归档报告。
-- 首个参考环境：Apple M5 Pro / 48GB 宿主上的 Parallels Desktop Pro 26.4.1、macOS 26.5.2（25F84）、4 vCPU / 8 GiB VM，客体 WebKit 21624.2.5.11.8；测量 commit `308178a7a2b209a87d0d571731717983c460ab56`，e2e-harness 可执行文件 SHA-256 `049c5babb9c420d2f4687cfb35ba3a6a8f057f58b2d3f4075dd1a4b2a6c168b2`。
-- 2026-08-13 T090 startup/idle 正式运行完成并产生真实 `fail`：10 次冷启动均发布可编辑画布信号，nearest-rank P95 为 2895.874334 ms，超过 2000 ms 预算；空闲进程树 RSS P95 为 140623872 bytes，低于 150000000 bytes 预算；60 秒空闲观察为 0 个文件系统事件、0 个持久路径变化。由于启动预算失败，T090 仍不得勾选。
-- 2026-08-13 T090 canvas/I/O 正式运行两次，均在 10k 场景 30 秒预热与 30 秒 RSS 窗口后，等待首个 30 秒 pan/zoom `result.json` 45 秒超时。最新正式报告保留 30 个场景 RSS 样本（223723520–223821824 bytes），但缺少 pan/zoom、60 秒高频编辑和写入观察结果，因此 verdict 为 `not_evaluated`，不得用 RSS 单项代替完整 verdict。额外 foreground 诊断在 command 开始后通过 UID 501 GUI launchd 域激活 app，仍以相同边界 `not_evaluated`，不能计作门禁证据。
-- 诊断期间发现先前临时脚本向 GUI launchd 持久写入了 `TMPDIR`、XDG 路径、`EXCALIDRAW_E2E_ROOT` 与 `RUST_LOG`；这些变量已逐项定向清除并读回为空。清理后正式 canvas 失败仍复现，因此该污染不是唯一根因。当前较强假设是 macOS/WebKit rAF workload 或最终 Tauri result publication 链路失败；app 在两次当前运行中未留下新 crash report，正式 fixture 又丢弃 stdio，driver rejection 未进入报告。
-- T108 依赖 T090 且复用同一 native command/result driver。由于该先决契约仍不可用，本轮未启动 30 分钟 soak，避免把确定不可评估的运行伪装成有效验收；T108 保持未勾选。完整运行仍必须产生真实 `pass` 或 `fail`，预算失败保留为已知风险但不阻断合并或开源发布。
-- VM 内带日期证据：`/Users/Shared/excalidraw-perf/e2e/perf/results/2026-08-13-startup-idle-formal.json`（SHA-256 `6b06e3a98ef52f6ff2cbac92afb2b8610d2223978bda2748126ba878998cebea`）、`2026-08-13-canvas-io-formal.json`（`08c927b8d81f1f03787e457f8b196761008e77f43cd98d650b3e2c39f47dd384`）和 `2026-08-13-canvas-io-focus-diagnostic.json`（`4e5b89a0b1dd4846c1ee0acf5b6c283e533ac6bbf0c7ed34fff69d1b86a9ecf5`）。Parallels 官方说明 Apple-silicon macOS VM 由 Apple Virtualization Framework 管理，CLI/配置与第三方兼容性存在已知限制；本轮未把这些一般限制直接认定为应用故障根因（[KB 128867](https://kb.parallels.com/en/128867)）。
+- 首个参考环境：Apple M5 Pro / 48GB 宿主上的 Parallels Desktop Pro 26.4.1、macOS 26.5.2（25F84）、4 vCPU / 8 GiB VM（客体 `VirtualMac2,1 (Apple M5 Pro (Virtual))`，arm64，WebKit 21624.2.5.11.8）。测量 commit `8c75caafd6e2e1dde19c8ee2afdbb79030e6512f`，e2e-harness 可执行文件 SHA-256 `0235da4dadc0f847fd995db57f4b0f9969bd701791e238b1a818d378fd8273a5`。
+- 2026-08-13 根因修复：此前 canvas/I/O 与 soak 的 `not_evaluated` 源于前端 driver `parseCommand` 的序列化缺口——Rust 将 `Option::None` 序列化为 `"targetEvents": null`，而 TS 校验用 `!== undefined`，导致所有不带 `targetEvents` 的 pan-zoom/edit-soak 命令被拒、`result.json` 永不产出。修复为 `PerformanceCommand.target_events` 增加 `#[serde(skip_serializing_if = "Option::is_none")]`，并补 Rust/TS 回归测试。
+- 2026-08-13 T090 startup/idle 完整执行，verdict `fail`：10 次冷启动均发布可编辑画布信号，nearest-rank P95 为 2229.164333 ms（超过 2000 ms 预算）；空闲进程树 RSS P95 为 140328960 bytes（低于 150000000 bytes 预算）；60 秒空闲观察 0 个文件系统事件、0 个持久路径变化。
+- 2026-08-13 T090 canvas/I/O 完整执行，verdict `fail`：10k 场景稳定后进程树 RSS P95 233537536 bytes（≤350 MB 预算）；pan/zoom 观测 2.04 fps（<30 fps 预算）、最大帧间隔 15668 ms（>100 ms 冻结预算）；60 秒高频编辑 58.72 fps 但最大帧间隔 750 ms（>100 ms）；写合并比 0.00194（≤0.01 预算）。pan/zoom 低帧率与长冻结与 paravirtual GPU 软件渲染一致，需复测并区分产品回归与虚拟化噪声（ADR-004）。
+- 2026-08-13 T108 30 分钟 soak 完整执行，verdict `fail`：RSS 增长 18235392 bytes（≤50 MB）且 7.82%（≤15%）；静置 60 秒 CPU P95 为 9.7% 单逻辑核（>1% 预算）；静置观察 8 个文件系统事件、8 个持久路径变化（>0 预算）。空闲 CPU 与静置写盘超出预算，需定位静置期后台写入来源（draftScheduler 兜底/索引/缩略图等）。
+- 进程树计量边界：macOS 上 WKWebView 的 WebContent/GPU/Network 进程被 reparent 到 launchd（ppid=1）且命令行不含 app token，`processMetrics` 的「递归父闭包 + 令牌归属」无法将其归入进程树，故 RSS 样本 `processCount=1`、仅计 Tauri 主进程。报告内 `processTreeAccounting` 已如实记录该方法与限制；全树 RSS（含 WebKit）高于报告值，读取 RSS 结论时须以此口径理解。
+- 报告归档：`e2e/perf/results/startup-idle.json`（SHA-256 `0d3a1091…`）、`canvas-io.json`（`62568c47…`）、`edit-soak.json`（`a336a2f6…`），三者 schemaVersion `2.0.0`、commit `8c75caa…`、verdict 均为真实 `fail`。
 
 ## 6. SC-010 开源分发记录
 
@@ -62,5 +63,5 @@
 
 - §1.1 两个 pre-existing 浏览器测试失败。
 - T078/T080 macOS 原生验收待在记录配置的 VM 或物理机执行；T094 仅为可选 Ubuntu 24.04 IME smoke test，Fedora/其他 Linux 矩阵已移出当前门禁。
-- T090 startup/idle 已完成并真实 `fail`，canvas/I/O 仍 `not_evaluated`；T108 因共享 native command/result 契约未恢复而未执行。两项均保持未完成。
+- T090（startup/idle 与 canvas/I/O）与 T108（30 分钟 soak）已在声明参考 VM 完整执行并产生真实 `fail` 报告；预算失败（冷启动 P95、10k pan/zoom fps/冻结、静置 CPU/写盘）作为已知风险保留，不阻断合并或开源发布。进程树 RSS 计量在 macOS 上仅含 Tauri 主进程（漏 WebKit 子进程），RSS 结论须按 §5 口径理解。
 - 上游 `@excalidraw/excalidraw` 内部 DOM 不在壳层 a11y 扫描范围（T093 残余说明）。
