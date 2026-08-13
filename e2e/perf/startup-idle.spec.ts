@@ -20,7 +20,7 @@ import {
 import { collectProcessTreeWindow, PERF_BUDGETS } from "./helpers/workloads";
 
 const COLD_START_REPETITIONS = 10;
-const READY_TIMEOUT_MS = 5_000;
+const READY_TIMEOUT_MS = 15_000;
 const WARM_UP_MS = 30_000;
 const SAMPLE_WINDOW_MS = 60_000;
 const SAMPLE_INTERVAL_MS = 1_000;

@@ -98,6 +98,18 @@ describe("native performance driver contract", () => {
     ).toThrow("command payload is invalid");
   });
 
+  it("accepts a command without targetEvents", () => {
+    const parsed = parseCommand({
+      schemaVersion: "1.0.0",
+      commandId: "pan-1",
+      operation: "pan-zoom",
+      durationMs: 30_000,
+      seed: 9,
+    });
+    expect(parsed.commandId).toBe("pan-1");
+    expect(parsed.targetEvents).toBeUndefined();
+  });
+
   it("records every visible rAF interval and completes all targeted edits", async () => {
     const editor = createEditor();
     const result = await executePerformanceCommand(

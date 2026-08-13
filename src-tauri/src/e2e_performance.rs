@@ -87,6 +87,7 @@ pub(crate) struct PerformanceCommand {
     pub(crate) operation: PerformanceOperation,
     pub(crate) duration_ms: f64,
     pub(crate) seed: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) target_events: Option<u64>,
 }
 

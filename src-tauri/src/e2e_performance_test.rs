@@ -237,6 +237,42 @@ async fn ready_and_results_publish_atomically_and_validate_live_contract() {
 }
 
 #[tokio::test]
+async fn command_serialization_omits_absent_target_events() {
+    let fixture = Fixture::new("serialize-command");
+    fixture.write_bootstrap(json!({
+        "schemaVersion": "1.0.0",
+        "scenario": "startup-editable",
+        "seed": 7
+    }));
+    let state = PerformanceHarnessState::initialize(
+        &fixture.control,
+        &fixture.e2e_root,
+        fixture.repository().await,
+    )
+    .await
+    .unwrap_or_else(|error| panic!("initialize serialize harness: {error}"));
+
+    fixture.write_command(json!({
+        "schemaVersion": "1.0.0",
+        "commandId": "pan-1",
+        "operation": "pan-zoom",
+        "durationMs": 100,
+        "seed": 8
+    }));
+    let command = state
+        .next_command()
+        .await
+        .unwrap_or_else(|error| panic!("read next command: {error}"))
+        .unwrap_or_else(|| panic!("expected a performance command"));
+    let serialized = serde_json::to_value(&command)
+        .unwrap_or_else(|error| panic!("serialize command: {error}"));
+    assert!(
+        serialized.get("targetEvents").is_none(),
+        "pan-zoom command must omit targetEvents when absent, got {serialized}"
+    );
+}
+
+#[tokio::test]
 async fn malformed_commands_and_unissued_results_are_rejected() {
     let fixture = Fixture::new("commands");
     fixture.write_bootstrap(json!({
