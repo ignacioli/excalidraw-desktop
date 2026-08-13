@@ -29,6 +29,20 @@ The main agent owns requirements, integration, final edits, and validation. Owne
 - Use a single-layer reviewer role for small, predominantly single-layer diffs. Use a full-stack reviewer role for Rust/TypeScript, IPC, persistence, infrastructure, reliability, or performance-boundary review.
 - A general full-stack role MUST NOT own core IPC architecture, crash recovery, atomic persistence, native packaging, platform compatibility, or performance/reliability gates.
 
+## Documentation Map
+
+Spec-driven deliverables are recorded at these canonical paths. The private specs repository names deliverables; this public repo owns the paths:
+
+| Deliverable | Path |
+|-------------|------|
+| Architecture decision records (ADR) | `docs/adr/` |
+| Architecture overview | `docs/architecture.md` |
+| IPC contract | `docs/contracts/ipc-contracts.md` |
+| Quick start guide | `docs/quickstart.md` |
+| Native verification evidence | `docs/evidence/native-verification.md` |
+| Accessibility audit | `docs/evidence/a11y-audit.md` |
+| Validation summaries | `docs/evidence/validation-summary.md` |
+
 ## Spec-Driven Development (SDD) Workflow
 
 1. Translate a fuzzy request into the smallest coherent user-visible outcome. Identify assumptions, affected boundaries, and what success looks like.
