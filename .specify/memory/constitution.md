@@ -1,12 +1,15 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 3.0.0 → 3.0.1
+Version change: 3.0.1 → 3.1.0
 Modified principles:
-  - Core Principle V: removed the "documentation body uses Chinese" language mandate (it was
-    an artifact of per-question language auto-detection, not a project policy)
+  - Docs-Code Sync Gate: clarified that the same-PR coupling applies to user-facing
+    documentation, and that specs are the upstream prerequisite of a change (not bundled)
+  - Core Principles IV/V: noted that specs live in a private repository accessed via a
+    gitignored symlink
 Added sections: none
-Governance: PATCH change; body translated to English and the spurious language mandate removed
+Governance: MINOR change; scopes the Docs-Code Sync Gate to user-facing documentation and
+  records the specs private-repository location after the specs migration
 Removed sections: none
 Templates requiring updates: none; templates read this constitution at runtime
 Follow-up TODOs: none
@@ -85,7 +88,7 @@ desktop application"; retrofitting them costs far more than shipping them with t
 
 ### IV. Performance and Resource Budgets
 
-The Success Criteria of the authoritative PRD (`specs/001-excalidraw-desktop/spec.md`) are
+The Success Criteria of the authoritative PRD (in the private `specs/` repository) are
 performance-budget red lines; a performance regression is equivalent to a functional defect:
 
 - Performance acceptance MUST run the full workload in the maintainer-declared macOS reference
@@ -115,8 +118,9 @@ across iterations.
 ### V. Documentation Discipline — Globally Enforced
 
 - All external behavior, IPC contracts, data formats, and architecture decisions MUST have
-  corresponding documentation: product specifications live in `specs/`, architecture and
-  development documentation live in `docs/`.
+  corresponding documentation: product specifications live in the private `specs/` repository
+  (accessed via a gitignored symlink), architecture and development documentation live in
+  `docs/`.
 - Architecture decisions MUST record context, alternatives, and trade-off rationale (ADR form
   or an equivalent section).
 - Documentation inconsistent with the implementation MUST be treated as a defect, with fix
@@ -192,13 +196,17 @@ user worktree from accidental damage.
 ## Docs-Code Sync Gate
 
 - Code changes that alter external behavior, IPC/data contracts, or architecture MUST include
-  the corresponding documentation and architecture-diagram updates in the same commit/PR;
-  missing updates MUST NOT be merged.
+  the corresponding user-facing documentation and architecture-diagram updates in the same
+  commit/PR; missing updates MUST NOT be merged.
+- Spec-driven artifacts (`specs/` spec/plan/tasks) are the upstream source of a change: they
+  are updated first in the private specs repository, and the PR then implements the spec and
+  ships the corresponding user-facing documentation. specs are a prerequisite of the PR, not a
+  deliverable bundled into it.
 - Behavior-neutral changes (pure refactors, dependency upgrades, formatting) MUST explicitly
   declare "no documentation impact" in the commit message as a review checkpoint.
 - The code-review checklist MUST include a documentation-sync item: the reviewer confirms the
-  documentation/diagrams were updated, or that the "no documentation impact" declaration holds,
-  before approval.
+  user-facing documentation/diagrams were updated, or that the "no documentation impact"
+  declaration holds, before approval.
 - Spec-driven artifacts (`specs/` spec/plan/tasks) MUST keep their state consistent with
   implementation progress; the state where implementation is complete but the spec still
   describes stale behavior MUST NOT occur.
@@ -221,4 +229,4 @@ user worktree from accidental damage.
 - Complexity and deviations (new dependencies, abstraction layers, permission expansion) MUST
   have written justification, otherwise they are treated as violations.
 
-**Version**: 3.0.1 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-13
+**Version**: 3.1.0 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-13
