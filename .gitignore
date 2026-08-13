@@ -69,3 +69,6 @@ blob-report/
 
 # omo
 .omo/
+
+# Specs (symlink to the private specs repo; not part of this public repo)
+/specs
