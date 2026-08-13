@@ -47,8 +47,12 @@
 ## 5. 参考环境性能测量（T089/T090/T108/T091）
 
 - 基础设施：T089 测量夹具与报告 schema v2.0.0 记录宿主、虚拟化层与客体环境；T091 `performance.yml` 由维护者手动触发参考 VM 完整测量并归档报告。
-- 首个参考环境：Apple M5 Pro / 48GB 宿主上的 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB VM；客体 WebView 仍需在执行时记录。
-- T090/T108 未执行，不得勾选。完整运行必须产生真实 `pass` 或 `fail`；预算失败保留为已知风险，但不再阻断合并或开源发布。
+- 首个参考环境：Apple M5 Pro / 48GB 宿主上的 Parallels Desktop Pro 26.4.1、macOS 26.5.2（25F84）、4 vCPU / 8 GiB VM，客体 WebKit 21624.2.5.11.8；测量 commit `308178a7a2b209a87d0d571731717983c460ab56`，e2e-harness 可执行文件 SHA-256 `049c5babb9c420d2f4687cfb35ba3a6a8f057f58b2d3f4075dd1a4b2a6c168b2`。
+- 2026-08-13 T090 startup/idle 正式运行完成并产生真实 `fail`：10 次冷启动均发布可编辑画布信号，nearest-rank P95 为 2895.874334 ms，超过 2000 ms 预算；空闲进程树 RSS P95 为 140623872 bytes，低于 150000000 bytes 预算；60 秒空闲观察为 0 个文件系统事件、0 个持久路径变化。由于启动预算失败，T090 仍不得勾选。
+- 2026-08-13 T090 canvas/I/O 正式运行两次，均在 10k 场景 30 秒预热与 30 秒 RSS 窗口后，等待首个 30 秒 pan/zoom `result.json` 45 秒超时。最新正式报告保留 30 个场景 RSS 样本（223723520–223821824 bytes），但缺少 pan/zoom、60 秒高频编辑和写入观察结果，因此 verdict 为 `not_evaluated`，不得用 RSS 单项代替完整 verdict。额外 foreground 诊断在 command 开始后通过 UID 501 GUI launchd 域激活 app，仍以相同边界 `not_evaluated`，不能计作门禁证据。
+- 诊断期间发现先前临时脚本向 GUI launchd 持久写入了 `TMPDIR`、XDG 路径、`EXCALIDRAW_E2E_ROOT` 与 `RUST_LOG`；这些变量已逐项定向清除并读回为空。清理后正式 canvas 失败仍复现，因此该污染不是唯一根因。当前较强假设是 macOS/WebKit rAF workload 或最终 Tauri result publication 链路失败；app 在两次当前运行中未留下新 crash report，正式 fixture 又丢弃 stdio，driver rejection 未进入报告。
+- T108 依赖 T090 且复用同一 native command/result driver。由于该先决契约仍不可用，本轮未启动 30 分钟 soak，避免把确定不可评估的运行伪装成有效验收；T108 保持未勾选。完整运行仍必须产生真实 `pass` 或 `fail`，预算失败保留为已知风险但不阻断合并或开源发布。
+- VM 内带日期证据：`/Users/Shared/excalidraw-perf/e2e/perf/results/2026-08-13-startup-idle-formal.json`（SHA-256 `6b06e3a98ef52f6ff2cbac92afb2b8610d2223978bda2748126ba878998cebea`）、`2026-08-13-canvas-io-formal.json`（`08c927b8d81f1f03787e457f8b196761008e77f43cd98d650b3e2c39f47dd384`）和 `2026-08-13-canvas-io-focus-diagnostic.json`（`4e5b89a0b1dd4846c1ee0acf5b6c283e533ac6bbf0c7ed34fff69d1b86a9ecf5`）。Parallels 官方说明 Apple-silicon macOS VM 由 Apple Virtualization Framework 管理，CLI/配置与第三方兼容性存在已知限制；本轮未把这些一般限制直接认定为应用故障根因（[KB 128867](https://kb.parallels.com/en/128867)）。
 
 ## 6. SC-010 开源分发记录
 
@@ -58,5 +62,5 @@
 
 - §1.1 两个 pre-existing 浏览器测试失败。
 - T078/T080 macOS 原生验收待在记录配置的 VM 或物理机执行；T094 仅为可选 Ubuntu 24.04 IME smoke test，Fedora/其他 Linux 矩阵已移出当前门禁。
-- T090/T108 待 macOS 参考 VM 完整测量。
+- T090 startup/idle 已完成并真实 `fail`，canvas/I/O 仍 `not_evaluated`；T108 因共享 native command/result 契约未恢复而未执行。两项均保持未完成。
 - 上游 `@excalidraw/excalidraw` 内部 DOM 不在壳层 a11y 扫描范围（T093 残余说明）。

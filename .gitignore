@@ -62,3 +62,6 @@ blob-report/
 
 # local handoff notes
 .handoff
+
+# codegraph
+.codegraph/
