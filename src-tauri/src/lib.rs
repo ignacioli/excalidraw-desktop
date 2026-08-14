@@ -36,8 +36,8 @@ use database::repository::SqliteRepository;
 use documents::recovery::RecoveryStore;
 #[cfg(feature = "e2e-harness")]
 use e2e_performance::{
-    e2e_perf_bootstrap, e2e_perf_next_command, e2e_perf_publish_ready, e2e_perf_publish_result,
-    PerformanceHarnessState,
+    e2e_perf_bootstrap, e2e_perf_next_command, e2e_perf_publish_error, e2e_perf_publish_ready,
+    e2e_perf_publish_result, PerformanceHarnessState,
 };
 use watcher::{WatcherService, WatcherState};
 
@@ -151,6 +151,7 @@ pub fn run() {
         e2e_perf_publish_ready,
         e2e_perf_next_command,
         e2e_perf_publish_result,
+        e2e_perf_publish_error,
     ]);
 
     #[cfg(not(feature = "e2e-harness"))]

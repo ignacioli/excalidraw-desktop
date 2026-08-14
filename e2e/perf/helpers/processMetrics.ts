@@ -12,6 +12,12 @@ import os from "node:os";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 
+import {
+  snapshotProcesses,
+  type ProcessRecord,
+  type WebKitProcessTracker,
+} from "../../helpers/webkitProcesses";
+
 const execFileAsync = promisify(execFile);
 
 export const PERFORMANCE_REPORT_SCHEMA_VERSION = "2.0.0";
@@ -65,15 +71,6 @@ export interface WriteObservation {
   changedPathCount: number;
   watchedRootCount: number;
   limitations: readonly string[];
-}
-
-interface PsRecord {
-  pid: number;
-  parentPid: number;
-  rssKilobytes: number;
-  cpuPercent: number;
-  name: string;
-  command: string;
 }
 
 function round(value: number, digits = 3): number {
@@ -247,41 +244,8 @@ export async function collectCommit(): Promise<string> {
   return commit;
 }
 
-function parsePs(output: string): PsRecord[] {
-  const records: PsRecord[] = [];
-  for (const line of output.split("\n")) {
-    const match = line
-      .trim()
-      .match(/^(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)\s+(\S+)\s*(.*)$/);
-    if (!match) {
-      continue;
-    }
-    records.push({
-      pid: Number(match[1]),
-      parentPid: Number(match[2]),
-      rssKilobytes: Number(match[3]),
-      cpuPercent: Number(match[4]),
-      name: match[5],
-      command: match[6],
-    });
-  }
-  return records;
-}
-
-async function processSnapshot(): Promise<PsRecord[]> {
-  const { stdout } = await execFileAsync(
-    "/bin/ps",
-    ["-axo", "pid=,ppid=,rss=,%cpu=,ucomm=,command="],
-    {
-      encoding: "utf8",
-      maxBuffer: 16 * 1024 * 1024,
-    },
-  );
-  return parsePs(stdout);
-}
-
 function descendantPids(
-  records: readonly PsRecord[],
+  records: readonly ProcessRecord[],
   rootPid: number,
 ): Set<number> {
   const included = new Set<number>([rootPid]);
@@ -298,14 +262,14 @@ function descendantPids(
   return included;
 }
 
-function isWebViewAuxiliary(record: PsRecord): boolean {
+function isWebViewAuxiliary(record: ProcessRecord): boolean {
   return /(webkit|webview|gpu|networkprocess|webprocess)/i.test(
     `${record.name} ${record.command}`,
   );
 }
 
 function processClass(
-  record: PsRecord,
+  record: ProcessRecord,
   rootPid: number,
 ): keyof ProcessClassCounts {
   const descriptor = `${record.name} ${record.command}`;
@@ -330,7 +294,7 @@ export function processTreeAccounting(
   return {
     rootProcessName,
     associationMethod:
-      "recursive parent PID closure plus WebView/GPU/Network auxiliary processes carrying an explicit app association token",
+      "recursive parent PID closure, plus WebView/GPU/Network auxiliary processes carrying an explicit app association token, plus launch-time-window attribution of WebKit-role processes re-parented to launchd (PID 1) that appeared after the app launch and were absent from the pre-launch snapshot",
     includedClasses: [
       "Tauri main",
       "descendants",
@@ -340,10 +304,11 @@ export function processTreeAccounting(
     ],
     exclusions: [
       "unrelated system WebView/GPU processes",
-      "processes that expose neither parentage nor an app association token",
+      "WebKit-role processes that already existed before the app launch",
     ],
     platformLimitations: [
-      "macOS may re-parent WKWebView auxiliary processes; token attribution is used only when the process also has a WebKit/GPU/Network role",
+      "macOS re-parents WKWebView auxiliary processes to launchd with no app token; launch-time-window attribution assumes no other same-user WebKit app is launched during the measurement window",
+      "ps etime has one-second granularity; a two-second slack is applied to the launch window",
       "ps RSS can include shared pages charged independently to more than one process",
       "ps CPU is an OS interval estimate normalized so 100 percent equals one logical core",
     ],
@@ -354,8 +319,9 @@ export async function collectProcessTreeSample(
   rootPid: number,
   startedAtNs: bigint,
   associationTokens: readonly string[],
+  webkitTracker?: WebKitProcessTracker,
 ): Promise<ProcessTreeSample> {
-  const records = await processSnapshot();
+  const records = await snapshotProcesses();
   const root = records.find((record) => record.pid === rootPid);
   if (!root) {
     throw new Error(`Tauri root process ${rootPid} is not running.`);
@@ -372,6 +338,12 @@ export async function collectProcessTreeSample(
     }
     const command = record.command.toLowerCase();
     if (normalizedTokens.some((token) => command.includes(token))) {
+      includedPids.add(record.pid);
+    }
+  }
+
+  if (webkitTracker !== undefined) {
+    for (const record of webkitTracker.orphanedAppProcesses(records)) {
       includedPids.add(record.pid);
     }
   }

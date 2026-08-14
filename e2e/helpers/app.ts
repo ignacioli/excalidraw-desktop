@@ -4,8 +4,11 @@ import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
+import { WebKitProcessTracker } from "./webkitProcesses";
+
 const TEST_ROOT_PREFIX = "excalidraw-desktop-e2e-";
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 10_000;
+const STDERR_CAPTURE_LIMIT_BYTES = 64 * 1024;
 
 export interface IsolatedDesktopPaths {
   root: string;
@@ -29,6 +32,10 @@ export interface DesktopAppHandle {
   readonly pid: number;
   readonly paths: IsolatedDesktopPaths;
   readonly startedAtNs: bigint;
+  /** Attributes the app's re-parented WebKit auxiliary processes (macOS). */
+  readonly webkitTracker: WebKitProcessTracker;
+  /** Returns the captured stderr tail (native crashes and Rust panics). */
+  stderrOutput(): string;
   close(): Promise<void>;
 }
 
@@ -178,6 +185,22 @@ function signalProcessTree(child: ChildProcess, signal: NodeJS.Signals): void {
   }
 }
 
+/**
+ * Formats a contract failure together with the app's captured stderr tail so
+ * native crashes and Rust panics are visible in test output instead of being
+ * discarded with the child process's stdio.
+ */
+export function describeAppError(
+  error: unknown,
+  app: Pick<DesktopAppHandle, "stderrOutput">,
+): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const stderr = app.stderrOutput().trim();
+  return stderr.length > 0
+    ? `${message}\napp stderr tail:\n${stderr}`
+    : message;
+}
+
 export async function cleanupIsolatedDesktopPaths(
   paths: IsolatedDesktopPaths,
 ): Promise<void> {
@@ -201,11 +224,17 @@ export async function launchTauriTestApp(
 ): Promise<DesktopAppHandle> {
   const binaryPath = await resolveDesktopBinary(options.binaryPath);
   const paths = await createIsolatedDesktopPaths();
+  const webkitTracker = await WebKitProcessTracker.create();
   const startedAtNs = process.hrtime.bigint();
   const child = spawn(binaryPath, [...(options.args ?? [])], {
     detached: process.platform !== "win32",
     env: isolatedDesktopEnvironment(paths, options.environment),
-    stdio: ["ignore", "ignore", "ignore"],
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  let stderrTail = "";
+  child.stderr?.setEncoding("utf8");
+  child.stderr?.on("data", (chunk: string) => {
+    stderrTail = (stderrTail + chunk).slice(-STDERR_CAPTURE_LIMIT_BYTES);
   });
 
   try {
@@ -217,6 +246,10 @@ export async function launchTauriTestApp(
       pid,
       paths,
       startedAtNs,
+      webkitTracker,
+      stderrOutput(): string {
+        return stderrTail;
+      },
       async close(): Promise<void> {
         if (closed) {
           return;
@@ -233,6 +266,10 @@ export async function launchTauriTestApp(
             signalProcessTree(child, "SIGKILL");
             await waitForExit(child, 2_000);
           }
+          // The group signal does not reach WKWebView auxiliary processes that
+          // macOS re-parented to launchd; terminate them explicitly so they do
+          // not leak across multi-launch cycles.
+          await webkitTracker.terminateOrphanedProcesses();
         } finally {
           await cleanupIsolatedDesktopPaths(paths);
         }
@@ -240,6 +277,7 @@ export async function launchTauriTestApp(
     };
   } catch (error) {
     child.kill("SIGKILL");
+    await webkitTracker.terminateOrphanedProcesses();
     await cleanupIsolatedDesktopPaths(paths);
     throw error;
   }

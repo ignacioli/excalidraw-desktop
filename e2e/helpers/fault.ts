@@ -24,6 +24,7 @@ const E2E_PERFORMANCE_COMMANDS = [
   "e2e_perf_publish_ready",
   "e2e_perf_next_command",
   "e2e_perf_publish_result",
+  "e2e_perf_publish_error",
 ] as const;
 
 export type E2eHarnessCommand = (typeof E2E_HARNESS_COMMANDS)[number];

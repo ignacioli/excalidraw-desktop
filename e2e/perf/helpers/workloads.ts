@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { WebKitProcessTracker } from "../../helpers/webkitProcesses";
 import {
   collectProcessTreeSample,
   type ProcessTreeSample,
@@ -26,6 +27,7 @@ export async function collectProcessTreeWindow(options: {
   associationTokens: readonly string[];
   durationMs: number;
   intervalMs: number;
+  webkitTracker?: WebKitProcessTracker;
 }): Promise<ProcessTreeSample[]> {
   const samples: ProcessTreeSample[] = [];
   const deadline =
@@ -37,6 +39,7 @@ export async function collectProcessTreeWindow(options: {
         options.rootPid,
         options.startedAtNs,
         options.associationTokens,
+        options.webkitTracker,
       ),
     );
     const elapsedMs =

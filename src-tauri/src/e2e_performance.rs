@@ -91,6 +91,18 @@ pub(crate) struct PerformanceCommand {
     pub(crate) target_events: Option<u64>,
 }
 
+/// A fatal driver failure surfaced through the filesystem contract so the
+/// Node test harness can fail fast with the real cause instead of a bare
+/// ready/result timeout (webview console output is otherwise invisible).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct PerformanceErrorSignal {
+    pub(crate) schema_version: String,
+    pub(crate) message: String,
+}
+
+const MAXIMUM_ERROR_MESSAGE_CHARS: usize = 32 * 1024;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct PerformanceCommandResult {
@@ -293,6 +305,13 @@ impl PerformanceHarnessState {
         Ok(())
     }
 
+    pub(crate) async fn publish_error(&self, error: PerformanceErrorSignal) -> Result<(), String> {
+        let active = Arc::clone(self.active()?);
+        validate_error_signal(&error)?;
+        let path = active.control_directory.join("error.json");
+        publish_json(path, error).await
+    }
+
     fn active(&self) -> Result<&Arc<ActivePerformanceHarness>, String> {
         self.active
             .as_ref()
@@ -328,6 +347,14 @@ pub(crate) async fn e2e_perf_publish_result(
     state: State<'_, PerformanceHarnessState>,
 ) -> Result<(), String> {
     state.publish_result(result).await
+}
+
+#[tauri::command]
+pub(crate) async fn e2e_perf_publish_error(
+    error: PerformanceErrorSignal,
+    state: State<'_, PerformanceHarnessState>,
+) -> Result<(), String> {
+    state.publish_error(error).await
 }
 
 fn canonical_prefixed_directory(
@@ -479,6 +506,17 @@ fn validate_result(
                 "performance frame intervals do not cover the requested visible window".to_owned(),
             );
         }
+    }
+    Ok(())
+}
+
+fn validate_error_signal(error: &PerformanceErrorSignal) -> Result<(), String> {
+    validate_schema_version(&error.schema_version, "error signal")?;
+    if error.message.trim().is_empty() {
+        return Err("performance error signal message must not be empty".to_owned());
+    }
+    if error.message.chars().count() > MAXIMUM_ERROR_MESSAGE_CHARS {
+        return Err("performance error signal message exceeds the supported size".to_owned());
     }
     Ok(())
 }

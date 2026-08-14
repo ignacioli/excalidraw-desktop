@@ -79,7 +79,11 @@ export class NativePerformanceControl {
   }
 
   async waitForReady(timeoutMs: number): Promise<PerformanceReadySignal> {
-    const value = await waitForJson(join(this.root, "ready.json"), timeoutMs);
+    const value = await waitForJson(
+      join(this.root, "ready.json"),
+      timeoutMs,
+      join(this.root, "error.json"),
+    );
     return validateReadySignal(value, this.bootstrap.scenario);
   }
 
@@ -100,7 +104,11 @@ export class NativePerformanceControl {
     command: PerformanceCommand,
     timeoutMs: number,
   ): Promise<PerformanceCommandResult> {
-    const value = await waitForJson(join(this.root, "result.json"), timeoutMs);
+    const value = await waitForJson(
+      join(this.root, "result.json"),
+      timeoutMs,
+      join(this.root, "error.json"),
+    );
     return validateCommandResult(value, command);
   }
 
@@ -115,7 +123,11 @@ export class NativePerformanceControl {
   }
 }
 
-async function waitForJson(path: string, timeoutMs: number): Promise<unknown> {
+async function waitForJson(
+  path: string,
+  timeoutMs: number,
+  driverErrorPath?: string,
+): Promise<unknown> {
   const deadline = process.hrtime.bigint() + BigInt(timeoutMs) * 1_000_000n;
   let lastParseError: unknown;
   while (process.hrtime.bigint() < deadline) {
@@ -126,6 +138,9 @@ async function waitForJson(path: string, timeoutMs: number): Promise<unknown> {
       if (code !== "ENOENT") {
         lastParseError = error;
       }
+      if (driverErrorPath !== undefined) {
+        await throwIfDriverErrorPublished(driverErrorPath);
+      }
       await delay(25);
     }
   }
@@ -135,6 +150,31 @@ async function waitForJson(path: string, timeoutMs: number): Promise<unknown> {
       : "";
   throw new Error(
     `Native performance contract did not publish ${basename(path)} within ${timeoutMs} ms.${detail}`,
+  );
+}
+
+async function throwIfDriverErrorPublished(path: string): Promise<void> {
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch {
+    return;
+  }
+  let message: string | undefined;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (
+      isRecord(value) &&
+      typeof value.message === "string" &&
+      value.message.length > 0
+    ) {
+      message = value.message;
+    }
+  } catch {
+    // A partially written error file still proves a driver failure.
+  }
+  throw new Error(
+    `Native performance driver reported a fatal error: ${message ?? raw}`,
   );
 }
 

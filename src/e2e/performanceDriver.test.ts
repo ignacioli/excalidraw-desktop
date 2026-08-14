@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   executePerformanceCommand,
+  NativePerformanceDriver,
   parseBootstrap,
   parseCommand,
   type PerformanceClock,
@@ -136,6 +137,35 @@ describe("native performance driver contract", () => {
     expect(result.eventCount).toBe(4);
     expect(editor.applyPerformanceViewport).toHaveBeenNthCalledWith(1, 9, 0);
     expect(editor.applyPerformanceViewport).toHaveBeenNthCalledWith(4, 9, 3);
+  });
+
+  it("publishes fatal driver failures through the control contract", async () => {
+    const published: string[] = [];
+    const publishError = vi.fn(async (message: string) => {
+      published.push(message);
+    });
+    const reportError = vi.fn();
+    const driver = new NativePerformanceDriver({
+      control: {
+        bootstrap: vi.fn(async () => {
+          throw new Error("bootstrap exploded");
+        }),
+        publishReady: vi.fn(async () => {}),
+        nextCommand: vi.fn(async () => null),
+        publishResult: vi.fn(async () => {}),
+        publishError,
+      },
+      documents: { open: vi.fn(async () => "doc-1") },
+      clock: createFrameClock(),
+      wait: async () => {},
+      isNativeRuntime: () => true,
+      reportError,
+    });
+
+    driver.start();
+    await vi.waitFor(() => expect(publishError).toHaveBeenCalledTimes(1));
+    expect(published[0]).toContain("bootstrap exploded");
+    expect(reportError).toHaveBeenCalled();
   });
 
   it("paces soak edits while retaining frame-by-frame measurements", async () => {

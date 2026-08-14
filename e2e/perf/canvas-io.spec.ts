@@ -1,7 +1,11 @@
 import { test } from "@playwright/test";
 import { setTimeout as delay } from "node:timers/promises";
 
-import { launchTauriTestApp, resolveDesktopBinary } from "../helpers/app";
+import {
+  describeAppError,
+  launchTauriTestApp,
+  resolveDesktopBinary,
+} from "../helpers/app";
 import {
   NativePerformanceControl,
   type PerformanceCommandResult,
@@ -158,6 +162,7 @@ test("measures the 10k canvas and 60 second persistence workload", async () => {
         ),
         durationMs: RSS_SAMPLE_WINDOW_MS,
         intervalMs: SAMPLE_INTERVAL_MS,
+        webkitTracker: app.webkitTracker,
       })),
     );
 
@@ -199,7 +204,7 @@ test("measures the 10k canvas and 60 second persistence workload", async () => {
       );
     }
   } catch (error) {
-    contractError = error instanceof Error ? error.message : String(error);
+    contractError = describeAppError(error, app);
   } finally {
     await app.close();
     await control.dispose();

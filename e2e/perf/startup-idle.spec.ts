@@ -1,7 +1,12 @@
 import { test } from "@playwright/test";
 import { setTimeout as delay } from "node:timers/promises";
 
-import { launchTauriTestApp, resolveDesktopBinary } from "../helpers/app";
+import {
+  describeAppError,
+  launchTauriTestApp,
+  resolveDesktopBinary,
+  type DesktopAppHandle,
+} from "../helpers/app";
 import { NativePerformanceControl } from "./helpers/nativePerformanceContract";
 import {
   assertReferenceEnvironment,
@@ -67,8 +72,7 @@ const WORKLOAD = {
 } as const;
 
 async function firstObservableProcessSample(
-  rootPid: number,
-  startedAtNs: bigint,
+  app: DesktopAppHandle,
   associationTokens: readonly string[],
 ): Promise<ProcessTreeSample> {
   const deadline = process.hrtime.bigint() + 5_000_000_000n;
@@ -76,9 +80,10 @@ async function firstObservableProcessSample(
   while (process.hrtime.bigint() < deadline) {
     try {
       return await collectProcessTreeSample(
-        rootPid,
-        startedAtNs,
+        app.pid,
+        app.startedAtNs,
         associationTokens,
+        app.webkitTracker,
       );
     } catch (error) {
       lastError = error;
@@ -139,8 +144,7 @@ test("measures cold start to editable canvas and idle process-tree RSS", async (
         app.paths.root,
       );
       const firstSample = await firstObservableProcessSample(
-        app.pid,
-        app.startedAtNs,
+        app,
         associationTokens,
       );
       coldStartProcessAliveMs.push(firstSample.monotonicMs);
@@ -155,7 +159,7 @@ test("measures cold start to editable canvas and idle process-tree RSS", async (
           Number(process.hrtime.bigint() - app.startedAtNs) / 1_000_000,
         );
       } catch (error) {
-        contractError = error instanceof Error ? error.message : String(error);
+        contractError = describeAppError(error, app);
         break;
       }
     } finally {
@@ -180,7 +184,7 @@ test("measures cold start to editable canvas and idle process-tree RSS", async (
       const ready = await idleControl.waitForReady(READY_TIMEOUT_MS);
       idleReady = ready.elementCount === 0;
     } catch (error) {
-      contractError ??= error instanceof Error ? error.message : String(error);
+      contractError ??= describeAppError(error, idleApp);
     }
     await delay(WARM_UP_MS);
     const observer = new DirectoryWriteObserver([
@@ -202,6 +206,7 @@ test("measures cold start to editable canvas and idle process-tree RSS", async (
           ),
           durationMs: SAMPLE_WINDOW_MS,
           intervalMs: SAMPLE_INTERVAL_MS,
+          webkitTracker: idleApp.webkitTracker,
         })),
       );
     } finally {

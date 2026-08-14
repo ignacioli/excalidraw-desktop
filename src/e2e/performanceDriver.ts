@@ -57,6 +57,7 @@ interface PerformanceControl {
   publishReady(ready: PerformanceReadySignal): Promise<void>;
   nextCommand(): Promise<PerformanceCommand | null>;
   publishResult(result: PerformanceCommandResult): Promise<void>;
+  publishError(message: string): Promise<void>;
 }
 
 export interface PerformanceEditor {
@@ -101,7 +102,17 @@ export class NativePerformanceDriver {
       return;
     }
     this.started = true;
-    void this.run().catch(this.dependencies.reportError);
+    void this.run().catch(async (error: unknown) => {
+      this.dependencies.reportError(error);
+      // Publish the failure through the filesystem contract so the Node test
+      // harness fails fast with the real cause; webview console output is
+      // invisible to the spawned-process harness.
+      try {
+        await this.dependencies.control.publishError(describeDriverError(error));
+      } catch (publishFailure) {
+        this.dependencies.reportError(publishFailure);
+      }
+    });
   }
 
   attachEditor(
@@ -247,6 +258,15 @@ export async function executePerformanceCommand(
   }
 }
 
+const MAXIMUM_ERROR_MESSAGE_CHARS = 16_000;
+
+function describeDriverError(error: unknown): string {
+  const message =
+    error instanceof Error ? (error.stack ?? error.message) : String(error);
+  const nonEmpty = message.trim().length > 0 ? message : "unknown driver error";
+  return [...nonEmpty].slice(0, MAXIMUM_ERROR_MESSAGE_CHARS).join("");
+}
+
 function getTargetEventCount(command: PerformanceCommand): number {
   if (command.operation === "pan-zoom") {
     return 0;
@@ -301,6 +321,12 @@ function createPerformanceControl(): PerformanceControl {
     async publishResult(result) {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("e2e_perf_publish_result", { result });
+    },
+    async publishError(message) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("e2e_perf_publish_error", {
+        error: { schemaVersion: CONTRACT_SCHEMA_VERSION, message },
+      });
     },
   };
 }

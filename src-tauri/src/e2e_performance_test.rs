@@ -5,8 +5,8 @@ use serde_json::json;
 use crate::{
     database::repository::{SqliteRepository, WorkspaceRepository},
     e2e_performance::{
-        PerformanceCommandResult, PerformanceHarnessState, PerformanceReadySignal,
-        PerformanceScenario,
+        PerformanceCommandResult, PerformanceErrorSignal, PerformanceHarnessState,
+        PerformanceReadySignal, PerformanceScenario,
     },
 };
 
@@ -264,12 +264,70 @@ async fn command_serialization_omits_absent_target_events() {
         .await
         .unwrap_or_else(|error| panic!("read next command: {error}"))
         .unwrap_or_else(|| panic!("expected a performance command"));
-    let serialized = serde_json::to_value(&command)
-        .unwrap_or_else(|error| panic!("serialize command: {error}"));
+    let serialized =
+        serde_json::to_value(&command).unwrap_or_else(|error| panic!("serialize command: {error}"));
     assert!(
         serialized.get("targetEvents").is_none(),
         "pan-zoom command must omit targetEvents when absent, got {serialized}"
     );
+}
+
+#[tokio::test]
+async fn driver_errors_publish_atomically_and_validate_bounds() {
+    let fixture = Fixture::new("error");
+    fixture.write_bootstrap(json!({
+        "schemaVersion": "1.0.0",
+        "scenario": "startup-editable",
+        "seed": 5
+    }));
+    let state = PerformanceHarnessState::initialize(
+        &fixture.control,
+        &fixture.e2e_root,
+        fixture.repository().await,
+    )
+    .await
+    .unwrap_or_else(|error| panic!("initialize error harness: {error}"));
+
+    state
+        .publish_error(PerformanceErrorSignal {
+            schema_version: "1.0.0".to_owned(),
+            message: "driver failed: no editable scene element".to_owned(),
+        })
+        .await
+        .unwrap_or_else(|error| panic!("publish driver error: {error}"));
+    let published = fs::read_to_string(fixture.control.join("error.json"))
+        .unwrap_or_else(|error| panic!("read published error: {error}"));
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&published)
+            .unwrap_or_else(|error| panic!("parse published error: {error}"))["message"],
+        json!("driver failed: no editable scene element")
+    );
+    assert_no_temporary_publications(&fixture.control);
+
+    assert!(state
+        .publish_error(PerformanceErrorSignal {
+            schema_version: "1.0.0".to_owned(),
+            message: "   ".to_owned(),
+        })
+        .await
+        .expect_err("empty error message must fail")
+        .contains("empty"));
+    assert!(state
+        .publish_error(PerformanceErrorSignal {
+            schema_version: "1.0.0".to_owned(),
+            message: "x".repeat(32 * 1024 + 1),
+        })
+        .await
+        .expect_err("oversized error message must fail")
+        .contains("size"));
+    assert!(state
+        .publish_error(PerformanceErrorSignal {
+            schema_version: "0.9.0".to_owned(),
+            message: "wrong schema".to_owned(),
+        })
+        .await
+        .expect_err("wrong schema version must fail")
+        .contains("schemaVersion"));
 }
 
 #[tokio::test]
