@@ -54,6 +54,9 @@ pub fn run() {
         return;
     }
 
+    #[cfg(all(feature = "e2e-harness", target_os = "macos"))]
+    e2e_harness::disable_app_nap();
+
     configure_linux_ime_environment();
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
@@ -121,6 +124,15 @@ pub fn run() {
             app.manage(session);
             app.manage(WatcherState::new(watcher_service.clone()));
             tauri::async_runtime::block_on(watcher_service.start_existing(app.handle().clone()))?;
+            // rAF-driven performance workloads stall when the window is
+            // occluded (WebKit throttles occluded views); keep the test-only
+            // measurement window unoccluded on busy diagnostic hosts.
+            #[cfg(feature = "e2e-harness")]
+            if std::env::var_os("EXCALIDRAW_PERF_CONTROL_DIR").is_some() {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_always_on_top(true);
+                }
+            }
             Ok(())
         });
 

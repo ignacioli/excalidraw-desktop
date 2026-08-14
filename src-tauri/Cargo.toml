@@ -33,8 +33,16 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"
 trash = "5"
 uuid = { version = "1", features = ["v4"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# Test-only: keeps rAF-driven performance measurements running while the
+# window is occluded (App Nap suspension). Never part of a production build.
+objc2-foundation = { version = "0.3", features = [
+  "NSProcessInfo",
+  "NSString",
+], optional = true }
+
 [features]
-e2e-harness = []
+e2e-harness = ["dep:objc2-foundation"]
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

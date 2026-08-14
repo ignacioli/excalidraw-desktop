@@ -261,8 +261,17 @@ export async function executePerformanceCommand(
 const MAXIMUM_ERROR_MESSAGE_CHARS = 16_000;
 
 function describeDriverError(error: unknown): string {
-  const message =
-    error instanceof Error ? (error.stack ?? error.message) : String(error);
+  let message: string;
+  if (error instanceof Error) {
+    // WebKit stacks contain only frames (no message), so always lead with the
+    // message and append the stack when it does not already include it.
+    const stack = error.stack ?? "";
+    message = stack.includes(error.message)
+      ? stack
+      : [error.message, stack].filter((part) => part.length > 0).join("\n");
+  } else {
+    message = String(error);
+  }
   const nonEmpty = message.trim().length > 0 ? message : "unknown driver error";
   return [...nonEmpty].slice(0, MAXIMUM_ERROR_MESSAGE_CHARS).join("");
 }
@@ -291,9 +300,37 @@ function isVisibleEditor(
   );
 }
 
+const FRAME_STALL_TIMEOUT_MS = 10_000;
+
+/**
+ * Awaits the next animation frame but fails loudly when the frame clock
+ * stalls (occluded window or a suspended process would otherwise hang the
+ * driver forever without publishing any error).
+ */
 function nextAnimationFrame(clock: PerformanceClock): Promise<void> {
-  return new Promise((resolve) => {
-    clock.requestFrame(() => resolve());
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const stallTimer = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(
+        new Error(
+          `requestAnimationFrame produced no frame for ${FRAME_STALL_TIMEOUT_MS} ms ` +
+            `(visibilityState=${clock.visibilityState()}); the window is likely ` +
+            "occluded or the process was suspended, so the measurement cannot continue.",
+        ),
+      );
+    }, FRAME_STALL_TIMEOUT_MS);
+    clock.requestFrame(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(stallTimer);
+      resolve();
+    });
   });
 }
 

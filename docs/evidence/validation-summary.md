@@ -52,8 +52,15 @@
 - 2026-08-13 T090 startup/idle 完整执行，verdict `fail`：10 次冷启动均发布可编辑画布信号，nearest-rank P95 为 2229.164333 ms（超过 2000 ms 预算）；空闲进程树 RSS P95 为 140328960 bytes（低于 150000000 bytes 预算）；60 秒空闲观察 0 个文件系统事件、0 个持久路径变化。
 - 2026-08-13 T090 canvas/I/O 完整执行，verdict `fail`：10k 场景稳定后进程树 RSS P95 233537536 bytes（≤350 MB 预算）；pan/zoom 观测 2.04 fps（<30 fps 预算）、最大帧间隔 15668 ms（>100 ms 冻结预算）；60 秒高频编辑 58.72 fps 但最大帧间隔 750 ms（>100 ms）；写合并比 0.00194（≤0.01 预算）。pan/zoom 低帧率与长冻结与 paravirtual GPU 软件渲染一致，需复测并区分产品回归与虚拟化噪声（ADR-004）。
 - 2026-08-13 T108 30 分钟 soak 完整执行，verdict `fail`：RSS 增长 18235392 bytes（≤50 MB）且 7.82%（≤15%）；静置 60 秒 CPU P95 为 9.7% 单逻辑核（>1% 预算）；静置观察 8 个文件系统事件、8 个持久路径变化（>0 预算）。空闲 CPU 与静置写盘超出预算，需定位静置期后台写入来源（draftScheduler 兜底/索引/缩略图等）。
-- 进程树计量边界：macOS 上 WKWebView 的 WebContent/GPU/Network 进程被 reparent 到 launchd（ppid=1）且命令行不含 app token，`processMetrics` 的「递归父闭包 + 令牌归属」无法将其归入进程树，故 RSS 样本 `processCount=1`、仅计 Tauri 主进程。报告内 `processTreeAccounting` 已如实记录该方法与限制；全树 RSS（含 WebKit）高于报告值，读取 RSS 结论时须以此口径理解。
+- 进程树计量边界（2026-08-13 记录，2026-08-14 已修复，见下）：macOS 上 WKWebView 的 WebContent/GPU/Network 进程被 reparent 到 launchd（ppid=1）且命令行不含 app token，`processMetrics` 的「递归父闭包 + 令牌归属」无法将其归入进程树，故 2026-08-13 报告的 RSS 样本 `processCount=1`、仅计 Tauri 主进程。
 - 报告归档：`e2e/perf/results/startup-idle.json`（SHA-256 `0d3a1091…`）、`canvas-io.json`（`62568c47…`）、`edit-soak.json`（`a336a2f6…`），三者 schemaVersion `2.0.0`、commit `8c75caa…`、verdict 均为真实 `fail`。
+- 2026-08-14 soak 时长政策变更：经 ADR-006（宪法 v3.2.0、私有 specs 同步），T108 必要编辑 soak 时长由 30 分钟缩短为 15 分钟；RSS 增长预算（≤50 MB 且 ≤15%）与静置检查不变。15 分钟序列的 `rssGrowthBytes` 不得与旧 30 分钟报告直接比较。
+- 2026-08-14 测量基础设施修复（`e2e/helpers/webkitProcesses.ts`、`app.ts`、`processMetrics.ts`、driver 错误桥）：
+  1. 进程树 RSS 归因改为「启动时间窗口」：ppid=1、启动晚于 app 启动、且不在启动前快照中的 WebKit 角色进程归入应用树。物理机验证 `processCount` 由 1 变为 4（Tauri/WebContent/GPU/Networking）。诚实计量后，物理机（Apple M5 Pro）diagnostic 空闲 RSS P95 为 413.4 MB，超过 150 MB 预算——2026-08-13 VM 报告的 140 MB「通过」是 Tauri-only 口径假象，RSS 全序列需按新口径在参考 VM 重测（构成新测量序列）。
+  2. `launchTauriTestApp.close()` 现按同一追踪集终止被 reparent 的 WebKit 孤儿进程；物理机多次启动后确认零泄漏（交接文档所记跨启动进程累积问题关闭）。
+  3. driver 错误桥：driver 致命错误经新 Tauri 命令 `e2e_perf_publish_error` 原子发布 `error.json`，Node 侧 `waitForReady/waitForResult` 轮询即刻快速失败；`launchTauriTestApp` 改为捕获 stderr 尾部并入契约错误。WebKit 的 `error.stack` 不含 message，错误格式化已改为 message+stack。
+  4. 宿主机「`result.json` 不返回」根因确诊：性能工作负载由 rAF 驱动，窗口被遮挡（用户在其他 Space/全屏应用）或显示器休眠时 WKWebView 暂停 rAF 且 `visibilityState=hidden`，driver 在 `nextAnimationFrame` 上无限挂起、无任何错误输出。现 driver 加 10 秒 rAF 停摆看门狗（挂起变为可诊断失败），harness 构建禁用 App Nap（`NSProcessInfo` activity）并在 perf 控制模式下窗口置顶。宿主机 diagnostic 跑的硬性前提：测量窗口全程可见；参考 VM 独占 GUI 会话天然满足，历史 VM 运行不受此问题影响。
+  5. 物理机 2026-08-14 diagnostic startup-idle（修复后口径）：冷启动 P95 1982 ms（贴近 2 s 预算）、空闲全树 RSS P95 413.4 MB（fail）、60 秒空闲 0 写入。canvas-io 与 15 分钟 soak 因宿主机窗口可见性中断未完成 diagnostic 重跑，待可见窗口会话或参考 VM 执行。
 
 ## 6. SC-010 开源分发记录
 
@@ -63,5 +70,7 @@
 
 - §1.1 两个 pre-existing 浏览器测试失败。
 - T078/T080 macOS 原生验收待在记录配置的 VM 或物理机执行；T094 仅为可选 Ubuntu 24.04 IME smoke test，Fedora/其他 Linux 矩阵已移出当前门禁。
-- T090（startup/idle 与 canvas/I/O）与 T108（30 分钟 soak）已在声明参考 VM 完整执行并产生真实 `fail` 报告；预算失败（冷启动 P95、10k pan/zoom fps/冻结、静置 CPU/写盘）作为已知风险保留，不阻断合并或开源发布。进程树 RSS 计量在 macOS 上仅含 Tauri 主进程（漏 WebKit 子进程），RSS 结论须按 §5 口径理解。
+- T090（startup/idle 与 canvas/I/O）与 T108（soak）已在声明参考 VM 完整执行并产生真实 `fail` 报告；预算失败（冷启动 P95、10k pan/zoom fps/冻结、静置 CPU/写盘）作为已知风险保留，不阻断合并或开源发布。
+- 2026-08-13 的 VM RSS 序列为 Tauri-only 口径（漏 WebKit 子进程）；2026-08-14 归因修复后为新测量序列，三个 spec 需在参考 VM 以新口径（含 ADR-006 的 15 分钟 soak）重测。物理机 diagnostic 已显示全树空闲 RSS P95 413 MB（>150 MB 预算），空闲 RSS 预算大概率在诚实口径下不达标，属待归因的真实产品发现（WebKit 子进程内存占比）。
+- 宿主机 diagnostic 性能跑要求测量窗口全程可见（rAF 遮挡暂停约束，§5）；违反时 driver 会在 10 秒内以可诊断错误失败而非挂起。
 - 上游 `@excalidraw/excalidraw` 内部 DOM 不在壳层 a11y 扫描范围（T093 残余说明）。

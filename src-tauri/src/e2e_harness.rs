@@ -43,6 +43,26 @@ use crate::{
 pub(crate) const RELIABILITY_SCENARIO_FLAG: &str = "--e2e-reliability-scenario";
 const E2E_ROOT_PREFIX: &str = "excalidraw-desktop-e2e-";
 
+/// Prevents macOS App Nap from suspending the harness process.
+///
+/// Performance workloads are driven by `requestAnimationFrame`; when the test
+/// window is occluded on a busy host, App Nap suspends the process and the
+/// driver silently stalls mid-command. The activity assertion is held for the
+/// whole process lifetime of the test-only build.
+#[cfg(target_os = "macos")]
+pub(crate) fn disable_app_nap() {
+    use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
+
+    let reason = NSString::from_str(
+        "excalidraw-desktop e2e harness keeps rAF-driven measurements running",
+    );
+    let token = NSProcessInfo::processInfo().beginActivityWithOptions_reason(
+        NSActivityOptions::UserInitiated | NSActivityOptions::LatencyCritical,
+        &reason,
+    );
+    std::mem::forget(token);
+}
+
 #[tauri::command]
 pub(crate) fn e2e_set_atomic_write_fault(point: AtomicWriteFaultPoint) {
     set_fault_point(Some(point));
