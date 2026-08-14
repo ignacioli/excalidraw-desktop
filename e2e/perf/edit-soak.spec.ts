@@ -25,7 +25,8 @@ import {
   PERF_BUDGETS,
 } from "./helpers/workloads";
 
-const REQUIRED_SOAK_DURATION_MS = 30 * 60_000;
+// The required soak duration is governed by ADR-006 (15 minutes since 2026-08-14).
+const REQUIRED_SOAK_DURATION_MS = 15 * 60_000;
 const WARM_UP_MS = 30_000;
 const BASELINE_WINDOW_MS = 60_000;
 const QUIESCENT_WINDOW_MS = 60_000;
@@ -48,7 +49,7 @@ function soakDurationMs(hardGate: boolean): number {
   return diagnosticDuration;
 }
 
-test("measures 30 minute editing stability and subsequent quiescence", async () => {
+test("measures 15 minute editing stability and subsequent quiescence", async () => {
   const referenceRun = process.env.PERF_REFERENCE_RUN === "1";
   const editDurationMs = soakDurationMs(referenceRun);
   test.setTimeout(editDurationMs + 300_000);
@@ -290,9 +291,9 @@ test("measures 30 minute editing stability and subsequent quiescence", async () 
       ? "pass"
       : "fail";
   const reason = !fullDuration
-    ? "A shortened diagnostic soak cannot evaluate the approved 30-minute budget."
+    ? "A shortened diagnostic soak cannot evaluate the approved 15-minute budget."
     : !measurementsAvailable
-      ? `The 30-minute native editing contract was unavailable or incomplete. ${contractError ?? ""}`.trim()
+      ? `The 15-minute native editing contract was unavailable or incomplete. ${contractError ?? ""}`.trim()
       : allWithinBudget
         ? "All evaluated T108 memory, idle CPU, and quiescent-write budgets passed."
         : "At least one evaluated T108 resource budget failed.";

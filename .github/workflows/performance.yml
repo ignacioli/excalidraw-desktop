@@ -14,8 +14,8 @@ jobs:
   macos-reference-measurement:
     name: Declared macOS VM reference measurement
     runs-on: [self-hosted, macOS, ARM64, excalidraw-perf]
-    # 30 minute edit soak + warm-up/baseline/quiescent windows + build margin.
-    timeout-minutes: 60
+    # 15 minute edit soak (ADR-006) + warm-up/baseline/quiescent windows + build margin.
+    timeout-minutes: 45
     env:
       CI: "true"
       PERF_TEST: "1"

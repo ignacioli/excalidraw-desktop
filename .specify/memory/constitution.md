@@ -1,15 +1,13 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 3.0.1 → 3.1.0
+Version change: 3.1.0 → 3.2.0
 Modified principles:
-  - Docs-Code Sync Gate: clarified that the same-PR coupling applies to user-facing
-    documentation, and that specs are the upstream prerequisite of a change (not bundled)
-  - Core Principles IV/V: noted that specs live in a private repository accessed via a
-    gitignored symlink
+  - Core Principle IV: the scripted-editing soak duration is shortened from 30 minutes to
+    15 minutes per ADR-006; the RSS-growth budget values (≤ 50MB and ≤ 15%) are unchanged
 Added sections: none
-Governance: MINOR change; scopes the Docs-Code Sync Gate to user-facing documentation and
-  records the specs private-repository location after the specs migration
+Governance: MINOR change; substantive revision of a measurement constraint recorded through
+  ADR-006 rather than a silent threshold edit, honoring the ADR-004 baseline-series rule
 Removed sections: none
 Templates requiring updates: none; templates read this constitution at runtime
 Follow-up TODOs: none
@@ -97,7 +95,8 @@ performance-budget red lines; a performance regression is equivalent to a functi
   version, guest OS/WebView, and virtual resources.
 - Cold start to editable canvas ≤ 2 s; idle application process-tree RSS ≤ 150MB.
 - Idle CPU P95 ≤ 1% of a single logical core; after a 10,000-element scene stabilizes, process-
-  tree RSS ≤ 350MB; after 30 minutes of scripted editing, RSS growth over the warm-up baseline
+  tree RSS ≤ 350MB; after 15 minutes of scripted editing (ADR-006), RSS growth over the
+  warm-up baseline
   MUST be both ≤ 50MB and ≤ 15%; when the app has been idle for 60 s, its managed data
   directory and mounted workspaces MUST have zero persistent writes.
 - Pan/zoom must stay usable and smooth in a 10,000+ element scene, with no perceptible
@@ -229,4 +228,4 @@ user worktree from accidental damage.
 - Complexity and deviations (new dependencies, abstraction layers, permission expansion) MUST
   have written justification, otherwise they are treated as violations.
 
-**Version**: 3.1.0 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-13
+**Version**: 3.2.0 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-14
