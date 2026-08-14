@@ -97,6 +97,14 @@ Validation must be proportional to risk and should eventually include, as applic
 
 Never claim a check passed unless it actually ran successfully. If validation requires unavailable services, target operating systems, or declared VM configuration details, report the exact gap without weakening code or tests.
 
+## Long-Running Agent Tasks
+
+These rules bind every coding agent that starts a command expected to run longer than a few minutes (performance measurements, soak tests, builds, VM runs):
+
+1. **Announce before starting**: state in the conversation, before launching, the expected duration and the concrete completion signal (for example "canvas-io spec, ~8–10 minutes, done when the report JSON lands"). The user must be able to leave and work on other things instead of waiting blind.
+2. **Heartbeat while running**: proactively check the task's health on a fixed interval (about every 5 minutes) and report the result into the conversation — even a no-progress report ("still running healthily, N samples collected") counts. A live process alone is not health; check observable intermediate artifacts (sample counts, report files, `error.json`). Tasks that cannot expose such signals should be fixed to expose them before being relied on.
+3. **30-minute cap with explicit exemption**: a single background command must not exceed 30 minutes by default. Splittable work must be split (for example, run the three perf specs as three commands; each boundary is a natural report point). A genuinely unsplittable longer task requires announcing the expected duration to the user and getting acknowledgment before launch, and must still satisfy the heartbeat rule.
+
 ## Git and Completion
 
 The primary branch is `main`. Do not commit unless explicitly requested. Keep changes focused, use short imperative commit subjects when asked to commit, and never bypass hooks or force-push the primary branch. Do not discard or overwrite user changes.
