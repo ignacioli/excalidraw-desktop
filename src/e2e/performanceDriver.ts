@@ -108,7 +108,9 @@ export class NativePerformanceDriver {
       // harness fails fast with the real cause; webview console output is
       // invisible to the spawned-process harness.
       try {
-        await this.dependencies.control.publishError(describeDriverError(error));
+        await this.dependencies.control.publishError(
+          describeDriverError(error),
+        );
       } catch (publishFailure) {
         this.dependencies.reportError(publishFailure);
       }
@@ -300,35 +302,60 @@ function isVisibleEditor(
   );
 }
 
-const FRAME_STALL_TIMEOUT_MS = 10_000;
+/** Occluded/hidden documents fail fast; this is the original hang detector. */
+export const FRAME_STALL_OCCLUDED_TIMEOUT_MS = 10_000;
+/**
+ * Visible 10k pan/zoom frames can exceed 10 s on the reference VM (2026-08-13
+ * max freeze was 15 668 ms). Aborting those as "stalls" turns a valid freeze
+ * sample into `not_evaluated`. Keep waiting long enough to record the interval.
+ */
+export const FRAME_STALL_VISIBLE_HANG_TIMEOUT_MS = 60_000;
 
 /**
  * Awaits the next animation frame but fails loudly when the frame clock
- * stalls (occluded window or a suspended process would otherwise hang the
- * driver forever without publishing any error).
+ * stalls. Hidden documents reject after 10 s (occlusion / App Nap). Visible
+ * documents wait up to 60 s so a slow 10k frame is recorded as freeze rather
+ * than treated as a hung driver.
  */
 function nextAnimationFrame(clock: PerformanceClock): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false;
-    const stallTimer = setTimeout(() => {
+    const waitStartedAt = Date.now();
+
+    const fail = (message: string) => {
       if (settled) {
         return;
       }
       settled = true;
-      reject(
-        new Error(
-          `requestAnimationFrame produced no frame for ${FRAME_STALL_TIMEOUT_MS} ms ` +
-            `(visibilityState=${clock.visibilityState()}); the window is likely ` +
+      clearInterval(stallTimer);
+      reject(new Error(message));
+    };
+
+    const stallTimer = setInterval(() => {
+      const visibility = clock.visibilityState();
+      const waitedMs = Date.now() - waitStartedAt;
+      if (visibility !== "visible") {
+        fail(
+          `requestAnimationFrame produced no frame for ${waitedMs} ms ` +
+            `(visibilityState=${visibility}); the window is likely ` +
             "occluded or the process was suspended, so the measurement cannot continue.",
-        ),
-      );
-    }, FRAME_STALL_TIMEOUT_MS);
+        );
+        return;
+      }
+      if (waitedMs >= FRAME_STALL_VISIBLE_HANG_TIMEOUT_MS) {
+        fail(
+          `requestAnimationFrame produced no frame for ${waitedMs} ms ` +
+            "(visibilityState=visible); the process appears hung, so the measurement cannot continue.",
+        );
+      }
+    }, FRAME_STALL_OCCLUDED_TIMEOUT_MS);
+
     clock.requestFrame(() => {
       if (settled) {
         return;
       }
       settled = true;
-      clearTimeout(stallTimer);
+      clearInterval(stallTimer);
       resolve();
     });
   });

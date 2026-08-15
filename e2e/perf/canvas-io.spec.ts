@@ -8,6 +8,7 @@ import {
 } from "../helpers/app";
 import {
   NativePerformanceControl,
+  RESULT_PUBLISH_SLACK_MS,
   type PerformanceCommandResult,
 } from "./helpers/nativePerformanceContract";
 import {
@@ -98,7 +99,7 @@ const WORKLOAD = {
 } as const;
 
 test("measures the 10k canvas and 60 second persistence workload", async () => {
-  test.setTimeout(300_000);
+  test.setTimeout(720_000);
   const referenceRun = process.env.PERF_REFERENCE_RUN === "1";
   const [environment, commit, executable] = await Promise.all([
     collectEnvironmentMetadata(),
@@ -173,7 +174,7 @@ test("measures the 10k canvas and 60 second persistence workload", async () => {
     });
     panZoomResult = await control.waitForResult(
       panZoomCommand,
-      PAN_ZOOM_DURATION_MS + 15_000,
+      PAN_ZOOM_DURATION_MS + RESULT_PUBLISH_SLACK_MS,
     );
 
     const observer = new DirectoryWriteObserver([
@@ -193,7 +194,7 @@ test("measures the 10k canvas and 60 second persistence workload", async () => {
       });
       editResult = await control.waitForResult(
         editCommand,
-        EDIT_DURATION_MS + 15_000,
+        EDIT_DURATION_MS + RESULT_PUBLISH_SLACK_MS,
       );
     } finally {
       writeObservation = await observer.stop();

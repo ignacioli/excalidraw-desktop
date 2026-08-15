@@ -8,6 +8,7 @@ import {
 } from "../helpers/app";
 import {
   NativePerformanceControl,
+  RESULT_PUBLISH_SLACK_MS,
   type PerformanceCommandResult,
 } from "./helpers/nativePerformanceContract";
 import {
@@ -192,7 +193,7 @@ test("measures 15 minute editing stability and subsequent quiescence", async () 
         webkitTracker: app.webkitTracker,
       })),
     );
-    soakResult = await control.waitForResult(command, 15_000);
+    soakResult = await control.waitForResult(command, RESULT_PUBLISH_SLACK_MS);
     if (soakResult.eventCount === 0) {
       throw new Error(
         "Soak command completed without any scripted edit events.",

@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   executePerformanceCommand,
+  FRAME_STALL_OCCLUDED_TIMEOUT_MS,
+  FRAME_STALL_VISIBLE_HANG_TIMEOUT_MS,
   NativePerformanceDriver,
   parseBootstrap,
   parseCommand,
@@ -179,5 +181,79 @@ describe("native performance driver contract", () => {
     expect(result.frameIntervalsMs).toHaveLength(10);
     expect(result.eventCount).toBe(4);
     expect(editor.applyPerformanceEdit).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe("native performance driver rAF stall watchdog", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("fails fast when rAF stalls while the document is hidden", async () => {
+    const clock: PerformanceClock = {
+      now: () => 0,
+      requestFrame: () => 0,
+      visibilityState: () => "hidden",
+    };
+    const pending = executePerformanceCommand(
+      command({ operation: "pan-zoom", durationMs: 1_000 }),
+      createEditor(),
+      clock,
+    );
+    const expectation = expect(pending).rejects.toThrow(
+      /visibilityState=hidden/,
+    );
+    await vi.advanceTimersByTimeAsync(FRAME_STALL_OCCLUDED_TIMEOUT_MS);
+    await expectation;
+  });
+
+  it("records a slow visible frame instead of aborting at the occlusion timeout", async () => {
+    let currentTime = 0;
+    let frames = 0;
+    const firstFrameDelayMs = 15_000;
+    const clock: PerformanceClock = {
+      now: () => currentTime,
+      requestFrame: (callback) => {
+        const delay = frames === 0 ? firstFrameDelayMs : 20;
+        frames += 1;
+        setTimeout(() => {
+          currentTime += delay;
+          callback(currentTime);
+        }, delay);
+        return currentTime;
+      },
+      visibilityState: () => "visible",
+    };
+    const pending = executePerformanceCommand(
+      command({ operation: "pan-zoom", durationMs: 80 }),
+      createEditor(),
+      clock,
+    );
+    await vi.advanceTimersByTimeAsync(firstFrameDelayMs);
+    const result = await pending;
+    expect(result.frameIntervalsMs[0]).toBe(firstFrameDelayMs);
+    expect(result.durationMs).toBe(firstFrameDelayMs);
+  });
+
+  it("rejects a visible hang after the long watchdog", async () => {
+    const clock: PerformanceClock = {
+      now: () => 0,
+      requestFrame: () => 0,
+      visibilityState: () => "visible",
+    };
+    const pending = executePerformanceCommand(
+      command({ operation: "pan-zoom", durationMs: 1_000 }),
+      createEditor(),
+      clock,
+    );
+    const expectation = expect(pending).rejects.toThrow(
+      /visibilityState=visible.*hung/,
+    );
+    await vi.advanceTimersByTimeAsync(FRAME_STALL_VISIBLE_HANG_TIMEOUT_MS);
+    await expectation;
   });
 });

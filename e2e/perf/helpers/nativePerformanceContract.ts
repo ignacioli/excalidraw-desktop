@@ -7,6 +7,13 @@ import { setTimeout as delay } from "node:timers/promises";
 const CONTRACT_SCHEMA_VERSION = "1.0.0";
 const CONTROL_ROOT_PREFIX = "excalidraw-desktop-perf-control-";
 
+/**
+ * Extra time after a workload's requested duration for result.json or
+ * error.json. Must exceed the driver's visible-hang watchdog (60 s) so a slow
+ * 10k frame is recorded instead of the Node waiter giving up first.
+ */
+export const RESULT_PUBLISH_SLACK_MS = 75_000;
+
 export type PerformanceScenario =
   "startup-editable" | "canvas-10k" | "edit-soak";
 
