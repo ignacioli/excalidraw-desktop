@@ -4,7 +4,9 @@ import { join } from "node:path";
 
 import type { WebKitProcessTracker } from "../../helpers/webkitProcesses";
 import {
+  collectProcessTreeBreakdown,
   collectProcessTreeSample,
+  type ProcessTreeBreakdown,
   type ProcessTreeSample,
 } from "./processMetrics";
 
@@ -21,27 +23,19 @@ export const PERF_BUDGETS = {
   quiescentWrites: 0,
 } as const;
 
-export async function collectProcessTreeWindow(options: {
-  rootPid: number;
-  startedAtNs: bigint;
-  associationTokens: readonly string[];
-  durationMs: number;
-  intervalMs: number;
-  webkitTracker?: WebKitProcessTracker;
-}): Promise<ProcessTreeSample[]> {
-  const samples: ProcessTreeSample[] = [];
+async function collectWindow<T>(
+  options: {
+    durationMs: number;
+    intervalMs: number;
+  },
+  collect: () => Promise<T>,
+): Promise<T[]> {
+  const samples: T[] = [];
   const deadline =
     process.hrtime.bigint() + BigInt(options.durationMs) * 1_000_000n;
   while (process.hrtime.bigint() < deadline) {
     const sampleStartedAt = process.hrtime.bigint();
-    samples.push(
-      await collectProcessTreeSample(
-        options.rootPid,
-        options.startedAtNs,
-        options.associationTokens,
-        options.webkitTracker,
-      ),
-    );
+    samples.push(await collect());
     const elapsedMs =
       Number(process.hrtime.bigint() - sampleStartedAt) / 1_000_000;
     const remainingMs = Number(deadline - process.hrtime.bigint()) / 1_000_000;
@@ -55,6 +49,42 @@ export async function collectProcessTreeWindow(options: {
     }
   }
   return samples;
+}
+
+export async function collectProcessTreeBreakdownWindow(options: {
+  rootPid: number;
+  startedAtNs: bigint;
+  associationTokens: readonly string[];
+  durationMs: number;
+  intervalMs: number;
+  webkitTracker?: WebKitProcessTracker;
+}): Promise<ProcessTreeBreakdown[]> {
+  return collectWindow(options, () =>
+    collectProcessTreeBreakdown(
+      options.rootPid,
+      options.startedAtNs,
+      options.associationTokens,
+      options.webkitTracker,
+    ),
+  );
+}
+
+export async function collectProcessTreeWindow(options: {
+  rootPid: number;
+  startedAtNs: bigint;
+  associationTokens: readonly string[];
+  durationMs: number;
+  intervalMs: number;
+  webkitTracker?: WebKitProcessTracker;
+}): Promise<ProcessTreeSample[]> {
+  return collectWindow(options, () =>
+    collectProcessTreeSample(
+      options.rootPid,
+      options.startedAtNs,
+      options.associationTokens,
+      options.webkitTracker,
+    ),
+  );
 }
 
 export function frameStatistics(frameIntervalsMs: readonly number[]): {

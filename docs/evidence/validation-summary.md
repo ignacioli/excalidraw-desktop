@@ -78,7 +78,11 @@
 
 - §1.1 两个 pre-existing 浏览器测试失败。
 - T078/T080 macOS 原生验收待在记录配置的 VM 或物理机执行；T094 仅为可选 Ubuntu 24.04 IME smoke test，Fedora/其他 Linux 矩阵已移出当前门禁。
-- T090（startup/idle 与 canvas/I/O）与 T108（soak）已在声明参考 VM 以 **全树归因新口径** 完整重测并产生真实 `fail` 报告（§5 2026-08-14/15 序列）。预算失败扩大为：冷启动 P95、空闲全树 RSS（410.7 MB > 150 MB）、10k 全树 RSS（726.4 MB > 350 MB）、10k pan/zoom fps/冻结、15 分钟 soak RSS 增长（167 MB / 22.6%）、静置 CPU（28.9%）与静置写盘（8/8）。失败作为已知风险保留，不阻断合并或开源发布；预算重校准须走 ADR（ADR-004），属 Phase 2 归因之后的 Phase 3。
+- 2026-08-15 Phase 2 物理机归因（未重跑 T090/T108；报告 gitignored）：
+  1. 分角色 RSS（`e2e/perf/results/phase2-attribution.host.json`，SHA-256 `6681a9b6dc469049e20d68ba2230c1262019832d790723471e2b3309d4de6d4a`，二进制 `837c5cd8…`）：空闲全树 P95 **400.7 MB** = WebContent 195.4 + Tauri 147.9 + GPU 40.4 + Network 17.0。10k 加载后（编辑前）**761.7 MB** = WebContent 427.8 + Tauri 239.8 + GPU 76.8 + Network 17.2。150 / 350 MB 全树预算低于 WebContent 单项，属预算对照基线而非产品泄漏。空闲 CPU P95 **9.4%**（Tauri 4.2 + WebContent 5.2），空画布已远超 1%。
+  2. 静置 8 次写：15 秒高频编辑后立即观察 60 秒，仍是 **8 事件 / 8 路径**（与 T108 相同）。路径为一次 `save_draft` 的 recovery 原子写 + 一次 idle checkpoint 的 `performance.excalidraw` 原子写 + sqlite/WAL。编辑结束后再等 5 秒再观察 20 秒：**0 写入**（`phase2-panzoom.host.json`）。不是持续后台写盘。
+  3. pan/zoom A/B（`phase2-panzoom.host.json`，SHA-256 `882da7d55d54b844078516d9c52b24e1a5da18aea0d200f2dce7262b47b5ebc8`，探测二进制 `3d747904…`）：官方每帧 `updateScene` 振荡 zoom **24.38 fps** / 91 ms；同场景锁定 zoom=1 只平移 **59.69 fps** / 63 ms。物理机 21.82 fps 主要是测试视口在每帧改 zoom，不是 10k 平移本身。探测用的 adapter 种子约定已从工作区撤回。
+- T090（startup/idle 与 canvas/I/O）与 T108（soak）已在声明参考 VM 以 **全树归因新口径** 完整重测并产生真实 `fail` 报告（§5 2026-08-14/15 序列）。Phase 2 结论：RSS 与 idle CPU 走 Phase 3 预算 ADR；pan/zoom 与静置写盘走 workload（视口不再每帧振荡 zoom；soak 观察窗口从 `draftScheduler` idle 3 s 之后开始）。失败仍不阻断合并或开源发布；禁止静默改阈值（ADR-004）。
 - 物理机 diagnostic：2026-08-15 已用同一份 `837c5cd8…` 二进制跑完 startup-idle / canvas-io / 15 分钟 soak（`*.host.json`，§5）。空闲 RSS 411 MB 与 VM 410.7 MB 同量级；10k pan/zoom 21.82 fps / 108 ms 冻结，对照 VM 2.10 fps / 15396 ms，低帧率主要是虚拟化；静置 8 次写盘两边相同。
 - 宿主机 diagnostic 性能跑要求测量窗口全程可见（rAF 遮挡暂停约束，§5）；`visibilityState=hidden` 时 driver 10 秒失败，可见慢帧最多等 60 秒。
 - 上游 `@excalidraw/excalidraw` 内部 DOM 不在壳层 a11y 扫描范围（T093 残余说明）。

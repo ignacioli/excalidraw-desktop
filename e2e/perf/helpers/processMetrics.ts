@@ -57,6 +57,21 @@ export interface ProcessTreeSample {
   processClasses: ProcessClassCounts;
 }
 
+export interface ProcessRoleSample {
+  pid: number;
+  role: keyof ProcessClassCounts;
+  name: string;
+  rssBytes: number;
+  cpuPercent: number;
+}
+
+export interface ProcessTreeBreakdown {
+  tree: ProcessTreeSample;
+  processes: ProcessRoleSample[];
+  rssBytesByClass: ProcessClassCounts;
+  cpuPercentByClass: Record<keyof ProcessClassCounts, number>;
+}
+
 export interface ProcessTreeAccounting {
   rootProcessName: string;
   associationMethod: string;
@@ -315,12 +330,21 @@ export function processTreeAccounting(
   };
 }
 
-export async function collectProcessTreeSample(
+function emptyClassCounts(): ProcessClassCounts {
+  return {
+    tauri: 0,
+    webview: 0,
+    gpu: 0,
+    network: 0,
+    other: 0,
+  };
+}
+
+async function resolveIncludedRecords(
   rootPid: number,
-  startedAtNs: bigint,
   associationTokens: readonly string[],
   webkitTracker?: WebKitProcessTracker,
-): Promise<ProcessTreeSample> {
+): Promise<ProcessRecord[]> {
   const records = await snapshotProcesses();
   const root = records.find((record) => record.pid === rootPid);
   if (!root) {
@@ -348,32 +372,79 @@ export async function collectProcessTreeSample(
     }
   }
 
-  const included = records.filter((record) => includedPids.has(record.pid));
-  const classes: ProcessClassCounts = {
+  return records.filter((record) => includedPids.has(record.pid));
+}
+
+export async function collectProcessTreeBreakdown(
+  rootPid: number,
+  startedAtNs: bigint,
+  associationTokens: readonly string[],
+  webkitTracker?: WebKitProcessTracker,
+): Promise<ProcessTreeBreakdown> {
+  const included = await resolveIncludedRecords(
+    rootPid,
+    associationTokens,
+    webkitTracker,
+  );
+  const processClasses = emptyClassCounts();
+  const rssBytesByClass = emptyClassCounts();
+  const cpuPercentByClass: Record<keyof ProcessClassCounts, number> = {
     tauri: 0,
     webview: 0,
     gpu: 0,
     network: 0,
     other: 0,
   };
-  for (const record of included) {
-    classes[processClass(record, rootPid)] += 1;
-  }
+  const processes: ProcessRoleSample[] = included.map((record) => {
+    const role = processClass(record, rootPid);
+    const rssBytes = record.rssKilobytes * 1024;
+    processClasses[role] += 1;
+    rssBytesByClass[role] += rssBytes;
+    cpuPercentByClass[role] = round(cpuPercentByClass[role] + record.cpuPercent);
+    return {
+      pid: record.pid,
+      role,
+      name: record.name,
+      rssBytes,
+      cpuPercent: record.cpuPercent,
+    };
+  });
 
   return {
-    monotonicMs: round(
-      Number(process.hrtime.bigint() - startedAtNs) / 1_000_000,
-    ),
-    rssBytes: included.reduce(
-      (total, record) => total + record.rssKilobytes * 1024,
-      0,
-    ),
-    cpuPercentOfOneLogicalCore: round(
-      included.reduce((total, record) => total + record.cpuPercent, 0),
-    ),
-    processCount: included.length,
-    processClasses: classes,
+    tree: {
+      monotonicMs: round(
+        Number(process.hrtime.bigint() - startedAtNs) / 1_000_000,
+      ),
+      rssBytes: included.reduce(
+        (total, record) => total + record.rssKilobytes * 1024,
+        0,
+      ),
+      cpuPercentOfOneLogicalCore: round(
+        included.reduce((total, record) => total + record.cpuPercent, 0),
+      ),
+      processCount: included.length,
+      processClasses,
+    },
+    processes,
+    rssBytesByClass,
+    cpuPercentByClass,
   };
+}
+
+export async function collectProcessTreeSample(
+  rootPid: number,
+  startedAtNs: bigint,
+  associationTokens: readonly string[],
+  webkitTracker?: WebKitProcessTracker,
+): Promise<ProcessTreeSample> {
+  return (
+    await collectProcessTreeBreakdown(
+      rootPid,
+      startedAtNs,
+      associationTokens,
+      webkitTracker,
+    )
+  ).tree;
 }
 
 export function percentile(
@@ -494,6 +565,11 @@ export class DirectoryWriteObserver {
         "write observation covers only the explicitly supplied application-managed data roots and mounted test workspaces",
       ],
     };
+  }
+
+  /** Absolute paths observed by fs.watch or the before/after snapshot. */
+  changedPaths(): string[] {
+    return [...this.#changedPaths].sort();
   }
 }
 
