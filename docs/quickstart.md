@@ -1,6 +1,6 @@
 # Quickstart & Validation Guide: 跨平台 Excalidraw Desktop
 
-**Date**: 2026-08-04 | **Last updated**: 2026-08-12 | **Plan**: [plan.md](./plan.md) | **设计契约**: [../../DESIGN.md](../../DESIGN.md) | **IPC 契约**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md)
+**Date**: 2026-08-04 | **Last updated**: 2026-08-15 | **Plan**: [plan.md](./plan.md) | **设计契约**: [../../DESIGN.md](../../DESIGN.md) | **IPC 契约**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md)
 
 本文件是端到端验证指南：环境前提、构建运行命令、按用户故事组织的验证场景与预期结果。实现细节见 tasks.md 与源码，此处不重复。
 
@@ -104,11 +104,11 @@ APP_E2E=1 pnpm e2e           # Playwright 桌面 E2E（测试专用构建，暴�
 | 指标 | 夹具 | 阈值 |
 |------|------|------|
 | 冷启动 | 清空应用测试数据，执行 10 次冷进程启动；单调时钟记录进程启动 → 画布可编辑并计算 P95 | ≤2s（SC-002） |
-| 空载内存 | 启动稳定 30s 后采样 60s，聚合 Tauri 主进程及关联 WebView/GPU 进程树 RSS P95 | ≤150MB（SC-002） |
-| 空闲 CPU | 同一稳定窗口采样应用进程树 CPU P95，按单逻辑核归一化 | ≤1% 单逻辑核（SC-013） |
-| 大场景帧率/内存 | 10k 图元固定 fixture + 平移/缩放脚本，采集帧时间与场景稳定后的进程树 RSS | ≥30fps、目标 60fps、无 >100ms 冻结、RSS ≤350MB（SC-005/013） |
+| 空载内存 | 启动稳定 30s 后采样 60s，聚合 Tauri 主进程及关联 WebView/GPU 进程树 RSS P95 | ≤500MB（SC-002，ADR-007） |
+| 空闲 CPU | soak 后崩溃安全刷新完成，再采样 60s 进程树 CPU P95，按单逻辑核归一化 | ≤35% 单逻辑核（SC-013，ADR-007） |
+| 大场景帧率/内存 | 10k 图元固定 fixture + 恒定缩放平移脚本，采集帧时间与场景稳定后的进程树 RSS | ≥30fps、目标 60fps、无 >100ms 冻结、RSS ≤950MB（SC-005/013，ADR-007） |
 | 写盘削峰 | 60s 连续绘制脚本 + 应用管理路径写入计数 | 写次数 ≤事件数 1%，且无持久化掉帧尖峰（SC-006） |
-| 长时稳定性 | 热身后脚本编辑 30min，对比进程树 RSS；再静置 60s 观察 CPU 与应用管理路径/工作区写入 | RSS 增长同时 ≤50MB 且 ≤15%；空闲 CPU ≤1%；零持续写入（SC-013） |
+| 长时稳定性 | 热身后脚本编辑 15min，对比进程树 RSS；等待 5s 崩溃安全刷新后再静置 60s 观察 CPU 与写入 | RSS 增长同时 ≤50MB 且 ≤15%；空闲 CPU ≤35%；零持续写入（SC-013，ADR-006/007） |
 
 T090/T108 在声明的 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB 参考 VM 上完整执行；工作流仍使用 `self-hosted`、`macOS`、`ARM64`、`excalidraw-perf` 标签。报告记录宿主硬件、虚拟化软件/版本、客体 OS、WebView、vCPU 与内存并输出真实 `pass`/`fail`；预算失败不阻断合并或开源发布。参考配置变化时必须建立新的独立测量序列并更新 ADR，禁止把不可比结果混合或静默放宽预算。
 

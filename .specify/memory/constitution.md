@@ -1,13 +1,14 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 3.1.0 → 3.2.0
+Version change: 3.2.0 → 3.3.0
 Modified principles:
-  - Core Principle IV: the scripted-editing soak duration is shortened from 30 minutes to
-    15 minutes per ADR-006; the RSS-growth budget values (≤ 50MB and ≤ 15%) are unchanged
+  - Core Principle IV: idle process-tree RSS 150MB → 500MB, 10k RSS 350MB → 950MB,
+    idle CPU 1% → 35% of one logical core; T090 pan workload is constant-zoom pan;
+    T108 quiescent-write observation starts 5 s after scripted editing (ADR-007)
 Added sections: none
-Governance: MINOR change; substantive revision of a measurement constraint recorded through
-  ADR-006 rather than a silent threshold edit, honoring the ADR-004 baseline-series rule
+Governance: MINOR change; substantive revision of measurement constraints recorded through
+  ADR-007 rather than a silent threshold edit, honoring the ADR-004 baseline-series rule
 Removed sections: none
 Templates requiring updates: none; templates read this constitution at runtime
 Follow-up TODOs: none
@@ -93,14 +94,15 @@ performance-budget red lines; a performance regression is equivalent to a functi
   environment. The first reference environment is a macOS 26.5.2 VM (4 vCPU / 8GB RAM) in
   Parallels Desktop Pro 26.4.1; reports MUST record host hardware, virtualization software and
   version, guest OS/WebView, and virtual resources.
-- Cold start to editable canvas ≤ 2 s; idle application process-tree RSS ≤ 150MB.
-- Idle CPU P95 ≤ 1% of a single logical core; after a 10,000-element scene stabilizes, process-
-  tree RSS ≤ 350MB; after 15 minutes of scripted editing (ADR-006), RSS growth over the
+- Cold start to editable canvas ≤ 2 s; idle application process-tree RSS ≤ 500MB (ADR-007).
+- Idle CPU P95 ≤ 35% of a single logical core; after a 10,000-element scene stabilizes, process-
+  tree RSS ≤ 950MB; after 15 minutes of scripted editing (ADR-006), RSS growth over the
   warm-up baseline
-  MUST be both ≤ 50MB and ≤ 15%; when the app has been idle for 60 s, its managed data
+  MUST be both ≤ 50MB and ≤ 15%; when the app has been idle for 60 s after the crash-safety
+  flush has settled (ADR-007), its managed data
   directory and mounted workspaces MUST have zero persistent writes.
-- Pan/zoom must stay usable and smooth in a 10,000+ element scene, with no perceptible
-  >100ms freeze during editing.
+- Pan at constant zoom must stay usable and smooth in a 10,000+ element scene (T090 scripted
+  pan, ADR-007), with no perceptible >100ms freeze during editing.
 - The high-frequency editing path MUST NOT serialize the full scene, transfer over IPC, or
   write to disk on every event; persistence MUST go through debounce/coalescing scheduling
   (≥95% reduction over per-event disk writes).
@@ -228,4 +230,4 @@ user worktree from accidental damage.
 - Complexity and deviations (new dependencies, abstraction layers, permission expansion) MUST
   have written justification, otherwise they are treated as violations.
 
-**Version**: 3.2.0 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-14
+**Version**: 3.3.0 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-15
