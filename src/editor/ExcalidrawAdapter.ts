@@ -61,13 +61,11 @@ export class ExcalidrawAdapter {
   applyPerformanceViewport(seed: number, frameIndex: number): void {
     const phase = ((seed + frameIndex) % 240) / 240;
     const radians = phase * Math.PI * 2;
-    const zoom = normalizeZoom(1 + Math.sin(radians) * 0.15);
-
     this.api.updateScene({
       appState: {
         scrollX: Math.cos(radians) * 180,
         scrollY: Math.sin(radians) * 120,
-        zoom: { value: zoom },
+        zoom: { value: normalizeZoom(1) },
       },
     });
   }

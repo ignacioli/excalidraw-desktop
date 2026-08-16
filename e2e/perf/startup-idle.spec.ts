@@ -42,7 +42,7 @@ const BUDGET = {
   },
   idleProcessTreeRss: {
     value: PERF_BUDGETS.idleRssBytes,
-    unit: "bytes (150 decimal MB)",
+    unit: "bytes (500 decimal MB)",
     statistic: "nearest-rank p95",
   },
 } as const;

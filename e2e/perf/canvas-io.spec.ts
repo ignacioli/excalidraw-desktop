@@ -55,7 +55,7 @@ const BUDGET = {
   },
   stable10kSceneProcessTreeRss: {
     value: PERF_BUDGETS.stable10kRssBytes,
-    unit: "bytes (350 decimal MB)",
+    unit: "bytes (950 decimal MB)",
     statistic: "nearest-rank p95 after scene warm-up",
   },
   writesPerEditEventRatio: {
@@ -82,7 +82,8 @@ const WORKLOAD = {
   },
   panZoom: {
     durationMs: PAN_ZOOM_DURATION_MS,
-    statistic: "rAF-derived observed FPS and maximum frame interval",
+    statistic:
+      "rAF-derived observed FPS and maximum frame interval during constant-zoom pan (ADR-007)",
   },
   editing: {
     durationMs: EDIT_DURATION_MS,

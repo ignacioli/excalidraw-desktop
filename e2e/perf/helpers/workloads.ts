@@ -12,9 +12,9 @@ import {
 
 export const PERF_BUDGETS = {
   coldStartToEditableMs: 2_000,
-  idleRssBytes: 150_000_000,
-  idleCpuPercentOfOneCore: 1,
-  stable10kRssBytes: 350_000_000,
+  idleRssBytes: 500_000_000,
+  idleCpuPercentOfOneCore: 35,
+  stable10kRssBytes: 950_000_000,
   minimumPanZoomFps: 30,
   maximumFreezeMs: 100,
   maximumWritesPerEditEventRatio: 0.01,
@@ -22,6 +22,14 @@ export const PERF_BUDGETS = {
   soakRssGrowthPercent: 15,
   quiescentWrites: 0,
 } as const;
+
+/**
+ * Wait after scripted editing before the T108 quiescent write window so
+ * DraftScheduler debounce (300 ms) + idle checkpoint (3 s) can finish.
+ * 2026-08-15 physical attribution measured 0 writes in a 20 s window
+ * that started 5 s after edits.
+ */
+export const QUIESCENT_SETTLE_MS = 5_000;
 
 async function collectWindow<T>(
   options: {

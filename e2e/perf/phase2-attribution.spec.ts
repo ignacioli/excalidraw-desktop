@@ -1,3 +1,8 @@
+/**
+ * Diagnostic spec: 2026-08-15 physical attribution of idle/10k RSS by
+ * process class and post-edit writes. Filename `phase2-*` is historical
+ * and is not tasks.md SDD Phase 2 (Foundational).
+ */
 import { test } from "@playwright/test";
 import { setTimeout as delay } from "node:timers/promises";
 import { relative } from "node:path";
@@ -58,7 +63,7 @@ function summarizeBreakdownWindow(
   lastProcesses: ProcessTreeBreakdown["processes"];
 } {
   if (samples.length === 0) {
-    throw new Error("Phase 2 attribution window collected no samples.");
+    throw new Error("Attribution window collected no samples.");
   }
   const rssP95ByClass = {} as Record<keyof ProcessClassCounts, number>;
   const cpuP95ByClass = {} as Record<keyof ProcessClassCounts, number>;

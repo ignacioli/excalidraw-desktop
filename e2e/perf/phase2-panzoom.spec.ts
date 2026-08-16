@@ -25,9 +25,9 @@ import {
 const READY_TIMEOUT_MS = 15_000;
 const SCENE_WARM_UP_MS = 20_000;
 const PAN_DURATION_MS = 15_000;
-/** Pan-only arm used seed 90_000 with a temporary adapter probe that held zoom
- * at 1. That probe is reverted; do not treat a re-run as pan-only unless the
- * probe (or an equivalent workload change) is restored. */
+/** Official T090 pan is constant-zoom after ADR-007. Seed 90_000 was a
+ * 2026-08-15 attribution probe; a re-run of this spec is no longer an A/B.
+ * Filename `phase2-*` is historical and is not tasks.md SDD Phase 2. */
 const SHORT_EDIT_DURATION_MS = 15_000;
 const SHORT_EDIT_TARGET_EVENTS = 900;
 const SETTLE_BEFORE_OBSERVE_MS = 5_000;

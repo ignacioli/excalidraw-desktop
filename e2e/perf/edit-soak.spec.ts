@@ -28,6 +28,7 @@ import {
   collectProcessTreeWindow,
   createTenThousandElementFixture,
   PERF_BUDGETS,
+  QUIESCENT_SETTLE_MS,
 } from "./helpers/workloads";
 
 // The required soak duration is governed by ADR-006 (15 minutes since 2026-08-14).
@@ -98,10 +99,11 @@ test("measures 15 minute editing stability and subsequent quiescence", async () 
     },
     quiescent: {
       durationMs: QUIESCENT_WINDOW_MS,
+      settleMs: QUIESCENT_SETTLE_MS,
       sampleIntervalMs: SAMPLE_INTERVAL_MS,
       statistics: ["process-tree RSS p95", "process-tree CPU p95"],
       writeObservation:
-        "application-managed data/config/cache/runtime roots and mounted workspace",
+        "application-managed data/config/cache/runtime roots and mounted workspace after crash-safety flush",
     },
     expectedVariance: {
       rss: "up to 10 percent run-to-run before investigation; both absolute and relative caps remain mandatory",
@@ -199,6 +201,8 @@ test("measures 15 minute editing stability and subsequent quiescence", async () 
         "Soak command completed without any scripted edit events.",
       );
     }
+
+    await delay(QUIESCENT_SETTLE_MS);
 
     const observer = new DirectoryWriteObserver([
       app.paths.data,
