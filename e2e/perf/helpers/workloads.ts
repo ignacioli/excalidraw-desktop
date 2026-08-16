@@ -35,6 +35,7 @@ async function collectWindow<T>(
   options: {
     durationMs: number;
     intervalMs: number;
+    onSample?: (sample: T, samples: readonly T[]) => Promise<void> | void;
   },
   collect: () => Promise<T>,
 ): Promise<T[]> {
@@ -44,6 +45,7 @@ async function collectWindow<T>(
   while (process.hrtime.bigint() < deadline) {
     const sampleStartedAt = process.hrtime.bigint();
     samples.push(await collect());
+    await options.onSample?.(samples[samples.length - 1]!, samples);
     const elapsedMs =
       Number(process.hrtime.bigint() - sampleStartedAt) / 1_000_000;
     const remainingMs = Number(deadline - process.hrtime.bigint()) / 1_000_000;
@@ -66,6 +68,10 @@ export async function collectProcessTreeBreakdownWindow(options: {
   durationMs: number;
   intervalMs: number;
   webkitTracker?: WebKitProcessTracker;
+  onSample?: (
+    sample: ProcessTreeBreakdown,
+    samples: readonly ProcessTreeBreakdown[],
+  ) => Promise<void> | void;
 }): Promise<ProcessTreeBreakdown[]> {
   return collectWindow(options, () =>
     collectProcessTreeBreakdown(
