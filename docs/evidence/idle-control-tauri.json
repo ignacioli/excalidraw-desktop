@@ -1,0 +1,61 @@
+{
+  "label": "tauri-empty-window",
+  "command": "/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/cursor-sandbox-cache/2de72dda11eef44935231e32f05244d6/cargo-target/release/tauri-idle-control",
+  "pid": 49377,
+  "sampleCount": 57,
+  "rssBytes": {
+    "p50": 201179136,
+    "p95": 201228288,
+    "max": 201228288
+  },
+  "cpuPercentOfOneLogicalCore": {
+    "p50": 0,
+    "p95": 0,
+    "max": 0
+  },
+  "rssBytesP95ByClass": {
+    "host": 118931456,
+    "webview": 37076992,
+    "gpu": 28213248,
+    "network": 17022976,
+    "other": 0
+  },
+  "cpuPercentP95ByClass": {
+    "host": 0,
+    "webview": 0,
+    "gpu": 0,
+    "network": 0,
+    "other": 0
+  },
+  "lastProcesses": [
+    {
+      "pid": 49377,
+      "role": "host",
+      "name": "tauri-idle-contr",
+      "rssBytes": 118898688,
+      "cpuPercent": 0
+    },
+    {
+      "pid": 49445,
+      "role": "gpu",
+      "name": "com.apple.WebKit",
+      "rssBytes": 28213248,
+      "cpuPercent": 0
+    },
+    {
+      "pid": 49446,
+      "role": "network",
+      "name": "com.apple.WebKit",
+      "rssBytes": 17006592,
+      "cpuPercent": 0
+    },
+    {
+      "pid": 49447,
+      "role": "webview",
+      "name": "com.apple.WebKit",
+      "rssBytes": 37060608,
+      "cpuPercent": 0
+    }
+  ],
+  "lastProcessCount": 4
+}

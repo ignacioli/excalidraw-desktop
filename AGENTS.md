@@ -43,6 +43,8 @@ Spec-driven deliverables are recorded at these canonical paths. The private spec
 | Accessibility audit | `docs/evidence/a11y-audit.md` |
 | Validation summaries | `docs/evidence/validation-summary.md` |
 
+`Phase N` in `specs/` (`tasks.md`, `plan.md`) means the Spec-Driven Development stages (Setup, Foundational, US1–US7, Polish). Do not reuse `Phase 1/2/3/4` in ADRs or evidence for the 2026-08-14 performance measurement work; that numbering is not SDD. Name those activities by date and what they did (full-tree remeasure, physical attribution, ADR-007 budget/workload calibration).
+
 ## Spec-Driven Development (SDD) Workflow
 
 1. Translate a fuzzy request into the smallest coherent user-visible outcome. Identify assumptions, affected boundaries, and what success looks like.

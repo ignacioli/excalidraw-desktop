@@ -1,0 +1,76 @@
+{
+  "label": "safari-excalidraw.com",
+  "url": "https://excalidraw.com/",
+  "pid": 61825,
+  "safariHostWasPreexisting": false,
+  "sampleCount": 57,
+  "rssBytes": {
+    "p50": 629276672,
+    "p95": 629440512,
+    "max": 629456896
+  },
+  "cpuPercentOfOneLogicalCore": {
+    "p50": 0,
+    "p95": 0,
+    "max": 0.2
+  },
+  "rssBytesP95ByClass": {
+    "host": 233160704,
+    "webview": 299761664,
+    "gpu": 47874048,
+    "network": 48709632,
+    "other": 0
+  },
+  "cpuPercentP95ByClass": {
+    "host": 0,
+    "webview": 0,
+    "gpu": 0,
+    "network": 0,
+    "other": 0
+  },
+  "lastProcesses": [
+    {
+      "pid": 61825,
+      "role": "host",
+      "name": "Safari",
+      "rssBytes": 233111552,
+      "cpuPercent": 0
+    },
+    {
+      "pid": 61831,
+      "role": "webview",
+      "name": "com.apple.WebKit",
+      "rssBytes": 170852352,
+      "cpuPercent": 0
+    },
+    {
+      "pid": 61833,
+      "role": "network",
+      "name": "com.apple.WebKit",
+      "rssBytes": 48693248,
+      "cpuPercent": 0
+    },
+    {
+      "pid": 61944,
+      "role": "gpu",
+      "name": "com.apple.WebKit",
+      "rssBytes": 47874048,
+      "cpuPercent": 0
+    },
+    {
+      "pid": 61947,
+      "role": "webview",
+      "name": "com.apple.WebKit",
+      "rssBytes": 80052224,
+      "cpuPercent": 0
+    },
+    {
+      "pid": 61950,
+      "role": "webview",
+      "name": "com.apple.WebKit",
+      "rssBytes": 48824320,
+      "cpuPercent": 0
+    }
+  ],
+  "lastProcessCount": 6
+}
