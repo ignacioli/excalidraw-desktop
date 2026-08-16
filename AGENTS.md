@@ -4,7 +4,7 @@
 
 Build `excalidraw-desktop` as a macOS-first desktop application using Tauri 2.x, a React/TypeScript frontend, and a Rust backend. macOS is the required native acceptance platform; Ubuntu 24.04 Desktop is optional community validation, while Fedora/other Linux and Windows are outside the current support commitment. Preserve native desktop behavior, strong security boundaries, accessibility, and maintainable frontend/backend contracts.
 
-The repository is a working Tauri 2.x + Vite/React application implementing seven user stories: offline editing and saving, crash-safe persistence, a workspace file sidebar, external-change detection and conflict resolution, PNG/SVG export, macOS native integration, and multi-workspace browsing with thumbnails and asset deduplication. The persistence core is reliability-first: atomic writes, recovery snapshots, and fault-injection testing.
+The repository is a working Tauri 2.x + Vite/React application implementing seven user stories: offline editing and saving, crash-safe persistence, a workspace file sidebar, external-change detection and conflict resolution, PNG/SVG export, macOS native integration, and multi-workspace browsing with thumbnails and asset deduplication. The persistence core is reliability-first: coalesced hot-tier drafts, atomic cold-file writes, recovery snapshots, and fault-injection testing. Do not regress that contract to chase RSS or idle CPU—do not switch back to in-place overwrites, lengthen the draft window as a resource workaround, or remove recovery snapshots / idle checkpoints.
 
 ## Expected Structure
 
