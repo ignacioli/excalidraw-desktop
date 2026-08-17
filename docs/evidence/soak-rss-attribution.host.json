@@ -1,0 +1,4713 @@
+{
+  "kind": "soak-rss-attribution",
+  "commit": "e2e0de985f5f4e4877d8063107ad0c40e121fcb0",
+  "hardware": "Mac17,9 (Apple M5 Pro)",
+  "memory": {
+    "bytes": 51539607552,
+    "gibibytes": 48
+  },
+  "architecture": "arm64",
+  "logicalCores": 15,
+  "osVersion": "macOS 26.5.2 (25F84)",
+  "webviewVersion": "WebKit 21624.2.5.11.8",
+  "executionEnvironment": {
+    "type": "physical",
+    "hostHardware": "Apple M5 Pro / 48GB",
+    "virtualization": null
+  },
+  "binaryPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/src-tauri/target/release/bundle/macos/excalidraw-desktop.app/Contents/MacOS/excalidraw-desktop",
+  "binarySha256": "e8bef9b754c526632b49655ad3a23c81ac060b3004ab8881ed7a00fe384b1f99",
+  "binaryHint": "reuses the current e2e-harness release binary; no official T090/T108 rerun",
+  "processTreeAccounting": {
+    "rootProcessName": "excalidraw-desktop",
+    "associationMethod": "recursive parent PID closure, plus WebView/GPU/Network auxiliary processes carrying an explicit app association token, plus launch-time-window attribution of WebKit-role processes re-parented to launchd (PID 1) that appeared after the app launch and were absent from the pre-launch snapshot",
+    "includedClasses": [
+      "Tauri main",
+      "descendants",
+      "associated WebView",
+      "GPU",
+      "Network"
+    ],
+    "exclusions": [
+      "unrelated system WebView/GPU processes",
+      "WebKit-role processes that already existed before the app launch"
+    ],
+    "platformLimitations": [
+      "macOS re-parents WKWebView auxiliary processes to launchd with no app token; launch-time-window attribution assumes no other same-user WebKit app is launched during the measurement window",
+      "ps etime has one-second granularity; a two-second slack is applied to the launch window",
+      "ps RSS can include shared pages charged independently to more than one process",
+      "ps CPU is an OS interval estimate normalized so 100 percent equals one logical core"
+    ]
+  },
+  "workload": {
+    "name": "soak-rss-attribution",
+    "fixture": "deterministic 10,000-element scene",
+    "operation": "edit-soak",
+    "seed": 40000,
+    "warmUpMs": 30000,
+    "baselineWindowMs": 20000,
+    "editDurationMs": 180000,
+    "postEditWindowMs": 30000,
+    "sampleIntervalMs": 1000,
+    "notes": "Same 4 Hz soak edit rate as T108. Covers the host evidence rise (complete by ~40 s, 788→1110 MB by ~100 s) plus a plateau confirmation. Window must stay visible (harness always_on_top)."
+  },
+  "samples": {
+    "preEditBaseline": [
+      {
+        "monotonicMs": 30894.134,
+        "rssBytes": 764772352,
+        "rssBytesByClass": {
+          "tauri": 236814336,
+          "webview": 433127424,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.1,
+          "webview": 4.3,
+          "gpu": 0.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 31882.486,
+        "rssBytes": 764821504,
+        "rssBytesByClass": {
+          "tauri": 236814336,
+          "webview": 433176576,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3.5,
+          "webview": 3.9,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 32889.9,
+        "rssBytes": 764772352,
+        "rssBytesByClass": {
+          "tauri": 236814336,
+          "webview": 433127424,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 3.3,
+          "gpu": 0,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 33892.752,
+        "rssBytes": 764821504,
+        "rssBytesByClass": {
+          "tauri": 236814336,
+          "webview": 433176576,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.9,
+          "webview": 3.6,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 34892.343,
+        "rssBytes": 764903424,
+        "rssBytesByClass": {
+          "tauri": 236814336,
+          "webview": 433258496,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.9,
+          "webview": 3.6,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 35886.74,
+        "rssBytes": 764952576,
+        "rssBytesByClass": {
+          "tauri": 236765184,
+          "webview": 433356800,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3.2,
+          "webview": 3.9,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 36889.93,
+        "rssBytes": 765018112,
+        "rssBytesByClass": {
+          "tauri": 236765184,
+          "webview": 433422336,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3.2,
+          "webview": 3.6,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 37900.738,
+        "rssBytes": 765083648,
+        "rssBytesByClass": {
+          "tauri": 236765184,
+          "webview": 433487872,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.8,
+          "webview": 3.1,
+          "gpu": 0,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 38899.266,
+        "rssBytes": 765165568,
+        "rssBytesByClass": {
+          "tauri": 236765184,
+          "webview": 433569792,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3,
+          "webview": 3.6,
+          "gpu": 0,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 39895.662,
+        "rssBytes": 765263872,
+        "rssBytesByClass": {
+          "tauri": 236781568,
+          "webview": 433651712,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3,
+          "webview": 3.6,
+          "gpu": 0,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 40896.284,
+        "rssBytes": 765345792,
+        "rssBytesByClass": {
+          "tauri": 236781568,
+          "webview": 433733632,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3.5,
+          "webview": 3.9,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 41886.326,
+        "rssBytes": 765444096,
+        "rssBytesByClass": {
+          "tauri": 236781568,
+          "webview": 433831936,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3.3,
+          "webview": 3.7,
+          "gpu": 0.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 42895.973,
+        "rssBytes": 765542400,
+        "rssBytesByClass": {
+          "tauri": 236781568,
+          "webview": 433930240,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3.1,
+          "webview": 3.5,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 43892.77,
+        "rssBytes": 765624320,
+        "rssBytesByClass": {
+          "tauri": 236781568,
+          "webview": 434012160,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3.2,
+          "webview": 3.6,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 44902.052,
+        "rssBytes": 765706240,
+        "rssBytesByClass": {
+          "tauri": 236765184,
+          "webview": 434110464,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 3.5,
+          "gpu": 0,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 45904.685,
+        "rssBytes": 765788160,
+        "rssBytesByClass": {
+          "tauri": 236765184,
+          "webview": 434192384,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3.6,
+          "webview": 4,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 46892.903,
+        "rssBytes": 765853696,
+        "rssBytesByClass": {
+          "tauri": 236765184,
+          "webview": 434257920,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3.8,
+          "webview": 4,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 47900.553,
+        "rssBytes": 765935616,
+        "rssBytesByClass": {
+          "tauri": 236765184,
+          "webview": 434339840,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3,
+          "webview": 3.2,
+          "gpu": 0,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 48893.489,
+        "rssBytes": 766066688,
+        "rssBytesByClass": {
+          "tauri": 236765184,
+          "webview": 434470912,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 3,
+          "gpu": 0,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 49893.98,
+        "rssBytes": 766164992,
+        "rssBytesByClass": {
+          "tauri": 236765184,
+          "webview": 434569216,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 2.6,
+          "gpu": 0,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      }
+    ],
+    "editing": [
+      {
+        "monotonicMs": 50894.941,
+        "rssBytes": 766263296,
+        "rssBytesByClass": {
+          "tauri": 236765184,
+          "webview": 434667520,
+          "gpu": 77856768,
+          "network": 16973824,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3.2,
+          "webview": 3.6,
+          "gpu": 0,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 51884.69,
+        "rssBytes": 693108736,
+        "rssBytesByClass": {
+          "tauri": 164577280,
+          "webview": 436109312,
+          "gpu": 77234176,
+          "network": 15187968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.5,
+          "webview": 8.6,
+          "gpu": 1.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 52891.555,
+        "rssBytes": 654442496,
+        "rssBytesByClass": {
+          "tauri": 160088064,
+          "webview": 405962752,
+          "gpu": 74645504,
+          "network": 13746176,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.7,
+          "webview": 8.2,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 53908.486,
+        "rssBytes": 654245888,
+        "rssBytesByClass": {
+          "tauri": 159154176,
+          "webview": 406683648,
+          "gpu": 74661888,
+          "network": 13746176,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 7.3,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 54902.9,
+        "rssBytes": 652066816,
+        "rssBytesByClass": {
+          "tauri": 156876800,
+          "webview": 407355392,
+          "gpu": 74465280,
+          "network": 13369344,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 9.4,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 55902.051,
+        "rssBytes": 652509184,
+        "rssBytesByClass": {
+          "tauri": 156876800,
+          "webview": 407764992,
+          "gpu": 74498048,
+          "network": 13369344,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 6.4,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 56903.716,
+        "rssBytes": 656801792,
+        "rssBytesByClass": {
+          "tauri": 156876800,
+          "webview": 412008448,
+          "gpu": 74547200,
+          "network": 13369344,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 7.2,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 57888.499,
+        "rssBytes": 674037760,
+        "rssBytesByClass": {
+          "tauri": 156876800,
+          "webview": 429228032,
+          "gpu": 74563584,
+          "network": 13369344,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 7.1,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 58899.214,
+        "rssBytes": 694124544,
+        "rssBytesByClass": {
+          "tauri": 156876800,
+          "webview": 449298432,
+          "gpu": 74579968,
+          "network": 13369344,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.9,
+          "webview": 10.3,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 59906.246,
+        "rssBytes": 694419456,
+        "rssBytesByClass": {
+          "tauri": 156876800,
+          "webview": 449593344,
+          "gpu": 74579968,
+          "network": 13369344,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 7.3,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 60903.272,
+        "rssBytes": 694435840,
+        "rssBytesByClass": {
+          "tauri": 156876800,
+          "webview": 449609728,
+          "gpu": 74579968,
+          "network": 13369344,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 7.4,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 61906.009,
+        "rssBytes": 696975360,
+        "rssBytesByClass": {
+          "tauri": 156860416,
+          "webview": 452165632,
+          "gpu": 74579968,
+          "network": 13369344,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 7.3,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 62896.598,
+        "rssBytes": 712458240,
+        "rssBytesByClass": {
+          "tauri": 156860416,
+          "webview": 467648512,
+          "gpu": 74579968,
+          "network": 13369344,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 7.7,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 63897.891,
+        "rssBytes": 717193216,
+        "rssBytesByClass": {
+          "tauri": 156860416,
+          "webview": 472334336,
+          "gpu": 74612736,
+          "network": 13385728,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 7.1,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 64903.8,
+        "rssBytes": 717258752,
+        "rssBytesByClass": {
+          "tauri": 156860416,
+          "webview": 472399872,
+          "gpu": 74612736,
+          "network": 13385728,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 5.9,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 65922.049,
+        "rssBytes": 717193216,
+        "rssBytesByClass": {
+          "tauri": 156811264,
+          "webview": 472645632,
+          "gpu": 74350592,
+          "network": 13385728,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.9,
+          "webview": 5.8,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 66904.619,
+        "rssBytes": 679772160,
+        "rssBytesByClass": {
+          "tauri": 147177472,
+          "webview": 447791104,
+          "gpu": 71417856,
+          "network": 13385728,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 6.9,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 67909.457,
+        "rssBytes": 710311936,
+        "rssBytesByClass": {
+          "tauri": 147177472,
+          "webview": 478330880,
+          "gpu": 71417856,
+          "network": 13385728,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.9,
+          "webview": 10.3,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 68908.119,
+        "rssBytes": 714194944,
+        "rssBytesByClass": {
+          "tauri": 147177472,
+          "webview": 482213888,
+          "gpu": 71417856,
+          "network": 13385728,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 12.5,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 69906.305,
+        "rssBytes": 646234112,
+        "rssBytesByClass": {
+          "tauri": 136904704,
+          "webview": 426180608,
+          "gpu": 70057984,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.6,
+          "webview": 5.7,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 70916.109,
+        "rssBytes": 676085760,
+        "rssBytesByClass": {
+          "tauri": 126779392,
+          "webview": 466239488,
+          "gpu": 69976064,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.8,
+          "webview": 5.2,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 71907.869,
+        "rssBytes": 702971904,
+        "rssBytesByClass": {
+          "tauri": 126779392,
+          "webview": 493092864,
+          "gpu": 70008832,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 10.6,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 72907.609,
+        "rssBytes": 703037440,
+        "rssBytesByClass": {
+          "tauri": 126779392,
+          "webview": 493092864,
+          "gpu": 70074368,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 6.5,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 73913.261,
+        "rssBytes": 703070208,
+        "rssBytesByClass": {
+          "tauri": 126779392,
+          "webview": 493125632,
+          "gpu": 70074368,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 6.6,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 74899.386,
+        "rssBytes": 715456512,
+        "rssBytesByClass": {
+          "tauri": 126779392,
+          "webview": 505495552,
+          "gpu": 70090752,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 6.6,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 75911.189,
+        "rssBytes": 734838784,
+        "rssBytesByClass": {
+          "tauri": 126779392,
+          "webview": 524877824,
+          "gpu": 70090752,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 8,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 76913.246,
+        "rssBytes": 734969856,
+        "rssBytesByClass": {
+          "tauri": 126779392,
+          "webview": 524926976,
+          "gpu": 70172672,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 6.4,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 77906.678,
+        "rssBytes": 735133696,
+        "rssBytesByClass": {
+          "tauri": 126779392,
+          "webview": 524976128,
+          "gpu": 70287360,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 5.3,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 78911.528,
+        "rssBytes": 745013248,
+        "rssBytesByClass": {
+          "tauri": 126779392,
+          "webview": 534806528,
+          "gpu": 70336512,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 6.4,
+          "gpu": 1.5,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 79903.295,
+        "rssBytes": 762380288,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 552157184,
+          "gpu": 70385664,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 5.9,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 80913.165,
+        "rssBytes": 767623168,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 557301760,
+          "gpu": 70483968,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 6.3,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 81917.355,
+        "rssBytes": 767770624,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 557432832,
+          "gpu": 70500352,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 5.5,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 82911.895,
+        "rssBytes": 778731520,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 568393728,
+          "gpu": 70500352,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.7,
+          "webview": 10.1,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 83911.627,
+        "rssBytes": 796393472,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 586039296,
+          "gpu": 70516736,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 5.6,
+          "gpu": 0.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 84903.789,
+        "rssBytes": 801816576,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 591446016,
+          "gpu": 70533120,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 5.9,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 85918.943,
+        "rssBytes": 801718272,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 591347712,
+          "gpu": 70533120,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 5,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 86912.096,
+        "rssBytes": 806977536,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 596606976,
+          "gpu": 70533120,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 5.1,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 87903.981,
+        "rssBytes": 826474496,
+        "rssBytesByClass": {
+          "tauri": 126763008,
+          "webview": 616087552,
+          "gpu": 70533120,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 9,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 88913.698,
+        "rssBytes": 836550656,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 626032640,
+          "gpu": 70680576,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 8,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 89905.376,
+        "rssBytes": 837632000,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 627097600,
+          "gpu": 70696960,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 9.5,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 90907.148,
+        "rssBytes": 838483968,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 627916800,
+          "gpu": 70729728,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 6.9,
+          "gpu": 0.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 91913.994,
+        "rssBytes": 838516736,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 627982336,
+          "gpu": 70696960,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 5.1,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 92912.709,
+        "rssBytes": 838516736,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 627982336,
+          "gpu": 70696960,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 6.1,
+          "gpu": 0.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 93911.657,
+        "rssBytes": 838746112,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 628178944,
+          "gpu": 70729728,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 8.2,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 94914.017,
+        "rssBytes": 838795264,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 628228096,
+          "gpu": 70729728,
+          "network": 13090816,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 8,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 95910.013,
+        "rssBytes": 838828032,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 628228096,
+          "gpu": 70746112,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 6.3,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 96915.187,
+        "rssBytes": 838893568,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 628228096,
+          "gpu": 70811648,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 7,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 97925.88,
+        "rssBytes": 838500352,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 628047872,
+          "gpu": 70598656,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.8,
+          "webview": 5.3,
+          "gpu": 0.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 98912.718,
+        "rssBytes": 826867712,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 616431616,
+          "gpu": 70582272,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.7,
+          "webview": 12.1,
+          "gpu": 0.6,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 99916.84,
+        "rssBytes": 793509888,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 583073792,
+          "gpu": 70582272,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 6.8,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 100912.894,
+        "rssBytes": 786153472,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 575717376,
+          "gpu": 70582272,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 5.8,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 101916.316,
+        "rssBytes": 787759104,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 577290240,
+          "gpu": 70615040,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 4.4,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 102913.554,
+        "rssBytes": 790331392,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 579780608,
+          "gpu": 70696960,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 5.9,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 103915.171,
+        "rssBytes": 790315008,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 579780608,
+          "gpu": 70680576,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 5.2,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 104918.135,
+        "rssBytes": 790921216,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 580354048,
+          "gpu": 70713344,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 5.5,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 105912.99,
+        "rssBytes": 791248896,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 580632576,
+          "gpu": 70762496,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 8.6,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 106917.486,
+        "rssBytes": 791150592,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 580632576,
+          "gpu": 70664192,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 5.4,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 107915.893,
+        "rssBytes": 791330816,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 580763648,
+          "gpu": 70713344,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 10.4,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 108910.792,
+        "rssBytes": 791347200,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 580763648,
+          "gpu": 70729728,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.8,
+          "webview": 5.2,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 109924.288,
+        "rssBytes": 791314432,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 580747264,
+          "gpu": 70713344,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 7.8,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 110916.16,
+        "rssBytes": 791314432,
+        "rssBytesByClass": {
+          "tauri": 126746624,
+          "webview": 580747264,
+          "gpu": 70713344,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 6.4,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 111918.528,
+        "rssBytes": 848887808,
+        "rssBytesByClass": {
+          "tauri": 183795712,
+          "webview": 580796416,
+          "gpu": 71188480,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 6.6,
+          "webview": 6.8,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 112919.575,
+        "rssBytes": 814907392,
+        "rssBytesByClass": {
+          "tauri": 183795712,
+          "webview": 547291136,
+          "gpu": 70713344,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 7,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 113923.173,
+        "rssBytes": 814907392,
+        "rssBytesByClass": {
+          "tauri": 183795712,
+          "webview": 547291136,
+          "gpu": 70713344,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 6.4,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 114921.356,
+        "rssBytes": 729579520,
+        "rssBytesByClass": {
+          "tauri": 183795712,
+          "webview": 484671488,
+          "gpu": 48005120,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 6.1,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 115921.094,
+        "rssBytes": 693698560,
+        "rssBytesByClass": {
+          "tauri": 183795712,
+          "webview": 450314240,
+          "gpu": 46481408,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 6.8,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 116923.187,
+        "rssBytes": 693600256,
+        "rssBytesByClass": {
+          "tauri": 183795712,
+          "webview": 450314240,
+          "gpu": 46383104,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 6.2,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 117924.71,
+        "rssBytes": 693977088,
+        "rssBytesByClass": {
+          "tauri": 183795712,
+          "webview": 450691072,
+          "gpu": 46383104,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 6.5,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 118924.214,
+        "rssBytes": 693977088,
+        "rssBytesByClass": {
+          "tauri": 183795712,
+          "webview": 450691072,
+          "gpu": 46383104,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 7.4,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 119922.944,
+        "rssBytes": 694009856,
+        "rssBytesByClass": {
+          "tauri": 183795712,
+          "webview": 450707456,
+          "gpu": 46399488,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 12.2,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 120918.767,
+        "rssBytes": 694009856,
+        "rssBytesByClass": {
+          "tauri": 183795712,
+          "webview": 450707456,
+          "gpu": 46399488,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 6.5,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 121923.152,
+        "rssBytes": 693993472,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 450707456,
+          "gpu": 46399488,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 6,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 122927.514,
+        "rssBytes": 693993472,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 450707456,
+          "gpu": 46399488,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 7,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 123925.706,
+        "rssBytes": 693993472,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 450707456,
+          "gpu": 46399488,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 5.1,
+          "gpu": 0.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 124927.602,
+        "rssBytes": 694403072,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 451117056,
+          "gpu": 46399488,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 6.1,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 125923.649,
+        "rssBytes": 696680448,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 453394432,
+          "gpu": 46399488,
+          "network": 13107200,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 5.4,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 126928.971,
+        "rssBytes": 696696832,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 453394432,
+          "gpu": 46399488,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 6,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 127929.446,
+        "rssBytes": 696713216,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 453394432,
+          "gpu": 46415872,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 5.2,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 128931.929,
+        "rssBytes": 696827904,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 453476352,
+          "gpu": 46448640,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 7.6,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 129935.486,
+        "rssBytes": 696860672,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 453509120,
+          "gpu": 46448640,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 7.9,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 130929.148,
+        "rssBytes": 698384384,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 455032832,
+          "gpu": 46448640,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 6.8,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 131927.292,
+        "rssBytes": 698646528,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 455229440,
+          "gpu": 46514176,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 6.7,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 132929.774,
+        "rssBytes": 698777600,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 455360512,
+          "gpu": 46514176,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 6.7,
+          "gpu": 0.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 133935.622,
+        "rssBytes": 698826752,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 455393280,
+          "gpu": 46530560,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 7.6,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 134932.073,
+        "rssBytes": 698826752,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 455393280,
+          "gpu": 46530560,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 5.6,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 135933.695,
+        "rssBytes": 701464576,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 458031104,
+          "gpu": 46530560,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 6.7,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 136930.914,
+        "rssBytes": 701513728,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 458080256,
+          "gpu": 46530560,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.9,
+          "webview": 6.6,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 137938.336,
+        "rssBytes": 701513728,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 458080256,
+          "gpu": 46530560,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 5.2,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 138945.437,
+        "rssBytes": 643743744,
+        "rssBytesByClass": {
+          "tauri": 183779328,
+          "webview": 400310272,
+          "gpu": 46530560,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.7,
+          "webview": 4.3,
+          "gpu": 0.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 139941.123,
+        "rssBytes": 584646656,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 349061120,
+          "gpu": 46153728,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 6.9,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 140937.893,
+        "rssBytes": 571228160,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335626240,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.6,
+          "webview": 4.6,
+          "gpu": 0.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 141934.773,
+        "rssBytes": 571228160,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335626240,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.6,
+          "webview": 7,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 142934.859,
+        "rssBytes": 571228160,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335626240,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.9,
+          "webview": 5.7,
+          "gpu": 0.6,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 143937.116,
+        "rssBytes": 571244544,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335642624,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.9,
+          "webview": 5.4,
+          "gpu": 0.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 144939.865,
+        "rssBytes": 571342848,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335740928,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 9,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 145936.851,
+        "rssBytes": 571375616,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335773696,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 8.6,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 146933.933,
+        "rssBytes": 571375616,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335773696,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 5.3,
+          "gpu": 0.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 147932.474,
+        "rssBytes": 571375616,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335773696,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.7,
+          "webview": 7.2,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 148939.622,
+        "rssBytes": 571375616,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335773696,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 6.4,
+          "gpu": 0.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 149932.573,
+        "rssBytes": 571392000,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335790080,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 7,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 150937.422,
+        "rssBytes": 571392000,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335790080,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 6.5,
+          "gpu": 0.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 151933.611,
+        "rssBytes": 571392000,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335790080,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 7.7,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 152935.263,
+        "rssBytes": 571490304,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335888384,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.7,
+          "webview": 7.7,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 153933.718,
+        "rssBytes": 571490304,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 335888384,
+          "gpu": 46170112,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 5.9,
+          "gpu": 0.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 154947.943,
+        "rssBytes": 571670528,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 336019456,
+          "gpu": 46219264,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 10.1,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 155940.666,
+        "rssBytes": 552337408,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 316768256,
+          "gpu": 46137344,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 8.4,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 156938.702,
+        "rssBytes": 553893888,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 318324736,
+          "gpu": 46137344,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 9,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 157945.199,
+        "rssBytes": 554090496,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 318472192,
+          "gpu": 46186496,
+          "network": 13123584,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.7,
+          "webview": 9.3,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 158944.392,
+        "rssBytes": 550223872,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 314605568,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 6.8,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 159945.424,
+        "rssBytes": 550223872,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 314605568,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 6.2,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 160948.923,
+        "rssBytes": 550371328,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 314753024,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 9.8,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 161939.594,
+        "rssBytes": 550371328,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 314753024,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 9.1,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 162945.227,
+        "rssBytes": 550387712,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 314769408,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.9,
+          "webview": 6.9,
+          "gpu": 1.4,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 163947.512,
+        "rssBytes": 550387712,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 314769408,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 8.3,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 164951.184,
+        "rssBytes": 550387712,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 314769408,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 8.1,
+          "gpu": 0.8,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 165945.775,
+        "rssBytes": 550387712,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 314769408,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.8,
+          "webview": 10.4,
+          "gpu": 0.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 166944.301,
+        "rssBytes": 550387712,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 314769408,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 10.1,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 167940.406,
+        "rssBytes": 550436864,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 314818560,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 10.2,
+          "gpu": 1.5,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 168944.675,
+        "rssBytes": 550436864,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 314818560,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.6,
+          "webview": 5.9,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 169945.684,
+        "rssBytes": 550436864,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 314818560,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 8.5,
+          "gpu": 1.3,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 170951.23,
+        "rssBytes": 550436864,
+        "rssBytesByClass": {
+          "tauri": 176308224,
+          "webview": 314818560,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 9.1,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 171951.43,
+        "rssBytes": 565133312,
+        "rssBytesByClass": {
+          "tauri": 190349312,
+          "webview": 315473920,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 12.1,
+          "webview": 9.3,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 172944.002,
+        "rssBytes": 565035008,
+        "rssBytesByClass": {
+          "tauri": 190349312,
+          "webview": 315375616,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 7.6,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 173950.141,
+        "rssBytes": 565035008,
+        "rssBytesByClass": {
+          "tauri": 190349312,
+          "webview": 315375616,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 9.3,
+          "gpu": 1.3,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 174948.807,
+        "rssBytes": 565018624,
+        "rssBytesByClass": {
+          "tauri": 190332928,
+          "webview": 315375616,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.6,
+          "webview": 6.2,
+          "gpu": 1.3,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 175947.181,
+        "rssBytes": 565018624,
+        "rssBytesByClass": {
+          "tauri": 190332928,
+          "webview": 315375616,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 10.4,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 176951.383,
+        "rssBytes": 565182464,
+        "rssBytesByClass": {
+          "tauri": 190332928,
+          "webview": 315539456,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 9.4,
+          "gpu": 1.3,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 177946.051,
+        "rssBytes": 565198848,
+        "rssBytesByClass": {
+          "tauri": 190332928,
+          "webview": 315555840,
+          "gpu": 46170112,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 8,
+          "gpu": 1.6,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 178953.532,
+        "rssBytes": 565460992,
+        "rssBytesByClass": {
+          "tauri": 190332928,
+          "webview": 315736064,
+          "gpu": 46252032,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 10.7,
+          "gpu": 1.3,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 179950.617,
+        "rssBytes": 565460992,
+        "rssBytesByClass": {
+          "tauri": 190332928,
+          "webview": 315736064,
+          "gpu": 46252032,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.9,
+          "webview": 8,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 180952.569,
+        "rssBytes": 565460992,
+        "rssBytesByClass": {
+          "tauri": 190332928,
+          "webview": 315736064,
+          "gpu": 46252032,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 7.6,
+          "gpu": 1.5,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 181951.764,
+        "rssBytes": 564199424,
+        "rssBytesByClass": {
+          "tauri": 190316544,
+          "webview": 314490880,
+          "gpu": 46252032,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 8.8,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 182947.929,
+        "rssBytes": 564576256,
+        "rssBytesByClass": {
+          "tauri": 190316544,
+          "webview": 314802176,
+          "gpu": 46317568,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 7.9,
+          "gpu": 1.4,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 183953.39,
+        "rssBytes": 564936704,
+        "rssBytesByClass": {
+          "tauri": 190316544,
+          "webview": 315162624,
+          "gpu": 46317568,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 7.5,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 184953.174,
+        "rssBytes": 564936704,
+        "rssBytesByClass": {
+          "tauri": 190316544,
+          "webview": 315162624,
+          "gpu": 46317568,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 10,
+          "gpu": 1.3,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 185962.607,
+        "rssBytes": 556875776,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315179008,
+          "gpu": 45744128,
+          "network": 13139968,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 10.1,
+          "gpu": 1.3,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 186958.469,
+        "rssBytes": 556941312,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315228160,
+          "gpu": 45596672,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 9.5,
+          "gpu": 1.6,
+          "network": 0.1,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 187950.953,
+        "rssBytes": 556941312,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315228160,
+          "gpu": 45596672,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 9.8,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 188956.392,
+        "rssBytes": 556941312,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315228160,
+          "gpu": 45596672,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 7.7,
+          "gpu": 1.4,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 189960.338,
+        "rssBytes": 556941312,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315228160,
+          "gpu": 45596672,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 8.3,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 190954.659,
+        "rssBytes": 556990464,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315260928,
+          "gpu": 45613056,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 10.8,
+          "gpu": 1.5,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 191963.225,
+        "rssBytes": 556957696,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315260928,
+          "gpu": 45596672,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 9.1,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 192949.124,
+        "rssBytes": 557006848,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315260928,
+          "gpu": 45596672,
+          "network": 13336576,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 8.2,
+          "gpu": 1.6,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 193954.256,
+        "rssBytes": 557006848,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315260928,
+          "gpu": 45596672,
+          "network": 13336576,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 7.5,
+          "gpu": 1.4,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 194957.998,
+        "rssBytes": 557039616,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315293696,
+          "gpu": 45596672,
+          "network": 13336576,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 7.4,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 195962.828,
+        "rssBytes": 557072384,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315293696,
+          "gpu": 45596672,
+          "network": 13369344,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 10.6,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 196959.123,
+        "rssBytes": 557088768,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315293696,
+          "gpu": 45613056,
+          "network": 13369344,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 9.1,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 197958.332,
+        "rssBytes": 557023232,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315293696,
+          "gpu": 45596672,
+          "network": 13320192,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 7.6,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 198963.335,
+        "rssBytes": 557023232,
+        "rssBytesByClass": {
+          "tauri": 182812672,
+          "webview": 315293696,
+          "gpu": 45596672,
+          "network": 13320192,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 9.2,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 199960.684,
+        "rssBytes": 548864000,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 313671680,
+          "gpu": 45596672,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 8.1,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 200961.492,
+        "rssBytes": 548651008,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 313475072,
+          "gpu": 45580288,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 7.9,
+          "gpu": 1.4,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 201964.155,
+        "rssBytes": 548667392,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 313491456,
+          "gpu": 45580288,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.1,
+          "webview": 10,
+          "gpu": 1.3,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 202965.263,
+        "rssBytes": 548716544,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 313491456,
+          "gpu": 45629440,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 8.9,
+          "gpu": 1.4,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 203960.157,
+        "rssBytes": 548700160,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 313475072,
+          "gpu": 45629440,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 7.8,
+          "gpu": 1.5,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 204965.173,
+        "rssBytes": 548765696,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 313475072,
+          "gpu": 45694976,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.9,
+          "webview": 7.9,
+          "gpu": 1.5,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 205963.945,
+        "rssBytes": 548765696,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 313475072,
+          "gpu": 45694976,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 8.7,
+          "gpu": 1.5,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 206964.894,
+        "rssBytes": 549011456,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 313671680,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 13.9,
+          "gpu": 1.5,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 207966.407,
+        "rssBytes": 549011456,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 313671680,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.5,
+          "webview": 8.6,
+          "gpu": 1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 208960.863,
+        "rssBytes": 549011456,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 313671680,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.9,
+          "webview": 7.8,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 209965.023,
+        "rssBytes": 549437440,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 314097664,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 8.9,
+          "gpu": 1.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 210963.529,
+        "rssBytes": 549453824,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 314114048,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 10.5,
+          "gpu": 1.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 211968.512,
+        "rssBytes": 549453824,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 314114048,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 8.6,
+          "gpu": 1.6,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 212972.336,
+        "rssBytes": 549453824,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 314114048,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 8.8,
+          "gpu": 1.3,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 213962.743,
+        "rssBytes": 549453824,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 314114048,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 7.7,
+          "gpu": 1.5,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 214967.973,
+        "rssBytes": 549453824,
+        "rssBytesByClass": {
+          "tauri": 176291840,
+          "webview": 314114048,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.9,
+          "webview": 6.6,
+          "gpu": 1.5,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 215965.075,
+        "rssBytes": 541868032,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 313999360,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 9.4,
+          "gpu": 1.4,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 216967.822,
+        "rssBytes": 541933568,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314064896,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.6,
+          "webview": 9.2,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 217978.171,
+        "rssBytes": 542179328,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314310656,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 10.1,
+          "gpu": 1.3,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 218965.534,
+        "rssBytes": 542179328,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314310656,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 11,
+          "gpu": 1.9,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 219971.73,
+        "rssBytes": 542081024,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314212352,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 7.9,
+          "gpu": 1.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 220973.565,
+        "rssBytes": 542081024,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314212352,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 9.4,
+          "gpu": 1.7,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 221973.059,
+        "rssBytes": 542081024,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314212352,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 11,
+          "gpu": 1.6,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 222975.719,
+        "rssBytes": 542097408,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314228736,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 8.7,
+          "gpu": 1.3,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 223967.495,
+        "rssBytes": 542097408,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314228736,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.3,
+          "webview": 11.1,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 224970.301,
+        "rssBytes": 542097408,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314228736,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.9,
+          "webview": 8.1,
+          "gpu": 1.3,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 225974.862,
+        "rssBytes": 542097408,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314228736,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.2,
+          "webview": 7.8,
+          "gpu": 1.4,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 226975.993,
+        "rssBytes": 542162944,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314294272,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 10,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 227983.114,
+        "rssBytes": 542162944,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314294272,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.4,
+          "webview": 9.8,
+          "gpu": 1.5,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 228975.763,
+        "rssBytes": 542162944,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314294272,
+          "gpu": 45744128,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 1.7,
+          "webview": 6.2,
+          "gpu": 1.5,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 229974.039,
+        "rssBytes": 542474240,
+        "rssBytesByClass": {
+          "tauri": 168820736,
+          "webview": 314474496,
+          "gpu": 45875200,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2,
+          "webview": 7.4,
+          "gpu": 1.5,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      }
+    ],
+    "postEdit": [
+      {
+        "monotonicMs": 230942.233,
+        "rssBytes": 535756800,
+        "rssBytesByClass": {
+          "tauri": 161611776,
+          "webview": 314966016,
+          "gpu": 45875200,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 2.7,
+          "webview": 8.6,
+          "gpu": 1.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 231943.216,
+        "rssBytes": 622706688,
+        "rssBytesByClass": {
+          "tauri": 238518272,
+          "webview": 324567040,
+          "gpu": 46317568,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 16.7,
+          "webview": 5.8,
+          "gpu": 0.2,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 232945.094,
+        "rssBytes": 620740608,
+        "rssBytesByClass": {
+          "tauri": 238518272,
+          "webview": 322633728,
+          "gpu": 46284800,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.1,
+          "webview": 10.1,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 233946.823,
+        "rssBytes": 620740608,
+        "rssBytesByClass": {
+          "tauri": 238518272,
+          "webview": 322633728,
+          "gpu": 46284800,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.7,
+          "webview": 4.1,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 234938.37,
+        "rssBytes": 620740608,
+        "rssBytesByClass": {
+          "tauri": 238518272,
+          "webview": 322633728,
+          "gpu": 46284800,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.1,
+          "webview": 4,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 235949.32,
+        "rssBytes": 620642304,
+        "rssBytesByClass": {
+          "tauri": 238518272,
+          "webview": 322666496,
+          "gpu": 46153728,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4,
+          "webview": 4.1,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 236950.134,
+        "rssBytes": 620724224,
+        "rssBytesByClass": {
+          "tauri": 238518272,
+          "webview": 322748416,
+          "gpu": 46153728,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.4,
+          "webview": 4.9,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 237952.689,
+        "rssBytes": 620756992,
+        "rssBytesByClass": {
+          "tauri": 238518272,
+          "webview": 322781184,
+          "gpu": 46153728,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.8,
+          "webview": 4.3,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 238950.723,
+        "rssBytes": 621232128,
+        "rssBytesByClass": {
+          "tauri": 238518272,
+          "webview": 323354624,
+          "gpu": 46055424,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.5,
+          "webview": 11,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 239941.671,
+        "rssBytes": 621133824,
+        "rssBytesByClass": {
+          "tauri": 238518272,
+          "webview": 323256320,
+          "gpu": 46055424,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.5,
+          "webview": 4,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 240951.094,
+        "rssBytes": 621150208,
+        "rssBytesByClass": {
+          "tauri": 238534656,
+          "webview": 323256320,
+          "gpu": 46055424,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3.7,
+          "webview": 5.5,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 241954.837,
+        "rssBytes": 620314624,
+        "rssBytesByClass": {
+          "tauri": 238632960,
+          "webview": 322322432,
+          "gpu": 46055424,
+          "network": 13303808,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.2,
+          "webview": 4.1,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 242957.608,
+        "rssBytes": 620314624,
+        "rssBytesByClass": {
+          "tauri": 238632960,
+          "webview": 322338816,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.5,
+          "webview": 4.2,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 243958.885,
+        "rssBytes": 620331008,
+        "rssBytesByClass": {
+          "tauri": 238632960,
+          "webview": 322355200,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 5.1,
+          "webview": 4.6,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 244946.302,
+        "rssBytes": 620331008,
+        "rssBytesByClass": {
+          "tauri": 238632960,
+          "webview": 322355200,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.8,
+          "webview": 13.2,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 245949.399,
+        "rssBytes": 620347392,
+        "rssBytesByClass": {
+          "tauri": 238649344,
+          "webview": 322355200,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3.4,
+          "webview": 3.5,
+          "gpu": 0,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 246954.8,
+        "rssBytes": 620331008,
+        "rssBytesByClass": {
+          "tauri": 238632960,
+          "webview": 322355200,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.1,
+          "webview": 4,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 247962.184,
+        "rssBytes": 620331008,
+        "rssBytesByClass": {
+          "tauri": 238632960,
+          "webview": 322355200,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.3,
+          "webview": 4.5,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 248951.741,
+        "rssBytes": 620331008,
+        "rssBytesByClass": {
+          "tauri": 238632960,
+          "webview": 322355200,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.9,
+          "webview": 4.4,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 249959.769,
+        "rssBytes": 620331008,
+        "rssBytesByClass": {
+          "tauri": 238632960,
+          "webview": 322355200,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.6,
+          "webview": 9,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 250953.568,
+        "rssBytes": 620331008,
+        "rssBytesByClass": {
+          "tauri": 238632960,
+          "webview": 322355200,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 3.7,
+          "webview": 3.7,
+          "gpu": 0,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 251952.655,
+        "rssBytes": 620756992,
+        "rssBytesByClass": {
+          "tauri": 238632960,
+          "webview": 322781184,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.2,
+          "webview": 3.7,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 252958.088,
+        "rssBytes": 620822528,
+        "rssBytesByClass": {
+          "tauri": 238665728,
+          "webview": 322813952,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.5,
+          "webview": 4.5,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 253961.815,
+        "rssBytes": 620855296,
+        "rssBytesByClass": {
+          "tauri": 238698496,
+          "webview": 322813952,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.6,
+          "webview": 4.1,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 254964.68,
+        "rssBytes": 620855296,
+        "rssBytesByClass": {
+          "tauri": 238698496,
+          "webview": 322813952,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.9,
+          "webview": 4.3,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 255954.902,
+        "rssBytes": 620855296,
+        "rssBytesByClass": {
+          "tauri": 238698496,
+          "webview": 322813952,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.3,
+          "webview": 4,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 256965.165,
+        "rssBytes": 620855296,
+        "rssBytesByClass": {
+          "tauri": 238698496,
+          "webview": 322813952,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4,
+          "webview": 3.9,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 257962.759,
+        "rssBytes": 620806144,
+        "rssBytesByClass": {
+          "tauri": 238649344,
+          "webview": 322813952,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.5,
+          "webview": 4.3,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 258961.986,
+        "rssBytes": 620806144,
+        "rssBytesByClass": {
+          "tauri": 238649344,
+          "webview": 322813952,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.8,
+          "webview": 4.5,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 259955.16,
+        "rssBytes": 620806144,
+        "rssBytesByClass": {
+          "tauri": 238649344,
+          "webview": 322813952,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.1,
+          "webview": 3.7,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      },
+      {
+        "monotonicMs": 260939.232,
+        "rssBytes": 620806144,
+        "rssBytesByClass": {
+          "tauri": 238649344,
+          "webview": 322813952,
+          "gpu": 46055424,
+          "network": 13287424,
+          "other": 0
+        },
+        "cpuPercentByClass": {
+          "tauri": 4.2,
+          "webview": 5.5,
+          "gpu": 0.1,
+          "network": 0,
+          "other": 0
+        },
+        "processCount": 4
+      }
+    ]
+  },
+  "keyframes": {
+    "preEditLast": {
+      "tree": {
+        "monotonicMs": 49893.98,
+        "rssBytes": 766164992,
+        "cpuPercentOfOneLogicalCore": 5.1,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      "processes": [
+        {
+          "pid": 54069,
+          "role": "tauri",
+          "name": "excalidraw-deskt",
+          "rssBytes": 236765184,
+          "cpuPercent": 2.5
+        },
+        {
+          "pid": 54084,
+          "role": "gpu",
+          "name": "com.apple.WebKit",
+          "rssBytes": 77856768,
+          "cpuPercent": 0
+        },
+        {
+          "pid": 54085,
+          "role": "network",
+          "name": "com.apple.WebKit",
+          "rssBytes": 16973824,
+          "cpuPercent": 0
+        },
+        {
+          "pid": 54086,
+          "role": "webview",
+          "name": "com.apple.WebKit",
+          "rssBytes": 434569216,
+          "cpuPercent": 2.6
+        }
+      ],
+      "rssBytesByClass": {
+        "tauri": 236765184,
+        "webview": 434569216,
+        "gpu": 77856768,
+        "network": 16973824,
+        "other": 0
+      },
+      "cpuPercentByClass": {
+        "tauri": 2.5,
+        "webview": 2.6,
+        "gpu": 0,
+        "network": 0,
+        "other": 0
+      }
+    },
+    "editingFirst": {
+      "tree": {
+        "monotonicMs": 50894.941,
+        "rssBytes": 766263296,
+        "cpuPercentOfOneLogicalCore": 6.8,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      "processes": [
+        {
+          "pid": 54069,
+          "role": "tauri",
+          "name": "excalidraw-deskt",
+          "rssBytes": 236765184,
+          "cpuPercent": 3.2
+        },
+        {
+          "pid": 54084,
+          "role": "gpu",
+          "name": "com.apple.WebKit",
+          "rssBytes": 77856768,
+          "cpuPercent": 0
+        },
+        {
+          "pid": 54085,
+          "role": "network",
+          "name": "com.apple.WebKit",
+          "rssBytes": 16973824,
+          "cpuPercent": 0
+        },
+        {
+          "pid": 54086,
+          "role": "webview",
+          "name": "com.apple.WebKit",
+          "rssBytes": 434667520,
+          "cpuPercent": 3.6
+        }
+      ],
+      "rssBytesByClass": {
+        "tauri": 236765184,
+        "webview": 434667520,
+        "gpu": 77856768,
+        "network": 16973824,
+        "other": 0
+      },
+      "cpuPercentByClass": {
+        "tauri": 3.2,
+        "webview": 3.6,
+        "gpu": 0,
+        "network": 0,
+        "other": 0
+      }
+    },
+    "editingAt90PercentDelta": null,
+    "editingLast": {
+      "tree": {
+        "monotonicMs": 229974.039,
+        "rssBytes": 542474240,
+        "cpuPercentOfOneLogicalCore": 10.9,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      "processes": [
+        {
+          "pid": 54069,
+          "role": "tauri",
+          "name": "excalidraw-deskt",
+          "rssBytes": 168820736,
+          "cpuPercent": 2
+        },
+        {
+          "pid": 54084,
+          "role": "gpu",
+          "name": "com.apple.WebKit",
+          "rssBytes": 45875200,
+          "cpuPercent": 1.5
+        },
+        {
+          "pid": 54085,
+          "role": "network",
+          "name": "com.apple.WebKit",
+          "rssBytes": 13303808,
+          "cpuPercent": 0
+        },
+        {
+          "pid": 54086,
+          "role": "webview",
+          "name": "com.apple.WebKit",
+          "rssBytes": 314474496,
+          "cpuPercent": 7.4
+        }
+      ],
+      "rssBytesByClass": {
+        "tauri": 168820736,
+        "webview": 314474496,
+        "gpu": 45875200,
+        "network": 13303808,
+        "other": 0
+      },
+      "cpuPercentByClass": {
+        "tauri": 2,
+        "webview": 7.4,
+        "gpu": 1.5,
+        "network": 0,
+        "other": 0
+      }
+    },
+    "postEditLast": {
+      "tree": {
+        "monotonicMs": 260939.232,
+        "rssBytes": 620806144,
+        "cpuPercentOfOneLogicalCore": 9.8,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      "processes": [
+        {
+          "pid": 54069,
+          "role": "tauri",
+          "name": "excalidraw-deskt",
+          "rssBytes": 238649344,
+          "cpuPercent": 4.2
+        },
+        {
+          "pid": 54084,
+          "role": "gpu",
+          "name": "com.apple.WebKit",
+          "rssBytes": 46055424,
+          "cpuPercent": 0.1
+        },
+        {
+          "pid": 54085,
+          "role": "network",
+          "name": "com.apple.WebKit",
+          "rssBytes": 13287424,
+          "cpuPercent": 0
+        },
+        {
+          "pid": 54086,
+          "role": "webview",
+          "name": "com.apple.WebKit",
+          "rssBytes": 322813952,
+          "cpuPercent": 5.5
+        }
+      ],
+      "rssBytesByClass": {
+        "tauri": 238649344,
+        "webview": 322813952,
+        "gpu": 46055424,
+        "network": 13287424,
+        "other": 0
+      },
+      "cpuPercentByClass": {
+        "tauri": 4.2,
+        "webview": 5.5,
+        "gpu": 0.1,
+        "network": 0,
+        "other": 0
+      }
+    }
+  },
+  "statistic": {
+    "editing": {
+      "sampleCount": 180,
+      "firstRssBytes": 766263296,
+      "lastRssBytes": 542474240,
+      "maxRssBytes": 848887808,
+      "deltaRssBytes": -223789056,
+      "deltaRssBytesByClass": {
+        "tauri": -67944448,
+        "webview": -120193024,
+        "gpu": -31981568,
+        "network": -3670016,
+        "other": 0
+      },
+      "elapsedMs": 179079.098,
+      "msTo90PercentOfDelta": null,
+      "plateauLast60sDeltaRssBytes": -7962624,
+      "dominantClass": null
+    },
+    "postEditDeltaRssBytes": 85049344,
+    "editEventCount": 720
+  },
+  "contractError": null
+}

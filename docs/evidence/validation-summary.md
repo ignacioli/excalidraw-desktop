@@ -1,7 +1,21 @@
 # 验证证据汇总（Phase 10 / T095）
 
-**日期**：2026-08-10
+**日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17）
 **范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。
+
+先看下表再下钻各节。性能当前有效序列是 2026-08-16 ADR-007（同一份 e2e-harness `e8bef9b7…`）；§5.3 的日期流水账不可与之混比。
+
+| 门禁 | 状态 | 说明 |
+|------|------|------|
+| 浏览器回归（T095，§1） | **36 pass** · 2 已知 fail · 12 skip | 两例失败为断言/定位符脆性，先于本阶段；skip 依赖原生测试二进制 |
+| SC-012 可靠性（§2） | 前序 **pass**，本会话未复跑 | 合并阻断门禁；未在本会话重建 `e2e-harness` 复跑 |
+| SC-014 外观（§3） | **pass**（4/4） | light/dark/system 与截图基线 |
+| SC-015 无障碍（§4） | **pass**（15/15） | axe serious/critical = 0 |
+| T090 startup/idle（§5.2） | 物理机 **pass** · 参考 VM **fail** | VM 只败在冷启动 3704 ms；空载 RSS 两边过 500 MB |
+| T090 canvas/I/O（§5.2） | 物理机 **pass** · 参考 VM **pass** | 10k 恒定 zoom 平移/编辑约 60 fps |
+| T108 15 min soak（§5.2） | 物理机 **fail** · 参考 VM **fail** | 只败在 RSS 增长；idle CPU 与静置 0 写入两边过 |
+| SC-010 开源分发（§6） | 政策已定，未打 `v*` tag | 未签名 GitHub Release；本会话未触发真实发布 |
+| T078/T080 原生验收（§7） | **待执行** | macOS 必选；Ubuntu 24.04 IME 可选 |
 
 ## 1. 全量浏览器回归（T095 执行）
 
@@ -32,7 +46,7 @@
 | `e2e/tests/us2-snapshot-corruption.spec.ts` | T045 | 最新快照自损 → 回退次新并提示实际恢复时间点 |
 | `e2e/tests/us4-external-changes.spec.ts` | T066 | 外部变更自动重载/冲突弹窗/失联另存，决策前零写入 |
 
-**执行方式**：`APP_E2E=1 pnpm e2e`，要求 `EXCALIDRAW_E2E_BINARY` 指向故障注入测试构建（Harness 仅测试构建编译注册，生产构建无该接口）。当前证据状态：前序会话（Phase 8/9 交接）报告三套件通过；本会话未重新执行（未构建本地测试二进制），缺口记录见 §5。
+**执行方式**：`APP_E2E=1 pnpm e2e`，要求 `EXCALIDRAW_E2E_BINARY` 指向故障注入测试构建（Harness 仅测试构建编译注册，生产构建无该接口）。当前证据状态：前序会话（Phase 8/9 交接）报告三套件通过；本会话未重新执行（未构建本地测试二进制），缺口记录见 §7。
 
 ## 3. SC-014 外观矩阵与视觉基线（T111）
 
@@ -45,6 +59,64 @@
 - T093 跨故事审计：axe-core 4.12.1（`@axe-core/playwright`），标签 `wcag2a/wcag2aa/wcag21aa/wcag22aa`，浅色与深色各表面 serious/critical 均为 0；15 个用例全部通过。修复：`--warning`/`--success` 浅色值（白底 2.99:1 → 5.47:1、4.36:1 → 5.40:1）。完整矩阵与键盘/焦点/reduced motion 结论见 [a11y-audit.md](./a11y-audit.md)。
 
 ## 5. 参考环境性能测量（T089/T090/T108/T091）
+
+当前有效成绩单是 **2026-08-16 ADR-007 序列**：物理机 + 声明参考 VM，同一份 e2e-harness SHA-256 `e8bef9b754c526632b49655ad3a23c81ac060b3004ab8881ed7a00fe384b1f99`，commit `0a77e1f`。恒定 zoom=1 平移；T108 编辑结束后先等 5 s 再采静置窗。空载 RSS 500 MB、10k RSS 950 MB、idle CPU 35%（ADR-007）；冷启动 2 s 与 soak RSS 增长未改（ADR-008）。权威门禁是参考 VM；物理机先行。§5.3 的 8/13–8/15 流水账不可与下表混比。
+
+### 5.1 结论
+
+没有发现产品热路径上的严重性能缺陷：10k 场景平移/编辑约 60 fps，冻结远低于 100 ms，空载与 10k RSS 过校准后的预算，静置 0 写入。增长不在 Tauri / GPU / 磁盘，也不在崩溃安全持久化。
+
+仍诚实保留的两项 `fail`（预算未抬，不阻断合并或开源发布，[ADR-008](../adr/ADR-008.md)）：
+
+1. **官方 15 min T108 soak RSS 增长**：物理机 +368 MB / +47%，参考 VM +217 MB / +30%。形态是开编约 40 s 抬升后高位平台，不是编满 15 分钟才堆出来的无界泄漏。物理机 180 s 分角色（非门禁）证明只有 WebContent 上涨；WebContent 是 WKWebView 进程（WebKit + 上游 Excalidraw + 壳层），不等于「TypeScript 壳设计过重」。undo/`captureUpdate` 是否为涨因尚未 A/B。
+2. **参考 VM 冷启动 2 s**：P95 3704 ms。进程拉起约 30 ms（比物理机还快）；慢在 spawn 之后的 WebView + 空场景就绪。物理机 615 ms 已过。
+
+能说的同级别对照只有空载全树 RSS（同一套 launchd-reparent 口径，物理机热身 30 s + 采样 60 s；[ADR-007](../adr/ADR-007.md)）。仓库里没有 Figma、tldraw 桌面版或 Electron Excalidraw 壳的 15 min soak。
+
+| 场景 | 全树 RSS P95 | 说明 |
+|------|----------------|------|
+| 空白 Tauri v2 窗口 | 201.2 MB | 无插件、空白 HTML |
+| 本应用空闲 | 411–427 MB | WebContent 约 195 MB |
+| Safari 打开 [excalidraw.com](https://excalidraw.com/) | 629.4 MB | WebContent 约 300 MB |
+
+本应用落在空壳与 Safari+Excalidraw 之间；WebContent 低于 Safari 加载同一画布。500 MB 空载预算对照的是 WKWebView+Excalidraw 基线，不是把 411 MB 算进壳层泄漏。报告：[`idle-control-tauri.json`](./idle-control-tauri.json)、[`idle-control-safari.json`](./idle-control-safari.json)。
+
+### 5.2 最终成绩单（ADR-007 序列）
+
+三张表对应 T090 的两份报告与 T108 官方 15 min 门禁。单元格为测量值 + `pass`/`fail`。十进制 MB = 10^6 bytes；P95 为 nearest-rank。
+
+**表 1 · T090 startup / idle**（[`startup-idle.host.json`](./startup-idle.host.json) SHA-256 `ad753249…`；[`startup-idle.ref.json`](./startup-idle.ref.json) `3747832d…`）
+
+| 指标 | 预算 | 物理机 | 参考 VM |
+|------|------|--------|---------|
+| 冷启动至可编辑 P95 | ≤ 2000 ms | 615 ms · **pass** | 3704 ms · **fail** |
+| 空载全树 RSS P95 | ≤ 500 MB | 427.3 MB · **pass** | 411.4 MB · **pass** |
+| 套件 overall | 两项都过才 pass | **pass** | **fail** |
+
+**表 2 · T090 canvas / I/O**（[`canvas-io.host.json`](./canvas-io.host.json) SHA-256 `814cdc5e…`；[`canvas-io.ref.json`](./canvas-io.ref.json) `d6fbb45f…`）
+
+| 指标 | 预算 | 物理机 | 参考 VM |
+|------|------|--------|---------|
+| 10k 稳定全树 RSS P95 | ≤ 950 MB | 866.6 MB · **pass** | 742.7 MB · **pass** |
+| 平移观测 fps | ≥ 30 | 59.91 · **pass** | 59.93 · **pass** |
+| 平移最大冻结 | ≤ 100 ms | 33 ms · **pass** | 34 ms · **pass** |
+| 编辑观测 fps / 最大冻结 | 冻结 ≤ 100 ms | 60.00 / 24 ms · **pass** | 59.99 / 45 ms · **pass** |
+| 写 / 编辑比 | ≤ 0.01 | 0 · **pass** | 0 · **pass** |
+| 套件 overall | 全部过才 pass | **pass** | **pass** |
+
+**表 3 · 官方 15 min T108 soak**（[`edit-soak.host.json`](./edit-soak.host.json) SHA-256 `5c17040b…`；[`edit-soak.ref.json`](./edit-soak.ref.json) `ed8c0bef…`）
+
+| 指标 | 预算 | 物理机 | 参考 VM |
+|------|------|--------|---------|
+| RSS 增长绝对值 | ≤ 50 MB | +368.0 MB · **fail** | +216.9 MB · **fail** |
+| RSS 增长相对值 | ≤ 15% | +46.8% · **fail** | +29.9% · **fail** |
+| 静置 CPU P95 | ≤ 单核 35% | 14.4% · **pass** | 31.2% · **pass** |
+| 静置写盘 | 0 事件 / 0 路径 | 0 / 0 · **pass** | 0 / 0 · **pass** |
+| 套件 overall | 增长两项都过才 pass | **fail** | **fail** |
+
+180 s 分角色是诊断，不是第四张门禁，不能改写表 3。两次物理机跑只有 WebContent 上涨，结束全树低于开编：[`soak-rss-attribution.host.json`](./soak-rss-attribution.host.json)、[`soak-rss-attribution.host.quiet.json`](./soak-rss-attribution.host.quiet.json)。
+
+### 5.3 测量流水账（历史，不可与 §5.2 混比）
 
 - 基础设施：T089 测量夹具与报告 schema v2.0.0 记录宿主、虚拟化层与客体环境；T091 `performance.yml` 由维护者手动触发参考 VM 完整测量并归档报告。
 - 首个参考环境：Apple M5 Pro / 48GB 宿主上的 Parallels Desktop Pro 26.4.1、macOS 26.5.2（25F84）、4 vCPU / 8 GiB VM（客体 `VirtualMac2,1 (Apple M5 Pro (Virtual))`，arm64，WebKit 21624.2.5.11.8）。测量 commit `8c75caafd6e2e1dde19c8ee2afdbb79030e6512f`，e2e-harness 可执行文件 SHA-256 `0235da4dadc0f847fd995db57f4b0f9969bd701791e238b1a818d378fd8273a5`。
@@ -69,14 +141,7 @@
   1. T090 startup/idle 完整执行，verdict `fail`：冷启动 P95 **3650.417292 ms**（> 2000 ms）；空闲全树 RSS P95 **410746880 bytes**（410.7 MB，> 150 MB）；`processCount=4`（Tauri + WebContent + GPU + Networking）；60 秒空闲 0 个文件系统事件、0 个持久路径变化。与物理机 diagnostic 空闲 RSS 413.4 MB 同量级，坐实 2026-08-13 VM 的 140 MB「通过」是 Tauri-only 假象。报告：`e2e/perf/results/startup-idle.ref.json`（SHA-256 `b8d6b29d4728853f3e0369639832608e4e7ebf4d94d5a7dd3c26714648975f65`）。
   2. T090 canvas/I/O 完整执行，verdict `fail`：10k 场景稳定后全树 RSS P95 **726368256 bytes**（726.4 MB，> 350 MB）；pan/zoom 观测 2.10 fps（<30 fps）、最大帧间隔 15396 ms（>100 ms）；60 秒高频编辑 58.71 fps 但最大帧间隔 625 ms（>100 ms）；写合并比 0.00111（≤0.01 预算，通过）。`processCount=4`。相对 2026-08-13 Tauri-only 的 233.5 MB「通过」，10k RSS 在诚实全树口径下同样不达标。报告：`e2e/perf/results/canvas-io.ref.json`（SHA-256 `b8e9bcce1693e9fa4169f85424d08fb82fdb693917ec40507f4c6920f3215623`）。
   3. T108 15 分钟 soak 完整执行，verdict `fail`：预热全树 RSS P95 738967552 bytes（739.0 MB），soak 后 905969664 bytes（906.0 MB）；RSS 增长 **167002112 bytes**（167.0 MB，> 50 MB）且 **22.60%**（> 15%）；静置 60 秒 CPU P95 **28.9%** 单逻辑核（> 1%）；静置观察 8 个文件系统事件、8 个持久路径变化（> 0）。`processCount=4`，soak 完成 3600 次脚本编辑、53956 帧。15 分钟 `rssGrowthBytes` 不得与 2026-08-13 的 30 分钟序列直接比较；静置 8 次写盘与旧报告同数量级。报告：`e2e/perf/results/edit-soak.ref.json`（SHA-256 `efb1cc94d8bd144622b7dfe6dd2b7cb13685d117c58a0163af4b5ff20ea66580`）。
-- 2026-08-16 物理机 **ADR-007 后新序列**（`PERF_EXECUTION_ENVIRONMENT=physical`，commit `0a77e1f`，二进制 SHA-256 `e8bef9b754c526632b49655ad3a23c81ac060b3004ab8881ed7a00fe384b1f99`。恒定 zoom=1 平移；T108 静置观察在编辑结束后先等 5 s。空载 RSS 500 MB、10k RSS 950 MB、idle CPU 35%。**不要**与 2026-08-14/15 振荡-zoom / 立刻观察写盘的绝对值混成同一序列。原始 JSON 已入库为本目录 `*.host.json`）：
-  1. startup-idle，verdict `pass`：冷启动 P95 **615.289125 ms**（≤ 2000 ms）；空闲全树 RSS P95 **427261952 bytes**（427.3 MB，≤ 500 MB）；`processCount=4`。报告：[`startup-idle.host.json`](./startup-idle.host.json)（SHA-256 `ad7532494116206af7b71d5bdfda9219756f330d1e498d14ea90fc834435af6a`）。
-  2. canvas-io，verdict `pass`：10k 全树 RSS P95 **866631680 bytes**（866.6 MB，≤ 950 MB）；恒定 zoom 平移 **59.91 fps**、最大冻结 **33 ms**；高频编辑 **60.00 fps**、最大冻结 **24 ms**；写合并比 0。采样窗 `processCount=5`（`webview: 2`），10k RSS 可能略含多一个 WebContent，仍低于 950 MB。报告：[`canvas-io.host.json`](./canvas-io.host.json)（SHA-256 `814cdc5e0169a39a8956fa09d190246a3472146a7e4b807682e188df18d2919d`）。
-  3. T108 15 分钟 soak，verdict `fail`：预热全树 RSS P95 786726912 bytes（786.7 MB），静置窗 P95 1154711552 bytes（1154.7 MB）；RSS 增长 **367984640 bytes**（368.0 MB，> 50 MB）且 **46.77%**（> 15%）；静置 CPU P95 **14.4%**（≤ 35%，通过）；静置写 **0 事件 / 0 路径**（通过）。`processCount=4`。增长主要发生在编辑开始后约 100 s（约 788→1110 MB），随后 15 分钟平台期约 1143 MB。冷启动 2 s 与 soak RSS 增长预算未改；失败不阻断合并。报告：[`edit-soak.host.json`](./edit-soak.host.json)（SHA-256 `5c17040bee0c074448fb7ed5be8be632ed7c80e46267573f033ff917e24e7c3f`）。
-- 2026-08-16 参考 VM **ADR-007 后新序列**（声明参考环境；`PERF_REFERENCE_RUN=1`，`PERF_EXECUTION_ENVIRONMENT=virtual`。宿主 `HEAD` `0a77e1f`，二进制 SHA-256 `e8bef9b754c526632b49655ad3a23c81ac060b3004ab8881ed7a00fe384b1f99`。来宾报告 `commit` 仍是旧副本 `8c75caa`，**不可信**。恒定 zoom=1；T108 先等 5 s 再观察静置。原始 JSON 已入库为本目录 `*.ref.json`；2026-08-15 振荡-zoom 序列的 SHA 仍记在上条）：
-  1. T090 startup/idle，verdict `fail`：冷启动 P95 **3704.431417 ms**（> 2000 ms，与旧序列 3650 ms 同量级）；空闲全树 RSS P95 **411418624 bytes**（411.4 MB，≤ 500 MB，通过）；`processCount=4`。报告：[`startup-idle.ref.json`](./startup-idle.ref.json)（SHA-256 `3747832df41caafac4f5f0e2d23bbba577cbe1c3f1c71bab59da0fb0469a7024`）。
-  2. T090 canvas/I/O，verdict `pass`：10k 全树 RSS P95 **742686720 bytes**（742.7 MB，≤ 950 MB）；恒定 zoom 平移 **59.93 fps**、最大冻结 **34 ms**；高频编辑 **59.99 fps**、最大冻结 **45 ms**；写合并比 0。`processCount=4`。旧序列振荡 zoom 的 2.10 fps / 15396 ms 冻结不要与本条混比。报告：[`canvas-io.ref.json`](./canvas-io.ref.json)（SHA-256 `d6fbb45fb64381bd94596225e93dd04d414b2bca24aea6214d5dd6fd1cdeb6bb`）。
-  3. T108 15 分钟 soak，verdict `fail`：预热全树 RSS P95 725221376 bytes（725.2 MB），静置窗 P95 942145536 bytes（942.1 MB）；RSS 增长 **216924160 bytes**（216.9 MB，> 50 MB）且 **29.91%**（> 15%）；静置 CPU P95 **31.2%**（≤ 35%，通过）；静置写 **0 事件 / 0 路径**（通过）。`processCount=4`。失败不阻断合并。报告：[`edit-soak.ref.json`](./edit-soak.ref.json)（SHA-256 `ed8c0bef02e8a726c40e99419007df9b1216f25b6db2d3252e2b031f8903fcc3`）。
+- 2026-08-16 ADR-007 后新序列（物理机 + 参考 VM，二进制 `e8bef9b7…`）：最终 `pass`/`fail` 与 JSON SHA 见 §5.2，结论见 §5.1。不要与上条 8/14–8/15 振荡-zoom / 立刻观察写盘的绝对值混比。来宾报告 `commit` 仍可能是旧副本 `8c75caa`，取证以二进制 SHA-256 为准。
 
 ## 6. SC-010 开源分发记录
 
@@ -86,12 +151,11 @@
 
 - §1.1 两个 pre-existing 浏览器测试失败。
 - T078/T080 macOS 原生验收待在记录配置的 VM 或物理机执行；T094 仅为可选 Ubuntu 24.04 IME smoke test，Fedora/其他 Linux 矩阵已移出当前门禁。
+- T090/T108 当前 `pass`/`fail`、产品热路径结论与同级别空载对照见 §5.1–§5.2。两条仍 fail 的项（soak RSS 增长、参考 VM 冷启动 2 s）预算未改，不阻断合并或开源发布（[ADR-008](../adr/ADR-008.md)）。2026-08-14/15 振荡-zoom 序列只作历史对照（§5.3）。
 - 2026-08-15 物理机归因（未重跑 T090/T108；报告 gitignored；此「归因」不是 `tasks.md` 的 SDD Phase 2 Foundational）：
-  1. 分角色 RSS（`e2e/perf/results/phase2-attribution.host.json`，SHA-256 `6681a9b6dc469049e20d68ba2230c1262019832d790723471e2b3309d4de6d4a`，二进制 `837c5cd8…`）：空闲全树 P95 **400.7 MB** = WebContent 195.4 + Tauri 147.9 + GPU 40.4 + Network 17.0。10k 加载后（编辑前）**761.7 MB** = WebContent 427.8 + Tauri 239.8 + GPU 76.8 + Network 17.2。150 / 350 MB 全树预算低于 WebContent 单项，属预算对照基线而非产品泄漏。空闲 CPU P95 **9.4%**（Tauri 4.2 + WebContent 5.2），空画布已远超 1%。
-  2. 静置 8 次写：15 秒高频编辑后立即观察 60 秒，仍是 **8 事件 / 8 路径**（与 T108 相同）。路径为一次 `save_draft` 的 recovery 原子写 + 一次 idle checkpoint 的 `performance.excalidraw` 原子写 + sqlite/WAL。编辑结束后再等 5 秒再观察 20 秒：**0 写入**（`phase2-panzoom.host.json`）。不是持续后台写盘。
-  3. pan/zoom A/B（`phase2-panzoom.host.json`，SHA-256 `882da7d55d54b844078516d9c52b24e1a5da18aea0d200f2dce7262b47b5ebc8`，探测二进制 `3d747904…`）：官方每帧 `updateScene` 振荡 zoom **24.38 fps** / 91 ms；同场景锁定 zoom=1 只平移 **59.69 fps** / 63 ms。物理机 21.82 fps 主要是测试视口在每帧改 zoom，不是 10k 平移本身。探测用的 adapter 种子约定已从工作区撤回。
-- T090 / T108 在 ADR-007 后的声明参考 VM 新序列已跑完（§5 2026-08-16，入库 JSON 见本目录 `*.ref.json`，二进制 `e8bef9b7…`）。canvas-io **pass**（恒定 zoom 59.93 fps，10k RSS 742.7 MB）；startup-idle 因冷启动 3704 ms 仍 `fail`（空载 RSS 411.4 MB 通过）；T108 soak 因 RSS 增长 216.9 MB / 29.9% 仍 `fail`，但 idle CPU 31.2% 与静置 0 写入通过。物理机同序列：canvas-io / startup-idle `pass`，soak RSS 增长 368 MB `fail`。冷启动 2s 与 soak RSS 增长预算未改；失败不阻断合并或开源发布。2026-08-14/15 振荡-zoom 序列只作历史对照。
-- 2026-08-16 物理机空载对照（全树、与 harness 相同的 launchd-reparent 归因；热身 30 s + 采样 60 s）。空白 Tauri v2 窗口 P95 **201.2 MB**（host 118.9 + WebContent 37.1 + GPU 28.2 + Network 17.0）；Safari 新进程打开空的 excalidraw.com **629.4 MB**（host 233.2 + WebContent 299.8 + GPU 47.9 + Network 48.7）。本应用空闲 411 MB 落在空壳与 Safari+Excalidraw 之间；WebContent 195 MB 低于 Safari 加载同一画布的 300 MB。用来说明 ADR-007 的 **500 MB 空载绝对预算** 对照的是 WKWebView+Excalidraw 基线，不是把 411 MB 算进壳层泄漏；10k 950 MB 与 idle CPU 35% 仍以全树口径重测与物理机归因为本，不是这次对照。原始 JSON 入库：[`idle-control-tauri.json`](./idle-control-tauri.json)（SHA-256 `09fbc287a56aad34c06fd5ddbfa8961a97db21ed8006012ffc4bb593aa958858`）、[`idle-control-safari.json`](./idle-control-safari.json)（SHA-256 `ad06765c8557e20d1c47ca2f53547041699e3d3601b1f01c6927affc64a64a0c`）。空窗口 / Safari 在未禁用 App Nap 时 idle CPU P95 约为 0%，不能用来否定 harness（可见窗口 + 禁用 App Nap）下的 9–29% idle CPU 测量条件。对照表见 [ADR-007](../adr/ADR-007.md)。
-- 物理机 / 参考 VM diagnostic：2026-08-16 ADR-007 新序列已用同一份 `e8bef9b7…` 二进制跑完（本目录 `*.host.json` / `*.ref.json`，§5）。两边恒定 zoom 平移都约 60 fps，空载 RSS 约 411–427 MB 过 500 MB，静置写入 0。soak RSS 增长两边仍 fail（物理 368 MB / VM 217 MB），未在本序列追根。
-- 宿主机 diagnostic 性能跑要求测量窗口全程可见（rAF 遮挡暂停约束，§5）；`visibilityState=hidden` 时 driver 10 秒失败，可见慢帧最多等 60 秒。
+  1. 分角色 RSS（`e2e/perf/results/phase2-attribution.host.json`，SHA-256 `6681a9b6dc469049e20d68ba2230c1262019832d790723471e2b3309d4de6d4a`，二进制 `837c5cd8…`）：空闲全树 P95 **400.7 MB** = WebContent 195.4 + Tauri 147.9 + GPU 40.4 + Network 17.0。10k 加载后（编辑前）**761.7 MB** = WebContent 427.8 + Tauri 239.8 + GPU 76.8 + Network 17.2。当时 150 / 350 MB 全树预算低于 WebContent 单项，属预算对照基线而非产品泄漏；ADR-007 已重校准为 500 / 950 MB。空闲 CPU P95 **9.4%**（Tauri 4.2 + WebContent 5.2）。
+  2. 静置 8 次写：15 秒高频编辑后立即观察 60 秒，仍是 **8 事件 / 8 路径**。路径为一次 `save_draft` 的 recovery 原子写 + 一次 idle checkpoint 的 `performance.excalidraw` 原子写 + sqlite/WAL。编辑结束后再等 5 秒再观察 20 秒：**0 写入**（`phase2-panzoom.host.json`）。不是持续后台写盘；ADR-007 后官方 T108 静置窗已过。
+  3. pan/zoom A/B（`phase2-panzoom.host.json`，SHA-256 `882da7d55d54b844078516d9c52b24e1a5da18aea0d200f2dce7262b47b5ebc8`，探测二进制 `3d747904…`）：官方每帧 `updateScene` 振荡 zoom **24.38 fps** / 91 ms；同场景锁定 zoom=1 只平移 **59.69 fps** / 63 ms。物理机当时 21.82 fps 主要是测试视口在每帧改 zoom，不是 10k 平移本身。探测用的 adapter 种子约定已从工作区撤回。
+- 空窗口 / Safari 对照在未禁用 App Nap 时 idle CPU P95 约为 0%，不能用来否定 harness（可见窗口 + 禁用 App Nap）下的 9–29% idle CPU 测量条件。
+- 宿主机 diagnostic 性能跑要求测量窗口全程可见（rAF 遮挡暂停约束，§5.3）；`visibilityState=hidden` 时 driver 10 秒失败，可见慢帧最多等 60 秒。
 - 上游 `@excalidraw/excalidraw` 内部 DOM 不在壳层 a11y 扫描范围（T093 残余说明）。
