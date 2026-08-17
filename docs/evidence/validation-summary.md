@@ -11,7 +11,7 @@
 | SC-012 可靠性（§2） | 前序 **pass**，本会话未复跑 | 合并阻断门禁；未在本会话重建 `e2e-harness` 复跑 |
 | SC-014 外观（§3） | **pass**（4/4） | light/dark/system 与截图基线 |
 | SC-015 无障碍（§4） | **pass**（15/15） | axe serious/critical = 0 |
-| T090 startup/idle（§5.2） | 物理机 **pass** · 参考 VM **fail** | VM 只败在冷启动 3704 ms；空载 RSS 两边过 500 MB |
+| T090 startup/idle（§5.2） | 物理机 **pass** · 参考 VM **fail** | VM 只败在冷启动 3704 ms；8 vCPU 诊断仍 fail（§5.2），未改 specs；空载 RSS 两边过 500 MB |
 | T090 canvas/I/O（§5.2） | 物理机 **pass** · 参考 VM **pass** | 10k 恒定 zoom 平移/编辑约 60 fps |
 | T108 15 min soak（§5.2） | 物理机 **fail** · 参考 VM **fail** | 只败在 RSS 增长；idle CPU 与静置 0 写入两边过 |
 | SC-010 开源分发（§6） | 政策已定，未打 `v*` tag | 未签名 GitHub Release；本会话未触发真实发布 |
@@ -69,7 +69,7 @@
 仍诚实保留的两项 `fail`（预算未抬，不阻断合并或开源发布，[ADR-008](../adr/ADR-008.md)）：
 
 1. **官方 15 min T108 soak RSS 增长**：物理机 +368 MB / +47%，参考 VM +217 MB / +30%。形态是开编约 40 s 抬升后高位平台，不是编满 15 分钟才堆出来的无界泄漏。物理机 180 s 分角色（非门禁）证明只有 WebContent 上涨；WebContent 是 WKWebView 进程（WebKit + 上游 Excalidraw + 壳层），不等于「TypeScript 壳设计过重」。undo/`captureUpdate` 是否为涨因尚未 A/B。
-2. **参考 VM 冷启动 2 s**：P95 3704 ms。进程拉起约 30 ms（比物理机还快）；慢在 spawn 之后的 WebView + 空场景就绪。物理机 615 ms 已过。
+2. **参考 VM 冷启动 2 s**：P95 3704 ms。进程拉起约 30 ms（比物理机还快）；慢在 spawn 之后的 WebView + 空场景就绪。物理机 615 ms 已过。2026-08-17 把同一来宾临时改成 8 vCPU 只跑冷启动（非门禁）：暖启动大约快 200 ms，P95 仍被第一次冷缓存拉到 3991 ms，去掉第一次后最慢仍 2028 ms。核数帮不上这条预算，specs / 4 vCPU 门禁未改。
 
 能说的同级别对照只有空载全树 RSS（同一套 launchd-reparent 口径，物理机热身 30 s + 采样 60 s；[ADR-007](../adr/ADR-007.md)）。仓库里没有 Figma、tldraw 桌面版或 Electron Excalidraw 壳的 15 min soak。
 
@@ -92,6 +92,20 @@
 | 冷启动至可编辑 P95 | ≤ 2000 ms | 615 ms · **pass** | 3704 ms · **fail** |
 | 空载全树 RSS P95 | ≤ 500 MB | 427.3 MB · **pass** | 411.4 MB · **pass** |
 | 套件 overall | 两项都过才 pass | **pass** | **fail** |
+
+**诊断 · 8 vCPU 冷启动（非门禁，2026-08-17）**。同一份来宾 scratch 与 `startup-idle` spec；未设 `PERF_REFERENCE_RUN`（否则 4 核断言会拒跑）；未覆盖 [`startup-idle.ref.json`](./startup-idle.ref.json)。nearest-rank P95 在 n=10 时等于最大值。报告 [`startup-idle.ref.8vcpu.json`](./startup-idle.ref.8vcpu.json)（SHA-256 `8fb28477…`）；来宾 `commit` 字段仍是旧副本 `8c75caa`，不可信。
+
+| 指标 | 4 vCPU 官方 | 8 vCPU 诊断 | 物理机 |
+|------|-------------|-------------|--------|
+| 逻辑核 / 内存 | 4 / 8 GiB | 8 / 8 GiB | 15 / 48 GiB |
+| 进程拉起 P95 | 30 ms | 19 ms | 40 ms |
+| 冷启动 P95 | 3704 ms · **fail** | 3991 ms · **fail** | 615 ms · **pass** |
+| 第 1 次（冷缓存） | 3704 ms | 3991 ms | — |
+| 其余 9 次 | 2118–2238 ms | 1927–2028 ms | — |
+| 空载 RSS P95 | 411.4 MB · **pass** | 422.6 MB · **pass** | 427.3 MB · **pass** |
+| 套件 overall | **fail** | **fail**（诊断） | **pass** |
+
+暖启动大约快 200 ms，仍贴着 2 s；P95 继续被第一次冷缓存主导。不因此改 specs 或把参考 VM 调到 8 vCPU。
 
 **表 2 · T090 canvas / I/O**（[`canvas-io.host.json`](./canvas-io.host.json) SHA-256 `814cdc5e…`；[`canvas-io.ref.json`](./canvas-io.ref.json) `d6fbb45f…`）
 
