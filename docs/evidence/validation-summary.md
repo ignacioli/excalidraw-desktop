@@ -1,6 +1,6 @@
 # 验证证据汇总（Phase 10 / T095）
 
-**日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17）
+**日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17；§6/§7 原生发版与 T078/T080/T094 更新于 2026-08-18）
 **范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。
 
 先看下表再下钻各节。性能当前有效序列是 2026-08-16 ADR-007（同一份 e2e-harness `e8bef9b7…`）；§5.3 的日期流水账不可与之混比。
@@ -14,8 +14,8 @@
 | T090 startup/idle（§5.2） | 物理机 **pass** · 参考 VM **fail** | VM 只败在冷启动 3704 ms；8 vCPU 诊断仍 fail（§5.2），未改 specs；空载 RSS 两边过 500 MB |
 | T090 canvas/I/O（§5.2） | 物理机 **pass** · 参考 VM **pass** | 10k 恒定 zoom 平移/编辑约 60 fps |
 | T108 15 min soak（§5.2） | 物理机 **fail** · 参考 VM **fail** | 只败在 RSS 增长；idle CPU 与静置 0 写入两边过 |
-| SC-010 开源分发（§6） | 政策已定，未打 `v*` tag | 未签名 GitHub Release；本会话未触发真实发布 |
-| T078/T080 原生验收（§7） | **待执行** | macOS 必选；Ubuntu 24.04 IME 可选 |
+| SC-010 开源分发（§6） | **v0.1.1 已发布** | 未签名/未公证 GitHub Release；macOS universal `.dmg` + Linux amd64 AppImage/deb/rpm |
+| T078/T080 原生验收（§7） | **通过**（2026-08-18） | 物理 macOS 26.5.2 下载真实 `v0.1.1`；T094 Ubuntu IME 可选已做 |
 
 ## 1. 全量浏览器回归（T095 执行）
 
@@ -159,12 +159,14 @@
 
 ## 6. SC-010 开源分发记录
 
-2026-08-12 决策取代 2026-08-05 的“延后签名/公证”设想：项目不规划 App Store、Developer ID 或 Apple 公证。`.github/workflows/release.yml` 在 `v*` tag 构建并创建 GitHub Release，上传未签名/未公证 macOS 与 Linux 产物；README 和发布说明披露 Gatekeeper 风险与用户主动手动放行步骤。本会话未触发真实 tag/Release。
+2026-08-12 决策取代 2026-08-05 的“延后签名/公证”设想：项目不规划 App Store、Developer ID 或 Apple 公证。`.github/workflows/release.yml` 在 `v*` tag 构建并创建 GitHub Release，上传未签名/未公证 macOS 与 Linux 产物；README 和发布说明披露 Gatekeeper 风险与用户主动手动放行步骤。
+
+2026-08-18 已打 `v0.1.1`（commit `5e6f2b9`）并发布：[ignacioli/excalidraw-desktop `v0.1.1`](https://github.com/ignacioli/excalidraw-desktop/releases/tag/v0.1.1)。`v0.1.0` tag 的 workflow 因 pnpm 11 需要 Node 22 而失败，未形成 Release。Linux 包为 ubuntu-22.04 **amd64**，不是当前 Ubuntu ARM64 验证机可直接安装的架构。
 
 ## 7. 残余风险
 
 - §1.1 两个 pre-existing 浏览器测试失败。
-- T078/T080 macOS 原生验收待在记录配置的 VM 或物理机执行；T094 仅为可选 Ubuntu 24.04 IME smoke test，Fedora/其他 Linux 矩阵已移出当前门禁。
+- T078/T080 已于 2026-08-18 在物理 macOS 26.5.2 对真实 `v0.1.1` GitHub Release 执行（Chrome 下载隔离、Gatekeeper 手动放行、文件关联、单实例、FR-030 画布/拖放/剪贴板/IME）；记录见 [native-verification.md](./native-verification.md)。T094 已在 Ubuntu 24.04.4 ARM64 VM（GNOME Wayland + ibus libpinyin）完成可选 IME smoke。未覆盖：`macos-vm-01`、Fedora/其他 Linux、GitHub amd64 Linux 包在 ARM 客机上的安装。
 - T090/T108 当前 `pass`/`fail`、产品热路径结论与同级别空载对照见 §5.1–§5.2。两条仍 fail 的项（soak RSS 增长、参考 VM 冷启动 2 s）预算未改，不阻断合并或开源发布（[ADR-008](../adr/ADR-008.md)）。2026-08-14/15 振荡-zoom 序列只作历史对照（§5.3）。
 - 2026-08-15 物理机归因（未重跑 T090/T108；报告 gitignored；此「归因」不是 `tasks.md` 的 SDD Phase 2 Foundational）：
   1. 分角色 RSS（`e2e/perf/results/phase2-attribution.host.json`，SHA-256 `6681a9b6dc469049e20d68ba2230c1262019832d790723471e2b3309d4de6d4a`，二进制 `837c5cd8…`）：空闲全树 P95 **400.7 MB** = WebContent 195.4 + Tauri 147.9 + GPU 40.4 + Network 17.0。10k 加载后（编辑前）**761.7 MB** = WebContent 427.8 + Tauri 239.8 + GPU 76.8 + Network 17.2。当时 150 / 350 MB 全树预算低于 WebContent 单项，属预算对照基线而非产品泄漏；ADR-007 已重校准为 500 / 950 MB。空闲 CPU P95 **9.4%**（Tauri 4.2 + WebContent 5.2）。

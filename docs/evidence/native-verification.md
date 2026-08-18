@@ -13,10 +13,13 @@
 
 ## 2. 验收环境记录
 
+执行日期：**2026-08-18**。产物：[GitHub Release `v0.1.1`](https://github.com/ignacioli/excalidraw-desktop/releases/tag/v0.1.1)（annotated tag → commit `5e6f2b9`）。macOS 必选验收在宿主机物理机完成，不用 `macos-vm-01`。
+
 | 环境 ID | 类型 | 宿主硬件 | 虚拟化软件/版本 | 客体 OS | vCPU/RAM | 桌面/显示协议 | 状态 |
 |-----------|------|----------|---------------------|-----------|----------|-------------------|------|
-| macos-vm-01 | VM | Apple M5 Pro / 48GB | Parallels Desktop Pro 26.4.1 | macOS 26.5.2 | 4 vCPU / 8GB | macOS WindowServer | 待执行 |
-| ubuntu-vm-01 | VM | Apple M5 Pro / 48GB | Parallels Desktop Pro 26.4.1 | Ubuntu 24.04 Desktop | 待记录 | GNOME / X11 或 Wayland（待记录） | 待执行 |
+| macos-physical-01 | 物理机 | Apple M5 Pro / 48GB | N/A | macOS 26.5.2 (25F84)，WKWebView 随系统 | 15 逻辑核 / 48GB | macOS WindowServer | 2026-08-18 已执行 |
+| macos-vm-01 | VM | Apple M5 Pro / 48GB | Parallels Desktop Pro 26.4.1 | macOS 26.5.2 | 4 vCPU / 8GB | macOS WindowServer | 本轮未使用（物理机已覆盖 T078/T080） |
+| ubuntu-vm-01 | VM | Apple M5 Pro / 48GB | Parallels Desktop Pro 26.4.1 | Ubuntu 24.04.4 LTS aarch64，WebKitGTK 2.52.3 | 4 vCPU / 8GB | GNOME / Wayland | 2026-08-18 已执行（可选 T094） |
 
 环境记录完整后才能填写通过结果。更换宿主机、虚拟化软件版本、客体 OS/WebView、虚拟资源或显示协议时，必须新增环境 ID 或明确记录变更。
 
@@ -24,15 +27,15 @@
 
 | 条目 | macOS 环境（必选） | Ubuntu 24.04 Desktop（可选） | 验证方法 | 状态 |
 |------|----------------|-------------------|----------|------|
-| 画布渲染（中英混排、图片、缩放平移） | 需要 | 可选 | 启动应用绘制并检查 | 待原生环境执行 |
-| 拖放（拖入图片/拖入 .excalidraw 文件） | 需要 | 可选 | 拖放后检查画布/标签行为 | 待原生环境执行 |
-| 剪贴板（复制粘贴元素与图片） | 需要 | 可选 | 应用内与系统剪贴板往返 | 待原生环境执行 |
-| 中文输入法（FR-005） | 需要 | 可选单环境 smoke test | 拼音组合输入候选框跟随 | 待原生环境执行 |
-| 双击 .excalidraw 文件关联打开（FR-028） | 需要 | 可选 | Finder / 文件管理器双击 | 待原生环境执行 |
-| 应用已运行时二次打开复用实例并新开标签（FR-028） | 需要 | 可选 | 运行中再打开文件 | 待原生环境执行 |
-| 多文件连续打开各自成为标签页 | 需要 | 可选 | 依次打开多个文件 | 待原生环境执行 |
-| 应用菜单入口与文件图标关联（FR-029） | 需要（Finder 图标） | 可选（.desktop + MIME） | 安装后检查 | 待原生环境执行 |
-| Gatekeeper 警告、手动放行说明与放行后启动 | 需要 | N/A | 从 GitHub Release 同类产物安装并按 README 放行 | 待 macOS 环境执行 |
+| 画布渲染（中英混排、图片、缩放平移） | macos-physical-01：操作员确认；截图含 `nihao 你好 hello world!`、图片与手绘字体正文 | 未作为 Ubuntu 安装矩阵项执行（T094 只覆盖 IME） | 启动应用绘制并检查 | macOS **通过**；Ubuntu 未覆盖 |
+| 拖放（拖入图片/拖入 .excalidraw 文件） | macos-physical-01：操作员确认画布出现插入图片 | 未覆盖 | 拖放后检查画布/标签行为 | macOS **通过**；Ubuntu 未覆盖 |
+| 剪贴板（复制粘贴元素与图片） | macos-physical-01：操作员确认 | 未覆盖 | 应用内与系统剪贴板往返 | macOS **通过**；Ubuntu 未覆盖 |
+| 中文输入法（FR-005） | macos-physical-01：拼音 `nihao` → `你好`，中英混输不丢字 | ubuntu-vm-01：见 §6 | 拼音组合输入候选框跟随 | macOS **通过**；Ubuntu **通过**（T094） |
+| 双击 .excalidraw 文件关联打开（FR-028） | `.excalidraw` UTI = `com.excalidraw.desktop.drawing` / Kind `Excalidraw Drawing`；`open` 两个测试文件均进入已运行实例。普通 `.json` 仍为 `public.json` / JSON Document，未抢占 | 未覆盖（本轮未装 GitHub amd64 deb；客机为 aarch64） | Finder / 文件管理器双击 | macOS **通过**；Ubuntu 未覆盖 |
+| 应用已运行时二次打开复用实例并新开标签（FR-028） | 运行中 `open` 第二份 `.excalidraw`，进程仍为单一 pid（session.lock 与该 pid 一致） | 未覆盖 | 运行中再打开文件 | macOS **通过**；Ubuntu 未覆盖 |
+| 多文件连续打开各自成为标签页 | 操作员窗口可见 `week-4` / `week-1` / `intro` / `tmp` 多个标签 | 未覆盖 | 依次打开多个文件 | macOS **通过**；Ubuntu 未覆盖 |
+| 应用菜单入口与文件图标关联（FR-029） | `/Applications/excalidraw-desktop.app` 已安装；Launch Services Owner 声明 `.excalidraw` 与 `.excalidraw.json` | 本地 aarch64 二进制/AppImage 可启动；未验证 `.desktop` + MIME 安装路径 | 安装后检查 | macOS **通过**；Ubuntu 部分（仅本地二进制启动） |
+| Gatekeeper 警告、手动放行说明与放行后启动 | 见下方 T078 记录 | N/A | 从 GitHub Release 同类产物安装并按 README 放行 | macOS **通过** |
 
 ## 4. macOS 验收步骤（未签名/未公证）
 
@@ -67,7 +70,7 @@
 
 | 环境 | 会话/输入法 | 候选框跟随（缩放/平移后） | 组合事件不丢字/不重复 | 状态 |
 |------|------------|--------------------------|------------------------|------|
-| ubuntu-vm-01 | 记录当前 GNOME 会话与已启用中文输入法 | — | — | 可选，待执行 |
+| ubuntu-vm-01 | GNOME Wayland；ibus `libpinyin`（输入源 `xkb:us` + `ibus:libpinyin`） | 操作员确认缩放/平移后候选框仍跟随画布文本光标 | 操作员确认；截图文本 `hihao 你好 hello world!` | **通过**（2026-08-18，可选 T094） |
 
 **验证步骤**：
 
@@ -83,6 +86,15 @@
 
 ## 7. 已知边界
 
-- macOS 文件关联基于 `CFBundleDocumentTypes` + `UTExportedTypeDeclarations`（`src-tauri/Info.plist` 模板）；`.excalidraw.json` 属于双扩展名文件，关联行为依赖系统对 `json` 扩展的处理，须按第 3.3 步复检。
-- 项目不进行 App Store、Developer ID 签名、Apple 公证或 stapler（SC-010）；Gatekeeper 手动放行是未签名 macOS 开源分发的已知用户步骤。
-- VM 验收不覆盖所有物理 GPU、外设、主机厂商或驱动组合；未测试的硬件及 Fedora/其他 Linux 不得声称已覆盖。
+- macOS 文件关联基于 `CFBundleDocumentTypes` + `UTExportedTypeDeclarations`（`src-tauri/Info.plist` 模板）；`.excalidraw.json` 属于双扩展名文件，关联行为依赖系统对 `json` 扩展的处理。2026-08-18 复检：普通 `.json` 仍为 `public.json`，未被声明为 Excalidraw Drawing。
+- 项目不进行 App Store、Developer ID 签名、Apple 公证或 stapler（SC-010）；Gatekeeper 手动放行是未签名 macOS 开源分发的已知用户步骤。`spctl --assess` 对已放行应用仍报告 `rejected` / `no usable signature`，这是未签名包的预期，不能当成放行失败。
+- 本轮未在 `macos-vm-01` 上重复 T078。物理机结果不得表述为未执行的 VM 覆盖。
+- GitHub Release 的 Linux 包是 `amd64`（ubuntu-22.04 runner）。`ubuntu-vm-01` 是 aarch64，T094 使用客机本地 `pnpm tauri build` 的 aarch64 二进制与 AppImage，没有安装 Release 里的 deb/rpm/AppImage。Fedora/其他 Linux 未覆盖。
+- VM 验收不覆盖所有物理 GPU、外设、主机厂商或驱动组合；未测试的硬件不得声称已覆盖。
+
+## 8. T078 执行记录（macos-physical-01，2026-08-18）
+
+1. **产物**：Chrome 从 Releases 页下载 `excalidraw-desktop_0.1.0_universal.dmg`（62 215 155 bytes）。SHA-256 `31b03b7d88ecb32580d549da3b6b3668396606a1cc803a1e5a7a0ee96dcf1081` 与 Release asset digest 一致。`com.apple.quarantine`：`0081;…;Chrome;…`。`kMDItemWhereFroms` 含 `https://github.com/ignacioli/excalidraw-desktop/releases/tag/v0.1.1`。不是 `curl`/`gh` 预检。
+2. **安装与启动**：拖入 `/Applications/excalidraw-desktop.app`（universal `x86_64 arm64`，adhoc / linker-signed，无 Team ID）。应用 quarantine `01c1;…;Chrome;…`。启动后 `~/Library/Application Support/excalidraw-desktop/session.lock` 写入 `{"pid":93499,…}`；正常运行期间 lock 存在。
+3. **Gatekeeper**：`spctl --assess --type execute` → `rejected` / `source=no usable signature`。操作员确认首次打开后在 **系统设置 → 隐私与安全性** 选择 **仍要打开**，之后应用可交互。未关闭 Gatekeeper。
+4. **文件关联与单实例**：`open` `/tmp/t078-native/alpha.excalidraw` 与 `beta.excalidraw` 时始终只有一个 `/Applications/excalidraw-desktop.app/Contents/MacOS/excalidraw-desktop` 进程。操作员窗口可见多个已打开标签。
