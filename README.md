@@ -71,7 +71,7 @@ Because the macOS package has no Developer ID signature or Apple notarization, m
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22.13+ (required by pnpm 11.20.0)
 - pnpm (the repo declares `packageManager: pnpm@11.20.0`)
 - Rust stable 1.80+
 - macOS: Xcode Command Line Tools

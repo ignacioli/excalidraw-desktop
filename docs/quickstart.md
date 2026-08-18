@@ -10,7 +10,7 @@
 
 | 平台 | 要求 |
 |------|------|
-| 通用 | Node.js 20+、pnpm（锁定为唯一包管理器）、Rust stable 1.80+（rustup）、Python 3.10+ 与 uv（仅构建期字体合并，解释器由 `.python-version` 固定，依赖由 `pyproject.toml` + `uv.lock` 声明，`uv run` 自动安装） |
+| 通用 | Node.js 22.13+（pnpm 11.20.0 要求）、pnpm（锁定为唯一包管理器）、Rust stable 1.80+（rustup）、Python 3.10+ 与 uv（仅构建期字体合并，解释器由 `.python-version` 固定，依赖由 `pyproject.toml` + `uv.lock` 声明，`uv run` 自动安装） |
 | macOS | Xcode Command Line Tools；项目不需要 Developer ID、签名或公证；首次运行未签名产物时按 README 的 Gatekeeper 手动放行步骤验证 |
 | Ubuntu 24.04 Desktop（可选） | `libwebkit2gtk-4.1-dev`、`libgtk-3-dev` 等 Tauri 2 系统依赖；可选单环境 smoke test，Fedora/其他 Linux 不在当前验收要求内 |
 

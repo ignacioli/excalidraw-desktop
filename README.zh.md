@@ -71,7 +71,7 @@ GitHub Release 中的 macOS 安装包没有 Developer ID 签名或 Apple 公证�
 
 ### 环境前提
 
-- Node.js 20+
+- Node.js 22.13+（pnpm 11.20.0 的要求）
 - pnpm（项目声明 `packageManager: pnpm@11.20.0`）
 - Rust stable 1.80+
 - macOS：Xcode Command Line Tools
