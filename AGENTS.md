@@ -1,3 +1,5 @@
+[English](AGENTS.md) | [简体中文](AGENTS.zh.md)
+
 # excalidraw-desktop Project Instructions
 
 ## Project Intent
@@ -16,29 +18,33 @@ The repository is a working Tauri 2.x + Vite/React application implementing seve
 
 Tests follow the conventions of the selected frontend, Rust, and end-to-end tooling rather than a structure invented in advance.
 
-## Architecture and Ownership
+## Architecture and Change Boundaries
 
 The application is a Tauri 2.x dual-process layout: `src/` (React 19 + TypeScript strict frontend) and `src-tauri/` (Rust backend), communicating across an IPC contract boundary. See `docs/architecture.md` for the layered view, data flows, and trust boundaries; `docs/adr/` for decision records; and `docs/contracts/ipc-contracts.md` for the IPC contract.
 
-The main agent owns requirements, integration, final edits, and validation. Ownership boundaries below describe the capabilities a change requires, not any named agent; each coding tool maps these roles to its own local configuration (for example Codex `.codex/agents/*.toml`, opencode `.agents/`).
+What a change may touch is a project constraint, not a particular editor or assistant:
 
-- For a Tauri feature crossing React and Rust, use a Tauri-contract role when IPC, permissions, shared native APIs, or lifecycle is central. Use a desktop-platform role when OS compatibility or packaging is central. Use a general full-stack role for ordinary application-level vertical slices. Use UI or Rust specialist roles alone only for work contained within that layer.
-- Performance-sensitive work MUST include measurement and a regression verdict in its acceptance track. Implementation stays with the owning role; measurement methodology and the verdict stay with a performance-measurement role.
-- Atomic persistence, abnormal-exit recovery, conflict resolution, and native desktop E2E MUST include desktop-reliability testing. Browser-only evidence is insufficient.
-- Platform integration and release packaging are owned by a desktop-platform role; the Tauri-contract role reviews the shared Tauri contract but does not duplicate platform implementation.
-- Use a single-layer reviewer role for small, predominantly single-layer diffs. Use a full-stack reviewer role for Rust/TypeScript, IPC, persistence, infrastructure, reliability, or performance-boundary review.
-- A general full-stack role MUST NOT own core IPC architecture, crash recovery, atomic persistence, native packaging, platform compatibility, or performance/reliability gates.
+- A change that crosses React and Rust must keep the IPC contract, Tauri capabilities, and app lifecycle explicit. Do not expand permissions, bypass validation, or treat native APIs as frontend details. UI-only or Rust-only edits are appropriate only when the work is truly contained in that layer.
+- OS compatibility, installers, file association, Gatekeeper behavior, and release packaging need native platform verification. Browser tests do not prove those paths.
+- Performance-sensitive work MUST include measurement and a regression verdict in the same acceptance track. Do not ship a performance claim from implementation intent alone.
+- Atomic persistence, abnormal-exit recovery, conflict resolution, and native desktop E2E MUST include process-level reliability testing. Browser-only evidence is insufficient.
+- Do not use an ordinary feature slice to redesign core IPC architecture, crash recovery, atomic persistence, native packaging, platform support, or performance/reliability gates.
 
 ## Documentation Map
 
-Spec-driven deliverables are recorded at these canonical paths. The private specs repository names deliverables; this public repo owns the paths:
+Spec-driven deliverables are recorded at these canonical paths. The private specs repository names deliverables; this public repo owns the paths.
+
+User-facing and root contributor docs use English as the canonical filename (no suffix) and Simplified Chinese as a `*.zh.md` sibling next to it. `docs/architecture.md` and `docs/adr/` are not bilingual. `docs/quickstart.md` is a Chinese contributor validation guide and has no language sibling.
 
 | Deliverable | Path |
 |-------------|------|
+| User README (English / Chinese) | `README.md` / `README.zh.md` |
+| Visual and interaction contract (English / Chinese) | `DESIGN.md` / `DESIGN.zh.md` |
+| Contributor and maintainer instructions (English / Chinese) | `AGENTS.md` / `AGENTS.zh.md` |
 | Architecture decision records (ADR) | `docs/adr/` |
 | Architecture overview | `docs/architecture.md` |
 | IPC contract | `docs/contracts/ipc-contracts.md` |
-| Quick start guide | `docs/quickstart.md` |
+| Contributor validation guide | `docs/quickstart.md` |
 | Native verification evidence | `docs/evidence/native-verification.md` |
 | Accessibility audit | `docs/evidence/a11y-audit.md` |
 | Validation summaries | `docs/evidence/validation-summary.md` |
@@ -99,9 +105,9 @@ Validation must be proportional to risk and should eventually include, as applic
 
 Never claim a check passed unless it actually ran successfully. If validation requires unavailable services, target operating systems, or declared VM configuration details, report the exact gap without weakening code or tests.
 
-## Long-Running Agent Tasks
+## Long-Running Tasks
 
-These rules bind every coding agent that starts a command expected to run longer than a few minutes (performance measurements, soak tests, builds, VM runs):
+These rules bind anyone who starts a command expected to run longer than a few minutes (performance measurements, soak tests, builds, VM runs):
 
 1. **Announce before starting**: state in the conversation, before launching, the expected duration and the concrete completion signal (for example "canvas-io spec, ~8–10 minutes, done when the report JSON lands"). The user must be able to leave and work on other things instead of waiting blind.
 2. **Heartbeat while running**: proactively check the task's health on a fixed interval (about every 5 minutes) and report the result into the conversation — even a no-progress report ("still running healthily, N samples collected") counts. A live process alone is not health; check observable intermediate artifacts (sample counts, report files, `error.json`). Tasks that cannot expose such signals should be fixed to expose them before being relied on.
@@ -109,13 +115,13 @@ These rules bind every coding agent that starts a command expected to run longer
 
 ## Git and Completion
 
-The primary branch is `main`. Do not commit unless explicitly requested. Keep changes focused, use short imperative commit subjects when asked to commit, and never bypass hooks or force-push the primary branch. Do not discard or overwrite user changes.
+The primary branch is `main`. Keep changes focused, use short imperative commit subjects, and never bypass hooks or force-push the primary branch. Do not discard or overwrite unrelated local work. Automated coding tools MUST NOT create a commit unless the operator explicitly asked.
 
 A task is complete only when the requested outcome works across the affected path, relevant tests and documentation are updated, applicable checks pass or exact gaps are reported, no secrets are introduced, and the final handoff lists changed files, validation, assumptions, and residual risks.
 
 ## Worktree Safety and SDD Commit Cadence
 
-Two related policies apply here and are defined in the global user-level agent instructions. They are deliberately tool-agnostic: they bind every coding agent (Codex, opencode, Cursor, and others), because destructive worktree operations and commit cadence are failure modes shared by all AI coding agents, not by any single tool.
+Two related policies apply to every contributor and every automated coding tool. Destructive worktree operations and commit cadence are shared failure modes; they are not specific to one editor.
 
 - **Worktree Safety (all development modes)**: pre-work uncommitted-change audit, WIP-branch backup before destructive worktree operations, and native-Git integration. This applies to every repository and every development mode, including manual spec → plan → task → implement → validate loops that do not use SpecKit tools.
 - **Spec-Driven Development Commit Cadence**: checkpoint-level commits with safety and boundary triggers, plus task-tracking checkboxes committed with the code that satisfies them. This applies whenever work is driven by this repository's private `specs/` spec/plan/tasks artifacts, whether executed with SpecKit tools or manually.

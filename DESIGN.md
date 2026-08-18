@@ -1,114 +1,116 @@
-# Excalidraw Desktop 设计系统
+[English](DESIGN.md) | [简体中文](DESIGN.zh.md)
 
-**状态**：已批准的设计契约
+# Excalidraw Desktop Design System
 
-**最后更新**：2026-08-06
+**Status**: Approved design contract
 
-**适用范围**：应用壳层、桌面专属界面与内嵌 Excalidraw 编辑器
+**Last updated**: 2026-08-06
 
-本文档是仓库内供人类与 Coding Agent 共同遵守的视觉和交互事实来源。产品行为以私有 specs 仓库的 `spec.md` 为准，实施顺序以其 `tasks.md` 为准。
+**Scope**: Application shell, desktop-specific UI, and the embedded Excalidraw editor
 
-## 产品气质
+This document is the in-repo visual and interaction contract for humans and coding agents. Product behavior is defined by the project specification.
 
-应用应当像“为可靠桌面文档工作流重新组织的 Excalidraw”：
+## Product character
 
-- 熟悉、克制、轻量、直接；
-- 内容优先，画布始终拥有最高视觉优先级；
-- 遵循桌面工作流，不模仿浏览器或 PWA 外壳；
-- 与锁定版本的官方 Excalidraw 保持同一视觉语言，不创造平行设计体系。
+The app should feel like “Excalidraw reorganized for a reliable desktop document workflow”:
 
-避免装饰性渐变、玻璃拟态、过量阴影、所有元素都使用大圆角、纯装饰动画、密集 SaaS Dashboard 风格，以及任何与画布争夺注意力的控件。
+- Familiar, restrained, lightweight, and direct;
+- Content first: the canvas always has the highest visual priority;
+- Follow desktop workflow conventions; do not imitate a browser or PWA chrome;
+- Stay in the same visual language as the locked official Excalidraw package; do not invent a parallel design system.
 
-## 桌面信息架构
+Avoid decorative gradients, glassmorphism, excessive shadows, large corner radii on every element, purely decorative animation, dense SaaS-dashboard styling, and any control that competes with the canvas for attention.
 
-标准窗口使用操作系统的普通装饰窗口。不得在 Web 内容区重新绘制浏览器控制、PWA 顶栏或 macOS 红黄绿交通灯。
+## Desktop information architecture
 
-| 区域 | 用途 | 必须满足的行为 |
+The standard window uses the operating system’s ordinary decorated window. Do not redraw browser chrome, a PWA top bar, or macOS red/yellow/green traffic lights in the web content area.
+
+| Region | Purpose | Required behavior |
 |------|------|----------------|
-| 顶部标签栏 | 已打开文档导航 | 显示文件名、活动状态与未保存状态；支持键盘和指针操作 |
-| 左侧文件栏 | 已挂载工作区与图纸文件 | 承担文件导航与文件操作；未挂载工作区时显示可操作的空状态；可折叠但默认不得覆盖活动画布 |
-| 右侧编辑区 | 官方 Excalidraw 编辑器 | 占据剩余空间并保持主视觉表面 |
-| 对话框层 | 导出、恢复、冲突、确认与偏好设置 | 使用统一的对话框和焦点管理模式 |
+| Top tab bar | Navigation among open documents | Show the file name, active state, and unsaved state; support keyboard and pointer operation |
+| Left file pane | Mounted workspaces and drawing files | Own file navigation and file actions; show an actionable empty state when no workspace is mounted; collapsible, but must not cover the active canvas by default |
+| Right editing area | Official Excalidraw editor | Occupy remaining space and remain the primary visual surface |
+| Dialog layer | Export, recovery, conflict, confirmation, and preferences | Use a unified dialog and focus-management model |
 
-第一版不复刻官方 PWA 主菜单、浏览器/PWA 标题栏、Excalidraw+ 入口、账号界面、实时协作或云服务控件。
+The first version does not recreate the official PWA main menu, browser/PWA title bar, Excalidraw+ entry points, account UI, realtime collaboration, or cloud-service controls.
 
-## 官方 Excalidraw 边界
+## Official Excalidraw boundary
 
-- 导入锁定版本 `@excalidraw/excalidraw` 随包提供的样式。画布工具、编辑器面板、图标、控件几何和编辑器内部交互状态由官方包负责。
-- 只通过官方公开的 `theme` 与 UI 组合 API 控制编辑器。不得复制上游私有 React 组件或 Fork 上游应用 CSS。
-- 仅覆盖官方文档公开的 Excalidraw CSS Variables，并限制在应用根节点作用域内。除非兼容性决策记录了原因与升级测试，否则不得依赖不稳定的内部 class。
-- 初始浅色/深色数值以锁定依赖包为准，不从截图取色。截图只用于整体风格与视觉回归参考。
-- 桌面专属标签、文件管理、状态、对话框和偏好设置属于应用壳层，使用下文语义 Token。
+- Import the styles shipped with the locked `@excalidraw/excalidraw` package. Canvas tools, editor panels, icons, control geometry, and in-editor interaction states are owned by the official package.
+- Control the editor only through official public `theme` and UI composition APIs. Do not copy upstream private React components or fork upstream application CSS.
+- Override only Excalidraw CSS variables documented by the official docs, and keep those overrides scoped to the application root. Do not depend on unstable internal classes unless a compatibility decision records the reason and upgrade tests.
+- Initial light/dark values come from the locked dependency package, not from screenshot color picking. Screenshots are for overall style and visual-regression reference only.
+- Desktop-specific tabs, file management, status, dialogs, and preferences belong to the application shell and use the semantic tokens below.
 
-官方参考：
+Official references:
 
 - <https://docs.excalidraw.com/docs/@excalidraw/excalidraw/api/props/>
 - <https://docs.excalidraw.com/docs/@excalidraw/excalidraw/customizing-styles>
 
-## 主题模型
+## Theme model
 
-主题家族与明暗模式偏好是两个独立概念：
+Theme family and light/dark mode preference are independent concepts:
 
-- `themeId`：主题家族标识；第一版仅提供 `excalidraw`。
-- `modePreference`：`light`、`dark` 或 `system`。
-- `resolvedColorScheme`：根据模式偏好与系统外观解析得到的 `light` 或 `dark`。
+- `themeId`: theme-family identifier; the first version provides only `excalidraw`.
+- `modePreference`: `light`, `dark`, or `system`.
+- `resolvedColorScheme`: `light` or `dark`, resolved from the mode preference and the system appearance.
 
-解析后的明暗模式同时控制应用壳层与内嵌编辑器。选择 `system` 时，操作系统外观变化必须在同一帧同步更新两者；选择固定 `light` 或 `dark` 后，后续系统变化不得覆盖用户选择。
+The resolved light/dark mode controls both the application shell and the embedded editor. When `system` is selected, operating-system appearance changes must update both in the same frame; after a fixed `light` or `dark` choice, later system changes must not override the user selection.
 
-外观偏好是应用本地状态，不是文档内容。它不得改变 `.excalidraw` 文件、图纸语义、导出契约或缩略图缓存契约。无效或来自未来版本的偏好回退为 `system`。
+Appearance preference is application-local state, not document content. It must not change `.excalidraw` files, drawing semantics, the export contract, or the thumbnail-cache contract. Invalid preferences, or preferences from a future version, fall back to `system`.
 
-已保存偏好必须在首个用户可见界面前应用，启动时不得闪现相反明暗模式。
+Saved preferences must be applied before the first user-visible UI. Startup must not flash the opposite light/dark mode.
 
-## 语义 Token
+## Semantic tokens
 
-应用组件消费语义 Token，不直接使用调色板字面值。初始值必须从锁定版本的 Excalidraw 浅色/深色样式中提取，并在实现时记录对应包版本。
+Application components consume semantic tokens and must not use palette literals directly. Initial values must be extracted from the locked Excalidraw light/dark styles, and the corresponding package version must be recorded at implementation time.
 
-| Token 角色 | 用途 |
+| Token role | Purpose |
 |------------|------|
-| `app-background` | 窗口内容背景 |
-| `canvas-background` | 文档内容周围的默认编辑器表面 |
-| `panel-background` | 侧栏、菜单、对话框和常驻面板 |
-| `surface-background` | 按钮、标签、输入框与浮动控件 |
-| `surface-hover` / `surface-active` | 悬停与按下状态 |
-| `text-primary` / `text-secondary` / `text-disabled` | 文本层级 |
-| `border-subtle` / `border-strong` | 分隔线、输入框与选中边界 |
-| `accent` / `accent-hover` / `accent-contrast` | 主操作与选中控件 |
-| `focus-ring` | 键盘焦点指示 |
-| `danger` / `warning` / `success` | 危险、警告与完成状态；不得作为唯一信息来源 |
-| `shadow-floating` | 仅用于菜单和对话框 |
-| `radius-control` / `radius-panel` | 控件与面板的统一圆角 |
-| `space-*` | 壳层统一间距尺度 |
+| `app-background` | Window content background |
+| `canvas-background` | Default editor surface around document content |
+| `panel-background` | Sidebars, menus, dialogs, and persistent panels |
+| `surface-background` | Buttons, tabs, inputs, and floating controls |
+| `surface-hover` / `surface-active` | Hover and pressed states |
+| `text-primary` / `text-secondary` / `text-disabled` | Text hierarchy |
+| `border-subtle` / `border-strong` | Dividers, inputs, and selected borders |
+| `accent` / `accent-hover` / `accent-contrast` | Primary actions and selected controls |
+| `focus-ring` | Keyboard focus indicator |
+| `danger` / `warning` / `success` | Danger, warning, and completion states; must not be the only information channel |
+| `shadow-floating` | Menus and dialogs only |
+| `radius-control` / `radius-panel` | Shared corner radii for controls and panels |
+| `space-*` | Shared spacing scale for the shell |
 
-浅色模式使用白色与近白表面、深炭色文字、克制的冷色边框和 Excalidraw 紫色强调色。深色模式使用近黑画布周边、深灰面板、具有足够对比度的暖白文字、克制边框和对应的浅紫强调色。精确数值跟随锁定上游包。
+Light mode uses white and near-white surfaces, deep charcoal text, restrained cool borders, and Excalidraw purple accents. Dark mode uses a near-black canvas surround, dark-gray panels, warm-white text with sufficient contrast, restrained borders, and corresponding light-purple accents. Exact values follow the locked upstream package.
 
-## 组件与交互规则
+## Component and interaction rules
 
-- 优先使用语义化 HTML 和符合平台认知的控件。每个交互元素必须具有 accessible name 和可见焦点。
-- hover、active、selected、disabled、loading、empty、error、conflict、permission-denied 与 offline 都是组件定义的一部分。
-- 标签页必须显示文件名，不得只依赖图标；未保存状态同时使用可见标记与无障碍文本。
-- 文件层级、活动文档、选中、警告和冲突不得只用颜色表达。
-- 模态对话框打开时焦点进入并被约束在其中；关闭后焦点返回触发控件。
-- 动效只服务于状态理解且保持短暂；必须尊重 reduced motion，避免画布周围发生动画布局跳动。
-- 阴影只表达浮动控件、菜单和对话框的层级；常驻面板使用边框或明度差分隔。
+- Prefer semantic HTML and controls that match platform conventions. Every interactive element must have an accessible name and a visible focus indicator.
+- hover, active, selected, disabled, loading, empty, error, conflict, permission-denied, and offline are part of the component definition.
+- Tabs must show the file name and must not rely on icons alone; unsaved state uses both a visible marker and accessible text.
+- File hierarchy, the active document, selection, warnings, and conflicts must not be expressed by color alone.
+- When a modal dialog opens, focus moves into it and is constrained there; when it closes, focus returns to the triggering control.
+- Motion exists only to aid state understanding and stays brief; respect reduced motion, and avoid animated layout jumps around the canvas.
+- Shadows express stacking only for floating controls, menus, and dialogs; persistent panels use borders or luminance difference.
 
-## 后续主题扩展
+## Later theme expansion
 
-后续内置主题与用户自定义主题通过映射到浅色或深色基础模式的、经校验的语义 Token 定义扩展。
+Later built-in themes and user-defined themes extend the system through validated semantic-token definitions mapped onto a light or dark base mode.
 
-- 主题定义只能提供 Token 值；禁止任意 CSS、脚本、远程资源与选择器。
-- 自定义主题声明稳定标识、显示名称、基础明暗模式与支持的语义 Token。
-- 缺失或不支持的 Token 回退到所选基础模式。
-- 主题导入、主题编辑器、主题分享和公开主题文件格式不属于第一版。
+- A theme definition may supply token values only; arbitrary CSS, scripts, remote resources, and selectors are forbidden.
+- A custom theme declares a stable identifier, a display name, a base light/dark mode, and the supported semantic tokens.
+- Missing or unsupported tokens fall back to the chosen base mode.
+- Theme import, a theme editor, theme sharing, and a public theme file format are out of scope for the first version.
 
-## 验证契约
+## Verification contract
 
-初始实现必须提供以下证据：
+The initial implementation must provide evidence for:
 
-- 浅色、深色与跟随系统行为；
-- 重启持久化与损坏偏好回退；
-- 壳层/画布同步且启动无相反主题闪现；
-- 代表性桌面壳层与编辑器浅色/深色视觉快照；
-- 键盘导航、焦点可见性、accessible name、对比度、非颜色唯一状态与 reduced motion；
-- macOS 与受支持 Linux 环境中的系统原生装饰窗口行为。
+- Light, dark, and follow-system behavior;
+- Persistence across restart and fallback from corrupted preferences;
+- Shell/canvas synchronization with no opposite-theme flash at startup;
+- Representative light/dark visual snapshots of the desktop shell and editor;
+- Keyboard navigation, focus visibility, accessible names, contrast, non-color-only state, and reduced motion;
+- Native decorated-window behavior on macOS and supported Linux environments.
 
-Open Design 只作为后续原创视觉工作的可选探索工具，例如恢复流程、复杂空状态、首次引导或主题编辑器。被采纳的探索结果必须回写本文档和仓库 Token 定义；外部设计工作区不得成为并行事实来源。
+Open Design is only an optional exploration tool for later original visual work, such as recovery flows, complex empty states, first-run guidance, or a theme editor. Adopted exploration results must be written back into this document and the in-repo token definitions; an external design workspace must not become a parallel source of truth.

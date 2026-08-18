@@ -1,97 +1,122 @@
+[English](README.md) | [简体中文](README.zh.md)
+
 # Excalidraw Desktop
 
-本地优先（local-first）的离线 Excalidraw 桌面应用，基于 Tauri 2.x、React 19、严格 TypeScript 与 Rust 构建。文档以本地文件为唯一事实来源，不依赖账号、云同步或网络服务。
+A local-first Excalidraw desktop app for macOS. Drawings are ordinary `.excalidraw` files on disk. There is no account, cloud sync, or collaboration.
 
-## 为什么存在这个应用
+The canvas is the official [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) package, not a fork. What this project adds is how that canvas meets the filesystem: frequent edits, crashes, Finder, and other programs that touch the same files.
 
-这不是把 Excalidraw 再包进一个桌面窗口。和常见的「定时全量覆盖写入目标文件」不同，本应用把高频编辑、崩溃安全和可携带文件拆开：
+## Why it exists
 
-- 本地 `.excalidraw` 文件是唯一事实来源。
-- 画布变更先留在内存，约 300ms 防抖后写入热层草稿，而不是按固定间隔对冷层做全量覆盖。
-- 空闲、切标签或退出时，冷层只经临时文件写入、校验再 `rename` 替换，避免半写损坏。
-- 崩溃、强杀或掉电后，从未 checkpoint 的草稿和轮换恢复快照找回编辑成果。
+Open-source Excalidraw desktops are easy to ship as a thin window around the editor. A common pattern is to overwrite the whole drawing in place on a timer (on the order of tens of seconds). That is a small program. It also means a crash can lose that whole interval, and a kill in the middle of a write can leave truncated JSON.
 
-可靠性是产品红线，不拿来换更低的空闲内存或 CPU。资源占用在不削弱上述合同的前提下持续压低，对照的是同类画布桌面应用，而不是空窗口的 Tauri 壳。持久化分层见 [architecture.md](docs/architecture.md) 与 [ADR-002](docs/adr/ADR-002.md)。
+This app is built for a different contract.
 
-## 功能范围
+**Draw without beating the disk.** Excalidraw can emit changes at 60 fps. Those updates stay in memory. After about 300 ms of quiet, a private draft is written. The `.excalidraw` file is not rewritten on every stroke or on a 30-second clock. On Apple Silicon, a 10,000-element scene still pans and edits at about 60 fps.
 
-覆盖以下 7 个用户故事：
+**Don't lose the file, or the last few seconds.** Drafts and a few rotating snapshots live in the app data directory. They are not `.excalidraw` files. After a crash, force-quit, or power loss they restore work that had not yet landed in the drawing. When the drawing *is* written, the app writes a temp file, checks that the JSON is complete, then `rename`s it into place.
 
-1. 离线创建、编辑与保存本地图纸
-2. 异常退出后不丢失编辑成果
-3. 工作区文件管理侧边栏
-4. 外部文件变更感知与冲突消解
-5. PNG/SVG 图纸导出
-6. macOS 原生桌面系统集成（Ubuntu 24.04 可选社区验证）
-7. 多工作区浏览与缩略图、资产去重
+**Keep a file you can take elsewhere.** The document you copy, put in git, or open on [excalidraw.com](https://excalidraw.com/) is still standard `.excalidraw`. Fonts and editor assets are bundled, including a Virgil + Xiaolai CJK hand-drawn font, so the app does not fetch scripts or typefaces from the network.
 
-## 平台范围
+What this is **not**: a lightweight process. A WKWebView running Excalidraw uses hundreds of megabytes. Idle memory here sits between an empty Tauri window and Safari opening the same canvas. The work that paid off is coalesced writes and a usable 10k canvas, not a 50 MB RAM headline.
 
-- macOS 12+（Apple Silicon 与 Intel）
-- Ubuntu 24.04 Desktop（可选社区验证；Fedora/其他 Linux 不在当前版本支持承诺内）
-- Windows 不在支持范围
-- macOS 产物通过 GitHub Releases 以未签名、未公证形式提供；项目不规划 App Store、Developer ID 或 Apple 公证
+## How saving works
 
-## macOS 安装与 Gatekeeper
+- **While you draw:** memory first, then a private draft after ~300 ms of quiet.
+- **If the app dies:** restore from those drafts and snapshots.
+- **The `.excalidraw` file:** written on idle, tab switch, save, or quit, only through temp + validate + `rename`.
 
-GitHub Release 中的 macOS 安装包没有 Developer ID 签名或 Apple 公证。macOS 因此无法验证开发者身份，也无法利用 Apple 公证票据确认产物未被篡改；首次启动可能被 Gatekeeper 拦截。请仅从本项目的 GitHub Releases 下载产物，并在理解这一风险后手动放行：
+## Compared with a timer-save shell
 
-1. 将应用拖入“应用程序”，并先尝试正常打开一次。
-2. 如被拦截，打开“系统设置 → 隐私与安全性”，在安全性区域为该应用选择“仍要打开”。
-3. 再次确认打开。该放行操作由用户主动执行，项目不要求禁用 Gatekeeper。
+| | Overwrite on a clock | This app |
+| --- | --- | --- |
+| While drawing | Whole file, in place, every few tens of seconds | Memory → coalesced draft; `.excalidraw` stays still |
+| Crash or power loss | That whole interval can be lost; the file can be truncated | Drafts + snapshots; destination file is complete old or complete new |
+| External edit (git, iCloud, another editor) | Often ignored | Reload, or a conflict dialog — never a silent overwrite |
+| Folders | Typically one tree | Several workspaces, with lazy thumbnails |
 
-## 环境前提
+## What it can do
+
+- Create, edit, and save drawings locally, fully offline, including Chinese hand-drawn text
+- Recover work after a crash, force-quit, or power loss
+- Browse drawings in a workspace sidebar; mount more than one workspace
+- Detect external file changes and resolve conflicts
+- Export PNG or SVG (SVG keeps the bundled font)
+- Open `.excalidraw` from Finder; reuse one app instance for more files
+- Deduplicate repeated images inside a drawing so the file does not grow with every paste
+
+## Platforms
+
+- **macOS 12+** (Apple Silicon and Intel) is the supported release platform.
+- **Ubuntu 24.04 Desktop** is optional community / best-effort validation. Fedora and other Linux distributions are not supported in this version.
+- **Windows** is not supported.
+
+## Install from GitHub Releases
+
+Download installers from this repository's GitHub Releases. The intended repository path is [ignacioli/excalidraw-desktop](https://github.com/ignacioli/excalidraw-desktop).
+
+macOS builds are **unsigned and unnotarized** `.dmg` files. There is no App Store listing, Developer ID signature, or Apple notarization.
+
+Linux **AppImage**, **deb**, and **rpm** files may also appear on the Releases page as **best-effort binaries**. That does not mean Linux is verified or supported in this version.
+
+### macOS and Gatekeeper
+
+Because the macOS package has no Developer ID signature or Apple notarization, macOS cannot verify the developer identity and cannot use an Apple notarization ticket to confirm the binary was not tampered with. Gatekeeper may block the first launch. Download only from this repository's GitHub Releases, and allow the app yourself after you understand that risk:
+
+1. Drag the app into Applications, then try to open it once.
+2. If it is blocked, open **System Settings → Privacy & Security**, and choose **Open Anyway** for the app in the Security section.
+3. Confirm Open Anyway. You perform this override; the project does not ask you to turn Gatekeeper off.
+
+## Build from source
+
+### Prerequisites
 
 - Node.js 20+
-- pnpm（项目声明 `packageManager: pnpm@11.20.0`）
+- pnpm (the repo declares `packageManager: pnpm@11.20.0`)
 - Rust stable 1.80+
-- macOS：Xcode Command Line Tools
-- Linux：WebKitGTK 系统依赖
-- Python 3.10+ 与 uv（仅用于字体构建，即 `pnpm fonts:build`；解释器由 `.python-version` 固定为 3.14，依赖经 `pyproject.toml` + `uv.lock` 管理，`uv run` 自动创建 `.venv`）
+- macOS: Xcode Command Line Tools
+- Linux: WebKitGTK system dependencies (only if you choose to build there)
+- Python 3.10+ and uv (font build only, via `pnpm fonts:build`; the interpreter is pinned to 3.14 by `.python-version`; dependencies are managed with `pyproject.toml` + `uv.lock`; `uv run` creates `.venv`)
 
-## 开发与构建
+### Develop and package
 
 ```sh
 pnpm install
-pnpm dev            # 启动 Vite 开发服务器
-pnpm fonts:build    # 构建内置 CJK 手写字体（uv 管理 fonttools/brotli，产出 public/fonts/）
-pnpm tauri dev      # 启动 Tauri 开发应用
-pnpm tauri build    # 构建当前 Tauri 安装包
+pnpm dev            # Vite development server
+pnpm fonts:build    # bundled CJK hand-drawn font (uv manages fonttools/brotli; output in public/fonts/)
+pnpm tauri dev      # Tauri development app
+pnpm tauri build    # current Tauri bundle
 ```
 
-## 质量门禁与验证
+### Quality gates
 
 ```sh
-pnpm lint                                            # 前端 ESLint
-pnpm typecheck                                       # 严格 TypeScript 检查
-pnpm test                                            # Vitest 单元测试
+pnpm lint                                            # frontend ESLint
+pnpm typecheck                                       # strict TypeScript check
+pnpm test                                            # Vitest unit tests
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 APP_E2E=1 pnpm e2e                                   # Playwright E2E
 ```
 
-`APP_E2E=1 pnpm e2e` 覆盖浏览器可见的 E2E 流程；原生 shell 与故障注入用例需要测试专用 Tauri 构建。
+`APP_E2E=1 pnpm e2e` covers browser-visible flows. Native-shell and fault-injection cases need the test-only Tauri build described by the E2E fixture.
 
-macOS 原生功能、安装和 IME 验收可在记录完整配置的虚拟机中执行且为当前版本必选；Ubuntu 24.04 Desktop 仅作可选社区验证，Fedora/其他 Linux 不形成当前门禁。性能 T090/T108 的首个参考环境为 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB VM；完整测量必须记录真实 `pass`/`fail`，但预算失败不阻断开源发布。详见 [native-verification.md](docs/evidence/native-verification.md) 与 [ADR-004](docs/adr/ADR-004.md)。
+## Documentation
 
-## 文档索引
+- [DESIGN.md](DESIGN.md) / [DESIGN.zh.md](DESIGN.zh.md) — visual and interaction contract
+- [docs/architecture.md](docs/architecture.md) — architecture overview
+- [docs/contracts/ipc-contracts.md](docs/contracts/ipc-contracts.md) — IPC contract
+- [docs/adr/](docs/adr/) — architecture decision records
+- [docs/quickstart.md](docs/quickstart.md) — contributor validation guide (not an end-user manual)
+- [AGENTS.md](AGENTS.md) / [AGENTS.zh.md](AGENTS.zh.md) — constraints, commands, and contribution rules for contributors and maintainers
 
-- [DESIGN.md](DESIGN.md) — 桌面 UI 主题与视觉契约
-- [docs/](docs/) — 实现文档
-  - [quickstart.md](docs/quickstart.md) — 快速上手
-  - [architecture.md](docs/architecture.md) — 架构说明
-  - [contracts/ipc-contracts.md](docs/contracts/ipc-contracts.md) — IPC 契约
-  - [adr/](docs/adr/) — 架构决策记录
-  - [evidence/](docs/evidence/) — 验证与审计证据
-    - [native-verification.md](docs/evidence/native-verification.md) — 原生平台验证
-    - [a11y-audit.md](docs/evidence/a11y-audit.md) — 无障碍审计
-    - [validation-summary.md](docs/evidence/validation-summary.md) — 验证摘要
+## License
 
-规格驱动（SDD）生命周期工件（spec、plan、research、data-model、tasks、checklists）保存在独立的私有 specs 仓库，经 gitignored 的 `specs/` 软链接供维护者访问，不随本仓库开源。
+This project is licensed under the [MIT License](LICENSE).
 
-## 贡献指引
+The bundled CJK hand-drawn font is generated from Virgil and Xiaolai, which remain under the SIL Open Font License. See [public/fonts/README.md](public/fonts/README.md).
 
-- 遵循仓库 `AGENTS.md` 的约束；核心维护者按私有 specs 仓库中的任务编号驱动实现
-- 仅在被明确要求时提交代码
-- 修改行为或契约时，同步更新相关设计、契约与验证文档
+## Contributing
+
+Read [AGENTS.md](AGENTS.md) before changing the project. When you change behavior or contracts, update the related design, contract, and validation docs.

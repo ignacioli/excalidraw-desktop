@@ -2,7 +2,7 @@
 
 **最后更新**：2026-08-10
 
-本文档描述 Excalidraw Desktop 的实现架构：分层视图、两条关键数据流、模块职责、依赖方向与信任边界、安全路径与存储层。产品行为以私有 specs 仓库的 `spec.md` 为准；决策记录见 `docs/adr/`；视觉与交互契约见根目录 `DESIGN.md`。
+本文档描述 Excalidraw Desktop 的实现架构：分层视图、两条关键数据流、模块职责、依赖方向与信任边界、安全路径与存储层。产品行为以私有 specs 仓库的 `spec.md` 为准；决策记录见 `docs/adr/`；视觉与交互契约见根目录 `DESIGN.md`（英文正文；中文见 `DESIGN.zh.md`）。
 
 ## 1. 总体结构
 
@@ -146,6 +146,6 @@ flowchart TB
 
 - ADR：ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 声明参考环境性能测量、ADR-005 主题边界
 - `DESIGN.md`（视觉与交互契约）
-- `docs/quickstart.md`（快速上手）、`docs/contracts/ipc-contracts.md`（IPC 契约）
+- `docs/quickstart.md`（贡献者验证指南）、`docs/contracts/ipc-contracts.md`（IPC 契约）
 - 私有 specs 仓库（spec.md、plan.md、research.md、data-model.md、checklists，经 `specs/` 软链接访问）
 - `docs/evidence/`（原生验证矩阵、无障碍审计与验证汇总，VM 或物理机）

@@ -1,8 +1,8 @@
-# Quickstart & Validation Guide: 跨平台 Excalidraw Desktop
+# 贡献者验证指南：Excalidraw Desktop
 
-**Date**: 2026-08-04 | **Last updated**: 2026-08-15 | **Plan**: [plan.md](./plan.md) | **设计契约**: [../../DESIGN.md](../../DESIGN.md) | **IPC 契约**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md)
+**Date**: 2026-08-04 | **Last updated**: 2026-08-15 | **架构**: [architecture.md](./architecture.md) | **设计契约**: [../DESIGN.md](../DESIGN.md) | **IPC 契约**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md)
 
-本文件是端到端验证指南：环境前提、构建运行命令、按用户故事组织的验证场景与预期结果。实现细节见 tasks.md 与源码，此处不重复。
+本文件是面向贡献者的端到端验证指南：环境前提、构建运行命令、按用户故事组织的验证场景与预期结果。实现细节见源码，此处不重复。
 
 验证证据分为三类并分别报告：Playwright 浏览器 UI（交互/a11y/视觉）、`APP_E2E=1` Tauri 进程级可靠性（进程/文件系统/恢复）和 macOS 目标 OS 平台验收（窗口/IME/文件关联/Gatekeeper 手动放行/安装）。记录完整配置的 macOS 虚拟机或物理机均可用于必选原生验收；Ubuntu 24.04 Desktop 可选补充 smoke test，浏览器测试不得替代后两类。
 
