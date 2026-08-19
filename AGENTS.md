@@ -12,7 +12,7 @@ The repository is a working Tauri 2.x + Vite/React application implementing seve
 
 - `src/`: React 19 + TypeScript strict frontend.
 - `src-tauri/`: Rust backend (Tauri 2.x).
-- `specs/`: symlink to the private specs repository holding the authoritative feature specification, plan, research, data model, tasks, and checklists (ignored by Git, not part of this public repo).
+- `specs/`: symlink to the private specs repository holding the authoritative feature specification, plan, research, data model, tasks, and checklists (ignored by Git, not part of this public repo). Before changing any linked specification, read `specs/AGENTS.md` and audit the private repository's Git status, staged content, and unpushed commits separately; this public repository's Git status does not cover linked files.
 - `docs/`: implementation-facing architecture records and ADRs.
 - `.codex/`: developer-local Codex configuration. It is ignored by Git and MUST NOT be required to build, test, review, or contribute to the project.
 
