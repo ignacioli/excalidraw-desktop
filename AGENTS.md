@@ -83,6 +83,7 @@ The manifests establish the following workflows:
 - `pnpm typecheck`: run the standalone strict TypeScript gate.
 - `pnpm test`: run the Vitest unit suite.
 - `APP_E2E=1 pnpm e2e`: run the Playwright suites; native-shell and fault-injection cases require the test-only Tauri build described by the E2E fixture.
+- **Codex managed macOS sandbox**: for browser-visible Playwright runs, do not let Playwright start its configured `webServer` inside the sandbox. Start `pnpm dev --host 127.0.0.1` outside the sandbox and wait for the ready URL, then run Playwright with `PLAYWRIGHT_SKIP_WEBSERVER=1` (and set `PLAYWRIGHT_BASE_URL` when using a non-default port). Ordinary developer shells and CI may continue to use the configured `webServer`.
 - `pnpm fonts:build`: build the bundled CJK hand-drawn font from the licensed local source fonts.
 - `pnpm tauri dev`: run the Tauri development application through the package script.
 - `pnpm tauri build`: build the current Tauri bundle through the package script.
