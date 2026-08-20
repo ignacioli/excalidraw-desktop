@@ -53,9 +53,8 @@ const E2E_ROOT_PREFIX: &str = "excalidraw-desktop-e2e-";
 pub(crate) fn disable_app_nap() {
     use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
 
-    let reason = NSString::from_str(
-        "excalidraw-desktop e2e harness keeps rAF-driven measurements running",
-    );
+    let reason =
+        NSString::from_str("excalidraw-desktop e2e harness keeps rAF-driven measurements running");
     let token = NSProcessInfo::processInfo().beginActivityWithOptions_reason(
         NSActivityOptions::UserInitiated | NSActivityOptions::LatencyCritical,
         &reason,

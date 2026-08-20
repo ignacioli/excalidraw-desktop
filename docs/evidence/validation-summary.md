@@ -1,7 +1,7 @@
 # 验证证据汇总（Phase 10 / T095）
 
-**日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17；§6/§7 原生发版与 T078/T080/T094 更新于 2026-08-18）
-**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。
+**日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17；§6/§7 原生发版与 T078/T080/T094 更新于 2026-08-18；002 修改前基线更新于 2026-08-19）
+**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总，并包含 feature 002 的修改前诊断基线；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。
 
 先看下表再下钻各节。性能当前有效序列是 2026-08-16 ADR-007（同一份 e2e-harness `e8bef9b7…`）；§5.3 的日期流水账不可与之混比。
 
@@ -16,6 +16,19 @@
 | T108 15 min soak（§5.2） | 物理机 **fail** · 参考 VM **fail** | 只败在 RSS 增长；idle CPU 与静置 0 写入两边过 |
 | SC-010 开源分发（§6） | **v0.1.1 已发布** | 未签名/未公证 GitHub Release；macOS universal `.dmg` + Linux amd64 AppImage/deb/rpm |
 | T078/T080 原生验收（§7） | **通过**（2026-08-18） | 物理 macOS 26.5.2 下载真实 `v0.1.1`；T094 Ubuntu IME 可选已做 |
+
+## 0. Feature 002 修改前基线（T001，2026-08-19）
+
+本节只记录 `HEAD 1346d29` 开始实现前的诊断状态，不替换、不重分类 §5.2 的正式物理机/参考 VM T090/T108 证据。浏览器 fixture 不证明原生文件系统或进程树性能；本机 startup/resource 运行未设置 `PERF_REFERENCE_RUN=1`，因此只属于 physical diagnostic。
+
+| 基线面                    | 修改前结果                                                                                                                                                                                                                                                                       | 证据边界                                                                                                                                                                                                       |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 10k Workspace tree        | **fail**：展开耗时 8088.5 ms（预算 ≤200 ms）；10,001 个 treeitem 全部进入 DOM（预算 <300）；`scrollHeightPx == clientHeightPx == 320032`，滚动位移 0、位置变化 0                                                                                                                 | `us3-scale-scroll.spec.ts` browser fixture；rAF 记录 118.98 fps，但由于容器不可滚动，该数值不是有效滚动 FPS；浏览器 heap 304,000,000 bytes 仅为诊断                                                            |
+| Thumbnail activity        | 2/2 focused browser tests **pass**；可见 Drawing 行执行 `thumb_lookup`，miss 后执行额外 `doc_open`、worker/main-thread render 与 `thumb_store`，随后经 asset protocol 呈现；重载命中缓存且不增加 store 数                                                                        | 证明当前产品 UI 仍消费完整 thumbnail 链；不证明原生 cache I/O 性能                                                                                                                                             |
+| Startup/resource snapshot | physical diagnostic **pass**：10 次冷启动 editable P95 648.879459 ms；空闲进程树 RSS P95 411,795,456 bytes；60 秒观察 0 filesystem event / 0 changed path                                                                                                                        | macOS 26.5.2、Apple M5 Pro / 48 GiB、WebKit 21624.2.5.11.8；现有 test-only binary SHA-256 `e8bef9b7…`；原始 `/tmp/excalidraw-002-t001-startup-idle.json` SHA-256 `4289ee61…`，临时文件不提交；不是参考 VM T090 |
+| `prompt` / `confirm`      | 生产源码仍在 `FileTree.tsx` 使用 4 个 `window.prompt` 与 1 个 `window.confirm`，在 `WorkspacePanel.tsx` 使用 1 个 `window.confirm`。同日隔离原生复现确认 prompt 无声取消、confirm 无声接受；唯一 delete sentinel 未显示确认即进入 macOS Trash，随后通过 Finder **Put Back** 恢复 | 原生复现使用隔离 app-data/workspace/sentinel；本轮未重复执行 Trash mutation，避免把已完成的安全复现误当实现后验收                                                                                              |
+
+Focused browser 命令实际以仓库本地 Vite/Playwright 可执行文件运行；标准 `pnpm exec` 在当前环境尝试访问 registry 而失败，沙箱内 Chromium/Mach port 与 localhost bind 也被拒绝，因此最终在获准的本机执行边界运行。最终产品断言结果为 2 pass / 1 fail；前述环境启动失败不计入该结果。
 
 ## 1. 全量浏览器回归（T095 执行）
 

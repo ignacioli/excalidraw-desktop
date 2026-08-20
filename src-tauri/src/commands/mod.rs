@@ -1,5 +1,6 @@
 pub mod documents;
 pub mod dto;
+pub mod entries;
 pub mod error;
 pub mod export;
 pub mod files;

@@ -4,6 +4,11 @@ export type ErrorCode =
   | "PATH_ACCESS_DENIED"
   | "WORKSPACE_NOT_FOUND"
   | "WORKSPACE_OVERLAP"
+  | "INVALID_NAME"
+  | "NAME_CONFLICT"
+  | "ENTRY_PROTECTED"
+  | "DIRECTORY_NOT_EMPTY"
+  | "ENTRY_CHANGED"
   | "FILE_NOT_FOUND"
   | "FILE_CORRUPTED"
   | "FILE_TOO_LARGE"
@@ -68,6 +73,53 @@ export interface FileEntry {
   fileSize: number;
 }
 
+export type WorkspaceEntryKind = "drawing" | "directory";
+
+export interface WorkspaceEntry {
+  workspaceId: string;
+  kind: WorkspaceEntryKind;
+  canonicalPath: string;
+  relativePath: string;
+  parentRelativePath: string;
+  name: string;
+  displayName: string;
+  mtime: number;
+  fileSize: number;
+}
+
+export interface ExpectedOpenDocument {
+  relativePath: string;
+  baseHash: string;
+}
+
+export interface PathMigration {
+  oldRelativePath: string;
+  newRelativePath: string;
+  oldCanonicalPath: string;
+  newCanonicalPath: string;
+}
+
+export interface EntryMutationResult {
+  operationId: string;
+  entry: WorkspaceEntry;
+}
+
+export interface EntryRenameResult extends EntryMutationResult {
+  oldRelativePath: string;
+  newRelativePath: string;
+  pathMigrations: PathMigration[];
+}
+
+export type EntryDeletePreflightResult =
+  | { status: "confirmable"; entry: WorkspaceEntry }
+  | { status: "directoryNotEmpty"; entry: WorkspaceEntry };
+
+export interface EntryDeleteResult {
+  operationId: string;
+  kind: WorkspaceEntryKind;
+  oldRelativePath: string;
+}
+
 export interface ExportOptions {
   scale?: 1 | 2 | 3;
   background?: "transparent" | "solid";
@@ -107,6 +159,44 @@ export interface IpcCommands {
   workspace_list: {
     request: Record<string, never>;
     response: Workspace[];
+  };
+  workspace_entry_list: {
+    request: { workspaceId: string; parentRelativePath: string };
+    response: WorkspaceEntry[];
+  };
+  workspace_entry_create: {
+    request: {
+      workspaceId: string;
+      parentRelativePath: string;
+      kind: WorkspaceEntryKind;
+      baseName: string;
+    };
+    response: EntryMutationResult;
+  };
+  workspace_entry_rename: {
+    request: {
+      workspaceId: string;
+      relativePath: string;
+      baseName: string;
+      expectedOpenDocuments: ExpectedOpenDocument[];
+    };
+    response: EntryRenameResult;
+  };
+  workspace_entry_delete_preflight: {
+    request: { workspaceId: string; relativePath: string };
+    response: EntryDeletePreflightResult;
+  };
+  workspace_entry_delete: {
+    request: {
+      workspaceId: string;
+      relativePath: string;
+      expectedOpenDocument?: ExpectedOpenDocument;
+    };
+    response: EntryDeleteResult;
+  };
+  workspace_entry_reveal: {
+    request: { workspaceId: string; relativePath: string };
+    response: Record<string, never>;
   };
   dir_list: {
     request: { workspaceId: string; relativePath: string };
@@ -176,6 +266,7 @@ export type CommandResponse<Name extends CommandName> =
   IpcCommands[Name]["response"];
 
 export interface IpcEvents {
+  "workspace-entries-changed": WorkspaceEntriesChangedEvent;
   "file-changed": {
     path: string;
     change: "modified" | "created" | "removed" | "renamed";
@@ -196,6 +287,14 @@ export interface IpcEvents {
     localDraftUpdatedAt: number;
   };
   "open-file-request": { paths: string[] };
+}
+
+export interface WorkspaceEntriesChangedEvent {
+  workspaceId: string;
+  operationId?: string;
+  change: "created" | "renamed" | "removed" | "invalidated";
+  relativePath: string;
+  newRelativePath?: string;
 }
 
 export type EventName = keyof IpcEvents;

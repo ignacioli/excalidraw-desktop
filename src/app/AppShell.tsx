@@ -79,13 +79,10 @@ export function AppShell({
   const setHasMountedWorkspace = useAppStore(
     (state) => state.setHasMountedWorkspace,
   );
-  const activeTabId = useAppStore((state) => state.activeTabId);
-  const activeTab = useAppStore((state) =>
-    state.activeTabId === null ? undefined : state.tabsById[state.activeTabId],
-  );
   const sessionsById = useDocumentStore((state) => state.sessionsById);
+  const activeDocumentId = useDocumentStore((state) => state.activeDocumentId);
   const activeSession =
-    activeTabId === null ? undefined : sessionsById[activeTabId];
+    activeDocumentId === null ? undefined : sessionsById[activeDocumentId];
   const documentSessions = Object.values(sessionsById);
   const themeSnapshot = useSyncExternalStore(
     themeController.subscribe,
@@ -390,7 +387,7 @@ export function AppShell({
               <section
                 aria-labelledby={`tab-${session.id}`}
                 className="canvas-document"
-                hidden={session.id !== activeTabId}
+                hidden={session.id !== activeDocumentId}
                 id={`document-${session.id}`}
                 key={session.id}
                 role="tabpanel"
@@ -407,25 +404,10 @@ export function AppShell({
                 />
               </section>
             ))
-          ) : activeTab === undefined ? (
+          ) : (
             <div className="canvas-empty-state">
               <p>Select a drawing to begin.</p>
             </div>
-          ) : (
-            <section
-              aria-labelledby={`tab-${activeTab.id}`}
-              className="canvas-document"
-              id={`document-${activeTab.id}`}
-              role="tabpanel"
-            >
-              <div
-                className="canvas-placeholder"
-                data-document-id={activeTab.id}
-              >
-                <p>{activeTab.title}</p>
-                <span>The editor is not loaded yet.</span>
-              </div>
-            </section>
           )}
         </main>
       </div>

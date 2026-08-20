@@ -51,12 +51,7 @@ describe("DocumentManager", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     serializeAsJSON.mockClear();
-    useAppStore.setState({
-      tabsById: {},
-      tabOrder: [],
-      activeTabId: null,
-      hasMountedWorkspace: false,
-    });
+    useAppStore.setState({ hasMountedWorkspace: false });
   });
 
   it("does not serialize high-frequency scene or viewport changes", async () => {
@@ -126,6 +121,30 @@ describe("DocumentManager", () => {
     manager.dispose();
   });
 
+  it("owns tab order, active identity, and derived path-title-dirty-orphan facts", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const firstId = await manager.open("/tmp/first.excalidraw");
+    const secondId = await manager.open("/tmp/second.excalidraw");
+    const state = manager.store.getState() as typeof manager.store extends {
+      getState(): infer State;
+    }
+      ? State & { tabOrder: string[]; activeDocumentId: string | null }
+      : never;
+
+    expect(state.tabOrder).toEqual([firstId, secondId]);
+    expect(state.activeDocumentId).toBe(secondId);
+    expect(state.sessionsById[firstId]).toMatchObject({
+      path: "/tmp/first.excalidraw",
+      title: "first.excalidraw",
+      saveState: "clean",
+    });
+    expect(useAppStore.getState()).not.toHaveProperty("tabsById");
+    expect(useAppStore.getState()).not.toHaveProperty("tabOrder");
+    expect(useAppStore.getState()).not.toHaveProperty("activeTabId");
+    manager.dispose();
+  });
+
   it("retargets future saves after a file is renamed", async () => {
     const gateway = createGateway();
     const manager = new DocumentManager(gateway);
@@ -147,10 +166,6 @@ describe("DocumentManager", () => {
       path: "/tmp/after.excalidraw",
       title: "after.excalidraw",
     });
-    expect(useAppStore.getState().tabsById[documentId]).toMatchObject({
-      path: "/tmp/after.excalidraw",
-      title: "after.excalidraw",
-    });
     expect(gateway.checkpoint).toHaveBeenCalledWith(
       "/tmp/after.excalidraw",
       expect.any(String),
@@ -169,7 +184,6 @@ describe("DocumentManager", () => {
     expect(manager.store.getState().sessionsById[documentId]?.saveState).toBe(
       "orphaned",
     );
-    expect(useAppStore.getState().tabsById[documentId]?.isOrphaned).toBe(true);
     manager.dispose();
   });
 
@@ -233,7 +247,6 @@ describe("DocumentManager", () => {
       path: "/tmp/recovered.excalidraw",
       saveState: "dirty",
     });
-    expect(useAppStore.getState().tabsById[documentId]?.isDirty).toBe(true);
     await vi.advanceTimersByTimeAsync(300);
     expect(gateway.saveDraft).toHaveBeenCalledWith(
       "/tmp/recovered.excalidraw",
@@ -265,7 +278,6 @@ describe("DocumentManager", () => {
     expect(session?.baseHash).toBe("external-hash");
     expect(session?.sceneVersion).toBe(9);
     expect(session?.lastReloadedAt).not.toBeNull();
-    expect(useAppStore.getState().tabsById[documentId]?.isDirty).toBe(false);
     manager.dispose();
   });
 
@@ -321,7 +333,6 @@ describe("DocumentManager", () => {
     expect(session?.saveState).toBe("dirty");
     expect(session?.baseHash).toBe("external");
     expect(session?.conflictInfo).toBeNull();
-    expect(useAppStore.getState().tabsById[documentId]?.isDirty).toBe(true);
     manager.dispose();
   });
 
@@ -377,7 +388,6 @@ describe("DocumentManager", () => {
     const session = manager.store.getState().sessionsById[documentId];
     expect(session?.saveState).toBe("clean");
     expect(session?.path).toBe("/tmp/saved.excalidraw");
-    expect(useAppStore.getState().tabsById[documentId]?.isOrphaned).toBe(false);
     manager.dispose();
   });
 });

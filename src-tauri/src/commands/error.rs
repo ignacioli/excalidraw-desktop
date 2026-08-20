@@ -23,6 +23,11 @@ pub enum ErrorCode {
     PathAccessDenied,
     WorkspaceNotFound,
     WorkspaceOverlap,
+    InvalidName,
+    NameConflict,
+    EntryProtected,
+    DirectoryNotEmpty,
+    EntryChanged,
     FileNotFound,
     FileCorrupted,
     FileTooLarge,
@@ -52,6 +57,16 @@ pub enum AppError {
     WorkspaceNotFound(String),
     #[error("workspace overlaps an existing mount: {0}")]
     WorkspaceOverlap(String),
+    #[error("invalid Workspace Entry name: {0}")]
+    InvalidName(String),
+    #[error("Workspace Entry name conflicts with {0}")]
+    NameConflict(PathBuf),
+    #[error("Workspace Entry is protected: {0}")]
+    EntryProtected(PathBuf),
+    #[error("Directory is not empty: {0}")]
+    DirectoryNotEmpty(PathBuf),
+    #[error("Workspace Entry changed during the operation: {0}")]
+    EntryChanged(PathBuf),
     #[error("file not found: {0}")]
     FileNotFound(PathBuf),
     #[error("file is corrupted: {0}")]
@@ -102,6 +117,36 @@ impl AppError {
                 "Workspace overlaps an existing mount.".to_owned(),
                 false,
                 None,
+            ),
+            Self::InvalidName(_) => (
+                ErrorCode::InvalidName,
+                "The name is not valid for a Workspace Entry.".to_owned(),
+                false,
+                None,
+            ),
+            Self::NameConflict(path) => (
+                ErrorCode::NameConflict,
+                "An entry with that name already exists.".to_owned(),
+                false,
+                Some(path),
+            ),
+            Self::EntryProtected(path) => (
+                ErrorCode::EntryProtected,
+                "This Workspace Entry is protected.".to_owned(),
+                false,
+                Some(path),
+            ),
+            Self::DirectoryNotEmpty(path) => (
+                ErrorCode::DirectoryNotEmpty,
+                "The Directory is not empty.".to_owned(),
+                false,
+                Some(path),
+            ),
+            Self::EntryChanged(path) => (
+                ErrorCode::EntryChanged,
+                "The Workspace Entry changed during the operation.".to_owned(),
+                true,
+                Some(path),
             ),
             Self::FileNotFound(path) => (
                 ErrorCode::FileNotFound,

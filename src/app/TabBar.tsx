@@ -1,12 +1,10 @@
 import { useRef, type KeyboardEvent } from "react";
-import { documentManager } from "../documents/documentStore";
-import { useAppStore } from "./store";
+import { documentManager, useDocumentStore } from "../documents/documentStore";
 
 export function TabBar() {
-  const tabsById = useAppStore((state) => state.tabsById);
-  const tabOrder = useAppStore((state) => state.tabOrder);
-  const activeTabId = useAppStore((state) => state.activeTabId);
-  const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const sessionsById = useDocumentStore((state) => state.sessionsById);
+  const tabOrder = useDocumentStore((state) => state.tabOrder);
+  const activeDocumentId = useDocumentStore((state) => state.activeDocumentId);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const moveFocus = (index: number) => {
@@ -18,11 +16,7 @@ export function TabBar() {
   };
 
   const activateTab = (tabId: string) => {
-    if (documentManager.store.getState().sessionsById[tabId] === undefined) {
-      setActiveTab(tabId);
-    } else {
-      void documentManager.activate(tabId);
-    }
+    void documentManager.activate(tabId);
   };
 
   const handleKeyDown = (
@@ -50,37 +44,39 @@ export function TabBar() {
     <nav className="tab-bar" aria-label="Open drawings">
       <div className="tab-list" role="tablist" aria-label="Drawing tabs">
         {tabOrder.map((tabId, index) => {
-          const tab = tabsById[tabId];
-          if (tab === undefined) {
+          const session = sessionsById[tabId];
+          if (session === undefined) {
             return null;
           }
 
-          const isActive = activeTabId === tab.id;
+          const isActive = activeDocumentId === session.id;
+          const isDirty = session.saveState !== "clean";
+          const isOrphaned = session.saveState === "orphaned";
           return (
             <button
               className="tab"
-              id={`tab-${tab.id}`}
-              key={tab.id}
-              onClick={() => activateTab(tab.id)}
+              id={`tab-${session.id}`}
+              key={session.id}
+              onClick={() => activateTab(session.id)}
               onKeyDown={(event) => handleKeyDown(event, index)}
               ref={(element) => {
                 tabRefs.current[index] = element;
               }}
               role="tab"
               type="button"
-              aria-controls={`document-${tab.id}`}
-              aria-label={`${tab.title}${tab.isDirty ? ", unsaved changes" : ""}${tab.isOrphaned ? ", file unavailable" : ""}`}
+              aria-controls={`document-${session.id}`}
+              aria-label={`${session.title}${isDirty ? ", unsaved changes" : ""}${isOrphaned ? ", file unavailable" : ""}`}
               aria-selected={isActive}
               tabIndex={isActive ? 0 : -1}
             >
-              <span className="tab-title">{tab.title}</span>
-              {tab.isDirty ? (
+              <span className="tab-title">{session.title}</span>
+              {isDirty ? (
                 <span className="dirty-indicator" title="Unsaved changes">
                   <span aria-hidden="true">●</span>
                   <span className="visually-hidden">Unsaved changes</span>
                 </span>
               ) : null}
-              {tab.isOrphaned ? (
+              {isOrphaned ? (
                 <span className="orphaned-indicator" title="File unavailable">
                   <span aria-hidden="true">!</span>
                   <span className="visually-hidden">File unavailable</span>

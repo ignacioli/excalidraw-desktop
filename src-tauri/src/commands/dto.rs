@@ -113,6 +113,115 @@ pub struct FileEntry {
     pub file_size: i64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceEntryKind {
+    Drawing,
+    Directory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceEntry {
+    pub workspace_id: String,
+    pub kind: WorkspaceEntryKind,
+    pub canonical_path: String,
+    pub relative_path: String,
+    pub parent_relative_path: String,
+    pub name: String,
+    pub display_name: String,
+    pub mtime: i64,
+    pub file_size: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExpectedOpenDocument {
+    pub relative_path: String,
+    pub base_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PathMigration {
+    pub old_relative_path: String,
+    pub new_relative_path: String,
+    pub old_canonical_path: String,
+    pub new_canonical_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryMutationResult {
+    pub operation_id: String,
+    pub entry: WorkspaceEntry,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceEntryListRequest {
+    pub workspace_id: String,
+    pub parent_relative_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceEntryCreateRequest {
+    pub workspace_id: String,
+    pub parent_relative_path: String,
+    pub kind: WorkspaceEntryKind,
+    pub base_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceEntryRenameRequest {
+    pub workspace_id: String,
+    pub relative_path: String,
+    pub base_name: String,
+    pub expected_open_documents: Vec<ExpectedOpenDocument>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceEntryRenameResult {
+    pub operation_id: String,
+    pub entry: WorkspaceEntry,
+    pub old_relative_path: String,
+    pub new_relative_path: String,
+    pub path_migrations: Vec<PathMigration>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceEntryPathRequest {
+    pub workspace_id: String,
+    pub relative_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum WorkspaceEntryDeletePreflightResult {
+    Confirmable { entry: WorkspaceEntry },
+    DirectoryNotEmpty { entry: WorkspaceEntry },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceEntryDeleteRequest {
+    pub workspace_id: String,
+    pub relative_path: String,
+    pub expected_open_document: Option<ExpectedOpenDocument>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceEntryDeleteResult {
+    pub operation_id: String,
+    pub kind: WorkspaceEntryKind,
+    pub old_relative_path: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileCreateRequest {

@@ -11,6 +11,7 @@ pub mod indexing;
 pub mod security;
 pub mod thumbnails;
 mod watcher;
+pub mod workspace_entries;
 
 use std::{path::Path, path::PathBuf, sync::Arc};
 
@@ -23,6 +24,7 @@ use commands::{
         doc_checkpoint, doc_close, doc_open, doc_resolve_conflict, doc_save_draft,
         ConflictRegistry, DirectFileGrant, DocumentService, DocumentState,
     },
+    entries::{workspace_entry_list, WorkspaceEntryState},
     export::{doc_export, ExportService, ExportState},
     files::{file_create, file_delete, file_rename, FileState},
     recovery::{
@@ -40,6 +42,7 @@ use e2e_performance::{
     e2e_perf_publish_result, PerformanceHarnessState,
 };
 use watcher::{WatcherService, WatcherState};
+use workspace_entries::WorkspaceMutationGate;
 
 use crate::thumbnails::ThumbnailCache;
 
@@ -80,6 +83,7 @@ pub fn run() {
             ))?;
             let session = SessionState::initialize(&app_data_directory, pending_open_paths)?;
             let shared_repository = Arc::new(repository.clone());
+            let workspace_mutation_gate = WorkspaceMutationGate::default();
             let recovery_store = Arc::new(RecoveryStore::new(&app_data_directory));
             let thumbnail_cache = Arc::new(ThumbnailCache::new(&app_data_directory));
             #[cfg(feature = "e2e-harness")]
@@ -111,6 +115,11 @@ pub fn run() {
             app.manage(DocumentState::new(document_service));
             app.manage(RecoveryState::new(recovery_service));
             app.manage(WorkspaceState::new(Arc::clone(&shared_repository)));
+            app.manage(workspace_mutation_gate.clone());
+            app.manage(WorkspaceEntryState::new(
+                Arc::clone(&shared_repository),
+                workspace_mutation_gate,
+            ));
             app.manage(ExportState::new(ExportService::new(
                 Arc::clone(&shared_repository),
                 Arc::new(TauriFileGrant(app.fs_scope())),
@@ -149,6 +158,7 @@ pub fn run() {
         workspace_add,
         workspace_remove,
         workspace_list,
+        workspace_entry_list,
         dir_list,
         file_create,
         file_rename,
@@ -179,6 +189,7 @@ pub fn run() {
         workspace_add,
         workspace_remove,
         workspace_list,
+        workspace_entry_list,
         dir_list,
         file_create,
         file_rename,

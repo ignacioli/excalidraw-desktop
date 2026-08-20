@@ -1,7 +1,6 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { useStore } from "zustand";
 import { getSceneVersion } from "@excalidraw/excalidraw";
-import { useAppStore } from "../app/store";
 import { createTauriCommandInvoker } from "../ipc/client";
 import type { CheckpointReason, IpcEvents, SceneData } from "../ipc/contracts";
 import {
@@ -43,6 +42,8 @@ export interface DocumentSession {
 
 export interface DocumentStoreState {
   sessionsById: Record<string, DocumentSession>;
+  tabOrder: string[];
+  activeDocumentId: string | null;
 }
 
 export class DocumentManager {
@@ -55,7 +56,11 @@ export class DocumentManager {
 
   constructor(gateway: DocumentGateway) {
     this.gateway = gateway;
-    this.store = createStore<DocumentStoreState>(() => ({ sessionsById: {} }));
+    this.store = createStore<DocumentStoreState>(() => ({
+      sessionsById: {},
+      tabOrder: [],
+      activeDocumentId: null,
+    }));
   }
 
   async open(path: string): Promise<string> {
@@ -113,7 +118,6 @@ export class DocumentManager {
         saveState: "dirty",
       });
     }
-    useAppStore.getState().setDocumentDirty(documentId, true);
     this.schedulers.get(documentId)?.recordChange(scene);
     return documentId;
   }
@@ -136,20 +140,21 @@ export class DocumentManager {
       errorMessage: null,
       lastReloadedAt: null,
     });
-    useAppStore.getState().setDocumentDirty(documentId, true);
     this.schedulers.get(documentId)?.recordChange(scene);
   }
 
   async activate(documentId: string): Promise<void> {
-    const activeId = useAppStore.getState().activeTabId;
+    const { activeDocumentId: activeId, sessionsById } = this.store.getState();
     if (activeId === documentId) {
       return;
     }
 
+    if (sessionsById[documentId] === undefined) return;
+
     if (activeId !== null) {
       await this.schedulers.get(activeId)?.checkpoint("tabSwitch");
     }
-    useAppStore.getState().setActiveTab(documentId);
+    this.store.setState({ activeDocumentId: documentId });
   }
 
   async checkpoint(
@@ -162,7 +167,7 @@ export class DocumentManager {
   async checkpointActive(
     reason: CheckpointReason = "manualSave",
   ): Promise<void> {
-    const activeId = useAppStore.getState().activeTabId;
+    const activeId = this.store.getState().activeDocumentId;
     if (activeId !== null) {
       await this.checkpoint(activeId, reason);
     }
@@ -191,9 +196,18 @@ export class DocumentManager {
     this.store.setState((state) => {
       const sessionsById = { ...state.sessionsById };
       delete sessionsById[documentId];
-      return { sessionsById };
+      const closedIndex = state.tabOrder.indexOf(documentId);
+      const tabOrder = state.tabOrder.filter((id) => id !== documentId);
+      const fallbackIndex = Math.min(closedIndex, tabOrder.length - 1);
+      return {
+        sessionsById,
+        tabOrder,
+        activeDocumentId:
+          state.activeDocumentId === documentId
+            ? (tabOrder[fallbackIndex] ?? null)
+            : state.activeDocumentId,
+      };
     });
-    useAppStore.getState().closeTab(documentId);
   }
 
   setConflicted(documentId: string, conflicted: boolean): void {
@@ -217,7 +231,6 @@ export class DocumentManager {
       title,
       saveState: session.saveState === "orphaned" ? "dirty" : session.saveState,
     });
-    useAppStore.getState().updateDocumentLocation(session.id, newPath, title);
   }
 
   handleFileRemoved(path: string): void {
@@ -227,7 +240,6 @@ export class DocumentManager {
     }
     this.schedulers.get(session.id)?.setConflicted(true);
     this.patchSession(session.id, { saveState: "orphaned" });
-    useAppStore.getState().setDocumentOrphaned(session.id, true);
   }
 
   sessionByPath(path: string): DocumentSession | undefined {
@@ -268,7 +280,6 @@ export class DocumentManager {
       lastReloadedAt: Date.now(),
       errorMessage: null,
     });
-    useAppStore.getState().setDocumentDirty(documentId, false);
   }
 
   async resolveConflict(
@@ -297,7 +308,6 @@ export class DocumentManager {
         conflictInfo: null,
         errorMessage: null,
       });
-      useAppStore.getState().setDocumentDirty(documentId, false);
       return;
     }
     if (resolution === "keepLocal") {
@@ -321,8 +331,6 @@ export class DocumentManager {
       conflictInfo: null,
       errorMessage: null,
     });
-    useAppStore.getState().updateDocumentLocation(documentId, saveAsPath, title);
-    useAppStore.getState().setDocumentDirty(documentId, false);
   }
 
   async saveOrphanedAs(documentId: string, newPath: string): Promise<void> {
@@ -346,8 +354,6 @@ export class DocumentManager {
       conflictInfo: null,
       errorMessage: null,
     });
-    useAppStore.getState().updateDocumentLocation(documentId, newPath, title);
-    useAppStore.getState().setDocumentDirty(documentId, false);
   }
 
   dispose(): void {
@@ -361,7 +367,7 @@ export class DocumentManager {
     baseHash,
     saveState,
   }: Pick<DocumentSession, "path" | "scene" | "baseHash" | "saveState">) {
-    const activeId = useAppStore.getState().activeTabId;
+    const activeId = this.store.getState().activeDocumentId;
     if (activeId !== null) {
       await this.schedulers.get(activeId)?.checkpoint("tabSwitch");
     }
@@ -406,9 +412,6 @@ export class DocumentManager {
           saveState: current?.scene === nextScene ? "clean" : "dirty",
           errorMessage: null,
         });
-        if (current?.scene === nextScene) {
-          useAppStore.getState().setDocumentDirty(id, false);
-        }
       },
       onError: (error) => {
         this.patchSession(id, {
@@ -421,8 +424,9 @@ export class DocumentManager {
     this.schedulers.set(id, scheduler);
     this.store.setState((state) => ({
       sessionsById: { ...state.sessionsById, [id]: session },
+      tabOrder: [...state.tabOrder, id],
+      activeDocumentId: id,
     }));
-    useAppStore.getState().registerTab({ id, path, title });
     return id;
   }
 

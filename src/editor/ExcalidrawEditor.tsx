@@ -3,7 +3,7 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "@excalidraw/excalidraw/index.css";
 import type { ResolvedColorScheme } from "../app/theme/types";
-import { useAppStore } from "../app/store";
+import { documentManager } from "../documents/documentStore";
 import { ExcalidrawAdapter } from "./ExcalidrawAdapter";
 import { resolveAssetFiles } from "./assetResolver";
 import { ImeBridge } from "./imeBridge";
@@ -47,7 +47,7 @@ export function ExcalidrawEditor({
   useEffect(() => {
     let cancelled = false;
     const documentPath =
-      useAppStore.getState().tabsById[documentId]?.path ?? undefined;
+      documentManager.store.getState().sessionsById[documentId]?.path;
     void resolveAssetFiles(initialScene.files, documentPath)
       .then((files) => {
         if (!cancelled) {
@@ -80,7 +80,7 @@ export function ExcalidrawEditor({
       const adapter = new ExcalidrawAdapter(api, (files) =>
         resolveAssetFiles(
           files,
-          useAppStore.getState().tabsById[documentId]?.path ?? undefined,
+          documentManager.store.getState().sessionsById[documentId]?.path,
         ),
       );
       adapterRef.current = adapter;

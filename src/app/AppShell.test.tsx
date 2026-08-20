@@ -1,7 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { documentManager } from "../documents/documentStore";
+import {
+  documentManager,
+  type DocumentSaveState,
+  type DocumentSession,
+} from "../documents/documentStore";
 import { AppShell } from "./AppShell";
 import { useAppStore } from "./store";
 import { initializeBrowserThemeController } from "./theme/themeController";
@@ -43,13 +47,12 @@ vi.mock("@excalidraw/excalidraw", () => ({
 describe("AppShell", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    documentManager.store.setState({ sessionsById: {} });
-    useAppStore.setState({
-      tabsById: {},
+    documentManager.store.setState({
+      sessionsById: {},
       tabOrder: [],
-      activeTabId: null,
-      hasMountedWorkspace: false,
+      activeDocumentId: null,
     });
+    useAppStore.setState({ hasMountedWorkspace: false });
     initializeBrowserThemeController().setModePreference("system");
   });
 
@@ -82,14 +85,10 @@ describe("AppShell", () => {
 
   it("exposes active and dirty tab state without relying on color", async () => {
     const user = userEvent.setup();
-    useAppStore.getState().registerTab({ id: "one", title: "One", path: null });
-    useAppStore.getState().registerTab({
-      id: "two",
-      title: "Two",
-      path: "/tmp/two.excalidraw",
-      isDirty: true,
-      isOrphaned: true,
-    });
+    setDocumentSessions([
+      createSession("one", "One", "/tmp/one.excalidraw", "clean"),
+      createSession("two", "Two", "/tmp/two.excalidraw", "orphaned"),
+    ]);
     render(<AppShell />);
 
     const firstTab = screen.getByRole("tab", { name: "One" });
@@ -123,12 +122,8 @@ describe("AppShell", () => {
           lastReloadedAt: null,
         },
       },
-    });
-    useAppStore.getState().registerTab({
-      id: "drawing",
-      title: "drawing.excalidraw",
-      path: "/tmp/drawing.excalidraw",
-      isDirty: true,
+      tabOrder: ["drawing"],
+      activeDocumentId: "drawing",
     });
     const save = vi
       .spyOn(documentManager, "checkpointActive")
@@ -179,16 +174,8 @@ describe("AppShell", () => {
           lastReloadedAt: null,
         },
       },
-    });
-    useAppStore.getState().registerTab({
-      id: "first",
-      title: "first.excalidraw",
-      path: "/tmp/first.excalidraw",
-    });
-    useAppStore.getState().registerTab({
-      id: "second",
-      title: "second.excalidraw",
-      path: "/tmp/second.excalidraw",
+      tabOrder: ["first", "second"],
+      activeDocumentId: "second",
     });
 
     render(<AppShell />);
@@ -224,12 +211,8 @@ describe("AppShell", () => {
           lastReloadedAt: null,
         },
       },
-    });
-    useAppStore.getState().registerTab({
-      id: "drawing",
-      title: "drawing.excalidraw",
-      path: "/tmp/drawing.excalidraw",
-      isDirty: true,
+      tabOrder: ["drawing"],
+      activeDocumentId: "drawing",
     });
     vi.spyOn(documentManager, "checkpointActive").mockRejectedValue({
       code: "DISK_FULL",
@@ -245,3 +228,34 @@ describe("AppShell", () => {
     );
   });
 });
+
+function createSession(
+  id: string,
+  title: string,
+  path: string,
+  saveState: DocumentSaveState,
+): DocumentSession {
+  return {
+    id,
+    title,
+    path,
+    scene: { elements: [], appState: {}, files: {} },
+    sceneVersion: 0,
+    baseHash: `${id}-base`,
+    saveState,
+    errorMessage: null,
+    conflictInfo: null,
+    lastReloadedAt: null,
+  };
+}
+
+function setDocumentSessions(sessions: readonly DocumentSession[]): void {
+  const tabOrder = sessions.map((session) => session.id);
+  documentManager.store.setState({
+    sessionsById: Object.fromEntries(
+      sessions.map((session) => [session.id, session]),
+    ),
+    tabOrder,
+    activeDocumentId: tabOrder.at(-1) ?? null,
+  });
+}

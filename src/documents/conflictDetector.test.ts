@@ -1,5 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useAppStore } from "../app/store";
+import { describe, expect, it, vi } from "vitest";
 import type { SceneSnapshot } from "../editor/sceneSerializer";
 import type { EventName, EventPayload } from "../ipc/contracts";
 import type { EventListener } from "../ipc/events";
@@ -25,9 +24,9 @@ vi.mock("@excalidraw/excalidraw", () => ({
     }),
 }));
 
-type EventHandler<Name extends EventName> = (
-  event: { payload: EventPayload<Name> },
-) => void;
+type EventHandler<Name extends EventName> = (event: {
+  payload: EventPayload<Name>;
+}) => void;
 
 function createGateway(initialScene: unknown): DocumentGateway {
   return {
@@ -52,15 +51,6 @@ const emptyScene = {
 };
 
 describe("ConflictDetector", () => {
-  beforeEach(() => {
-    useAppStore.setState({
-      tabsById: {},
-      tabOrder: [],
-      activeTabId: null,
-      hasMountedWorkspace: false,
-    });
-  });
-
   it("reloads a clean document automatically when it changes on disk", async () => {
     const gateway = createGateway(emptyScene);
     const manager = new DocumentManager(gateway);

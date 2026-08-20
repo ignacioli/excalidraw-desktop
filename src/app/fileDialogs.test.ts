@@ -1,7 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DocumentManager } from "../documents/documentStore";
 import type { DocumentGateway } from "../documents/documentGateway";
-import { useAppStore } from "./store";
 import { createFileDialogActions, type FileDialogAdapter } from "./fileDialogs";
 
 vi.mock("@excalidraw/excalidraw", () => ({
@@ -62,15 +61,6 @@ function createHarness(paths: { open?: string | null; save?: string | null }) {
 }
 
 describe("file dialog actions", () => {
-  beforeEach(() => {
-    useAppStore.setState({
-      tabsById: {},
-      tabOrder: [],
-      activeTabId: null,
-      hasMountedWorkspace: false,
-    });
-  });
-
   it("opens the selected drawing through the document gateway", async () => {
     const { actions, gateway, manager } = createHarness({
       open: "/drawings/plan.excalidraw",
@@ -80,7 +70,7 @@ describe("file dialog actions", () => {
 
     expect(gateway.open).toHaveBeenCalledWith("/drawings/plan.excalidraw");
     expect(documentId).not.toBeNull();
-    expect(useAppStore.getState().activeTabId).toBe(documentId);
+    expect(manager.store.getState().activeDocumentId).toBe(documentId);
     manager.dispose();
   });
 
