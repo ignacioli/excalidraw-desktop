@@ -111,6 +111,186 @@ impl SqliteRepository {
         let writer = DatabaseWriter::open(path, DEFAULT_WRITER_QUEUE_CAPACITY).await?;
         Ok(Self { writer })
     }
+
+    /// Move all persisted observations for an entry after the filesystem
+    /// rename has committed.  The filesystem is the mutation commit point;
+    /// this transaction only derives the SQLite paths from that result.
+    ///
+    /// The operation is deliberately idempotent.  Retrying the same rename
+    /// after a process interruption does not create duplicate rows and a
+    /// stale destination row cannot prevent the source rows from migrating.
+    pub fn migrate_entry_paths(
+        &self,
+        old_canonical_path: String,
+        new_canonical_path: String,
+        old_relative_path: String,
+        new_relative_path: String,
+        new_display_name: String,
+    ) -> RepositoryFuture<'_, ()> {
+        Box::pin(async move {
+            self.writer
+                .execute(move |connection| {
+                    let transaction = connection.transaction()?;
+
+                    let file_index_rows = {
+                        let mut statement = transaction.prepare(
+                            "SELECT canonical_path, workspace_id, display_name, relative_path, mtime, file_size, content_hash \
+                             FROM file_index",
+                        )?;
+                        let rows = statement
+                            .query_map([], file_index_from_row)?
+                            .collect::<rusqlite::Result<Vec<_>>>()?;
+                        rows
+                    };
+                    let draft_paths = {
+                        let mut statement = transaction.prepare("SELECT file_path FROM drafts")?;
+                        let rows = statement
+                            .query_map([], |row| row.get::<_, String>(0))?
+                            .collect::<rusqlite::Result<Vec<_>>>()?;
+                        rows
+                    };
+                    let metadata_paths = {
+                        let mut statement = transaction.prepare(
+                            "SELECT canonical_path FROM file_meta",
+                        )?;
+                        let rows = statement
+                            .query_map([], |row| row.get::<_, String>(0))?
+                            .collect::<rusqlite::Result<Vec<_>>>()?;
+                        rows
+                    };
+
+                    // Remove destination keys first.  A previous interrupted
+                    // retry may have left a derived destination row behind;
+                    // source rows remain authoritative for this migration.
+                    for row in &file_index_rows {
+                        if is_path_or_descendant(&row.canonical_path, &new_canonical_path) {
+                            transaction.execute(
+                                "DELETE FROM file_index WHERE canonical_path=?1",
+                                [&row.canonical_path],
+                            )?;
+                        }
+                    }
+                    for path in &draft_paths {
+                        if is_path_or_descendant(path, &new_canonical_path) {
+                            transaction.execute("DELETE FROM drafts WHERE file_path=?1", [path])?;
+                        }
+                    }
+                    for path in &metadata_paths {
+                        if is_path_or_descendant(path, &new_canonical_path) {
+                            transaction.execute(
+                                "DELETE FROM file_meta WHERE canonical_path=?1",
+                                [path],
+                            )?;
+                        }
+                    }
+
+                    for row in file_index_rows {
+                        if !is_path_or_descendant(&row.canonical_path, &old_canonical_path) {
+                            continue;
+                        }
+                        let canonical_path = migrate_path(
+                            &row.canonical_path,
+                            &old_canonical_path,
+                            &new_canonical_path,
+                        );
+                        let relative_path = migrate_path(
+                            &row.relative_path,
+                            &old_relative_path,
+                            &new_relative_path,
+                        );
+                        let display_name = if row.canonical_path == old_canonical_path {
+                            new_display_name.clone()
+                        } else {
+                            row.display_name
+                        };
+                        transaction.execute(
+                            "UPDATE file_index SET canonical_path=?2, display_name=?3, relative_path=?4 \
+                             WHERE canonical_path=?1",
+                            rusqlite::params![
+                                row.canonical_path,
+                                canonical_path,
+                                display_name,
+                                relative_path,
+                            ],
+                        )?;
+                    }
+
+                    for path in draft_paths {
+                        if !is_path_or_descendant(&path, &old_canonical_path) {
+                            continue;
+                        }
+                        let migrated = migrate_path(&path, &old_canonical_path, &new_canonical_path);
+                        transaction.execute(
+                            "UPDATE drafts SET file_path=?2 WHERE file_path=?1",
+                            rusqlite::params![path, migrated],
+                        )?;
+                    }
+
+                    for path in metadata_paths {
+                        if !is_path_or_descendant(&path, &old_canonical_path) {
+                            continue;
+                        }
+                        let migrated = migrate_path(&path, &old_canonical_path, &new_canonical_path);
+                        transaction.execute(
+                            "UPDATE file_meta SET canonical_path=?2 WHERE canonical_path=?1",
+                            rusqlite::params![path, migrated],
+                        )?;
+                    }
+                    transaction.commit()
+                })
+                .await?;
+            Ok(())
+        })
+    }
+
+    /// Remove only metadata that is safe to discard after an entry has been
+    /// moved to the operating-system Trash.  Dirty drafts are intentionally
+    /// retained if a caller violated the higher-level preflight invariant.
+    pub fn remove_clean_entry_metadata(&self, canonical_path: String) -> RepositoryFuture<'_, ()> {
+        Box::pin(async move {
+            self.writer
+                .execute(move |connection| {
+                    let transaction = connection.transaction()?;
+                    transaction.execute(
+                        "DELETE FROM file_index WHERE canonical_path=?1",
+                        [&canonical_path],
+                    )?;
+                    transaction.execute(
+                        "DELETE FROM file_meta WHERE canonical_path=?1",
+                        [&canonical_path],
+                    )?;
+                    transaction.execute(
+                        "DELETE FROM drafts WHERE file_path=?1 AND is_dirty=0",
+                        [&canonical_path],
+                    )?;
+                    transaction.commit()
+                })
+                .await?;
+            Ok(())
+        })
+    }
+}
+
+fn is_path_or_descendant(path: &str, root: &str) -> bool {
+    path == root
+        || path
+            .strip_prefix(root)
+            .is_some_and(|suffix| suffix.starts_with('/') || suffix.starts_with('\\'))
+}
+
+fn migrate_path(path: &str, old_root: &str, new_root: &str) -> String {
+    if path == old_root {
+        return new_root.to_owned();
+    }
+    let suffix = path
+        .strip_prefix(old_root)
+        .unwrap_or_default()
+        .trim_start_matches(['/', '\\']);
+    if suffix.is_empty() {
+        new_root.to_owned()
+    } else {
+        format!("{new_root}/{suffix}")
+    }
 }
 
 impl WorkspaceRepository for SqliteRepository {

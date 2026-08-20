@@ -27,9 +27,10 @@ use crate::{
 
 use super::{
     dto::{
-        CheckpointReason, CheckpointRequest, CheckpointResponse, CloseDocumentRequest,
-        ConflictResolution, DraftSavedEvent, EmptyResponse, PathRequest, ResolveConflictRequest,
-        ResolveConflictResponse, SaveDraftRequest, SaveDraftResponse, SceneOpenResponse,
+        CheckpointReason, CheckpointRequest, CheckpointResponse, CloseDocumentMode,
+        CloseDocumentRequest, ConflictResolution, DraftSavedEvent, EmptyResponse, PathRequest,
+        ResolveConflictRequest, ResolveConflictResponse, SaveDraftRequest, SaveDraftResponse,
+        SceneOpenResponse,
     },
     error::{AppError, IpcError},
 };
@@ -481,24 +482,87 @@ impl DocumentService {
     }
 
     async fn close(&self, request: CloseDocumentRequest) -> Result<EmptyResponse, AppError> {
-        let authorized = self
-            .authorize_path(Path::new(&request.path), PathMode::Existing)
-            .await?;
-        let _document_guard = self.lock_document(&authorized.path).await;
-        let canonical_path = path_string(&authorized.path);
-        if request.discard_draft {
-            self.repository.draft_delete(canonical_path).await?;
-            return Ok(EmptyResponse {});
-        }
-        if self
+        let requested = PathBuf::from(&request.path);
+        let canonical_path = match request.mode {
+            CloseDocumentMode::Checkpointed if requested.exists() => {
+                self.authorize_path(&requested, PathMode::Existing)
+                    .await?
+                    .path
+            }
+            CloseDocumentMode::Checkpointed => return Err(AppError::FileNotFound(requested)),
+            CloseDocumentMode::DiscardOrphan if !requested.exists() => {
+                self.authorize_missing_orphan(&requested).await?
+            }
+            CloseDocumentMode::DiscardOrphan => {
+                let authorized = self.authorize_path(&requested, PathMode::Existing).await?;
+                return Err(AppError::EntryChanged(authorized.path));
+            }
+        };
+        let _document_guard = self.lock_document(&canonical_path).await;
+        let canonical_path_string = path_string(&canonical_path);
+        let draft = self
             .repository
-            .draft_get(canonical_path)
-            .await?
-            .is_some_and(|draft| draft.is_dirty)
+            .draft_get(canonical_path_string.clone())
+            .await?;
+        if request.mode == CloseDocumentMode::Checkpointed
+            && draft.as_ref().is_some_and(|draft| draft.is_dirty)
         {
-            return Err(AppError::ConflictPending(authorized.path));
+            return Err(AppError::ConflictPending(canonical_path));
         }
+
+        // A successful close consumes both the exact draft row and all
+        // recovery slots belonging to this deterministic document id. Remove
+        // snapshots first so a storage failure leaves the draft available for
+        // a retry instead of silently losing the recovery record.
+        self.remove_recovery_for_path(&canonical_path).await?;
+        self.repository.draft_delete(canonical_path_string).await?;
         Ok(EmptyResponse {})
+    }
+
+    async fn authorize_missing_orphan(&self, requested: &Path) -> Result<PathBuf, AppError> {
+        if !is_supported_document_path(requested) {
+            return Err(AppError::PathAccessDenied(requested.to_path_buf()));
+        }
+        let requested_string = path_string(requested);
+        let has_draft = self
+            .repository
+            .draft_get(requested_string.clone())
+            .await?
+            .is_some();
+        let has_recovery = if let Some(recovery) = self.recovery.clone() {
+            let requested_string = requested_string.clone();
+            run_blocking(move || {
+                recovery
+                    .list_snapshots()
+                    .map(|snapshots| {
+                        snapshots.into_iter().any(|(_, snapshot)| {
+                            snapshot.original_path.as_deref() == Some(requested_string.as_str())
+                        })
+                    })
+                    .map_err(AppError::from)
+            })
+            .await?
+        } else {
+            false
+        };
+        if has_draft || has_recovery {
+            Ok(requested.to_path_buf())
+        } else {
+            Err(AppError::FileNotFound(requested.to_path_buf()))
+        }
+    }
+
+    async fn remove_recovery_for_path(&self, path: &Path) -> Result<(), AppError> {
+        let Some(recovery) = self.recovery.clone() else {
+            return Ok(());
+        };
+        let document_id = document_id_for_path(path);
+        run_blocking(move || {
+            recovery
+                .remove_document(&document_id)
+                .map_err(AppError::from)
+        })
+        .await
     }
 
     async fn authorize_path(
@@ -669,15 +733,12 @@ pub async fn doc_checkpoint(
 #[tauri::command]
 pub async fn doc_close(
     path: String,
-    discard_draft: bool,
+    mode: CloseDocumentMode,
     state: State<'_, DocumentState>,
 ) -> Result<EmptyResponse, IpcError> {
     state
         .service
-        .doc_close(CloseDocumentRequest {
-            path,
-            discard_draft,
-        })
+        .doc_close(CloseDocumentRequest { path, mode })
         .await
 }
 

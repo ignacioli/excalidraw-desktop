@@ -1,0 +1,464 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent, MouseEvent } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import type { Workspace, WorkspaceEntry } from "../ipc/contracts";
+import {
+  buildWorkspaceTreeRows,
+  getAdjacentRowKey,
+  getPageTargetRowKey,
+  makeEntryRowKey,
+  type ActiveDrawingReference,
+  type WorkspaceTreeEntriesByWorkspace,
+  type WorkspaceTreeRow,
+} from "./workspaceTreeModel";
+
+export interface WorkspaceTreeProps {
+  workspaces: readonly Workspace[];
+  entriesByWorkspace: WorkspaceTreeEntriesByWorkspace;
+  expandedWorkspaceIds?: ReadonlySet<string>;
+  expandedDirectoryKeys?: ReadonlySet<string>;
+  activeDrawing?: ActiveDrawingReference | null;
+  activeDocumentPath?: string | null;
+  onToggleWorkspace?: (workspaceId: string, expanded: boolean) => void;
+  onToggleDirectory?: (entry: WorkspaceEntry, expanded: boolean) => void;
+  onOpenDrawing?: (entry: WorkspaceEntry) => void;
+  onRowAction?: (row: WorkspaceTreeRow, trigger: HTMLButtonElement) => void;
+  ariaLabel?: string;
+  className?: string;
+  rowHeight?: number;
+  overscan?: number;
+}
+
+const DEFAULT_ROW_HEIGHT = 32;
+const DEFAULT_OVERSCAN = 8;
+const FALLBACK_VISIBLE_ROWS = 40;
+
+function isDirectoryExpanded(
+  expandedKeys: ReadonlySet<string>,
+  rowKey: string,
+  relativePath: string,
+): boolean {
+  return expandedKeys.has(rowKey) || expandedKeys.has(relativePath);
+}
+
+export function WorkspaceTree({
+  workspaces,
+  entriesByWorkspace,
+  expandedWorkspaceIds: controlledWorkspaceIds,
+  expandedDirectoryKeys: controlledDirectoryKeys,
+  activeDrawing = null,
+  activeDocumentPath = null,
+  onToggleWorkspace,
+  onToggleDirectory,
+  onOpenDrawing,
+  onRowAction,
+  ariaLabel = "Workspace files",
+  className,
+  rowHeight = DEFAULT_ROW_HEIGHT,
+  overscan = DEFAULT_OVERSCAN,
+}: WorkspaceTreeProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const pendingFocusKey = useRef<string | null>(null);
+  const [internalWorkspaceIds, setInternalWorkspaceIds] = useState<Set<string>>(
+    () => new Set(workspaces.map((workspace) => workspace.id)),
+  );
+  const [internalDirectoryKeys, setInternalDirectoryKeys] = useState<
+    Set<string>
+  >(() => new Set());
+  const [focusedRowKey, setFocusedRowKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    setInternalWorkspaceIds((current) => {
+      const next = new Set<string>();
+      for (const workspace of workspaces) {
+        next.add(workspace.id);
+        if (current.has(workspace.id)) continue;
+        // A Workspace is expanded the first time it is mounted.
+        next.add(workspace.id);
+      }
+      return next;
+    });
+  }, [workspaces]);
+
+  const expandedWorkspaceIds = controlledWorkspaceIds ?? internalWorkspaceIds;
+  const expandedDirectoryKeys =
+    controlledDirectoryKeys ?? internalDirectoryKeys;
+  const rows = useMemo(
+    () =>
+      buildWorkspaceTreeRows({
+        workspaces,
+        entriesByWorkspace,
+        expandedWorkspaceIds,
+        expandedDirectoryKeys,
+        activeDrawing,
+        activeDocumentPath,
+      }),
+    [
+      activeDocumentPath,
+      activeDrawing,
+      entriesByWorkspace,
+      expandedDirectoryKeys,
+      expandedWorkspaceIds,
+      workspaces,
+    ],
+  );
+
+  // TanStack Virtual exposes an intentionally imperative virtualizer object.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => rowHeight,
+    overscan,
+    initialRect: { width: 320, height: 320 },
+  });
+  const virtualItems = virtualizer.getVirtualItems();
+  const renderedRows =
+    virtualItems.length > 0
+      ? virtualItems.map((item) => ({
+          row: rows[item.index],
+          index: item.index,
+          start: item.start,
+        }))
+      : rows.slice(0, FALLBACK_VISIBLE_ROWS).map((row, index) => ({
+          row,
+          index,
+          start: index * rowHeight,
+        }));
+
+  useEffect(() => {
+    if (
+      focusedRowKey !== null &&
+      rows.some((row) => row.key === focusedRowKey)
+    ) {
+      return;
+    }
+    const preferred =
+      (activeDrawing === null
+        ? undefined
+        : rows.find((row) => row.isActive)?.key) ??
+      rows[0]?.key ??
+      null;
+    setFocusedRowKey(preferred);
+  }, [activeDrawing, focusedRowKey, rows]);
+
+  useEffect(() => {
+    const rowKey = pendingFocusKey.current;
+    if (rowKey === null) return;
+    const row = rowRefs.current.get(rowKey);
+    if (row === undefined) return;
+    row.focus();
+    pendingFocusKey.current = null;
+  }, [focusedRowKey, rows, virtualItems]);
+
+  const focusRow = (rowKey: string | null): void => {
+    if (rowKey === null) return;
+    const index = rows.findIndex((row) => row.key === rowKey);
+    if (index < 0) return;
+    setFocusedRowKey(rowKey);
+    pendingFocusKey.current = rowKey;
+    virtualizer.scrollToIndex(index, { align: "auto" });
+    const row = rowRefs.current.get(rowKey);
+    if (row !== undefined) {
+      row.focus();
+      pendingFocusKey.current = null;
+    }
+  };
+
+  const toggleWorkspace = (row: WorkspaceTreeRow): void => {
+    if (row.kind !== "workspace") return;
+    const nextExpanded = !expandedWorkspaceIds.has(row.workspaceId);
+    if (controlledWorkspaceIds === undefined) {
+      setInternalWorkspaceIds((current) => {
+        const next = new Set(current);
+        if (nextExpanded) next.add(row.workspaceId);
+        else next.delete(row.workspaceId);
+        return next;
+      });
+    }
+    onToggleWorkspace?.(row.workspaceId, nextExpanded);
+  };
+
+  const toggleDirectory = (row: WorkspaceTreeRow): void => {
+    if (row.kind !== "directory") return;
+    const key = makeEntryRowKey(row.workspaceId, row.relativePath);
+    const nextExpanded = !isDirectoryExpanded(
+      expandedDirectoryKeys,
+      key,
+      row.relativePath,
+    );
+    if (controlledDirectoryKeys === undefined) {
+      setInternalDirectoryKeys((current) => {
+        const next = new Set(current);
+        if (nextExpanded) next.add(key);
+        else next.delete(key);
+        return next;
+      });
+    }
+    onToggleDirectory?.(row.entry, nextExpanded);
+  };
+
+  const activateRow = (row: WorkspaceTreeRow): void => {
+    setFocusedRowKey(row.key);
+    if (row.kind === "workspace") {
+      toggleWorkspace(row);
+    } else if (row.kind === "directory") {
+      toggleDirectory(row);
+    } else {
+      onOpenDrawing?.(row.entry);
+    }
+  };
+
+  const handleTreeKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    const currentRow = rows.find((row) => row.key === focusedRowKey);
+    if (currentRow === undefined) return;
+
+    let targetKey: string | null = null;
+    if (event.key === "ArrowDown") {
+      targetKey = getAdjacentRowKey(rows, currentRow.key, "next");
+    } else if (event.key === "ArrowUp") {
+      targetKey = getAdjacentRowKey(rows, currentRow.key, "previous");
+    } else if (event.key === "PageDown" || event.key === "PageUp") {
+      const viewportHeight = scrollRef.current?.clientHeight || 320;
+      const pageSize = Math.max(1, Math.floor(viewportHeight / rowHeight));
+      targetKey = getPageTargetRowKey(
+        rows,
+        currentRow.key,
+        event.key === "PageDown" ? "next" : "previous",
+        pageSize,
+      );
+    } else if (event.key === "Home") {
+      targetKey = rows[0]?.key ?? null;
+    } else if (event.key === "End") {
+      targetKey = rows.at(-1)?.key ?? null;
+    } else if (event.key === "ArrowRight") {
+      if (
+        currentRow.kind === "workspace" &&
+        !expandedWorkspaceIds.has(currentRow.workspaceId)
+      ) {
+        toggleWorkspace(currentRow);
+      } else if (
+        currentRow.kind === "directory" &&
+        !isDirectoryExpanded(
+          expandedDirectoryKeys,
+          currentRow.key,
+          currentRow.relativePath,
+        )
+      ) {
+        toggleDirectory(currentRow);
+      } else {
+        const next =
+          rows[rows.findIndex((row) => row.key === currentRow.key) + 1];
+        if (next !== undefined && next.depth > currentRow.depth)
+          targetKey = next.key;
+      }
+    } else if (event.key === "ArrowLeft") {
+      const isExpanded =
+        currentRow.kind === "workspace"
+          ? expandedWorkspaceIds.has(currentRow.workspaceId)
+          : currentRow.kind === "directory" &&
+            isDirectoryExpanded(
+              expandedDirectoryKeys,
+              currentRow.key,
+              currentRow.relativePath,
+            );
+      if (isExpanded) {
+        if (currentRow.kind === "workspace") toggleWorkspace(currentRow);
+        else if (currentRow.kind === "directory") toggleDirectory(currentRow);
+      } else {
+        targetKey = currentRow.parentRowKey;
+      }
+    } else if (event.key === "Enter" || event.key === " ") {
+      activateRow(currentRow);
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+    if (targetKey !== null) focusRow(targetKey);
+  };
+
+  return (
+    <div
+      ref={scrollRef}
+      className={className ? `workspace-tree ${className}` : "workspace-tree"}
+      role="tree"
+      aria-label={ariaLabel}
+      tabIndex={0}
+      onKeyDown={handleTreeKeyDown}
+      style={{
+        height: "100%",
+        minHeight: 0,
+        minWidth: 0,
+        overflowX: "hidden",
+        overflowY: "auto",
+      }}
+    >
+      <div
+        className="workspace-tree-rows"
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          minWidth: 0,
+          position: "relative",
+          width: "100%",
+        }}
+      >
+        {renderedRows.map(({ row, index, start }) => (
+          <WorkspaceTreeRowView
+            key={row.key}
+            row={row}
+            index={index}
+            totalRows={rows.length}
+            rowHeight={rowHeight}
+            start={start}
+            expanded={
+              row.kind === "workspace"
+                ? expandedWorkspaceIds.has(row.workspaceId)
+                : row.kind === "directory"
+                  ? expandedDirectoryKeys.has(row.key) ||
+                    expandedDirectoryKeys.has(row.relativePath)
+                  : undefined
+            }
+            focused={row.key === focusedRowKey}
+            onFocus={() => setFocusedRowKey(row.key)}
+            onActivate={() => activateRow(row)}
+            onAction={(event) => {
+              event.stopPropagation();
+              onRowAction?.(row, event.currentTarget);
+            }}
+            registerRef={(element) => {
+              if (element === null) rowRefs.current.delete(row.key);
+              else rowRefs.current.set(row.key, element);
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface WorkspaceTreeRowViewProps {
+  row: WorkspaceTreeRow;
+  index: number;
+  totalRows: number;
+  rowHeight: number;
+  start: number;
+  focused: boolean;
+  onFocus: () => void;
+  onActivate: () => void;
+  onAction: (event: MouseEvent<HTMLButtonElement>) => void;
+  registerRef: (element: HTMLDivElement | null) => void;
+  expanded: boolean | undefined;
+}
+
+function WorkspaceTreeRowView({
+  row,
+  index,
+  totalRows,
+  rowHeight,
+  start,
+  expanded,
+  focused,
+  onFocus,
+  onActivate,
+  onAction,
+  registerRef,
+}: WorkspaceTreeRowViewProps) {
+  const isExpandable = row.kind === "workspace" || row.kind === "directory";
+  const icon =
+    row.kind === "workspace"
+      ? "▣"
+      : row.kind === "directory"
+        ? expanded
+          ? "▾"
+          : "▸"
+        : "▧";
+
+  return (
+    <div
+      ref={registerRef}
+      role="treeitem"
+      aria-label={row.displayName}
+      aria-level={row.depth + 1}
+      aria-posinset={index + 1}
+      aria-setsize={totalRows}
+      aria-expanded={isExpandable ? expanded : undefined}
+      aria-selected={row.isActive || undefined}
+      className={`workspace-tree-row${row.isActive ? " is-active" : ""}`}
+      data-row-key={row.key}
+      data-kind={row.kind}
+      tabIndex={focused ? 0 : -1}
+      title={row.displayName}
+      onClick={onActivate}
+      onFocus={onFocus}
+      style={{
+        alignItems: "center",
+        display: "flex",
+        gap: "0.25rem",
+        height: `${rowHeight}px`,
+        left: 0,
+        minWidth: 0,
+        overflow: "hidden",
+        paddingInlineStart: `${row.depth * 16 + 4}px`,
+        paddingInlineEnd: "0.25rem",
+        position: "absolute",
+        top: 0,
+        transform: `translateY(${start}px)`,
+        userSelect: "none",
+        width: "100%",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        data-slot="workspace-tree-icon"
+        className="workspace-tree-icon-slot"
+        style={{
+          display: "inline-flex",
+          flex: "0 0 1.25rem",
+          justifyContent: "center",
+          width: "1.25rem",
+        }}
+      >
+        {icon}
+      </span>
+      <span
+        className="workspace-tree-label"
+        data-slot="workspace-tree-label"
+        style={{
+          flex: "1 1 auto",
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {row.displayName}
+      </span>
+      <span
+        data-slot="workspace-tree-action"
+        className="workspace-tree-action-slot"
+        style={{
+          display: "inline-flex",
+          flex: "0 0 2rem",
+          justifyContent: "flex-end",
+          width: "2rem",
+        }}
+      >
+        <button
+          type="button"
+          aria-label={`Actions for ${row.displayName}`}
+          className="workspace-tree-action"
+          onClick={onAction}
+          tabIndex={-1}
+          style={{
+            minWidth: "2rem",
+            visibility: focused ? "visible" : undefined,
+          }}
+        >
+          ⋯
+        </button>
+      </span>
+    </div>
+  );
+}

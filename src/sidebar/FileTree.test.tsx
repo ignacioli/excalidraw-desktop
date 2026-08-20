@@ -3,6 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CommandInvoker } from "../ipc/client";
 import { FileTree } from "./FileTree";
 
+vi.mock("@excalidraw/excalidraw", () => ({
+  getSceneVersion: () => 0,
+  restore: (scene: object) => scene,
+  serializeAsJSON: () => "{}",
+}));
+
 function createInvoker(): CommandInvoker {
   return {
     invoke: vi.fn(async (command: string) => {

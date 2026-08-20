@@ -191,6 +191,26 @@ export async function installUiInteractionHarness(
           if (command === "workspace_list") {
             return state.workspaces.map((workspace) => ({ ...workspace }));
           }
+          if (command === "workspace_add") {
+            const rootPath = String(
+              args.rootPath ?? "/ui-interactions/mounted",
+            );
+            const workspace = {
+              id: `workspace-${state.workspaces.length + 1}`,
+              name: rootPath.split("/").filter(Boolean).at(-1) ?? "Workspace",
+              rootPath,
+              createdAt: state.workspaces.length + 1,
+            };
+            state.workspaces.push(workspace);
+            return { ...workspace };
+          }
+          if (command === "workspace_remove") {
+            const workspaceId = String(args.workspaceId ?? "");
+            state.workspaces = state.workspaces.filter(
+              (workspace) => workspace.id !== workspaceId,
+            );
+            return {};
+          }
           if (command === "workspace_entry_list") {
             const workspaceId = String(args.workspaceId ?? "");
             const parentRelativePath = String(args.parentRelativePath ?? "");
@@ -219,6 +239,152 @@ export async function installUiInteractionHarness(
                 fileSize: entry.fileSize,
               }));
           }
+          if (command === "workspace_entry_create") {
+            const workspaceId = String(args.workspaceId ?? "");
+            const parentRelativePath = String(args.parentRelativePath ?? "");
+            const kind = args.kind === "directory" ? "directory" : "drawing";
+            const baseName = String(args.baseName ?? "");
+            const name =
+              kind === "drawing" ? `${baseName}.excalidraw` : baseName;
+            if (
+              state.entries.some(
+                (entry) =>
+                  entry.workspaceId === workspaceId &&
+                  entry.parentRelativePath === parentRelativePath &&
+                  entry.name.toLowerCase() === name.toLowerCase(),
+              )
+            ) {
+              throw {
+                code: "NAME_CONFLICT",
+                message: "Entry already exists",
+                retriable: false,
+              };
+            }
+            const workspace = state.workspaces.find(
+              (item) => item.id === workspaceId,
+            );
+            const relativePath = [parentRelativePath, name]
+              .filter(Boolean)
+              .join("/");
+            const entry = {
+              workspaceId,
+              kind,
+              canonicalPath: `${workspace?.rootPath ?? "/ui-interactions"}/${relativePath}`,
+              relativePath,
+              parentRelativePath,
+              name,
+              displayName: kind === "drawing" ? baseName : name,
+              mtime: Date.now(),
+              fileSize: 0,
+            } satisfies UiHarnessWorkspaceEntry;
+            state.entries.push(entry);
+            return { operationId: `create-${state.invocations.length}`, entry };
+          }
+          if (command === "workspace_entry_rename") {
+            const workspaceId = String(args.workspaceId ?? "");
+            const oldRelativePath = String(args.relativePath ?? "");
+            const baseName = String(args.baseName ?? "");
+            const source = state.entries.find(
+              (entry) =>
+                entry.workspaceId === workspaceId &&
+                entry.relativePath === oldRelativePath,
+            );
+            if (source === undefined)
+              throw new Error("Harness entry not found");
+            const suffix = source.name
+              .toLowerCase()
+              .endsWith(".excalidraw.json")
+              ? ".excalidraw.json"
+              : source.kind === "drawing"
+                ? ".excalidraw"
+                : "";
+            const nextName = `${baseName}${suffix}`;
+            const newRelativePath = [source.parentRelativePath, nextName]
+              .filter(Boolean)
+              .join("/");
+            const oldCanonicalPath = source.canonicalPath;
+            const newCanonicalPath =
+              oldCanonicalPath.slice(0, -source.name.length) + nextName;
+            const pathMigrations = state.entries
+              .filter(
+                (entry) =>
+                  entry.kind === "drawing" &&
+                  (entry.relativePath === oldRelativePath ||
+                    entry.relativePath.startsWith(`${oldRelativePath}/`)),
+              )
+              .map((entry) => ({
+                oldRelativePath: entry.relativePath,
+                newRelativePath: entry.relativePath.replace(
+                  oldRelativePath,
+                  newRelativePath,
+                ),
+                oldCanonicalPath: entry.canonicalPath,
+                newCanonicalPath: entry.canonicalPath.replace(
+                  oldCanonicalPath,
+                  newCanonicalPath,
+                ),
+              }));
+            for (const entry of state.entries) {
+              if (
+                entry.relativePath === oldRelativePath ||
+                entry.relativePath.startsWith(`${oldRelativePath}/`)
+              ) {
+                entry.relativePath = entry.relativePath.replace(
+                  oldRelativePath,
+                  newRelativePath,
+                );
+                entry.canonicalPath = entry.canonicalPath.replace(
+                  oldCanonicalPath,
+                  newCanonicalPath,
+                );
+                entry.parentRelativePath = entry.parentRelativePath.replace(
+                  oldRelativePath,
+                  newRelativePath,
+                );
+              }
+            }
+            source.name = nextName;
+            source.displayName = baseName;
+            return {
+              operationId: `rename-${state.invocations.length}`,
+              entry: { ...source },
+              oldRelativePath,
+              newRelativePath,
+              pathMigrations,
+            };
+          }
+          if (command === "workspace_entry_delete_preflight") {
+            const relativePath = String(args.relativePath ?? "");
+            const entry = state.entries.find(
+              (item) => item.relativePath === relativePath,
+            );
+            if (entry === undefined) throw new Error("Harness entry not found");
+            const nonEmpty =
+              entry.kind === "directory" &&
+              state.entries.some((item) =>
+                item.relativePath.startsWith(`${relativePath}/`),
+              );
+            return {
+              status: nonEmpty ? "directoryNotEmpty" : "confirmable",
+              entry: { ...entry },
+            };
+          }
+          if (command === "workspace_entry_delete") {
+            const relativePath = String(args.relativePath ?? "");
+            const entry = state.entries.find(
+              (item) => item.relativePath === relativePath,
+            );
+            if (entry === undefined) throw new Error("Harness entry not found");
+            state.entries = state.entries.filter(
+              (item) => item.relativePath !== relativePath,
+            );
+            return {
+              operationId: `delete-${state.invocations.length}`,
+              kind: entry.kind,
+              oldRelativePath: relativePath,
+            };
+          }
+          if (command === "workspace_entry_reveal") return {};
           if (command === "doc_open") {
             return {
               scene: emptyScene,

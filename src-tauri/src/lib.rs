@@ -24,9 +24,11 @@ use commands::{
         doc_checkpoint, doc_close, doc_open, doc_resolve_conflict, doc_save_draft,
         ConflictRegistry, DirectFileGrant, DocumentService, DocumentState,
     },
-    entries::{workspace_entry_list, WorkspaceEntryState},
+    entries::{
+        workspace_entry_create, workspace_entry_delete, workspace_entry_delete_preflight,
+        workspace_entry_list, workspace_entry_rename, workspace_entry_reveal, WorkspaceEntryState,
+    },
     export::{doc_export, ExportService, ExportState},
-    files::{file_create, file_delete, file_rename, FileState},
     recovery::{
         recovery_apply, recovery_list, RecoveryService, RecoveryState, TauriRecoveryPathGrant,
     },
@@ -129,7 +131,6 @@ pub fn run() {
                 Arc::clone(&shared_repository),
                 Arc::clone(&thumbnail_cache),
             )));
-            app.manage(FileState::new(shared_repository));
             app.manage(session);
             app.manage(WatcherState::new(watcher_service.clone()));
             tauri::async_runtime::block_on(watcher_service.start_existing(app.handle().clone()))?;
@@ -159,10 +160,12 @@ pub fn run() {
         workspace_remove,
         workspace_list,
         workspace_entry_list,
+        workspace_entry_create,
+        workspace_entry_rename,
+        workspace_entry_delete_preflight,
+        workspace_entry_delete,
+        workspace_entry_reveal,
         dir_list,
-        file_create,
-        file_rename,
-        file_delete,
         doc_export,
         thumb_lookup,
         thumb_store,
@@ -190,10 +193,12 @@ pub fn run() {
         workspace_remove,
         workspace_list,
         workspace_entry_list,
+        workspace_entry_create,
+        workspace_entry_rename,
+        workspace_entry_delete_preflight,
+        workspace_entry_delete,
+        workspace_entry_reveal,
         dir_list,
-        file_create,
-        file_rename,
-        file_delete,
         doc_export,
         thumb_lookup,
         thumb_store

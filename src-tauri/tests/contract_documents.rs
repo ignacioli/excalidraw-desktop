@@ -7,8 +7,8 @@ use excalidraw_desktop_lib::{
     commands::{
         documents::{DirectFileGrant, DocumentService},
         dto::{
-            CheckpointReason, CheckpointRequest, CloseDocumentRequest, ConflictResolution,
-            PathRequest, ResolveConflictRequest, SaveDraftRequest,
+            CheckpointReason, CheckpointRequest, CloseDocumentMode, CloseDocumentRequest,
+            ConflictResolution, PathRequest, ResolveConflictRequest, SaveDraftRequest,
         },
         error::ErrorCode,
     },
@@ -101,7 +101,7 @@ async fn document_contract_round_trips_open_draft_checkpoint_and_close() {
         .service
         .doc_close(CloseDocumentRequest {
             path: path_string,
-            discard_draft: false,
+            mode: CloseDocumentMode::Checkpointed,
         })
         .await
         .unwrap_or_else(|error| panic!("close checkpointed document: {error:?}"));
@@ -348,7 +348,7 @@ async fn every_document_command_rejects_paths_outside_mounted_workspaces() {
             .service
             .doc_close(CloseDocumentRequest {
                 path: outside,
-                discard_draft: true,
+                mode: CloseDocumentMode::DiscardOrphan,
             })
             .await
             .expect_err("outside close must fail")

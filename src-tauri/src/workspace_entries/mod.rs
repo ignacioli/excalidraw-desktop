@@ -1,25 +1,38 @@
 use std::{
-    collections::HashMap,
-    fs,
+    collections::{HashMap, HashSet},
+    fs::{self, File, OpenOptions},
+    io::{self, Write},
     path::{Path, PathBuf},
+    process::Command,
     sync::Arc,
 };
 
+use sha2::{Digest, Sha256};
 use tokio::sync::{Mutex, OwnedMutexGuard};
+use uuid::Uuid;
 
 use crate::{
     commands::{
-        dto::{WorkspaceEntry, WorkspaceEntryKind, WorkspaceEntryListRequest},
+        dto::{
+            EmptyResponse, EntryMutationResult, ExpectedOpenDocument, PathMigration,
+            WorkspaceEntry, WorkspaceEntryCreateRequest, WorkspaceEntryDeletePreflightResult,
+            WorkspaceEntryDeleteRequest, WorkspaceEntryDeleteResult, WorkspaceEntryKind,
+            WorkspaceEntryListRequest, WorkspaceEntryPathRequest, WorkspaceEntryRenameRequest,
+            WorkspaceEntryRenameResult,
+        },
         error::{AppError, IpcError},
         workspace::{
             is_supported_document, modified_timestamp, policy_for_repository, safe_relative_path,
             workspace_by_id,
         },
     },
-    database::repository::SqliteRepository,
+    database::repository::{
+        DraftRepository, FileIndexRecord, FileIndexRepository, SqliteRepository, WorkspaceRecord,
+    },
 };
 
 const MANAGED_DIRECTORY_NAMES: &[&str] = &[".excalidraw_assets"];
+const EMPTY_SCENE: &[u8] = br#"{"type":"excalidraw","version":2,"source":"excalidraw-desktop","elements":[],"appState":{},"files":{}}"#;
 
 #[derive(Clone, Default)]
 pub struct WorkspaceMutationGate {
@@ -40,22 +53,84 @@ impl WorkspaceMutationGate {
     }
 }
 
+/// Small seam around the operating-system Trash provider. Tests can inject a
+/// deterministic failure without depending on a desktop Trash service.
+pub trait TrashOperator: Send + Sync {
+    fn delete(&self, path: &Path) -> Result<(), io::Error>;
+}
+
+#[derive(Debug, Default)]
+pub struct SystemTrashOperator;
+
+impl TrashOperator for SystemTrashOperator {
+    fn delete(&self, path: &Path) -> Result<(), io::Error> {
+        trash::delete(path).map_err(|error| io::Error::other(error.to_string()))
+    }
+}
+
 #[derive(Clone)]
 pub struct WorkspaceEntryService {
     repository: Arc<SqliteRepository>,
     mutation_gate: WorkspaceMutationGate,
+    trash: Arc<dyn TrashOperator>,
 }
 
 impl WorkspaceEntryService {
     pub fn new(repository: Arc<SqliteRepository>, mutation_gate: WorkspaceMutationGate) -> Self {
+        Self::with_trash(repository, mutation_gate, Arc::new(SystemTrashOperator))
+    }
+
+    pub fn with_trash(
+        repository: Arc<SqliteRepository>,
+        mutation_gate: WorkspaceMutationGate,
+        trash: Arc<dyn TrashOperator>,
+    ) -> Self {
         Self {
             repository,
             mutation_gate,
+            trash,
         }
     }
 
     pub fn mutation_gate(&self) -> &WorkspaceMutationGate {
         &self.mutation_gate
+    }
+
+    pub async fn create(
+        &self,
+        request: WorkspaceEntryCreateRequest,
+    ) -> Result<EntryMutationResult, IpcError> {
+        self.create_inner(request).await.map_err(Into::into)
+    }
+
+    pub async fn rename(
+        &self,
+        request: WorkspaceEntryRenameRequest,
+    ) -> Result<WorkspaceEntryRenameResult, IpcError> {
+        self.rename_inner(request).await.map_err(Into::into)
+    }
+
+    pub async fn delete_preflight(
+        &self,
+        request: WorkspaceEntryPathRequest,
+    ) -> Result<WorkspaceEntryDeletePreflightResult, IpcError> {
+        self.delete_preflight_inner(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn delete(
+        &self,
+        request: WorkspaceEntryDeleteRequest,
+    ) -> Result<WorkspaceEntryDeleteResult, IpcError> {
+        self.delete_inner(request).await.map_err(Into::into)
+    }
+
+    pub async fn reveal(
+        &self,
+        request: WorkspaceEntryPathRequest,
+    ) -> Result<EmptyResponse, IpcError> {
+        self.reveal_inner(request).await.map_err(Into::into)
     }
 
     pub async fn list(
@@ -132,6 +207,338 @@ impl WorkspaceEntryService {
         });
         Ok(entries)
     }
+
+    async fn create_inner(
+        &self,
+        request: WorkspaceEntryCreateRequest,
+    ) -> Result<EntryMutationResult, AppError> {
+        let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
+        let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
+        let root = PathBuf::from(&workspace.root_path);
+        let base_name = validate_entry_base_name(&request.base_name)?;
+        let parent = self
+            .authorize_parent(&workspace, &request.parent_relative_path)
+            .await?;
+        let target_name = match request.kind {
+            WorkspaceEntryKind::Drawing => format!("{base_name}.excalidraw"),
+            WorkspaceEntryKind::Directory => base_name,
+        };
+        let target = authorize_creation(&self.repository, &parent, &target_name).await?;
+        reject_symlink_components(&root, &target)?;
+        ensure_target_absent(&target)?;
+
+        match request.kind {
+            WorkspaceEntryKind::Drawing => atomic_create_drawing(&target)?,
+            WorkspaceEntryKind::Directory => fs::create_dir(&target).map_err(|source| {
+                if source.kind() == io::ErrorKind::AlreadyExists {
+                    AppError::NameConflict(target.clone())
+                } else {
+                    AppError::Io {
+                        path: Some(target.clone()),
+                        source,
+                    }
+                }
+            })?,
+        }
+
+        let parent_relative_path = normalized_relative(&root, &parent)?;
+        let entry = entry_from_path(
+            &workspace.id,
+            &root,
+            &parent_relative_path,
+            &target,
+            request.kind,
+        )?;
+        if request.kind == WorkspaceEntryKind::Drawing {
+            self.index_entry(&workspace, &entry).await?;
+        }
+        Ok(EntryMutationResult {
+            operation_id: Uuid::new_v4().to_string(),
+            entry,
+        })
+    }
+
+    async fn rename_inner(
+        &self,
+        request: WorkspaceEntryRenameRequest,
+    ) -> Result<WorkspaceEntryRenameResult, AppError> {
+        let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
+        let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
+        let root = PathBuf::from(&workspace.root_path);
+        let source = self
+            .resolve_entry(&workspace, &request.relative_path)
+            .await?;
+        let base_name = validate_entry_base_name(&request.base_name)?;
+        let suffix = match source.kind {
+            WorkspaceEntryKind::Drawing => drawing_suffix(&source.name)
+                .ok_or_else(|| AppError::PathAccessDenied(source.path.clone()))?,
+            WorkspaceEntryKind::Directory => String::new(),
+        };
+        let target_name = format!("{base_name}{suffix}");
+        let parent = source
+            .path
+            .parent()
+            .ok_or_else(|| AppError::PathAccessDenied(source.path.clone()))?;
+        let target = authorize_creation(&self.repository, parent, &target_name).await?;
+        reject_symlink_components(&root, &target)?;
+        ensure_target_absent(&target)?;
+
+        let path_migrations =
+            expected_path_migrations(&source, &target, &request.expected_open_documents)?;
+        let old_canonical_path = source.path.display().to_string();
+        let old_relative_path = source.relative_path.clone();
+        let new_relative_path = normalized_relative(&root, &target)?;
+
+        let old_path = source.path.clone();
+        let new_path = target.clone();
+        run_blocking(move || {
+            fs::rename(&old_path, &new_path).map_err(|source| {
+                if source.kind() == io::ErrorKind::AlreadyExists {
+                    AppError::NameConflict(new_path.clone())
+                } else {
+                    AppError::Io {
+                        path: Some(new_path.clone()),
+                        source,
+                    }
+                }
+            })
+        })
+        .await?;
+
+        // Filesystem rename is the commit point. SQLite paths are derived
+        // state and can be rebuilt/retried after a process interruption.
+        self.repository
+            .migrate_entry_paths(
+                old_canonical_path,
+                target.display().to_string(),
+                old_relative_path.clone(),
+                new_relative_path.clone(),
+                target
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or_default()
+                    .to_owned(),
+            )
+            .await?;
+
+        let parent_relative_path = target
+            .parent()
+            .map(|parent| normalized_relative(&root, parent))
+            .transpose()?
+            .unwrap_or_default();
+        let entry = entry_from_path(
+            &workspace.id,
+            &root,
+            &parent_relative_path,
+            &target,
+            source.kind,
+        )?;
+        Ok(WorkspaceEntryRenameResult {
+            operation_id: Uuid::new_v4().to_string(),
+            entry,
+            old_relative_path,
+            new_relative_path,
+            path_migrations,
+        })
+    }
+
+    async fn delete_preflight_inner(
+        &self,
+        request: WorkspaceEntryPathRequest,
+    ) -> Result<WorkspaceEntryDeletePreflightResult, AppError> {
+        let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
+        let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
+        let source = self
+            .resolve_entry(&workspace, &request.relative_path)
+            .await?;
+        let non_empty =
+            source.kind == WorkspaceEntryKind::Directory && directory_has_children(&source.path)?;
+        let entry = source.into_entry()?;
+        if non_empty {
+            return Ok(WorkspaceEntryDeletePreflightResult::DirectoryNotEmpty { entry });
+        }
+        Ok(WorkspaceEntryDeletePreflightResult::Confirmable { entry })
+    }
+
+    async fn delete_inner(
+        &self,
+        request: WorkspaceEntryDeleteRequest,
+    ) -> Result<WorkspaceEntryDeleteResult, AppError> {
+        let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
+        let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
+        let source = self
+            .resolve_entry(&workspace, &request.relative_path)
+            .await?;
+        if source.kind == WorkspaceEntryKind::Directory && directory_has_children(&source.path)? {
+            return Err(AppError::DirectoryNotEmpty(source.path));
+        }
+
+        let canonical_path = source.path.display().to_string();
+        let draft = self.repository.draft_get(canonical_path.clone()).await?;
+        if draft.as_ref().is_some_and(|draft| draft.is_dirty) {
+            return Err(AppError::ConflictPending(source.path));
+        }
+        if let Some(expected) = request.expected_open_document {
+            if expected.relative_path != source.relative_path
+                || source.kind != WorkspaceEntryKind::Drawing
+                || hash_file(&source.path)? != expected.base_hash
+            {
+                return Err(AppError::EntryChanged(source.path));
+            }
+        }
+
+        let trash = Arc::clone(&self.trash);
+        let target = source.path.clone();
+        run_blocking(move || {
+            trash.delete(&target).map_err(|source| AppError::Io {
+                path: Some(target),
+                source,
+            })
+        })
+        .await?;
+        self.repository
+            .remove_clean_entry_metadata(canonical_path)
+            .await?;
+        Ok(WorkspaceEntryDeleteResult {
+            operation_id: Uuid::new_v4().to_string(),
+            kind: source.kind,
+            old_relative_path: source.relative_path,
+        })
+    }
+
+    async fn reveal_inner(
+        &self,
+        request: WorkspaceEntryPathRequest,
+    ) -> Result<EmptyResponse, AppError> {
+        let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
+        let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
+        let source = self
+            .resolve_entry(&workspace, &request.relative_path)
+            .await?;
+        let path = source.path;
+        run_blocking(move || reveal_in_finder(&path)).await?;
+        Ok(EmptyResponse {})
+    }
+
+    async fn authorize_parent(
+        &self,
+        workspace: &WorkspaceRecord,
+        relative_path: &str,
+    ) -> Result<PathBuf, AppError> {
+        let root = PathBuf::from(&workspace.root_path);
+        let relative = safe_relative_path(relative_path)?;
+        let parent = root.join(relative);
+        reject_protected_parent(&root, &parent)?;
+        reject_symlink_components(&root, &parent)?;
+        let policy = policy_for_repository(&self.repository).await?;
+        let authorized = policy.authorize_existing(&parent)?;
+        let metadata = fs::metadata(&authorized).map_err(|source| AppError::Io {
+            path: Some(authorized.clone()),
+            source,
+        })?;
+        if metadata.is_dir() {
+            Ok(authorized)
+        } else {
+            Err(AppError::PathAccessDenied(authorized))
+        }
+    }
+
+    async fn resolve_entry(
+        &self,
+        workspace: &WorkspaceRecord,
+        relative_path: &str,
+    ) -> Result<EntryLocation, AppError> {
+        let root = PathBuf::from(&workspace.root_path);
+        let relative = safe_relative_path(relative_path)?;
+        if relative.as_os_str().is_empty() {
+            return Err(AppError::EntryProtected(root));
+        }
+        let requested = root.join(relative);
+        reject_protected_parent(&root, &requested)?;
+        reject_symlink_components(&root, &requested)?;
+        let policy = policy_for_repository(&self.repository).await?;
+        let path = policy.authorize_existing(&requested)?;
+        let metadata = fs::symlink_metadata(&path).map_err(|source| {
+            if source.kind() == io::ErrorKind::NotFound {
+                AppError::FileNotFound(path.clone())
+            } else {
+                AppError::Io {
+                    path: Some(path.clone()),
+                    source,
+                }
+            }
+        })?;
+        if metadata.file_type().is_symlink() {
+            return Err(AppError::EntryProtected(path));
+        }
+        let kind = if metadata.is_dir() {
+            WorkspaceEntryKind::Directory
+        } else if metadata.is_file() && is_supported_document(&path) {
+            WorkspaceEntryKind::Drawing
+        } else {
+            return Err(AppError::PathAccessDenied(path));
+        };
+        let relative_path = normalized_relative(&root, &path)?;
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| AppError::PathAccessDenied(path.clone()))?
+            .to_owned();
+        Ok(EntryLocation {
+            workspace_id: workspace.id.clone(),
+            root,
+            path,
+            relative_path,
+            name,
+            kind,
+        })
+    }
+
+    async fn index_entry(
+        &self,
+        workspace: &WorkspaceRecord,
+        entry: &WorkspaceEntry,
+    ) -> Result<(), AppError> {
+        self.repository
+            .file_index_upsert(FileIndexRecord {
+                canonical_path: entry.canonical_path.clone(),
+                workspace_id: workspace.id.clone(),
+                display_name: entry.name.clone(),
+                relative_path: entry.relative_path.clone(),
+                mtime: entry.mtime,
+                file_size: entry.file_size,
+                content_hash: None,
+            })
+            .await
+            .map_err(Into::into)
+    }
+}
+
+struct EntryLocation {
+    workspace_id: String,
+    root: PathBuf,
+    path: PathBuf,
+    relative_path: String,
+    name: String,
+    kind: WorkspaceEntryKind,
+}
+
+impl EntryLocation {
+    fn into_entry(self) -> Result<WorkspaceEntry, AppError> {
+        let parent_relative_path = self
+            .path
+            .parent()
+            .map(|parent| normalized_relative(&self.root, parent))
+            .transpose()?
+            .unwrap_or_default();
+        entry_from_path(
+            &self.workspace_id,
+            &self.root,
+            &parent_relative_path,
+            &self.path,
+            self.kind,
+        )
+    }
 }
 
 pub fn validate_entry_base_name(value: &str) -> Result<String, AppError> {
@@ -170,6 +577,251 @@ pub fn validate_entry_base_name(value: &str) -> Result<String, AppError> {
 
 pub fn is_protected_entry_name(name: &str) -> bool {
     name.starts_with('.') || MANAGED_DIRECTORY_NAMES.contains(&name)
+}
+
+fn reject_protected_parent(root: &Path, path: &Path) -> Result<(), AppError> {
+    let relative = path
+        .strip_prefix(root)
+        .map_err(|_| AppError::PathAccessDenied(path.to_path_buf()))?;
+    for component in relative.components() {
+        let name = component.as_os_str().to_string_lossy();
+        if is_protected_entry_name(&name) {
+            return Err(AppError::EntryProtected(path.to_path_buf()));
+        }
+    }
+    Ok(())
+}
+
+fn reject_symlink_components(root: &Path, path: &Path) -> Result<(), AppError> {
+    let relative = path
+        .strip_prefix(root)
+        .map_err(|_| AppError::PathAccessDenied(path.to_path_buf()))?;
+    let mut current = root.to_path_buf();
+    for component in relative.components() {
+        current.push(component.as_os_str());
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(AppError::EntryProtected(current));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => break,
+            Err(source) => {
+                return Err(AppError::Io {
+                    path: Some(current),
+                    source,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn ensure_target_absent(target: &Path) -> Result<(), AppError> {
+    match fs::symlink_metadata(target) {
+        Ok(_) => Err(AppError::NameConflict(target.to_path_buf())),
+        Err(source) if source.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(source) => Err(AppError::Io {
+            path: Some(target.to_path_buf()),
+            source,
+        }),
+    }
+}
+
+async fn authorize_creation(
+    repository: &SqliteRepository,
+    parent: &Path,
+    name: &str,
+) -> Result<PathBuf, AppError> {
+    let policy = policy_for_repository(repository).await?;
+    policy
+        .authorize_for_creation(&parent.join(name))
+        .map_err(Into::into)
+}
+
+fn atomic_create_drawing(target: &Path) -> Result<(), AppError> {
+    let parent = target
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let file_name = target
+        .file_name()
+        .ok_or_else(|| AppError::PathAccessDenied(target.to_path_buf()))?;
+    let temporary = parent.join(format!(
+        ".{}.{}.tmp",
+        file_name.to_string_lossy(),
+        Uuid::new_v4()
+    ));
+    let result = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .map_err(|source| AppError::Io {
+                path: Some(temporary.clone()),
+                source,
+            })?;
+        file.write_all(EMPTY_SCENE).map_err(|source| AppError::Io {
+            path: Some(temporary.clone()),
+            source,
+        })?;
+        file.sync_all().map_err(|source| AppError::Io {
+            path: Some(temporary.clone()),
+            source,
+        })?;
+        serde_json::from_slice::<serde_json::Value>(EMPTY_SCENE)
+            .map_err(|source| AppError::InvalidScene(source.to_string()))?;
+        // Hard-link publish is atomic and cannot overwrite a target created
+        // by a concurrent external process, unlike a plain rename.
+        fs::hard_link(&temporary, target).map_err(|source| {
+            if source.kind() == io::ErrorKind::AlreadyExists {
+                AppError::NameConflict(target.to_path_buf())
+            } else {
+                AppError::Io {
+                    path: Some(target.to_path_buf()),
+                    source,
+                }
+            }
+        })?;
+        File::open(parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|source| AppError::Io {
+                path: Some(parent.to_path_buf()),
+                source,
+            })?;
+        Ok(())
+    })();
+    let cleanup = fs::remove_file(&temporary);
+    match (result, cleanup) {
+        (Err(error), Err(cleanup_error)) if cleanup_error.kind() != io::ErrorKind::NotFound => {
+            let _ = cleanup_error;
+            Err(error)
+        }
+        (Err(error), _) => Err(error),
+        (Ok(()), Err(error)) => Err(AppError::Io {
+            path: Some(temporary),
+            source: error,
+        }),
+        (Ok(()), Ok(())) => Ok(()),
+    }
+}
+
+fn directory_has_children(path: &Path) -> Result<bool, AppError> {
+    let mut entries = fs::read_dir(path).map_err(|source| AppError::Io {
+        path: Some(path.to_path_buf()),
+        source,
+    })?;
+    Ok(entries
+        .next()
+        .transpose()
+        .map_err(|source| AppError::Io {
+            path: Some(path.to_path_buf()),
+            source,
+        })?
+        .is_some())
+}
+
+fn expected_path_migrations(
+    source: &EntryLocation,
+    target: &Path,
+    expected_documents: &[ExpectedOpenDocument],
+) -> Result<Vec<PathMigration>, AppError> {
+    let mut seen = HashSet::new();
+    let mut migrations = Vec::with_capacity(expected_documents.len());
+    for expected in expected_documents {
+        let relative = safe_relative_path(&expected.relative_path)?
+            .to_string_lossy()
+            .replace(std::path::MAIN_SEPARATOR, "/");
+        let valid_source = match source.kind {
+            WorkspaceEntryKind::Drawing => relative == source.relative_path,
+            WorkspaceEntryKind::Directory => {
+                relative == source.relative_path
+                    || relative
+                        .strip_prefix(&source.relative_path)
+                        .is_some_and(|suffix| suffix.starts_with('/'))
+            }
+        };
+        if !valid_source || !seen.insert(relative.clone()) {
+            return Err(AppError::EntryChanged(source.path.clone()));
+        }
+
+        let old_path = source.root.join(Path::new(&relative));
+        reject_symlink_components(&source.root, &old_path)?;
+        let old_path = old_path
+            .canonicalize()
+            .map_err(|source_error| AppError::Io {
+                path: Some(old_path.clone()),
+                source: source_error,
+            })?;
+        let metadata = fs::metadata(&old_path).map_err(|source_error| AppError::Io {
+            path: Some(old_path.clone()),
+            source: source_error,
+        })?;
+        if !metadata.is_file() || !is_supported_document(&old_path) {
+            return Err(AppError::EntryChanged(old_path));
+        }
+        if hash_file(&old_path)? != expected.base_hash {
+            return Err(AppError::EntryChanged(old_path));
+        }
+
+        let suffix = relative
+            .strip_prefix(&source.relative_path)
+            .unwrap_or_default()
+            .trim_start_matches('/');
+        let new_root = normalized_relative(&source.root, target)?;
+        let new_relative = if source.kind == WorkspaceEntryKind::Drawing || suffix.is_empty() {
+            new_root.clone()
+        } else {
+            format!("{new_root}/{suffix}")
+        };
+        let new_canonical = if source.kind == WorkspaceEntryKind::Drawing || suffix.is_empty() {
+            target.display().to_string()
+        } else {
+            target.join(suffix).display().to_string()
+        };
+        migrations.push(PathMigration {
+            old_relative_path: relative,
+            new_relative_path: new_relative,
+            old_canonical_path: old_path.display().to_string(),
+            new_canonical_path: new_canonical,
+        });
+    }
+    Ok(migrations)
+}
+
+fn hash_file(path: &Path) -> Result<String, AppError> {
+    let bytes = fs::read(path).map_err(|source| AppError::Io {
+        path: Some(path.to_path_buf()),
+        source,
+    })?;
+    Ok(format!("{:x}", Sha256::digest(bytes)))
+}
+
+fn reveal_in_finder(path: &Path) -> Result<(), AppError> {
+    #[cfg(target_os = "macos")]
+    {
+        let path_string = path.display().to_string();
+        let status = Command::new("open")
+            .args(["-R", path_string.as_str()])
+            .status()
+            .map_err(|source| AppError::Io {
+                path: Some(path.to_path_buf()),
+                source,
+            })?;
+        if !status.success() {
+            return Err(AppError::Internal(format!(
+                "Finder failed to reveal {}",
+                path.display()
+            )));
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Finder is a macOS-only surface. Keep this command deterministic on
+        // community-validation platforms instead of spawning an arbitrary
+        // desktop opener from an IPC request.
+        let _ = path;
+    }
+    Ok(())
 }
 
 fn reject_symlink(path: &Path) -> Result<(), AppError> {
@@ -242,11 +894,32 @@ fn normalized_relative(root: &Path, path: &Path) -> Result<String, AppError> {
         .map_err(|_| AppError::PathAccessDenied(path.to_path_buf()))
 }
 
+async fn run_blocking<T, F>(operation: F) -> Result<T, AppError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, AppError> + Send + 'static,
+{
+    tokio::task::spawn_blocking(operation)
+        .await
+        .map_err(|error| AppError::Internal(format!("blocking entry task failed: {error}")))?
+}
+
 fn drawing_display_name(name: &str) -> String {
     name.strip_suffix(".excalidraw.json")
         .or_else(|| name.strip_suffix(".excalidraw"))
         .unwrap_or(name)
         .to_owned()
+}
+
+fn drawing_suffix(name: &str) -> Option<String> {
+    let lower = name.to_ascii_lowercase();
+    if lower.ends_with(".excalidraw.json") {
+        Some(name[name.len() - ".excalidraw.json".len()..].to_owned())
+    } else if lower.ends_with(".excalidraw") {
+        Some(name[name.len() - ".excalidraw".len()..].to_owned())
+    } else {
+        None
+    }
 }
 
 fn apply_drawing_display_name_collisions(entries: &mut [WorkspaceEntry]) {

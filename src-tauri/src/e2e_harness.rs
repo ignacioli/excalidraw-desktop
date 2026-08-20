@@ -7,7 +7,10 @@ use std::{
     env, fs,
     io::Write,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -20,14 +23,16 @@ use crate::{
     commands::{
         documents::DocumentService,
         dto::{
-            CheckpointReason, CheckpointRequest, PathRequest, RecoveryAction, RecoveryApplyRequest,
-            SaveDraftRequest,
+            CheckpointReason, CheckpointRequest, ExpectedOpenDocument, PathRequest, RecoveryAction,
+            RecoveryApplyRequest, SaveDraftRequest, WorkspaceEntryDeletePreflightResult,
+            WorkspaceEntryDeleteRequest, WorkspaceEntryPathRequest, WorkspaceEntryRenameRequest,
         },
         error::IpcError,
         recovery::RecoveryService,
     },
     database::repository::{
-        DraftRepository, SqliteRepository, WorkspaceRecord, WorkspaceRepository,
+        DraftRecord, DraftRepository, FileIndexRecord, FileIndexRepository, FileMetaRecord,
+        FileMetaRepository, SqliteRepository, WorkspaceRecord, WorkspaceRepository,
     },
     documents::{
         atomic_write::{
@@ -38,6 +43,7 @@ use crate::{
         recovery::{document_id_for_path, unix_timestamp, RecoveryStore},
         session_lock::SessionLock,
     },
+    workspace_entries::{TrashOperator, WorkspaceEntryService, WorkspaceMutationGate},
 };
 
 pub(crate) const RELIABILITY_SCENARIO_FLAG: &str = "--e2e-reliability-scenario";
@@ -140,6 +146,12 @@ async fn run_scenario(scenario: &str, root: &Path) -> Result<String, String> {
         "atomic-write-kill" => serialize_evidence(run_atomic_write_kill(root)?),
         "snapshot-corruption" => serialize_evidence(run_snapshot_corruption(root).await?),
         "recovery-window" => serialize_evidence(run_recovery_window(root).await?),
+        "entry-trash" => serialize_evidence(run_entry_trash(root).await?),
+        "entry-rename-fault" => serialize_evidence(run_entry_rename_fault(root).await?),
+        "entry-directory-race" => serialize_evidence(run_entry_directory_race(root).await?),
+        "entry-metadata-cleanup" => serialize_evidence(run_entry_metadata_cleanup(root).await?),
+        "entry-descendant-save" => serialize_evidence(run_entry_descendant_save(root).await?),
+        "entry-rename-kill" => serialize_evidence(run_entry_rename_kill(root)?),
         other => Err(format!("unknown E2E reliability scenario: {other}")),
     }
 }
@@ -666,6 +678,593 @@ async fn run_disk_full_checkpoint(root: &Path) -> Result<DiskFullEvidence, Strin
         temporary_files: temporary_files(&path)?,
         error,
     })
+}
+
+const E2E_WORKSPACE_ID: &str = "e2e-reliability-workspace";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum E2eTrashMode {
+    Success,
+    Failure,
+    SourceDisappeared,
+}
+
+impl E2eTrashMode {
+    fn from_environment() -> Result<Self, String> {
+        match env::var("EXCALIDRAW_E2E_TRASH_MODE")
+            .unwrap_or_else(|_| "success".to_owned())
+            .as_str()
+        {
+            "success" => Ok(Self::Success),
+            "failure" => Ok(Self::Failure),
+            "source-disappeared" => Ok(Self::SourceDisappeared),
+            other => Err(format!("unknown E2E Trash mode: {other}")),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct RecordingTrashOperator {
+    mode: E2eTrashMode,
+    destination: PathBuf,
+    invoked: Arc<AtomicBool>,
+}
+
+impl TrashOperator for RecordingTrashOperator {
+    fn delete(&self, path: &Path) -> Result<(), std::io::Error> {
+        self.invoked.store(true, Ordering::SeqCst);
+        match self.mode {
+            E2eTrashMode::Success => {
+                if let Some(parent) = self.destination.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::rename(path, &self.destination)
+            }
+            E2eTrashMode::Failure => Err(std::io::Error::other(
+                "deterministic E2E Trash provider failure",
+            )),
+            E2eTrashMode::SourceDisappeared => {
+                fs::remove_file(path)?;
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "source disappeared before Trash commit",
+                ))
+            }
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EntryTrashEvidence {
+    scenario: &'static str,
+    mode: &'static str,
+    target_path: String,
+    trash_path: String,
+    trash_invoked: bool,
+    source_exists_after: bool,
+    trash_exists_after: bool,
+    error_code: Option<crate::commands::error::ErrorCode>,
+    target_file_index_before: bool,
+    target_file_index_after: bool,
+    target_draft_before: bool,
+    target_draft_after: bool,
+    target_metadata_before: bool,
+    target_metadata_after: bool,
+}
+
+async fn run_entry_trash(root: &Path) -> Result<EntryTrashEvidence, String> {
+    let mode = E2eTrashMode::from_environment()?;
+    let (repository, _document_service, workspace) = open_scenario_service(root).await?;
+    let target = workspace.join("trash-target.excalidraw");
+    let trash_path = root.join("trash").join("trash-target.excalidraw");
+    let scene = scene_json("trash-target");
+    fs::write(&target, scene.as_bytes())
+        .map_err(|error| format!("failed to create Trash target: {error}"))?;
+    seed_clean_metadata(&repository, &target, &workspace, &scene, 1).await?;
+    let target_path = path_string(&target);
+    let target_file_index_before = repository
+        .file_index_get(target_path.clone())
+        .await
+        .map_err(|error| format!("failed to inspect target file index: {error}"))?
+        .is_some();
+    let target_draft_before = repository
+        .draft_get(target_path.clone())
+        .await
+        .map_err(|error| format!("failed to inspect target draft: {error}"))?
+        .is_some();
+    let target_metadata_before = repository
+        .file_meta_get(target_path.clone())
+        .await
+        .map_err(|error| format!("failed to inspect target metadata: {error}"))?
+        .is_some();
+
+    let invoked = Arc::new(AtomicBool::new(false));
+    let service = WorkspaceEntryService::with_trash(
+        Arc::clone(&repository),
+        WorkspaceMutationGate::default(),
+        Arc::new(RecordingTrashOperator {
+            mode,
+            destination: trash_path.clone(),
+            invoked: Arc::clone(&invoked),
+        }),
+    );
+    let error = service
+        .delete(WorkspaceEntryDeleteRequest {
+            workspace_id: E2E_WORKSPACE_ID.to_owned(),
+            relative_path: "trash-target.excalidraw".to_owned(),
+            expected_open_document: None,
+        })
+        .await
+        .err();
+    let target_file_index_after = repository
+        .file_index_get(target_path.clone())
+        .await
+        .map_err(|source| format!("failed to inspect target file index after Trash: {source}"))?
+        .is_some();
+    let target_draft_after = repository
+        .draft_get(target_path.clone())
+        .await
+        .map_err(|source| format!("failed to inspect target draft after Trash: {source}"))?
+        .is_some();
+    let target_metadata_after = repository
+        .file_meta_get(target_path.clone())
+        .await
+        .map_err(|source| format!("failed to inspect target metadata after Trash: {source}"))?
+        .is_some();
+    Ok(EntryTrashEvidence {
+        scenario: "entry-trash",
+        mode: trash_mode_name(mode),
+        target_path,
+        trash_path: path_string(&trash_path),
+        trash_invoked: invoked.load(Ordering::SeqCst),
+        source_exists_after: target.exists(),
+        trash_exists_after: trash_path.exists(),
+        error_code: error.map(|value| value.code),
+        target_file_index_before,
+        target_file_index_after,
+        target_draft_before,
+        target_draft_after,
+        target_metadata_before,
+        target_metadata_after,
+    })
+}
+
+fn trash_mode_name(mode: E2eTrashMode) -> &'static str {
+    match mode {
+        E2eTrashMode::Success => "success",
+        E2eTrashMode::Failure => "failure",
+        E2eTrashMode::SourceDisappeared => "source-disappeared",
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EntryRenameFaultEvidence {
+    scenario: &'static str,
+    fault_point: &'static str,
+    source_path: String,
+    target_path: String,
+    error_code: Option<crate::commands::error::ErrorCode>,
+    source_exists_after: bool,
+    target_exists_after: bool,
+}
+
+async fn run_entry_rename_fault(root: &Path) -> Result<EntryRenameFaultEvidence, String> {
+    let fault_point = env::var("EXCALIDRAW_E2E_ENTRY_RENAME_FAULT")
+        .map_err(|_| "EXCALIDRAW_E2E_ENTRY_RENAME_FAULT is required".to_owned())?;
+    let (repository, _document_service, workspace) = open_scenario_service(root).await?;
+    let source = workspace.join("rename-source.excalidraw");
+    let target = workspace.join("rename-target.excalidraw");
+    let original = scene_json("rename-original");
+    fs::write(&source, original.as_bytes())
+        .map_err(|error| format!("failed to create rename source: {error}"))?;
+    let original_hash = sha256(original.as_bytes());
+    let source_path = path_string(&source);
+    let target_path = path_string(&target);
+
+    let expected_documents = match fault_point.as_str() {
+        "source-changed" => {
+            fs::write(&source, scene_json("rename-changed").as_bytes())
+                .map_err(|error| format!("failed to mutate rename source: {error}"))?;
+            vec![ExpectedOpenDocument {
+                relative_path: "rename-source.excalidraw".to_owned(),
+                base_hash: original_hash,
+            }]
+        }
+        "target-collision" => {
+            fs::write(&target, scene_json("rename-collision").as_bytes())
+                .map_err(|error| format!("failed to create rename collision: {error}"))?;
+            Vec::new()
+        }
+        other => return Err(format!("unknown E2E entry rename fault point: {other}")),
+    };
+    let error =
+        WorkspaceEntryService::new(Arc::clone(&repository), WorkspaceMutationGate::default())
+            .rename(WorkspaceEntryRenameRequest {
+                workspace_id: E2E_WORKSPACE_ID.to_owned(),
+                relative_path: "rename-source.excalidraw".to_owned(),
+                base_name: "rename-target".to_owned(),
+                expected_open_documents: expected_documents,
+            })
+            .await
+            .err();
+    Ok(EntryRenameFaultEvidence {
+        scenario: "entry-rename-fault",
+        fault_point: match fault_point.as_str() {
+            "source-changed" => "source-changed",
+            "target-collision" => "target-collision",
+            _ => unreachable!("validated entry rename fault point"),
+        },
+        source_path,
+        target_path,
+        error_code: error.map(|value| value.code),
+        source_exists_after: source.exists(),
+        target_exists_after: target.exists(),
+    })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EntryDirectoryRaceEvidence {
+    scenario: &'static str,
+    directory_path: String,
+    child_path: String,
+    preflight_status: &'static str,
+    error_code: Option<crate::commands::error::ErrorCode>,
+    trash_invoked: bool,
+    directory_exists_after: bool,
+    child_exists_after: bool,
+}
+
+async fn run_entry_directory_race(root: &Path) -> Result<EntryDirectoryRaceEvidence, String> {
+    let (repository, _document_service, workspace) = open_scenario_service(root).await?;
+    let directory = workspace.join("race-directory");
+    let child = directory.join(".appeared-after-confirmation");
+    fs::create_dir(&directory)
+        .map_err(|error| format!("failed to create race Directory: {error}"))?;
+    let invoked = Arc::new(AtomicBool::new(false));
+    let service = WorkspaceEntryService::with_trash(
+        Arc::clone(&repository),
+        WorkspaceMutationGate::default(),
+        Arc::new(RecordingTrashOperator {
+            mode: E2eTrashMode::Success,
+            destination: root.join("trash").join("race-directory"),
+            invoked: Arc::clone(&invoked),
+        }),
+    );
+    let preflight = service
+        .delete_preflight(WorkspaceEntryPathRequest {
+            workspace_id: E2E_WORKSPACE_ID.to_owned(),
+            relative_path: "race-directory".to_owned(),
+        })
+        .await
+        .map_err(|error| format!("Directory preflight failed: {}", error.message))?;
+    let preflight_status = match preflight {
+        WorkspaceEntryDeletePreflightResult::Confirmable { .. } => "confirmable",
+        WorkspaceEntryDeletePreflightResult::DirectoryNotEmpty { .. } => "directoryNotEmpty",
+    };
+    fs::write(&child, b"created after confirmation")
+        .map_err(|error| format!("failed to create race child: {error}"))?;
+    let error = service
+        .delete(WorkspaceEntryDeleteRequest {
+            workspace_id: E2E_WORKSPACE_ID.to_owned(),
+            relative_path: "race-directory".to_owned(),
+            expected_open_document: None,
+        })
+        .await
+        .err();
+    Ok(EntryDirectoryRaceEvidence {
+        scenario: "entry-directory-race",
+        directory_path: path_string(&directory),
+        child_path: path_string(&child),
+        preflight_status,
+        error_code: error.map(|value| value.code),
+        trash_invoked: invoked.load(Ordering::SeqCst),
+        directory_exists_after: directory.exists(),
+        child_exists_after: child.exists(),
+    })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EntryMetadataCleanupEvidence {
+    scenario: &'static str,
+    target_path: String,
+    sibling_path: String,
+    trash_invoked: bool,
+    source_exists_after: bool,
+    target_file_index_after: bool,
+    target_draft_after: bool,
+    target_metadata_after: bool,
+    sibling_file_index_after: bool,
+    sibling_draft_after: bool,
+    sibling_metadata_after: bool,
+}
+
+async fn run_entry_metadata_cleanup(root: &Path) -> Result<EntryMetadataCleanupEvidence, String> {
+    let (repository, _document_service, workspace) = open_scenario_service(root).await?;
+    let target = workspace.join("metadata-target.excalidraw");
+    let sibling = workspace.join("metadata-target-copy.excalidraw");
+    let target_scene = scene_json("metadata-target");
+    let sibling_scene = scene_json("metadata-sibling");
+    fs::write(&target, target_scene.as_bytes())
+        .map_err(|error| format!("failed to create metadata target: {error}"))?;
+    fs::write(&sibling, sibling_scene.as_bytes())
+        .map_err(|error| format!("failed to create metadata sibling: {error}"))?;
+    seed_clean_metadata(&repository, &target, &workspace, &target_scene, 1).await?;
+    seed_metadata(&repository, &sibling, &workspace, &sibling_scene, 2, true).await?;
+    let invoked = Arc::new(AtomicBool::new(false));
+    let service = WorkspaceEntryService::with_trash(
+        Arc::clone(&repository),
+        WorkspaceMutationGate::default(),
+        Arc::new(RecordingTrashOperator {
+            mode: E2eTrashMode::Success,
+            destination: root.join("trash").join("metadata-target.excalidraw"),
+            invoked: Arc::clone(&invoked),
+        }),
+    );
+    service
+        .delete(WorkspaceEntryDeleteRequest {
+            workspace_id: E2E_WORKSPACE_ID.to_owned(),
+            relative_path: "metadata-target.excalidraw".to_owned(),
+            expected_open_document: None,
+        })
+        .await
+        .map_err(|error| format!("metadata cleanup Trash failed: {}", error.message))?;
+    let target_path = path_string(&target);
+    let sibling_path = path_string(&sibling);
+    Ok(EntryMetadataCleanupEvidence {
+        scenario: "entry-metadata-cleanup",
+        target_path: target_path.clone(),
+        sibling_path: sibling_path.clone(),
+        trash_invoked: invoked.load(Ordering::SeqCst),
+        source_exists_after: target.exists(),
+        target_file_index_after: repository
+            .file_index_get(target_path)
+            .await
+            .map_err(|error| format!("inspect target index after cleanup: {error}"))?
+            .is_some(),
+        target_draft_after: repository
+            .draft_get(path_string(&target))
+            .await
+            .map_err(|error| format!("inspect target draft after cleanup: {error}"))?
+            .is_some(),
+        target_metadata_after: repository
+            .file_meta_get(path_string(&target))
+            .await
+            .map_err(|error| format!("inspect target metadata after cleanup: {error}"))?
+            .is_some(),
+        sibling_file_index_after: repository
+            .file_index_get(sibling_path.clone())
+            .await
+            .map_err(|error| format!("inspect sibling index after cleanup: {error}"))?
+            .is_some(),
+        sibling_draft_after: repository
+            .draft_get(sibling_path.clone())
+            .await
+            .map_err(|error| format!("inspect sibling draft after cleanup: {error}"))?
+            .is_some(),
+        sibling_metadata_after: repository
+            .file_meta_get(sibling_path)
+            .await
+            .map_err(|error| format!("inspect sibling metadata after cleanup: {error}"))?
+            .is_some(),
+    })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EntryDescendantSaveEvidence {
+    scenario: &'static str,
+    old_directory_path: String,
+    new_directory_path: String,
+    descendants: Vec<EntryDescendantEvidence>,
+    path_migration_count: usize,
+    continued_save_succeeded: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EntryDescendantEvidence {
+    old_path: String,
+    new_path: String,
+    old_exists_after: bool,
+    new_exists_after: bool,
+    new_sha256: Option<String>,
+}
+
+async fn run_entry_descendant_save(root: &Path) -> Result<EntryDescendantSaveEvidence, String> {
+    let (repository, document_service, workspace) = open_scenario_service(root).await?;
+    let old_directory = workspace.join("old-directory");
+    let new_directory = workspace.join("new-directory");
+    fs::create_dir(&old_directory)
+        .map_err(|error| format!("failed to create old Directory: {error}"))?;
+    let names = ["one", "two", "three"];
+    let mut expected_documents = Vec::with_capacity(names.len());
+    let mut paths = Vec::with_capacity(names.len());
+    for (index, name) in names.iter().enumerate() {
+        let old_path = old_directory.join(format!("{name}.excalidraw"));
+        let scene = scene_json(&format!("descendant-{index}"));
+        fs::write(&old_path, scene.as_bytes())
+            .map_err(|error| format!("failed to create descendant {name}: {error}"))?;
+        expected_documents.push(ExpectedOpenDocument {
+            relative_path: format!("old-directory/{name}.excalidraw"),
+            base_hash: sha256(scene.as_bytes()),
+        });
+        paths.push((old_path, name.to_owned(), index));
+    }
+    let rename =
+        WorkspaceEntryService::new(Arc::clone(&repository), WorkspaceMutationGate::default())
+            .rename(WorkspaceEntryRenameRequest {
+                workspace_id: E2E_WORKSPACE_ID.to_owned(),
+                relative_path: "old-directory".to_owned(),
+                base_name: "new-directory".to_owned(),
+                expected_open_documents: expected_documents,
+            })
+            .await
+            .map_err(|error| format!("Directory rename failed: {}", error.message))?;
+    let mut descendants = Vec::with_capacity(paths.len());
+    let mut continued_save_succeeded = true;
+    for (old_path, name, index) in paths {
+        let new_path = new_directory.join(format!("{name}.excalidraw"));
+        let scene = scene_json(&format!("continued-{index}"));
+        if document_service
+            .doc_checkpoint(CheckpointRequest {
+                path: path_string(&new_path),
+                scene_json: scene,
+                reason: CheckpointReason::ManualSave,
+            })
+            .await
+            .is_err()
+        {
+            continued_save_succeeded = false;
+        }
+        let new_sha256 = fs::read(&new_path).ok().map(|bytes| sha256(&bytes));
+        descendants.push(EntryDescendantEvidence {
+            old_path: path_string(&old_path),
+            new_path: path_string(&new_path),
+            old_exists_after: old_path.exists(),
+            new_exists_after: new_path.exists(),
+            new_sha256,
+        });
+    }
+    Ok(EntryDescendantSaveEvidence {
+        scenario: "entry-descendant-save",
+        old_directory_path: path_string(&old_directory),
+        new_directory_path: path_string(&new_directory),
+        path_migration_count: rename.path_migrations.len(),
+        descendants,
+        continued_save_succeeded,
+    })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EntryRenameKillReady {
+    scenario: &'static str,
+    fault_point: &'static str,
+    source_path: String,
+    target_path: String,
+    descendant_old_path: String,
+    descendant_new_path: String,
+}
+
+fn run_entry_rename_kill(root: &Path) -> Result<EntryRenameKillReady, String> {
+    let fault_point = env::var("EXCALIDRAW_E2E_ENTRY_RENAME_FAULT")
+        .map_err(|_| "EXCALIDRAW_E2E_ENTRY_RENAME_FAULT is required".to_owned())?;
+    if fault_point != "before_rename" {
+        return Err(format!(
+            "entry-rename-kill only supports the before_rename barrier, received {fault_point}"
+        ));
+    }
+    let workspace = root.join("workspace");
+    let source = workspace.join("kill-old-directory");
+    let target = workspace.join("kill-new-directory");
+    let descendant_old = source.join("descendant.excalidraw");
+    let descendant_new = target.join("descendant.excalidraw");
+    fs::create_dir_all(&workspace)
+        .map_err(|error| format!("failed to create rename-kill workspace: {error}"))?;
+    fs::create_dir(&source)
+        .map_err(|error| format!("failed to create rename-kill source: {error}"))?;
+    fs::write(
+        &descendant_old,
+        scene_json("rename-kill-descendant").as_bytes(),
+    )
+    .map_err(|error| format!("failed to create rename-kill descendant: {error}"))?;
+    if target.exists() {
+        return Err(format!(
+            "rename-kill target unexpectedly exists: {}",
+            target.display()
+        ));
+    }
+    let control_directory = root.join("runtime").join("reliability");
+    fs::create_dir_all(&control_directory)
+        .map_err(|error| format!("failed to create rename-kill control directory: {error}"))?;
+    let ready = EntryRenameKillReady {
+        scenario: "entry-rename-kill",
+        fault_point: "before_rename",
+        source_path: path_string(&source),
+        target_path: path_string(&target),
+        descendant_old_path: path_string(&descendant_old),
+        descendant_new_path: path_string(&descendant_new),
+    };
+    let marker = control_directory.join("entry-rename.ready.json");
+    fs::write(
+        &marker,
+        serde_json::to_vec(&ready)
+            .map_err(|error| format!("failed to serialize rename-kill marker: {error}"))?,
+    )
+    .map_err(|error| format!("failed to publish rename-kill marker: {error}"))?;
+    loop {
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+async fn seed_clean_metadata(
+    repository: &SqliteRepository,
+    path: &Path,
+    workspace: &Path,
+    scene: &str,
+    updated_at: i64,
+) -> Result<(), String> {
+    seed_metadata(repository, path, workspace, scene, updated_at, false).await
+}
+
+async fn seed_metadata(
+    repository: &SqliteRepository,
+    path: &Path,
+    workspace: &Path,
+    scene: &str,
+    updated_at: i64,
+    dirty: bool,
+) -> Result<(), String> {
+    let canonical_path = path_string(path);
+    let content_hash = sha256(scene.as_bytes());
+    let relative_path = path
+        .strip_prefix(workspace)
+        .map_err(|error| format!("metadata path escaped workspace: {error}"))?
+        .to_string_lossy()
+        .replace(std::path::MAIN_SEPARATOR, "/");
+    repository
+        .file_index_upsert(FileIndexRecord {
+            canonical_path: canonical_path.clone(),
+            workspace_id: E2E_WORKSPACE_ID.to_owned(),
+            display_name: path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or_default()
+                .to_owned(),
+            relative_path,
+            mtime: updated_at,
+            file_size: i64::try_from(scene.len()).unwrap_or(i64::MAX),
+            content_hash: Some(content_hash.clone()),
+        })
+        .await
+        .map_err(|error| format!("seed file index: {error}"))?;
+    repository
+        .draft_upsert(DraftRecord {
+            file_path: canonical_path.clone(),
+            scene_json: scene.to_owned(),
+            content_hash,
+            base_hash: Some(sha256(scene.as_bytes())),
+            updated_at,
+            is_dirty: dirty,
+        })
+        .await
+        .map_err(|error| format!("seed draft: {error}"))?;
+    repository
+        .file_meta_upsert(FileMetaRecord {
+            canonical_path,
+            thumbnail_key: format!("metadata-key-{updated_at}"),
+            thumbnail_path: format!("/isolated/metadata-{updated_at}.webp"),
+            generated_at: updated_at,
+            renderer_version: "e2e".to_owned(),
+            theme: "light".to_owned(),
+        })
+        .await
+        .map_err(|error| format!("seed file metadata: {error}"))?;
+    Ok(())
 }
 
 fn scene_json(element_id: &str) -> String {

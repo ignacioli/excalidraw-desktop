@@ -2,7 +2,13 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import { useStore } from "zustand";
 import { getSceneVersion } from "@excalidraw/excalidraw";
 import { createTauriCommandInvoker } from "../ipc/client";
-import type { CheckpointReason, IpcEvents, SceneData } from "../ipc/contracts";
+import type {
+  CheckpointReason,
+  ExpectedOpenDocument,
+  IpcEvents,
+  PathMigration,
+  SceneData,
+} from "../ipc/contracts";
 import {
   createEmptyScene,
   deserializeSceneData,
@@ -33,6 +39,7 @@ export interface DocumentSession {
   title: string;
   scene: SceneSnapshot;
   sceneVersion: number;
+  revision: number;
   baseHash: string;
   saveState: DocumentSaveState;
   errorMessage: string | null;
@@ -53,6 +60,7 @@ export class DocumentManager {
     string,
     DraftScheduler<SceneSnapshot>
   >();
+  private readonly pathMutations = new Set<string>();
 
   constructor(gateway: DocumentGateway) {
     this.gateway = gateway;
@@ -136,6 +144,7 @@ export class DocumentManager {
     this.patchSession(documentId, {
       scene,
       sceneVersion,
+      revision: session.revision + 1,
       saveState: session.saveState === "orphaned" ? "orphaned" : "dirty",
       errorMessage: null,
       lastReloadedAt: null,
@@ -190,7 +199,10 @@ export class DocumentManager {
     if (!discardDraft) {
       await this.checkpoint(documentId, "tabClose");
     }
-    await this.gateway.close(session.path, discardDraft);
+    await this.gateway.close(
+      session.path,
+      discardDraft ? "discardOrphan" : "checkpointed",
+    );
     this.schedulers.get(documentId)?.dispose();
     this.schedulers.delete(documentId);
     this.store.setState((state) => {
@@ -208,6 +220,86 @@ export class DocumentManager {
             : state.activeDocumentId,
       };
     });
+  }
+
+  async coordinateEntryRename<
+    Result extends { pathMigrations: PathMigration[] },
+  >(
+    workspaceRoot: string,
+    sourceCanonicalPath: string,
+    execute: (expectedOpenDocuments: ExpectedOpenDocument[]) => Promise<Result>,
+  ): Promise<Result> {
+    if (this.pathMutations.has(sourceCanonicalPath)) {
+      throw new Error("A path mutation is already in progress.");
+    }
+    this.pathMutations.add(sourceCanonicalPath);
+    try {
+      const affected = Object.values(this.store.getState().sessionsById)
+        .filter(
+          (session) =>
+            session.path === sourceCanonicalPath ||
+            session.path.startsWith(`${sourceCanonicalPath}/`),
+        )
+        .map((session) => ({
+          id: session.id,
+          revision: session.revision,
+          path: session.path,
+        }));
+      for (const session of affected) {
+        await this.checkpoint(session.id, "manualSave");
+      }
+      const current = this.store.getState().sessionsById;
+      const expectedOpenDocuments = affected.map((prepared) => {
+        const session = current[prepared.id];
+        if (
+          session === undefined ||
+          session.revision !== prepared.revision ||
+          session.path !== prepared.path
+        ) {
+          throw new Error(
+            `An Open Document changed during rename preparation (${prepared.id}: revision ${prepared.revision}->${session?.revision ?? "missing"}, path ${prepared.path}->${session?.path ?? "missing"}).`,
+          );
+        }
+        return {
+          relativePath: relativeDocumentPath(workspaceRoot, session.path),
+          baseHash: session.baseHash,
+        };
+      });
+      const result = await execute(expectedOpenDocuments);
+      this.applyPathMigrations(result.pathMigrations);
+      return result;
+    } finally {
+      this.pathMutations.delete(sourceCanonicalPath);
+    }
+  }
+
+  entryDeleteBlock(canonicalPath: string): string | null {
+    const session = this.findByPath(canonicalPath);
+    if (session === undefined) return null;
+    return session.saveState === "clean" ? null : session.id;
+  }
+
+  async coordinateCleanEntryDelete<Result>(
+    workspaceRoot: string,
+    canonicalPath: string,
+    execute: (expectedOpenDocument?: ExpectedOpenDocument) => Promise<Result>,
+  ): Promise<Result> {
+    const session = this.findByPath(canonicalPath);
+    if (session !== undefined && session.saveState !== "clean") {
+      throw new Error(
+        `Open Document ${session.id} must be clean before deletion.`,
+      );
+    }
+    const result = await execute(
+      session === undefined
+        ? undefined
+        : {
+            relativePath: relativeDocumentPath(workspaceRoot, session.path),
+            baseHash: session.baseHash,
+          },
+    );
+    if (session !== undefined) this.disposeCommittedSession(session.id);
+    return result;
   }
 
   setConflicted(documentId: string, conflicted: boolean): void {
@@ -274,6 +366,7 @@ export class DocumentManager {
     this.patchSession(documentId, {
       scene,
       sceneVersion: getSceneVersion(scene.elements),
+      revision: session.revision + 1,
       baseHash: response.baseHash,
       saveState: "clean",
       conflictInfo: null,
@@ -343,7 +436,7 @@ export class DocumentManager {
       serializeScene(session.scene),
       "manualSave",
     );
-    await this.gateway.close(session.path, true);
+    await this.gateway.close(session.path, "discardOrphan");
     this.schedulers.get(documentId)?.setConflicted(false);
     const title = getFileName(newPath);
     this.patchSession(documentId, {
@@ -380,6 +473,7 @@ export class DocumentManager {
       title,
       scene,
       sceneVersion: getSceneVersion(scene.elements),
+      revision: 0,
       baseHash,
       saveState,
       errorMessage: null,
@@ -453,6 +547,60 @@ export class DocumentManager {
       };
     });
   }
+
+  private applyPathMigrations(migrations: readonly PathMigration[]): void {
+    const byOldPath = new Map(
+      migrations.map((migration) => [migration.oldCanonicalPath, migration]),
+    );
+    this.store.setState((state) => ({
+      sessionsById: Object.fromEntries(
+        Object.entries(state.sessionsById).map(([id, session]) => {
+          const migration = byOldPath.get(session.path);
+          return [
+            id,
+            migration === undefined
+              ? session
+              : {
+                  ...session,
+                  path: migration.newCanonicalPath,
+                  title: getFileName(migration.newCanonicalPath),
+                },
+          ];
+        }),
+      ),
+    }));
+  }
+
+  private disposeCommittedSession(documentId: string): void {
+    this.schedulers.get(documentId)?.dispose();
+    this.schedulers.delete(documentId);
+    this.store.setState((state) => {
+      const sessionsById = { ...state.sessionsById };
+      delete sessionsById[documentId];
+      const closedIndex = state.tabOrder.indexOf(documentId);
+      const tabOrder = state.tabOrder.filter((id) => id !== documentId);
+      return {
+        sessionsById,
+        tabOrder,
+        activeDocumentId:
+          state.activeDocumentId === documentId
+            ? (tabOrder[Math.min(closedIndex, tabOrder.length - 1)] ?? null)
+            : state.activeDocumentId,
+      };
+    });
+  }
+}
+
+function relativeDocumentPath(
+  workspaceRoot: string,
+  canonicalPath: string,
+): string {
+  const normalizedRoot = workspaceRoot.replace(/[\\/]+$/, "");
+  const prefix = `${normalizedRoot}/`;
+  if (!canonicalPath.startsWith(prefix)) {
+    throw new Error("Open Document is outside the coordinated Workspace.");
+  }
+  return canonicalPath.slice(prefix.length);
 }
 
 function getFileName(path: string): string {

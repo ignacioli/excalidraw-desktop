@@ -1,11 +1,23 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { documentManager } from "../documents/documentStore";
+import {
+  DirectoryNotEmptyDialog,
+  EntryDeleteConfirmationDialog,
+  EntryNamingDialog,
+  type EntryNamingMode,
+} from "../app/interaction";
 import type { CommandInvoker } from "../ipc/client";
 import {
   createTauriCommandInvoker,
   hasTauriCommandRuntime,
 } from "../ipc/client";
-import type { ColorScheme, DirEntry, FileEntry } from "../ipc/contracts";
+import type {
+  ColorScheme,
+  DirEntry,
+  FileEntry,
+  WorkspaceEntry,
+} from "../ipc/contracts";
 import { useThumbnails } from "./useThumbnails";
 
 interface TreeNode {
@@ -44,6 +56,17 @@ export function FileTree({
     node: TreeNode;
     x: number;
     y: number;
+  } | null>(null);
+  const [naming, setNaming] = useState<{
+    mode: EntryNamingMode;
+    parentPath: string;
+    node?: TreeNode;
+  } | null>(null);
+  const [deleting, setDeleting] = useState<{
+    node: TreeNode;
+    phase: "confirmation" | "nonEmpty";
+    busy: boolean;
+    error: string | null;
   } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -154,35 +177,72 @@ export function FileTree({
     if (!expanded.has(path)) await loadDirectory(path);
   };
 
-  const runFileAction = async (
-    node: TreeNode,
-    action: "create" | "rename" | "delete",
-  ) => {
+  const submitNaming = async (baseName: string) => {
+    if (naming === null) return;
+    if (naming.mode === "newDrawing" || naming.mode === "newDirectory") {
+      const created = await invoker.invoke("workspace_entry_create", {
+        workspaceId,
+        parentRelativePath: naming.parentPath,
+        kind: naming.mode === "newDrawing" ? "drawing" : "directory",
+        baseName,
+      });
+      await loadDirectory(naming.parentPath, true);
+      if (created.entry.kind === "drawing")
+        onOpenFile?.(asFileEntry(created.entry));
+      else {
+        setExpanded((current) =>
+          new Set(current).add(created.entry.relativePath),
+        );
+        await loadDirectory(created.entry.relativePath, true);
+      }
+    } else if (naming.node !== undefined) {
+      const node = naming.node;
+      const source = absolutePath(workspaceRoot, node.entry.relativePath);
+      await documentManager.coordinateEntryRename(
+        workspaceRoot ?? "",
+        source,
+        (expectedOpenDocuments) =>
+          invoker.invoke("workspace_entry_rename", {
+            workspaceId,
+            relativePath: node.entry.relativePath,
+            baseName,
+            expectedOpenDocuments,
+          }),
+      );
+      await loadDirectory(node.parentPath, true);
+    }
+    setNaming(null);
+  };
+
+  const requestDelete = async (node: TreeNode) => {
     setMenu(null);
     try {
-      if (action === "create") {
-        const name = window.prompt("New drawing name", "drawing.excalidraw");
-        if (!name) return;
-        const created = await invoker.invoke("file_create", {
-          workspaceId,
-          relativePath: `${node.entry.relativePath}/${name}`,
-        });
-        onOpenFile?.(created);
-        await loadDirectory(node.entry.relativePath, true);
-      } else if (action === "rename") {
-        const name = window.prompt("Rename drawing", node.entry.name);
-        if (!name || name === node.entry.name) return;
-        await invoker.invoke("file_rename", {
-          path: absolutePath(workspaceRoot, node.entry.relativePath),
-          newName: name,
-        });
-        await loadDirectory(node.parentPath, true);
-      } else if (window.confirm(`Move ${node.entry.name} to the Trash?`)) {
-        await invoker.invoke("file_delete", {
-          path: absolutePath(workspaceRoot, node.entry.relativePath),
-        });
-        await loadDirectory(node.parentPath, true);
+      const canonicalPath = absolutePath(
+        workspaceRoot,
+        node.entry.relativePath,
+      );
+      const blockedDocumentId = documentManager.entryDeleteBlock(canonicalPath);
+      if (blockedDocumentId !== null) {
+        await documentManager.activate(blockedDocumentId);
+        setError("Save the open drawing before deleting it.");
+        return;
       }
+      const preflight = await invoker.invoke(
+        "workspace_entry_delete_preflight",
+        {
+          workspaceId,
+          relativePath: node.entry.relativePath,
+        },
+      );
+      setDeleting({
+        node,
+        phase:
+          preflight.status === "directoryNotEmpty"
+            ? "nonEmpty"
+            : "confirmation",
+        busy: false,
+        error: null,
+      });
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -192,22 +252,34 @@ export function FileTree({
     }
   };
 
-  const createDrawing = async (directory: string) => {
-    const name = window.prompt("New drawing name", "drawing.excalidraw");
-    if (!name) return;
+  const confirmDelete = async () => {
+    if (deleting === null) return;
+    const { node } = deleting;
+    setDeleting({ ...deleting, busy: true, error: null });
     try {
-      const created = await invoker.invoke("file_create", {
-        workspaceId,
-        relativePath: directory ? `${directory}/${name}` : name,
-      });
-      onOpenFile?.(created);
-      await loadDirectory(directory, true);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "The file operation failed.",
+      await documentManager.coordinateCleanEntryDelete(
+        workspaceRoot ?? "",
+        absolutePath(workspaceRoot, node.entry.relativePath),
+        (expectedOpenDocument) =>
+          invoker.invoke("workspace_entry_delete", {
+            workspaceId,
+            relativePath: node.entry.relativePath,
+            ...(expectedOpenDocument === undefined
+              ? {}
+              : { expectedOpenDocument }),
+          }),
       );
+      setDeleting(null);
+      await loadDirectory(node.parentPath, true);
+    } catch (nextError) {
+      setDeleting({
+        ...deleting,
+        busy: false,
+        error:
+          nextError instanceof Error
+            ? nextError.message
+            : "The entry could not be deleted.",
+      });
     }
   };
 
@@ -217,9 +289,16 @@ export function FileTree({
       <button
         type="button"
         className="file-tree-new-button"
-        onClick={() => void createDrawing("")}
+        onClick={() => setNaming({ mode: "newDrawing", parentPath: "" })}
       >
         New drawing
+      </button>
+      <button
+        type="button"
+        className="file-tree-new-button"
+        onClick={() => setNaming({ mode: "newDirectory", parentPath: "" })}
+      >
+        New folder
       </button>
       <div
         ref={scrollRef}
@@ -336,33 +415,100 @@ export function FileTree({
             <button
               role="menuitem"
               type="button"
-              onClick={() => void runFileAction(menu.node, "create")}
+              onClick={() => {
+                setNaming({
+                  mode: "newDrawing",
+                  parentPath: menu.node.entry.relativePath,
+                });
+                setMenu(null);
+              }}
             >
               New drawing
             </button>
           ) : null}
-          {menu.node.entry.kind === "file" ? (
+          {menu.node.entry.kind === "dir" ? (
             <button
               role="menuitem"
               type="button"
-              onClick={() => void runFileAction(menu.node, "rename")}
+              onClick={() => {
+                setNaming({
+                  mode: "newDirectory",
+                  parentPath: menu.node.entry.relativePath,
+                });
+                setMenu(null);
+              }}
             >
-              Rename
+              New folder
             </button>
           ) : null}
-          {menu.node.entry.kind === "file" ? (
-            <button
-              role="menuitem"
-              type="button"
-              onClick={() => void runFileAction(menu.node, "delete")}
-            >
-              Move to Trash
-            </button>
-          ) : null}
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              setNaming({
+                mode:
+                  menu.node.entry.kind === "file"
+                    ? "renameDrawing"
+                    : "renameDirectory",
+                parentPath: menu.node.parentPath,
+                node: menu.node,
+              });
+              setMenu(null);
+            }}
+          >
+            Rename
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => void requestDelete(menu.node)}
+          >
+            Delete
+          </button>
         </div>
+      ) : null}
+      {naming ? (
+        <EntryNamingDialog
+          currentName={naming.node?.entry.name}
+          mode={naming.mode}
+          onCancel={() => setNaming(null)}
+          onSubmit={submitNaming}
+        />
+      ) : null}
+      {deleting?.phase === "confirmation" ? (
+        <EntryDeleteConfirmationDialog
+          busy={deleting.busy}
+          displayName={deleting.node.entry.name}
+          errorMessage={deleting.error}
+          onCancel={() => setDeleting(null)}
+          onDelete={() => void confirmDelete()}
+        />
+      ) : null}
+      {deleting?.phase === "nonEmpty" ? (
+        <DirectoryNotEmptyDialog
+          onCancel={() => setDeleting(null)}
+          onReveal={() => {
+            void invoker.invoke("workspace_entry_reveal", {
+              workspaceId,
+              relativePath: deleting.node.entry.relativePath,
+            });
+            setDeleting(null);
+          }}
+        />
       ) : null}
     </section>
   );
+}
+
+function asFileEntry(entry: WorkspaceEntry): FileEntry {
+  return {
+    canonicalPath: entry.canonicalPath,
+    workspaceId: entry.workspaceId,
+    displayName: entry.displayName,
+    relativePath: entry.relativePath,
+    mtime: entry.mtime,
+    fileSize: entry.fileSize,
+  };
 }
 
 function absolutePath(root: string | undefined, relativePath: string): string {

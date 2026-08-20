@@ -191,6 +191,15 @@ pub struct WatcherService {
     conflicts: ConflictRegistry,
     known: Arc<Mutex<KnownFileTable>>,
     tasks: Arc<Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
+    entry_operations: Arc<Mutex<HashMap<String, EntryOperation>>>,
+}
+
+#[derive(Debug, Clone)]
+struct EntryOperation {
+    workspace_id: String,
+    relative_path: String,
+    new_relative_path: Option<String>,
+    recorded_at: Instant,
 }
 
 #[derive(Clone)]
@@ -211,6 +220,7 @@ impl WatcherService {
             conflicts,
             known: Arc::new(Mutex::new(KnownFileTable::default())),
             tasks: Arc::new(Mutex::new(HashMap::new())),
+            entry_operations: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -256,6 +266,28 @@ impl WatcherService {
             .note(&path, FileTriplet { mtime, size, hash });
     }
 
+    /// Records an application-owned Workspace Entry mutation before its
+    /// recursive watcher echo is observed.  The operation id is echoed to
+    /// the frontend event so the tree can apply the command result exactly
+    /// once.
+    pub async fn note_entry_operation(
+        &self,
+        operation_id: String,
+        workspace_id: String,
+        relative_path: String,
+        new_relative_path: Option<String>,
+    ) {
+        self.entry_operations.lock().await.insert(
+            operation_id,
+            EntryOperation {
+                workspace_id,
+                relative_path,
+                new_relative_path,
+                recorded_at: Instant::now(),
+            },
+        );
+    }
+
     async fn run_workspace_watch(
         &self,
         workspace: WorkspaceRecord,
@@ -288,7 +320,7 @@ impl WatcherService {
                 _ = tick.tick() => {
                     let ready = engine.drain_ready(Instant::now());
                     if !ready.is_empty() {
-                        self.process_batch(&app, ready).await;
+                        self.process_batch(&app, &workspace, ready).await;
                     }
                 }
                 event = receiver.recv() => {
@@ -317,13 +349,32 @@ impl WatcherService {
         }
     }
 
-    async fn process_batch(&self, app: &AppHandle, events: Vec<(PathBuf, RawChangeKind)>) {
+    async fn process_batch(
+        &self,
+        app: &AppHandle,
+        workspace: &WorkspaceRecord,
+        events: Vec<(PathBuf, RawChangeKind)>,
+    ) {
         for (path, kind) in resolve_batch(events) {
-            self.process_change(app, &path, kind).await;
+            self.process_change(app, workspace, &path, kind).await;
         }
     }
 
-    async fn process_change(&self, app: &AppHandle, path: &Path, kind: ResolvedChangeKind) {
+    async fn process_change(
+        &self,
+        app: &AppHandle,
+        workspace: &WorkspaceRecord,
+        path: &Path,
+        kind: ResolvedChangeKind,
+    ) {
+        if self.is_entry_operation_echo(workspace, path, &kind).await {
+            return;
+        }
+
+        if is_complex_directory_event(path, &kind) || is_complex_removed_path(path, &kind) {
+            self.emit_parent_invalidation(app, workspace, path);
+            return;
+        }
         match kind {
             ResolvedChangeKind::Renamed { new_path } => {
                 let (mtime, content_hash) = match read_triplet(&new_path) {
@@ -452,6 +503,107 @@ impl WatcherService {
     fn current_triplet(&self, path: &Path) -> Result<FileTriplet, AppError> {
         read_triplet(path)
     }
+
+    async fn is_entry_operation_echo(
+        &self,
+        workspace: &WorkspaceRecord,
+        path: &Path,
+        kind: &ResolvedChangeKind,
+    ) -> bool {
+        let relative_path =
+            path.strip_prefix(Path::new(&workspace.root_path))
+                .ok()
+                .map(|relative| {
+                    relative
+                        .to_string_lossy()
+                        .replace(std::path::MAIN_SEPARATOR, "/")
+                });
+        let Some(relative_path) = relative_path else {
+            return false;
+        };
+        let now = Instant::now();
+        let mut operations = self.entry_operations.lock().await;
+        operations.retain(|_, operation| {
+            now.duration_since(operation.recorded_at) < Duration::from_secs(10)
+        });
+        let matched = operations.iter().find_map(|(operation_id, operation)| {
+            if operation.workspace_id != workspace.id {
+                return None;
+            }
+            let matches = match kind {
+                ResolvedChangeKind::Renamed { new_path } => {
+                    let new_relative = new_path
+                        .strip_prefix(Path::new(&workspace.root_path))
+                        .ok()
+                        .map(|relative| {
+                            relative
+                                .to_string_lossy()
+                                .replace(std::path::MAIN_SEPARATOR, "/")
+                        });
+                    relative_path == operation.relative_path
+                        && new_relative.as_deref() == operation.new_relative_path.as_deref()
+                }
+                ResolvedChangeKind::Created => {
+                    operation.new_relative_path.is_none()
+                        && relative_path == operation.relative_path
+                }
+                ResolvedChangeKind::Removed => {
+                    operation.new_relative_path.is_none()
+                        && relative_path == operation.relative_path
+                }
+                ResolvedChangeKind::Modified => false,
+            };
+            matches.then_some(operation_id.clone())
+        });
+        if let Some(operation_id) = matched {
+            operations.remove(&operation_id);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn emit_parent_invalidation(&self, app: &AppHandle, workspace: &WorkspaceRecord, path: &Path) {
+        let root = Path::new(&workspace.root_path);
+        let relative_path = path
+            .strip_prefix(root)
+            .ok()
+            .and_then(|relative| relative.parent().or(Some(relative)))
+            .map(|relative| {
+                relative
+                    .to_string_lossy()
+                    .replace(std::path::MAIN_SEPARATOR, "/")
+            })
+            .unwrap_or_default();
+        let _ = app.emit(
+            "workspace-entries-changed",
+            serde_json::json!({
+                "workspaceId": workspace.id,
+                "change": "invalidated",
+                "relativePath": relative_path,
+            }),
+        );
+    }
+}
+
+fn path_is_directory(path: &Path) -> bool {
+    fs::metadata(path).is_ok_and(|metadata| metadata.is_dir())
+}
+
+fn is_complex_directory_event(path: &Path, kind: &ResolvedChangeKind) -> bool {
+    path_is_directory(path)
+        || matches!(kind, ResolvedChangeKind::Renamed { new_path } if path_is_directory(new_path))
+}
+
+fn is_complex_removed_path(path: &Path, kind: &ResolvedChangeKind) -> bool {
+    matches!(kind, ResolvedChangeKind::Removed)
+        && !path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| {
+                let lower = name.to_ascii_lowercase();
+                lower.ends_with(".excalidraw") || lower.ends_with(".excalidraw.json")
+            })
 }
 
 fn classify_event_kind(kind: &EventKind) -> Option<RawChangeKind> {

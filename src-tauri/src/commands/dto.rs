@@ -294,7 +294,14 @@ pub struct CheckpointResponse {
 #[serde(rename_all = "camelCase")]
 pub struct CloseDocumentRequest {
     pub path: String,
-    pub discard_draft: bool,
+    pub mode: CloseDocumentMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CloseDocumentMode {
+    Checkpointed,
+    DiscardOrphan,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

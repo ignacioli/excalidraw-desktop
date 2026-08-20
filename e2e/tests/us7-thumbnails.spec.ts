@@ -1,63 +1,107 @@
 import { expect, test } from "@playwright/test";
 import {
-  getUs7State,
-  installUs7Harness,
-} from "./us7BrowserHarness";
+  getUiInteractionHarnessState,
+  installUiInteractionHarness,
+} from "./uiInteractionHarness";
 
-test("visible file rows lazily generate thumbnails and hit the cache on revisit", async ({
+const WORKSPACE = {
+  id: "workspace-1",
+  name: "Workspace",
+  rootPath: "/ui-interactions/workspace-1",
+  createdAt: 1,
+};
+
+const DRAWING = {
+  workspaceId: WORKSPACE.id,
+  kind: "drawing" as const,
+  canonicalPath: `${WORKSPACE.rootPath}/drawing.excalidraw`,
+  relativePath: "drawing.excalidraw",
+  parentRelativePath: "",
+  name: "drawing.excalidraw",
+  displayName: "drawing",
+  mtime: 1,
+  fileSize: 100,
+};
+
+test("drawing rows stay icon-only and opening one performs exactly one document open", async ({
   page,
 }) => {
-  await installUs7Harness(page);
+  await installUiInteractionHarness(page, {
+    workspaces: [WORKSPACE],
+    entries: [DRAWING],
+  });
   await page.goto("/");
 
-  await page.getByRole("button", { name: /Mount folder/i }).click();
-  const workspaceTree = page
-    .getByRole("region", { name: "Workspace files for Workspace" })
-    .getByRole("tree");
-  await expect(workspaceTree).toBeVisible();
+  await expect(page.getByRole("tree")).toBeVisible();
+  const drawing = page.getByRole("button", {
+    name: /Open drawing\.excalidraw/i,
+  });
+  await expect(drawing).toBeVisible();
+  await expect(page.locator("img.file-tree-thumbnail")).toHaveCount(0);
+  expect(
+    (await getUiInteractionHarnessState(page)).invocations.filter(
+      ({ command }) =>
+        command === "thumb_lookup" ||
+        command === "thumb_store" ||
+        command === "thumbnail_render",
+    ),
+  ).toEqual([]);
+
+  await drawing.click();
   await expect(
-    workspaceTree.getByRole("button", { name: /Open drawing\.excalidraw/i }),
+    page.getByRole("tab", { name: "drawing.excalidraw" }),
   ).toBeVisible();
-
-  // The visible rows request a thumbnail; the miss path renders and stores.
-  await expect
-    .poll(async () => (await getUs7State(page)).storeCalls.length)
-    .toBeGreaterThan(0);
-  await expect(page.locator("img.file-tree-thumbnail").first()).toBeVisible();
-
-  const stateAfterFirst = await getUs7State(page);
-  expect(stateAfterFirst.lookupCalls.length).toBeGreaterThan(0);
-  expect(stateAfterFirst.convertCalls.length).toBeGreaterThan(0);
-  const storeCount = stateAfterFirst.storeCalls.length;
-
-  // Revisit (simulate a restart) must hit the cache and not regenerate.
-  await page.reload();
-  await page.getByRole("button", { name: /Mount folder/i }).click();
-  await expect(workspaceTree).toBeVisible();
-  await expect(page.locator("img.file-tree-thumbnail").first()).toBeVisible();
-
-  const stateAfterReload = await getUs7State(page);
-  expect(stateAfterReload.lookupCalls.length).toBeGreaterThan(0);
-  expect(stateAfterReload.storeCalls.length).toBeLessThanOrEqual(storeCount);
+  const state = await getUiInteractionHarnessState(page);
+  expect(
+    state.invocations.filter(({ command }) => command === "doc_open"),
+  ).toHaveLength(1);
+  expect(
+    state.invocations.filter(
+      ({ command }) =>
+        command === "thumb_lookup" ||
+        command === "thumb_store" ||
+        command === "thumbnail_render",
+    ),
+  ).toEqual([]);
+  await expect(page.locator("img.file-tree-thumbnail")).toHaveCount(0);
 });
-
-test("thumbnails are decorative and never take keyboard focus", async ({
+test("mounting, expanding, and revisiting a Workspace never starts thumbnail work", async ({
   page,
 }) => {
-  await installUs7Harness(page);
+  const entries = [
+    DRAWING,
+    {
+      ...DRAWING,
+      canonicalPath: `${WORKSPACE.rootPath}/second.excalidraw.json`,
+      relativePath: "second.excalidraw.json",
+      name: "second.excalidraw.json",
+      displayName: "second",
+    },
+  ];
+  await installUiInteractionHarness(page, {
+    workspaces: [WORKSPACE],
+    entries,
+  });
   await page.goto("/");
 
-  await page.getByRole("button", { name: /Mount folder/i }).click();
-  const workspaceTree = page
-    .getByRole("region", { name: "Workspace files for Workspace" })
-    .getByRole("tree");
-  await expect(workspaceTree).toBeVisible();
-  const thumbnail = page.locator("img.file-tree-thumbnail").first();
-  await expect(thumbnail).toBeVisible();
+  const tree = page.getByRole("tree");
+  await expect(tree).toBeVisible();
+  await expect(tree.getByRole("button", { name: /^Open /i })).toHaveCount(2);
+  await tree.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+  await page.reload();
+  await expect(page.getByRole("tree")).toBeVisible();
+  await expect(page.locator("img.file-tree-thumbnail")).toHaveCount(0);
 
-  await expect(thumbnail).toHaveAttribute("alt", "");
-  await expect(thumbnail).toHaveAttribute("aria-hidden", "true");
-  await expect(thumbnail).not.toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(thumbnail).not.toBeFocused();
+  const state = await getUiInteractionHarnessState(page);
+  expect(
+    state.invocations.filter(
+      ({ command }) =>
+        command === "thumb_lookup" ||
+        command === "thumb_store" ||
+        command === "thumbnail_render",
+    ),
+  ).toEqual([]);
 });

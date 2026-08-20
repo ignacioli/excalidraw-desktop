@@ -87,14 +87,14 @@ export function ApplicationDialog({
       .join(" ") || undefined;
 
   return (
-    <div className="application-dialog-backdrop">
+    <div className="application-dialog-backdrop conflict-dialog-backdrop">
       <div
         ref={dialogRef}
         aria-busy={busy || undefined}
         aria-describedby={describedBy}
         aria-labelledby={titleId}
         aria-modal="true"
-        className="application-dialog"
+        className="application-dialog conflict-dialog"
         onKeyDown={handleKeyDown}
         role="dialog"
         tabIndex={-1}
@@ -103,7 +103,7 @@ export function ApplicationDialog({
         {description ? <p id={descriptionId}>{description}</p> : null}
         {children}
         {errorMessage ? (
-          <p id={errorId} role="alert">
+          <p className="conflict-dialog-error" id={errorId} role="alert">
             {errorMessage}
           </p>
         ) : null}

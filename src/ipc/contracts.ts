@@ -227,7 +227,7 @@ export interface IpcCommands {
     response: { newBaseHash: string; mtime: number };
   };
   doc_close: {
-    request: { path: string; discardDraft: boolean };
+    request: { path: string; mode: "checkpointed" | "discardOrphan" };
     response: Record<string, never>;
   };
   doc_resolve_conflict: {

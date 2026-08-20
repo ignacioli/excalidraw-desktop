@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "../app/store";
 import type { SceneSnapshot } from "../editor/sceneSerializer";
+import type { ExpectedOpenDocument } from "../ipc/contracts";
 import type { DocumentGateway } from "./documentGateway";
 import {
   DocumentManager,
@@ -142,6 +143,104 @@ describe("DocumentManager", () => {
     expect(useAppStore.getState()).not.toHaveProperty("tabsById");
     expect(useAppStore.getState()).not.toHaveProperty("tabOrder");
     expect(useAppStore.getState()).not.toHaveProperty("activeTabId");
+    manager.dispose();
+  });
+
+  it("checkpoints descendants and applies returned path migrations atomically", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const firstId = await manager.open("/workspace/folder/first.excalidraw");
+    const secondId = await manager.open("/workspace/folder/second.excalidraw");
+    for (const id of [firstId, secondId]) {
+      const scene = manager.store.getState().sessionsById[id]?.scene;
+      manager.updateScene(id, {
+        ...scene!,
+        elements: [{ version: 2 } as SceneSnapshot["elements"][number]],
+      });
+    }
+    const execute = vi.fn(
+      async (expectedOpenDocuments: ExpectedOpenDocument[]) => ({
+        pathMigrations: expectedOpenDocuments.map((document) => ({
+          oldRelativePath: document.relativePath,
+          newRelativePath: document.relativePath.replace("folder/", "renamed/"),
+          oldCanonicalPath: `/workspace/${document.relativePath}`,
+          newCanonicalPath: `/workspace/${document.relativePath.replace("folder/", "renamed/")}`,
+        })),
+      }),
+    );
+
+    await manager.coordinateEntryRename(
+      "/workspace",
+      "/workspace/folder",
+      execute,
+    );
+
+    expect(execute).toHaveBeenCalledWith([
+      { relativePath: "folder/first.excalidraw", baseHash: "next" },
+      { relativePath: "folder/second.excalidraw", baseHash: "next" },
+    ]);
+    expect(manager.store.getState().sessionsById[firstId]?.path).toBe(
+      "/workspace/renamed/first.excalidraw",
+    );
+    expect(manager.store.getState().sessionsById[secondId]?.path).toBe(
+      "/workspace/renamed/second.excalidraw",
+    );
+    manager.dispose();
+  });
+
+  it("cancels rename before the backend when a prepared revision changes", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const id = await manager.open("/workspace/folder/drawing.excalidraw");
+    const initial = manager.store.getState().sessionsById[id]?.scene;
+    manager.updateScene(id, {
+      ...initial!,
+      elements: [{ version: 1 } as SceneSnapshot["elements"][number]],
+    });
+    vi.mocked(gateway.checkpoint).mockImplementationOnce(async () => {
+      manager.updateScene(id, {
+        ...initial!,
+        elements: [{ version: 2 } as SceneSnapshot["elements"][number]],
+      });
+      return { newBaseHash: "changed", mtime: 2 };
+    });
+    const execute = vi.fn(async () => ({ pathMigrations: [] }));
+
+    await expect(
+      manager.coordinateEntryRename("/workspace", "/workspace/folder", execute),
+    ).rejects.toThrow("changed during rename preparation");
+    expect(execute).not.toHaveBeenCalled();
+    expect(manager.store.getState().sessionsById[id]?.path).toBe(
+      "/workspace/folder/drawing.excalidraw",
+    );
+    manager.dispose();
+  });
+
+  it("blocks dirty deletion and disposes a clean session only after commit", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const id = await manager.open("/workspace/drawing.excalidraw");
+    const scene = manager.store.getState().sessionsById[id]?.scene;
+    manager.updateScene(id, {
+      ...scene!,
+      elements: [{ version: 1 } as SceneSnapshot["elements"][number]],
+    });
+    expect(manager.entryDeleteBlock("/workspace/drawing.excalidraw")).toBe(id);
+    await manager.checkpoint(id);
+    const execute = vi.fn(async () => ({ operationId: "delete-1" }));
+
+    await manager.coordinateCleanEntryDelete(
+      "/workspace",
+      "/workspace/drawing.excalidraw",
+      execute,
+    );
+
+    expect(execute).toHaveBeenCalledWith({
+      relativePath: "drawing.excalidraw",
+      baseHash: "next",
+    });
+    expect(manager.store.getState().sessionsById[id]).toBeUndefined();
+    expect(gateway.close).not.toHaveBeenCalled();
     manager.dispose();
   });
 
@@ -384,7 +483,10 @@ describe("DocumentManager", () => {
       expect.any(String),
       "manualSave",
     );
-    expect(gateway.close).toHaveBeenCalledWith("/tmp/gone.excalidraw", true);
+    expect(gateway.close).toHaveBeenCalledWith(
+      "/tmp/gone.excalidraw",
+      "discardOrphan",
+    );
     const session = manager.store.getState().sessionsById[documentId];
     expect(session?.saveState).toBe("clean");
     expect(session?.path).toBe("/tmp/saved.excalidraw");

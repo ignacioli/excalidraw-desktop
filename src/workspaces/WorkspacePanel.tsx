@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ApplicationDialog } from "../app/interaction";
 import type { CommandInvoker } from "../ipc/client";
 import { createTauriCommandInvoker } from "../ipc/client";
 import type { ColorScheme, Workspace } from "../ipc/contracts";
@@ -28,6 +29,7 @@ export function WorkspacePanel({
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [pendingRemoval, setPendingRemoval] = useState<Workspace | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -80,12 +82,6 @@ export function WorkspacePanel({
   };
 
   const removeWorkspace = async (workspace: Workspace) => {
-    if (
-      !window.confirm(
-        `Remove “${workspace.name}” from this app? Files on disk will not be deleted.`,
-      )
-    )
-      return;
     setBusy(true);
     try {
       await invoker.invoke("workspace_remove", { workspaceId: workspace.id });
@@ -97,6 +93,7 @@ export function WorkspacePanel({
         return withoutRemoved;
       });
       onWorkspacePresenceChange?.(next.length > 0);
+      setPendingRemoval(null);
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -161,7 +158,7 @@ export function WorkspacePanel({
             <button
               type="button"
               disabled={busy}
-              onClick={() => void removeWorkspace(workspace)}
+              onClick={() => setPendingRemoval(workspace)}
             >
               Remove
             </button>
@@ -182,6 +179,31 @@ export function WorkspacePanel({
           </div>
         </article>
       ))}
+      {pendingRemoval ? (
+        <ApplicationDialog
+          busy={busy}
+          onDismiss={() => setPendingRemoval(null)}
+          title={`Remove ${pendingRemoval.name}?`}
+        >
+          <p>Files on disk will not be deleted.</p>
+          <div className="application-dialog-actions conflict-dialog-actions">
+            <button
+              disabled={busy}
+              onClick={() => setPendingRemoval(null)}
+              type="button"
+            >
+              Cancel
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => void removeWorkspace(pendingRemoval)}
+              type="button"
+            >
+              Remove Workspace
+            </button>
+          </div>
+        </ApplicationDialog>
+      ) : null}
     </section>
   );
 }
