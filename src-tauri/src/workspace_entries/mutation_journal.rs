@@ -5,7 +5,12 @@
 //! or a post-commit storage failure, and the IPC result must not claim the
 //! filesystem mutation never happened.
 
-use std::{fs, io, path::PathBuf, sync::Arc};
+use std::{
+    fs, io,
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +22,7 @@ use crate::{
 
 const JOURNAL_DIRECTORY_NAME: &str = "entry-mutation-journal";
 const JOURNAL_VERSION: u32 = 1;
+pub(crate) const UNCOMMITTED_JOURNAL_TTL: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -200,7 +206,9 @@ pub async fn apply_committed_record_with_skip(
     skip_recovery: bool,
 ) -> Result<(), AppError> {
     if !filesystem_commit_observed(record) {
-        delete_journal(recovery, &record.operation_id)?;
+        if uncommitted_journal_is_stale(recovery, record) {
+            delete_journal(recovery, &record.operation_id)?;
+        }
         return Ok(());
     }
 
@@ -232,7 +240,7 @@ pub async fn apply_committed_record_with_skip(
     Ok(())
 }
 
-fn filesystem_commit_observed(record: &MutationJournalRecord) -> bool {
+pub(crate) fn filesystem_commit_observed(record: &MutationJournalRecord) -> bool {
     let old = PathBuf::from(&record.old_canonical_path);
     match record.kind {
         MutationJournalKind::Rename => {
@@ -244,6 +252,19 @@ fn filesystem_commit_observed(record: &MutationJournalRecord) -> bool {
         }
         MutationJournalKind::Delete => !old.exists(),
     }
+}
+
+fn uncommitted_journal_is_stale(recovery: &RecoveryStore, record: &MutationJournalRecord) -> bool {
+    let path = journal_path(recovery, &record.operation_id);
+    let Ok(metadata) = fs::metadata(&path) else {
+        return false;
+    };
+    let Ok(modified) = metadata.modified() else {
+        return false;
+    };
+    SystemTime::now()
+        .duration_since(modified)
+        .is_ok_and(|age| age >= UNCOMMITTED_JOURNAL_TTL)
 }
 
 async fn apply_sqlite(

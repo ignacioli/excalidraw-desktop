@@ -1,4 +1,10 @@
-use std::{fs, io, path::Path, path::PathBuf, sync::Arc};
+use std::{
+    fs::{self, File},
+    io,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use crate::{
     commands::{
@@ -13,7 +19,7 @@ use crate::{
     workspace_entries::{
         mutation_journal::{
             journal_directory, load_journals, reconcile_pending_mutations, save_journal,
-            MutationJournalRecord,
+            MutationJournalRecord, UNCOMMITTED_JOURNAL_TTL,
         },
         DerivedStateFault, TrashOperator, WorkspaceEntryService, WorkspaceMutationGate,
     },
@@ -402,4 +408,82 @@ async fn delete_removes_recovery_snapshots_without_doc_close() {
     );
     let candidates = service.list().await.expect("list recovery candidates");
     assert!(candidates.is_empty());
+}
+
+#[tokio::test]
+async fn reconcile_preserves_an_in_flight_rename_journal() {
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    save_journal(
+        &fixture.recovery,
+        &MutationJournalRecord::rename(
+            "op-in-flight".to_owned(),
+            fixture.workspace_id.clone(),
+            source.display().to_string(),
+            target.display().to_string(),
+            "source.excalidraw".to_owned(),
+            "target.excalidraw".to_owned(),
+            "target.excalidraw".to_owned(),
+        ),
+    )
+    .expect("journal intent before filesystem commit");
+
+    reconcile_pending_mutations(&fixture.repository, &fixture.recovery)
+        .await
+        .expect("in-flight journal must be skipped, not deleted");
+
+    assert_eq!(
+        load_journals(&fixture.recovery)
+            .expect("load journals")
+            .len(),
+        1
+    );
+    assert!(source.exists());
+    assert!(!target.exists());
+    assert!(fixture
+        .repository
+        .file_index_get(source.display().to_string())
+        .await
+        .expect("read source index")
+        .is_some());
+}
+
+#[tokio::test]
+async fn reconcile_drops_a_stale_uncommitted_journal() {
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    save_journal(
+        &fixture.recovery,
+        &MutationJournalRecord::rename(
+            "op-stale".to_owned(),
+            fixture.workspace_id.clone(),
+            source.display().to_string(),
+            target.display().to_string(),
+            "source.excalidraw".to_owned(),
+            "target.excalidraw".to_owned(),
+            "target.excalidraw".to_owned(),
+        ),
+    )
+    .expect("journal crash leftover");
+    let journal = journal_directory(&fixture.recovery).join("op-stale.json");
+    let file = File::open(&journal).expect("open journal");
+    file.set_modified(SystemTime::now() - (UNCOMMITTED_JOURNAL_TTL + Duration::from_secs(5)))
+        .expect("age the uncommitted journal");
+
+    reconcile_pending_mutations(&fixture.repository, &fixture.recovery)
+        .await
+        .expect("stale uncommitted journal can be dropped");
+
+    assert!(load_journals(&fixture.recovery)
+        .expect("load journals")
+        .is_empty());
+    assert!(source.exists());
+    assert!(fixture
+        .repository
+        .file_index_get(source.display().to_string())
+        .await
+        .expect("read source index")
+        .is_some());
 }

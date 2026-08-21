@@ -21,7 +21,9 @@ use crate::{
     },
     security::{PathSecurityError, WorkspacePathPolicy},
     workspace_entries::{
-        mutation_journal::{load_journals, MutationJournalKind, MutationJournalRecord},
+        mutation_journal::{
+            filesystem_commit_observed, load_journals, MutationJournalKind, MutationJournalRecord,
+        },
         reconcile_pending_mutations,
     },
 };
@@ -364,6 +366,7 @@ fn journal_hides_deleted_snapshot(
     let path = path.display().to_string();
     journals.iter().any(|journal| {
         journal.kind == MutationJournalKind::Delete
+            && filesystem_commit_observed(journal)
             && is_path_or_descendant(&path, &journal.old_canonical_path)
     })
 }
@@ -375,7 +378,7 @@ fn rewrite_renamed_snapshot_path(
     let path = original_path?;
     let path_string = path.display().to_string();
     for journal in journals {
-        if journal.kind != MutationJournalKind::Rename {
+        if journal.kind != MutationJournalKind::Rename || !filesystem_commit_observed(journal) {
             continue;
         }
         let Some(new_canonical_path) = journal.new_canonical_path.as_ref() else {
