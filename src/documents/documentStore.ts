@@ -113,6 +113,7 @@ export class DocumentManager {
       this.patchSession(existing.id, {
         scene,
         sceneVersion: getSceneVersion(scene.elements),
+        revision: existing.revision + 1,
         saveState: "dirty",
         errorMessage: null,
       });
@@ -396,6 +397,7 @@ export class DocumentManager {
       this.patchSession(documentId, {
         scene,
         sceneVersion: getSceneVersion(scene.elements),
+        revision: session.revision + 1,
         baseHash: response.newBaseHash,
         saveState: "clean",
         conflictInfo: null,

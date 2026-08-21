@@ -6,7 +6,6 @@ import {
   buildWorkspaceTreeRows,
   getAdjacentRowKey,
   getPageTargetRowKey,
-  makeEntryRowKey,
   type ActiveDrawingReference,
   type WorkspaceTreeEntriesByWorkspace,
   type WorkspaceTreeRow,
@@ -32,13 +31,6 @@ export interface WorkspaceTreeProps {
 const DEFAULT_ROW_HEIGHT = 32;
 const DEFAULT_OVERSCAN = 8;
 const FALLBACK_VISIBLE_ROWS = 40;
-
-function isDirectoryExpanded(
-  expandedKeys: ReadonlySet<string>,
-  rowKey: string,
-): boolean {
-  return expandedKeys.has(rowKey);
-}
 
 export function WorkspaceTree({
   workspaces,
@@ -194,13 +186,12 @@ export function WorkspaceTree({
 
   const toggleDirectory = (row: WorkspaceTreeRow): void => {
     if (row.kind !== "directory") return;
-    const key = makeEntryRowKey(row.workspaceId, row.relativePath);
-    const nextExpanded = !isDirectoryExpanded(expandedDirectoryKeys, key);
+    const nextExpanded = !expandedDirectoryKeys.has(row.key);
     if (controlledDirectoryKeys === undefined) {
       setInternalDirectoryKeys((current) => {
         const next = new Set(current);
-        if (nextExpanded) next.add(key);
-        else next.delete(key);
+        if (nextExpanded) next.add(row.key);
+        else next.delete(row.key);
         return next;
       });
     }
@@ -248,7 +239,7 @@ export function WorkspaceTree({
         toggleWorkspace(currentRow);
       } else if (
         currentRow.kind === "directory" &&
-        !isDirectoryExpanded(expandedDirectoryKeys, currentRow.key)
+        !expandedDirectoryKeys.has(currentRow.key)
       ) {
         toggleDirectory(currentRow);
       } else {
@@ -262,7 +253,7 @@ export function WorkspaceTree({
         currentRow.kind === "workspace"
           ? expandedWorkspaceIds.has(currentRow.workspaceId)
           : currentRow.kind === "directory" &&
-            isDirectoryExpanded(expandedDirectoryKeys, currentRow.key);
+            expandedDirectoryKeys.has(currentRow.key);
       if (isExpanded) {
         if (currentRow.kind === "workspace") toggleWorkspace(currentRow);
         else if (currentRow.kind === "directory") toggleDirectory(currentRow);

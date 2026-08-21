@@ -21,8 +21,6 @@ export interface WorkspaceTreeModelOptions {
 
 interface WorkspaceTreeRowBase {
   key: string;
-  /** Alias kept on the row so consumers do not have to derive a React key. */
-  rowKey: string;
   workspaceId: string;
   relativePath: string;
   parentRowKey: string | null;
@@ -65,17 +63,6 @@ export function makeEntryRowKey(
   return `entry:${encodeURIComponent(workspaceId)}:${encodeURIComponent(relativePath)}`;
 }
 
-export function getWorkspaceRowKey(workspaceId: string): string {
-  return makeWorkspaceRowKey(workspaceId);
-}
-
-export function getEntryRowKey(
-  workspaceId: string,
-  relativePath: string,
-): string {
-  return makeEntryRowKey(workspaceId, relativePath);
-}
-
 export function buildWorkspaceTreeRows(
   options: WorkspaceTreeModelOptions,
 ): WorkspaceTreeRow[] {
@@ -101,7 +88,6 @@ export function buildWorkspaceTreeRows(
     workspaceSiblingIndex += 1;
     rows.push({
       key: workspaceKey,
-      rowKey: workspaceKey,
       kind: "workspace",
       workspace,
       workspaceId: workspace.id,
@@ -135,10 +121,6 @@ export function buildWorkspaceTreeRows(
   return rows;
 }
 
-/** Alias that reads naturally at call sites that already have a tree model. */
-export const flattenWorkspaceTree = buildWorkspaceTreeRows;
-export const getVisibleWorkspaceRows = buildWorkspaceTreeRows;
-
 function appendEntries(
   rows: WorkspaceTreeRow[],
   visitedKeys: Set<string>,
@@ -170,7 +152,6 @@ function appendEntries(
         activeDocumentPath === entry.canonicalPath);
     rows.push({
       key,
-      rowKey: key,
       kind: entry.kind,
       entry,
       workspaceId: workspace.id,
@@ -271,14 +252,6 @@ export function resolveScrollAnchor(
     index: 0,
     offset: anchor.offset,
   };
-}
-
-export function findNearestSurvivingRowKey(
-  previousRows: readonly WorkspaceTreeRow[],
-  nextRows: readonly WorkspaceTreeRow[],
-  anchor: ScrollAnchor | null,
-): string | null {
-  return resolveScrollAnchor(previousRows, nextRows, anchor)?.rowKey ?? null;
 }
 
 export function getAdjacentRowKey(

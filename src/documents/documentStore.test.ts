@@ -345,12 +345,36 @@ describe("DocumentManager", () => {
     expect(manager.store.getState().sessionsById[documentId]).toMatchObject({
       path: "/tmp/recovered.excalidraw",
       saveState: "dirty",
+      revision: 0,
     });
     await vi.advanceTimersByTimeAsync(300);
     expect(gateway.saveDraft).toHaveBeenCalledWith(
       "/tmp/recovered.excalidraw",
       expect.any(String),
     );
+    manager.dispose();
+  });
+
+  it("increments revision when restoring a snapshot onto an open document", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/recovered.excalidraw");
+    expect(manager.store.getState().sessionsById[documentId]?.revision).toBe(0);
+
+    const restoredId = await manager.restore("/tmp/recovered.excalidraw", {
+      type: "excalidraw",
+      version: 2,
+      elements: [{ version: 7 }],
+      appState: { name: "Recovered" },
+      files: {},
+    });
+
+    expect(restoredId).toBe(documentId);
+    expect(manager.store.getState().sessionsById[documentId]).toMatchObject({
+      saveState: "dirty",
+      sceneVersion: 7,
+      revision: 1,
+    });
     manager.dispose();
   });
 
@@ -376,6 +400,7 @@ describe("DocumentManager", () => {
     expect(session?.saveState).toBe("clean");
     expect(session?.baseHash).toBe("external-hash");
     expect(session?.sceneVersion).toBe(9);
+    expect(session?.revision).toBe(1);
     expect(session?.lastReloadedAt).not.toBeNull();
     manager.dispose();
   });
@@ -405,6 +430,7 @@ describe("DocumentManager", () => {
     expect(session?.saveState).toBe("clean");
     expect(session?.baseHash).toBe("external");
     expect(session?.sceneVersion).toBe(5);
+    expect(session?.revision).toBe(1);
     expect(session?.conflictInfo).toBeNull();
     manager.dispose();
   });
