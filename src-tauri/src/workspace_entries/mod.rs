@@ -27,7 +27,8 @@ use crate::{
         },
     },
     database::repository::{
-        DraftRepository, FileIndexRecord, FileIndexRepository, SqliteRepository, WorkspaceRecord,
+        migrate_path, DraftRepository, FileIndexRecord, FileIndexRepository, SqliteRepository,
+        WorkspaceRecord,
     },
     documents::recovery::RecoveryStore,
 };
@@ -149,18 +150,18 @@ impl WorkspaceEntryService {
         &self,
         operation_id: &str,
         workspace_id: &str,
-        relative_path: String,
-        new_relative_path: Option<String>,
+        echoes: Vec<(String, crate::watcher::WatcherEchoKind)>,
     ) {
         if let Some(watcher) = &self.watcher {
             watcher
-                .note_entry_operation(
-                    operation_id.to_owned(),
-                    workspace_id.to_owned(),
-                    relative_path,
-                    new_relative_path,
-                )
+                .note_entry_operation(operation_id.to_owned(), workspace_id.to_owned(), echoes)
                 .await;
+        }
+    }
+
+    async fn forget_pending_operation(&self, operation_id: &str) {
+        if let Some(watcher) = &self.watcher {
+            watcher.forget_entry_operation(operation_id).await;
         }
     }
 
@@ -340,11 +341,18 @@ impl WorkspaceEntryService {
 
         let operation_id = Uuid::new_v4().to_string();
         let relative_path = normalized_relative(&root, &target)?;
-        self.note_pending_operation(&operation_id, &request.workspace_id, relative_path, None)
-            .await;
+        self.note_pending_operation(
+            &operation_id,
+            &request.workspace_id,
+            vec![(
+                relative_path.clone(),
+                crate::watcher::WatcherEchoKind::Created,
+            )],
+        )
+        .await;
 
-        match request.kind {
-            WorkspaceEntryKind::Drawing => atomic_create_drawing(&target)?,
+        let create_result = match request.kind {
+            WorkspaceEntryKind::Drawing => atomic_create_drawing(&target),
             WorkspaceEntryKind::Directory => fs::create_dir(&target).map_err(|source| {
                 if source.kind() == io::ErrorKind::AlreadyExists {
                     AppError::NameConflict(target.clone())
@@ -354,7 +362,11 @@ impl WorkspaceEntryService {
                         source,
                     }
                 }
-            })?,
+            }),
+        };
+        if let Err(error) = create_result {
+            self.forget_pending_operation(&operation_id).await;
+            return Err(error);
         }
 
         let parent_relative_path = normalized_relative(&root, &parent)?;
@@ -425,8 +437,7 @@ impl WorkspaceEntryService {
         self.note_pending_operation(
             &operation_id,
             &request.workspace_id,
-            old_relative_path.clone(),
-            Some(new_relative_path.clone()),
+            watcher_echoes_for_rename(&source.path, &old_relative_path, &new_relative_path),
         )
         .await;
 
@@ -447,6 +458,7 @@ impl WorkspaceEntryService {
         .await;
         if let Err(error) = rename_result {
             delete_journal(&self.recovery, &operation_id)?;
+            self.forget_pending_operation(&operation_id).await;
             return Err(error);
         }
 
@@ -540,8 +552,10 @@ impl WorkspaceEntryService {
         self.note_pending_operation(
             &operation_id,
             &request.workspace_id,
-            source.relative_path.clone(),
-            None,
+            vec![(
+                source.relative_path.clone(),
+                crate::watcher::WatcherEchoKind::Removed,
+            )],
         )
         .await;
         let trash_result = run_blocking(move || {
@@ -553,6 +567,7 @@ impl WorkspaceEntryService {
         .await;
         if let Err(error) = trash_result {
             delete_journal(&self.recovery, &operation_id)?;
+            self.forget_pending_operation(&operation_id).await;
             return Err(error);
         }
         let _ = apply_committed_record_with_skip(
@@ -951,6 +966,50 @@ fn expected_path_migrations(
         });
     }
     Ok(migrations)
+}
+
+fn watcher_echoes_for_rename(
+    source: &Path,
+    old_relative: &str,
+    new_relative: &str,
+) -> Vec<(String, crate::watcher::WatcherEchoKind)> {
+    use crate::watcher::WatcherEchoKind;
+    let mut relatives = vec![old_relative.to_owned()];
+    if source.is_dir() {
+        collect_descendant_relatives(source, old_relative, &mut relatives);
+    }
+    let mut echoes = Vec::with_capacity(relatives.len() * 2);
+    for old in relatives {
+        let new = migrate_path(&old, old_relative, new_relative);
+        echoes.push((old, WatcherEchoKind::Removed));
+        echoes.push((new, WatcherEchoKind::Created));
+    }
+    echoes
+}
+
+fn collect_descendant_relatives(directory: &Path, relative: &str, out: &mut Vec<String>) {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        let child_relative = format!("{relative}/{name}");
+        let path = entry.path();
+        let Ok(metadata) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if metadata.file_type().is_symlink() {
+            out.push(child_relative);
+            continue;
+        }
+        if metadata.is_dir() {
+            collect_descendant_relatives(&path, &child_relative, out);
+        }
+        out.push(child_relative);
+    }
 }
 
 fn hash_file(path: &Path) -> Result<String, AppError> {

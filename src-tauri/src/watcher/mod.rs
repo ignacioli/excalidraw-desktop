@@ -7,7 +7,7 @@
 //! (plan data flow 2, FR-018/019/020, R7).
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -194,11 +194,16 @@ pub struct WatcherService {
     entry_operations: Arc<Mutex<HashMap<String, EntryOperation>>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum WatcherEchoKind {
+    Created,
+    Removed,
+}
+
 #[derive(Debug, Clone)]
-struct EntryOperation {
-    workspace_id: String,
-    relative_path: String,
-    new_relative_path: Option<String>,
+pub(crate) struct EntryOperation {
+    pub(crate) workspace_id: String,
+    pub(crate) expected: HashSet<(String, WatcherEchoKind)>,
     recorded_at: Instant,
 }
 
@@ -266,26 +271,28 @@ impl WatcherService {
             .note(&path, FileTriplet { mtime, size, hash });
     }
 
-    /// Records an application-owned Workspace Entry mutation before its
-    /// recursive watcher echo is observed.  The operation id is echoed to
-    /// the frontend event so the tree can apply the command result exactly
-    /// once.
-    pub async fn note_entry_operation(
+    /// Records the expected watcher echoes for an application-owned mutation
+    /// before the filesystem commit.  Each expected path/kind is consumed once
+    /// so a later Put Back or create on the same path is not treated as echo.
+    pub(crate) async fn note_entry_operation(
         &self,
         operation_id: String,
         workspace_id: String,
-        relative_path: String,
-        new_relative_path: Option<String>,
+        echoes: Vec<(String, WatcherEchoKind)>,
     ) {
+        let expected = echoes.into_iter().collect();
         self.entry_operations.lock().await.insert(
             operation_id,
             EntryOperation {
                 workspace_id,
-                relative_path,
-                new_relative_path,
+                expected,
                 recorded_at: Instant::now(),
             },
         );
+    }
+
+    pub(crate) async fn forget_entry_operation(&self, operation_id: &str) {
+        self.entry_operations.lock().await.remove(operation_id);
     }
 
     async fn run_workspace_watch(
@@ -520,9 +527,7 @@ impl WatcherService {
         operations.retain(|_, operation| {
             now.duration_since(operation.recorded_at) < Duration::from_secs(10)
         });
-        operations
-            .values()
-            .any(|operation| entry_operation_covers(workspace, &relative_path, kind, operation))
+        consume_matching_echo(&mut operations, workspace, &relative_path, kind)
     }
 
     async fn record_echo_in_known_table(&self, path: &Path, kind: &ResolvedChangeKind) {
@@ -582,39 +587,59 @@ fn relative_workspace_path(workspace: &WorkspaceRecord, path: &Path) -> Option<S
         })
 }
 
-fn relative_is_self_or_descendant(relative: &str, root: &str) -> bool {
-    relative == root
-        || relative
-            .strip_prefix(root)
-            .is_some_and(|suffix| suffix.starts_with('/'))
-}
-
-fn entry_operation_covers(
+fn consume_matching_echo(
+    operations: &mut HashMap<String, EntryOperation>,
     workspace: &WorkspaceRecord,
     relative_path: &str,
     kind: &ResolvedChangeKind,
-    operation: &EntryOperation,
 ) -> bool {
-    if operation.workspace_id != workspace.id {
-        return false;
+    let mut consumed_id = None;
+    for (operation_id, operation) in operations.iter_mut() {
+        if operation.workspace_id != workspace.id {
+            continue;
+        }
+        if !consume_echo_from_operation(operation, workspace, relative_path, kind) {
+            continue;
+        }
+        consumed_id = Some(operation_id.clone());
+        break;
     }
+    let Some(operation_id) = consumed_id else {
+        return false;
+    };
+    if operations
+        .get(&operation_id)
+        .is_some_and(|operation| operation.expected.is_empty())
+    {
+        operations.remove(&operation_id);
+    }
+    true
+}
+
+fn consume_echo_from_operation(
+    operation: &mut EntryOperation,
+    workspace: &WorkspaceRecord,
+    relative_path: &str,
+    kind: &ResolvedChangeKind,
+) -> bool {
     match kind {
+        ResolvedChangeKind::Created => operation
+            .expected
+            .remove(&(relative_path.to_owned(), WatcherEchoKind::Created)),
+        ResolvedChangeKind::Removed => operation
+            .expected
+            .remove(&(relative_path.to_owned(), WatcherEchoKind::Removed)),
         ResolvedChangeKind::Renamed { new_path } => {
             let Some(new_relative) = relative_workspace_path(workspace, new_path) else {
                 return false;
             };
-            let Some(operation_new) = operation.new_relative_path.as_deref() else {
-                return false;
-            };
-            relative_is_self_or_descendant(relative_path, &operation.relative_path)
-                && relative_is_self_or_descendant(&new_relative, operation_new)
-        }
-        ResolvedChangeKind::Created => match operation.new_relative_path.as_deref() {
-            Some(new_relative) => relative_is_self_or_descendant(relative_path, new_relative),
-            None => relative_path == operation.relative_path,
-        },
-        ResolvedChangeKind::Removed => {
-            relative_is_self_or_descendant(relative_path, &operation.relative_path)
+            let removed = operation
+                .expected
+                .remove(&(relative_path.to_owned(), WatcherEchoKind::Removed));
+            let created = operation
+                .expected
+                .remove(&(new_relative, WatcherEchoKind::Created));
+            removed || created
         }
         ResolvedChangeKind::Modified => false,
     }

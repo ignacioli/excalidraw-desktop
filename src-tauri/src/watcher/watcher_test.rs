@@ -1,10 +1,14 @@
 use std::{
+    collections::{HashMap, HashSet},
     fs,
     path::PathBuf,
     time::{Duration, Instant},
 };
 
-use super::{read_triplet, DebounceEngine, FileTriplet, KnownFileTable, RawChangeKind};
+use super::{
+    consume_matching_echo, read_triplet, DebounceEngine, EntryOperation, FileTriplet,
+    KnownFileTable, RawChangeKind, WatcherEchoKind,
+};
 
 fn instant_after(start: Instant, millis: u64) -> Instant {
     start + Duration::from_millis(millis)
@@ -145,41 +149,107 @@ fn workspace_record() -> crate::database::repository::WorkspaceRecord {
 fn rename_operation() -> super::EntryOperation {
     super::EntryOperation {
         workspace_id: "ws".to_owned(),
-        relative_path: "folder".to_owned(),
-        new_relative_path: Some("renamed".to_owned()),
+        expected: HashSet::from([
+            ("folder".to_owned(), WatcherEchoKind::Removed),
+            (
+                "folder/child.excalidraw".to_owned(),
+                WatcherEchoKind::Removed,
+            ),
+            ("renamed".to_owned(), WatcherEchoKind::Created),
+            (
+                "renamed/child.excalidraw".to_owned(),
+                WatcherEchoKind::Created,
+            ),
+        ]),
         recorded_at: Instant::now(),
     }
+}
+
+fn operations_with(operation: EntryOperation) -> HashMap<String, EntryOperation> {
+    HashMap::from([("op".to_owned(), operation)])
 }
 
 #[test]
 fn directory_rename_operation_covers_descendant_remove_and_create() {
     let workspace = workspace_record();
-    let operation = rename_operation();
-    assert!(super::entry_operation_covers(
+    let mut operations = operations_with(rename_operation());
+    assert!(consume_matching_echo(
+        &mut operations,
         &workspace,
         "folder/child.excalidraw",
         &super::ResolvedChangeKind::Removed,
-        &operation,
     ));
-    assert!(super::entry_operation_covers(
+    assert!(consume_matching_echo(
+        &mut operations,
         &workspace,
         "renamed/child.excalidraw",
         &super::ResolvedChangeKind::Created,
-        &operation,
     ));
-    assert!(super::entry_operation_covers(
+    let mut renamed = operations_with(rename_operation());
+    assert!(consume_matching_echo(
+        &mut renamed,
         &workspace,
         "folder/child.excalidraw",
         &super::ResolvedChangeKind::Renamed {
             new_path: PathBuf::from("/workspace/renamed/child.excalidraw"),
         },
-        &operation,
     ));
-    assert!(!super::entry_operation_covers(
+    assert!(!consume_matching_echo(
+        &mut operations,
         &workspace,
         "other.excalidraw",
         &super::ResolvedChangeKind::Removed,
-        &operation,
+    ));
+    assert!(!consume_matching_echo(
+        &mut operations,
+        &workspace,
+        "renamed/brand-new.excalidraw",
+        &super::ResolvedChangeKind::Created,
+    ));
+}
+
+#[test]
+fn delete_echo_does_not_suppress_a_later_create_on_the_same_path() {
+    let workspace = workspace_record();
+    let mut operations = operations_with(EntryOperation {
+        workspace_id: "ws".to_owned(),
+        expected: HashSet::from([("drawing.excalidraw".to_owned(), WatcherEchoKind::Removed)]),
+        recorded_at: Instant::now(),
+    });
+    assert!(consume_matching_echo(
+        &mut operations,
+        &workspace,
+        "drawing.excalidraw",
+        &super::ResolvedChangeKind::Removed,
+    ));
+    assert!(operations.is_empty());
+    assert!(!consume_matching_echo(
+        &mut operations,
+        &workspace,
+        "drawing.excalidraw",
+        &super::ResolvedChangeKind::Created,
+    ));
+}
+
+#[test]
+fn consumed_create_echo_does_not_suppress_a_second_create() {
+    let workspace = workspace_record();
+    let mut operations = operations_with(EntryOperation {
+        workspace_id: "ws".to_owned(),
+        expected: HashSet::from([("target.excalidraw".to_owned(), WatcherEchoKind::Created)]),
+        recorded_at: Instant::now(),
+    });
+    assert!(consume_matching_echo(
+        &mut operations,
+        &workspace,
+        "target.excalidraw",
+        &super::ResolvedChangeKind::Created,
+    ));
+    assert!(!consume_matching_echo(
+        &mut operations,
+        &workspace,
+        "target.excalidraw",
+        &super::ResolvedChangeKind::Created,
     ));
 }
 
