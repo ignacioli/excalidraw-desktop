@@ -168,4 +168,70 @@ describe("workspaceTreeModel", () => {
       makeWorkspaceRowKey("workspace-1"),
     );
   });
+
+  it("assigns sibling posinset among a shared parent, not the flattened list", () => {
+    const rows = buildWorkspaceTreeRows({
+      workspaces,
+      entriesByWorkspace: entries(),
+      expandedWorkspaceIds: new Set(["workspace-1", "workspace-2"]),
+      expandedDirectoryKeys: new Set([makeEntryRowKey("workspace-1", "notes")]),
+    });
+    expect(
+      rows.find((row) => row.key === makeWorkspaceRowKey("workspace-1")),
+    ).toMatchObject({ siblingIndex: 1, siblingCount: 2 });
+    expect(
+      rows.find((row) => row.key === makeEntryRowKey("workspace-1", "notes")),
+    ).toMatchObject({ siblingIndex: 1, siblingCount: 2 });
+    expect(
+      rows.find(
+        (row) => row.key === makeEntryRowKey("workspace-1", "first.excalidraw"),
+      ),
+    ).toMatchObject({ siblingIndex: 2, siblingCount: 2 });
+    expect(
+      rows.find(
+        (row) =>
+          row.key === makeEntryRowKey("workspace-1", "notes/nested.excalidraw"),
+      ),
+    ).toMatchObject({ siblingIndex: 1, siblingCount: 1 });
+  });
+
+  it("does not expand a Directory from a bare relative path or another Workspace", () => {
+    const withBarePath = buildWorkspaceTreeRows({
+      workspaces,
+      entriesByWorkspace: {
+        ...entries(),
+        "workspace-2": {
+          "": [entry("workspace-2", "notes", "directory")],
+          notes: [entry("workspace-2", "notes/other.excalidraw", "drawing")],
+        },
+      },
+      expandedWorkspaceIds: new Set(["workspace-1", "workspace-2"]),
+      expandedDirectoryKeys: new Set(["notes"]),
+    });
+    expect(withBarePath.map((row) => row.relativePath)).not.toContain(
+      "notes/nested.excalidraw",
+    );
+    expect(withBarePath.map((row) => row.relativePath)).not.toContain(
+      "notes/other.excalidraw",
+    );
+
+    const withScopedKey = buildWorkspaceTreeRows({
+      workspaces,
+      entriesByWorkspace: {
+        ...entries(),
+        "workspace-2": {
+          "": [entry("workspace-2", "notes", "directory")],
+          notes: [entry("workspace-2", "notes/other.excalidraw", "drawing")],
+        },
+      },
+      expandedWorkspaceIds: new Set(["workspace-1", "workspace-2"]),
+      expandedDirectoryKeys: new Set([makeEntryRowKey("workspace-1", "notes")]),
+    });
+    expect(withScopedKey.map((row) => row.relativePath)).toContain(
+      "notes/nested.excalidraw",
+    );
+    expect(withScopedKey.map((row) => row.relativePath)).not.toContain(
+      "notes/other.excalidraw",
+    );
+  });
 });

@@ -345,4 +345,43 @@ describe("WorkspacePanel", () => {
     await user.click(screen.getByRole("button", { name: "Blueprints" }));
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
+
+  it("shows Remove failures inside the confirmation dialog and restores trigger focus", async () => {
+    const user = userEvent.setup();
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return WORKSPACES;
+      if (command === "dir_list") return [];
+      if (command === "workspace_remove") {
+        throw new Error("Workspace is still in use.");
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        selectDirectory={async () => null}
+      />,
+    );
+    const remove = (
+      await screen.findAllByRole("button", { name: "Remove" })
+    )[0];
+    await user.click(remove);
+    const dialog = await screen.findByRole("dialog", {
+      name: "Remove Sketches?",
+    });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Remove Workspace" }),
+    );
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Workspace is still in use.",
+    );
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(remove).toHaveFocus();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
 });

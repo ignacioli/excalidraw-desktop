@@ -63,4 +63,43 @@ describe("EntryNamingDialog", () => {
     expect(onCancel).toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
   });
+
+  it("keeps the dialog open when submit rejects with a null reason", async () => {
+    const user = userEvent.setup();
+    render(
+      <EntryNamingDialog
+        mode="newDrawing"
+        onCancel={vi.fn()}
+        onSubmit={vi.fn(async () => {
+          throw null;
+        })}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "could not be saved",
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("does not cancel while a submit is in flight", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    let finish: () => void = () => undefined;
+    const pending = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    render(
+      <EntryNamingDialog
+        mode="newDrawing"
+        onCancel={onCancel}
+        onSubmit={vi.fn(async () => pending)}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "true");
+    await user.keyboard("{Escape}");
+    expect(onCancel).not.toHaveBeenCalled();
+    finish();
+  });
 });

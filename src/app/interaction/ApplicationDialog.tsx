@@ -48,15 +48,18 @@ export function ApplicationDialog({
     const returnFocusTarget = returnFocusRef?.current;
     const initial =
       initialFocusRef?.current ??
-      dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+      dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ??
+      dialogRef.current;
     initial?.focus();
-    return () => returnFocusTarget?.focus();
+    return () => {
+      if (returnFocusTarget?.isConnected) returnFocusTarget.focus();
+    };
   }, [initialFocusRef, returnFocusRef]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape") {
       event.preventDefault();
-      onDismiss("escape");
+      if (!busy) onDismiss("escape");
       return;
     }
     if (event.key !== "Tab") return;

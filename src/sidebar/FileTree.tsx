@@ -16,6 +16,7 @@ import type {
   ColorScheme,
   DirEntry,
   FileEntry,
+  IpcError,
   WorkspaceEntry,
 } from "../ipc/contracts";
 import { useThumbnails } from "./useThumbnails";
@@ -56,6 +57,7 @@ export function FileTree({
     node: TreeNode;
     x: number;
     y: number;
+    trigger: HTMLElement;
   } | null>(null);
   const [naming, setNaming] = useState<{
     mode: EntryNamingMode;
@@ -69,6 +71,7 @@ export function FileTree({
     error: string | null;
   } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dialogReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const loadDirectory = useCallback(
     async (relativePath: string, force = false) => {
@@ -89,11 +92,7 @@ export function FileTree({
           [relativePath]: entries,
         }));
       } catch (nextError) {
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Unable to load this folder.",
-        );
+        setError(operationError(nextError, "Unable to load this folder."));
       } finally {
         setLoading((current) => {
           const next = new Set(current);
@@ -244,18 +243,16 @@ export function FileTree({
         error: null,
       });
     } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "The file operation failed.",
-      );
+      setError(operationError(nextError, "The file operation failed."));
     }
   };
 
   const confirmDelete = async () => {
     if (deleting === null) return;
     const { node } = deleting;
-    setDeleting({ ...deleting, busy: true, error: null });
+    setDeleting((current) =>
+      current === null ? current : { ...current, busy: true, error: null },
+    );
     try {
       await documentManager.coordinateCleanEntryDelete(
         workspaceRoot ?? "",
@@ -272,14 +269,46 @@ export function FileTree({
       setDeleting(null);
       await loadDirectory(node.parentPath, true);
     } catch (nextError) {
-      setDeleting({
-        ...deleting,
-        busy: false,
-        error:
-          nextError instanceof Error
-            ? nextError.message
-            : "The entry could not be deleted.",
+      setDeleting((current) =>
+        current === null
+          ? current
+          : {
+              ...current,
+              busy: false,
+              error: operationError(
+                nextError,
+                "The entry could not be deleted.",
+              ),
+            },
+      );
+    }
+  };
+
+  const revealDeleting = async () => {
+    if (deleting === null) return;
+    const { node } = deleting;
+    setDeleting((current) =>
+      current === null ? current : { ...current, busy: true, error: null },
+    );
+    try {
+      await invoker.invoke("workspace_entry_reveal", {
+        workspaceId,
+        relativePath: node.entry.relativePath,
       });
+      setDeleting(null);
+    } catch (nextError) {
+      setDeleting((current) =>
+        current === null
+          ? current
+          : {
+              ...current,
+              busy: false,
+              error: operationError(
+                nextError,
+                "Finder could not open this folder.",
+              ),
+            },
+      );
     }
   };
 
@@ -289,14 +318,20 @@ export function FileTree({
       <button
         type="button"
         className="file-tree-new-button"
-        onClick={() => setNaming({ mode: "newDrawing", parentPath: "" })}
+        onClick={(event) => {
+          dialogReturnFocusRef.current = event.currentTarget;
+          setNaming({ mode: "newDrawing", parentPath: "" });
+        }}
       >
         New drawing
       </button>
       <button
         type="button"
         className="file-tree-new-button"
-        onClick={() => setNaming({ mode: "newDirectory", parentPath: "" })}
+        onClick={(event) => {
+          dialogReturnFocusRef.current = event.currentTarget;
+          setNaming({ mode: "newDirectory", parentPath: "" });
+        }}
       >
         New folder
       </button>
@@ -340,7 +375,12 @@ export function FileTree({
                 }}
                 onContextMenu={(event) => {
                   event.preventDefault();
-                  setMenu({ node, x: event.clientX, y: event.clientY });
+                  setMenu({
+                    node,
+                    x: event.clientX,
+                    y: event.clientY,
+                    trigger: event.currentTarget,
+                  });
                 }}
               >
                 <button
@@ -395,6 +435,7 @@ export function FileTree({
                       node,
                       x: event.currentTarget.getBoundingClientRect().right,
                       y: event.currentTarget.getBoundingClientRect().bottom,
+                      trigger: event.currentTarget,
                     })
                   }
                 >
@@ -416,6 +457,7 @@ export function FileTree({
               role="menuitem"
               type="button"
               onClick={() => {
+                dialogReturnFocusRef.current = menu.trigger;
                 setNaming({
                   mode: "newDrawing",
                   parentPath: menu.node.entry.relativePath,
@@ -431,6 +473,7 @@ export function FileTree({
               role="menuitem"
               type="button"
               onClick={() => {
+                dialogReturnFocusRef.current = menu.trigger;
                 setNaming({
                   mode: "newDirectory",
                   parentPath: menu.node.entry.relativePath,
@@ -445,6 +488,7 @@ export function FileTree({
             role="menuitem"
             type="button"
             onClick={() => {
+              dialogReturnFocusRef.current = menu.trigger;
               setNaming({
                 mode:
                   menu.node.entry.kind === "file"
@@ -461,7 +505,10 @@ export function FileTree({
           <button
             role="menuitem"
             type="button"
-            onClick={() => void requestDelete(menu.node)}
+            onClick={() => {
+              dialogReturnFocusRef.current = menu.trigger;
+              void requestDelete(menu.node);
+            }}
           >
             Delete
           </button>
@@ -471,6 +518,7 @@ export function FileTree({
         <EntryNamingDialog
           currentName={naming.node?.entry.name}
           mode={naming.mode}
+          returnFocusRef={dialogReturnFocusRef}
           onCancel={() => setNaming(null)}
           onSubmit={submitNaming}
         />
@@ -480,24 +528,39 @@ export function FileTree({
           busy={deleting.busy}
           displayName={deleting.node.entry.name}
           errorMessage={deleting.error}
-          onCancel={() => setDeleting(null)}
+          returnFocusRef={dialogReturnFocusRef}
+          onCancel={() => {
+            if (!deleting.busy) setDeleting(null);
+          }}
           onDelete={() => void confirmDelete()}
         />
       ) : null}
       {deleting?.phase === "nonEmpty" ? (
         <DirectoryNotEmptyDialog
-          onCancel={() => setDeleting(null)}
-          onReveal={() => {
-            void invoker.invoke("workspace_entry_reveal", {
-              workspaceId,
-              relativePath: deleting.node.entry.relativePath,
-            });
-            setDeleting(null);
+          busy={deleting.busy}
+          errorMessage={deleting.error}
+          returnFocusRef={dialogReturnFocusRef}
+          onCancel={() => {
+            if (!deleting.busy) setDeleting(null);
           }}
+          onReveal={() => void revealDeleting()}
         />
       ) : null}
     </section>
   );
+}
+
+function operationError(reason: unknown, fallback: string): string {
+  if (reason instanceof Error && reason.message.length > 0) {
+    return reason.message;
+  }
+  if (reason !== null && typeof reason === "object") {
+    const ipc = reason as Partial<IpcError>;
+    if (typeof ipc.message === "string" && ipc.message.length > 0) {
+      return ipc.message;
+    }
+  }
+  return fallback;
 }
 
 function asFileEntry(entry: WorkspaceEntry): FileEntry {

@@ -218,4 +218,76 @@ describe("FileTree", () => {
       "asset:///cache/thumbnails/aa/bb/thumbnail-key.webp",
     );
   });
+
+  it("restores focus to the trigger after cancelling a naming dialog", async () => {
+    const invoker = createInvoker();
+    render(
+      <FileTree
+        workspaceId="workspace-1"
+        workspaceRoot="/workspace"
+        invoker={invoker}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByText("drawing.excalidraw")).toBeInTheDocument(),
+    );
+    const trigger = screen.getByRole("button", { name: "New drawing" });
+    fireEvent.click(trigger);
+    expect(
+      screen.getByRole("dialog", { name: "New drawing" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(trigger).toHaveFocus();
+  });
+
+  it("keeps a Finder reveal failure inside the non-empty folder dialog", async () => {
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "dir_list") {
+        return [
+          {
+            name: "nested",
+            relativePath: "nested",
+            kind: "dir",
+            mtime: 1,
+            fileSize: 0,
+          },
+        ];
+      }
+      if (command === "workspace_entry_delete_preflight") {
+        return { status: "directoryNotEmpty", entry: {} };
+      }
+      if (command === "workspace_entry_reveal") {
+        throw {
+          code: "IO_ERROR",
+          message: "Finder is unavailable.",
+          retriable: true,
+        };
+      }
+      throw new Error(`unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+
+    render(
+      <FileTree
+        workspaceId="workspace-1"
+        workspaceRoot="/workspace"
+        invoker={{ invoke }}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText("nested")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Actions for nested" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    expect(
+      await screen.findByRole("dialog", { name: "Folder isn’t empty" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open in Finder" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Finder is unavailable.",
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Folder isn’t empty" }),
+    ).toBeInTheDocument();
+  });
 });

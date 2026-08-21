@@ -24,7 +24,9 @@ export function EntryDeleteConfirmationDialog({
       busy={busy}
       errorMessage={errorMessage}
       initialFocusRef={cancelRef}
-      onDismiss={onCancel}
+      onDismiss={() => {
+        if (!busy) onCancel();
+      }}
       returnFocusRef={returnFocusRef}
       title={`Delete ${displayName}?`}
     >
@@ -47,19 +49,29 @@ export function EntryDeleteConfirmationDialog({
 }
 
 interface DirectoryNotEmptyDialogProps {
+  busy?: boolean;
+  errorMessage?: string | null;
   returnFocusRef?: RefObject<HTMLElement | null>;
   onCancel(): void;
   onReveal(): void;
 }
 
 export function DirectoryNotEmptyDialog({
+  busy = false,
+  errorMessage,
   returnFocusRef,
   onCancel,
   onReveal,
 }: DirectoryNotEmptyDialogProps) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
   return (
     <ApplicationDialog
-      onDismiss={onCancel}
+      busy={busy}
+      errorMessage={errorMessage}
+      initialFocusRef={cancelRef}
+      onDismiss={() => {
+        if (!busy) onCancel();
+      }}
       returnFocusRef={returnFocusRef}
       title="Folder isn’t empty"
     >
@@ -68,10 +80,15 @@ export function DirectoryNotEmptyDialog({
         non-empty folders.
       </p>
       <div className="application-dialog-actions conflict-dialog-actions">
-        <button onClick={onCancel} type="button">
+        <button
+          ref={cancelRef}
+          disabled={busy}
+          onClick={onCancel}
+          type="button"
+        >
           Cancel
         </button>
-        <button onClick={onReveal} type="button">
+        <button disabled={busy} onClick={onReveal} type="button">
           Open in Finder
         </button>
       </div>

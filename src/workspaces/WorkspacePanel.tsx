@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ApplicationDialog } from "../app/interaction";
 import type { CommandInvoker } from "../ipc/client";
 import { createTauriCommandInvoker } from "../ipc/client";
@@ -30,6 +30,7 @@ export function WorkspacePanel({
     () => new Set(),
   );
   const [pendingRemoval, setPendingRemoval] = useState<Workspace | null>(null);
+  const removeTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -83,6 +84,7 @@ export function WorkspacePanel({
 
   const removeWorkspace = async (workspace: Workspace) => {
     setBusy(true);
+    setError(null);
     try {
       await invoker.invoke("workspace_remove", { workspaceId: workspace.id });
       const next = workspaces.filter((item) => item.id !== workspace.id);
@@ -129,7 +131,7 @@ export function WorkspacePanel({
           Mount folder…
         </button>
       </div>
-      {error ? <p role="alert">{error}</p> : null}
+      {error && pendingRemoval === null ? <p role="alert">{error}</p> : null}
       {workspaces.length === 0 ? (
         <p className="sidebar-placeholder">No workspace mounted.</p>
       ) : null}
@@ -158,7 +160,11 @@ export function WorkspacePanel({
             <button
               type="button"
               disabled={busy}
-              onClick={() => setPendingRemoval(workspace)}
+              onClick={(event) => {
+                removeTriggerRef.current = event.currentTarget;
+                setError(null);
+                setPendingRemoval(workspace);
+              }}
             >
               Remove
             </button>
@@ -182,14 +188,24 @@ export function WorkspacePanel({
       {pendingRemoval ? (
         <ApplicationDialog
           busy={busy}
-          onDismiss={() => setPendingRemoval(null)}
+          errorMessage={error}
+          onDismiss={() => {
+            if (busy) return;
+            setPendingRemoval(null);
+            setError(null);
+          }}
+          returnFocusRef={removeTriggerRef}
           title={`Remove ${pendingRemoval.name}?`}
         >
           <p>Files on disk will not be deleted.</p>
           <div className="application-dialog-actions conflict-dialog-actions">
             <button
               disabled={busy}
-              onClick={() => setPendingRemoval(null)}
+              onClick={() => {
+                if (busy) return;
+                setPendingRemoval(null);
+                setError(null);
+              }}
               type="button"
             >
               Cancel

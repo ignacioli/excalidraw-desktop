@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent, MouseEvent } from "react";
+import type { KeyboardEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Workspace, WorkspaceEntry } from "../ipc/contracts";
 import {
@@ -36,9 +36,8 @@ const FALLBACK_VISIBLE_ROWS = 40;
 function isDirectoryExpanded(
   expandedKeys: ReadonlySet<string>,
   rowKey: string,
-  relativePath: string,
 ): boolean {
-  return expandedKeys.has(rowKey) || expandedKeys.has(relativePath);
+  return expandedKeys.has(rowKey);
 }
 
 export function WorkspaceTree({
@@ -60,6 +59,7 @@ export function WorkspaceTree({
   const scrollRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const pendingFocusKey = useRef<string | null>(null);
+  const knownWorkspaceIdsRef = useRef<Set<string> | null>(null);
   const [internalWorkspaceIds, setInternalWorkspaceIds] = useState<Set<string>>(
     () => new Set(workspaces.map((workspace) => workspace.id)),
   );
@@ -69,17 +69,21 @@ export function WorkspaceTree({
   const [focusedRowKey, setFocusedRowKey] = useState<string | null>(null);
 
   useEffect(() => {
+    if (controlledWorkspaceIds !== undefined) return;
     setInternalWorkspaceIds((current) => {
+      const known = knownWorkspaceIdsRef.current;
+      const liveIds = new Set(workspaces.map((workspace) => workspace.id));
       const next = new Set<string>();
       for (const workspace of workspaces) {
-        next.add(workspace.id);
-        if (current.has(workspace.id)) continue;
-        // A Workspace is expanded the first time it is mounted.
-        next.add(workspace.id);
+        const seen = known?.has(workspace.id) ?? false;
+        if (!seen || current.has(workspace.id)) {
+          next.add(workspace.id);
+        }
       }
+      knownWorkspaceIdsRef.current = liveIds;
       return next;
     });
-  }, [workspaces]);
+  }, [controlledWorkspaceIds, workspaces]);
 
   const expandedWorkspaceIds = controlledWorkspaceIds ?? internalWorkspaceIds;
   const expandedDirectoryKeys =
@@ -166,6 +170,14 @@ export function WorkspaceTree({
     }
   };
 
+  const actionTriggerForRow = (rowKey: string): HTMLButtonElement | null => {
+    return (
+      rowRefs.current
+        .get(rowKey)
+        ?.querySelector<HTMLButtonElement>(".workspace-tree-action") ?? null
+    );
+  };
+
   const toggleWorkspace = (row: WorkspaceTreeRow): void => {
     if (row.kind !== "workspace") return;
     const nextExpanded = !expandedWorkspaceIds.has(row.workspaceId);
@@ -183,11 +195,7 @@ export function WorkspaceTree({
   const toggleDirectory = (row: WorkspaceTreeRow): void => {
     if (row.kind !== "directory") return;
     const key = makeEntryRowKey(row.workspaceId, row.relativePath);
-    const nextExpanded = !isDirectoryExpanded(
-      expandedDirectoryKeys,
-      key,
-      row.relativePath,
-    );
+    const nextExpanded = !isDirectoryExpanded(expandedDirectoryKeys, key);
     if (controlledDirectoryKeys === undefined) {
       setInternalDirectoryKeys((current) => {
         const next = new Set(current);
@@ -240,11 +248,7 @@ export function WorkspaceTree({
         toggleWorkspace(currentRow);
       } else if (
         currentRow.kind === "directory" &&
-        !isDirectoryExpanded(
-          expandedDirectoryKeys,
-          currentRow.key,
-          currentRow.relativePath,
-        )
+        !isDirectoryExpanded(expandedDirectoryKeys, currentRow.key)
       ) {
         toggleDirectory(currentRow);
       } else {
@@ -258,11 +262,7 @@ export function WorkspaceTree({
         currentRow.kind === "workspace"
           ? expandedWorkspaceIds.has(currentRow.workspaceId)
           : currentRow.kind === "directory" &&
-            isDirectoryExpanded(
-              expandedDirectoryKeys,
-              currentRow.key,
-              currentRow.relativePath,
-            );
+            isDirectoryExpanded(expandedDirectoryKeys, currentRow.key);
       if (isExpanded) {
         if (currentRow.kind === "workspace") toggleWorkspace(currentRow);
         else if (currentRow.kind === "directory") toggleDirectory(currentRow);
@@ -271,6 +271,14 @@ export function WorkspaceTree({
       }
     } else if (event.key === "Enter" || event.key === " ") {
       activateRow(currentRow);
+    } else if (
+      event.key === "F2" ||
+      event.key === "ContextMenu" ||
+      event.key === "Apps" ||
+      (event.key === "F10" && event.shiftKey)
+    ) {
+      const trigger = actionTriggerForRow(currentRow.key);
+      if (trigger !== null) onRowAction?.(currentRow, trigger);
     } else {
       return;
     }
@@ -304,29 +312,23 @@ export function WorkspaceTree({
           width: "100%",
         }}
       >
-        {renderedRows.map(({ row, index, start }) => (
+        {renderedRows.map(({ row, start }) => (
           <WorkspaceTreeRowView
             key={row.key}
             row={row}
-            index={index}
-            totalRows={rows.length}
             rowHeight={rowHeight}
             start={start}
             expanded={
               row.kind === "workspace"
                 ? expandedWorkspaceIds.has(row.workspaceId)
                 : row.kind === "directory"
-                  ? expandedDirectoryKeys.has(row.key) ||
-                    expandedDirectoryKeys.has(row.relativePath)
+                  ? expandedDirectoryKeys.has(row.key)
                   : undefined
             }
             focused={row.key === focusedRowKey}
             onFocus={() => setFocusedRowKey(row.key)}
             onActivate={() => activateRow(row)}
-            onAction={(event) => {
-              event.stopPropagation();
-              onRowAction?.(row, event.currentTarget);
-            }}
+            onAction={(trigger) => onRowAction?.(row, trigger)}
             registerRef={(element) => {
               if (element === null) rowRefs.current.delete(row.key);
               else rowRefs.current.set(row.key, element);
@@ -340,22 +342,18 @@ export function WorkspaceTree({
 
 interface WorkspaceTreeRowViewProps {
   row: WorkspaceTreeRow;
-  index: number;
-  totalRows: number;
   rowHeight: number;
   start: number;
   focused: boolean;
   onFocus: () => void;
   onActivate: () => void;
-  onAction: (event: MouseEvent<HTMLButtonElement>) => void;
+  onAction: (trigger: HTMLButtonElement) => void;
   registerRef: (element: HTMLDivElement | null) => void;
   expanded: boolean | undefined;
 }
 
 function WorkspaceTreeRowView({
   row,
-  index,
-  totalRows,
   rowHeight,
   start,
   expanded,
@@ -381,8 +379,8 @@ function WorkspaceTreeRowView({
       role="treeitem"
       aria-label={row.displayName}
       aria-level={row.depth + 1}
-      aria-posinset={index + 1}
-      aria-setsize={totalRows}
+      aria-posinset={row.siblingIndex}
+      aria-setsize={row.siblingCount}
       aria-expanded={isExpandable ? expanded : undefined}
       aria-selected={row.isActive || undefined}
       className={`workspace-tree-row${row.isActive ? " is-active" : ""}`}
@@ -391,6 +389,14 @@ function WorkspaceTreeRowView({
       tabIndex={focused ? 0 : -1}
       title={row.displayName}
       onClick={onActivate}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const trigger = event.currentTarget.querySelector<HTMLButtonElement>(
+          ".workspace-tree-action",
+        );
+        if (trigger !== null) onAction(trigger);
+      }}
       onFocus={onFocus}
       style={{
         alignItems: "center",
@@ -449,7 +455,10 @@ function WorkspaceTreeRowView({
           type="button"
           aria-label={`Actions for ${row.displayName}`}
           className="workspace-tree-action"
-          onClick={onAction}
+          onClick={(event) => {
+            event.stopPropagation();
+            onAction(event.currentTarget);
+          }}
           tabIndex={-1}
           style={{
             minWidth: "2rem",

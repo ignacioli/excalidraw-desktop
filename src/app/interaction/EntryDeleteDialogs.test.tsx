@@ -34,4 +34,33 @@ describe("Entry delete dialogs", () => {
     await user.click(screen.getByRole("button", { name: "Open in Finder" }));
     expect(onReveal).toHaveBeenCalledOnce();
   });
+
+  it("keeps confirmation open on Escape while delete is busy", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    render(
+      <EntryDeleteConfirmationDialog
+        busy
+        displayName="drawing"
+        onCancel={onCancel}
+        onDelete={vi.fn()}
+      />,
+    );
+    await user.keyboard("{Escape}");
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("shows a Finder reveal failure inside the non-empty folder dialog", () => {
+    render(
+      <DirectoryNotEmptyDialog
+        errorMessage="Finder could not open this folder."
+        onCancel={vi.fn()}
+        onReveal={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Finder could not open this folder.",
+    );
+  });
 });

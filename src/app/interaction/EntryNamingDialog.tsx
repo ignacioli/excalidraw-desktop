@@ -57,16 +57,7 @@ export function EntryNamingDialog({
     try {
       await onSubmit(value);
     } catch (reason) {
-      const ipc = reason as Partial<IpcError>;
-      setError(
-        ipc.code === "NAME_CONFLICT"
-          ? "An entry with that name already exists."
-          : ipc.code === "INVALID_NAME"
-            ? "Enter a valid name."
-            : reason instanceof Error
-              ? reason.message
-              : "The entry could not be saved.",
-      );
+      setError(namingDialogError(reason));
       setBusy(false);
     }
   };
@@ -85,7 +76,9 @@ export function EntryNamingDialog({
       busy={busy}
       errorMessage={error}
       initialFocusRef={inputRef}
-      onDismiss={onCancel}
+      onDismiss={() => {
+        if (!busy) onCancel();
+      }}
       returnFocusRef={returnFocusRef}
       title={title}
     >
@@ -122,6 +115,31 @@ export function EntryNamingDialog({
       </form>
     </ApplicationDialog>
   );
+}
+
+function namingDialogError(reason: unknown): string {
+  if (reason !== null && typeof reason === "object" && "code" in reason) {
+    const code = (reason as Partial<IpcError>).code;
+    if (code === "NAME_CONFLICT") {
+      return "An entry with that name already exists.";
+    }
+    if (code === "INVALID_NAME") {
+      return "Enter a valid name.";
+    }
+  }
+  if (reason instanceof Error && reason.message.length > 0) {
+    return reason.message;
+  }
+  if (
+    reason !== null &&
+    typeof reason === "object" &&
+    "message" in reason &&
+    typeof reason.message === "string" &&
+    reason.message.length > 0
+  ) {
+    return reason.message;
+  }
+  return "The entry could not be saved.";
 }
 
 function drawingSuffix(name: string | undefined): string {

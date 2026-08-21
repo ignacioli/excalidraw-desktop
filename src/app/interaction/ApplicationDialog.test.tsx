@@ -47,4 +47,23 @@ describe("ApplicationDialog", () => {
     expect(trigger).toHaveFocus();
     trigger.remove();
   });
+
+  it("does not dismiss on Escape while busy", async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    render(
+      <ApplicationDialog busy onDismiss={onDismiss} title="Deleting">
+        <button disabled type="button">
+          Cancel
+        </button>
+        <button disabled type="button">
+          Delete
+        </button>
+      </ApplicationDialog>,
+    );
+
+    await user.keyboard("{Escape}");
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "true");
+  });
 });

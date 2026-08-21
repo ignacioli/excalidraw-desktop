@@ -30,6 +30,8 @@ interface WorkspaceTreeRowBase {
   displayName: string;
   canonicalPath: string;
   isActive: boolean;
+  siblingIndex: number;
+  siblingCount: number;
 }
 
 export interface WorkspaceTreeWorkspaceRow extends WorkspaceTreeRowBase {
@@ -87,11 +89,16 @@ export function buildWorkspaceTreeRows(
   } = options;
   const rows: WorkspaceTreeRow[] = [];
   const visitedKeys = new Set<string>();
+  const workspaceSiblingCount = new Set(
+    workspaces.map((workspace) => workspace.id),
+  ).size;
+  let workspaceSiblingIndex = 0;
 
   for (const workspace of workspaces) {
     const workspaceKey = makeWorkspaceRowKey(workspace.id);
     if (visitedKeys.has(workspaceKey)) continue;
     visitedKeys.add(workspaceKey);
+    workspaceSiblingIndex += 1;
     rows.push({
       key: workspaceKey,
       rowKey: workspaceKey,
@@ -104,6 +111,8 @@ export function buildWorkspaceTreeRows(
       displayName: workspace.name,
       canonicalPath: workspace.rootPath,
       isActive: false,
+      siblingIndex: workspaceSiblingIndex,
+      siblingCount: workspaceSiblingCount,
     });
 
     if (expandedWorkspaceIds.has(workspace.id)) {
@@ -144,11 +153,16 @@ function appendEntries(
   ancestry: ReadonlySet<string>,
 ): void {
   const entries = entriesByWorkspace[workspace.id]?.[parentRelativePath] ?? [];
+  const siblingCount = entries.filter(
+    (entry) => entry.workspaceId === workspace.id,
+  ).length;
+  let siblingIndex = 0;
   for (const entry of entries) {
     if (entry.workspaceId !== workspace.id) continue;
     const key = makeEntryRowKey(workspace.id, entry.relativePath);
     if (visitedKeys.has(key)) continue;
     visitedKeys.add(key);
+    siblingIndex += 1;
     const isActive =
       entry.kind === "drawing" &&
       ((activeDrawing?.workspaceId === workspace.id &&
@@ -166,11 +180,13 @@ function appendEntries(
       displayName: entry.displayName || entry.name,
       canonicalPath: entry.canonicalPath,
       isActive,
+      siblingIndex,
+      siblingCount,
     });
 
     if (entry.kind !== "directory") continue;
     if (ancestry.has(entry.relativePath)) continue;
-    if (!isExpanded(expandedDirectoryKeys, key, entry.relativePath)) continue;
+    if (!expandedDirectoryKeys.has(key)) continue;
 
     const nextAncestry = new Set(ancestry);
     nextAncestry.add(entry.relativePath);
@@ -188,14 +204,6 @@ function appendEntries(
       nextAncestry,
     );
   }
-}
-
-function isExpanded(
-  expandedKeys: ReadonlySet<string>,
-  rowKey: string,
-  relativePath: string,
-): boolean {
-  return expandedKeys.has(rowKey) || expandedKeys.has(relativePath);
 }
 
 export interface ScrollAnchor {

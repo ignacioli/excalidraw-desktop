@@ -147,4 +147,82 @@ describe("WorkspaceTree", () => {
     expect(makeWorkspaceRowKey(workspace.id)).toContain("workspace");
     expect(makeEntryRowKey(workspace.id, "notes")).toContain("entry");
   });
+
+  it("keeps a collapsed Workspace collapsed when the list refreshes", async () => {
+    const second: Workspace = {
+      id: "workspace-2",
+      name: "Blueprints",
+      rootPath: "/workspace/blueprints",
+      createdAt: 2,
+    };
+    const { rerender } = render(
+      <WorkspaceTree
+        workspaces={[workspace]}
+        entriesByWorkspace={{ [workspace.id]: { "": [] } }}
+      />,
+    );
+    const sketches = await screen.findByRole("treeitem", { name: "Sketches" });
+    expect(sketches).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(sketches);
+    expect(sketches).toHaveAttribute("aria-expanded", "false");
+
+    rerender(
+      <WorkspaceTree
+        workspaces={[workspace, second]}
+        entriesByWorkspace={{
+          [workspace.id]: { "": [] },
+          [second.id]: { "": [] },
+        }}
+      />,
+    );
+    expect(screen.getByRole("treeitem", { name: "Sketches" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(
+      screen.getByRole("treeitem", { name: "Blueprints" }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("exposes sibling aria-posinset and opens row actions from the keyboard", async () => {
+    const onRowAction = vi.fn();
+    render(
+      <WorkspaceTree
+        workspaces={[workspace]}
+        entriesByWorkspace={{
+          [workspace.id]: {
+            "": [
+              entry("notes", "directory", "Notes"),
+              entry("first.excalidraw", "drawing", "First"),
+            ],
+          },
+        }}
+        expandedWorkspaceIds={new Set([workspace.id])}
+        onRowAction={onRowAction}
+      />,
+    );
+
+    const sketches = screen.getByRole("treeitem", { name: "Sketches" });
+    const notes = screen.getByRole("treeitem", { name: "Notes" });
+    const first = screen.getByRole("treeitem", { name: "First" });
+    expect(sketches).toHaveAttribute("aria-posinset", "1");
+    expect(sketches).toHaveAttribute("aria-setsize", "1");
+    expect(notes).toHaveAttribute("aria-posinset", "1");
+    expect(notes).toHaveAttribute("aria-setsize", "2");
+    expect(first).toHaveAttribute("aria-posinset", "2");
+    expect(first).toHaveAttribute("aria-setsize", "2");
+
+    const tree = screen.getByRole("tree", { name: "Workspace files" });
+    sketches.focus();
+    fireEvent.keyDown(tree, { key: "ArrowDown" });
+    expect(notes).toHaveFocus();
+    fireEvent.keyDown(tree, { key: "F2" });
+    expect(onRowAction).toHaveBeenCalledWith(
+      expect.objectContaining({ relativePath: "notes" }),
+      expect.any(HTMLButtonElement),
+    );
+    onRowAction.mockClear();
+    fireEvent.keyDown(tree, { key: "F10", shiftKey: true });
+    expect(onRowAction).toHaveBeenCalledOnce();
+  });
 });
