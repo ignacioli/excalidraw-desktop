@@ -13,17 +13,17 @@ test("multiple workspaces mount side by side and remove independently", async ({
   });
   await page.goto("/");
 
-  await expect(page.getByRole("button", { name: "Work" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Personal" })).toBeVisible();
+  await expect(page.getByRole("treeitem", { name: "Work" })).toBeVisible();
+  await expect(page.getByRole("treeitem", { name: "Personal" })).toBeVisible();
 
-  // Remove one workspace independently; the other stays mounted.
-  const workSection = page
-    .locator(".workspace-section")
-    .filter({ hasText: "Work" });
-  page.once("dialog", (dialog) => void dialog.accept());
-  await workSection.getByRole("button", { name: "Remove" }).click();
-  await expect(page.getByRole("button", { name: "Work" })).toBeHidden();
-  await expect(page.getByRole("button", { name: "Personal" })).toBeVisible();
+  await page.getByRole("button", { name: "Actions for Work" }).click();
+  await page.getByRole("menuitem", { name: "Remove Workspace" }).click();
+  const dialog = page.getByRole("dialog", { name: "Remove Work?" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("Files on disk will not be deleted");
+  await dialog.getByRole("button", { name: "Remove Workspace" }).click();
+  await expect(page.getByRole("treeitem", { name: "Work" })).toHaveCount(0);
+  await expect(page.getByRole("treeitem", { name: "Personal" })).toBeVisible();
 
   const state = await getUs7State(page);
   expect(

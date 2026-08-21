@@ -115,7 +115,7 @@ export async function installUs4Harness(
           }
           if (command === "app_handshake") {
             return {
-              contractVersion: 1,
+              contractVersion: 2,
               appVersion: "0.1.0",
               abnormalExit: false,
             };
@@ -141,11 +141,19 @@ export async function installUs4Harness(
               createdAt: 1,
             };
           }
-          if (command === "dir_list") {
+          if (command === "workspace_entry_list") {
+            const parentRelativePath = String(args.parentRelativePath ?? "");
+            if (parentRelativePath !== "") {
+              return [];
+            }
             return state.fileNames.map((name) => ({
-              name,
+              workspaceId: "workspace-1",
+              kind: "drawing",
+              canonicalPath: `/workspace/${name}`,
               relativePath: name,
-              kind: "file",
+              parentRelativePath: "",
+              name,
+              displayName: name.replace(/\.excalidraw(\.json)?$/i, ""),
               mtime: 1,
               fileSize: 100,
             }));

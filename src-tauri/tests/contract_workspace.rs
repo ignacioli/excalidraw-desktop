@@ -2,11 +2,12 @@ use std::{fs, path::PathBuf, sync::Arc};
 
 use excalidraw_desktop_lib::{
     commands::{
-        dto::{DirListRequest, WorkspaceAddRequest},
+        dto::{WorkspaceAddRequest, WorkspaceEntryListRequest},
         error::ErrorCode,
         workspace::WorkspaceService,
     },
     database::repository::SqliteRepository,
+    workspace_entries::{WorkspaceEntryService, WorkspaceMutationGate},
 };
 
 struct Fixture {
@@ -14,6 +15,7 @@ struct Fixture {
     workspace: PathBuf,
     outside: PathBuf,
     workspaces: WorkspaceService,
+    entries: WorkspaceEntryService,
 }
 
 impl Fixture {
@@ -32,12 +34,14 @@ impl Fixture {
                 .await
                 .unwrap(),
         );
-        let workspaces = WorkspaceService::new(repository);
+        let workspaces = WorkspaceService::new(Arc::clone(&repository));
+        let entries = WorkspaceEntryService::new(repository, WorkspaceMutationGate::default());
         Self {
             root,
             workspace,
             outside,
             workspaces,
+            entries,
         }
     }
 }
@@ -74,10 +78,10 @@ async fn workspace_contract_rejects_nested_roots_and_traversal() {
     assert_eq!(overlap.code, ErrorCode::WorkspaceOverlap);
 
     let traversal = fixture
-        .workspaces
-        .dir_list(DirListRequest {
+        .entries
+        .list(WorkspaceEntryListRequest {
             workspace_id: mounted.id,
-            relative_path: "../outside".to_owned(),
+            parent_relative_path: "../outside".to_owned(),
         })
         .await
         .unwrap_err();

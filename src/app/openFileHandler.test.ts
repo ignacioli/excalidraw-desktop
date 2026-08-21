@@ -54,7 +54,7 @@ describe("registerOpenFileHandler", () => {
       invoke: vi.fn(async (command: string) => {
         if (command === "app_handshake") {
           return {
-            contractVersion: 1,
+            contractVersion: 2,
             appVersion: "0.1.0",
             abnormalExit: false,
             pendingOpenPaths: ["/startup.excalidraw"],
@@ -87,7 +87,7 @@ describe("registerOpenFileHandler", () => {
     const onError = vi.fn();
     const invoker = {
       invoke: vi.fn(async () => ({
-        contractVersion: 1,
+        contractVersion: 2,
         appVersion: "0.1.0",
         abnormalExit: false,
         pendingOpenPaths: [],

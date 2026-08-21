@@ -182,7 +182,7 @@ export async function installUiInteractionHarness(
           }
           if (command === "app_handshake") {
             return {
-              contractVersion: 1,
+              contractVersion: 2,
               appVersion: "0.2.0-e2e",
               abnormalExit: false,
               pendingOpenPaths: [],
@@ -221,23 +221,6 @@ export async function installUiInteractionHarness(
                   entry.parentRelativePath === parentRelativePath,
               )
               .map((entry) => ({ ...entry }));
-          }
-          if (command === "dir_list") {
-            const workspaceId = String(args.workspaceId ?? "");
-            const parentRelativePath = String(args.relativePath ?? "");
-            return state.entries
-              .filter(
-                (entry) =>
-                  entry.workspaceId === workspaceId &&
-                  entry.parentRelativePath === parentRelativePath,
-              )
-              .map((entry) => ({
-                name: entry.name,
-                relativePath: entry.relativePath,
-                kind: entry.kind === "directory" ? "dir" : "file",
-                mtime: entry.mtime,
-                fileSize: entry.fileSize,
-              }));
           }
           if (command === "workspace_entry_create") {
             const workspaceId = String(args.workspaceId ?? "");
@@ -405,11 +388,6 @@ export async function installUiInteractionHarness(
             };
           }
           if (command === "doc_close") return {};
-          if (command === "thumb_lookup") return { hit: false };
-          if (command === "thumb_store") {
-            const key = String(args.key ?? "fixture");
-            return { webpPath: `/ui-interactions/thumbnails/${key}.webp` };
-          }
           throw new Error(
             `Unexpected UI interaction harness command: ${command}`,
           );

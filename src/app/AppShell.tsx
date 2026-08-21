@@ -358,7 +358,6 @@ export function AppShell({
                 void runAction(() => documentManager.open(entry.canonicalPath));
               }}
               onWorkspacePresenceChange={setHasMountedWorkspace}
-              theme={themeSnapshot.resolvedColorScheme}
             />
           ) : null}
           {!hasMountedWorkspace ? (

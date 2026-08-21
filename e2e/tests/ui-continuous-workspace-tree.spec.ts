@@ -70,7 +70,7 @@ test("three Workspaces render as one bounded native-scroll tree without overlap"
   await expect(tree).toBeVisible();
   for (const workspace of WORKSPACES) {
     await expect(
-      workspaceRegion.getByRole("button", { name: workspace.name }),
+      workspaceRegion.getByRole("treeitem", { name: workspace.name }),
     ).toBeVisible();
   }
 
@@ -129,13 +129,11 @@ test("Workspace and entry menus support keyboard navigation, dismissal, and view
   });
   await page.goto("/");
 
-  const alphaRegion = page.getByRole("region", {
-    name: "Workspace files for Alpha",
-  });
-  const tree = alphaRegion.getByRole("tree");
-  const entryActions = alphaRegion.getByRole("button", {
+  const workspaceRegion = page.getByRole("region", { name: "Workspaces" });
+  const tree = workspaceRegion.getByRole("tree");
+  const entryActions = workspaceRegion.getByRole("button", {
     name: "Actions for notes",
-  });
+  }).first();
   await expect(entryActions).toBeVisible();
   await entryActions.focus();
   await page.keyboard.press("Enter");
@@ -186,7 +184,7 @@ test("Workspace and entry menus support keyboard navigation, dismissal, and view
   });
   await workspaceActions.click();
   await expect(page.getByRole("menu")).toBeVisible();
-  await page.getByRole("button", { name: "Alpha" }).click();
+  await page.getByRole("treeitem", { name: "Alpha" }).click();
   await expect(page.getByRole("menu")).not.toBeVisible();
 });
 
@@ -213,8 +211,8 @@ test("refresh keeps the first surviving scroll anchor and restart restores tree 
     element.scrollTop = Math.min(768, element.scrollHeight / 2);
     element.dispatchEvent(new Event("scroll", { bubbles: true }));
   });
-  const anchor = page.getByRole("button", {
-    name: "Open drawing-040.excalidraw",
+  const anchor = page.getByRole("treeitem", {
+    name: "drawing-040",
   });
   await expect(anchor).toBeVisible();
   const before = await anchor.boundingBox();
@@ -242,7 +240,7 @@ test("refresh keeps the first surviving scroll anchor and restart restores tree 
   });
 
   await expect(
-    page.getByRole("button", { name: "Open drawing-000.excalidraw" }),
+    page.getByRole("treeitem", { name: "drawing-000" }),
   ).not.toBeVisible();
   await expect(anchor).toBeVisible();
   const after = await anchor.boundingBox();

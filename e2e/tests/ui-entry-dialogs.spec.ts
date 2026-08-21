@@ -20,7 +20,8 @@ test("entry dialogs cancel without mutation and keep naming conflicts inline", a
   });
   await page.goto("/");
 
-  await page.getByRole("button", { name: "New drawing" }).click();
+  await page.getByRole("button", { name: "Actions for Workspace" }).click();
+  await page.getByRole("menuitem", { name: "New Drawing" }).click();
   const input = page.getByRole("textbox", { name: "Name" });
   await expect(input).toHaveValue("Untitled");
   await expect(page.getByLabel("Fixed extension .excalidraw")).toBeVisible();
@@ -31,7 +32,10 @@ test("entry dialogs cancel without mutation and keep naming conflicts inline", a
     ),
   ).toHaveLength(0);
 
-  await page.getByRole("button", { name: "New drawing" }).click();
+  await page
+    .getByRole("button", { name: "Actions for Workspace" })
+    .click();
+  await page.getByRole("menuitem", { name: "New Drawing" }).click();
   await input.fill("drawing");
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page.getByRole("alert")).toContainText("already exists");
@@ -85,22 +89,16 @@ test("rename preserves the fixed suffix and delete cancellation performs no muta
     entries: [drawing("drawing.excalidraw", "drawing")],
   });
   await page.goto("/");
-  await page
-    .getByRole("button", { name: "Actions for drawing.excalidraw" })
-    .click();
+  await page.getByRole("button", { name: "Actions for drawing" }).click();
   await page.getByRole("menuitem", { name: "Rename" }).click();
   const input = page.getByRole("textbox", { name: "Name" });
   await expect(input).toHaveValue("drawing");
   await expect(page.getByLabel("Fixed extension .excalidraw")).toBeVisible();
   await input.fill("renamed");
   await page.getByRole("button", { name: "Rename" }).click();
-  await expect(
-    page.getByRole("button", { name: "Open renamed.excalidraw" }),
-  ).toBeVisible();
+  await expect(page.getByRole("treeitem", { name: "renamed" })).toBeVisible();
 
-  await page
-    .getByRole("button", { name: "Actions for renamed.excalidraw" })
-    .click();
+  await page.getByRole("button", { name: "Actions for renamed" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await expect(
     page.getByRole("dialog", { name: "Delete renamed.excalidraw?" }),
@@ -123,7 +121,7 @@ test("dirty Drawing deletion focuses its Open Document and performs no hidden mu
     entries: [drawing("drawing.excalidraw", "drawing")],
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Open drawing.excalidraw" }).click();
+  await page.getByRole("treeitem", { name: "drawing" }).click();
   const canvas = page.locator(".excalidraw__canvas.interactive").last();
   const box = await canvas.boundingBox();
   if (box === null) throw new Error("The Drawing canvas was not measurable.");
@@ -134,9 +132,7 @@ test("dirty Drawing deletion focuses its Open Document and performs no hidden mu
   await page.mouse.up();
   await expect(page.getByRole("status")).not.toHaveText("All changes saved");
 
-  await page
-    .getByRole("button", { name: "Actions for drawing.excalidraw" })
-    .click();
+  await page.getByRole("button", { name: "Actions for drawing" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await expect(page.getByRole("tab", { name: /drawing\.excalidraw/ })).toHaveAttribute(
     "aria-selected",

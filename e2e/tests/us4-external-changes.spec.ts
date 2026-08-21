@@ -114,9 +114,7 @@ test("marks a removed external file as orphaned and guides the user to save as",
 async function mountAndOpen(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Mount folder/i }).click();
   await expect(page.getByRole("tree")).toBeVisible();
-  await page
-    .getByRole("button", { name: /Open drawing\.excalidraw/i })
-    .click();
+  await page.getByRole("treeitem", { name: "drawing" }).click();
   await expect(
     page.getByRole("tab", { name: "drawing.excalidraw" }),
   ).toBeVisible();

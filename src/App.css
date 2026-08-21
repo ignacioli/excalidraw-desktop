@@ -255,96 +255,68 @@ body {
   font-size: 1rem;
 }
 
-.workspace-panel,
-.workspace-section,
-.file-tree {
+.workspace-panel {
   display: flex;
   min-height: 0;
   flex-direction: column;
   gap: var(--space-2);
-}
-
-.workspace-panel {
   height: 100%;
 }
 
-.workspace-panel-header,
-.workspace-section-header {
+.workspace-panel-header {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
 }
 
-.workspace-panel-header button,
-.workspace-section-header button,
-.file-tree-new-button {
+.workspace-panel-header button {
   min-height: 1.75rem;
   padding: var(--space-1) var(--space-2);
   font-size: 0.75rem;
 }
 
-.workspace-section {
+.workspace-tree {
+  min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
-  border-top: 1px solid var(--border-subtle);
-  padding-top: var(--space-2);
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
-.workspace-section-header h3 {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-secondary);
-  font-size: 0.8125rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-tree-scroll {
-  flex: 1 1 auto;
-  min-height: 8rem;
-  border-radius: var(--radius-control);
-}
-
-.file-tree-scroll:focus-visible {
+.workspace-tree:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-.file-tree-row {
-  display: flex;
-  height: 2rem;
-  align-items: center;
-  gap: var(--space-1);
+.workspace-tree-row.is-active {
+  background: var(--selection-background, rgb(0 0 0 / 8%));
 }
 
-.file-sidebar .file-tree-label {
-  min-width: 0;
+.workspace-tree-action {
   min-height: 1.75rem;
-  flex: 1;
-  overflow: hidden;
-  border-color: transparent;
-  padding: var(--space-1);
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-sidebar .file-tree-menu-button {
-  min-height: 1.75rem;
+  min-width: 2rem;
   padding: var(--space-1);
 }
 
-.file-tree-menu {
+.application-context-menu {
+  position: fixed;
   z-index: 20;
   display: grid;
-  min-width: 9rem;
+  min-width: 11rem;
   gap: 1px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
   padding: var(--space-1);
   background: var(--panel-background);
   box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 18%);
+}
+
+.application-context-menu-description {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
 }
 
 .recovery-dialog-backdrop {

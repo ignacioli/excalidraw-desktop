@@ -1,15 +1,16 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import type {
-  CommandRequest,
-  CommandResponse,
-  EntryMutationResult,
-  ErrorCode,
-  ExpectedOpenDocument,
-  IpcCommands,
-  IpcEvents,
-  PathMigration,
-  WorkspaceEntriesChangedEvent,
-  WorkspaceEntry,
+import {
+  IPC_CONTRACT_VERSION,
+  type CommandRequest,
+  type CommandResponse,
+  type EntryMutationResult,
+  type ErrorCode,
+  type ExpectedOpenDocument,
+  type IpcCommands,
+  type IpcEvents,
+  type PathMigration,
+  type WorkspaceEntriesChangedEvent,
+  type WorkspaceEntry,
 } from "./contracts";
 
 describe("IPC v2 migration contract", () => {
@@ -63,7 +64,8 @@ describe("IPC v2 migration contract", () => {
     expect(existingCodes).toContain("PATH_ACCESS_DENIED");
   });
 
-  it("types the new commands while retaining legacy callers during migration", () => {
+  it("types Workspace Entry commands and proves migrated legacy callers are gone", () => {
+    expect(IPC_CONTRACT_VERSION).toBe(2);
     expectTypeOf<CommandRequest<"workspace_entry_list">>().toEqualTypeOf<{
       workspaceId: string;
       parentRelativePath: string;
@@ -94,15 +96,16 @@ describe("IPC v2 migration contract", () => {
       relativePath: string;
     }>();
 
-    const legacyCommands = [
-      "dir_list",
-      "file_create",
-      "file_rename",
-      "file_delete",
-      "thumb_lookup",
-      "thumb_store",
-    ] as const satisfies readonly (keyof IpcCommands)[];
-    expect(legacyCommands).toHaveLength(6);
+    type LegacyCommands =
+      | "dir_list"
+      | "file_create"
+      | "file_rename"
+      | "file_delete"
+      | "thumb_lookup"
+      | "thumb_store";
+    expectTypeOf<
+      Extract<keyof IpcCommands, LegacyCommands>
+    >().toEqualTypeOf<never>();
   });
 
   it("defines the Workspace Entry event shape and operation echo", () => {

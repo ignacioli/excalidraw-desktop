@@ -23,7 +23,6 @@
         "enable": true,
         "scope": {
           "allow": [
-            "$APPDATA/cache/thumbnails/**",
             "$HOME/**/.excalidraw_assets/*",
             "$HOME/.excalidraw_assets/*"
           ],

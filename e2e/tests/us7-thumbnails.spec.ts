@@ -33,9 +33,7 @@ test("drawing rows stay icon-only and opening one performs exactly one document 
   await page.goto("/");
 
   await expect(page.getByRole("tree")).toBeVisible();
-  const drawing = page.getByRole("button", {
-    name: /Open drawing\.excalidraw/i,
-  });
+  const drawing = page.getByRole("treeitem", { name: "drawing" });
   await expect(drawing).toBeVisible();
   await expect(page.locator("img.file-tree-thumbnail")).toHaveCount(0);
   expect(
@@ -86,7 +84,8 @@ test("mounting, expanding, and revisiting a Workspace never starts thumbnail wor
 
   const tree = page.getByRole("tree");
   await expect(tree).toBeVisible();
-  await expect(tree.getByRole("button", { name: /^Open /i })).toHaveCount(2);
+  await expect(tree.getByRole("treeitem", { name: "drawing" })).toBeVisible();
+  await expect(tree.getByRole("treeitem", { name: "second" })).toBeVisible();
   await tree.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
     element.dispatchEvent(new Event("scroll", { bubbles: true }));

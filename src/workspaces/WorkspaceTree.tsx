@@ -21,7 +21,12 @@ export interface WorkspaceTreeProps {
   onToggleWorkspace?: (workspaceId: string, expanded: boolean) => void;
   onToggleDirectory?: (entry: WorkspaceEntry, expanded: boolean) => void;
   onOpenDrawing?: (entry: WorkspaceEntry) => void;
-  onRowAction?: (row: WorkspaceTreeRow, trigger: HTMLButtonElement) => void;
+  onRowAction?: (
+    row: WorkspaceTreeRow,
+    trigger: HTMLButtonElement,
+    pointer?: { x: number; y: number },
+  ) => void;
+  onScroll?: () => void;
   ariaLabel?: string;
   className?: string;
   rowHeight?: number;
@@ -43,6 +48,7 @@ export function WorkspaceTree({
   onToggleDirectory,
   onOpenDrawing,
   onRowAction,
+  onScroll,
   ariaLabel = "Workspace files",
   className,
   rowHeight = DEFAULT_ROW_HEIGHT,
@@ -138,6 +144,17 @@ export function WorkspaceTree({
       null;
     setFocusedRowKey(preferred);
   }, [activeDrawing, focusedRowKey, rows]);
+
+  useEffect(() => {
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLElement &&
+      active.closest('[role="dialog"], [aria-modal="true"]') !== null
+    ) {
+      return;
+    }
+    scrollRef.current?.focus({ preventScroll: true });
+  }, []);
 
   useEffect(() => {
     const rowKey = pendingFocusKey.current;
@@ -286,6 +303,7 @@ export function WorkspaceTree({
       aria-label={ariaLabel}
       tabIndex={0}
       onKeyDown={handleTreeKeyDown}
+      onScroll={() => onScroll?.()}
       style={{
         height: "100%",
         minHeight: 0,
@@ -319,7 +337,9 @@ export function WorkspaceTree({
             focused={row.key === focusedRowKey}
             onFocus={() => setFocusedRowKey(row.key)}
             onActivate={() => activateRow(row)}
-            onAction={(trigger) => onRowAction?.(row, trigger)}
+            onAction={(trigger, pointer) =>
+              onRowAction?.(row, trigger, pointer)
+            }
             registerRef={(element) => {
               if (element === null) rowRefs.current.delete(row.key);
               else rowRefs.current.set(row.key, element);
@@ -338,7 +358,10 @@ interface WorkspaceTreeRowViewProps {
   focused: boolean;
   onFocus: () => void;
   onActivate: () => void;
-  onAction: (trigger: HTMLButtonElement) => void;
+  onAction: (
+    trigger: HTMLButtonElement,
+    pointer?: { x: number; y: number },
+  ) => void;
   registerRef: (element: HTMLDivElement | null) => void;
   expanded: boolean | undefined;
 }
@@ -386,7 +409,9 @@ function WorkspaceTreeRowView({
         const trigger = event.currentTarget.querySelector<HTMLButtonElement>(
           ".workspace-tree-action",
         );
-        if (trigger !== null) onAction(trigger);
+        if (trigger !== null) {
+          onAction(trigger, { x: event.clientX, y: event.clientY });
+        }
       }}
       onFocus={onFocus}
       style={{
@@ -446,6 +471,7 @@ function WorkspaceTreeRowView({
           type="button"
           aria-label={`Actions for ${row.displayName}`}
           className="workspace-tree-action"
+          onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
             onAction(event.currentTarget);

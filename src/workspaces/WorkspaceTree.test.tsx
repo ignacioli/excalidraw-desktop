@@ -225,4 +225,61 @@ describe("WorkspaceTree", () => {
     fireEvent.keyDown(tree, { key: "F10", shiftKey: true });
     expect(onRowAction).toHaveBeenCalledOnce();
   });
+
+  it("passes pointer origin from contextmenu and reports tree scroll", () => {
+    const onRowAction = vi.fn();
+    const onScroll = vi.fn();
+    render(
+      <WorkspaceTree
+        workspaces={[workspace]}
+        entriesByWorkspace={{
+          [workspace.id]: {
+            "": [entry("notes", "directory", "Notes")],
+          },
+        }}
+        expandedWorkspaceIds={new Set([workspace.id])}
+        onRowAction={onRowAction}
+        onScroll={onScroll}
+      />,
+    );
+
+    const notes = screen.getByRole("treeitem", { name: "Notes" });
+    fireEvent.contextMenu(notes, { clientX: 12, clientY: 34 });
+    expect(onRowAction).toHaveBeenCalledWith(
+      expect.objectContaining({ relativePath: "notes" }),
+      expect.any(HTMLButtonElement),
+      { x: 12, y: 34 },
+    );
+
+    fireEvent.scroll(screen.getByRole("tree", { name: "Workspace files" }));
+    expect(onScroll).toHaveBeenCalledOnce();
+  });
+
+  it("does not steal focus from an already open dialog", async () => {
+    const { rerender } = render(
+      <div aria-modal="true" role="dialog">
+        <button type="button">Keep</button>
+      </div>,
+    );
+    screen.getByRole("button", { name: "Keep" }).focus();
+    expect(screen.getByRole("button", { name: "Keep" })).toHaveFocus();
+
+    rerender(
+      <>
+        <div aria-modal="true" role="dialog">
+          <button type="button">Keep</button>
+        </div>
+        <WorkspaceTree
+          entriesByWorkspace={{ [workspace.id]: { "": [] } }}
+          expandedWorkspaceIds={new Set([workspace.id])}
+          workspaces={[workspace]}
+        />
+      </>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole("tree", { name: "Workspace files" })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Keep" })).toHaveFocus();
+  });
 });

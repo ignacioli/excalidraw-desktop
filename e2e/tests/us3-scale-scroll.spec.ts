@@ -576,17 +576,6 @@ async function installScaleHarness(
         rootPath: "/workspace",
         createdAt: seed,
       };
-      const makeFiles = () =>
-        Array.from({ length: count }, (_, index) => {
-          const name = `drawing-${String(index).padStart(5, "0")}.excalidraw`;
-          return {
-            name,
-            relativePath: `${directory}/${name}`,
-            kind: "file",
-            mtime: seed + index,
-            fileSize: 100,
-          };
-        });
       const makeWorkspaceEntries = () =>
         Array.from({ length: count }, (_, index) => {
           const name = `drawing-${String(index).padStart(5, "0")}.excalidraw`;
@@ -639,24 +628,6 @@ async function installScaleHarness(
             if (parentRelativePath === directory) return makeWorkspaceEntries();
             return [];
           }
-          if (command === "dir_list") {
-            const relativePath =
-              typeof args.relativePath === "string" ? args.relativePath : "";
-            if (relativePath === "") {
-              return [
-                {
-                  name: directory,
-                  relativePath: directory,
-                  kind: "dir",
-                  mtime: seed,
-                  fileSize: 0,
-                },
-              ];
-            }
-            if (relativePath === directory) return makeFiles();
-            return [];
-          }
-          if (command === "thumb_lookup") return { hit: false };
           if (command === "doc_open") {
             return {
               scene: {
@@ -669,9 +640,6 @@ async function installScaleHarness(
               baseHash: "scale-harness",
               hasNewerDraft: false,
             };
-          }
-          if (command === "thumb_store") {
-            return { webpPath: "/workspace/thumbnail.webp" };
           }
           throw new Error(`Unexpected scale command ${command}`);
         },

@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const IPC_CONTRACT_VERSION: u32 = 1;
+pub const IPC_CONTRACT_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -76,41 +76,6 @@ pub struct WorkspaceAddRequest {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceRemoveRequest {
     pub workspace_id: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DirListRequest {
-    pub workspace_id: String,
-    pub relative_path: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum DirEntryKind {
-    Dir,
-    File,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DirEntry {
-    pub name: String,
-    pub relative_path: String,
-    pub kind: DirEntryKind,
-    pub mtime: i64,
-    pub file_size: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FileEntry {
-    pub canonical_path: String,
-    pub workspace_id: String,
-    pub display_name: String,
-    pub relative_path: String,
-    pub mtime: i64,
-    pub file_size: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -220,20 +185,6 @@ pub struct WorkspaceEntryDeleteResult {
     pub operation_id: String,
     pub kind: WorkspaceEntryKind,
     pub old_relative_path: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FileCreateRequest {
-    pub workspace_id: String,
-    pub relative_path: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FileRenameRequest {
-    pub path: String,
-    pub new_name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -374,36 +325,6 @@ pub struct ExportResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ThumbnailLookupRequest {
-    pub path: String,
-    pub theme: Theme,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ThumbnailLookupResponse {
-    pub hit: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub webp_path: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ThumbnailStoreRequest {
-    pub path: String,
-    pub theme: String,
-    pub key: String,
-    pub webp_bytes: Vec<u8>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ThumbnailStoreResponse {
-    pub webp_path: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct EmptyResponse {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -469,7 +390,7 @@ mod tests {
         };
         let value = serde_json::to_value(response)
             .unwrap_or_else(|error| panic!("serialize handshake: {error}"));
-        assert_eq!(value["contractVersion"], 1);
+        assert_eq!(value["contractVersion"], 2);
         assert_eq!(value["abnormalExit"], false);
         assert_eq!(value["pendingOpenPaths"][0], "/tmp/drawing.excalidraw");
 

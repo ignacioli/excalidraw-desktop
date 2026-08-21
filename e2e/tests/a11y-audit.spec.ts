@@ -117,7 +117,7 @@ type HarnessWindow = {
   };
 };
 
-/** Default browser harness plus the workspace/thumbnail stubs the shell needs. */
+/** Default browser harness plus the workspace stubs the shell needs. */
 async function installShellHarness(page: Page): Promise<void> {
   await installBrowserTauriHarness(page);
   await page.addInitScript(() => {
@@ -129,9 +129,6 @@ async function installShellHarness(page: Page): Promise<void> {
     browser.__TAURI_INTERNALS__!.invoke = async (command, args) => {
       if (command === "workspace_list") {
         return [];
-      }
-      if (command === "thumb_lookup") {
-        return { hit: false };
       }
       return original(command, args);
     };
@@ -152,7 +149,7 @@ async function installWorkspaceHarness(
         return;
       }
       let mounted = false;
-      let names = [...fileNames];
+      const names = [...fileNames];
       browser.__TAURI_INTERNALS__!.invoke = async (command, args = {}) => {
         if (command === "workspace_list") {
           return mounted
@@ -175,30 +172,22 @@ async function installWorkspaceHarness(
             createdAt: 1,
           };
         }
-        if (command === "dir_list") {
+        if (command === "workspace_entry_list") {
+          const parentRelativePath = String(args.parentRelativePath ?? "");
+          if (parentRelativePath !== "") {
+            return [];
+          }
           return names.map((name) => ({
-            name,
+            workspaceId: "workspace-1",
+            kind: "drawing",
+            canonicalPath: `/workspace/${name}`,
             relativePath: name,
-            kind: "file",
+            parentRelativePath: "",
+            name,
+            displayName: name.replace(/\.excalidraw(\.json)?$/i, ""),
             mtime: 1,
             fileSize: 100,
           }));
-        }
-        if (command === "file_create") {
-          const requested = String(args.relativePath ?? "drawing.excalidraw");
-          const name = requested.split("/").pop() ?? "drawing.excalidraw";
-          names = [...names, name];
-          return {
-            canonicalPath: `/workspace/${name}`,
-            workspaceId: "workspace-1",
-            displayName: name,
-            relativePath: name,
-            mtime: 1,
-            fileSize: 100,
-          };
-        }
-        if (command === "thumb_lookup") {
-          return { hit: false };
         }
         return original(command, args);
       };
@@ -207,22 +196,9 @@ async function installWorkspaceHarness(
   );
 }
 
-/** US4 event-channel harness (native window runtime) plus a thumbnail stub. */
+/** US4 event-channel harness (native window runtime). */
 async function installConflictHarness(page: Page): Promise<void> {
   await installUs4Harness(page);
-  await page.addInitScript(() => {
-    const browser = globalThis as HarnessWindow;
-    const original = browser.__TAURI_INTERNALS__?.invoke;
-    if (original === undefined) {
-      return;
-    }
-    browser.__TAURI_INTERNALS__!.invoke = async (command, args) => {
-      if (command === "thumb_lookup") {
-        return { hit: false };
-      }
-      return original(command, args);
-    };
-  });
 }
 
 /** US4 harness with an abnormal-exit handshake and two recovery candidates. */
@@ -236,12 +212,9 @@ async function installRecoveryHarness(page: Page): Promise<void> {
         return;
       }
       browser.__TAURI_INTERNALS__!.invoke = async (command, args) => {
-        if (command === "thumb_lookup") {
-          return { hit: false };
-        }
         if (command === "app_handshake") {
           return {
-            contractVersion: 1,
+            contractVersion: 2,
             appVersion: "0.1.0",
             abnormalExit: true,
           };
@@ -274,9 +247,6 @@ async function installExportHarness(
       browser.__TAURI_INTERNALS__!.invoke = async (command, args) => {
         if (command === "workspace_list") {
           return [];
-        }
-        if (command === "thumb_lookup") {
-          return { hit: false };
         }
         if (command === "doc_export") {
           if (exportMode === "fail") {
@@ -339,9 +309,7 @@ async function drawRectangle(page: Page): Promise<void> {
 async function openDirtyDrawing(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Mount folder/i }).click();
   await expect(page.getByRole("tree")).toBeVisible();
-  await page
-    .getByRole("button", { name: /Open drawing\.excalidraw/i })
-    .click();
+  await page.getByRole("treeitem", { name: "drawing" }).click();
   await expect(page.getByRole("tab", { name: "drawing.excalidraw" })).toBeVisible();
   await drawRectangle(page);
   await page.waitForTimeout(400);
@@ -393,22 +361,15 @@ test("workspace file tree, context menu, and tab bar are axe-clean and keyboard 
   await page.goto("/");
   await page.getByRole("button", { name: /Mount folder/i }).click();
   await expect(page.getByRole("tree")).toBeVisible();
-  await page
-    .getByRole("button", { name: /Open drawing\.excalidraw/i })
-    .click();
-  await page
-    .getByRole("button", { name: /Open second\.excalidraw/i })
-    .click();
+  await page.getByRole("treeitem", { name: "drawing" }).click();
+  await page.getByRole("treeitem", { name: "second" }).click();
   await expect(page.getByRole("tab")).toHaveCount(2);
   await expectAxeClean(page, "workspace tree", SHELL_CHROME, EDITOR_EXCLUDE);
 
-  await page
-    .getByRole("button", { name: /Actions for drawing\.excalidraw/i })
-    .first()
-    .click();
+  await page.getByRole("button", { name: "Actions for drawing" }).first().click();
   const menu = page.getByRole("menu");
   await expect(menu).toBeVisible();
-  await expectAxeClean(page, "file tree context menu", [".file-tree-menu"], []);
+  await expectAxeClean(page, "file tree context menu", [".application-context-menu"], []);
 
   const activeTab = page.getByRole("tab", { name: "second.excalidraw" });
   await activeTab.focus();
