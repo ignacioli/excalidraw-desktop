@@ -106,9 +106,17 @@ pub fn run() {
                 conflicts,
                 Some(Arc::new(watcher_service.clone())),
             );
+            if let Err(error) = tauri::async_runtime::block_on(
+                crate::workspace_entries::reconcile_pending_mutations(
+                    &shared_repository,
+                    recovery_store.as_ref(),
+                ),
+            ) {
+                eprintln!("failed to reconcile pending Workspace Entry mutations: {error}");
+            }
             let recovery_service = RecoveryService::with_path_grant(
                 Arc::clone(&shared_repository),
-                recovery_store,
+                Arc::clone(&recovery_store),
                 Arc::new(TauriRecoveryPathGrant(app.fs_scope())),
             );
             app.manage(repository);
@@ -121,6 +129,8 @@ pub fn run() {
             app.manage(WorkspaceEntryState::new(
                 Arc::clone(&shared_repository),
                 workspace_mutation_gate,
+                Arc::clone(&recovery_store),
+                watcher_service.clone(),
             ));
             app.manage(ExportState::new(ExportService::new(
                 Arc::clone(&shared_repository),

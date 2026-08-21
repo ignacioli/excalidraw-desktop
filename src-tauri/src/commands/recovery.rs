@@ -10,7 +10,9 @@ use sha2::{Digest, Sha256};
 use tauri::State;
 
 use crate::{
-    database::repository::{DraftRepository, SqliteRepository, WorkspaceRepository},
+    database::repository::{
+        is_path_or_descendant, migrate_path, DraftRepository, SqliteRepository, WorkspaceRepository,
+    },
     documents::{
         assets::{asset_root_for, reembed_files},
         atomic_write::atomic_write,
@@ -18,6 +20,10 @@ use crate::{
         validation::{validate_scene, SceneValidationError},
     },
     security::{PathSecurityError, WorkspacePathPolicy},
+    workspace_entries::{
+        mutation_journal::{load_journals, MutationJournalKind, MutationJournalRecord},
+        reconcile_pending_mutations,
+    },
 };
 
 use super::{
@@ -96,6 +102,8 @@ impl RecoveryService {
     }
 
     pub async fn list(&self) -> Result<Vec<RecoveryCandidate>, AppError> {
+        let _ = reconcile_pending_mutations(&self.repository, &self.store).await;
+        let pending_journals = load_journals(&self.store)?;
         let store = Arc::clone(&self.store);
         let snapshots =
             run_blocking(move || store.list_snapshots().map_err(AppError::from)).await?;
@@ -125,6 +133,10 @@ impl RecoveryService {
         let mut candidates = Vec::new();
         for (_, (_, snapshot)) in latest_by_document {
             let stored_path = snapshot.original_path.clone().map(PathBuf::from);
+            if journal_hides_deleted_snapshot(&pending_journals, stored_path.as_deref()) {
+                continue;
+            }
+            let stored_path = rewrite_renamed_snapshot_path(&pending_journals, stored_path);
             let original_path = stored_path.filter(|path| {
                 is_authorized_recovery_path(path, &policy, self.path_grant.as_ref())
             });
@@ -340,6 +352,44 @@ fn validate_snapshot_scene(bytes: &[u8], maximum_bytes: usize) -> Result<(), App
             },
             other => AppError::InvalidScene(other.to_string()),
         })
+}
+
+fn journal_hides_deleted_snapshot(
+    journals: &[MutationJournalRecord],
+    original_path: Option<&Path>,
+) -> bool {
+    let Some(path) = original_path else {
+        return false;
+    };
+    let path = path.display().to_string();
+    journals.iter().any(|journal| {
+        journal.kind == MutationJournalKind::Delete
+            && is_path_or_descendant(&path, &journal.old_canonical_path)
+    })
+}
+
+fn rewrite_renamed_snapshot_path(
+    journals: &[MutationJournalRecord],
+    original_path: Option<PathBuf>,
+) -> Option<PathBuf> {
+    let path = original_path?;
+    let path_string = path.display().to_string();
+    for journal in journals {
+        if journal.kind != MutationJournalKind::Rename {
+            continue;
+        }
+        let Some(new_canonical_path) = journal.new_canonical_path.as_ref() else {
+            continue;
+        };
+        if is_path_or_descendant(&path_string, &journal.old_canonical_path) {
+            return Some(PathBuf::from(migrate_path(
+                &path_string,
+                &journal.old_canonical_path,
+                new_canonical_path,
+            )));
+        }
+    }
+    Some(path)
 }
 
 fn is_authorized_recovery_path(

@@ -271,14 +271,14 @@ impl SqliteRepository {
     }
 }
 
-fn is_path_or_descendant(path: &str, root: &str) -> bool {
+pub(crate) fn is_path_or_descendant(path: &str, root: &str) -> bool {
     path == root
         || path
             .strip_prefix(root)
             .is_some_and(|suffix| suffix.starts_with('/') || suffix.starts_with('\\'))
 }
 
-fn migrate_path(path: &str, old_root: &str, new_root: &str) -> String {
+pub(crate) fn migrate_path(path: &str, old_root: &str, new_root: &str) -> String {
     if path == old_root {
         return new_root.to_owned();
     }

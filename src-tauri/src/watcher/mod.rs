@@ -368,6 +368,7 @@ impl WatcherService {
         kind: ResolvedChangeKind,
     ) {
         if self.is_entry_operation_echo(workspace, path, &kind).await {
+            self.record_echo_in_known_table(path, &kind).await;
             return;
         }
 
@@ -510,57 +511,23 @@ impl WatcherService {
         path: &Path,
         kind: &ResolvedChangeKind,
     ) -> bool {
-        let relative_path =
-            path.strip_prefix(Path::new(&workspace.root_path))
-                .ok()
-                .map(|relative| {
-                    relative
-                        .to_string_lossy()
-                        .replace(std::path::MAIN_SEPARATOR, "/")
-                });
-        let Some(relative_path) = relative_path else {
-            return false;
+        let relative_path = match relative_workspace_path(workspace, path) {
+            Some(relative_path) => relative_path,
+            None => return false,
         };
         let now = Instant::now();
         let mut operations = self.entry_operations.lock().await;
         operations.retain(|_, operation| {
             now.duration_since(operation.recorded_at) < Duration::from_secs(10)
         });
-        let matched = operations.iter().find_map(|(operation_id, operation)| {
-            if operation.workspace_id != workspace.id {
-                return None;
-            }
-            let matches = match kind {
-                ResolvedChangeKind::Renamed { new_path } => {
-                    let new_relative = new_path
-                        .strip_prefix(Path::new(&workspace.root_path))
-                        .ok()
-                        .map(|relative| {
-                            relative
-                                .to_string_lossy()
-                                .replace(std::path::MAIN_SEPARATOR, "/")
-                        });
-                    relative_path == operation.relative_path
-                        && new_relative.as_deref() == operation.new_relative_path.as_deref()
-                }
-                ResolvedChangeKind::Created => {
-                    operation.new_relative_path.is_none()
-                        && relative_path == operation.relative_path
-                }
-                ResolvedChangeKind::Removed => {
-                    operation.new_relative_path.is_none()
-                        && relative_path == operation.relative_path
-                }
-                ResolvedChangeKind::Modified => false,
-            };
-            matches.then_some(operation_id.clone())
-        });
-        if let Some(operation_id) = matched {
-            operations.remove(&operation_id);
-            true
-        } else {
-            false
-        }
+        operations
+            .values()
+            .any(|operation| entry_operation_covers(workspace, &relative_path, kind, operation))
+    }
+
+    async fn record_echo_in_known_table(&self, path: &Path, kind: &ResolvedChangeKind) {
+        let mut known = self.known.lock().await;
+        apply_echo_to_known(&mut known, path, kind);
     }
 
     fn emit_parent_invalidation(&self, app: &AppHandle, workspace: &WorkspaceRecord, path: &Path) {
@@ -583,6 +550,73 @@ impl WatcherService {
                 "relativePath": relative_path,
             }),
         );
+    }
+}
+
+fn apply_echo_to_known(known: &mut KnownFileTable, path: &Path, kind: &ResolvedChangeKind) {
+    match kind {
+        ResolvedChangeKind::Renamed { new_path } => {
+            known.remove(path);
+            if let Ok(triplet) = read_triplet(new_path) {
+                known.note(new_path, triplet);
+            }
+        }
+        ResolvedChangeKind::Removed => {
+            known.remove(path);
+        }
+        ResolvedChangeKind::Created | ResolvedChangeKind::Modified => {
+            if let Ok(triplet) = read_triplet(path) {
+                known.note(path, triplet);
+            }
+        }
+    }
+}
+
+fn relative_workspace_path(workspace: &WorkspaceRecord, path: &Path) -> Option<String> {
+    path.strip_prefix(Path::new(&workspace.root_path))
+        .ok()
+        .map(|relative| {
+            relative
+                .to_string_lossy()
+                .replace(std::path::MAIN_SEPARATOR, "/")
+        })
+}
+
+fn relative_is_self_or_descendant(relative: &str, root: &str) -> bool {
+    relative == root
+        || relative
+            .strip_prefix(root)
+            .is_some_and(|suffix| suffix.starts_with('/'))
+}
+
+fn entry_operation_covers(
+    workspace: &WorkspaceRecord,
+    relative_path: &str,
+    kind: &ResolvedChangeKind,
+    operation: &EntryOperation,
+) -> bool {
+    if operation.workspace_id != workspace.id {
+        return false;
+    }
+    match kind {
+        ResolvedChangeKind::Renamed { new_path } => {
+            let Some(new_relative) = relative_workspace_path(workspace, new_path) else {
+                return false;
+            };
+            let Some(operation_new) = operation.new_relative_path.as_deref() else {
+                return false;
+            };
+            relative_is_self_or_descendant(relative_path, &operation.relative_path)
+                && relative_is_self_or_descendant(&new_relative, operation_new)
+        }
+        ResolvedChangeKind::Created => match operation.new_relative_path.as_deref() {
+            Some(new_relative) => relative_is_self_or_descendant(relative_path, new_relative),
+            None => relative_path == operation.relative_path,
+        },
+        ResolvedChangeKind::Removed => {
+            relative_is_self_or_descendant(relative_path, &operation.relative_path)
+        }
+        ResolvedChangeKind::Modified => false,
     }
 }
 

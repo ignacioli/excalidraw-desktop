@@ -5,7 +5,6 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::{
     database::repository::SqliteRepository,
-    watcher::WatcherState,
     workspace_entries::{WorkspaceEntryService, WorkspaceMutationGate},
 };
 
@@ -25,9 +24,15 @@ pub struct WorkspaceEntryState {
 }
 
 impl WorkspaceEntryState {
-    pub fn new(repository: Arc<SqliteRepository>, mutation_gate: WorkspaceMutationGate) -> Self {
+    pub fn new(
+        repository: Arc<SqliteRepository>,
+        mutation_gate: WorkspaceMutationGate,
+        recovery: Arc<crate::documents::recovery::RecoveryStore>,
+        watcher: crate::watcher::WatcherService,
+    ) -> Self {
         Self {
-            service: WorkspaceEntryService::new(repository, mutation_gate),
+            service: WorkspaceEntryService::with_recovery(repository, mutation_gate, recovery)
+                .with_watcher(watcher),
         }
     }
 }
@@ -55,7 +60,6 @@ pub async fn workspace_entry_create(
     base_name: String,
     app: AppHandle,
     state: State<'_, WorkspaceEntryState>,
-    watcher: State<'_, WatcherState>,
 ) -> Result<crate::commands::dto::EntryMutationResult, IpcError> {
     let result = state
         .service
@@ -66,15 +70,6 @@ pub async fn workspace_entry_create(
             base_name,
         })
         .await?;
-    watcher
-        .service
-        .note_entry_operation(
-            result.operation_id.clone(),
-            workspace_id.clone(),
-            result.entry.relative_path.clone(),
-            None,
-        )
-        .await;
     emit_entries_changed(
         &app,
         WorkspaceEntriesChangedEvent {
@@ -96,7 +91,6 @@ pub async fn workspace_entry_rename(
     expected_open_documents: Vec<crate::commands::dto::ExpectedOpenDocument>,
     app: AppHandle,
     state: State<'_, WorkspaceEntryState>,
-    watcher: State<'_, WatcherState>,
 ) -> Result<WorkspaceEntryRenameResult, IpcError> {
     let result = state
         .service
@@ -107,15 +101,6 @@ pub async fn workspace_entry_rename(
             expected_open_documents,
         })
         .await?;
-    watcher
-        .service
-        .note_entry_operation(
-            result.operation_id.clone(),
-            workspace_id.clone(),
-            result.old_relative_path.clone(),
-            Some(result.new_relative_path.clone()),
-        )
-        .await;
     emit_entries_changed(
         &app,
         WorkspaceEntriesChangedEvent {
@@ -151,7 +136,6 @@ pub async fn workspace_entry_delete(
     expected_open_document: Option<crate::commands::dto::ExpectedOpenDocument>,
     app: AppHandle,
     state: State<'_, WorkspaceEntryState>,
-    watcher: State<'_, WatcherState>,
 ) -> Result<crate::commands::dto::WorkspaceEntryDeleteResult, IpcError> {
     let result = state
         .service
@@ -161,15 +145,6 @@ pub async fn workspace_entry_delete(
             expected_open_document,
         })
         .await?;
-    watcher
-        .service
-        .note_entry_operation(
-            result.operation_id.clone(),
-            workspace_id.clone(),
-            result.old_relative_path.clone(),
-            None,
-        )
-        .await;
     emit_entries_changed(
         &app,
         WorkspaceEntriesChangedEvent {

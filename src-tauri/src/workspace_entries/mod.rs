@@ -29,6 +29,17 @@ use crate::{
     database::repository::{
         DraftRepository, FileIndexRecord, FileIndexRepository, SqliteRepository, WorkspaceRecord,
     },
+    documents::recovery::RecoveryStore,
+};
+
+pub(crate) mod mutation_journal;
+#[cfg(test)]
+mod mutation_test;
+
+pub use mutation_journal::reconcile_pending_mutations;
+
+use mutation_journal::{
+    apply_committed_record_with_skip, delete_journal, save_journal, MutationJournalRecord,
 };
 
 const MANAGED_DIRECTORY_NAMES: &[&str] = &[".excalidraw_assets"];
@@ -68,16 +79,40 @@ impl TrashOperator for SystemTrashOperator {
     }
 }
 
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DerivedStateFault {
+    Sqlite,
+    Recovery,
+}
+
 #[derive(Clone)]
 pub struct WorkspaceEntryService {
     repository: Arc<SqliteRepository>,
     mutation_gate: WorkspaceMutationGate,
     trash: Arc<dyn TrashOperator>,
+    recovery: Arc<RecoveryStore>,
+    watcher: Option<crate::watcher::WatcherService>,
+    #[cfg(test)]
+    derived_fault: Arc<std::sync::Mutex<Option<DerivedStateFault>>>,
 }
 
 impl WorkspaceEntryService {
     pub fn new(repository: Arc<SqliteRepository>, mutation_gate: WorkspaceMutationGate) -> Self {
-        Self::with_trash(repository, mutation_gate, Arc::new(SystemTrashOperator))
+        Self::with_recovery(repository, mutation_gate, isolated_recovery_store())
+    }
+
+    pub fn with_recovery(
+        repository: Arc<SqliteRepository>,
+        mutation_gate: WorkspaceMutationGate,
+        recovery: Arc<RecoveryStore>,
+    ) -> Self {
+        Self::with_trash_and_recovery(
+            repository,
+            mutation_gate,
+            Arc::new(SystemTrashOperator),
+            recovery,
+        )
     }
 
     pub fn with_trash(
@@ -85,15 +120,90 @@ impl WorkspaceEntryService {
         mutation_gate: WorkspaceMutationGate,
         trash: Arc<dyn TrashOperator>,
     ) -> Self {
+        Self::with_trash_and_recovery(repository, mutation_gate, trash, isolated_recovery_store())
+    }
+
+    pub fn with_trash_and_recovery(
+        repository: Arc<SqliteRepository>,
+        mutation_gate: WorkspaceMutationGate,
+        trash: Arc<dyn TrashOperator>,
+        recovery: Arc<RecoveryStore>,
+    ) -> Self {
         Self {
             repository,
             mutation_gate,
             trash,
+            recovery,
+            watcher: None,
+            #[cfg(test)]
+            derived_fault: Arc::new(std::sync::Mutex::new(None)),
+        }
+    }
+
+    pub fn with_watcher(mut self, watcher: crate::watcher::WatcherService) -> Self {
+        self.watcher = Some(watcher);
+        self
+    }
+
+    async fn note_pending_operation(
+        &self,
+        operation_id: &str,
+        workspace_id: &str,
+        relative_path: String,
+        new_relative_path: Option<String>,
+    ) {
+        if let Some(watcher) = &self.watcher {
+            watcher
+                .note_entry_operation(
+                    operation_id.to_owned(),
+                    workspace_id.to_owned(),
+                    relative_path,
+                    new_relative_path,
+                )
+                .await;
         }
     }
 
     pub fn mutation_gate(&self) -> &WorkspaceMutationGate {
         &self.mutation_gate
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_derived_fault(&self, fault: Option<DerivedStateFault>) {
+        *self
+            .derived_fault
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = fault;
+    }
+
+    fn skip_sqlite(&self) -> bool {
+        #[cfg(test)]
+        {
+            *self
+                .derived_fault
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                == Some(DerivedStateFault::Sqlite)
+        }
+        #[cfg(not(test))]
+        {
+            false
+        }
+    }
+
+    fn skip_recovery(&self) -> bool {
+        #[cfg(test)]
+        {
+            *self
+                .derived_fault
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                == Some(DerivedStateFault::Recovery)
+        }
+        #[cfg(not(test))]
+        {
+            false
+        }
     }
 
     pub async fn create(
@@ -213,6 +323,7 @@ impl WorkspaceEntryService {
         request: WorkspaceEntryCreateRequest,
     ) -> Result<EntryMutationResult, AppError> {
         let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
+        reconcile_pending_mutations(&self.repository, &self.recovery).await?;
         let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
         let root = PathBuf::from(&workspace.root_path);
         let base_name = validate_entry_base_name(&request.base_name)?;
@@ -226,6 +337,11 @@ impl WorkspaceEntryService {
         let target = authorize_creation(&self.repository, &parent, &target_name).await?;
         reject_symlink_components(&root, &target)?;
         ensure_target_absent(&target)?;
+
+        let operation_id = Uuid::new_v4().to_string();
+        let relative_path = normalized_relative(&root, &target)?;
+        self.note_pending_operation(&operation_id, &request.workspace_id, relative_path, None)
+            .await;
 
         match request.kind {
             WorkspaceEntryKind::Drawing => atomic_create_drawing(&target)?,
@@ -253,7 +369,7 @@ impl WorkspaceEntryService {
             self.index_entry(&workspace, &entry).await?;
         }
         Ok(EntryMutationResult {
-            operation_id: Uuid::new_v4().to_string(),
+            operation_id,
             entry,
         })
     }
@@ -263,6 +379,7 @@ impl WorkspaceEntryService {
         request: WorkspaceEntryRenameRequest,
     ) -> Result<WorkspaceEntryRenameResult, AppError> {
         let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
+        reconcile_pending_mutations(&self.repository, &self.recovery).await?;
         let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
         let root = PathBuf::from(&workspace.root_path);
         let source = self
@@ -288,10 +405,34 @@ impl WorkspaceEntryService {
         let old_canonical_path = source.path.display().to_string();
         let old_relative_path = source.relative_path.clone();
         let new_relative_path = normalized_relative(&root, &target)?;
+        let new_display_name = target
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_owned();
+        let operation_id = Uuid::new_v4().to_string();
+
+        let mut record = MutationJournalRecord::rename(
+            operation_id.clone(),
+            request.workspace_id.clone(),
+            old_canonical_path.clone(),
+            target.display().to_string(),
+            old_relative_path.clone(),
+            new_relative_path.clone(),
+            new_display_name,
+        );
+        save_journal(&self.recovery, &record)?;
+        self.note_pending_operation(
+            &operation_id,
+            &request.workspace_id,
+            old_relative_path.clone(),
+            Some(new_relative_path.clone()),
+        )
+        .await;
 
         let old_path = source.path.clone();
         let new_path = target.clone();
-        run_blocking(move || {
+        let rename_result = run_blocking(move || {
             fs::rename(&old_path, &new_path).map_err(|source| {
                 if source.kind() == io::ErrorKind::AlreadyExists {
                     AppError::NameConflict(new_path.clone())
@@ -303,23 +444,20 @@ impl WorkspaceEntryService {
                 }
             })
         })
-        .await?;
+        .await;
+        if let Err(error) = rename_result {
+            delete_journal(&self.recovery, &operation_id)?;
+            return Err(error);
+        }
 
-        // Filesystem rename is the commit point. SQLite paths are derived
-        // state and can be rebuilt/retried after a process interruption.
-        self.repository
-            .migrate_entry_paths(
-                old_canonical_path,
-                target.display().to_string(),
-                old_relative_path.clone(),
-                new_relative_path.clone(),
-                target
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or_default()
-                    .to_owned(),
-            )
-            .await?;
+        let _ = apply_committed_record_with_skip(
+            &self.repository,
+            &self.recovery,
+            &mut record,
+            self.skip_sqlite(),
+            self.skip_recovery(),
+        )
+        .await;
 
         let parent_relative_path = target
             .parent()
@@ -334,7 +472,7 @@ impl WorkspaceEntryService {
             source.kind,
         )?;
         Ok(WorkspaceEntryRenameResult {
-            operation_id: Uuid::new_v4().to_string(),
+            operation_id,
             entry,
             old_relative_path,
             new_relative_path,
@@ -347,6 +485,7 @@ impl WorkspaceEntryService {
         request: WorkspaceEntryPathRequest,
     ) -> Result<WorkspaceEntryDeletePreflightResult, AppError> {
         let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
+        reconcile_pending_mutations(&self.repository, &self.recovery).await?;
         let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
         let source = self
             .resolve_entry(&workspace, &request.relative_path)
@@ -365,6 +504,7 @@ impl WorkspaceEntryService {
         request: WorkspaceEntryDeleteRequest,
     ) -> Result<WorkspaceEntryDeleteResult, AppError> {
         let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
+        reconcile_pending_mutations(&self.repository, &self.recovery).await?;
         let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
         let source = self
             .resolve_entry(&workspace, &request.relative_path)
@@ -389,18 +529,42 @@ impl WorkspaceEntryService {
 
         let trash = Arc::clone(&self.trash);
         let target = source.path.clone();
-        run_blocking(move || {
+        let operation_id = Uuid::new_v4().to_string();
+        let mut record = MutationJournalRecord::delete(
+            operation_id.clone(),
+            request.workspace_id.clone(),
+            canonical_path.clone(),
+            source.relative_path.clone(),
+        );
+        save_journal(&self.recovery, &record)?;
+        self.note_pending_operation(
+            &operation_id,
+            &request.workspace_id,
+            source.relative_path.clone(),
+            None,
+        )
+        .await;
+        let trash_result = run_blocking(move || {
             trash.delete(&target).map_err(|source| AppError::Io {
                 path: Some(target),
                 source,
             })
         })
-        .await?;
-        self.repository
-            .remove_clean_entry_metadata(canonical_path)
-            .await?;
+        .await;
+        if let Err(error) = trash_result {
+            delete_journal(&self.recovery, &operation_id)?;
+            return Err(error);
+        }
+        let _ = apply_committed_record_with_skip(
+            &self.repository,
+            &self.recovery,
+            &mut record,
+            self.skip_sqlite(),
+            self.skip_recovery(),
+        )
+        .await;
         Ok(WorkspaceEntryDeleteResult {
-            operation_id: Uuid::new_v4().to_string(),
+            operation_id,
             kind: source.kind,
             old_relative_path: source.relative_path,
         })
@@ -411,6 +575,7 @@ impl WorkspaceEntryService {
         request: WorkspaceEntryPathRequest,
     ) -> Result<EmptyResponse, AppError> {
         let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
+        reconcile_pending_mutations(&self.repository, &self.recovery).await?;
         let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
         let source = self
             .resolve_entry(&workspace, &request.relative_path)
@@ -902,6 +1067,12 @@ where
     tokio::task::spawn_blocking(operation)
         .await
         .map_err(|error| AppError::Internal(format!("blocking entry task failed: {error}")))?
+}
+
+fn isolated_recovery_store() -> Arc<RecoveryStore> {
+    Arc::new(RecoveryStore::new(
+        std::env::temp_dir().join(format!("excalidraw-entry-recovery-{}", Uuid::new_v4())),
+    ))
 }
 
 fn drawing_display_name(name: &str) -> String {

@@ -132,3 +132,93 @@ fn removed_path_leaves_the_known_table() {
         },
     ));
 }
+
+fn workspace_record() -> crate::database::repository::WorkspaceRecord {
+    crate::database::repository::WorkspaceRecord {
+        id: "ws".to_owned(),
+        name: "Workspace".to_owned(),
+        root_path: "/workspace".to_owned(),
+        created_at: 1,
+    }
+}
+
+fn rename_operation() -> super::EntryOperation {
+    super::EntryOperation {
+        workspace_id: "ws".to_owned(),
+        relative_path: "folder".to_owned(),
+        new_relative_path: Some("renamed".to_owned()),
+        recorded_at: Instant::now(),
+    }
+}
+
+#[test]
+fn directory_rename_operation_covers_descendant_remove_and_create() {
+    let workspace = workspace_record();
+    let operation = rename_operation();
+    assert!(super::entry_operation_covers(
+        &workspace,
+        "folder/child.excalidraw",
+        &super::ResolvedChangeKind::Removed,
+        &operation,
+    ));
+    assert!(super::entry_operation_covers(
+        &workspace,
+        "renamed/child.excalidraw",
+        &super::ResolvedChangeKind::Created,
+        &operation,
+    ));
+    assert!(super::entry_operation_covers(
+        &workspace,
+        "folder/child.excalidraw",
+        &super::ResolvedChangeKind::Renamed {
+            new_path: PathBuf::from("/workspace/renamed/child.excalidraw"),
+        },
+        &operation,
+    ));
+    assert!(!super::entry_operation_covers(
+        &workspace,
+        "other.excalidraw",
+        &super::ResolvedChangeKind::Removed,
+        &operation,
+    ));
+}
+
+#[test]
+fn suppressed_rename_echo_updates_the_known_table() {
+    let directory =
+        std::env::temp_dir().join(format!("excalidraw-watcher-echo-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&directory).unwrap();
+    let old_path = directory.join("old.excalidraw");
+    let new_path = directory.join("new.excalidraw");
+    fs::write(&old_path, br#"{"type":"excalidraw"}"#).unwrap();
+    fs::rename(&old_path, &new_path).unwrap();
+
+    let mut table = KnownFileTable::default();
+    table.note(
+        &old_path,
+        FileTriplet {
+            mtime: 1,
+            size: 1,
+            hash: "stale".to_owned(),
+        },
+    );
+    super::apply_echo_to_known(
+        &mut table,
+        &old_path,
+        &super::ResolvedChangeKind::Renamed {
+            new_path: new_path.clone(),
+        },
+    );
+    assert!(table.changed(
+        &old_path,
+        &FileTriplet {
+            mtime: 1,
+            size: 1,
+            hash: "stale".to_owned(),
+        },
+    ));
+    let current = super::read_triplet(&new_path).unwrap();
+    assert!(!table.changed(&new_path, &current));
+
+    fs::remove_dir_all(directory).unwrap();
+}
