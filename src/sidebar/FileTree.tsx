@@ -130,8 +130,6 @@ export function FileTree({
     return result;
   }, [entriesByPath, expanded]);
 
-  // TanStack Virtual exposes an intentionally imperative virtualizer object.
-  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: nodes.length,
     getScrollElement: () => scrollRef.current,
