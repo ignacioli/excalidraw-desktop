@@ -289,6 +289,9 @@ describe("WorkspacePanel", () => {
         workspaceId: "workspace-1",
       }),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("treeitem", { name: "Blueprints" })).toHaveFocus(),
+    );
   });
 
   it("enforces one global menu, every dismissal path, and trigger focus restoration", async () => {
@@ -497,7 +500,7 @@ describe("WorkspacePanel", () => {
     await user.click(screen.getByRole("button", { name: "Rename" }));
     expect(
       await screen.findByRole("treeitem", { name: "archived" }),
-    ).toBeInTheDocument();
+    ).toHaveFocus();
     expect(
       screen.queryByRole("treeitem", { name: "old-child" }),
     ).not.toBeInTheDocument();
@@ -512,6 +515,7 @@ describe("WorkspacePanel", () => {
     await user.click(screen.getByRole("button", { name: "Create" }));
 
     const recreated = await screen.findByRole("treeitem", { name: "notes" });
+    expect(recreated).toHaveFocus();
     await user.click(recreated);
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("workspace_entry_list", {
@@ -523,5 +527,65 @@ describe("WorkspacePanel", () => {
       screen.queryByRole("treeitem", { name: "old-child" }),
     ).not.toBeInTheDocument();
     expect(notesListCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it("focuses the parent workspace row after a drawing is deleted", async () => {
+    const user = userEvent.setup();
+    const entries = ROOT_ENTRIES.filter(
+      (entry) => entry.workspaceId === "workspace-1",
+    );
+    const invoke = vi.fn(
+      async (command: string, args: Record<string, unknown>) => {
+        if (command === "workspace_list") return [WORKSPACES[0]];
+        if (command === "workspace_entry_list") {
+          const parentRelativePath = String(args.parentRelativePath ?? "");
+          return entries.filter(
+            (entry) => entry.parentRelativePath === parentRelativePath,
+          );
+        }
+        if (command === "workspace_entry_delete_preflight") {
+          const entry = entries.find(
+            (item) => item.relativePath === String(args.relativePath ?? ""),
+          );
+          if (entry === undefined) throw new Error("missing entry");
+          return { status: "confirmable", entry };
+        }
+        if (command === "workspace_entry_delete") {
+          const relativePath = String(args.relativePath ?? "");
+          const index = entries.findIndex(
+            (entry) => entry.relativePath === relativePath,
+          );
+          if (index >= 0) entries.splice(index, 1);
+          return {
+            operationId: "delete-1",
+            kind: "drawing",
+            oldRelativePath: relativePath,
+          };
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        selectDirectory={async () => null}
+      />,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for drawing" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Delete drawing.excalidraw?",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("treeitem", { name: "drawing" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("treeitem", { name: "Sketches" })).toHaveFocus();
   });
 });

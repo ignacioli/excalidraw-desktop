@@ -45,14 +45,17 @@ export function ApplicationDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const returnFocusTarget = returnFocusRef?.current;
     const initial =
       initialFocusRef?.current ??
       dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ??
       dialogRef.current;
     initial?.focus();
     return () => {
-      if (returnFocusTarget?.isConnected) returnFocusTarget.focus();
+      // Read at unmount so a successful mutation can clear this ref and
+      // focus the created/surviving tree row instead of the old trigger.
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+      const target = returnFocusRef?.current;
+      if (target?.isConnected) target.focus();
     };
   }, [initialFocusRef, returnFocusRef]);
 

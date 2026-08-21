@@ -282,4 +282,24 @@ describe("WorkspaceTree", () => {
     );
     expect(screen.getByRole("button", { name: "Keep" })).toHaveFocus();
   });
+
+  it("focuses a requested row after the tree has that key", async () => {
+    const onFocusRequestApplied = vi.fn();
+    render(
+      <WorkspaceTree
+        entriesByWorkspace={{
+          [workspace.id]: { "": [entry("notes", "directory", "Notes")] },
+        }}
+        expandedWorkspaceIds={new Set([workspace.id])}
+        focusRequestKey={makeEntryRowKey(workspace.id, "notes")}
+        onFocusRequestApplied={onFocusRequestApplied}
+        workspaces={[workspace]}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole("treeitem", { name: "Notes" })).toHaveFocus(),
+    );
+    expect(onFocusRequestApplied).toHaveBeenCalled();
+  });
 });

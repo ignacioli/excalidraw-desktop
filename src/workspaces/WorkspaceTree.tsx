@@ -27,6 +27,8 @@ export interface WorkspaceTreeProps {
     pointer?: { x: number; y: number },
   ) => void;
   onScroll?: () => void;
+  focusRequestKey?: string | null;
+  onFocusRequestApplied?: () => void;
   ariaLabel?: string;
   className?: string;
   rowHeight?: number;
@@ -49,6 +51,8 @@ export function WorkspaceTree({
   onOpenDrawing,
   onRowAction,
   onScroll,
+  focusRequestKey = null,
+  onFocusRequestApplied,
   ariaLabel = "Workspace files",
   className,
   rowHeight = DEFAULT_ROW_HEIGHT,
@@ -163,7 +167,23 @@ export function WorkspaceTree({
     if (row === undefined) return;
     row.focus();
     pendingFocusKey.current = null;
-  }, [focusedRowKey, rows, virtualItems]);
+    if (focusRequestKey === rowKey) onFocusRequestApplied?.();
+  }, [focusRequestKey, focusedRowKey, onFocusRequestApplied, rows, virtualItems]);
+
+  useEffect(() => {
+    if (focusRequestKey === null) return;
+    const index = rows.findIndex((row) => row.key === focusRequestKey);
+    if (index < 0) return;
+    setFocusedRowKey(focusRequestKey);
+    pendingFocusKey.current = focusRequestKey;
+    virtualizer.scrollToIndex(index, { align: "auto" });
+    const row = rowRefs.current.get(focusRequestKey);
+    if (row !== undefined) {
+      row.focus();
+      pendingFocusKey.current = null;
+      onFocusRequestApplied?.();
+    }
+  }, [focusRequestKey, onFocusRequestApplied, rows, virtualizer]);
 
   const focusRow = (rowKey: string | null): void => {
     if (rowKey === null) return;

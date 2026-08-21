@@ -48,6 +48,27 @@ describe("ApplicationDialog", () => {
     trigger.remove();
   });
 
+  it("does not restore focus when the caller cleared returnFocusRef", () => {
+    const trigger = document.createElement("button");
+    trigger.textContent = "Open rename dialog";
+    document.body.append(trigger);
+    const returnFocusRef: { current: HTMLElement | null } = { current: trigger };
+    const { unmount } = render(
+      <ApplicationDialog
+        onDismiss={vi.fn()}
+        returnFocusRef={returnFocusRef}
+        title="Rename drawing"
+      >
+        <button type="button">Rename</button>
+      </ApplicationDialog>,
+    );
+
+    returnFocusRef.current = null;
+    unmount();
+    expect(trigger).not.toHaveFocus();
+    trigger.remove();
+  });
+
   it("does not dismiss on Escape while busy", async () => {
     const user = userEvent.setup();
     const onDismiss = vi.fn();

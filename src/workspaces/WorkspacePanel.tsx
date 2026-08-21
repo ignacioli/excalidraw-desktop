@@ -32,6 +32,7 @@ import { defaultEventListener } from "../ipc/events";
 import { WorkspaceTree } from "./WorkspaceTree";
 import {
   makeEntryRowKey,
+  makeWorkspaceRowKey,
   type WorkspaceTreeEntriesByWorkspace,
   type WorkspaceTreeRow,
 } from "./workspaceTreeModel";
@@ -88,6 +89,7 @@ export function WorkspacePanel({
   const loadGenerationRef = useRef(new Map<string, number>());
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const menuTriggerRef = useRef<HTMLElement | null>(null);
+  const mountButtonRef = useRef<HTMLButtonElement | null>(null);
   const openMenu = useInteractionStore((state) => state.menu);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -112,6 +114,7 @@ export function WorkspacePanel({
   const [naming, setNaming] = useState<NamingState | null>(null);
   const [deleting, setDeleting] = useState<DeletingState | null>(null);
   const [treeMenu, setTreeMenu] = useState<TreeMenuState | null>(null);
+  const [focusRequestKey, setFocusRequestKey] = useState<string | null>(null);
 
   entriesRef.current = entriesByWorkspace;
   expandedWorkspaceIdsRef.current = expandedWorkspaceIds;
@@ -368,7 +371,14 @@ export function WorkspacePanel({
         return remaining;
       });
       onWorkspacePresenceChange?.(next.length > 0);
+      returnFocusRef.current = null;
       setPendingRemoval(null);
+      if (next[0] !== undefined) {
+        setFocusRequestKey(makeWorkspaceRowKey(next[0].id));
+      } else {
+        setFocusRequestKey(null);
+        queueMicrotask(() => mountButtonRef.current?.focus());
+      }
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -453,10 +463,14 @@ export function WorkspacePanel({
           true,
         );
       }
+      returnFocusRef.current = null;
+      setFocusRequestKey(
+        makeEntryRowKey(created.entry.workspaceId, created.entry.relativePath),
+      );
     } else if (naming.entry !== undefined) {
       const entry = naming.entry;
       const root = workspaceRootFor(naming.workspaceId);
-      await documentManager.coordinateEntryRename(
+      const renamed = await documentManager.coordinateEntryRename(
         root,
         entry.canonicalPath,
         (expectedOpenDocuments) =>
@@ -469,6 +483,10 @@ export function WorkspacePanel({
       );
       forgetEntrySubtree(naming.workspaceId, entry.relativePath);
       await loadEntries(naming.workspaceId, entry.parentRelativePath, true);
+      returnFocusRef.current = null;
+      setFocusRequestKey(
+        makeEntryRowKey(naming.workspaceId, renamed.newRelativePath),
+      );
     }
     setNaming(null);
   };
@@ -530,9 +548,15 @@ export function WorkspacePanel({
               : { expectedOpenDocument }),
           }),
       );
-      setDeleting(null);
       forgetEntrySubtree(workspaceId, entry.relativePath);
       await loadEntries(workspaceId, entry.parentRelativePath, true);
+      returnFocusRef.current = null;
+      setFocusRequestKey(
+        entry.parentRelativePath.length === 0
+          ? makeWorkspaceRowKey(workspaceId)
+          : makeEntryRowKey(workspaceId, entry.parentRelativePath),
+      );
+      setDeleting(null);
     } catch (nextError) {
       setDeleting((current) =>
         current === null
@@ -672,6 +696,7 @@ export function WorkspacePanel({
       <div className="workspace-panel-header">
         <h2>Workspaces</h2>
         <button
+          ref={mountButtonRef}
           type="button"
           disabled={busy}
           onClick={() => void mountWorkspace()}
@@ -723,6 +748,8 @@ export function WorkspacePanel({
           }}
           onOpenDrawing={(entry) => onOpenFile?.(asFileEntry(entry))}
           onRowAction={handleRowAction}
+          focusRequestKey={focusRequestKey}
+          onFocusRequestApplied={() => setFocusRequestKey(null)}
           onScroll={() => {
             if (openMenu !== null) dismissMenu("treeScroll");
           }}
