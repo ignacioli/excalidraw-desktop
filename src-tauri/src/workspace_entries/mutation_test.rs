@@ -11,7 +11,10 @@ use crate::{
     },
     documents::recovery::{document_id_for_path, RecoveryStore},
     workspace_entries::{
-        mutation_journal::{journal_directory, load_journals, reconcile_pending_mutations},
+        mutation_journal::{
+            journal_directory, load_journals, reconcile_pending_mutations, save_journal,
+            MutationJournalRecord,
+        },
         DerivedStateFault, TrashOperator, WorkspaceEntryService, WorkspaceMutationGate,
     },
 };
@@ -251,6 +254,66 @@ async fn rename_journal_reconciles_sqlite_and_hides_stale_recovery_candidates() 
     assert!(candidates.iter().all(|candidate| {
         candidate.original_path.as_deref() != Some(source.display().to_string().as_str())
     }));
+}
+
+#[tokio::test]
+async fn rename_reconcile_keeps_sqlite_rows_when_already_migrated_but_journal_flag_is_false() {
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    fs::rename(&source, &target).expect("commit filesystem rename");
+    fixture
+        .repository
+        .migrate_entry_paths(
+            source.display().to_string(),
+            target.display().to_string(),
+            "source.excalidraw".to_owned(),
+            "target.excalidraw".to_owned(),
+            "target.excalidraw".to_owned(),
+        )
+        .await
+        .expect("first sqlite migrate");
+
+    save_journal(
+        &fixture.recovery,
+        &MutationJournalRecord::rename(
+            "op-retry-sqlite".to_owned(),
+            fixture.workspace_id.clone(),
+            source.display().to_string(),
+            target.display().to_string(),
+            "source.excalidraw".to_owned(),
+            "target.excalidraw".to_owned(),
+            "target.excalidraw".to_owned(),
+        ),
+    )
+    .expect("journal still claims sqlite is pending");
+
+    reconcile_pending_mutations(&fixture.repository, &fixture.recovery)
+        .await
+        .expect("retry must not drop the already-migrated rows");
+
+    assert!(load_journals(&fixture.recovery)
+        .expect("load journals")
+        .is_empty());
+    assert!(fixture
+        .repository
+        .file_index_get(source.display().to_string())
+        .await
+        .expect("read old index")
+        .is_none());
+    let migrated = fixture
+        .repository
+        .file_index_get(target.display().to_string())
+        .await
+        .expect("read new index")
+        .expect("destination index row must survive reconcile");
+    assert_eq!(migrated.relative_path, "target.excalidraw");
+    assert!(fixture
+        .repository
+        .draft_get(target.display().to_string())
+        .await
+        .expect("read destination draft")
+        .is_some());
 }
 
 #[tokio::test]

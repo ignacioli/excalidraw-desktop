@@ -117,8 +117,10 @@ impl SqliteRepository {
     /// this transaction only derives the SQLite paths from that result.
     ///
     /// The operation is deliberately idempotent.  Retrying the same rename
-    /// after a process interruption does not create duplicate rows and a
-    /// stale destination row cannot prevent the source rows from migrating.
+    /// after a process interruption does not create duplicate rows.  A stale
+    /// destination row cannot prevent source rows from migrating; once those
+    /// source rows are gone, destination rows are the committed result and
+    /// must not be deleted.
     pub fn migrate_entry_paths(
         &self,
         old_canonical_path: String,
@@ -159,9 +161,24 @@ impl SqliteRepository {
                         rows
                     };
 
-                    // Remove destination keys first.  A previous interrupted
-                    // retry may have left a derived destination row behind;
-                    // source rows remain authoritative for this migration.
+                    let source_present = file_index_rows.iter().any(|row| {
+                        is_path_or_descendant(&row.canonical_path, &old_canonical_path)
+                    }) || draft_paths
+                        .iter()
+                        .any(|path| is_path_or_descendant(path, &old_canonical_path))
+                        || metadata_paths.iter().any(|path| {
+                            is_path_or_descendant(path, &old_canonical_path)
+                        });
+                    if !source_present {
+                        // SQLite already committed this migration.  The destination
+                        // rows are the migrated source, not leftovers.  Deleting
+                        // them would drop the only remaining index/draft/meta.
+                        transaction.commit()?;
+                        return Ok(());
+                    }
+
+                    // Source rows are still authoritative.  Drop a stale
+                    // destination first so it cannot block the UPDATE.
                     for row in &file_index_rows {
                         if is_path_or_descendant(&row.canonical_path, &new_canonical_path) {
                             transaction.execute(
