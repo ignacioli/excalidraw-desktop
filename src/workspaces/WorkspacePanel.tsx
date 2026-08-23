@@ -42,6 +42,8 @@ export interface WorkspacePanelProps {
   selectDirectory?: () => Promise<string | null>;
   onOpenFile?: (entry: FileEntry) => void;
   onWorkspacePresenceChange?: (hasAny: boolean) => void;
+  preferences?: ShellPreferences;
+  captureFocus?: boolean;
 }
 
 interface NamingState {
@@ -74,12 +76,17 @@ export function WorkspacePanel({
   selectDirectory: providedSelectDirectory,
   onOpenFile,
   onWorkspacePresenceChange,
+  preferences: providedPreferences,
+  captureFocus = true,
 }: WorkspacePanelProps) {
   const fallbackInvoker = useMemo(() => createTauriCommandInvoker(), []);
   const invoker = providedInvoker ?? fallbackInvoker;
   const selectDirectory = providedSelectDirectory ?? selectNativeDirectory;
   const firstLaunch = storageIsFirstLaunch(globalThis.localStorage);
-  const [preferences] = useState(() => new ShellPreferences());
+  const [ownedPreferences] = useState(
+    () => providedPreferences ?? new ShellPreferences(),
+  );
+  const preferences = providedPreferences ?? ownedPreferences;
   const knownWorkspaceIdsRef = useRef<Set<string> | null>(null);
   const expandedWorkspaceIdsRef = useRef<Set<string>>(new Set());
   const entriesRef = useRef<Record<string, Record<string, WorkspaceEntry[]>>>(
@@ -716,6 +723,7 @@ export function WorkspacePanel({
           expandedWorkspaceIds={expandedWorkspaceIds}
           expandedDirectoryKeys={expandedDirectoryKeys}
           activeDocumentPath={activeDocumentPath}
+          captureFocus={captureFocus}
           onToggleWorkspace={(workspaceId, expanded) => {
             preferences.setWorkspaceExpanded(workspaceId, expanded);
             setExpandedWorkspaceIds((current) => {

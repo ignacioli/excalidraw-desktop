@@ -19,12 +19,16 @@ export class ShellPreferences {
   private snapshot: ShellPreferenceSnapshot;
 
   constructor(
-    private readonly storage: ShellPreferenceStorage = globalThis.localStorage,
+    private readonly storage: ShellPreferenceStorage = createDefaultShellStorage(),
   ) {
-    this.snapshot = readSnapshot(
-      storage.getItem(SHELL_PREFERENCES_STORAGE_KEY),
-    );
-    this.persist();
+    const stored = storage.getItem(SHELL_PREFERENCES_STORAGE_KEY);
+    this.snapshot = readSnapshot(stored);
+    // Writing defaults on first construct poisons first-launch expansion:
+    // AppShell mounts before WorkspacePanel, so an empty persist would look
+    // like "the user collapsed every Workspace".
+    if (stored !== null) {
+      this.persist();
+    }
   }
 
   getSnapshot(): ShellPreferenceSnapshot {
@@ -96,4 +100,18 @@ function readSnapshot(stored: string | null): ShellPreferenceSnapshot {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function createDefaultShellStorage(): ShellPreferenceStorage {
+  const localStorage = globalThis.localStorage;
+  if (localStorage !== undefined && typeof localStorage.getItem === "function") {
+    return localStorage;
+  }
+  const values = new Map<string, string>();
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => {
+      values.set(key, value);
+    },
+  };
 }

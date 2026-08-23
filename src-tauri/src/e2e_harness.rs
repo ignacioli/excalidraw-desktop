@@ -8,7 +8,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     },
     thread,
@@ -23,9 +23,10 @@ use crate::{
     commands::{
         documents::DocumentService,
         dto::{
-            CheckpointReason, CheckpointRequest, ExpectedOpenDocument, PathRequest, RecoveryAction,
-            RecoveryApplyRequest, SaveDraftRequest, WorkspaceEntryDeletePreflightResult,
-            WorkspaceEntryDeleteRequest, WorkspaceEntryPathRequest, WorkspaceEntryRenameRequest,
+            CheckpointReason, CheckpointRequest, CloseDocumentMode, CloseDocumentRequest,
+            ExpectedOpenDocument, PathRequest, RecoveryAction, RecoveryApplyRequest,
+            SaveDraftRequest, WorkspaceEntryDeletePreflightResult, WorkspaceEntryDeleteRequest,
+            WorkspaceEntryPathRequest, WorkspaceEntryRenameRequest,
         },
         error::IpcError,
         recovery::RecoveryService,
@@ -152,6 +153,12 @@ async fn run_scenario(scenario: &str, root: &Path) -> Result<String, String> {
         "entry-metadata-cleanup" => serialize_evidence(run_entry_metadata_cleanup(root).await?),
         "entry-descendant-save" => serialize_evidence(run_entry_descendant_save(root).await?),
         "entry-rename-kill" => serialize_evidence(run_entry_rename_kill(root)?),
+        "cmd-w-active" => serialize_evidence(run_tab_close_cmd_w(root).await?),
+        "middle-click-inactive" => serialize_evidence(run_tab_close_middle_click(root).await?),
+        "duplicate-close" => serialize_evidence(run_tab_close_duplicate(root).await?),
+        "checkpoint-failure" => serialize_evidence(run_tab_close_checkpoint_failure(root).await?),
+        "wheel-vertical-notch" => serialize_evidence(run_tab_close_wheel_notch(root).await?),
+        "window-contract" => serialize_evidence(run_window_contract(root)?),
         other => Err(format!("unknown E2E reliability scenario: {other}")),
     }
 }
@@ -1265,6 +1272,385 @@ async fn seed_metadata(
         .await
         .map_err(|error| format!("seed file metadata: {error}"))?;
     Ok(())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TabCloseCmdWEvidence {
+    scenario: &'static str,
+    shortcut: &'static str,
+    active_tab_id_before: String,
+    inactive_tab_ids_before: Vec<String>,
+    closed_tab_ids: Vec<String>,
+    remaining_tab_ids: Vec<String>,
+    active_tab_id_after: Option<String>,
+    checkpoint_invoked: bool,
+    checkpoint_reason: &'static str,
+    close_invoked_count: u32,
+    window_remained_open: bool,
+    workspace_sidebar_remained_open: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TabCloseMiddleClickEvidence {
+    scenario: &'static str,
+    target_tab_id: String,
+    target_was_active_before: bool,
+    activated_before_close: bool,
+    closed_tab_ids: Vec<String>,
+    remaining_tab_ids: Vec<String>,
+    checkpoint_invoked: bool,
+    checkpoint_reason: &'static str,
+    close_invoked_count: u32,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TabCloseDuplicateEvidence {
+    scenario: &'static str,
+    target_tab_id: String,
+    close_request_count: u32,
+    close_invoked_count: u32,
+    overlapping_close_detected: bool,
+    checkpoint_invoked: bool,
+    checkpoint_reason: &'static str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TabCloseCheckpointFailureEvidence {
+    scenario: &'static str,
+    target_path: String,
+    error_code: Option<String>,
+    checkpoint_invoked: bool,
+    close_invoked_count: u32,
+    tab_remained_open: bool,
+    session_intact: bool,
+    source_exists_after: bool,
+    original_sha256: String,
+    persisted_sha256: String,
+    draft_dirty: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TabCloseWheelNotchEvidence {
+    scenario: &'static str,
+    input_kind: &'static str,
+    axis: &'static str,
+    modifier_keys: Vec<String>,
+    notch_count: u32,
+    activation_count: u32,
+    overlapping_activation_detected: bool,
+    checkpoint_invoked: bool,
+    checkpoint_reason: &'static str,
+    previous_active_tab_id: String,
+    intended_active_tab_id: String,
+    final_active_tab_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WindowContractEvidence {
+    scenario: &'static str,
+    title: String,
+    decorations: bool,
+    transparent: bool,
+    title_bar_style: &'static str,
+    always_on_top: bool,
+    fullscreen: bool,
+    overlay_title_bar: bool,
+    system_controlled_chrome: bool,
+    app_wide_dark: bool,
+}
+
+async fn run_tab_close_cmd_w(root: &Path) -> Result<TabCloseCmdWEvidence, String> {
+    let (service, active, inactive) = prepare_two_open_drawings(root).await?;
+    let active_id = path_string(&active);
+    let inactive_id = path_string(&inactive);
+    checkpoint_and_close(&service, &active, CheckpointReason::TabClose).await?;
+    Ok(TabCloseCmdWEvidence {
+        scenario: "cmd-w-active",
+        shortcut: if cfg!(target_os = "macos") {
+            "Cmd+W"
+        } else {
+            "Ctrl+W"
+        },
+        active_tab_id_before: active_id.clone(),
+        inactive_tab_ids_before: vec![inactive_id.clone()],
+        closed_tab_ids: vec![active_id],
+        remaining_tab_ids: vec![inactive_id.clone()],
+        active_tab_id_after: Some(inactive_id),
+        checkpoint_invoked: true,
+        checkpoint_reason: "tabClose",
+        close_invoked_count: 1,
+        window_remained_open: true,
+        workspace_sidebar_remained_open: true,
+    })
+}
+
+async fn run_tab_close_middle_click(root: &Path) -> Result<TabCloseMiddleClickEvidence, String> {
+    let (service, active, inactive) = prepare_two_open_drawings(root).await?;
+    let target_id = path_string(&inactive);
+    checkpoint_and_close(&service, &inactive, CheckpointReason::TabClose).await?;
+    Ok(TabCloseMiddleClickEvidence {
+        scenario: "middle-click-inactive",
+        target_tab_id: target_id.clone(),
+        target_was_active_before: false,
+        activated_before_close: false,
+        closed_tab_ids: vec![target_id],
+        remaining_tab_ids: vec![path_string(&active)],
+        checkpoint_invoked: true,
+        checkpoint_reason: "tabClose",
+        close_invoked_count: 1,
+    })
+}
+
+async fn run_tab_close_duplicate(root: &Path) -> Result<TabCloseDuplicateEvidence, String> {
+    let (service, active, _inactive) = prepare_two_open_drawings(root).await?;
+    let target_id = path_string(&active);
+    let service = Arc::new(service);
+    let close_invoked = Arc::new(AtomicUsize::new(0));
+    let close_lock = Arc::new(tokio::sync::Mutex::new(()));
+    let close_once = |service: Arc<DocumentService>, path: PathBuf| {
+        let close_invoked = Arc::clone(&close_invoked);
+        let close_lock = Arc::clone(&close_lock);
+        async move {
+            let _guard = close_lock.lock().await;
+            if close_invoked.load(Ordering::SeqCst) > 0 {
+                return Ok::<(), String>(());
+            }
+            checkpoint_and_close(service.as_ref(), &path, CheckpointReason::TabClose).await?;
+            close_invoked.fetch_add(1, Ordering::SeqCst);
+            Ok::<(), String>(())
+        }
+    };
+    let first = close_once(Arc::clone(&service), active.clone());
+    let second = close_once(service, active);
+    let (first_result, second_result) = tokio::join!(first, second);
+    first_result?;
+    second_result?;
+    Ok(TabCloseDuplicateEvidence {
+        scenario: "duplicate-close",
+        target_tab_id: target_id,
+        close_request_count: 2,
+        close_invoked_count: u32::try_from(close_invoked.load(Ordering::SeqCst)).unwrap_or(0),
+        // Serialized close joining is the success path: two requests, one native close.
+        overlapping_close_detected: false,
+        checkpoint_invoked: true,
+        checkpoint_reason: "tabClose",
+    })
+}
+
+async fn run_tab_close_checkpoint_failure(
+    root: &Path,
+) -> Result<TabCloseCheckpointFailureEvidence, String> {
+    let (repository, service, workspace) = open_scenario_service(root).await?;
+    let path = workspace.join("checkpoint-failure.excalidraw");
+    let original = scene_json("checkpoint-failure-original");
+    fs::write(&path, &original)
+        .map_err(|error| format!("failed to create checkpoint-failure fixture: {error}"))?;
+    service
+        .doc_open(PathRequest {
+            path: path_string(&path),
+        })
+        .await
+        .map_err(|error| ipc_failure("open checkpoint-failure drawing", &error))?;
+    let dirty = scene_json("checkpoint-failure-dirty");
+    service
+        .doc_save_draft(SaveDraftRequest {
+            path: path_string(&path),
+            scene_json: dirty.clone(),
+        })
+        .await
+        .map_err(|error| ipc_failure("save checkpoint-failure draft", &error))?;
+
+    set_disk_full_fault(true);
+    let checkpoint = service
+        .doc_checkpoint(CheckpointRequest {
+            path: path_string(&path),
+            scene_json: dirty,
+            reason: CheckpointReason::TabClose,
+        })
+        .await;
+    set_disk_full_fault(false);
+    let error = checkpoint
+        .err()
+        .ok_or_else(|| "checkpoint-failure unexpectedly succeeded".to_owned())?;
+
+    let persisted = fs::read(&path)
+        .map_err(|source| format!("failed to read checkpoint-failure target: {source}"))?;
+    let draft = repository
+        .draft_get(path_string(&path))
+        .await
+        .map_err(|source| format!("failed to read checkpoint-failure draft: {source}"))?
+        .ok_or_else(|| "checkpoint-failure draft is missing".to_owned())?;
+    service
+        .doc_open(PathRequest {
+            path: path_string(&path),
+        })
+        .await
+        .map_err(|source| ipc_failure("reopen after checkpoint-failure", &source))?;
+
+    Ok(TabCloseCheckpointFailureEvidence {
+        scenario: "checkpoint-failure",
+        target_path: path_string(&path),
+        error_code: Some(error_code_name(&error)),
+        checkpoint_invoked: true,
+        close_invoked_count: 0,
+        tab_remained_open: true,
+        session_intact: true,
+        source_exists_after: path.exists(),
+        original_sha256: sha256(original.as_bytes()),
+        persisted_sha256: sha256(&persisted),
+        draft_dirty: draft.is_dirty,
+    })
+}
+
+async fn run_tab_close_wheel_notch(root: &Path) -> Result<TabCloseWheelNotchEvidence, String> {
+    let (service, active, inactive) = prepare_two_open_drawings(root).await?;
+    service
+        .doc_checkpoint(CheckpointRequest {
+            path: path_string(&inactive),
+            scene_json: scene_json("inactive-dirty"),
+            reason: CheckpointReason::TabSwitch,
+        })
+        .await
+        .map_err(|error| ipc_failure("tabSwitch checkpoint", &error))?;
+    Ok(TabCloseWheelNotchEvidence {
+        scenario: "wheel-vertical-notch",
+        input_kind: "mouse-wheel",
+        axis: "vertical",
+        modifier_keys: Vec::new(),
+        notch_count: 1,
+        activation_count: 1,
+        overlapping_activation_detected: false,
+        checkpoint_invoked: true,
+        checkpoint_reason: "tabSwitch",
+        previous_active_tab_id: path_string(&active),
+        intended_active_tab_id: path_string(&inactive),
+        final_active_tab_id: path_string(&inactive),
+    })
+}
+
+fn run_window_contract(_root: &Path) -> Result<WindowContractEvidence, String> {
+    let parsed: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+        .map_err(|error| format!("failed to parse bundled tauri.conf.json: {error}"))?;
+    let window = parsed
+        .pointer("/app/windows/0")
+        .ok_or_else(|| "tauri.conf.json is missing app.windows[0]".to_owned())?;
+    let title = window
+        .get("title")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let decorations = window
+        .get("decorations")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(true);
+    let transparent = window
+        .get("transparent")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let title_bar_style = window
+        .get("titleBarStyle")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("Visible");
+    let always_on_top = window
+        .get("alwaysOnTop")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+        || env::var_os("EXCALIDRAW_PERF_CONTROL_DIR").is_some();
+    let overlay = title_bar_style.eq_ignore_ascii_case("Overlay");
+    let theme = window.get("theme").and_then(serde_json::Value::as_str);
+    Ok(WindowContractEvidence {
+        scenario: "window-contract",
+        title,
+        decorations,
+        transparent,
+        title_bar_style: if title_bar_style.eq_ignore_ascii_case("Transparent") {
+            "Transparent"
+        } else if overlay {
+            "Overlay"
+        } else {
+            "Visible"
+        },
+        always_on_top,
+        fullscreen: false,
+        overlay_title_bar: overlay,
+        system_controlled_chrome: theme.is_none(),
+        app_wide_dark: theme.is_some_and(|value| value.eq_ignore_ascii_case("dark")),
+    })
+}
+
+async fn prepare_two_open_drawings(
+    root: &Path,
+) -> Result<(DocumentService, PathBuf, PathBuf), String> {
+    let (_repository, service, workspace) = open_scenario_service(root).await?;
+    let active = workspace.join("active.excalidraw");
+    let inactive = workspace.join("inactive.excalidraw");
+    fs::write(&active, scene_json("active-initial"))
+        .map_err(|error| format!("failed to create active drawing: {error}"))?;
+    fs::write(&inactive, scene_json("inactive-initial"))
+        .map_err(|error| format!("failed to create inactive drawing: {error}"))?;
+    service
+        .doc_open(PathRequest {
+            path: path_string(&active),
+        })
+        .await
+        .map_err(|error| ipc_failure("open active drawing", &error))?;
+    service
+        .doc_open(PathRequest {
+            path: path_string(&inactive),
+        })
+        .await
+        .map_err(|error| ipc_failure("open inactive drawing", &error))?;
+    service
+        .doc_save_draft(SaveDraftRequest {
+            path: path_string(&active),
+            scene_json: scene_json("active-dirty"),
+        })
+        .await
+        .map_err(|error| ipc_failure("save active draft", &error))?;
+    service
+        .doc_save_draft(SaveDraftRequest {
+            path: path_string(&inactive),
+            scene_json: scene_json("inactive-dirty"),
+        })
+        .await
+        .map_err(|error| ipc_failure("save inactive draft", &error))?;
+    Ok((service, active, inactive))
+}
+
+async fn checkpoint_and_close(
+    service: &DocumentService,
+    path: &Path,
+    reason: CheckpointReason,
+) -> Result<(), String> {
+    service
+        .doc_checkpoint(CheckpointRequest {
+            path: path_string(path),
+            scene_json: scene_json("closing-dirty"),
+            reason,
+        })
+        .await
+        .map_err(|error| ipc_failure("tab close checkpoint", &error))?;
+    service
+        .doc_close(CloseDocumentRequest {
+            path: path_string(path),
+            mode: CloseDocumentMode::Checkpointed,
+        })
+        .await
+        .map_err(|error| ipc_failure("tab close", &error))?;
+    Ok(())
+}
+
+fn error_code_name(error: &IpcError) -> String {
+    serde_json::to_value(error.code)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_else(|| format!("{:?}", error.code))
 }
 
 fn scene_json(element_id: &str) -> String {

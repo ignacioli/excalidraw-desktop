@@ -1,26 +1,117 @@
-import { useRef, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type WheelEvent,
+} from "react";
 import { documentManager, useDocumentStore } from "../documents/documentStore";
+import { ingestWheel } from "../documents/tabActivationQueue";
+import { ContextMenu } from "./interaction/ContextMenu";
+import type { CloseOutcome } from "../documents/documentStore";
 
-export function TabBar() {
+interface TabBarProps {
+  onCloseOutcome?: (documentId: string, outcome: CloseOutcome) => void;
+}
+
+interface TabMenuState {
+  documentId: string;
+  x: number;
+  y: number;
+}
+
+export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
   const sessionsById = useDocumentStore((state) => state.sessionsById);
   const tabOrder = useDocumentStore((state) => state.tabOrder);
   const activeDocumentId = useDocumentStore((state) => state.activeDocumentId);
-  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-
-  const moveFocus = (index: number) => {
-    const tabId = tabOrder[index];
-    if (tabId !== undefined) {
-      activateTab(tabId);
-      tabRefs.current[index]?.focus();
-    }
-  };
+  const tabRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [menu, setMenu] = useState<TabMenuState | null>(null);
 
   const activateTab = (tabId: string) => {
     void documentManager.activate(tabId);
+    scrollTabNearest(tabId);
   };
 
+  const scrollTabNearest = (tabId: string) => {
+    const index = tabOrder.indexOf(tabId);
+    const element = tabRefs.current[index];
+    if (element === undefined || element === null) return;
+    const reducedMotion =
+      typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        : false;
+    const tabList = element.parentElement;
+    if (tabList !== null) {
+      const listBox = tabList.getBoundingClientRect();
+      const tabBox = element.getBoundingClientRect();
+      const fullyVisible =
+        tabBox.left >= listBox.left && tabBox.right <= listBox.right;
+      if (fullyVisible) return;
+    }
+    element.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+      behavior: reducedMotion ? "auto" : "smooth",
+    });
+  };
+
+  const closeTab = (tabId: string) => {
+    const currentOrder = documentManager.store.getState().tabOrder;
+    const closedIndex = currentOrder.indexOf(tabId);
+    void documentManager.close(tabId).then((outcome) => {
+      onCloseOutcome?.(tabId, outcome);
+      if (outcome.status !== "closed") return;
+      const nextOrder = documentManager.store.getState().tabOrder;
+      const survivor =
+        nextOrder[Math.min(closedIndex, nextOrder.length - 1)] ?? null;
+      if (survivor === null) return;
+      requestAnimationFrame(() => {
+        const index = documentManager.store.getState().tabOrder.indexOf(survivor);
+        const tab = tabRefs.current[index];
+        const closeButton = tab?.querySelector<HTMLButtonElement>(
+          'button[aria-label^="Close "]',
+        );
+        (closeButton ?? tab)?.focus();
+      });
+    });
+  };
+
+  const closeMany = (documentIds: readonly string[]) => {
+    void documentManager.closeMany(documentIds).then((outcome) => {
+      if (outcome.status === "failed" || outcome.status === "orphaned") {
+        onCloseOutcome?.(outcome.documentId, outcome);
+      }
+    });
+  };
+
+  const closeTabRef = useRef(closeTab);
+
+  useEffect(() => {
+    closeTabRef.current = closeTab;
+  });
+
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "w") return;
+      const isMac = /Mac|iPhone|iPad/.test(window.navigator.platform);
+      const modifier = isMac ? event.metaKey : event.ctrlKey;
+      if (!modifier || event.altKey || event.shiftKey) return;
+      if (isMac && event.ctrlKey) return;
+      if (!isMac && event.metaKey) return;
+      const activeId = documentManager.store.getState().activeDocumentId;
+      if (activeId === null) return;
+      event.preventDefault();
+      closeTabRef.current(activeId);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const handleKeyDown = (
-    event: KeyboardEvent<HTMLButtonElement>,
+    event: KeyboardEvent<HTMLDivElement>,
     index: number,
   ) => {
     let nextIndex: number | undefined;
@@ -33,16 +124,89 @@ export function TabBar() {
     } else if (event.key === "End") {
       nextIndex = tabOrder.length - 1;
     }
-
     if (nextIndex !== undefined) {
       event.preventDefault();
-      moveFocus(nextIndex);
+      const tabId = tabOrder[nextIndex];
+      if (tabId !== undefined) {
+        activateTab(tabId);
+        tabRefs.current[nextIndex]?.focus();
+      }
     }
   };
 
+  const handleWheel = (event: WheelEvent<HTMLElement>) => {
+    const nextIndex = ingestWheel({
+      deltaX: event.deltaX,
+      deltaY: event.deltaY,
+      deltaMode: event.deltaMode,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      tabCount: tabOrder.length,
+      activeIndex: Math.max(0, tabOrder.indexOf(activeDocumentId ?? "")),
+    });
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const tabId = tabOrder[nextIndex];
+    if (tabId !== undefined) {
+      activateTab(tabId);
+    }
+  };
+
+  const handleAuxClick = (
+    event: MouseEvent<HTMLDivElement>,
+    documentId: string,
+  ) => {
+    if (event.button !== 1) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeTab(documentId);
+  };
+
+  const handleContextMenu = (
+    event: MouseEvent<HTMLDivElement>,
+    documentId: string,
+  ) => {
+    event.preventDefault();
+    setMenu({ documentId, x: event.clientX, y: event.clientY });
+  };
+
+  const menuItems = (() => {
+    if (menu === null) return [];
+    const index = tabOrder.indexOf(menu.documentId);
+    const others = tabOrder.filter((id) => id !== menu.documentId);
+    const toTheRight = tabOrder.slice(index + 1);
+    return [
+      {
+        id: "close",
+        label: "Close",
+        onSelect: () => closeTab(menu.documentId),
+      },
+      {
+        id: "close-others",
+        label: "Close Others",
+        onSelect: () => closeMany(others),
+      },
+      {
+        id: "close-right",
+        label: "Close Tabs to the Right",
+        onSelect: () => closeMany(toTheRight),
+      },
+    ];
+  })();
+
   return (
-    <nav className="tab-bar" aria-label="Open drawings">
-      <div className="tab-list" role="tablist" aria-label="Drawing tabs">
+    <nav
+      className="tab-bar"
+      aria-label="Open drawings"
+      onWheel={handleWheel}
+    >
+      <div
+        className="tab-list"
+        role="tablist"
+        aria-label="Drawing tabs"
+      >
         {tabOrder.map((tabId, index) => {
           const session = sessionsById[tabId];
           if (session === undefined) {
@@ -52,18 +216,33 @@ export function TabBar() {
           const isActive = activeDocumentId === session.id;
           const isDirty = session.saveState !== "clean";
           const isOrphaned = session.saveState === "orphaned";
+          const closeVisible =
+            isActive || hoveredId === session.id || focusedId === session.id;
           return (
-            <button
+            <div
               className="tab"
               id={`tab-${session.id}`}
               key={session.id}
               onClick={() => activateTab(session.id)}
               onKeyDown={(event) => handleKeyDown(event, index)}
+              onMouseEnter={() => setHoveredId(session.id)}
+              onMouseLeave={() =>
+                setHoveredId((current) =>
+                  current === session.id ? null : current,
+                )
+              }
+              onFocus={() => setFocusedId(session.id)}
+              onBlur={() =>
+                setFocusedId((current) =>
+                  current === session.id ? null : current,
+                )
+              }
+              onAuxClick={(event) => handleAuxClick(event, session.id)}
+              onContextMenu={(event) => handleContextMenu(event, session.id)}
               ref={(element) => {
                 tabRefs.current[index] = element;
               }}
               role="tab"
-              type="button"
               aria-controls={`document-${session.id}`}
               aria-label={`${session.title}${isDirty ? ", unsaved changes" : ""}${isOrphaned ? ", file unavailable" : ""}`}
               aria-selected={isActive}
@@ -82,10 +261,36 @@ export function TabBar() {
                   <span className="visually-hidden">File unavailable</span>
                 </span>
               ) : null}
-            </button>
+              <span
+                data-slot="tab-close"
+                data-close-visible={closeVisible ? "true" : "false"}
+              >
+                {closeVisible ? (
+                  <button
+                    aria-label={`Close ${session.title}`}
+                    className="tab-close"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      closeTab(session.id);
+                    }}
+                    type="button"
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                ) : null}
+              </span>
+            </div>
           );
         })}
       </div>
+      {menu !== null ? (
+        <ContextMenu
+          label="Tab actions"
+          items={menuItems}
+          anchor={{ x: menu.x, y: menu.y }}
+          onDismiss={() => setMenu(null)}
+        />
+      ) : null}
     </nav>
   );
 }

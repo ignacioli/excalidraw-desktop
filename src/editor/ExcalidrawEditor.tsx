@@ -87,6 +87,15 @@ export function ExcalidrawEditor({
 
       if (containerRef.current !== null) {
         imeBridgeRef.current = new ImeBridge(containerRef.current, api);
+        const observer = new ResizeObserver(() => {
+          adapter.refresh();
+        });
+        observer.observe(containerRef.current);
+        const previousDispose = adapter.dispose.bind(adapter);
+        adapter.dispose = () => {
+          observer.disconnect();
+          previousDispose();
+        };
       }
       if (containerRef.current !== null) {
         onReadyRef.current?.(documentId, adapter, containerRef.current);

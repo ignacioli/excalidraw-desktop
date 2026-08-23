@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { interactionStore } from "../app/interaction";
 import type { Workspace, WorkspaceEntry } from "../ipc/contracts";
 import {
   buildWorkspaceTreeRows,
@@ -33,6 +34,7 @@ export interface WorkspaceTreeProps {
   className?: string;
   rowHeight?: number;
   overscan?: number;
+  captureFocus?: boolean;
 }
 
 const DEFAULT_ROW_HEIGHT = 32;
@@ -57,6 +59,7 @@ export function WorkspaceTree({
   className,
   rowHeight = DEFAULT_ROW_HEIGHT,
   overscan = DEFAULT_OVERSCAN,
+  captureFocus = true,
 }: WorkspaceTreeProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
@@ -150,6 +153,7 @@ export function WorkspaceTree({
   }, [activeDrawing, focusedRowKey, rows]);
 
   useEffect(() => {
+    if (!captureFocus) return;
     const active = document.activeElement;
     if (
       active instanceof HTMLElement &&
@@ -158,7 +162,7 @@ export function WorkspaceTree({
       return;
     }
     scrollRef.current?.focus({ preventScroll: true });
-  }, []);
+  }, [captureFocus]);
 
   useEffect(() => {
     const rowKey = pendingFocusKey.current;
@@ -422,6 +426,34 @@ function WorkspaceTreeRowView({
       data-kind={row.kind}
       tabIndex={focused ? 0 : -1}
       title={row.displayName}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        interactionStore.getState().dispatch({
+          type: "addHold",
+          reason: "drag",
+        });
+        const release = (upEvent: PointerEvent) => {
+          interactionStore.getState().dispatch({
+            type: "removeHold",
+            reason: "drag",
+          });
+          window.removeEventListener("pointerup", release);
+          window.removeEventListener("pointercancel", release);
+          const sidebar = document.querySelector(".file-sidebar");
+          if (
+            sidebar instanceof Element &&
+            upEvent.target instanceof Node &&
+            !sidebar.contains(upEvent.target)
+          ) {
+            const active = document.activeElement;
+            if (active instanceof HTMLElement && sidebar.contains(active)) {
+              active.blur();
+            }
+          }
+        };
+        window.addEventListener("pointerup", release);
+        window.addEventListener("pointercancel", release);
+      }}
       onClick={onActivate}
       onContextMenu={(event) => {
         event.preventDefault();

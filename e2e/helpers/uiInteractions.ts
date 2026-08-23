@@ -141,6 +141,110 @@ export interface NativeEntryRenameKillEvidence {
   descendantNewExistsAfter: boolean;
 }
 
+export type NativeTabCloseScenarioKind =
+  | "cmd-w-active"
+  | "middle-click-inactive"
+  | "duplicate-close"
+  | "checkpoint-failure"
+  | "wheel-vertical-notch";
+
+export type NativeTabCloseScenarioRun<T> = NativeEntryScenarioRun<T>;
+
+export interface NativeTabCloseCmdWEvidence {
+  scenario: "cmd-w-active";
+  shortcut: "Cmd+W" | "Ctrl+W";
+  activeTabIdBefore: string;
+  inactiveTabIdsBefore: string[];
+  closedTabIds: string[];
+  remainingTabIds: string[];
+  activeTabIdAfter: string | null;
+  checkpointInvoked: boolean;
+  checkpointReason: "tabClose" | null;
+  closeInvokedCount: number;
+  windowRemainedOpen: boolean;
+  workspaceSidebarRemainedOpen: boolean;
+}
+
+export interface NativeTabCloseMiddleClickEvidence {
+  scenario: "middle-click-inactive";
+  targetTabId: string;
+  targetWasActiveBefore: boolean;
+  activatedBeforeClose: boolean;
+  closedTabIds: string[];
+  remainingTabIds: string[];
+  checkpointInvoked: boolean;
+  checkpointReason: "tabClose" | null;
+  closeInvokedCount: number;
+}
+
+export interface NativeTabCloseDuplicateEvidence {
+  scenario: "duplicate-close";
+  targetTabId: string;
+  closeRequestCount: number;
+  closeInvokedCount: number;
+  overlappingCloseDetected: boolean;
+  checkpointInvoked: boolean;
+  checkpointReason: "tabClose" | null;
+}
+
+export interface NativeTabCloseCheckpointFailureEvidence {
+  scenario: "checkpoint-failure";
+  targetPath: string;
+  errorCode: string | null;
+  checkpointInvoked: boolean;
+  closeInvokedCount: number;
+  tabRemainedOpen: boolean;
+  sessionIntact: boolean;
+  sourceExistsAfter: boolean;
+  originalSha256: string;
+  persistedSha256: string;
+  draftDirty: boolean;
+}
+
+export interface NativeTabCloseWheelNotchEvidence {
+  scenario: "wheel-vertical-notch";
+  inputKind: "mouse-wheel" | "trackpad";
+  axis: "vertical";
+  modifierKeys: string[];
+  notchCount: number;
+  activationCount: number;
+  overlappingActivationDetected: boolean;
+  checkpointInvoked: boolean;
+  checkpointReason: "tabSwitch" | null;
+  previousActiveTabId: string;
+  intendedActiveTabId: string;
+  finalActiveTabId: string;
+}
+
+export type NativeTabCloseEvidence =
+  | NativeTabCloseCmdWEvidence
+  | NativeTabCloseMiddleClickEvidence
+  | NativeTabCloseDuplicateEvidence
+  | NativeTabCloseCheckpointFailureEvidence
+  | NativeTabCloseWheelNotchEvidence;
+
+/** FR-045 / SC-011 titlebar choice A: exact native window title. */
+export const REQUIRED_NATIVE_WINDOW_TITLE = "Excalidraw Whiteboard";
+
+export type NativeWindowTitleBarStyle = "Visible" | "Transparent" | "Overlay";
+
+export interface NativeWindowContractEvidence {
+  scenario: "window-contract";
+  title: string;
+  decorations: boolean;
+  transparent: boolean;
+  titleBarStyle: NativeWindowTitleBarStyle;
+  alwaysOnTop: boolean;
+  fullscreen: boolean;
+  overlayTitleBar: boolean;
+  /** Native chrome follows the OS appearance instead of an app-wide Dark theme. */
+  systemControlledChrome: boolean;
+  appWideDark: boolean;
+}
+
+export type NativeWindowContractScenarioRun =
+  NativeEntryScenarioRun<NativeWindowContractEvidence>;
+
 export type NativeUiInteractionEntrySeed =
   | { kind: "drawing"; relativePath: string; sceneJson?: string }
   | { kind: "directory"; relativePath: string }
@@ -298,12 +402,13 @@ export async function runNativeEntryScenario(
   const paths = await createIsolatedDesktopPaths();
   await assertIsolatedRoot(paths);
   try {
-    const evidence = await runNativeEntryScenarioProcess(
-      binary,
-      paths,
-      scenario,
-      environmentOverrides,
-    );
+    const evidence = await runReliabilityScenarioProcess<
+      | NativeEntryTrashEvidence
+      | NativeEntryRenameFaultEvidence
+      | NativeEntryDirectoryRaceEvidence
+      | NativeEntryMetadataCleanupEvidence
+      | NativeEntryDescendantSaveEvidence
+    >(binary, paths, scenario, environmentOverrides);
     const filesystem = await statfs(paths.workspace);
     const binarySha256 = createHash("sha256")
       .update(await readFile(binary))
@@ -453,6 +558,66 @@ export async function runNativeEntryRenameKill(
   }
 }
 
+/**
+ * Runs isolated native close/activation scenarios through the e2e-harness.
+ */
+export async function runNativeTabCloseScenario(
+  kind: NativeTabCloseScenarioKind,
+): Promise<NativeTabCloseScenarioRun<NativeTabCloseEvidence>> {
+  return runReliabilityScenario<NativeTabCloseEvidence>(kind);
+}
+
+/**
+ * Collects live OS title / stacking / chrome evidence from a native process.
+ */
+export async function runNativeWindowContractScenario(): Promise<NativeWindowContractScenarioRun> {
+  return runReliabilityScenario<NativeWindowContractEvidence>("window-contract");
+}
+
+async function runReliabilityScenario<T extends { scenario: string }>(
+  scenario: string,
+  environmentOverrides: Readonly<NodeJS.ProcessEnv> = {},
+): Promise<NativeEntryScenarioRun<T>> {
+  const binary = await resolveDesktopBinary();
+  const paths = await createIsolatedDesktopPaths();
+  await assertIsolatedRoot(paths);
+  try {
+    const evidence = await runReliabilityScenarioProcess<T>(
+      binary,
+      paths,
+      scenario,
+      environmentOverrides,
+    );
+    const filesystem = await statfs(paths.workspace);
+    const binarySha256 = createHash("sha256")
+      .update(await readFile(binary))
+      .digest("hex");
+    let cleaned = false;
+    return {
+      evidence,
+      environment: {
+        platform: process.platform,
+        architecture: process.arch,
+        filesystemType: String(filesystem.type),
+        binaryPath: binary,
+        binarySha256,
+        seed: environmentOverrides.EXCALIDRAW_E2E_SEED ?? "deterministic",
+      },
+      paths,
+      async cleanup(): Promise<void> {
+        if (cleaned) return;
+        cleaned = true;
+        await assertIsolatedRoot(paths);
+        await cleanupIsolatedDesktopPaths(paths);
+      },
+    };
+  } catch (error) {
+    await assertIsolatedRoot(paths);
+    await cleanupIsolatedDesktopPaths(paths);
+    throw error;
+  }
+}
+
 interface EntryRenameReadyMarker {
   scenario: "entry-rename-kill";
   faultPoint: "before_rename";
@@ -462,23 +627,12 @@ interface EntryRenameReadyMarker {
   descendantNewPath: string;
 }
 
-async function runNativeEntryScenarioProcess(
+async function runReliabilityScenarioProcess<T>(
   binary: string,
   paths: IsolatedDesktopPaths,
-  scenario:
-    | "entry-trash"
-    | "entry-rename-fault"
-    | "entry-directory-race"
-    | "entry-metadata-cleanup"
-    | "entry-descendant-save",
+  scenario: string,
   environmentOverrides: Readonly<NodeJS.ProcessEnv>,
-): Promise<
-  | NativeEntryTrashEvidence
-  | NativeEntryRenameFaultEvidence
-  | NativeEntryDirectoryRaceEvidence
-  | NativeEntryMetadataCleanupEvidence
-  | NativeEntryDescendantSaveEvidence
-> {
+): Promise<T> {
   const child = spawn(binary, [RELIABILITY_SCENARIO_FLAG, scenario], {
     env: isolatedDesktopEnvironment(paths, environmentOverrides),
     stdio: ["ignore", "pipe", "pipe"],
@@ -496,7 +650,7 @@ async function runNativeEntryScenarioProcess(
   const exitCode = await waitForNativeChildResult(child, scenario);
   if (exitCode !== 0) {
     throw new Error(
-      `Native entry scenario ${scenario} exited with ${exitCode}: ${stderr.trim()}`,
+      `Native reliability scenario ${scenario} exited with ${exitCode}: ${stderr.trim()}`,
     );
   }
   const evidenceLine = stdout
@@ -505,7 +659,9 @@ async function runNativeEntryScenarioProcess(
     .filter(Boolean)
     .at(-1);
   if (evidenceLine === undefined) {
-    throw new Error(`Native entry scenario ${scenario} produced no evidence.`);
+    throw new Error(
+      `Native reliability scenario ${scenario} produced no evidence.`,
+    );
   }
   const parsed: unknown = JSON.parse(evidenceLine);
   if (
@@ -515,17 +671,12 @@ async function runNativeEntryScenarioProcess(
     parsed.scenario !== scenario
   ) {
     throw new Error(
-      `Native entry scenario mismatch: requested ${scenario}, received ${String(
+      `Native reliability scenario mismatch: requested ${scenario}, received ${String(
         (parsed as { scenario?: unknown } | null)?.scenario,
       )}.`,
     );
   }
-  return parsed as
-    | NativeEntryTrashEvidence
-    | NativeEntryRenameFaultEvidence
-    | NativeEntryDirectoryRaceEvidence
-    | NativeEntryMetadataCleanupEvidence
-    | NativeEntryDescendantSaveEvidence;
+  return parsed as T;
 }
 
 function environmentOverridesForSeed(seed: string): NodeJS.ProcessEnv {

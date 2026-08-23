@@ -468,3 +468,103 @@ export async function setUiInteractionHarnessFailure(
     { commandName: command, nextFailure: failure },
   );
 }
+
+/**
+ * Opt-in file-changed emit for Orphaned Document journeys.
+ * AppShell only registers `file-changed` when transformCallback exists, so
+ * browser tests cannot mark a tab orphaned without this hook. Call after
+ * `installUiInteractionHarness` and before `page.goto`. Default harness
+ * behavior is unchanged.
+ */
+export async function installUiInteractionFileEvents(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    type EventCallback = (event: {
+      event: string;
+      id: number;
+      payload: unknown;
+    }) => void;
+    type EventInternals = {
+      invoke(command: string, args?: Record<string, unknown>): Promise<unknown>;
+      transformCallback?: (callback: EventCallback) => number;
+    };
+    const browser = globalThis as typeof globalThis & {
+      __TAURI_INTERNALS__?: EventInternals;
+      __TAURI_EVENT_PLUGIN_INTERNALS__?: {
+        unregisterListener(event: string, eventId: number): void;
+      };
+      __emitUiInteractionEvent?: (event: string, payload: unknown) => void;
+    };
+    const internals = browser.__TAURI_INTERNALS__;
+    if (internals === undefined) return;
+    const invoke = internals.invoke.bind(internals);
+    const callbacks = new Map<number, EventCallback>();
+    const listeners = new Map<string, Set<number>>();
+    let nextCallbackId = 1;
+    internals.transformCallback = (callback) => {
+      const id = nextCallbackId++;
+      callbacks.set(id, callback);
+      return id;
+    };
+    browser.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+      unregisterListener(event, eventId) {
+        listeners.get(event)?.delete(eventId);
+        callbacks.delete(eventId);
+      },
+    };
+    internals.invoke = async (command, args = {}) => {
+      if (command === "plugin:event|listen") {
+        const event = String(args.event ?? "");
+        const eventId = Number(args.handler);
+        const eventListeners = listeners.get(event) ?? new Set<number>();
+        eventListeners.add(eventId);
+        listeners.set(event, eventListeners);
+        return eventId;
+      }
+      if (command === "plugin:event|unlisten") {
+        const event = String(args.event ?? "");
+        const eventId = Number(args.eventId);
+        listeners.get(event)?.delete(eventId);
+        callbacks.delete(eventId);
+        return null;
+      }
+      if (
+        command === "plugin:window|on_close_requested" ||
+        command === "plugin:window|destroy"
+      ) {
+        return command === "plugin:window|on_close_requested" ? 1 : {};
+      }
+      return invoke(command, args);
+    };
+    browser.__emitUiInteractionEvent = (event, payload) => {
+      for (const eventId of listeners.get(event) ?? []) {
+        callbacks.get(eventId)?.({ event, id: eventId, payload });
+      }
+    };
+  });
+}
+
+export async function emitUiInteractionFileChanged(
+  page: Page,
+  payload: {
+    path: string;
+    change: "modified" | "created" | "removed" | "renamed";
+    newPath?: string;
+    mtime?: number;
+    contentHash?: string;
+  },
+): Promise<void> {
+  await page.evaluate(
+    ({ event, payload: eventPayload }) => {
+      const emit = (
+        globalThis as typeof globalThis & {
+          __emitUiInteractionEvent?: (eventName: string, next: unknown) => void;
+        }
+      ).__emitUiInteractionEvent;
+      if (emit === undefined) {
+        throw new Error("UI interaction file events are not installed.");
+      }
+      emit(event, eventPayload);
+    },
+    { event: "file-changed", payload },
+  );
+}

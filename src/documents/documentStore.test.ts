@@ -518,4 +518,420 @@ describe("DocumentManager", () => {
     expect(session?.path).toBe("/tmp/saved.excalidraw");
     manager.dispose();
   });
+
+  describe("US3 close and activation", () => {
+    type CloseOutcome =
+      | { status: "closed" }
+      | { status: "orphaned"; documentId: string }
+      | { status: "failed"; documentId: string; message: string }
+      | { status: "cancelled" }
+      | { status: "inFlight" };
+
+    function getCloseMany(
+      manager: DocumentManager,
+    ): (documentIds: readonly string[]) => Promise<CloseOutcome> {
+      const closeMany = Reflect.get(manager, "closeMany");
+      if (typeof closeMany !== "function") {
+        throw new Error("DocumentManager.closeMany is not implemented");
+      }
+      return (closeMany as (documentIds: readonly string[]) => Promise<CloseOutcome>).bind(
+        manager,
+      );
+    }
+
+    function getConfirmOrphanClose(
+      manager: DocumentManager,
+    ): (
+      documentId: string,
+      decision: "saveAs" | "discard" | "cancel",
+      saveAsPath?: string,
+    ) => Promise<CloseOutcome> {
+      const confirmOrphanClose = Reflect.get(manager, "confirmOrphanClose");
+      if (typeof confirmOrphanClose !== "function") {
+        throw new Error(
+          "DocumentManager.confirmOrphanClose is not implemented",
+        );
+      }
+      return (
+        confirmOrphanClose as (
+          documentId: string,
+          decision: "saveAs" | "discard" | "cancel",
+          saveAsPath?: string,
+        ) => Promise<CloseOutcome>
+      ).bind(manager);
+    }
+
+    function markDirty(manager: DocumentManager, documentId: string): void {
+      const scene = manager.store.getState().sessionsById[documentId]?.scene;
+      expect(scene).toBeDefined();
+      manager.updateScene(documentId, {
+        ...scene!,
+        elements: [{ version: 1 } as SceneSnapshot["elements"][number]],
+      });
+    }
+
+    it("joins a repeated close of the same document into one in-flight operation", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const documentId = await manager.open("/tmp/drawing.excalidraw");
+      let finishClose: () => void = () => undefined;
+      vi.mocked(gateway.close).mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishClose = resolve;
+          }),
+      );
+
+      const first = manager.close(documentId);
+      await Promise.resolve();
+      await Promise.resolve();
+      const duplicate = await manager.close(documentId);
+
+      expect(duplicate).toEqual({ status: "inFlight" });
+      expect(gateway.close).toHaveBeenCalledOnce();
+      expect(gateway.close).toHaveBeenCalledWith(
+        "/tmp/drawing.excalidraw",
+        "checkpointed",
+      );
+      finishClose();
+      await expect(first).resolves.toEqual({ status: "closed" });
+      expect(manager.store.getState().sessionsById[documentId]).toBeUndefined();
+      manager.dispose();
+    });
+
+    it("checkpoints a dirty available document with tabClose before closing", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const documentId = await manager.open("/tmp/drawing.excalidraw");
+      markDirty(manager, documentId);
+
+      await expect(manager.close(documentId)).resolves.toEqual({
+        status: "closed",
+      });
+
+      expect(gateway.checkpoint).toHaveBeenCalledWith(
+        "/tmp/drawing.excalidraw",
+        expect.any(String),
+        "tabClose",
+      );
+      expect(gateway.close).toHaveBeenCalledWith(
+        "/tmp/drawing.excalidraw",
+        "checkpointed",
+      );
+      expect(manager.store.getState().tabOrder).not.toContain(documentId);
+      manager.dispose();
+    });
+
+    it("returns failed and keeps the tab open when checkpoint throws", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const documentId = await manager.open("/tmp/drawing.excalidraw");
+      markDirty(manager, documentId);
+      vi.mocked(gateway.checkpoint).mockRejectedValueOnce(
+        new Error("disk is full"),
+      );
+
+      await expect(manager.close(documentId)).resolves.toEqual({
+        status: "failed",
+        documentId,
+        message: expect.stringMatching(/disk is full/i),
+      });
+      expect(gateway.close).not.toHaveBeenCalled();
+      expect(manager.store.getState().sessionsById[documentId]).toBeDefined();
+      expect(manager.store.getState().tabOrder).toEqual([documentId]);
+      manager.dispose();
+    });
+
+    it("returns orphaned without checkpointing or closing a missing path", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const documentId = await manager.open("/tmp/gone.excalidraw");
+      markDirty(manager, documentId);
+      manager.handleFileRemoved("/tmp/gone.excalidraw");
+      vi.mocked(gateway.checkpoint).mockClear();
+      vi.mocked(gateway.close).mockClear();
+
+      await expect(manager.close(documentId)).resolves.toEqual({
+        status: "orphaned",
+        documentId,
+      });
+      expect(gateway.checkpoint).not.toHaveBeenCalled();
+      expect(gateway.close).not.toHaveBeenCalled();
+      expect(manager.store.getState().sessionsById[documentId]?.saveState).toBe(
+        "orphaned",
+      );
+      manager.dispose();
+    });
+
+    it("saves an orphaned document as a new file then closes it", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const documentId = await manager.open("/tmp/gone.excalidraw");
+      manager.handleFileRemoved("/tmp/gone.excalidraw");
+      vi.mocked(gateway.checkpoint).mockClear();
+      vi.mocked(gateway.close).mockClear();
+      vi.mocked(gateway.checkpoint).mockResolvedValue({
+        newBaseHash: "orphan-copy",
+        mtime: 3,
+      });
+
+      await expect(
+        getConfirmOrphanClose(manager)(
+          documentId,
+          "saveAs",
+          "/tmp/saved.excalidraw",
+        ),
+      ).resolves.toEqual({ status: "closed" });
+      expect(gateway.checkpoint).toHaveBeenCalledWith(
+        "/tmp/saved.excalidraw",
+        expect.any(String),
+        "manualSave",
+      );
+      expect(
+        vi.mocked(gateway.checkpoint).mock.calls.every(
+          (call) => call[0] !== "/tmp/gone.excalidraw",
+        ),
+      ).toBe(true);
+      expect(manager.store.getState().sessionsById[documentId]).toBeUndefined();
+      manager.dispose();
+    });
+
+    it("discards an orphaned document without checkpointing the missing path", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const documentId = await manager.open("/tmp/gone.excalidraw");
+      manager.handleFileRemoved("/tmp/gone.excalidraw");
+      vi.mocked(gateway.checkpoint).mockClear();
+      vi.mocked(gateway.close).mockClear();
+
+      await expect(
+        getConfirmOrphanClose(manager)(documentId, "discard"),
+      ).resolves.toEqual({ status: "closed" });
+      expect(gateway.checkpoint).not.toHaveBeenCalled();
+      expect(gateway.close).toHaveBeenCalledWith(
+        "/tmp/gone.excalidraw",
+        "discardOrphan",
+      );
+      expect(manager.store.getState().sessionsById[documentId]).toBeUndefined();
+      manager.dispose();
+    });
+
+    it("cancels an orphaned close and leaves the session open", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const documentId = await manager.open("/tmp/gone.excalidraw");
+      manager.handleFileRemoved("/tmp/gone.excalidraw");
+      vi.mocked(gateway.checkpoint).mockClear();
+      vi.mocked(gateway.close).mockClear();
+
+      await expect(
+        getConfirmOrphanClose(manager)(documentId, "cancel"),
+      ).resolves.toEqual({ status: "cancelled" });
+      expect(gateway.close).not.toHaveBeenCalled();
+      expect(manager.store.getState().sessionsById[documentId]).toBeDefined();
+      manager.dispose();
+    });
+
+    it("closes a batch in visual tab order even when ids are requested out of order", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const firstId = await manager.open("/tmp/a.excalidraw");
+      const secondId = await manager.open("/tmp/b.excalidraw");
+      const thirdId = await manager.open("/tmp/c.excalidraw");
+      let finishFirst: () => void = () => undefined;
+      vi.mocked(gateway.close).mockImplementation(async (path) => {
+        if (path === "/tmp/a.excalidraw") {
+          await new Promise<void>((resolve) => {
+            finishFirst = resolve;
+          });
+        }
+      });
+
+      const pending = getCloseMany(manager)([thirdId, firstId, secondId]);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(vi.mocked(gateway.close).mock.calls.map((call) => call[0])).toEqual(
+        ["/tmp/a.excalidraw"],
+      );
+
+      finishFirst();
+      await expect(pending).resolves.toEqual({ status: "closed" });
+      expect(vi.mocked(gateway.close).mock.calls.map((call) => call[0])).toEqual(
+        ["/tmp/a.excalidraw", "/tmp/b.excalidraw", "/tmp/c.excalidraw"],
+      );
+      expect(manager.store.getState().tabOrder).toEqual([]);
+      manager.dispose();
+    });
+
+    it("stops a batch on the first failure and leaves unprocessed tabs open", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const firstId = await manager.open("/tmp/a.excalidraw");
+      const secondId = await manager.open("/tmp/b.excalidraw");
+      const thirdId = await manager.open("/tmp/c.excalidraw");
+      markDirty(manager, secondId);
+      vi.mocked(gateway.checkpoint).mockImplementation(
+        async (path, _scene, reason) => {
+          if (path === "/tmp/b.excalidraw" && reason === "tabClose") {
+            throw new Error("checkpoint failed");
+          }
+          return { newBaseHash: "next", mtime: 1 };
+        },
+      );
+
+      await expect(
+        getCloseMany(manager)([firstId, secondId, thirdId]),
+      ).resolves.toEqual({
+        status: "failed",
+        documentId: secondId,
+        message: expect.stringMatching(/checkpoint failed/i),
+      });
+      expect(manager.store.getState().tabOrder).toEqual([secondId, thirdId]);
+      expect(gateway.close).toHaveBeenCalledWith(
+        "/tmp/a.excalidraw",
+        "checkpointed",
+      );
+      expect(gateway.close).not.toHaveBeenCalledWith(
+        "/tmp/c.excalidraw",
+        "checkpointed",
+      );
+      manager.dispose();
+    });
+
+    it("stops a batch at an orphaned tab until cancel, leaving remaining tabs open", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const firstId = await manager.open("/tmp/a.excalidraw");
+      const secondId = await manager.open("/tmp/b.excalidraw");
+      const thirdId = await manager.open("/tmp/c.excalidraw");
+      manager.handleFileRemoved("/tmp/b.excalidraw");
+
+      await expect(
+        getCloseMany(manager)([firstId, secondId, thirdId]),
+      ).resolves.toEqual({ status: "orphaned", documentId: secondId });
+      expect(manager.store.getState().tabOrder).toEqual([secondId, thirdId]);
+
+      await expect(
+        getConfirmOrphanClose(manager)(secondId, "cancel"),
+      ).resolves.toEqual({ status: "cancelled" });
+      expect(manager.store.getState().tabOrder).toEqual([secondId, thirdId]);
+      expect(gateway.close).not.toHaveBeenCalledWith(
+        "/tmp/c.excalidraw",
+        "checkpointed",
+      );
+      manager.dispose();
+    });
+
+    it("resumes the remaining batch after an orphaned tab is discarded", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const firstId = await manager.open("/tmp/a.excalidraw");
+      const secondId = await manager.open("/tmp/b.excalidraw");
+      const thirdId = await manager.open("/tmp/c.excalidraw");
+      manager.handleFileRemoved("/tmp/b.excalidraw");
+
+      await expect(
+        getCloseMany(manager)([firstId, secondId, thirdId]),
+      ).resolves.toEqual({ status: "orphaned", documentId: secondId });
+
+      await expect(
+        getConfirmOrphanClose(manager)(secondId, "discard"),
+      ).resolves.toEqual({ status: "closed" });
+      expect(gateway.close).toHaveBeenCalledWith(
+        "/tmp/b.excalidraw",
+        "discardOrphan",
+      );
+      expect(gateway.close).toHaveBeenCalledWith(
+        "/tmp/c.excalidraw",
+        "checkpointed",
+      );
+      expect(manager.store.getState().tabOrder).toEqual([]);
+      manager.dispose();
+    });
+
+    it("activates the right neighbor after closing the active tab", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const firstId = await manager.open("/tmp/a.excalidraw");
+      const secondId = await manager.open("/tmp/b.excalidraw");
+      const thirdId = await manager.open("/tmp/c.excalidraw");
+      await manager.activate(secondId);
+
+      await expect(manager.close(secondId)).resolves.toEqual({
+        status: "closed",
+      });
+      expect(manager.store.getState().activeDocumentId).toBe(thirdId);
+      expect(manager.store.getState().tabOrder).toEqual([firstId, thirdId]);
+      manager.dispose();
+    });
+
+    it("activates the left neighbor when the closed active tab has no right neighbor", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const firstId = await manager.open("/tmp/a.excalidraw");
+      const secondId = await manager.open("/tmp/b.excalidraw");
+      const thirdId = await manager.open("/tmp/c.excalidraw");
+      expect(manager.store.getState().activeDocumentId).toBe(thirdId);
+
+      await expect(manager.close(thirdId)).resolves.toEqual({
+        status: "closed",
+      });
+      expect(manager.store.getState().activeDocumentId).toBe(secondId);
+      expect(manager.store.getState().tabOrder).toEqual([firstId, secondId]);
+      manager.dispose();
+    });
+
+    it("clears the active document after closing the last tab without quitting", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const documentId = await manager.open("/tmp/only.excalidraw");
+
+      await expect(manager.close(documentId)).resolves.toEqual({
+        status: "closed",
+      });
+      expect(manager.store.getState().activeDocumentId).toBeNull();
+      expect(manager.store.getState().tabOrder).toEqual([]);
+      expect(manager.store.getState().sessionsById).toEqual({});
+      manager.dispose();
+    });
+
+    it("activates only the latest intent after an in-flight activation completes", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const firstId = await manager.open("/tmp/a.excalidraw");
+      const secondId = await manager.open("/tmp/b.excalidraw");
+      const thirdId = await manager.open("/tmp/c.excalidraw");
+      markDirty(manager, thirdId);
+      let finishCheckpoint: () => void = () => undefined;
+      vi.mocked(gateway.checkpoint).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finishCheckpoint = () =>
+              resolve({ newBaseHash: "next", mtime: 1 });
+          }),
+      );
+
+      const seenActive: string[] = [];
+      const unsubscribe = manager.store.subscribe((state) => {
+        if (state.activeDocumentId !== null) {
+          seenActive.push(state.activeDocumentId);
+        }
+      });
+
+      const inFlight = manager.activate(firstId);
+      await Promise.resolve();
+      void manager.activate(secondId);
+      void manager.activate(thirdId);
+      finishCheckpoint();
+      await inFlight;
+      await Promise.resolve();
+      await Promise.resolve();
+      unsubscribe();
+
+      expect(manager.store.getState().activeDocumentId).toBe(thirdId);
+      expect(seenActive).not.toContain(secondId);
+      manager.dispose();
+    });
+  });
 });
+

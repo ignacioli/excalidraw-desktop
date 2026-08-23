@@ -17,6 +17,7 @@ import {
 } from "../editor/sceneSerializer";
 import { DraftScheduler } from "./draftScheduler";
 import { createDocumentGateway, type DocumentGateway } from "./documentGateway";
+import { bindActivateRunner, requestActivate } from "./tabActivationQueue";
 
 export type DocumentSaveState =
   | "clean"
@@ -53,6 +54,13 @@ export interface DocumentStoreState {
   activeDocumentId: string | null;
 }
 
+export type CloseOutcome =
+  | { status: "closed" }
+  | { status: "orphaned"; documentId: string }
+  | { status: "failed"; documentId: string; message: string }
+  | { status: "cancelled" }
+  | { status: "inFlight" };
+
 export class DocumentManager {
   readonly store: StoreApi<DocumentStoreState>;
   private readonly gateway: DocumentGateway;
@@ -61,6 +69,8 @@ export class DocumentManager {
     DraftScheduler<SceneSnapshot>
   >();
   private readonly pathMutations = new Set<string>();
+  private readonly closingById = new Map<string, Promise<CloseOutcome>>();
+  private batchRemainder: string[] = [];
 
   constructor(gateway: DocumentGateway) {
     this.gateway = gateway;
@@ -69,6 +79,7 @@ export class DocumentManager {
       tabOrder: [],
       activeDocumentId: null,
     }));
+    bindActivateRunner((documentId) => this.performActivate(documentId));
   }
 
   async open(path: string): Promise<string> {
@@ -154,6 +165,10 @@ export class DocumentManager {
   }
 
   async activate(documentId: string): Promise<void> {
+    await requestActivate(documentId);
+  }
+
+  private async performActivate(documentId: string): Promise<void> {
     const { activeDocumentId: activeId, sessionsById } = this.store.getState();
     if (activeId === documentId) {
       return;
@@ -191,19 +206,114 @@ export class DocumentManager {
     );
   }
 
-  async close(documentId: string, discardDraft = false): Promise<void> {
+  async close(documentId: string, discardDraft = false): Promise<CloseOutcome> {
+    const inFlight = this.closingById.get(documentId);
+    if (inFlight !== undefined) {
+      return { status: "inFlight" };
+    }
+    const task = this.closeExclusive(documentId, discardDraft);
+    this.closingById.set(documentId, task);
+    try {
+      return await task;
+    } finally {
+      this.closingById.delete(documentId);
+    }
+  }
+
+  async closeMany(documentIds: readonly string[]): Promise<CloseOutcome> {
+    const requested = new Set(documentIds);
+    this.batchRemainder = this.store
+      .getState()
+      .tabOrder.filter((id) => requested.has(id));
+    return this.continueBatch();
+  }
+
+  async confirmOrphanClose(
+    documentId: string,
+    decision: "saveAs" | "discard" | "cancel",
+    saveAsPath?: string,
+  ): Promise<CloseOutcome> {
+    if (decision === "cancel") {
+      this.batchRemainder = [];
+      return { status: "cancelled" };
+    }
+    if (decision === "saveAs") {
+      if (saveAsPath === undefined || saveAsPath.length === 0) {
+        return {
+          status: "failed",
+          documentId,
+          message: "A save location is required.",
+        };
+      }
+      try {
+        await this.saveOrphanedAs(documentId, saveAsPath);
+      } catch (error) {
+        return {
+          status: "failed",
+          documentId,
+          message: getErrorMessage(error),
+        };
+      }
+    }
+    const outcome = await this.close(documentId, decision === "discard");
+    if (outcome.status === "closed" && this.batchRemainder[0] === documentId) {
+      this.batchRemainder.shift();
+      const continued = await this.continueBatch();
+      return continued.status === "closed" ? outcome : continued;
+    }
+    return outcome;
+  }
+
+  private async continueBatch(): Promise<CloseOutcome> {
+    while (this.batchRemainder.length > 0) {
+      const documentId = this.batchRemainder[0];
+      if (documentId === undefined) {
+        break;
+      }
+      const outcome = await this.close(documentId);
+      if (outcome.status === "closed" || outcome.status === "inFlight") {
+        this.batchRemainder.shift();
+        continue;
+      }
+      return outcome;
+    }
+    return { status: "closed" };
+  }
+
+  private async closeExclusive(
+    documentId: string,
+    discardDraft: boolean,
+  ): Promise<CloseOutcome> {
     const session = this.store.getState().sessionsById[documentId];
     if (session === undefined) {
-      return;
+      return { status: "closed" };
     }
 
-    if (!discardDraft) {
-      await this.checkpoint(documentId, "tabClose");
+    if (session.saveState === "orphaned" && !discardDraft) {
+      return { status: "orphaned", documentId };
     }
-    await this.gateway.close(
-      session.path,
-      discardDraft ? "discardOrphan" : "checkpointed",
-    );
+
+    try {
+      if (!discardDraft) {
+        await this.checkpoint(documentId, "tabClose");
+      }
+      await this.gateway.close(
+        session.path,
+        discardDraft ? "discardOrphan" : "checkpointed",
+      );
+    } catch (error) {
+      return {
+        status: "failed",
+        documentId,
+        message: getErrorMessage(error),
+      };
+    }
+
+    this.dropSession(documentId);
+    return { status: "closed" };
+  }
+
+  private dropSession(documentId: string): void {
     this.schedulers.get(documentId)?.dispose();
     this.schedulers.delete(documentId);
     this.store.setState((state) => {
