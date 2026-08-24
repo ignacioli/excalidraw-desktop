@@ -48,6 +48,34 @@ describe("ContextMenu", () => {
     expect(triggerRef.current).toHaveFocus();
   });
 
+  it("dismisses on Tab without restoring the trigger so focus can leave", async () => {
+    const user = userEvent.setup();
+    const triggerRef = createRef<HTMLButtonElement>();
+    const onDismiss = vi.fn();
+    render(
+      <>
+        <button ref={triggerRef} type="button">
+          Drawing actions
+        </button>
+        <button type="button">After menu</button>
+        <ContextMenu
+          anchor={{ x: 40, y: 50 }}
+          items={[
+            { id: "rename", label: "Rename", onSelect: vi.fn() },
+            { id: "delete", label: "Delete", onSelect: vi.fn() },
+          ]}
+          label="Drawing actions"
+          onDismiss={onDismiss}
+          triggerRef={triggerRef}
+        />
+      </>,
+    );
+
+    expect(screen.getByRole("menuitem", { name: "Rename" })).toHaveFocus();
+    await user.tab();
+    expect(onDismiss).toHaveBeenCalledWith("tab");
+  });
+
   it("renders a description without adding a menuitem", () => {
     const triggerRef = createRef<HTMLButtonElement>();
     render(

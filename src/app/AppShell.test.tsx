@@ -350,6 +350,9 @@ describe("AppShell", () => {
       expect(
         screen.queryByRole("complementary", { name: "Files" }),
       ).not.toBeInTheDocument();
+      expect(document.getElementById("workspace-sidebar")).toHaveAttribute(
+        "hidden",
+      );
       expect(
         screen.getByRole("main", { name: "Drawing canvas" }),
       ).toBeInTheDocument();
@@ -470,6 +473,7 @@ describe("AppShell", () => {
       assertNoRightSidebar();
 
       const inFlowColumns = [...getShellBody().children].filter((child) => {
+        if (child instanceof HTMLElement && child.hidden) return false;
         const position = getComputedStyle(child).position;
         return position !== "fixed" && position !== "absolute";
       });

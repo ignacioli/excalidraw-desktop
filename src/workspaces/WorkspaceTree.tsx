@@ -286,7 +286,6 @@ export function WorkspaceTree({
   };
 
   const handleTreeKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (event.target instanceof HTMLButtonElement) return;
     const currentRow = rows.find((row) => row.key === focusedRowKey);
     if (currentRow === undefined) return;
 

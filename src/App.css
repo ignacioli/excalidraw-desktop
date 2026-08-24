@@ -296,6 +296,10 @@ body {
   background: var(--panel-background);
 }
 
+.file-sidebar[hidden] {
+  display: none;
+}
+
 .workspace-empty-state {
   display: flex;
   flex-direction: column;

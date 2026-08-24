@@ -35,13 +35,17 @@ export function ContextMenu({
   description,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef(true);
   const descriptionId = useId();
   const [position, setPosition] = useState(anchor);
 
   useEffect(() => {
     const returnFocusTarget = triggerRef?.current;
+    restoreFocusRef.current = true;
     firstEnabledItem(menuRef.current)?.focus();
-    return () => returnFocusTarget?.focus();
+    return () => {
+      if (restoreFocusRef.current) returnFocusTarget?.focus();
+    };
   }, [triggerRef]);
 
   useEffect(() => {
@@ -93,6 +97,10 @@ export function ContextMenu({
       case "Escape":
         event.preventDefault();
         onDismiss("escape");
+        return;
+      case "Tab":
+        restoreFocusRef.current = false;
+        onDismiss("tab");
         return;
       default:
         return;

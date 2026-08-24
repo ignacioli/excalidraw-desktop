@@ -226,6 +226,35 @@ describe("WorkspaceTree", () => {
     expect(onRowAction).toHaveBeenCalledOnce();
   });
 
+  it("keeps arrow navigation after the row action button is focused", () => {
+    render(
+      <WorkspaceTree
+        workspaces={[workspace]}
+        entriesByWorkspace={{
+          [workspace.id]: {
+            "": [
+              entry("notes", "directory", "Notes"),
+              entry("first.excalidraw", "drawing", "First"),
+            ],
+          },
+        }}
+        expandedWorkspaceIds={new Set([workspace.id])}
+      />,
+    );
+
+    const sketches = screen.getByRole("treeitem", { name: "Sketches" });
+    const notes = screen.getByRole("treeitem", { name: "Notes" });
+    const first = screen.getByRole("treeitem", { name: "First" });
+    const tree = screen.getByRole("tree", { name: "Workspace files" });
+    sketches.focus();
+    fireEvent.keyDown(tree, { key: "ArrowDown" });
+    expect(notes).toHaveFocus();
+    const action = screen.getByRole("button", { name: "Actions for Notes" });
+    action.focus();
+    fireEvent.keyDown(action, { key: "ArrowDown" });
+    expect(first).toHaveFocus();
+  });
+
   it("passes pointer origin from contextmenu and reports tree scroll", () => {
     const onRowAction = vi.fn();
     const onScroll = vi.fn();

@@ -447,78 +447,76 @@ export function AppShell({
         }
         data-sidebar-mode={sidebarSnapshot.mode}
       >
-        {sidebarSnapshot.mode !== "hidden" ? (
-          <aside
-            aria-label="Files"
-            className="file-sidebar"
-            id="workspace-sidebar"
-            style={
-              sidebarSnapshot.mode === "overlay"
-                ? { position: "absolute" }
-                : undefined
+        <aside
+          aria-label="Files"
+          className="file-sidebar"
+          hidden={sidebarSnapshot.mode === "hidden"}
+          id="workspace-sidebar"
+          inert={sidebarSnapshot.mode === "hidden"}
+          style={
+            sidebarSnapshot.mode === "overlay"
+              ? { position: "absolute" }
+              : undefined
+          }
+          onPointerEnter={() => sidebarController.handlePointerEnter()}
+          onPointerLeave={() => sidebarController.handlePointerLeave()}
+          onFocusCapture={() => sidebarController.setHold("focus", true)}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+              sidebarController.setHold("focus", false);
             }
-            onPointerEnter={() => sidebarController.handlePointerEnter()}
-            onPointerLeave={() => sidebarController.handlePointerLeave()}
-            onFocusCapture={() => sidebarController.setHold("focus", true)}
-            onBlurCapture={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                sidebarController.setHold("focus", false);
-              }
-            }}
-          >
-            {sidebarSnapshot.mode === "overlay" ? (
-              <button
-                onClick={() => {
-                  sidebarController.pin();
-                  preferences.setSidebarPinned(true);
-                }}
-                type="button"
-              >
-                Pin workspace sidebar
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  sidebarController.unpin();
-                  preferences.setSidebarPinned(false);
-                }}
-                type="button"
-              >
-                Unpin workspace sidebar
-              </button>
-            )}
-            {hasTauriCommandRuntime() ? (
-              <WorkspacePanel
-                preferences={preferences}
-                captureFocus={sidebarSnapshot.mode === "pinned"}
-                onOpenFile={(entry) => {
-                  void runAction(() =>
-                    documentManager.open(entry.canonicalPath),
-                  );
-                }}
-                onWorkspacePresenceChange={setHasMountedWorkspace}
-              />
-            ) : null}
-            {!hasMountedWorkspace ? (
-              <div className="workspace-empty-state">
-                <h2>No workspace mounted</h2>
-                <p>Open a drawing directly, or create a new local drawing.</p>
-                <div className="empty-state-actions">
-                  <button
-                    className="primary-action"
-                    type="button"
-                    onClick={() => void createDocument()}
-                  >
-                    New drawing
-                  </button>
-                  <button type="button" onClick={() => void openDocument()}>
-                    Open drawing…
-                  </button>
-                </div>
+          }}
+        >
+          {sidebarSnapshot.mode === "overlay" ? (
+            <button
+              onClick={() => {
+                sidebarController.pin();
+                preferences.setSidebarPinned(true);
+              }}
+              type="button"
+            >
+              Pin workspace sidebar
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                sidebarController.unpin();
+                preferences.setSidebarPinned(false);
+              }}
+              type="button"
+            >
+              Unpin workspace sidebar
+            </button>
+          )}
+          {hasTauriCommandRuntime() ? (
+            <WorkspacePanel
+              preferences={preferences}
+              captureFocus={sidebarSnapshot.mode === "pinned"}
+              onOpenFile={(entry) => {
+                void runAction(() => documentManager.open(entry.canonicalPath));
+              }}
+              onWorkspacePresenceChange={setHasMountedWorkspace}
+            />
+          ) : null}
+          {!hasMountedWorkspace ? (
+            <div className="workspace-empty-state">
+              <h2>No workspace mounted</h2>
+              <p>Open a drawing directly, or create a new local drawing.</p>
+              <div className="empty-state-actions">
+                <button
+                  className="primary-action"
+                  type="button"
+                  onClick={() => void createDocument()}
+                >
+                  New drawing
+                </button>
+                <button type="button" onClick={() => void openDocument()}>
+                  Open drawing…
+                </button>
               </div>
-            ) : null}
-          </aside>
-        ) : null}
+            </div>
+          ) : null}
+        </aside>
 
         <main className="canvas-region" aria-label="Drawing canvas">
           {documentSessions.length > 0 ? (

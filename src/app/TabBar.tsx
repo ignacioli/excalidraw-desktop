@@ -26,6 +26,7 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
   const tabOrder = useDocumentStore((state) => state.tabOrder);
   const activeDocumentId = useDocumentStore((state) => state.activeDocumentId);
   const clusterRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const menuTriggerRef = useRef<HTMLElement | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [menu, setMenu] = useState<TabMenuState | null>(null);
@@ -177,6 +178,9 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
     documentId: string,
   ) => {
     event.preventDefault();
+    const trigger = event.currentTarget.querySelector('[role="tab"]');
+    menuTriggerRef.current =
+      trigger instanceof HTMLElement ? trigger : event.currentTarget;
     setMenu({ documentId, x: event.clientX, y: event.clientY });
   };
 
@@ -314,6 +318,7 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
           items={menuItems}
           anchor={{ x: menu.x, y: menu.y }}
           onDismiss={() => setMenu(null)}
+          triggerRef={menuTriggerRef}
         />
       ) : null}
     </nav>
