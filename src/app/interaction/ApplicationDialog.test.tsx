@@ -52,7 +52,9 @@ describe("ApplicationDialog", () => {
     const trigger = document.createElement("button");
     trigger.textContent = "Open rename dialog";
     document.body.append(trigger);
-    const returnFocusRef: { current: HTMLElement | null } = { current: trigger };
+    const returnFocusRef: { current: HTMLElement | null } = {
+      current: trigger,
+    };
     const { unmount } = render(
       <ApplicationDialog
         onDismiss={vi.fn()}

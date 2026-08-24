@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -36,13 +42,17 @@ describe("TabBar", () => {
       tabOrder: [],
       activeDocumentId: null,
     });
-    vi.spyOn(documentManager, "close").mockImplementation(async (documentId) => {
-      applyStoreClose(documentId);
-      return { status: "closed" };
-    });
-    vi.spyOn(documentManager, "activate").mockImplementation(async (documentId) => {
-      documentManager.store.setState({ activeDocumentId: documentId });
-    });
+    vi.spyOn(documentManager, "close").mockImplementation(
+      async (documentId) => {
+        applyStoreClose(documentId);
+        return { status: "closed" };
+      },
+    );
+    vi.spyOn(documentManager, "activate").mockImplementation(
+      async (documentId) => {
+        documentManager.store.setState({ activeDocumentId: documentId });
+      },
+    );
   });
 
   afterEach(() => {
@@ -59,7 +69,6 @@ describe("TabBar", () => {
     render(<TabBar />);
 
     const alphaTab = screen.getByRole("tab", { name: "Alpha" });
-    const betaTab = screen.getByRole("tab", { name: "Beta" });
     const tabBar = alphaTab.closest(".tab-bar");
     const alphaSlot = tabBar?.querySelector(
       "[data-slot='tab-close'][data-tab-id='alpha']",
@@ -71,14 +80,18 @@ describe("TabBar", () => {
     expect(betaSlot).not.toBeNull();
     expect(betaSlot).toHaveAttribute("data-close-visible", "true");
     expect(alphaSlot).toHaveAttribute("data-close-visible", "false");
-    expect(screen.getByRole("button", { name: "Close Beta" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Close Beta" }),
+    ).toBeInTheDocument();
 
     await user.hover(alphaTab);
     expect(
       tabBar?.querySelector("[data-slot='tab-close'][data-tab-id='alpha']"),
     ).toBe(alphaSlot);
     expect(alphaSlot).toHaveAttribute("data-close-visible", "true");
-    expect(screen.getByRole("button", { name: "Close Alpha" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Close Alpha" }),
+    ).toBeInTheDocument();
   });
 
   it("names each close control after its document", () => {
@@ -88,9 +101,9 @@ describe("TabBar", () => {
     ]);
     render(<TabBar />);
 
-    expect(screen.getByRole("button", { name: "Close Beta" })).toHaveAccessibleName(
-      "Close Beta",
-    );
+    expect(
+      screen.getByRole("button", { name: "Close Beta" }),
+    ).toHaveAccessibleName("Close Beta");
   });
 
   it("offers Close, Close Others, and Close Tabs to the Right from the tab context menu", async () => {
@@ -104,7 +117,9 @@ describe("TabBar", () => {
 
     fireEvent.contextMenu(screen.getByRole("tab", { name: "Beta" }));
     const menu = screen.getByRole("menu");
-    expect(within(menu).getByRole("menuitem", { name: "Close" })).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Close" }),
+    ).toBeInTheDocument();
     expect(
       within(menu).getByRole("menuitem", { name: "Close Others" }),
     ).toBeInTheDocument();
@@ -186,7 +201,9 @@ describe("TabBar", () => {
     render(<TabBar />);
 
     fireEvent.contextMenu(screen.getByRole("button", { name: "Close Beta" }));
-    expect(screen.getByRole("menu", { name: "Tab actions" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("menu", { name: "Tab actions" }),
+    ).toBeInTheDocument();
   });
 
   it("activates an inactive tab from its empty close slot", () => {
@@ -428,7 +445,9 @@ describe("TabBar", () => {
     render(<TabBar />);
 
     await user.click(screen.getByRole("button", { name: "Close Alpha" }));
-    expect(screen.getByRole("navigation", { name: "Open drawings" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "Open drawings" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("tablist")).toBeInTheDocument();
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   });
@@ -462,13 +481,20 @@ describe("TabBar", () => {
   it("focuses the surviving tab after closing a title that contains quotes", async () => {
     const user = userEvent.setup();
     setDocumentSessions([
-      createSession("quoted", 'Quote "file"', "/tmp/quoted.excalidraw", "clean"),
+      createSession(
+        "quoted",
+        'Quote "file"',
+        "/tmp/quoted.excalidraw",
+        "clean",
+      ),
       createSession("beta", "Beta", "/tmp/beta.excalidraw", "clean"),
     ]);
     documentManager.store.setState({ activeDocumentId: "quoted" });
     render(<TabBar />);
 
-    await user.click(screen.getByRole("button", { name: 'Close Quote "file"' }));
+    await user.click(
+      screen.getByRole("button", { name: 'Close Quote "file"' }),
+    );
     await waitFor(() => {
       const focused = document.activeElement;
       expect(

@@ -54,9 +54,7 @@ describe("ContextMenu", () => {
       <ContextMenu
         anchor={{ x: 8, y: 8 }}
         description="Files on disk will not be deleted"
-        items={[
-          { id: "remove", label: "Remove Workspace", onSelect: vi.fn() },
-        ]}
+        items={[{ id: "remove", label: "Remove Workspace", onSelect: vi.fn() }]}
         label="Workspace actions"
         onDismiss={vi.fn()}
         triggerRef={triggerRef}
@@ -129,12 +127,8 @@ describe("ContextMenu", () => {
     expect(Number.parseFloat(popup.style.left)).toBeGreaterThanOrEqual(0);
     expect(Number.parseFloat(popup.style.top)).toBeLessThanOrEqual(140);
     expect(Number.parseFloat(popup.style.top)).toBeGreaterThanOrEqual(0);
-    expect(
-      Number.parseFloat(popup.style.left) + 160,
-    ).toBeLessThanOrEqual(420);
-    expect(
-      Number.parseFloat(popup.style.top) + 120,
-    ).toBeLessThanOrEqual(260);
+    expect(Number.parseFloat(popup.style.left) + 160).toBeLessThanOrEqual(420);
+    expect(Number.parseFloat(popup.style.top) + 120).toBeLessThanOrEqual(260);
 
     if (innerWidth) Object.defineProperty(window, "innerWidth", innerWidth);
     if (innerHeight) Object.defineProperty(window, "innerHeight", innerHeight);

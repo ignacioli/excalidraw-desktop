@@ -73,7 +73,9 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
         nextOrder[Math.min(closedIndex, nextOrder.length - 1)] ?? null;
       if (survivor === null) return;
       requestAnimationFrame(() => {
-        const index = documentManager.store.getState().tabOrder.indexOf(survivor);
+        const index = documentManager.store
+          .getState()
+          .tabOrder.indexOf(survivor);
         const cluster = clusterRefs.current[index];
         const closeButton =
           cluster?.querySelector<HTMLButtonElement>("button.tab-close") ?? null;
@@ -203,11 +205,7 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
   })();
 
   return (
-    <nav
-      className="tab-bar"
-      aria-label="Open drawings"
-      onWheel={handleWheel}
-    >
+    <nav className="tab-bar" aria-label="Open drawings" onWheel={handleWheel}>
       <div className="tab-list">
         <div
           aria-label="Drawing tabs"

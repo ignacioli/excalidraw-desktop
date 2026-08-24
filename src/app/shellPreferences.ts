@@ -104,7 +104,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function createDefaultShellStorage(): ShellPreferenceStorage {
   const localStorage = globalThis.localStorage;
-  if (localStorage !== undefined && typeof localStorage.getItem === "function") {
+  if (
+    localStorage !== undefined &&
+    typeof localStorage.getItem === "function"
+  ) {
     return localStorage;
   }
   const values = new Map<string, string>();

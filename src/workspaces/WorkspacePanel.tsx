@@ -163,11 +163,7 @@ export function WorkspacePanel({
   );
 
   const loadEntries = useCallback(
-    async (
-      workspaceId: string,
-      parentRelativePath: string,
-      force = false,
-    ) => {
+    async (workspaceId: string, parentRelativePath: string, force = false) => {
       const loadKey = `${workspaceId}:${parentRelativePath}`;
       if (!force) {
         if (loadingRef.current.has(loadKey)) return;
@@ -464,11 +460,7 @@ export function WorkspacePanel({
         kind: naming.mode === "newDrawing" ? "drawing" : "directory",
         baseName,
       });
-      await loadEntries(
-        naming.workspaceId,
-        naming.parentRelativePath,
-        true,
-      );
+      await loadEntries(naming.workspaceId, naming.parentRelativePath, true);
       if (created.entry.kind === "drawing") {
         onOpenFile?.(asFileEntry(created.entry));
       } else {
@@ -651,11 +643,7 @@ export function WorkspacePanel({
           id: "new-drawing",
           label: "New Drawing",
           onSelect: () =>
-            beginNaming(
-              "newDrawing",
-              row.workspaceId,
-              row.entry.relativePath,
-            ),
+            beginNaming("newDrawing", row.workspaceId, row.entry.relativePath),
         },
         {
           id: "new-folder",
@@ -768,7 +756,8 @@ export function WorkspacePanel({
               else next.delete(key);
               return next;
             });
-            if (expanded) void loadEntries(entry.workspaceId, entry.relativePath);
+            if (expanded)
+              void loadEntries(entry.workspaceId, entry.relativePath);
             else if (
               treeMenu !== null &&
               menuOwnedByDirectory(treeMenu.row, entry)

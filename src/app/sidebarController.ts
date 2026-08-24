@@ -37,7 +37,8 @@ export function createSidebarController(
   const delayMs = options.pointerLeaveDelayMs ?? DEFAULT_POINTER_LEAVE_DELAY_MS;
   const listeners = new Set<() => void>();
   const holdReasons = new Set<SidebarHoldReason>();
-  let mode: SidebarMode = options.initiallyPinned === true ? "pinned" : "hidden";
+  let mode: SidebarMode =
+    options.initiallyPinned === true ? "pinned" : "hidden";
   let closePending = false;
   let hideAt: number | null = null;
   let pointerInside = false;

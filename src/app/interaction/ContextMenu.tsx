@@ -114,9 +114,7 @@ export function ContextMenu({
         </p>
       ) : null}
       <div
-        aria-describedby={
-          description === undefined ? undefined : descriptionId
-        }
+        aria-describedby={description === undefined ? undefined : descriptionId}
         aria-label={label}
         role="menu"
       >

@@ -8,10 +8,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CommandInvoker } from "../ipc/client";
-import {
-  createInteractionState,
-  interactionStore,
-} from "../app/interaction";
+import { createInteractionState, interactionStore } from "../app/interaction";
 import {
   SHELL_PREFERENCES_STORAGE_KEY,
   SHELL_PREFERENCES_VERSION,
@@ -193,10 +190,7 @@ describe("WorkspacePanel", () => {
     const invoker = createInvoker();
 
     render(
-      <WorkspacePanel
-        invoker={invoker}
-        selectDirectory={async () => null}
-      />,
+      <WorkspacePanel invoker={invoker} selectDirectory={async () => null} />,
     );
 
     const firstToggle = await screen.findByRole("treeitem", {
@@ -253,10 +247,9 @@ describe("WorkspacePanel", () => {
     expect(
       await screen.findByRole("treeitem", { name: "Sketches" }),
     ).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByRole("treeitem", { name: "Blueprints" })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
+    expect(
+      screen.getByRole("treeitem", { name: "Blueprints" }),
+    ).toHaveAttribute("aria-expanded", "false");
   });
 
   it("expands a newly mounted Workspace even when an existing preference is collapsed", async () => {
@@ -330,7 +323,9 @@ describe("WorkspacePanel", () => {
       }),
     );
     await waitFor(() =>
-      expect(screen.getByRole("treeitem", { name: "Blueprints" })).toHaveFocus(),
+      expect(
+        screen.getByRole("treeitem", { name: "Blueprints" }),
+      ).toHaveFocus(),
     );
   });
 

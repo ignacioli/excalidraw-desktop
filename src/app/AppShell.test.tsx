@@ -87,7 +87,9 @@ describe("AppShell", () => {
       screen.queryByRole("complementary", { name: "Files" }),
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /workspace sidebar/i }));
+    await user.click(
+      screen.getByRole("button", { name: /workspace sidebar/i }),
+    );
     expect(
       screen.getByRole("complementary", { name: "Files" }),
     ).toBeInTheDocument();
@@ -254,12 +256,14 @@ describe("AppShell", () => {
       createSession("gone-a", "Gone A", "/tmp/gone-a.excalidraw", "orphaned"),
       createSession("gone-b", "Gone B", "/tmp/gone-b.excalidraw", "orphaned"),
     ]);
-    vi.spyOn(documentManager, "close").mockImplementation(async (documentId) => {
-      if (documentId === "gone-a" || documentId === "gone-b") {
-        return { status: "orphaned", documentId };
-      }
-      return { status: "closed" };
-    });
+    vi.spyOn(documentManager, "close").mockImplementation(
+      async (documentId) => {
+        if (documentId === "gone-a" || documentId === "gone-b") {
+          return { status: "orphaned", documentId };
+        }
+        return { status: "closed" };
+      },
+    );
     vi.spyOn(documentManager, "confirmOrphanClose").mockImplementation(
       async (documentId, decision) => {
         if (decision === "discard" && documentId === "gone-a") {

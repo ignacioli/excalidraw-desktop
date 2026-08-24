@@ -534,9 +534,9 @@ describe("DocumentManager", () => {
       if (typeof closeMany !== "function") {
         throw new Error("DocumentManager.closeMany is not implemented");
       }
-      return (closeMany as (documentIds: readonly string[]) => Promise<CloseOutcome>).bind(
-        manager,
-      );
+      return (
+        closeMany as (documentIds: readonly string[]) => Promise<CloseOutcome>
+      ).bind(manager);
     }
 
     function getConfirmOrphanClose(
@@ -688,9 +688,9 @@ describe("DocumentManager", () => {
         "manualSave",
       );
       expect(
-        vi.mocked(gateway.checkpoint).mock.calls.every(
-          (call) => call[0] !== "/tmp/gone.excalidraw",
-        ),
+        vi
+          .mocked(gateway.checkpoint)
+          .mock.calls.every((call) => call[0] !== "/tmp/gone.excalidraw"),
       ).toBe(true);
       expect(manager.store.getState().sessionsById[documentId]).toBeUndefined();
       manager.dispose();
@@ -750,15 +750,19 @@ describe("DocumentManager", () => {
       const pending = getCloseMany(manager)([thirdId, firstId, secondId]);
       await Promise.resolve();
       await Promise.resolve();
-      expect(vi.mocked(gateway.close).mock.calls.map((call) => call[0])).toEqual(
-        ["/tmp/a.excalidraw"],
-      );
+      expect(
+        vi.mocked(gateway.close).mock.calls.map((call) => call[0]),
+      ).toEqual(["/tmp/a.excalidraw"]);
 
       finishFirst();
       await expect(pending).resolves.toEqual({ status: "closed" });
-      expect(vi.mocked(gateway.close).mock.calls.map((call) => call[0])).toEqual(
-        ["/tmp/a.excalidraw", "/tmp/b.excalidraw", "/tmp/c.excalidraw"],
-      );
+      expect(
+        vi.mocked(gateway.close).mock.calls.map((call) => call[0]),
+      ).toEqual([
+        "/tmp/a.excalidraw",
+        "/tmp/b.excalidraw",
+        "/tmp/c.excalidraw",
+      ]);
       expect(manager.store.getState().tabOrder).toEqual([]);
       manager.dispose();
     });
@@ -906,8 +910,7 @@ describe("DocumentManager", () => {
       vi.mocked(gateway.checkpoint).mockImplementation(
         () =>
           new Promise((resolve) => {
-            finishCheckpoint = () =>
-              resolve({ newBaseHash: "next", mtime: 1 });
+            finishCheckpoint = () => resolve({ newBaseHash: "next", mtime: 1 });
           }),
       );
 
@@ -934,4 +937,3 @@ describe("DocumentManager", () => {
     });
   });
 });
-

@@ -278,7 +278,9 @@ describe("WorkspaceTree", () => {
     );
 
     await waitFor(() =>
-      expect(screen.getByRole("tree", { name: "Workspace files" })).toBeInTheDocument(),
+      expect(
+        screen.getByRole("tree", { name: "Workspace files" }),
+      ).toBeInTheDocument(),
     );
     expect(screen.getByRole("button", { name: "Keep" })).toHaveFocus();
   });

@@ -603,7 +603,6 @@ body {
   margin-top: var(--space-4);
 }
 
-
 .recovery-startup-error {
   position: fixed;
   z-index: 90;

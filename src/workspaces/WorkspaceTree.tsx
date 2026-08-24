@@ -172,7 +172,13 @@ export function WorkspaceTree({
     row.focus();
     pendingFocusKey.current = null;
     if (focusRequestKey === rowKey) onFocusRequestApplied?.();
-  }, [focusRequestKey, focusedRowKey, onFocusRequestApplied, rows, virtualItems]);
+  }, [
+    focusRequestKey,
+    focusedRowKey,
+    onFocusRequestApplied,
+    rows,
+    virtualItems,
+  ]);
 
   useEffect(() => {
     if (focusRequestKey === null) return;

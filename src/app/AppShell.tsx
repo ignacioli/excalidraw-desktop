@@ -570,7 +570,8 @@ export function AppShell({
           onSaveAs={() => {
             const documentId = orphanCloseId;
             void runAction(async () => {
-              const session = documentManager.store.getState().sessionsById[documentId];
+              const session =
+                documentManager.store.getState().sessionsById[documentId];
               if (session === undefined) return;
               const selectedPath = await chooseSavePath(session.title);
               if (selectedPath === null) return;

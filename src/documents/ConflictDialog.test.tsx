@@ -3,7 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ConflictDialog } from "./ConflictDialog";
 
-function renderDialog(overrides: Partial<Parameters<typeof ConflictDialog>[0]> = {}) {
+function renderDialog(
+  overrides: Partial<Parameters<typeof ConflictDialog>[0]> = {},
+) {
   const onResolve = vi.fn(async () => undefined);
   const onDismiss = vi.fn();
   render(
