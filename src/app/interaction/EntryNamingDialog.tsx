@@ -126,6 +126,9 @@ function namingDialogError(reason: unknown): string {
     if (code === "INVALID_NAME") {
       return "Enter a valid name.";
     }
+    if (code === "PATH_ACCESS_DENIED") {
+      return "This location is outside the Workspace.";
+    }
   }
   if (reason instanceof Error && reason.message.length > 0) {
     return reason.message;

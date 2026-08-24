@@ -56,11 +56,14 @@ body {
 }
 
 .app-commands button:focus-visible,
+.app-shell-tabs > button:focus-visible,
 .file-sidebar button:focus-visible,
 .export-dialog button:focus-visible,
 .recovery-dialog button:focus-visible,
 .conflict-dialog button:focus-visible,
+.application-context-menu [role="menuitem"]:focus-visible,
 .tab:focus-visible,
+.tab-close:focus-visible,
 .export-option-group input:focus-visible + span,
 .appearance-option input:focus-visible + span {
   outline: 2px solid var(--focus-ring);
@@ -102,11 +105,25 @@ body {
 }
 
 .tab-list {
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: 1px;
   overflow-x: auto;
   padding: var(--space-1) var(--space-2) 0;
+}
+
+.tab-list-tablist {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tab-cluster {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  min-width: 0;
 }
 
 .tab {
@@ -122,6 +139,7 @@ body {
   background: transparent;
 }
 
+.tab.is-selected,
 .tab[aria-selected="true"] {
   border-color: var(--border-subtle);
   border-bottom-color: var(--canvas-background);
@@ -137,9 +155,9 @@ body {
 }
 
 .tab-close {
-  flex: 0 0 1.25rem;
-  width: 1.25rem;
-  height: 1.25rem;
+  flex: 0 0 1.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
   border: none;
   border-radius: 0.25rem;
@@ -147,9 +165,9 @@ body {
 }
 
 [data-slot="tab-close"] {
-  flex: 0 0 1.25rem;
-  width: 1.25rem;
-  height: 1.25rem;
+  flex: 0 0 1.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 .dirty-indicator {
@@ -349,6 +367,11 @@ body {
   padding: var(--space-1);
   background: var(--panel-background);
   box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 18%);
+}
+
+.application-context-menu [role="menu"] {
+  display: grid;
+  gap: 1px;
 }
 
 .application-context-menu-description {

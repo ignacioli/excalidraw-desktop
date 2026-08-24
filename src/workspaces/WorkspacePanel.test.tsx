@@ -150,6 +150,44 @@ describe("WorkspacePanel", () => {
     });
   });
 
+  it("announces folder loading then permission-denied list errors", async () => {
+    let rejectList: (reason: unknown) => void = () => undefined;
+    const pending = new Promise<never>((_resolve, reject) => {
+      rejectList = reject;
+    });
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return WORKSPACES;
+      if (command === "workspace_entry_list") return pending;
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        selectDirectory={async () => null}
+      />,
+    );
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Loading folder…",
+    );
+    expect(screen.getByRole("region", { name: "Workspaces" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+
+    rejectList({
+      code: "PATH_ACCESS_DENIED",
+      message: "Path is outside the mounted workspaces.",
+      retriable: false,
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This location is outside the Workspace.",
+    );
+    expect(screen.queryByText("Loading folder…")).not.toBeInTheDocument();
+  });
+
   it("renders multiple workspaces in parallel and collapses each independently", async () => {
     const user = userEvent.setup();
     const invoker = createInvoker();
@@ -274,7 +312,9 @@ describe("WorkspacePanel", () => {
     expect(
       screen.getByRole("menuitem", { name: "Remove Workspace" }),
     ).toBeVisible();
-    expect(menu).toHaveTextContent("Files on disk will not be deleted");
+    expect(menu).toHaveAccessibleDescription(
+      "Files on disk will not be deleted",
+    );
 
     await user.click(
       screen.getByRole("menuitem", { name: "Remove Workspace" }),

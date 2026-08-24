@@ -6,7 +6,7 @@
 
 Build `excalidraw-desktop` as a macOS-first desktop application using Tauri 2.x, a React/TypeScript frontend, and a Rust backend. macOS is the required native acceptance platform; Ubuntu 24.04 Desktop is optional community validation, while Fedora/other Linux and Windows are outside the current support commitment. Preserve native desktop behavior, strong security boundaries, accessibility, and maintainable frontend/backend contracts.
 
-The repository is a working Tauri 2.x + Vite/React application implementing seven user stories: offline editing and saving, crash-safe persistence, a workspace file sidebar, external-change detection and conflict resolution, PNG/SVG export, macOS native integration, and multi-workspace browsing with thumbnails and asset deduplication. The persistence core is reliability-first: coalesced hot-tier drafts, atomic cold-file writes, recovery snapshots, and fault-injection testing. Do not regress that contract to chase RSS or idle CPU—do not switch back to in-place overwrites, lengthen the draft window as a resource workaround, or remove recovery snapshots / idle checkpoints.
+The repository is a working Tauri 2.x + Vite/React application implementing seven user stories: offline editing and saving, crash-safe persistence, a workspace file sidebar, external-change detection and conflict resolution, PNG/SVG export, macOS native integration, and multi-workspace browsing with a continuous virtualized workspace tree and asset deduplication. The shell is canvas-first: the Workspace Sidebar starts hidden, opens as an overlay, and can be pinned. Do not restore FileTree, production `dir_list` listing, canvas-content thumbnails, or `thumb_*` IPC. The persistence core is reliability-first: coalesced hot-tier drafts, atomic cold-file writes, recovery snapshots, and fault-injection testing. Do not regress that contract to chase RSS or idle CPU—do not switch back to in-place overwrites, lengthen the draft window as a resource workaround, or remove recovery snapshots / idle checkpoints.
 
 ## Expected Structure
 
@@ -34,17 +34,18 @@ What a change may touch is a project constraint, not a particular editor or assi
 
 Spec-driven deliverables are recorded at these canonical paths. The private specs repository names deliverables; this public repo owns the paths.
 
-User-facing and root contributor docs use English as the canonical filename (no suffix) and Simplified Chinese as a `*.zh.md` sibling next to it. `docs/architecture.md` and `docs/adr/` are not bilingual. `docs/quickstart.md` is a Chinese contributor validation guide and has no language sibling.
+User-facing and root contributor docs use English as the canonical filename (no suffix) and Simplified Chinese as a `*.zh.md` sibling next to it. `docs/architecture.md` and `docs/adr/` are not bilingual. `docs/quickstart.md` is a Chinese getting-started and verification guide and has no language sibling. Public user-facing pages (`README.md`, `DESIGN.md`, `CONTEXT.md`, `docs/architecture.md`, `docs/quickstart.md`) describe the product, architecture, and how to run it; they must not cite private-spec numbering such as feature `001`/`002`, spec user-story IDs, or `T0xx` task IDs. Those identifiers belong in `docs/evidence/` and, when needed, ADRs.
 
 | Deliverable | Path |
 |-------------|------|
 | User README (English / Chinese) | `README.md` / `README.zh.md` |
 | Visual and interaction contract (English / Chinese) | `DESIGN.md` / `DESIGN.zh.md` |
+| Ubiquitous language (English / Chinese) | `CONTEXT.md` / `CONTEXT.zh.md` |
 | Contributor and maintainer instructions (English / Chinese) | `AGENTS.md` / `AGENTS.zh.md` |
 | Architecture decision records (ADR) | `docs/adr/` |
 | Architecture overview | `docs/architecture.md` |
 | IPC contract | `docs/contracts/ipc-contracts.md` |
-| Contributor validation guide | `docs/quickstart.md` |
+| Getting started and verification | `docs/quickstart.md` |
 | Native verification evidence | `docs/evidence/native-verification.md` |
 | Accessibility audit | `docs/evidence/a11y-audit.md` |
 | Validation summaries | `docs/evidence/validation-summary.md` |

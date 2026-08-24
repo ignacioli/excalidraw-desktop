@@ -64,11 +64,14 @@ describe("ContextMenu", () => {
     );
 
     const menu = screen.getByRole("menu");
-    expect(menu).toHaveTextContent("Files on disk will not be deleted");
-    expect(menu).toHaveAttribute("aria-describedby");
-    expect(screen.getByRole("note")).toHaveTextContent(
+    expect(menu).toHaveAccessibleDescription(
       "Files on disk will not be deleted",
     );
+    expect(menu).toHaveAttribute("aria-describedby");
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Files on disk will not be deleted"),
+    ).toBeInTheDocument();
     expect(screen.getAllByRole("menuitem")).toHaveLength(1);
   });
 
@@ -77,7 +80,7 @@ describe("ContextMenu", () => {
     const menuRect = vi
       .spyOn(HTMLElement.prototype, "getBoundingClientRect")
       .mockImplementation(function (this: HTMLElement) {
-        if (this.getAttribute("role") === "menu") {
+        if (this.classList.contains("application-context-menu")) {
           const left = Number.parseFloat(this.style.left || "0");
           const top = Number.parseFloat(this.style.top || "0");
           return {
@@ -119,16 +122,18 @@ describe("ContextMenu", () => {
       />,
     );
 
-    const menu = screen.getByRole("menu");
-    expect(Number.parseFloat(menu.style.left)).toBeLessThanOrEqual(260);
-    expect(Number.parseFloat(menu.style.left)).toBeGreaterThanOrEqual(0);
-    expect(Number.parseFloat(menu.style.top)).toBeLessThanOrEqual(140);
-    expect(Number.parseFloat(menu.style.top)).toBeGreaterThanOrEqual(0);
+    const popup = document.querySelector(
+      ".application-context-menu",
+    ) as HTMLElement;
+    expect(Number.parseFloat(popup.style.left)).toBeLessThanOrEqual(260);
+    expect(Number.parseFloat(popup.style.left)).toBeGreaterThanOrEqual(0);
+    expect(Number.parseFloat(popup.style.top)).toBeLessThanOrEqual(140);
+    expect(Number.parseFloat(popup.style.top)).toBeGreaterThanOrEqual(0);
     expect(
-      Number.parseFloat(menu.style.left) + 160,
+      Number.parseFloat(popup.style.left) + 160,
     ).toBeLessThanOrEqual(420);
     expect(
-      Number.parseFloat(menu.style.top) + 120,
+      Number.parseFloat(popup.style.top) + 120,
     ).toBeLessThanOrEqual(260);
 
     if (innerWidth) Object.defineProperty(window, "innerWidth", innerWidth);

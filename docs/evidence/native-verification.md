@@ -4,6 +4,8 @@
 
 验证证据分为三类并分开报告（quickstart §1）：Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、本文件记录的目标 OS 原生环境矩阵。浏览器测试不得替代本文件条目；虚拟机结果不得表述为未执行的真机覆盖。
 
+**证据分层（001 历史 vs 002 待执行）**：§1–§8 与 2026-08-18 GitHub Release `v0.1.1` 矩阵是 feature 001 的 T078（Gatekeeper / 安装 / 文件关联 / 单实例）与 T080（FR-030 画布 / 拖放 / 剪贴板 / IME）物理机历史证据，不得改写或重分类为 002 结果。Feature 002 US1–US4 原生矩阵见 §9，当前全部为「尚未执行」（T070）。浏览器 Playwright 与测试专用 `e2e-harness` 合成场景不能关闭 §9 各行，见 §10。002 原生矩阵未在 Ubuntu / Fedora / Windows 上执行，也不形成那些平台的 002 验收声明。
+
 ## 1. 受支持平台清单（FR-030）
 
 | 平台 | 目标 |
@@ -98,3 +100,30 @@
 2. **安装与启动**：拖入 `/Applications/excalidraw-desktop.app`（universal `x86_64 arm64`，adhoc / linker-signed，无 Team ID）。应用 quarantine `01c1;…;Chrome;…`。启动后 `~/Library/Application Support/excalidraw-desktop/session.lock` 写入 `{"pid":93499,…}`；正常运行期间 lock 存在。
 3. **Gatekeeper**：`spctl --assess --type execute` → `rejected` / `source=no usable signature`。操作员确认首次打开后在 **系统设置 → 隐私与安全性** 选择 **仍要打开**，之后应用可交互。未关闭 Gatekeeper。
 4. **文件关联与单实例**：`open` `/tmp/t078-native/alpha.excalidraw` 与 `beta.excalidraw` 时始终只有一个 `/Applications/excalidraw-desktop.app/Contents/MacOS/excalidraw-desktop` 进程。操作员窗口可见多个已打开标签。
+
+## 9. Feature 002 US1–US4 原生矩阵（T070，尚未执行）
+
+本节是 002 必选 macOS 功能/原生矩阵的**指令与待填空表**。T070 尚未执行，因此每一行都是「尚未执行」，没有通过/失败。001 的 T078/T080（§2–§8，2026-08-18 `v0.1.1`）不覆盖这些 002 行为，也不得被重分类为本表结果。Ubuntu / Fedora / Windows 未跑本矩阵。
+
+隔离工作区与操作员步骤见本表「验证方法」列；本表只记录目标 OS 上可观察的结果。环境 ID 在实际执行 T070 时填写；未执行前不得借用 macos-physical-01 的 001 行冒充 002 覆盖。
+
+| 条目 | 故事 / 准则 | macOS 状态 | 验证方法（T070 执行时） |
+|------|-------------|------------|-------------------------|
+| 空 Directory / 干净 Drawing 进入废纸篓，并可 **Put Back** 恢复 | US1 / SC-002 | **尚未执行** | 真实 Tauri 窗口删除后，在 Finder 废纸篓确认来源消失与 Put Back |
+| **Open in Finder**（非空目录拒绝删除后的显式选择） | US1 / FR-012 | **尚未执行** | 操作员选择后 Finder 显示该目录；取消不得打开 |
+| VoiceOver：菜单、对话框、树行、标签关闭控件、校验错误、焦点恢复 | US1–US4 / SC-006 原生面 | **尚未执行** | 系统 VoiceOver，不是 axe 或浏览器可访问名断言 |
+| 真实 **Cmd+W** 只关闭活动图纸标签；关完最后一标签后窗口与侧边栏仍在 | US3 / FR-031 | **尚未执行** | 操作员按系统快捷键；见 §10 |
+| 真实鼠标**中键**关闭所指标签且不必先激活 | US3 / FR-031 | **尚未执行** | 真实指针设备中键；见 §10 |
+| 真实鼠标滚轮与触控板手势（垂直刻度切换、水平不激活、无重叠激活） | US3 / SC-008 / FR-037 | **尚未执行** | 真实鼠标离散滚轮 + 触控板；见 §10 |
+| 侧边栏 overlay / pin / 拖拽改宽；固定态画布 ≥70% 宽；overlay 不改画布盒 | US4 / SC-009 / SC-010 | **尚未执行** | 真实窗口内指针与键盘；含支持的窗口尺寸 |
+| 标题栏选择 A：标题 **Excalidraw Whiteboard**、系统着色、正常堆叠、生产非 always-on-top、无透明/覆盖式标题栏 | US4 / SC-011 / FR-045 / FR-046 | **尚未执行** | Light/Dark 系统外观 × 内容 `light`/`dark`/`system`；见 §10 |
+| 普通窗口被其他应用遮挡、最小化、再恢复 | US4 / SC-011 | **尚未执行** | 操作员用真实窗口管理；测量用 always-on-top 不是生产行为 |
+
+## 10. 浏览器 Playwright 与合成 harness 不能关闭 §9
+
+下列路径**不能**把 §9 标为已执行或通过：
+
+- **浏览器 Playwright**（含 `browser-ui`、Vite harness、`ui-*.spec.ts`、axe、键盘旅程）证明布局、对话框/菜单、焦点与主题独立性，不证明 Trash/Put Back、Finder 显示、VoiceOver、原生标题栏颜色/堆叠、系统 Cmd+W 路由、真实鼠标/触控板。
+- **测试专用 `e2e-harness`**（`APP_E2E=1` + `EXCALIDRAW_E2E_BINARY`）用于进程级故障注入与契约探针。`native-tab-close` 的 `cmd-w-active` / `middle-click-inactive` / 滚轮 notch 在 harness 内合成 checkpoint/close 或刻度，**不是**用户按下的 Cmd+W、中键或触控板手势。`native-window-contract` 的配置静态检查与 harness 读 `tauri.conf.json` **不是**操作员看到的系统着色标题栏，也不是遮挡/最小化/恢复。该文件的 live native 用例在未配置测试二进制时 skip；即使将来跑过，仍不能替代 §9 的真机窗口管理行。
+- **生产 vs harness 二进制证明**属于 T069（[validation-summary.md](./validation-summary.md) §0.1），尚未执行；不能用源码审查或合成 window-contract 代替「生产包无 always-on-top / 无 harness」的构建证据。
+- 虚拟机跑过的 001 T078/T080 或性能参考 VM **不得**写成未执行的 002 物理机覆盖。§9 执行后须新记环境 ID；物理机结果也不得反过来冒充未跑的 VM。

@@ -25,10 +25,14 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
   const sessionsById = useDocumentStore((state) => state.sessionsById);
   const tabOrder = useDocumentStore((state) => state.tabOrder);
   const activeDocumentId = useDocumentStore((state) => state.activeDocumentId);
-  const tabRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const clusterRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [menu, setMenu] = useState<TabMenuState | null>(null);
+  const ownedTabIds = tabOrder
+    .filter((tabId) => sessionsById[tabId] !== undefined)
+    .map((tabId) => `tab-${tabId}`)
+    .join(" ");
 
   const activateTab = (tabId: string) => {
     void documentManager.activate(tabId);
@@ -37,21 +41,21 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
 
   const scrollTabNearest = (tabId: string) => {
     const index = tabOrder.indexOf(tabId);
-    const element = tabRefs.current[index];
-    if (element === undefined || element === null) return;
+    const cluster = clusterRefs.current[index];
+    if (cluster === undefined || cluster === null) return;
     const reducedMotion =
       typeof window.matchMedia === "function"
         ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
         : false;
-    const tabList = element.parentElement;
+    const tabList = cluster.closest(".tab-list");
     if (tabList !== null) {
       const listBox = tabList.getBoundingClientRect();
-      const tabBox = element.getBoundingClientRect();
+      const clusterBox = cluster.getBoundingClientRect();
       const fullyVisible =
-        tabBox.left >= listBox.left && tabBox.right <= listBox.right;
+        clusterBox.left >= listBox.left && clusterBox.right <= listBox.right;
       if (fullyVisible) return;
     }
-    element.scrollIntoView({
+    cluster.scrollIntoView({
       block: "nearest",
       inline: "nearest",
       behavior: reducedMotion ? "auto" : "smooth",
@@ -70,10 +74,10 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
       if (survivor === null) return;
       requestAnimationFrame(() => {
         const index = documentManager.store.getState().tabOrder.indexOf(survivor);
-        const tab = tabRefs.current[index];
-        const closeButton = tab?.querySelector<HTMLButtonElement>(
-          'button[aria-label^="Close "]',
-        );
+        const cluster = clusterRefs.current[index];
+        const closeButton =
+          cluster?.querySelector<HTMLButtonElement>("button.tab-close") ?? null;
+        const tab = cluster?.querySelector<HTMLElement>('[role="tab"]') ?? null;
         (closeButton ?? tab)?.focus();
       });
     });
@@ -129,7 +133,9 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
       const tabId = tabOrder[nextIndex];
       if (tabId !== undefined) {
         activateTab(tabId);
-        tabRefs.current[nextIndex]?.focus();
+        clusterRefs.current[nextIndex]
+          ?.querySelector<HTMLElement>('[role="tab"]')
+          ?.focus();
       }
     }
   };
@@ -202,17 +208,18 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
       aria-label="Open drawings"
       onWheel={handleWheel}
     >
-      <div
-        className="tab-list"
-        role="tablist"
-        aria-label="Drawing tabs"
-      >
+      <div className="tab-list">
+        <div
+          aria-label="Drawing tabs"
+          aria-owns={ownedTabIds.length > 0 ? ownedTabIds : undefined}
+          className="tab-list-tablist"
+          role="tablist"
+        />
         {tabOrder.map((tabId, index) => {
           const session = sessionsById[tabId];
           if (session === undefined) {
             return null;
           }
-
           const isActive = activeDocumentId === session.id;
           const isDirty = session.saveState !== "clean";
           const isOrphaned = session.saveState === "orphaned";
@@ -220,50 +227,70 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
             isActive || hoveredId === session.id || focusedId === session.id;
           return (
             <div
-              className="tab"
-              id={`tab-${session.id}`}
+              className="tab-cluster"
+              data-tab-id={session.id}
               key={session.id}
-              onClick={() => activateTab(session.id)}
-              onKeyDown={(event) => handleKeyDown(event, index)}
-              onMouseEnter={() => setHoveredId(session.id)}
-              onMouseLeave={() =>
-                setHoveredId((current) =>
-                  current === session.id ? null : current,
-                )
-              }
-              onFocus={() => setFocusedId(session.id)}
-              onBlur={() =>
+              onBlur={(event) => {
+                const next = event.relatedTarget;
+                if (
+                  next instanceof Node &&
+                  event.currentTarget.contains(next)
+                ) {
+                  return;
+                }
                 setFocusedId((current) =>
                   current === session.id ? null : current,
-                )
-              }
+                );
+              }}
+              onFocus={() => setFocusedId(session.id)}
+              onMouseEnter={() => setHoveredId(session.id)}
+              onMouseLeave={(event) => {
+                const next = event.relatedTarget;
+                if (
+                  next instanceof Node &&
+                  event.currentTarget.contains(next)
+                ) {
+                  return;
+                }
+                setHoveredId((current) =>
+                  current === session.id ? null : current,
+                );
+              }}
               onAuxClick={(event) => handleAuxClick(event, session.id)}
+              onClick={() => activateTab(session.id)}
               onContextMenu={(event) => handleContextMenu(event, session.id)}
               ref={(element) => {
-                tabRefs.current[index] = element;
+                clusterRefs.current[index] = element;
               }}
-              role="tab"
-              aria-controls={`document-${session.id}`}
-              aria-label={`${session.title}${isDirty ? ", unsaved changes" : ""}${isOrphaned ? ", file unavailable" : ""}`}
-              aria-selected={isActive}
-              tabIndex={isActive ? 0 : -1}
             >
-              <span className="tab-title">{session.title}</span>
-              {isDirty ? (
-                <span className="dirty-indicator" title="Unsaved changes">
-                  <span aria-hidden="true">●</span>
-                  <span className="visually-hidden">Unsaved changes</span>
-                </span>
-              ) : null}
-              {isOrphaned ? (
-                <span className="orphaned-indicator" title="File unavailable">
-                  <span aria-hidden="true">!</span>
-                  <span className="visually-hidden">File unavailable</span>
-                </span>
-              ) : null}
+              <div
+                aria-controls={`document-${session.id}`}
+                aria-label={`${session.title}${isDirty ? ", unsaved changes" : ""}${isOrphaned ? ", file unavailable" : ""}`}
+                aria-selected={isActive}
+                className={isActive ? "tab is-selected" : "tab"}
+                id={`tab-${session.id}`}
+                onKeyDown={(event) => handleKeyDown(event, index)}
+                role="tab"
+                tabIndex={isActive ? 0 : -1}
+              >
+                <span className="tab-title">{session.title}</span>
+                {isDirty ? (
+                  <span className="dirty-indicator" title="Unsaved changes">
+                    <span aria-hidden="true">●</span>
+                    <span className="visually-hidden">Unsaved changes</span>
+                  </span>
+                ) : null}
+                {isOrphaned ? (
+                  <span className="orphaned-indicator" title="File unavailable">
+                    <span aria-hidden="true">!</span>
+                    <span className="visually-hidden">File unavailable</span>
+                  </span>
+                ) : null}
+              </div>
               <span
-                data-slot="tab-close"
                 data-close-visible={closeVisible ? "true" : "false"}
+                data-slot="tab-close"
+                data-tab-id={session.id}
               >
                 {closeVisible ? (
                   <button

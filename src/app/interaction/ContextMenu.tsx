@@ -104,36 +104,37 @@ export function ContextMenu({
   return (
     <div
       ref={menuRef}
-      aria-label={label}
-      aria-describedby={description === undefined ? undefined : descriptionId}
       className="application-context-menu"
       onKeyDown={handleKeyDown}
-      role="menu"
       style={{ left: position.x, position: "fixed", top: position.y }}
     >
       {description ? (
-        <div
-          className="application-context-menu-description"
-          id={descriptionId}
-          role="note"
-        >
+        <p className="application-context-menu-description" id={descriptionId}>
           {description}
-        </div>
+        </p>
       ) : null}
-      {items.map((item) => (
-        <button
-          key={item.id}
-          disabled={item.disabled}
-          onClick={() => {
-            item.onSelect();
-            onDismiss("action");
-          }}
-          role="menuitem"
-          type="button"
-        >
-          {item.label}
-        </button>
-      ))}
+      <div
+        aria-describedby={
+          description === undefined ? undefined : descriptionId
+        }
+        aria-label={label}
+        role="menu"
+      >
+        {items.map((item) => (
+          <button
+            key={item.id}
+            disabled={item.disabled}
+            onClick={() => {
+              item.onSelect();
+              onDismiss("action");
+            }}
+            role="menuitem"
+            type="button"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

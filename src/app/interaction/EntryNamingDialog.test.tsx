@@ -47,6 +47,28 @@ describe("EntryNamingDialog", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
+  it("announces permission-denied create failures without closing", async () => {
+    const user = userEvent.setup();
+    render(
+      <EntryNamingDialog
+        mode="newDrawing"
+        onCancel={vi.fn()}
+        onSubmit={vi.fn(async () => {
+          throw {
+            code: "PATH_ACCESS_DENIED",
+            message: "escaped",
+            retriable: false,
+          };
+        })}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "outside the Workspace",
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
   it("cancels without submitting", async () => {
     const user = userEvent.setup();
     const onCancel = vi.fn();

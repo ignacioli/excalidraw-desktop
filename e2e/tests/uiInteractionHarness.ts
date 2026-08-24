@@ -37,6 +37,7 @@ export interface UiInteractionHarnessOptions {
   workspaces?: readonly UiHarnessWorkspace[];
   entries?: readonly UiHarnessWorkspaceEntry[];
   failures?: Readonly<Record<string, UiHarnessFailure>>;
+  latenciesMs?: Readonly<Record<string, number>>;
   responses?: Readonly<Record<string, unknown>>;
   dialogPaths?: readonly (string | null)[];
   tenThousandRows?: {
@@ -119,6 +120,7 @@ export async function installUiInteractionHarness(
       workspaceSeeds,
       entrySeeds,
       failureSeeds,
+      latencySeeds,
       responseSeeds,
       pathSeeds,
       emptyScene,
@@ -128,6 +130,7 @@ export async function installUiInteractionHarness(
         workspaces: UiHarnessWorkspace[];
         entries: UiHarnessWorkspaceEntry[];
         failures: Record<string, UiHarnessFailure>;
+        latenciesMs: Record<string, number>;
         responses: Record<string, unknown>;
         dialogPaths: (string | null)[];
         nextDialogPath: number;
@@ -147,6 +150,7 @@ export async function installUiInteractionHarness(
         workspaces: workspaceSeeds.map((workspace) => ({ ...workspace })),
         entries: entrySeeds.map((entry) => ({ ...entry })),
         failures: { ...failureSeeds },
+        latenciesMs: { ...latencySeeds },
         responses: { ...responseSeeds },
         dialogPaths: [...pathSeeds],
         nextDialogPath: 0,
@@ -156,6 +160,12 @@ export async function installUiInteractionHarness(
       browser.__TAURI_INTERNALS__ = {
         async invoke(command, args = {}) {
           state.invocations.push({ command, args: { ...args } });
+          const latencyMs = state.latenciesMs[command];
+          if (typeof latencyMs === "number" && latencyMs > 0) {
+            await new Promise<void>((resolve) => {
+              globalThis.setTimeout(resolve, latencyMs);
+            });
+          }
           const failure = state.failures[command];
           if (failure !== undefined) {
             throw {
@@ -399,6 +409,7 @@ export async function installUiInteractionHarness(
       workspaceSeeds: workspaces,
       entrySeeds: entries,
       failureSeeds: { ...(options.failures ?? {}) },
+      latencySeeds: { ...(options.latenciesMs ?? {}) },
       responseSeeds: { ...(options.responses ?? {}) },
       pathSeeds: [...(options.dialogPaths ?? [])],
       emptyScene: EMPTY_SCENE,

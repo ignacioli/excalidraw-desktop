@@ -117,6 +117,9 @@ export function WorkspacePanel({
   >(() => new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingKeys, setLoadingKeys] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [pendingRemoval, setPendingRemoval] = useState<Workspace | null>(null);
   const [naming, setNaming] = useState<NamingState | null>(null);
   const [deleting, setDeleting] = useState<DeletingState | null>(null);
@@ -174,6 +177,11 @@ export function WorkspacePanel({
       const generation = (loadGenerationRef.current.get(loadKey) ?? 0) + 1;
       loadGenerationRef.current.set(loadKey, generation);
       loadingRef.current.add(loadKey);
+      setLoadingKeys((current) => {
+        const next = new Set(current);
+        next.add(loadKey);
+        return next;
+      });
       try {
         const entries = await invoker.invoke("workspace_entry_list", {
           workspaceId,
@@ -193,6 +201,11 @@ export function WorkspacePanel({
       } finally {
         if (loadGenerationRef.current.get(loadKey) === generation) {
           loadingRef.current.delete(loadKey);
+          setLoadingKeys((current) => {
+            const next = new Set(current);
+            next.delete(loadKey);
+            return next;
+          });
         }
       }
     },
@@ -699,7 +712,11 @@ export function WorkspacePanel({
   const treeEntries: WorkspaceTreeEntriesByWorkspace = entriesByWorkspace;
 
   return (
-    <section className="workspace-panel" aria-label="Workspaces">
+    <section
+      aria-busy={loadingKeys.size > 0 || undefined}
+      aria-label="Workspaces"
+      className="workspace-panel"
+    >
       <div className="workspace-panel-header">
         <h2>Workspaces</h2>
         <button
@@ -711,6 +728,11 @@ export function WorkspacePanel({
           Mount folder…
         </button>
       </div>
+      {loadingKeys.size > 0 ? (
+        <p aria-live="polite" role="status">
+          Loading folder…
+        </p>
+      ) : null}
       {error && pendingRemoval === null && deleting === null ? (
         <p role="alert">{error}</p>
       ) : null}
@@ -869,6 +891,12 @@ function asFileEntry(entry: WorkspaceEntry): FileEntry {
 }
 
 function operationError(reason: unknown, fallback: string): string {
+  if (reason !== null && typeof reason === "object" && "code" in reason) {
+    const code = (reason as Partial<IpcError>).code;
+    if (code === "PATH_ACCESS_DENIED") {
+      return "This location is outside the Workspace.";
+    }
+  }
   if (reason instanceof Error && reason.message.length > 0) {
     return reason.message;
   }

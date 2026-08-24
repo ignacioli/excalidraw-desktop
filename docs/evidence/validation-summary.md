@@ -1,21 +1,22 @@
-# 验证证据汇总（Phase 10 / T095）
+# 验证证据汇总（Phase 10 / T095；002 T066 指令）
 
-**日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17；§6/§7 原生发版与 T078/T080/T094 更新于 2026-08-18；002 修改前基线更新于 2026-08-19）
-**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总，并包含 feature 002 的修改前诊断基线；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。
+**日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17；§6/§7 原生发版与 T078/T080/T094 更新于 2026-08-18；002 修改前基线更新于 2026-08-19；002 Polish 验证指令 T066 更新于 2026-08-23）
+**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总，并包含 feature 002 的修改前诊断基线与 Polish 门禁指令；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。T066 只更新指令与证据边界，不重分类下列 001 历史数字，也不把尚未执行的 T068–T075 写成 pass/fail。
 
-先看下表再下钻各节。性能当前有效序列是 2026-08-16 ADR-007（同一份 e2e-harness `e8bef9b7…`）；§5.3 的日期流水账不可与之混比。
+先看下表再下钻各节。下表是 **001 Phase 10 / T095 历史成绩单一览**，不因 002 改写。性能当前有效序列是 2026-08-16 ADR-007（同一份 e2e-harness `e8bef9b7…`）；§5.3 的日期流水账不可与之混比。002 剩余门禁顺序与执行边界见 §0.1。
 
 | 门禁 | 状态 | 说明 |
 |------|------|------|
-| 浏览器回归（T095，§1） | **36 pass** · 2 已知 fail · 12 skip | 两例失败为断言/定位符脆性，先于本阶段；skip 依赖原生测试二进制 |
+| 浏览器回归（T095，§1） | **36 pass** · 2 已知 fail · 12 skip | 两例失败为断言/定位符脆性，先于本阶段；skip 依赖原生测试二进制。此为 001 历史计数，不是 T068 |
 | SC-012 可靠性（§2） | 前序 **pass**，本会话未复跑 | 合并阻断门禁；未在本会话重建 `e2e-harness` 复跑 |
 | SC-014 外观（§3） | **pass**（4/4） | light/dark/system 与截图基线 |
-| SC-015 无障碍（§4） | **pass**（15/15） | axe serious/critical = 0 |
-| T090 startup/idle（§5.2） | 物理机 **pass** · 参考 VM **fail** | VM 只败在冷启动 3704 ms；8 vCPU 诊断仍 fail（§5.2），未改 specs；空载 RSS 两边过 500 MB |
-| T090 canvas/I/O（§5.2） | 物理机 **pass** · 参考 VM **pass** | 10k 恒定 zoom 平移/编辑约 60 fps |
-| T108 15 min soak（§5.2） | 物理机 **fail** · 参考 VM **fail** | 只败在 RSS 增长；idle CPU 与静置 0 写入两边过 |
+| SC-015 无障碍（§4） | **pass**（15/15） | T093 历史：axe serious/critical = 0。002 跨故事审计结果以 [a11y-audit.md](./a11y-audit.md)（T063）为准，本文件不改写 |
+| T090 startup/idle（§5.2） | 物理机 **pass** · 参考 VM **fail** | VM 只败在冷启动 3704 ms；8 vCPU 诊断仍 fail（§5.2），未改 specs；空载 RSS 两边过 500 MB。001 历史；002 不得复用为 T073 |
+| T090 canvas/I/O（§5.2） | 物理机 **pass** · 参考 VM **pass** | 10k 恒定 zoom 平移/编辑约 60 fps。001 历史；002 不得复用为 T073 |
+| T108 15 min soak（§5.2） | 物理机 **fail** · 参考 VM **fail** | 只败在 RSS 增长；idle CPU 与静置 0 写入两边过。001 历史；002 不得复用为 T074 |
 | SC-010 开源分发（§6） | **v0.1.1 已发布** | 未签名/未公证 GitHub Release；macOS universal `.dmg` + Linux amd64 AppImage/deb/rpm |
-| T078/T080 原生验收（§7） | **通过**（2026-08-18） | 物理 macOS 26.5.2 下载真实 `v0.1.1`；T094 Ubuntu IME 可选已做 |
+| T078/T080 原生验收（§7） | **通过**（2026-08-18） | 001 历史：物理 macOS 26.5.2 下载真实 `v0.1.1`；T094 Ubuntu IME 可选已做。002 US1–US4 矩阵见 [native-verification.md](./native-verification.md) §9，**尚未执行** |
+| 002 Polish 门禁（§0.1） | 指令已更新（T066） | T067–T075 尚未作为本文件成绩单执行；不得把 §0 基线或前序会话 focused 跑数当成全量门禁 |
 
 ## 0. Feature 002 修改前基线（T001，2026-08-19）
 
@@ -29,6 +30,47 @@
 | `prompt` / `confirm`      | 生产源码仍在 `FileTree.tsx` 使用 4 个 `window.prompt` 与 1 个 `window.confirm`，在 `WorkspacePanel.tsx` 使用 1 个 `window.confirm`。同日隔离原生复现确认 prompt 无声取消、confirm 无声接受；唯一 delete sentinel 未显示确认即进入 macOS Trash，随后通过 Finder **Put Back** 恢复 | 原生复现使用隔离 app-data/workspace/sentinel；本轮未重复执行 Trash mutation，避免把已完成的安全复现误当实现后验收                                                                                              |
 
 Focused browser 命令实际以仓库本地 Vite/Playwright 可执行文件运行；标准 `pnpm exec` 在当前环境尝试访问 registry 而失败，沙箱内 Chromium/Mach port 与 localhost bind 也被拒绝，因此最终在获准的本机执行边界运行。最终产品断言结果为 2 pass / 1 fail；前述环境启动失败不计入该结果。
+
+## 0.1 Feature 002 Polish 验证说明（T066，2026-08-23）
+
+本节只更新浏览器 / 原生 / 可靠性 / 性能**验证指令与证据边界**。T068–T075 之后才写入各自的 pass/fail/skip；本任务未跑那些门禁，因此不填写新的计数或 verdict。§0 的 T001 基线、§1 的 T095、§4 的 T093、§5.2 的 T090/T108、§7 的 T078/T080 一律保持历史身份，不得重分类为 002 已验收。
+
+### 剩余门禁顺序
+
+文档与无障碍指令先于可执行门禁。顺序不得跳步把后面的成绩提前写成通过：
+
+1. **文档 / 无障碍（T063–T066）**：跨故事 a11y 审计写入 [a11y-audit.md](./a11y-audit.md)（T063，本文件不改写其结果）；产品文档与架构/IPC 由 T064/T065 同步；本文件与 [native-verification.md](./native-verification.md) 由 T066 更新指令。
+2. **前端 / Rust 门禁（T067）**：`pnpm format`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`；`cargo fmt --manifest-path src-tauri/Cargo.toml --check`、`cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`、`cargo test --manifest-path src-tauri/Cargo.toml`。仅修复 002 回归。**尚未作为本文件成绩单执行。**
+3. **全量浏览器 E2E（T068）**：focused 与全量 Playwright 套件，记录精确 pass/fail/skip 并附 002 产物。**尚未执行。** 不得用 §1 的 T095「36 pass / 2 fail / 12 skip」代替。
+4. **生产 vs `e2e-harness` 二进制（T069）**：分别构建生产包与 `VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness`；证明生产构建无 harness / thumbnail handler，bundle 无 thumbnail worker chunk。**尚未执行。**
+5. **隔离 macOS 功能 / 原生矩阵（T070）**：US1–US4 真机矩阵（Trash/Put Back、Finder、VoiceOver、真实 Cmd+W、鼠标/触控板、侧边栏 overlay/pin/resize、标题栏选择 A、普通窗口遮挡/最小化/恢复）写入 [native-verification.md](./native-verification.md) §9。**尚未执行。**
+6. **物理机 10k 连续树（T071）**：先做物理 macOS 10k 连续树与零缩略图工作量的 before/after，记录环境与回归 verdict。**尚未执行。** 不得把 §0 的修改前 10k fail 或 §5.2 的 001 canvas/I/O 写成 002 复测。
+7. **性能可观测性（T072）**：在任何参考 VM 跑之前，确认原生性能命令 / `result.json` 路径可观测。无效则记 `not_evaluated`，**不得消耗 T108 时间**。**尚未执行。**
+8. **T090 / T108 参考 VM（T073 / T074）**：仅当 T072 有效时，才跑未缩短的完整 T090 与 15 分钟 T108，并记录真实 `pass` / `fail`（T108 允许有依据的 `not_evaluated`）。**尚未执行。** 权威门禁仍是声明配置的参考 VM；物理机先行。VM 结果不得表述为未执行的真机覆盖。
+
+T075（`specs/002-desktop-ui-interactions/quickstart.md` 全量命令与手工场景、安全/无障碍/文档对齐）在上述门禁之后收口，本任务不提前填写其结果。Ubuntu 24.04 Desktop 仍为可选社区验证；Fedora / 其他 Linux / Windows 不在当前支持承诺内，002 也未声明那些平台的新覆盖。
+
+### Codex macOS 沙箱：浏览器 E2E
+
+在 **Codex managed macOS 沙箱**里跑浏览器可见 Playwright 时，不得让 Playwright 在沙箱内启动其配置的 `webServer`（`e2e/playwright.config.ts` 默认 `pnpm dev --host 127.0.0.1`，ready URL `http://127.0.0.1:1420`）。应：
+
+1. 在沙箱**外**启动 `pnpm dev --host 127.0.0.1`，等到 ready URL；
+2. 再设置 `PLAYWRIGHT_SKIP_WEBSERVER=1` 运行 Playwright；
+3. 使用非默认端口时同时设置 `PLAYWRIGHT_BASE_URL`。
+
+普通开发者 shell 与 CI 仍可使用配置中的 `webServer`。沙箱内 Chromium / Mach port / localhost bind 失败不得记进产品 pass/fail。
+
+### 缩略图退役
+
+002 **不得**把 thumbnail IPC / 渲染当作当前产品工作。§0 T001 记录的 `thumb_lookup` / 额外 `doc_open` / worker render / `thumb_store` 是**修改前**活动，只作历史对照。T069 尚未证明生产二进制与 bundle 已清除 harness / thumbnail handler 与 worker chunk；在那之前不得用实现意图或 T001 的 thumbnail 测试通过数声称生产面仍提供或已验证退役。
+
+### 前序 002 US3/US4 会话交接（非本会话、非 T068）
+
+前序交接称：focused Vitest + `tsc` 通过；Playwright **18 pass / 1 skip**（skip = live native window-contract，因未配置 `APP_E2E=1` + `EXCALIDRAW_E2E_BINARY`）。这是**前序会话的 focused 浏览器证据**，T066 本会话未复跑这些命令，因此：
+
+- 不得当作 T068 全量套件成绩；
+- 不得当作 T067 前端/Rust 全部门禁；
+- 不得关闭 T070 的真实 Cmd+W / 中键 / 触控板 / 窗口堆叠行（见 [native-verification.md](./native-verification.md) §10：合成 harness 不是真机输入）。
 
 ## 1. 全量浏览器回归（T095 执行）
 
@@ -188,3 +230,4 @@ Focused browser 命令实际以仓库本地 Vite/Playwright 可执行文件运�
 - 空窗口 / Safari 对照在未禁用 App Nap 时 idle CPU P95 约为 0%，不能用来否定 harness（可见窗口 + 禁用 App Nap）下的 9–29% idle CPU 测量条件。
 - 宿主机 diagnostic 性能跑要求测量窗口全程可见（rAF 遮挡暂停约束，§5.3）；`visibilityState=hidden` 时 driver 10 秒失败，可见慢帧最多等 60 秒。
 - 上游 `@excalidraw/excalidraw` 内部 DOM 不在壳层 a11y 扫描范围（T093 残余说明）。
+- Feature 002 Polish：T066 只落地指令。T067 前端/Rust 全部门禁、T068 全量浏览器 E2E、T069 生产 vs `e2e-harness` 二进制、T070 US1–US4 原生矩阵、T071 物理机 10k、T072 性能可观测性、T073/T074 参考 VM T090/T108 均**尚未执行**（§0.1）。002 无障碍数字以 [a11y-audit.md](./a11y-audit.md) 为准。前序会话 focused 18 pass / 1 skip 不是 T068。

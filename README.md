@@ -33,13 +33,13 @@ What this is **not**: a lightweight process. A WKWebView running Excalidraw uses
 | While drawing | Whole file, in place, every few tens of seconds | Memory → coalesced draft; `.excalidraw` stays still |
 | Crash or power loss | That whole interval can be lost; the file can be truncated | Drafts + snapshots; destination file is complete old or complete new |
 | External edit (git, iCloud, another editor) | Often ignored | Reload, or a conflict dialog — never a silent overwrite |
-| Folders | Typically one tree | Several workspaces, with lazy thumbnails |
+| Folders | Typically one tree | Several workspaces in one continuous virtualized tree |
 
 ## What it can do
 
 - Create, edit, and save drawings locally, fully offline, including Chinese hand-drawn text
 - Recover work after a crash, force-quit, or power loss
-- Browse drawings in a workspace sidebar; mount more than one workspace
+- Browse drawings in a canvas-first workspace sidebar (hidden on first launch; overlay or pinned); mount more than one workspace
 - Detect external file changes and resolve conflicts
 - Export PNG or SVG (SVG keeps the bundled font)
 - Open `.excalidraw` from Finder; reuse one app instance for more files

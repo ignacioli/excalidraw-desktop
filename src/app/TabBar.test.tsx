@@ -60,8 +60,13 @@ describe("TabBar", () => {
 
     const alphaTab = screen.getByRole("tab", { name: "Alpha" });
     const betaTab = screen.getByRole("tab", { name: "Beta" });
-    const alphaSlot = alphaTab.querySelector("[data-slot='tab-close']");
-    const betaSlot = betaTab.querySelector("[data-slot='tab-close']");
+    const tabBar = alphaTab.closest(".tab-bar");
+    const alphaSlot = tabBar?.querySelector(
+      "[data-slot='tab-close'][data-tab-id='alpha']",
+    );
+    const betaSlot = tabBar?.querySelector(
+      "[data-slot='tab-close'][data-tab-id='beta']",
+    );
     expect(alphaSlot).not.toBeNull();
     expect(betaSlot).not.toBeNull();
     expect(betaSlot).toHaveAttribute("data-close-visible", "true");
@@ -69,7 +74,9 @@ describe("TabBar", () => {
     expect(screen.getByRole("button", { name: "Close Beta" })).toBeInTheDocument();
 
     await user.hover(alphaTab);
-    expect(alphaTab.querySelector("[data-slot='tab-close']")).toBe(alphaSlot);
+    expect(
+      tabBar?.querySelector("[data-slot='tab-close'][data-tab-id='alpha']"),
+    ).toBe(alphaSlot);
     expect(alphaSlot).toHaveAttribute("data-close-visible", "true");
     expect(screen.getByRole("button", { name: "Close Alpha" })).toBeInTheDocument();
   });
@@ -154,6 +161,50 @@ describe("TabBar", () => {
     );
     expect(documentManager.close).toHaveBeenCalledWith("alpha");
     expect(documentManager.activate).not.toHaveBeenCalled();
+  });
+
+  it("closes from a middle-click on the close control without activating", () => {
+    setDocumentSessions([
+      createSession("alpha", "Alpha", "/tmp/alpha.excalidraw", "clean"),
+      createSession("beta", "Beta", "/tmp/beta.excalidraw", "clean"),
+    ]);
+    render(<TabBar />);
+
+    fireEvent(
+      screen.getByRole("button", { name: "Close Beta" }),
+      new MouseEvent("auxclick", { bubbles: true, button: 1 }),
+    );
+    expect(documentManager.close).toHaveBeenCalledWith("beta");
+    expect(documentManager.activate).not.toHaveBeenCalled();
+  });
+
+  it("opens the tab menu from a context menu on the close control", () => {
+    setDocumentSessions([
+      createSession("alpha", "Alpha", "/tmp/alpha.excalidraw", "clean"),
+      createSession("beta", "Beta", "/tmp/beta.excalidraw", "clean"),
+    ]);
+    render(<TabBar />);
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Close Beta" }));
+    expect(screen.getByRole("menu", { name: "Tab actions" })).toBeInTheDocument();
+  });
+
+  it("activates an inactive tab from its empty close slot", () => {
+    setDocumentSessions([
+      createSession("alpha", "Alpha", "/tmp/alpha.excalidraw", "clean"),
+      createSession("beta", "Beta", "/tmp/beta.excalidraw", "clean"),
+    ]);
+    render(<TabBar />);
+
+    const slot = screen
+      .getByRole("tab", { name: "Alpha" })
+      .closest(".tab-cluster")
+      ?.querySelector("[data-slot='tab-close']");
+    if (!(slot instanceof HTMLElement)) {
+      throw new Error("Expected the Alpha close slot.");
+    }
+    fireEvent.click(slot);
+    expect(documentManager.activate).toHaveBeenCalledWith("alpha");
   });
 
   it("closes the active tab with Cmd+W on macOS and Ctrl+W elsewhere", async () => {
@@ -271,15 +322,50 @@ describe("TabBar", () => {
       createSession("gamma", "Gamma", "/tmp/gamma.excalidraw", "clean"),
     ]);
     render(<TabBar />);
-    const tablist = screen.getByRole("tablist");
     const gamma = screen.getByRole("tab", { name: "Gamma" });
-    vi.spyOn(tablist, "getBoundingClientRect").mockReturnValue(
+    const cluster = gamma.closest(".tab-cluster");
+    const strip = gamma.closest(".tab-list");
+    if (!(cluster instanceof HTMLElement) || !(strip instanceof HTMLElement)) {
+      throw new Error("Expected the Gamma tab cluster.");
+    }
+    vi.spyOn(strip, "getBoundingClientRect").mockReturnValue(
+      domRect(0, 0, 200, 32),
+    );
+    vi.spyOn(cluster, "getBoundingClientRect").mockReturnValue(
+      domRect(240, 0, 144, 32),
+    );
+    const scrollIntoView = stubScrollIntoView(cluster);
+
+    await user.click(gamma);
+    expect(scrollIntoView).toHaveBeenCalledWith(
+      expect.objectContaining({ inline: "nearest", block: "nearest" }),
+    );
+  });
+
+  it("scrolls when the close control would stay clipped even if the tab label is in view", async () => {
+    const user = userEvent.setup();
+    setDocumentSessions([
+      createSession("alpha", "Alpha", "/tmp/alpha.excalidraw", "clean"),
+      createSession("beta", "Beta", "/tmp/beta.excalidraw", "clean"),
+      createSession("gamma", "Gamma", "/tmp/gamma.excalidraw", "clean"),
+    ]);
+    render(<TabBar />);
+    const gamma = screen.getByRole("tab", { name: "Gamma" });
+    const cluster = gamma.closest(".tab-cluster");
+    const strip = gamma.closest(".tab-list");
+    if (!(cluster instanceof HTMLElement) || !(strip instanceof HTMLElement)) {
+      throw new Error("Expected the Gamma tab cluster.");
+    }
+    vi.spyOn(strip, "getBoundingClientRect").mockReturnValue(
       domRect(0, 0, 200, 32),
     );
     vi.spyOn(gamma, "getBoundingClientRect").mockReturnValue(
-      domRect(240, 0, 120, 32),
+      domRect(80, 0, 120, 32),
     );
-    const scrollIntoView = stubScrollIntoView(gamma);
+    vi.spyOn(cluster, "getBoundingClientRect").mockReturnValue(
+      domRect(80, 0, 144, 32),
+    );
+    const scrollIntoView = stubScrollIntoView(cluster);
 
     await user.click(gamma);
     expect(scrollIntoView).toHaveBeenCalledWith(
@@ -296,20 +382,29 @@ describe("TabBar", () => {
       createSession("gamma", "Gamma", "/tmp/gamma.excalidraw", "clean"),
     ]);
     render(<TabBar />);
-    const tablist = screen.getByRole("tablist");
     const alpha = screen.getByRole("tab", { name: "Alpha" });
     const gamma = screen.getByRole("tab", { name: "Gamma" });
-    vi.spyOn(tablist, "getBoundingClientRect").mockReturnValue(
+    const alphaCluster = alpha.closest(".tab-cluster");
+    const gammaCluster = gamma.closest(".tab-cluster");
+    const strip = gamma.closest(".tab-list");
+    if (
+      !(alphaCluster instanceof HTMLElement) ||
+      !(gammaCluster instanceof HTMLElement) ||
+      !(strip instanceof HTMLElement)
+    ) {
+      throw new Error("Expected Alpha and Gamma tab clusters.");
+    }
+    vi.spyOn(strip, "getBoundingClientRect").mockReturnValue(
       domRect(0, 0, 200, 32),
     );
-    vi.spyOn(gamma, "getBoundingClientRect").mockReturnValue(
-      domRect(240, 0, 120, 32),
+    vi.spyOn(gammaCluster, "getBoundingClientRect").mockReturnValue(
+      domRect(240, 0, 144, 32),
     );
-    vi.spyOn(alpha, "getBoundingClientRect").mockReturnValue(
-      domRect(8, 0, 120, 32),
+    vi.spyOn(alphaCluster, "getBoundingClientRect").mockReturnValue(
+      domRect(8, 0, 144, 32),
     );
-    const scrollGamma = stubScrollIntoView(gamma);
-    const scrollAlpha = stubScrollIntoView(alpha);
+    const scrollGamma = stubScrollIntoView(gammaCluster);
+    const scrollAlpha = stubScrollIntoView(alphaCluster);
 
     await user.click(gamma);
     expect(scrollGamma).toHaveBeenCalledWith(
@@ -336,6 +431,51 @@ describe("TabBar", () => {
     expect(screen.getByRole("navigation", { name: "Open drawings" })).toBeInTheDocument();
     expect(screen.getByRole("tablist")).toBeInTheDocument();
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+  });
+
+  it("keeps an inactive close control mounted while it holds focus", async () => {
+    const user = userEvent.setup();
+    setDocumentSessions([
+      createSession("alpha", "Alpha", "/tmp/alpha.excalidraw", "clean"),
+      createSession("beta", "Beta", "/tmp/beta.excalidraw", "clean"),
+    ]);
+    render(<TabBar />);
+
+    const alphaTab = screen.getByRole("tab", { name: "Alpha" });
+    const cluster = alphaTab.closest(".tab-cluster");
+    if (!(cluster instanceof HTMLElement)) {
+      throw new Error("Expected the Alpha tab cluster.");
+    }
+    await user.hover(alphaTab);
+    const close = screen.getByRole("button", { name: "Close Alpha" });
+    close.focus();
+    fireEvent.mouseLeave(cluster, { relatedTarget: document.body });
+
+    expect(close).toBeInTheDocument();
+    expect(close).toHaveFocus();
+    expect(cluster.querySelector("[data-slot='tab-close']")).toHaveAttribute(
+      "data-close-visible",
+      "true",
+    );
+  });
+
+  it("focuses the surviving tab after closing a title that contains quotes", async () => {
+    const user = userEvent.setup();
+    setDocumentSessions([
+      createSession("quoted", 'Quote "file"', "/tmp/quoted.excalidraw", "clean"),
+      createSession("beta", "Beta", "/tmp/beta.excalidraw", "clean"),
+    ]);
+    documentManager.store.setState({ activeDocumentId: "quoted" });
+    render(<TabBar />);
+
+    await user.click(screen.getByRole("button", { name: 'Close Quote "file"' }));
+    await waitFor(() => {
+      const focused = document.activeElement;
+      expect(
+        focused === screen.getByRole("tab", { name: "Beta" }) ||
+          focused === screen.getByRole("button", { name: "Close Beta" }),
+      ).toBe(true);
+    });
   });
 });
 
