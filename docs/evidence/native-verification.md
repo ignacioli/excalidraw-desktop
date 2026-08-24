@@ -125,5 +125,5 @@
 
 - **浏览器 Playwright**（含 `browser-ui`、Vite harness、`ui-*.spec.ts`、axe、键盘旅程）证明布局、对话框/菜单、焦点与主题独立性，不证明 Trash/Put Back、Finder 显示、VoiceOver、原生标题栏颜色/堆叠、系统 Cmd+W 路由、真实鼠标/触控板。
 - **测试专用 `e2e-harness`**（`APP_E2E=1` + `EXCALIDRAW_E2E_BINARY`）用于进程级故障注入与契约探针。`native-tab-close` 的 `cmd-w-active` / `middle-click-inactive` / 滚轮 notch 在 harness 内合成 checkpoint/close 或刻度，**不是**用户按下的 Cmd+W、中键或触控板手势。`native-window-contract` 的配置静态检查与 harness 读 `tauri.conf.json` **不是**操作员看到的系统着色标题栏，也不是遮挡/最小化/恢复。该文件的 live native 用例在未配置测试二进制时 skip；即使将来跑过，仍不能替代 §9 的真机窗口管理行。
-- **生产 vs harness 二进制证明**属于 T069（[validation-summary.md](./validation-summary.md) §0.1），尚未执行；不能用源码审查或合成 window-contract 代替「生产包无 always-on-top / 无 harness」的构建证据。
+- **生产 vs harness 二进制证明**属于 T069（[validation-summary.md](./validation-summary.md) §0.4），已执行；不能用源码审查或合成 window-contract 代替该构建扫描。这仍不能关闭 T070 的真实 Cmd+W / 中键 / 触控板 / 窗口堆叠行。
 - 虚拟机跑过的 001 T078/T080 或性能参考 VM **不得**写成未执行的 002 物理机覆盖。§9 执行后须新记环境 ID；物理机结果也不得反过来冒充未跑的 VM。
