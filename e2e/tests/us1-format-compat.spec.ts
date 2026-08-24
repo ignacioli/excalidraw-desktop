@@ -4,6 +4,7 @@ import {
   readHarnessDraft,
   readHarnessFile,
 } from "./browserTauriHarness";
+import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
 
 const OFFICIAL_FIXTURE = JSON.stringify({
   type: "excalidraw",
@@ -47,6 +48,7 @@ test("round-trips an official scene through the locked official loader", async (
   page,
 }) => {
   await installBrowserTauriHarness(page, undefined, OFFICIAL_FIXTURE);
+  await persistPinnedWorkspaceSidebar(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Open drawing…" }).click();
   await expect(page.locator(".excalidraw-editor")).toBeVisible();

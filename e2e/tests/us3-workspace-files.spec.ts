@@ -1,10 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openWorkspaceSidebar } from "./workspaceSidebar";
 
 test("workspace file management closes the mount/create/rename/trash loop", async ({
   page,
 }) => {
   await installWorkspaceHarness(page);
   await page.goto("/");
+  await openWorkspaceSidebar(page);
   const mount = page.getByRole("button", { name: /Mount folder/i });
   await expect(mount).toBeVisible();
   await mount.click();

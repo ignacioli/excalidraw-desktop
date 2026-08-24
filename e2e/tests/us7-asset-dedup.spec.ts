@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { getUs7State, installUs7Harness } from "./us7BrowserHarness";
+import { openWorkspaceSidebar } from "./workspaceSidebar";
 
 test("multiple workspaces mount side by side and remove independently", async ({
   page,
@@ -12,6 +13,7 @@ test("multiple workspaces mount side by side and remove independently", async ({
     ],
   });
   await page.goto("/");
+  await openWorkspaceSidebar(page);
 
   await expect(page.getByRole("treeitem", { name: "Work" })).toBeVisible();
   await expect(page.getByRole("treeitem", { name: "Personal" })).toBeVisible();

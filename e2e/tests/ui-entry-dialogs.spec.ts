@@ -3,6 +3,7 @@ import {
   getUiInteractionHarnessState,
   installUiInteractionHarness,
 } from "./uiInteractionHarness";
+import { openWorkspaceSidebar } from "./workspaceSidebar";
 
 const workspace = {
   id: "workspace-1",
@@ -19,6 +20,7 @@ test("entry dialogs cancel without mutation and keep naming conflicts inline", a
     entries: [drawing("drawing.excalidraw", "drawing")],
   });
   await page.goto("/");
+  await openWorkspaceSidebar(page);
 
   await page.getByRole("button", { name: "Actions for Workspace" }).click();
   await page.getByRole("menuitem", { name: "New Drawing" }).click();
@@ -53,6 +55,7 @@ test("non-empty Directory blocker reveals only after explicit action", async ({
     ],
   });
   await page.goto("/");
+  await openWorkspaceSidebar(page);
   await page.getByRole("button", { name: "Actions for folder" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await expect(
@@ -89,6 +92,7 @@ test("rename preserves the fixed suffix and delete cancellation performs no muta
     entries: [drawing("drawing.excalidraw", "drawing")],
   });
   await page.goto("/");
+  await openWorkspaceSidebar(page);
   await page.getByRole("button", { name: "Actions for drawing" }).click();
   await page.getByRole("menuitem", { name: "Rename" }).click();
   const input = page.getByRole("textbox", { name: "Name" });
@@ -121,6 +125,7 @@ test("dirty Drawing deletion focuses its Open Document and performs no hidden mu
     entries: [drawing("drawing.excalidraw", "drawing")],
   });
   await page.goto("/");
+  await openWorkspaceSidebar(page);
   await page.getByRole("treeitem", { name: "drawing" }).click();
   const canvas = page.locator(".excalidraw__canvas.interactive").last();
   const box = await canvas.boundingBox();

@@ -5,8 +5,10 @@ import { interactionStore } from "../app/interaction";
 import type { Workspace, WorkspaceEntry } from "../ipc/contracts";
 import {
   buildWorkspaceTreeRows,
+  captureScrollAnchor,
   getAdjacentRowKey,
   getPageTargetRowKey,
+  resolveScrollAnchor,
   type ActiveDrawingReference,
   type WorkspaceTreeEntriesByWorkspace,
   type WorkspaceTreeRow,
@@ -65,6 +67,7 @@ export function WorkspaceTree({
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const pendingFocusKey = useRef<string | null>(null);
   const knownWorkspaceIdsRef = useRef<Set<string> | null>(null);
+  const previousRowsRef = useRef<readonly WorkspaceTreeRow[]>([]);
   const [internalWorkspaceIds, setInternalWorkspaceIds] = useState<Set<string>>(
     () => new Set(workspaces.map((workspace) => workspace.id)),
   );
@@ -135,6 +138,32 @@ export function WorkspaceTree({
           index,
           start: index * rowHeight,
         }));
+
+  useEffect(() => {
+    const previousRows = previousRowsRef.current;
+    previousRowsRef.current = rows;
+    if (previousRows.length === 0) return;
+    if (
+      previousRows.length === rows.length &&
+      previousRows.every((row, index) => row.key === rows[index]?.key)
+    ) {
+      return;
+    }
+    const scrollElement = scrollRef.current;
+    if (scrollElement === null) return;
+    const firstVisibleIndex = Math.max(
+      0,
+      Math.floor(scrollElement.scrollTop / rowHeight),
+    );
+    const offset = scrollElement.scrollTop - firstVisibleIndex * rowHeight;
+    const resolved = resolveScrollAnchor(
+      previousRows,
+      rows,
+      captureScrollAnchor(previousRows, firstVisibleIndex, offset),
+    );
+    if (resolved === null) return;
+    virtualizer.scrollToOffset(resolved.index * rowHeight + resolved.offset);
+  }, [rowHeight, rows, virtualizer]);
 
   useEffect(() => {
     if (
@@ -257,6 +286,7 @@ export function WorkspaceTree({
   };
 
   const handleTreeKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.target instanceof HTMLButtonElement) return;
     const currentRow = rows.find((row) => row.key === focusedRowKey);
     if (currentRow === undefined) return;
 
@@ -530,6 +560,11 @@ function WorkspaceTreeRowView({
           aria-label={`Actions for ${row.displayName}`}
           className="workspace-tree-action"
           onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.stopPropagation();
+            }
+          }}
           onClick={(event) => {
             event.stopPropagation();
             onAction(event.currentTarget);

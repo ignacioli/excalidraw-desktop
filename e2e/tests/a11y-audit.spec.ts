@@ -10,6 +10,7 @@ import {
   emitFileChanged,
   installUs4Harness,
 } from "./us4BrowserHarness";
+import { openWorkspaceSidebar } from "./workspaceSidebar";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
 
@@ -305,13 +306,7 @@ async function installDarkPreference(page: Page): Promise<void> {
 }
 
 async function ensureFilesSidebar(page: Page): Promise<void> {
-  const sidebar = page.getByRole("complementary", { name: "Files" });
-  if (!(await sidebar.isVisible())) {
-    await page
-      .getByRole("button", { name: "Workspace sidebar", exact: true })
-      .click();
-    await expect(sidebar).toBeVisible();
-  }
+  await openWorkspaceSidebar(page);
 }
 
 function a11yDrawing(

@@ -5,6 +5,7 @@ import {
   pngDimensions,
   waitForDrawingFonts,
 } from "./us5-exportHarness";
+import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
 
 const EXPORT_PATHS = {
   png1xTransparent: "/exports/drawing-1x-transparent.png",
@@ -151,6 +152,7 @@ test("exports an SVG with embedded WOFF2 fonts and matches its baseline", async 
 });
 
 async function openFixedDrawing(page: Page): Promise<void> {
+  await persistPinnedWorkspaceSidebar(page);
   await page.goto("/");
   await waitForDrawingFonts(page);
   await page.getByRole("button", { name: "Open drawing…" }).click();

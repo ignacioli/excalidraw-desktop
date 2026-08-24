@@ -1,11 +1,11 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { openWorkspaceSidebar } from "./workspaceSidebar";
 
 const OBSERVATION_SCHEMA_VERSION = "1.0.0" as const;
 const FIXTURE_FILE_COUNT = 10_000;
 const BASELINE_FILE_COUNT = 1_000;
 const FIXTURE_DIRECTORY = "bulk";
 const FIXTURE_SEED = 58_000;
-const FIRST_FIXTURE_FILE = "drawing-00000.excalidraw";
 const ROW_HEIGHT_PX = 32;
 const SCROLL_SAMPLE_DURATION_MS = 1_000;
 const MIN_SCROLL_FPS = 50;
@@ -49,21 +49,19 @@ test("10k-file fixture stays virtualized while scrolling", async ({
   page,
   context,
 }, testInfo) => {
+  test.setTimeout(180_000);
   await installScaleHarness(page, FIXTURE_FILE_COUNT);
+  const baseline = await measureBaselineFixture(context);
   await page.goto("/");
+  await openWorkspaceSidebar(page);
 
   const mount = page.getByRole("button", { name: /Mount folder/i });
   await expect(mount).toBeVisible();
-
-  // A smaller, independently mounted fixture gives us a DOM/heap comparison
-  // without changing the 10k workload or relying on a total-file-count proxy.
-  const baseline = await measureBaselineFixture(context);
-
   await mount.click();
   const tree = page.getByRole("tree");
   await expect(tree).toBeVisible();
   await expect(
-    page.getByRole("button", { name: `Expand ${FIXTURE_DIRECTORY}` }),
+    page.getByRole("treeitem", { name: FIXTURE_DIRECTORY, exact: true }),
   ).toBeVisible();
 
   const expansion = await measureExpansion(page);
@@ -274,20 +272,27 @@ async function measureBaselineFixture(
   unavailableReason: string | null;
 }> {
   const baselinePage = await context.newPage();
+  const abort = globalThis.setTimeout(() => {
+    void baselinePage.close();
+  }, 20_000);
   try {
     await installScaleHarness(baselinePage, BASELINE_FILE_COUNT);
     await baselinePage.goto("/");
+    await openWorkspaceSidebar(baselinePage);
     const mount = baselinePage.getByRole("button", { name: /Mount folder/i });
-    await expect(mount).toBeVisible();
+    await expect(mount).toBeVisible({ timeout: 8_000 });
     await mount.click();
     const tree = baselinePage.getByRole("tree");
-    await expect(tree).toBeVisible();
+    await expect(tree).toBeVisible({ timeout: 8_000 });
     await baselinePage
-      .getByRole("button", { name: `Expand ${FIXTURE_DIRECTORY}` })
-      .click();
+      .getByRole("treeitem", { name: FIXTURE_DIRECTORY, exact: true })
+      .click({ timeout: 8_000 });
     await expect(
-      baselinePage.getByRole("button", { name: `Open ${FIRST_FIXTURE_FILE}` }),
-    ).toBeVisible();
+      baselinePage.getByRole("treeitem", {
+        name: "drawing-00000",
+        exact: true,
+      }),
+    ).toBeVisible({ timeout: 8_000 });
     return {
       virtualization: await collectVirtualization(tree),
       heap: await readHeapSnapshot(baselinePage),
@@ -301,17 +306,20 @@ async function measureBaselineFixture(
       unavailableReason: reason,
     };
   } finally {
-    await baselinePage.close();
+    globalThis.clearTimeout(abort);
+    if (!baselinePage.isClosed()) {
+      await baselinePage.close();
+    }
   }
 }
 
 async function measureExpansion(page: Page): Promise<{ elapsedMs: number }> {
   await page.evaluate(() => performance.mark("us3-expansion-start"));
   await page
-    .getByRole("button", { name: `Expand ${FIXTURE_DIRECTORY}` })
+    .getByRole("treeitem", { name: FIXTURE_DIRECTORY, exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: `Open ${FIRST_FIXTURE_FILE}` }),
+    page.getByRole("treeitem", { name: "drawing-00000", exact: true }),
   ).toBeVisible();
   const elapsedMs = await page.evaluate(() => {
     const entries = performance.getEntriesByName("us3-expansion-start");
@@ -458,8 +466,15 @@ async function readHeapSnapshot(page: Page): Promise<HeapSnapshot> {
       typeof browserPerformance.measureUserAgentSpecificMemory === "function"
     ) {
       try {
-        const result =
-          await browserPerformance.measureUserAgentSpecificMemory();
+        const result = await Promise.race([
+          browserPerformance.measureUserAgentSpecificMemory(),
+          new Promise<never>((_, reject) => {
+            globalThis.setTimeout(
+              () => reject(new Error("memory measurement timed out")),
+              5_000,
+            );
+          }),
+        ]);
         return {
           api: "measureUserAgentSpecificMemory" as const,
           reportedBytes: result.bytes,

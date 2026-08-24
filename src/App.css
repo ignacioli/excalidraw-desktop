@@ -311,12 +311,16 @@ body {
   font-size: 1rem;
 }
 
+.file-sidebar > button {
+  flex: 0 0 auto;
+}
+
 .workspace-panel {
   display: flex;
+  flex: 1 1 auto;
   min-height: 0;
   flex-direction: column;
   gap: var(--space-2);
-  height: 100%;
 }
 
 .workspace-panel-header {

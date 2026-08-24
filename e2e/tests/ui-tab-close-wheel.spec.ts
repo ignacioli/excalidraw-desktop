@@ -6,6 +6,7 @@ import {
   installUiInteractionHarness,
   setUiInteractionHarnessFailure,
 } from "./uiInteractionHarness";
+import { openWorkspaceSidebar } from "./workspaceSidebar";
 
 const workspace = {
   id: "workspace-1",
@@ -320,13 +321,7 @@ async function openTabContextMenu(page: Page, displayName: string) {
 }
 
 async function openDrawings(page: Page, displayNames: readonly string[]) {
-  const sidebar = page.getByRole("complementary", { name: "Files" });
-  if (!(await sidebar.isVisible())) {
-    await page
-      .getByRole("button", { name: "Workspace sidebar", exact: true })
-      .click();
-    await expect(sidebar).toBeVisible();
-  }
+  await openWorkspaceSidebar(page);
   const workspaceRow = page.getByRole("treeitem", {
     name: workspace.name,
     exact: true,

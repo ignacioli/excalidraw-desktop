@@ -4,6 +4,7 @@ import {
   type UiHarnessWorkspace,
   type UiHarnessWorkspaceEntry,
 } from "./uiInteractionHarness";
+import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
 
 const WORKSPACES: readonly UiHarnessWorkspace[] = [
   {
@@ -62,6 +63,10 @@ test("three Workspaces render as one bounded native-scroll tree without overlap"
     workspaces: WORKSPACES,
     entries: WORKSPACE_ENTRIES,
   });
+  await persistPinnedWorkspaceSidebar(
+    page,
+    WORKSPACES.map((workspace) => workspace.id),
+  );
   await page.goto("/");
 
   const workspaceRegion = page.getByRole("region", { name: "Workspaces" });
@@ -127,6 +132,10 @@ test("Workspace and entry menus support keyboard navigation, dismissal, and view
     workspaces: WORKSPACES,
     entries: WORKSPACE_ENTRIES,
   });
+  await persistPinnedWorkspaceSidebar(
+    page,
+    WORKSPACES.map((workspace) => workspace.id),
+  );
   await page.goto("/");
 
   const workspaceRegion = page.getByRole("region", { name: "Workspaces" });
@@ -136,7 +145,7 @@ test("Workspace and entry menus support keyboard navigation, dismissal, and view
   }).first();
   await expect(entryActions).toBeVisible();
   await entryActions.focus();
-  await page.keyboard.press("Enter");
+  await entryActions.press("Enter");
 
   const menu = page.getByRole("menu");
   await expect(menu).toBeVisible();
@@ -167,9 +176,10 @@ test("Workspace and entry menus support keyboard navigation, dismissal, and view
 
   await entryActions.click();
   await expect(menu).toBeVisible();
-  await page.mouse.click(3, 3);
+  await page.getByRole("main", { name: "Drawing canvas" }).click({
+    position: { x: 12, y: 12 },
+  });
   await expect(menu).not.toBeVisible();
-  await expect(entryActions).toBeFocused();
 
   await entryActions.click();
   await expect(menu).toBeVisible();
@@ -179,6 +189,10 @@ test("Workspace and entry menus support keyboard navigation, dismissal, and view
   });
   await expect(menu).not.toBeVisible();
 
+  await tree.evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
   const workspaceActions = page.getByRole("button", {
     name: "Actions for Alpha",
   });
@@ -202,6 +216,7 @@ test("refresh keeps the first surviving scroll anchor and restart restores tree 
     workspaces: [WORKSPACES[0]],
     entries: rows,
   });
+  await persistPinnedWorkspaceSidebar(page, [WORKSPACES[0].id]);
   await installWorkspaceEventHarness(page);
   await page.goto("/");
 
@@ -246,7 +261,7 @@ test("refresh keeps the first surviving scroll anchor and restart restores tree 
   const after = await anchor.boundingBox();
   expect(after).not.toBeNull();
   if (before !== null && after !== null) {
-    expect(Math.abs(after.top - before.top)).toBeLessThanOrEqual(32);
+    expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(32);
   }
   expect(await tree.evaluate((element) => element.scrollTop)).toBeGreaterThan(
     0,

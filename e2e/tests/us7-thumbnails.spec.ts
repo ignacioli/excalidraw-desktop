@@ -3,6 +3,7 @@ import {
   getUiInteractionHarnessState,
   installUiInteractionHarness,
 } from "./uiInteractionHarness";
+import { openWorkspaceSidebar } from "./workspaceSidebar";
 
 const WORKSPACE = {
   id: "workspace-1",
@@ -31,6 +32,7 @@ test("drawing rows stay icon-only and opening one performs exactly one document 
     entries: [DRAWING],
   });
   await page.goto("/");
+  await openWorkspaceSidebar(page);
 
   await expect(page.getByRole("tree")).toBeVisible();
   const drawing = page.getByRole("treeitem", { name: "drawing" });
@@ -81,6 +83,7 @@ test("mounting, expanding, and revisiting a Workspace never starts thumbnail wor
     entries,
   });
   await page.goto("/");
+  await openWorkspaceSidebar(page);
 
   const tree = page.getByRole("tree");
   await expect(tree).toBeVisible();
@@ -91,6 +94,7 @@ test("mounting, expanding, and revisiting a Workspace never starts thumbnail wor
     element.dispatchEvent(new Event("scroll", { bubbles: true }));
   });
   await page.reload();
+  await openWorkspaceSidebar(page);
   await expect(page.getByRole("tree")).toBeVisible();
   await expect(page.locator("img.file-tree-thumbnail")).toHaveCount(0);
 

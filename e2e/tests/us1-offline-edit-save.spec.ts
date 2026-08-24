@@ -4,6 +4,7 @@ import {
   readHarnessDraft,
   readHarnessFile,
 } from "./browserTauriHarness";
+import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
 
 test("creates, checkpoints, and reopens a drawing with every asset local", async ({
   page,
@@ -24,6 +25,7 @@ test("creates, checkpoints, and reopens a drawing with every asset local", async
     await route.continue();
   });
   await installBrowserTauriHarness(page);
+  await persistPinnedWorkspaceSidebar(page);
   await page.goto("/");
 
   await page.getByRole("button", { name: "New drawing" }).click();

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installExportHarness } from "./us5-exportHarness";
+import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
 
 const READONLY_TARGET = "/readonly/export.png";
 const WRITABLE_TARGET = "/writable/export.png";
@@ -11,6 +12,7 @@ test("shows a clear error after a failed export and leaves no partial file", asy
     exportPaths: [READONLY_TARGET, WRITABLE_TARGET],
     failReadonlyTarget: READONLY_TARGET,
   });
+  await persistPinnedWorkspaceSidebar(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Open drawing…" }).click();
   await expect(page.locator(".excalidraw-editor")).toBeVisible();

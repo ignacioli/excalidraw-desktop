@@ -290,7 +290,7 @@ export function WorkspacePanel({
     let unlisten: (() => void) | undefined;
     void defaultEventListener("workspace-entries-changed", (event) => {
       const payload = event.payload;
-      if (payload.change !== "created") {
+      if (payload.change !== "created" && payload.change !== "invalidated") {
         forgetEntrySubtree(payload.workspaceId, payload.relativePath);
       }
       for (const parentRelativePath of parentsToReload(payload)) {
