@@ -1,7 +1,7 @@
 # 验证证据汇总（Phase 10 / T095；002 T066 指令）
 
-**日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17；§6/§7 原生发版与 T078/T080/T094 更新于 2026-08-18；002 修改前基线更新于 2026-08-19；002 Polish 验证指令 T066 更新于 2026-08-23；T067 前端/Rust 门禁更新于 2026-08-23；T068 浏览器 E2E 与 T069 二进制证明更新于 2026-08-23；T071 物理机 10k 树与 T072 可观测性更新于 2026-08-23；T070 原生矩阵更新于 2026-08-24）
-**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总，并包含 feature 002 的修改前诊断基线、Polish 门禁指令与 T067/T068/T069 成绩；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。T066 只更新指令与证据边界，不重分类下列 001 历史数字。T070 见 [native-verification.md](./native-verification.md) §9（2026-08-23/24 已执行）；T071/T072 见 §0.6/§0.7；T073–T075 在各自执行前不得写成 pass/fail。
+**日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17；§6/§7 原生发版与 T078/T080/T094 更新于 2026-08-18；002 修改前基线更新于 2026-08-19；002 Polish 验证指令 T066 更新于 2026-08-23；T067 前端/Rust 门禁更新于 2026-08-23；T068 浏览器 E2E 与 T069 二进制证明更新于 2026-08-23；T071 物理机 10k 树与 T072 可观测性更新于 2026-08-23；T070 原生矩阵更新于 2026-08-24；T073–T075 参考 VM 与 quickstart 收口更新于 2026-08-24）
+**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总，并包含 feature 002 的修改前诊断基线、Polish 门禁指令与 T067/T068/T069 成绩；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。T066 只更新指令与证据边界，不重分类下列 001 历史数字。T070 见 [native-verification.md](./native-verification.md) §9（2026-08-23/24 已执行）；T071/T072 见 §0.6/§0.7；T073 见 §0.8；T074 见 §0.9；T075 见 §0.10。
 
 先看下表再下钻各节。下表是 **001 Phase 10 / T095 历史成绩单一览**，不因 002 改写。性能当前有效序列是 2026-08-16 ADR-007（同一份 e2e-harness `e8bef9b7…`）；§5.3 的日期流水账不可与之混比。002 剩余门禁顺序与执行边界见 §0.1。
 
@@ -16,7 +16,7 @@
 | T108 15 min soak（§5.2） | 物理机 **fail** · 参考 VM **fail** | 只败在 RSS 增长；idle CPU 与静置 0 写入两边过。001 历史；002 不得复用为 T074 |
 | SC-010 开源分发（§6） | **v0.1.1 已发布** | 未签名/未公证 GitHub Release；macOS universal `.dmg` + Linux amd64 AppImage/deb/rpm |
 | T078/T080 原生验收（§7） | **通过**（2026-08-18） | 001 历史：物理 macOS 26.5.2 下载真实 `v0.1.1`；T094 Ubuntu IME 可选已做。002 US1–US4 矩阵见 [native-verification.md](./native-verification.md) §9：2026-08-23/24 **已执行**（T070） |
-| 002 Polish 门禁（§0.1） | T063–T072 已执行 | T067 见 §0.2，T068 见 §0.3，T069 见 §0.4，T070 见 §0.5，T071 见 §0.6，T072 见 §0.7。T073–T075 不得用 §0 基线、§1 T095 或前序会话 focused 跑数代替 |
+| 002 Polish 门禁（§0.1） | T063–T075 已执行 | T067 见 §0.2，T068 见 §0.3，T069 见 §0.4，T070 见 §0.5，T071 见 §0.6，T072 见 §0.7，T073 见 §0.8，T074 见 §0.9，T075 见 §0.10。不得用 §5.2 的 001 T090/T108 代替 |
 
 ## 0. Feature 002 修改前基线（T001，2026-08-19）
 
@@ -33,7 +33,7 @@ Focused browser 命令实际以仓库本地 Vite/Playwright 可执行文件运�
 
 ## 0.1 Feature 002 Polish 验证说明（T066，2026-08-23）
 
-本节记录 Polish 门禁顺序与证据边界。T067 成绩见 §0.2，T068 成绩见 §0.3，T069 成绩见 §0.4，T070 见 §0.5，T071 见 §0.6，T072 见 §0.7。T073–T075 之后才写入各自的 pass/fail/skip。§0 的 T001 基线、§1 的 T095、§4 的 T093、§5.2 的 T090/T108、§7 的 T078/T080 一律保持历史身份，不得重分类为 002 已验收。
+本节记录 Polish 门禁顺序与证据边界。T067 成绩见 §0.2，T068 成绩见 §0.3，T069 成绩见 §0.4，T070 见 §0.5，T071 见 §0.6，T072 见 §0.7，T073 见 §0.8，T074 见 §0.9，T075 见 §0.10。§0 的 T001 基线、§1 的 T095、§4 的 T093、§5.2 的 001 T090/T108、§7 的 T078/T080 一律保持历史身份，不得重分类为 002 已验收。
 
 ### 剩余门禁顺序
 
@@ -46,9 +46,9 @@ Focused browser 命令实际以仓库本地 Vite/Playwright 可执行文件运�
 5. **隔离 macOS 功能 / 原生矩阵（T070）**：已执行，见 §0.5 与 [native-verification.md](./native-verification.md) §9。
 6. **物理机 10k 连续树（T071）**：已执行，见 §0.6。不得把 §0 的修改前 10k fail 或 §5.2 的 001 canvas/I/O 写成 002 复测。
 7. **性能可观测性（T072）**：已执行且路径有效，见 §0.7。无效则记 `not_evaluated`，**不得消耗 T108 时间**。
-8. **T090 / T108 参考 VM（T073 / T074）**：仅当 T072 有效时，才跑未缩短的完整 T090 与 15 分钟 T108，并记录真实 `pass` / `fail`（T108 允许有依据的 `not_evaluated`）。**尚未执行。** 权威门禁仍是声明配置的参考 VM（Parallels 4 vCPU / 8GB），不是本机 48 GB 物理机。VM 结果不得表述为未执行的真机覆盖。
+8. **T090 / T108 参考 VM（T073 / T074）**：仅当 T072 有效时，才跑未缩短的完整 T090 与 15 分钟 T108，并记录真实 `pass` / `fail`（T108 允许有依据的 `not_evaluated`）。T073 已执行，见 §0.8；T074 已执行，见 §0.9。权威门禁仍是声明配置的参考 VM（Parallels 4 vCPU / 8GB），不是本机 48 GB 物理机。VM 结果不得表述为未执行的真机覆盖。不得用 §5.2 的 001 报告代替。
 
-T075（`specs/002-desktop-ui-interactions/quickstart.md` 全量命令与手工场景、安全/无障碍/文档对齐）在上述门禁之后收口，本任务不提前填写其结果。Ubuntu 24.04 Desktop 仍为可选社区验证；Fedora / 其他 Linux / Windows 不在当前支持承诺内，002 也未声明那些平台的新覆盖。
+T075（`specs/002-desktop-ui-interactions/quickstart.md` 全量命令与手工场景、安全/无障碍/文档对齐）已收口，见 §0.10。Ubuntu 24.04 Desktop 仍为可选社区验证，002 未新跑；Fedora / 其他 Linux / Windows 不在当前支持承诺内。
 
 ### Codex macOS 沙箱：浏览器 E2E
 
@@ -170,6 +170,55 @@ T075（`specs/002-desktop-ui-interactions/quickstart.md` 全量命令与手工�
 | 路径有效性 | **valid**。因此 **可以** 在声明配置的参考 VM 上跑未缩短的 T090/T108（T073/T074）。本机 48 GB 物理机 **不是** 该参考 VM，不得把本机 T090 写成 T073。 |
 
 未跑 T108。未把 T072 记为 `not_evaluated`。
+
+## 0.8 Feature 002 参考 VM T090（T073，2026-08-24）
+
+在声明配置的 Parallels 参考 VM `macOS26.5.2` 上执行未缩短的 T090（`startup-idle` + `canvas-io`）。来宾：macOS 26.5.2 (25F84)、arm64、4 逻辑 CPU、8589934592 bytes（8 GiB）、WebKit 21624.2.5.11.8。宿主硬件 `Apple M5 Pro / 48GB`，虚拟化 Parallels Desktop Pro 26.4.1。`PERF_REFERENCE_RUN=1`，`PERF_EXECUTION_ENVIRONMENT=virtual`。测量 commit `10fc040`；e2e-harness SHA-256 `8504a87a8d08cba2a762a506eaff9af236666aaad9fbd09de305e52aad579fae`（由该 HEAD 在宿主机 ARM64 重建后拷入来宾）。跑 T090 前在同一来宾对 harness 做 `observability-probe`：`result.json` **1 passed** / 生产忽略用例因未设 `TAURI_PRODUCTION_BINARY` 而 skip（生产忽略已由 T072 在物理机证明）。这不是 §5.2 的 001 序列。15 分钟 T108 见 §0.9。
+
+| 套件 | 报告 | overall | 要点 |
+|------|------|---------|------|
+| startup / idle | [startup-idle.002.ref.json](./startup-idle.002.ref.json) SHA-256 `b6d6c2ac…` | **fail** | 冷启动至可编辑 P95 **2175.199 ms**（预算 ≤2000 ms，n=10 最短 1598 ms、最长即 P95）；进程拉起 P95 26.6 ms；空载全树 RSS P95 **331.4 MB** · **pass**（≤500 MB） |
+| canvas / I/O | [canvas-io.002.ref.json](./canvas-io.002.ref.json) SHA-256 `bca08ae0…` | **pass** | 10k 稳定全树 RSS P95 **554.2 MB**（≤950 MB）；平移 59.95 fps / 最大冻结 33 ms；编辑 60.01 fps / 25 ms；写/编辑比 0 |
+
+Playwright 两份 spec 均 exit 0（预算失败仍写出完整 `fail` 报告，不把套件失败当成测量中断）。预算失败不阻断合并或开源发布（[ADR-008](../adr/ADR-008.md)）。§5.2 的 001 `startup-idle.ref.json` / `canvas-io.ref.json` 保持历史身份，未被覆盖。
+
+## 0.9 Feature 002 参考 VM 15 分钟 T108（T074，2026-08-24）
+
+同一声明参考 VM 与同一 e2e-harness SHA-256 `8504a87a…`、commit `10fc040`，在 T073 的来宾 `observability-probe` 有效之后跑**未缩短**的 `edit-soak.spec.ts`。Playwright 墙钟 **17.6 min**；工作负载 `editing.actualDurationMs` **900000**（= 要求的 15 分钟，seed 40000）。报告 [edit-soak.002.ref.json](./edit-soak.002.ref.json) SHA-256 `32ab2cd9…`。这不是 §5.2 的 001 soak，也未缩短为诊断时长。
+
+| 指标 | 预算 | 测量 | 判定 |
+|------|------|------|------|
+| RSS 增长绝对值 | ≤ 50 MB | +672.7 MB（预热 P95 556.6 MB → 静置 P95 1229.4 MB） | **fail** |
+| RSS 增长相对值 | ≤ 15% | +120.9% | **fail** |
+| 静置 idle CPU P95 | ≤ 35% 单逻辑核 | 23.5% | **pass** |
+| 静置写入 | 0 事件 / 0 路径 | 0 / 0 | **pass** |
+| 套件 overall | 全部过才 pass | RSS 增长两项失败 | **fail** |
+
+编辑事件 3600。预算失败不阻断合并或开源发布（[ADR-008](../adr/ADR-008.md)）。§5.2 的 001 `edit-soak.ref.json` 保持历史身份，未被覆盖。
+
+## 0.10 Feature 002 quickstart 收口（T075，2026-08-24）
+
+对照 `specs/002-desktop-ui-interactions/quickstart.md` 的适用命令与手工场景。本任务不重写 §1–§8 的 001 历史，也不把 Ubuntu/Fedora/Windows 写成已覆盖。
+
+| Quickstart 节 | 执行 | 证据 |
+|---------------|------|------|
+| 2 静态/单元 | 已执行 | T067 §0.2：typecheck/lint/test/build、cargo fmt/clippy/test **pass** |
+| 3 聚焦浏览器 UI | 已执行 | T068 §0.3：focused 42 passed；全量 69 passed / 27 skipped |
+| 4 原生测试二进制 | 已执行 | T069 §0.4；T073 另用当前 HEAD harness `8504a87a…` |
+| 5 隔离 macOS 功能矩阵 | 已执行 | T070 §0.5 与 [native-verification.md](./native-verification.md) §9 |
+| 6 标题栏选择 A | 已执行 | T070：标题栏 / 遮挡 / 最小化 / 恢复 **pass** |
+| 7 进程可靠性 | 已执行 | T070 同日 `APP_E2E=1`：**30 passed** / 1 skipped（nightly 100-seed） |
+| 8 性能回归 | 已执行 | 物理机 10k 树 T071 §0.6 **pass**；参考 VM T090 T073 §0.8（startup **fail** / canvas **pass**）；15 min T108 T074 §0.9 **fail** |
+| 9 文档与契约同步 | 已执行 | T063–T066；本轮 `git diff --check` 无空白错误；无产品代码改动，仅证据 JSON 与 tasks 勾选待提交 |
+
+安全 / 无障碍 / 文档对齐复查：T063 跨故事 axe serious/critical = 0，T070 含操作员 VoiceOver；T064–T066 已同步 DESIGN/README/AGENTS/CONTEXT、architecture/IPC/ADR-009 与证据指令；公开产品页不引用 SDD 任务号。本 Polish 切片未扩大 Tauri capabilities、未关 CSP、未把密钥写入仓库。
+
+剩余缺口（诚实保留，不阻断 002 收口）：
+
+- Ubuntu 24.04 Desktop 仍为可选社区验证；002 未新跑。001 T094 IME smoke 仍是该可选面的历史证据。
+- Fedora / 其他 Linux / Windows 不在当前支持承诺内。
+- 参考 VM 冷启动 2 s（T073）与 15 min soak RSS 增长（T074）为预算 **fail**，按 ADR-008 可见但不阻断合并或开源发布。
+- §1.1 两个 001 浏览器断言脆性仍在历史成绩单中；T068 全量已绿，不得把 T095 的 2 fail 算进 T068。
 
 ## 1. 全量浏览器回归（T095 执行）
 
@@ -329,4 +378,4 @@ T075（`specs/002-desktop-ui-interactions/quickstart.md` 全量命令与手工�
 - 空窗口 / Safari 对照在未禁用 App Nap 时 idle CPU P95 约为 0%，不能用来否定 harness（可见窗口 + 禁用 App Nap）下的 9–29% idle CPU 测量条件。
 - 宿主机 diagnostic 性能跑要求测量窗口全程可见（rAF 遮挡暂停约束，§5.3）；`visibilityState=hidden` 时 driver 10 秒失败，可见慢帧最多等 60 秒。
 - 上游 `@excalidraw/excalidraw` 内部 DOM 不在壳层 a11y 扫描范围（T093 残余说明）。
-- Feature 002 Polish：T063–T072 已执行（T067 见 §0.2，T068 见 §0.3，T069 见 §0.4，T070 见 §0.5，T071 见 §0.6，T072 见 §0.7）。T073/T074 参考 VM T090/T108 仍未做（T072 路径有效，但本机不是 4 vCPU / 8GB 参考 VM）。T075 未收口。002 无障碍数字以 [a11y-audit.md](./a11y-audit.md) 为准。前序会话 focused 18 pass / 1 skip 不是 T068。T068 的 27 skip 不是失败。
+- Feature 002 Polish：T063–T075 已执行（T067 见 §0.2，T068 见 §0.3，T069 见 §0.4，T070 见 §0.5，T071 见 §0.6，T072 见 §0.7，T073 见 §0.8，T074 见 §0.9，T075 见 §0.10）。T073 参考 VM startup/idle **fail**（冷启动 P95 2175 ms），canvas/I/O **pass**；T074 15 min soak **fail**（RSS +672.7 MB / +120.9%，idle CPU 与静置 0 写入通过）。不得把 §5.2 的 001 数字写成 002。002 无障碍数字以 [a11y-audit.md](./a11y-audit.md) 为准。前序会话 focused 18 pass / 1 skip 不是 T068。T068 的 27 skip 不是失败。
