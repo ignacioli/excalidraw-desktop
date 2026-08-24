@@ -269,7 +269,7 @@ body {
 }
 
 .app-shell-body--pinned {
-  grid-template-columns: minmax(14rem, 17.5rem) minmax(0, 1fr);
+  grid-template-columns: minmax(0, min(17.5rem, 30%)) minmax(70%, 1fr);
 }
 
 .app-shell-body--pinned .canvas-region {
@@ -691,7 +691,7 @@ body {
   }
 
   .app-shell-body--pinned {
-    grid-template-columns: minmax(11rem, 38vw) minmax(0, 1fr);
+    grid-template-columns: minmax(0, min(11rem, 30%)) minmax(70%, 1fr);
   }
 
   .save-status,
