@@ -239,6 +239,8 @@ Playwright 两份 spec 均 exit 0（预算失败仍写出完整 `fail` 报告，
 
 处理意见：作为已知偏差记录在案，后续以定位符收敛（`.first()`/可见性过滤）与 `>=` 边界修正消除；修复不属本阶段范围。
 
+**002 现况（不改写上表）**：两条已在当前产品代码中消除，不得把 T068 的 69 passed 写回本节 T095 计数。`us1-concurrent-tabs-save` 只定位 `.canvas-document:not([hidden])` 内的画布；`us3-scale-scroll` 断言改为 `scrollHeightPx > clientHeightPx`，连续树虚拟化后容器可滚动。T068 全量浏览器 **69 passed / 0 failed**（2026-08-23）；T071 复跑 `us3-scale-scroll` **pass**（展开 44.1 ms，26 行虚拟化）。上表「失败 2」仍是 Phase 10 / `HEAD 9e6ea21` 的历史记录。
+
 ## 2. SC-012 统一可靠性阻断门禁
 
 三类可靠性故障测试合并为统一的 SC-012 合并阻断门禁，任一失败即阻止合并：
