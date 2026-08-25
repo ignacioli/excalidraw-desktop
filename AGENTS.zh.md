@@ -34,7 +34,7 @@
 
 规格驱动交付物记录在下列规范路径。私有 specs 仓库为交付物命名；本公开仓库拥有这些路径。
 
-面向用户以及根目录贡献者文档以英文为规范文件名（无后缀），简体中文为同目录下的 `*.zh.md` 姊妹文件。`docs/adr/` 不是双语。公开面向用户的页面（`README.md`、`DESIGN.md`、`CONTEXT.md`、`docs/architecture.md`、`docs/quickstart.md`）只描述产品、架构与如何运行；不得引用私有规格编号，例如特性 `001`/`002`、规格用户故事编号或 `T0xx` 任务号。那些标识属于 `docs/evidence/`，必要时也可出现在 ADR。
+面向用户以及根目录贡献者文档以英文为规范文件名（无后缀），简体中文为同目录下的 `*.zh.md` 姊妹文件。`docs/adr/` 不是双语。公开面向用户的页面（`README.md`、`DESIGN.md`、`CONTEXT.md`、`CHANGELOG.md`、`docs/architecture.md`、`docs/quickstart.md`）只描述产品、架构与如何运行；不得引用私有规格编号，例如特性 `001`/`002`、规格用户故事编号或 `T0xx` 任务号。那些标识属于 `docs/evidence/`，必要时也可出现在 ADR。
 
 | 交付物 | 路径 |
 |-------------|------|
@@ -42,6 +42,7 @@
 | 视觉与交互契约（英文 / 中文） | `DESIGN.md` / `DESIGN.zh.md` |
 | 统一语言（英文 / 中文） | `CONTEXT.md` / `CONTEXT.zh.md` |
 | 贡献者与维护者说明（英文 / 中文） | `AGENTS.md` / `AGENTS.zh.md` |
+| 更新日志 | `CHANGELOG.md` |
 | 架构决策记录（ADR） | `docs/adr/` |
 | 架构概述（英文 / 中文） | `docs/architecture.md` / `docs/architecture.zh.md` |
 | IPC 契约 | `docs/contracts/ipc-contracts.md` |
@@ -93,7 +94,7 @@
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`：运行 Rust lint 门禁。
 - `cargo test --manifest-path src-tauri/Cargo.toml`：运行 Rust 单元与集成测试。
 
-参考性能工作流与测试专用故障注入 harness 已是落地的基础设施。T090/T108 在声明的 macOS 26.5.2、4 vCPU / 8GB Parallels Desktop Pro VM 上产出可审计的 `pass`/`fail` 测量；预算失败仍然可见，但不阻断合并或开源发布。参考运行设置 `PERF_TEST=1`、`PERF_REFERENCE_RUN=1`、`PERF_EXECUTION_ENVIRONMENT=virtual`、`PERF_HOST_HARDWARE`、`PERF_VIRTUALIZATION_NAME="Parallels Desktop Pro"` 与 `PERF_VIRTUALIZATION_VERSION`；GitHub workflow 从仓库变量读取宿主硬件与 Parallels 版本。macOS 包长期通过 GitHub Releases 以未签名、未公证形式分发；推送 `v*` tag 会发布它们，而 App Store、Developer ID 与 Apple 公证不是项目要求。
+参考性能工作流与测试专用故障注入 harness 已是落地的基础设施。T090/T108 在声明的 macOS 26.5.2、4 vCPU / 8GB Parallels Desktop Pro VM 上产出可审计的 `pass`/`fail` 测量；预算失败仍然可见，但不阻断合并或开源发布。参考运行设置 `PERF_TEST=1`、`PERF_REFERENCE_RUN=1`、`PERF_EXECUTION_ENVIRONMENT=virtual`、`PERF_HOST_HARDWARE`、`PERF_VIRTUALIZATION_NAME="Parallels Desktop Pro"` 与 `PERF_VIRTUALIZATION_VERSION`；GitHub workflow 从仓库变量读取宿主硬件与 Parallels 版本。macOS 包长期通过 GitHub Releases 以未签名、未公证形式分发；项目不规划 App Store、Developer ID 或 Apple 公证。把「四个版本文件 + `CHANGELOG.md` 一节」的发版 PR 合入 `main` 会创建 annotated tag `vX.Y.Z` 并发布 GitHub Release。推送 `v*` tag 仍会发布。普通功能 PR 不得改 `CHANGELOG.md`、不得打 tag。不要在 workflow 跑完前于 GitHub UI 先建空 Release。
 
 性能验证顺序：功能开发之后，先跑物理 macOS 的功能与性能测量（快速迭代，在慢速 VM 门禁之前暴露产品回归与工作负载设计问题），再跑声明参考 VM 测量（T090/T108）作为可审计门禁。VM 报告是权威证据，但物理机运行必须在它之前。
 

@@ -2,6 +2,12 @@ name: Release bundles
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: Existing v* tag to build and publish
+        required: true
+        type: string
   push:
     tags:
       - "v*"
@@ -10,7 +16,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event_name == 'workflow_call' && inputs.tag || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -21,15 +27,15 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Check out the tagged source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -44,7 +50,7 @@ jobs:
         run: pnpm tauri build --target universal-apple-darwin
 
       - name: Upload macOS bundles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: excalidraw-desktop-macos-universal
           path: |
@@ -68,15 +74,15 @@ jobs:
             rpm
 
       - name: Check out the tagged source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -88,7 +94,7 @@ jobs:
         run: pnpm tauri build --bundles deb,rpm,appimage
 
       - name: Upload Linux bundles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: excalidraw-desktop-linux
           path: |
@@ -100,28 +106,35 @@ jobs:
 
   publish-github-release:
     name: Publish unsigned open-source release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_call' || startsWith(github.ref, 'refs/tags/v')
     needs: [macos-universal, linux-bundles]
     runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_call' && inputs.tag || github.ref_name }}
     steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@v7
+
       - name: Download built bundles
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: excalidraw-desktop-*
           path: release-assets
 
+      - name: Compose release notes from CHANGELOG.md
+        run: python3 scripts/changelog-release-notes.py "$RELEASE_TAG" > /tmp/release-notes.md
+
       - name: Create the GitHub release
         run: >-
-          gh release create "$GITHUB_REF_NAME"
+          gh release create "$RELEASE_TAG"
           --repo "$GITHUB_REPOSITORY"
-          --title "$GITHUB_REF_NAME"
-          --notes "macOS bundles are intentionally unsigned and unnotarized. Gatekeeper may block the first launch. After trying to open the app once, go to System Settings > Privacy & Security, choose Open Anyway for the app, and confirm. Do not disable Gatekeeper; download only from this repository's Releases page."
+          --title "$RELEASE_TAG"
+          --notes-file /tmp/release-notes.md
 
       - name: Upload all release assets
         shell: bash
         run: |
           while IFS= read -r -d '' asset; do
-            gh release upload "$GITHUB_REF_NAME" "$asset" --repo "$GITHUB_REPOSITORY"
+            gh release upload "$RELEASE_TAG" "$asset" --repo "$GITHUB_REPOSITORY"
           done < <(find release-assets -type f -print0)

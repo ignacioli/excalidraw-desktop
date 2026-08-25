@@ -109,6 +109,7 @@ APP_E2E=1 pnpm e2e                                   # Playwright E2E
 - [docs/contracts/ipc-contracts.md](docs/contracts/ipc-contracts.md) — IPC contract
 - [docs/adr/](docs/adr/) — architecture decision records
 - [docs/quickstart.md](docs/quickstart.md) / [docs/quickstart.zh.md](docs/quickstart.zh.md) — contributor validation guide (not an end-user manual)
+- [CHANGELOG.md](CHANGELOG.md) — user-visible release notes
 - [AGENTS.md](AGENTS.md) / [AGENTS.zh.md](AGENTS.zh.md) — constraints, commands, and contribution rules for contributors and maintainers
 
 ## License
