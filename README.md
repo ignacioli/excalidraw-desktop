@@ -105,10 +105,10 @@ APP_E2E=1 pnpm e2e                                   # Playwright E2E
 ## Documentation
 
 - [DESIGN.md](DESIGN.md) / [DESIGN.zh.md](DESIGN.zh.md) — visual and interaction contract
-- [docs/architecture.md](docs/architecture.md) — architecture overview
+- [docs/architecture.md](docs/architecture.md) / [docs/architecture.zh.md](docs/architecture.zh.md) — architecture overview
 - [docs/contracts/ipc-contracts.md](docs/contracts/ipc-contracts.md) — IPC contract
 - [docs/adr/](docs/adr/) — architecture decision records
-- [docs/quickstart.md](docs/quickstart.md) — contributor validation guide (not an end-user manual)
+- [docs/quickstart.md](docs/quickstart.md) / [docs/quickstart.zh.md](docs/quickstart.zh.md) — contributor validation guide (not an end-user manual)
 - [AGENTS.md](AGENTS.md) / [AGENTS.zh.md](AGENTS.zh.md) — constraints, commands, and contribution rules for contributors and maintainers
 
 ## License

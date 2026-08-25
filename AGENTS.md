@@ -34,7 +34,7 @@ What a change may touch is a project constraint, not a particular editor or assi
 
 Spec-driven deliverables are recorded at these canonical paths. The private specs repository names deliverables; this public repo owns the paths.
 
-User-facing and root contributor docs use English as the canonical filename (no suffix) and Simplified Chinese as a `*.zh.md` sibling next to it. `docs/architecture.md` and `docs/adr/` are not bilingual. `docs/quickstart.md` is a Chinese getting-started and verification guide and has no language sibling. Public user-facing pages (`README.md`, `DESIGN.md`, `CONTEXT.md`, `docs/architecture.md`, `docs/quickstart.md`) describe the product, architecture, and how to run it; they must not cite private-spec numbering such as feature `001`/`002`, spec user-story IDs, or `T0xx` task IDs. Those identifiers belong in `docs/evidence/` and, when needed, ADRs.
+User-facing and root contributor docs use English as the canonical filename (no suffix) and Simplified Chinese as a `*.zh.md` sibling next to it. `docs/adr/` is not bilingual. Public user-facing pages (`README.md`, `DESIGN.md`, `CONTEXT.md`, `docs/architecture.md`, `docs/quickstart.md`) describe the product, architecture, and how to run it; they must not cite private-spec numbering such as feature `001`/`002`, spec user-story IDs, or `T0xx` task IDs. Those identifiers belong in `docs/evidence/` and, when needed, ADRs.
 
 | Deliverable | Path |
 |-------------|------|
@@ -43,9 +43,9 @@ User-facing and root contributor docs use English as the canonical filename (no 
 | Ubiquitous language (English / Chinese) | `CONTEXT.md` / `CONTEXT.zh.md` |
 | Contributor and maintainer instructions (English / Chinese) | `AGENTS.md` / `AGENTS.zh.md` |
 | Architecture decision records (ADR) | `docs/adr/` |
-| Architecture overview | `docs/architecture.md` |
+| Architecture overview (English / Chinese) | `docs/architecture.md` / `docs/architecture.zh.md` |
 | IPC contract | `docs/contracts/ipc-contracts.md` |
-| Getting started and verification | `docs/quickstart.md` |
+| Getting started and verification (English / Chinese) | `docs/quickstart.md` / `docs/quickstart.zh.md` |
 | Native verification evidence | `docs/evidence/native-verification.md` |
 | Accessibility audit | `docs/evidence/a11y-audit.md` |
 | Validation summaries | `docs/evidence/validation-summary.md` |

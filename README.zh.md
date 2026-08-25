@@ -105,10 +105,10 @@ APP_E2E=1 pnpm e2e                                   # Playwright E2E
 ## 文档
 
 - [DESIGN.md](DESIGN.md) / [DESIGN.zh.md](DESIGN.zh.md) — 视觉与交互契约
-- [docs/architecture.md](docs/architecture.md) — 架构说明
+- [docs/architecture.md](docs/architecture.md) / [docs/architecture.zh.md](docs/architecture.zh.md) — 架构说明
 - [docs/contracts/ipc-contracts.md](docs/contracts/ipc-contracts.md) — IPC 契约
 - [docs/adr/](docs/adr/) — 架构决策记录
-- [docs/quickstart.md](docs/quickstart.md) — 贡献者验证指南（不是最终用户手册）
+- [docs/quickstart.md](docs/quickstart.md) / [docs/quickstart.zh.md](docs/quickstart.zh.md) — 贡献者验证指南（不是最终用户手册）
 - [AGENTS.md](AGENTS.md) / [AGENTS.zh.md](AGENTS.zh.md) — 贡献者与维护者的约束、命令与贡献规则
 
 ## 许可证

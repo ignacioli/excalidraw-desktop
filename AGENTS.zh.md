@@ -34,7 +34,7 @@
 
 规格驱动交付物记录在下列规范路径。私有 specs 仓库为交付物命名；本公开仓库拥有这些路径。
 
-面向用户以及根目录贡献者文档以英文为规范文件名（无后缀），简体中文为同目录下的 `*.zh.md` 姊妹文件。`docs/architecture.md` 与 `docs/adr/` 不是双语。`docs/quickstart.md` 是中文上手与验证指南，没有语言姊妹文件。公开面向用户的页面（`README.md`、`DESIGN.md`、`CONTEXT.md`、`docs/architecture.md`、`docs/quickstart.md`）只描述产品、架构与如何运行；不得引用私有规格编号，例如特性 `001`/`002`、规格用户故事编号或 `T0xx` 任务号。那些标识属于 `docs/evidence/`，必要时也可出现在 ADR。
+面向用户以及根目录贡献者文档以英文为规范文件名（无后缀），简体中文为同目录下的 `*.zh.md` 姊妹文件。`docs/adr/` 不是双语。公开面向用户的页面（`README.md`、`DESIGN.md`、`CONTEXT.md`、`docs/architecture.md`、`docs/quickstart.md`）只描述产品、架构与如何运行；不得引用私有规格编号，例如特性 `001`/`002`、规格用户故事编号或 `T0xx` 任务号。那些标识属于 `docs/evidence/`，必要时也可出现在 ADR。
 
 | 交付物 | 路径 |
 |-------------|------|
@@ -43,9 +43,9 @@
 | 统一语言（英文 / 中文） | `CONTEXT.md` / `CONTEXT.zh.md` |
 | 贡献者与维护者说明（英文 / 中文） | `AGENTS.md` / `AGENTS.zh.md` |
 | 架构决策记录（ADR） | `docs/adr/` |
-| 架构概述 | `docs/architecture.md` |
+| 架构概述（英文 / 中文） | `docs/architecture.md` / `docs/architecture.zh.md` |
 | IPC 契约 | `docs/contracts/ipc-contracts.md` |
-| 上手与验证指南 | `docs/quickstart.md` |
+| 上手与验证指南（英文 / 中文） | `docs/quickstart.md` / `docs/quickstart.zh.md` |
 | 原生验证证据 | `docs/evidence/native-verification.md` |
 | 无障碍审计 | `docs/evidence/a11y-audit.md` |
 | 验证摘要 | `docs/evidence/validation-summary.md` |

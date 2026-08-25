@@ -1,165 +1,167 @@
-# 上手与验证指南：Excalidraw Desktop
+[English](quickstart.md) | [简体中文](quickstart.zh.md)
 
-**Date**: 2026-08-04 | **Last updated**: 2026-08-23 | **架构**: [architecture.md](./architecture.md) | **设计契约**: [../DESIGN.md](../DESIGN.md) | **IPC 契约**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md) | **ADR-009**: [adr/ADR-009-desktop-ui-interactions.md](./adr/ADR-009-desktop-ui-interactions.md)
+# Getting started and verification: Excalidraw Desktop
 
-本文件说明如何在本机运行 Excalidraw Desktop，以及如何按**产品能力**核对行为。实现细节见源码与 [architecture.md](./architecture.md)，此处不重复。
+**Date**: 2026-08-04 | **Last updated**: 2026-08-24 | **Architecture**: [architecture.md](./architecture.md) | **Design contract**: [../DESIGN.md](../DESIGN.md) | **IPC contract**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md) | **ADR-009**: [adr/ADR-009-desktop-ui-interactions.md](./adr/ADR-009-desktop-ui-interactions.md)
 
-验证证据必须按来源分开报告，**不得互相替代**：
+This file explains how to run Excalidraw Desktop locally and how to check behavior against **product capabilities**. Implementation detail lives in the source and in [architecture.md](./architecture.md); it is not repeated here.
 
-| 证据类 | 能证明什么 | 不能证明什么 |
-|--------|------------|----------------|
-| 浏览器 Playwright | 应用对话框、连续树、overlay/pinned 布局、键盘与 a11y | 废纸篓 Put Back、Finder、系统标题栏颜色、真实指针设备 |
-| `APP_E2E=1` 进程级 | 文件系统变更、关闭队列、恢复、冲突、越界拒绝 | 操作员看到的原生标题栏着色、窗口遮挡/最小化 |
-| 物理 macOS（或记录配置的 macOS VM） | 窗口标题 `Excalidraw Whiteboard`、系统标题栏颜色、正常层级、Trash/Finder、Gatekeeper | 不能用浏览器结果宣称已完成 |
+Verification evidence must be reported by source and **must not substitute for another source**:
 
-原生窗口矩阵与参考环境性能测量**未在本文件预填 pass/fail**。未执行的检查保持未执行；预算失败仍须如实记录，但不阻断合并或开源发布（ADR-004）。
+| Evidence class | What it can prove | What it cannot prove |
+|----------------|-------------------|----------------------|
+| Browser Playwright | In-app dialogs, the continuous tree, overlay/pinned layout, keyboard, and a11y | Trash Put Back, Finder, system title-bar color, real pointing devices |
+| `APP_E2E=1` process-level | Filesystem changes, close queues, recovery, conflicts, out-of-bounds rejection | Operator-visible native title-bar tint, window occlusion / minimize |
+| Physical macOS (or a recorded macOS VM) | Window title `Excalidraw Whiteboard`, system title-bar color, normal stacking, Trash/Finder, Gatekeeper | Browser results cannot be claimed as this coverage |
 
-## 1. 环境前提
+The native-window matrix and reference-environment performance measurements are **not pre-filled pass/fail in this file**. Unrun checks stay unrun. Budget failures must still be recorded honestly, but they do not block merge or open-source release (ADR-004).
 
-| 平台 | 要求 |
-|------|------|
-| 通用 | Node.js 22.13+（pnpm 11.20.0 要求）、pnpm（锁定为唯一包管理器）、Rust stable 1.80+（rustup）、Python 3.10+ 与 uv（仅构建期字体合并，解释器由 `.python-version` 固定，依赖由 `pyproject.toml` + `uv.lock` 声明，`uv run` 自动安装） |
-| macOS | Xcode Command Line Tools；项目不需要 Developer ID、签名或公证；首次运行未签名产物时按 README 的 Gatekeeper 手动放行步骤验证 |
-| Ubuntu 24.04 Desktop（可选） | `libwebkit2gtk-4.1-dev`、`libgtk-3-dev` 等 Tauri 2 系统依赖；可选单环境 smoke test，Fedora/其他 Linux 不在当前验收要求内 |
+## 1. Prerequisites
 
-## 2. 构建与运行
+| Platform | Requirement |
+|----------|-------------|
+| Common | Node.js 22.13+ (required by pnpm 11.20.0), pnpm (locked as the only package manager), Rust stable 1.80+ (rustup), Python 3.10+ and uv (font merge at build time only; the interpreter is pinned by `.python-version`; dependencies are declared by `pyproject.toml` + `uv.lock`; `uv run` installs them) |
+| macOS | Xcode Command Line Tools. The project does not need Developer ID, signing, or notarization. On first launch of an unsigned build, follow the Gatekeeper manual-allow steps in the README |
+| Ubuntu 24.04 Desktop (optional) | `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, and other Tauri 2 system dependencies. Optional single-environment smoke test. Fedora / other Linux distros are not in the current acceptance requirement |
 
-以根目录 `package.json` 脚本名为准：
+## 2. Build and run
+
+Use the script names in the root `package.json`:
 
 ```bash
-pnpm install                 # 前端依赖
-pnpm fonts:build             # 构建期合并 Virgil-CJK 字体（uv 解析 pyproject.toml 依赖，产出 public/fonts/）
-pnpm tauri dev               # 开发运行
-pnpm tauri build             # 生产打包（dmg / AppImage / deb / rpm）
+pnpm install                 # frontend dependencies
+pnpm fonts:build             # build-time Virgil-CJK font merge (uv resolves pyproject.toml deps into public/fonts/)
+pnpm tauri dev               # development run
+pnpm tauri build             # production bundle (dmg / AppImage / deb / rpm)
 
-# 质量门禁（CI 同款）
-pnpm lint && pnpm typecheck && pnpm test          # 前端
+# quality gates (same as CI)
+pnpm lint && pnpm typecheck && pnpm test          # frontend
 cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml
-APP_E2E=1 pnpm e2e           # Playwright 桌面 E2E（测试专用构建，暴露故障注入 Harness）
+APP_E2E=1 pnpm e2e           # Playwright desktop E2E (test-only build; exposes the fault-injection harness)
 ```
 
-进程级用例还要求 `EXCALIDRAW_E2E_BINARY` 指向 `--features e2e-harness` 的测试二进制。生产构建不得注册 Harness，也不得注册 `thumb_lookup` / `thumb_store`。
+Process-level cases also require `EXCALIDRAW_E2E_BINARY` to point at a test binary built with `--features e2e-harness`. Production builds must not register the harness, and must not register `thumb_lookup` / `thumb_store`.
 
-相关套件（作为验证入口，本文件不宣称其已通过）：`e2e/tests/ui-sidebar-modes.spec.ts`、`e2e/tests/us3-workspace-files.spec.ts`、`e2e/tests/native-entry-mutations.spec.ts`、`e2e/tests/native-tab-close.spec.ts`、`e2e/tests/native-window-contract.spec.ts`、`e2e/tests/us7-thumbnails.spec.ts`（断言缩略图命令未被调用）。
+Related suites (verification entry points; this file does not claim they have passed): `e2e/tests/ui-sidebar-modes.spec.ts`, `e2e/tests/us3-workspace-files.spec.ts`, `e2e/tests/native-entry-mutations.spec.ts`, `e2e/tests/native-tab-close.spec.ts`, `e2e/tests/native-window-contract.spec.ts`, `e2e/tests/us7-thumbnails.spec.ts` (asserts thumbnail commands are not called).
 
-## 3. 验证场景（按产品能力）
+## 3. Verification scenarios (by product capability)
 
-### 离线创建、编辑与保存
+### Offline create, edit, and save
 
-1. 断开网络 → 启动应用 → 新建图纸，绘制图形 + 中文文本 + 拖入图片。
-   - 预期：全功能可用；中文呈手绘字体（无系统字体回退）；DevTools Network 零外部请求。
-2. `Cmd/Ctrl+S` 保存 → 关闭应用 → 重新打开该文件。
-   - 预期：内容一致；文件可被官方 excalidraw.com 正常导入。
-3. 检查主窗口内容区与原生框架。
-   - 预期：普通系统装饰窗口，标题为 `Excalidraw Whiteboard`；默认画布占满，无空右侧栏；侧边栏未固定时为 overlay（覆盖画布、不改变画布盒），固定后进入布局并缩小画布列；没有浏览器/PWA 顶栏或账号、Excalidraw+、协作与云服务入口。系统标题栏颜色由 OS 控制（物理 macOS 证据）；内容浅色/深色/跟随系统独立解析。
-4. 依次选择浅色、深色、跟随系统；在跟随系统时切换操作系统外观，再分别以三种偏好重启应用。
-   - 预期：壳层与画布始终同步；仅跟随系统响应运行中系统变化；重启首个可交互画面无相反主题闪现；浅色/深色截图基线 `maxDiffPixelRatio <= 0.001`。标题栏不随内容主题被应用强制着色。
-5. 注入未知 `themeId`、未知模式和损坏的版本化外观偏好后启动。
-   - 预期：安全回退为跟随系统，应用正常进入可交互状态，已打开或保存的 `.excalidraw` 内容没有变化。
-6. 在浅色与深色模式分别只使用键盘操作标签、工作区空状态、外观选择和文件对话框，并启用系统减少动态效果。
-   - 预期：键盘闭环与焦点顺序正确，焦点始终可见，状态不只依赖颜色，非必要动画被移除或减弱；WCAG 2.2 AA 适用对比度通过，自动化扫描严重/致命问题均为 0。
+1. Disconnect the network → start the app → create a drawing, draw shapes + Chinese text + drop in an image.
+   - Expected: full function available; Chinese renders in the hand-drawn font (no system-font fallback); DevTools Network shows zero external requests.
+2. Save with `Cmd/Ctrl+S` → quit → reopen that file.
+   - Expected: content matches; the file imports cleanly on official excalidraw.com.
+3. Inspect the main-window content area and the native frame.
+   - Expected: ordinary system-decorated window titled `Excalidraw Whiteboard`; the canvas fills by default with no empty right pane; when the sidebar is not pinned it is an overlay (covers the canvas, does not change the canvas box); after pin it enters the layout and shrinks the canvas column; no browser/PWA chrome or account, Excalidraw+, collaboration, or cloud-service entry points. System title-bar color is OS-controlled (physical macOS evidence). Content light / dark / follow-system resolve independently.
+4. Select Light, Dark, and Follow system in turn; while on Follow system, change the OS appearance; then restart with each of the three preferences.
+   - Expected: shell and canvas stay in sync; only Follow system reacts to a live OS change; the first interactive frame after restart does not flash the opposite theme; light/dark screenshot baselines use `maxDiffPixelRatio <= 0.001`. The title bar is not force-tinted by the content theme.
+5. Start after injecting an unknown `themeId`, an unknown mode, and a corrupted versioned appearance preference.
+   - Expected: safe fallback to Follow system; the app reaches an interactive state; open or saved `.excalidraw` content is unchanged.
+6. In Light and Dark, operate tabs, the workspace empty state, appearance selection, and file dialogs with the keyboard only, with Reduce Motion enabled.
+   - Expected: keyboard loop and focus order are correct; focus is always visible; state is not color-only; non-essential animation is removed or reduced; applicable WCAG 2.2 AA contrast passes; automated scans have 0 serious/critical issues.
 
-### 崩溃恢复与原子写
+### Crash recovery and atomic write
 
-1. **保存中强杀**：`APP_E2E=1` 构建下对 `temp_created`、`mid_write`、`temp_synced`、`json_validated`、`before_rename`、`after_rename`、`before_parent_sync`、`parent_synced` 八个原子写故障点逐点注入 `SIGKILL` → 重启。PR 全点确定性执行；计划性可靠性任务额外运行并记录 100 个随机 seed。
-   - 预期：每个故障点的目标文件均为可解析的完整旧版本或完整新版本；无静默覆盖；恢复对话框出现且草稿恢复后内容符合最后持久化窗口。生产构建中 Harness 接口不存在。
-2. **快照自损**：Harness 破坏最新 `recovery-00N.json` → 触发恢复。
-   - 预期：自动回退次新快照并提示实际恢复时间点。
-3. **正常退出**：编辑后正常退出 → 重启。
-   - 预期：无恢复弹窗；内容已落盘。
+1. **Kill during save**: on an `APP_E2E=1` build, inject `SIGKILL` at each of the eight atomic-write fault points `temp_created`, `mid_write`, `temp_synced`, `json_validated`, `before_rename`, `after_rename`, `before_parent_sync`, `parent_synced` → restart. PRs run every point deterministically; planned reliability work also runs and records 100 random seeds.
+   - Expected: at each fault point the destination file is a parseable complete old version or complete new version; no silent overwrite; the recovery dialog appears and recovered draft content matches the last persistence window. The harness interface does not exist in production builds.
+2. **Snapshot self-damage**: the harness corrupts the newest `recovery-00N.json` → trigger recovery.
+   - Expected: automatic fallback to the next-newest snapshot, with a prompt that names the actual recovery timestamp.
+3. **Clean quit**: edit, quit normally → restart.
+   - Expected: no recovery dialog; content is on disk.
 
-原子写、草稿窗口与恢复快照是现行可靠性契约，不因壳层或 IPC 变更而放宽。
+Atomic writes, the draft window, and recovery snapshots are the current reliability contract. Shell or IPC changes do not relax them.
 
-### 工作区树与条目管理
+### Workspace tree and entry management
 
-生产列表/变更命令是 `workspace_entry_list` / `workspace_entry_create` / `workspace_entry_rename` / `workspace_entry_delete_preflight` / `workspace_entry_delete` / `workspace_entry_reveal`，**不是** `dir_list` 或 `file_*`。
+The production list/mutation commands are `workspace_entry_list` / `workspace_entry_create` / `workspace_entry_rename` / `workspace_entry_delete_preflight` / `workspace_entry_delete` / `workspace_entry_reveal`, **not** `dir_list` or `file_*`.
 
-1. 挂载含多级子目录的工作区 → 用应用对话框新建图纸/目录、重命名、删除；多标签打开。
-   - 预期：命名对话框默认 `Untitled` / `Untitled Folder`；图纸扩展名 `.excalidraw` 固定不可编辑；确认前不创建；取消零变更；重名保持对话框并显示行内错误，不覆盖。标签跟随 rename；干净条目删除进系统废纸篓（物理 macOS：可 Put Back）。各标签撤销历史独立。
-2. 删除已打开且 dirty 的图纸；删除含任意子项（含隐藏/不支持文件）的目录。
-   - 预期：dirty 删除被阻断并聚焦对应标签；非空目录被阻断，提供取消与在文件管理器中打开（仅用户明确选择后才 reveal）。空性以 Rust 真实 `read_dir` 为准，不以树的过滤结果为准。
-3. 多个工作区同时展开 → 单一连续滚动面浏览。
-   - 预期：标题与子项连续纵向排列，无重叠、无横向滚动；无画布内容缩略图。万级树滚动/展开的帧率与内存是测量项，本文件不预填 pass/fail。
-4. 构造 `../` 越界路径调用 `workspace_entry_list`（或等价条目命令）。
-   - 预期：返回 `PATH_ACCESS_DENIED`。前端只按 `code` 分流，不解析 `message`。
+1. Mount a workspace with nested directories → create drawings/directories, rename, and delete through in-app dialogs; open multiple tabs.
+   - Expected: naming dialogs default to `Untitled` / `Untitled Folder`; the drawing extension `.excalidraw` is fixed and not editable; nothing is created before confirm; cancel is a zero mutation; a name collision keeps the dialog and shows an inline error, and does not overwrite. Tabs follow rename; a clean entry delete goes to the system Trash (physical macOS: Put Back works). Each tab has an independent undo history.
+2. Delete an open dirty drawing; delete a directory that contains any child (including hidden / unsupported files).
+   - Expected: dirty delete is blocked and the matching tab is focused; a non-empty directory is blocked, with Cancel and Open in file manager (reveal only after an explicit user choice). Emptiness is a real Rust `read_dir`, not the tree's filtered view.
+3. Expand several workspaces at once → browse on a single continuous scroll surface.
+   - Expected: titles and children stack vertically with no overlap and no horizontal scroll; no canvas-content thumbnails. Frame rate and memory for a 10k-scale tree are measurement items; this file does not pre-fill pass/fail.
+4. Call `workspace_entry_list` (or an equivalent entry command) with a `../` path that escapes the workspace.
+   - Expected: `PATH_ACCESS_DENIED`. The frontend branches only on `code` and does not parse `message`.
 
-浏览器可覆盖对话框、树与键盘。Trash/Finder/`PATH_ACCESS_DENIED` 的进程级证明需要 `APP_E2E=1`。物理 macOS：空图纸/空目录删除进入废纸篓且可 Put Back；非空目录阻断后，仅在用户选择时用 Finder 打开。真实触控板/滚轮滚动树时，菜单须在视口内翻折。
+The browser can cover dialogs, the tree, and the keyboard. Process-level proof of Trash/Finder/`PATH_ACCESS_DENIED` needs `APP_E2E=1`. Physical macOS: deleting an empty drawing / empty directory goes to Trash and can be Put Back; after a non-empty directory is blocked, Finder opens only if the user chooses that. When scrolling the tree with a real trackpad/wheel, menus must flip inside the viewport.
 
-### 外部变更、冲突、失联关闭与标签切换
+### External changes, conflicts, orphan close, and tab switching
 
-1. 应用内文档无修改 → 外部编辑器改写该文件。
-   - 预期：约 3 秒内自动重载 + 轻提示。
-2. 应用内有未保存修改 → 外部改写。
-   - 预期：冲突弹窗（采用外部版本 / 保留本地草稿 / 另存为新文件），决策前目标文件零写入。
-3. 外部删除打开中的文件 → 关闭该失联标签。
-   - 预期：标签页失联标示；关闭提供另存 / 丢弃 / 取消；`doc_close` 使用 `discardOrphan` 时不向已缺失路径做 checkpoint。取消后标签仍在。
-4. 脚本 1s 内写文件 20 次（模拟云盘风暴）。
-   - 预期：事件合并，无弹窗轰炸。
-5. 连续关闭多个标签或滚轮快速切换。
-   - 预期：关闭串行；失败即停；激活只落实最新意图。浏览器可测队列行为；Cmd+W / 中键的原生命中需物理 macOS，不得用 harness 合成事件宣称已验证真实快捷键。
+1. The in-app document has no edits → an external editor rewrites the file.
+   - Expected: auto-reload within about 3 seconds + a light toast.
+2. The in-app document has unsaved edits → an external rewrite.
+   - Expected: conflict dialog (take the external version / keep the local draft / save as a new file). Zero writes to the target file until the user decides.
+3. An external delete of an open file → close that orphan tab.
+   - Expected: the tab is marked orphaned; close offers Save As / Discard / Cancel; `doc_close` with `discardOrphan` does not checkpoint a path that is already gone. Cancel leaves the tab open.
+4. A script writes the file 20 times in 1s (cloud-sync storm).
+   - Expected: events coalesce; no dialog flood.
+5. Close several tabs in a row, or switch rapidly with the scroll wheel.
+   - Expected: closes are serialized; a failure stops the batch; activation applies only the latest intent. The browser can measure queue behavior. Real Cmd+W / middle-click hits need physical macOS; harness-synthesized events must not be claimed as proof of the real shortcut.
 
-### 导出
+### Export
 
-1. 中英混排画布导出 PNG（2x/透明底）与 SVG → 在固定无字体干净环境打开 SVG。
-   - 预期：SVG 内嵌 WOFF2 且无字体回退；Playwright 固定截图基线 `maxDiffPixelRatio <= 0.001`；PNG 尺寸=画布×倍率。
-2. 导出到只读目录。
-   - 预期：明确错误提示，无残留半成品文件。
+1. Export a mixed Chinese/English canvas as PNG (2x / transparent) and SVG → open the SVG in a clean environment with no fonts installed.
+   - Expected: the SVG embeds WOFF2 with no font fallback; Playwright screenshot baselines use `maxDiffPixelRatio <= 0.001`; PNG size = canvas × scale.
+2. Export to a read-only directory.
+   - Expected: a clear error; no leftover partial files.
 
-### 系统集成与原生窗口
+### System integration and native window
 
-1. 在记录配置的 macOS VM 或物理机安装 GitHub Release 同类产物 → Finder 双击 `.excalidraw`；Ubuntu 24.04 可选执行对应 smoke test。
-   - 预期：应用启动并打开该文件；应用已运行时复用实例新开标签。
-2. macOS 首次启动未签名、未公证产物。
-   - 预期：Gatekeeper 可能拦截；README/Release 警告风险并提供用户主动手动放行步骤，放行后应用可运行。
-3. 检查原生窗口契约（见 ADR-009）。
-   - 预期：标题为 `Excalidraw Whiteboard`；普通装饰 `Visible` 窗口；标题栏颜色由系统控制；可被其他应用遮挡、最小化、恢复；生产不是 always-on-top。`e2e_harness` 在 `EXCALIDRAW_PERF_CONTROL_DIR` 下的置顶不得出现在生产构建。首次启动侧边栏默认隐藏；**Workspace sidebar** 打开 overlay，不改变画布盒；固定后进入布局；指针离开 500ms 后关闭 overlay，除非 focus/menu/dialog/drag 仍将其保持；Escape 关闭 overlay（除非对话框或菜单已消费 Escape）。
-4. Ubuntu 24.04 Desktop 可选安装 AppImage/deb；rpm 为 best-effort 产物，不要求其他 Linux 发行版验收。
-   - 预期：应用菜单入口 + 文件图标关联生效。
+1. Install a GitHub Release-class artifact on a recorded macOS VM or a physical machine → double-click a `.excalidraw` file in Finder. Ubuntu 24.04 may optionally run the matching smoke test.
+   - Expected: the app starts and opens that file; if the app is already running, it reuses the instance and opens a new tab.
+2. First launch of an unsigned, unnotarized macOS artifact.
+   - Expected: Gatekeeper may block; the README/Release warns about the risk and gives user-initiated manual-allow steps; after that override the app runs.
+3. Check the native-window contract (see ADR-009).
+   - Expected: title is `Excalidraw Whiteboard`; ordinary decorated `Visible` window; title-bar color is system-controlled; other apps can occlude it; it can minimize and restore; production is not always-on-top. `e2e_harness` always-on-top under `EXCALIDRAW_PERF_CONTROL_DIR` must not appear in production. On first launch the sidebar is hidden; **Workspace sidebar** opens as overlay and does not change the canvas box; pin enters the layout; overlay closes 500ms after the pointer leaves unless focus/menu/dialog/drag still holds it; Escape closes overlay unless a dialog or menu already consumed Escape.
+4. Optionally install AppImage/deb on Ubuntu 24.04 Desktop. rpm is a best-effort artifact; other Linux distros are not required for acceptance.
+   - Expected: the application-menu entry and file-icon association work.
 
-第 3 步的系统着色标题栏与窗口管理是物理 macOS 证据。静态读取 `tauri.conf.json` 只能核对标题字符串，不能代替目视标题栏。
+Step 3's system-tinted title bar and window management are physical macOS evidence. Statically reading `tauri.conf.json` can only check the title string; it does not replace looking at the title bar.
 
-### 多工作区与资产去重
+### Multiple workspaces and asset deduplication
 
-1. 挂载两个工作区 → 在同一连续树中并列展示、独立移除（不删磁盘文件）。
-2. 浏览文件列表。
-   - 预期：**不**生成画布缩略图；生产与浏览器路径不得调用 `thumb_lookup` / `thumb_store`。`.excalidraw_assets` 内真实图片仍可加载；asset protocol 不是缩略图缓存。
-3. 同一 10MB 图片粘贴 10 次 → 保存。
-   - 预期：文档体积增幅 ≤5%（资产去重）。
+1. Mount two workspaces → they appear side by side in the same continuous tree and can be removed independently (disk files are not deleted).
+2. Browse the file list.
+   - Expected: canvas thumbnails are **not** generated; production and browser paths must not call `thumb_lookup` / `thumb_store`. Real images inside `.excalidraw_assets` still load; the asset protocol is not a thumbnail cache.
+3. Paste the same 10MB image 10 times → save.
+   - Expected: document size growth ≤5% (asset deduplication).
 
-## 4. 性能夹具（回归基线）
+## 4. Performance fixtures (regression baselines)
 
-| 指标 | 夹具 | 阈值 |
-|------|------|------|
-| 冷启动 | 清空应用测试数据，执行 10 次冷进程启动；单调时钟记录进程启动 → 画布可编辑并计算 P95 | ≤2s |
-| 空载内存 | 启动稳定 30s 后采样 60s，聚合 Tauri 主进程及关联 WebView/GPU 进程树 RSS P95 | ≤500MB（ADR-007） |
-| 空闲 CPU | soak 后崩溃安全刷新完成，再采样 60s 进程树 CPU P95，按单逻辑核归一化 | ≤35% 单逻辑核（ADR-007） |
-| 大场景帧率/内存 | 10k 图元固定 fixture + 恒定缩放平移脚本，采集帧时间与场景稳定后的进程树 RSS | ≥30fps、目标 60fps、无 >100ms 冻结、RSS ≤950MB（ADR-007） |
-| 写盘削峰 | 60s 连续绘制脚本 + 应用管理路径写入计数 | 写次数 ≤事件数 1%，且无持久化掉帧尖峰 |
-| 长时稳定性 | 热身后脚本编辑 15min，对比进程树 RSS；等待 5s 崩溃安全刷新后再静置 60s 观察 CPU 与写入 | RSS 增长同时 ≤50MB 且 ≤15%；空闲 CPU ≤35%；零持续写入（ADR-006/007） |
+| Metric | Fixture | Threshold |
+|--------|---------|-----------|
+| Cold start | Clear app test data, run 10 cold process launches; monotonic clock from process start → canvas is editable, then compute P95 | ≤2s |
+| Idle memory | After 30s of startup settle, sample 60s; aggregate RSS P95 of the Tauri main process and related WebView/GPU process tree | ≤500MB (ADR-007) |
+| Idle CPU | After soak, wait for crash-safe flush, then sample 60s process-tree CPU P95, normalized to one logical core | ≤35% of one logical core (ADR-007) |
+| Large-scene frame rate / memory | 10k-element fixed fixture + constant pan/zoom script; collect frame times and process-tree RSS after the scene is stable | ≥30fps, target 60fps, no >100ms freeze, RSS ≤950MB (ADR-007) |
+| Write coalescing | 60s continuous-draw script + write counts on app-managed paths | writes ≤1% of events, and no persistence frame-time spikes |
+| Long-run stability | After warmup, scripted editing for 15min, compare process-tree RSS; wait 5s for crash-safe flush, then idle 60s for CPU and writes | RSS growth ≤50MB **and** ≤15%; idle CPU ≤35%; zero sustained writes (ADR-006/007) |
 
-参考环境冷启动 / 画布 I/O / soak 测量在声明的 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB 参考 VM 上完整执行；工作流仍使用 `self-hosted`、`macOS`、`ARM64`、`excalidraw-perf` 标签。报告记录宿主硬件、虚拟化软件/版本、客体 OS、WebView、vCPU 与内存并输出真实 `pass`/`fail`；预算失败不阻断合并或开源发布。参考配置变化时必须建立新的独立测量序列并更新 ADR，禁止把不可比结果混合或静默放宽预算。未跑完的测量不得写成已通过。
+Reference-environment cold-start / canvas I/O / soak measurements run in full on the declared Parallels Desktop Pro 26.4.1, macOS 26.5.2, 4 vCPU / 8GB reference VM. The workflow still uses the `self-hosted`, `macOS`, `ARM64`, and `excalidraw-perf` labels. Reports record host hardware, virtualization product/version, guest OS, WebView, vCPU, and memory, and emit a real `pass`/`fail`. Budget failure does not block merge or open-source release. A change to the reference configuration requires a new independent measurement series and an ADR update. Do not mix incomparable results or silently relax budgets. Incomplete measurements must not be written as passed.
 
-夹具输出 JSON 报告，包含 schema 版本、commit、硬件型号、内存、准确 OS/WebView 版本、样本、统计量、预算与 verdict，不得包含机器唯一标识或秘密。聚合口径必须覆盖 Tauri 主进程和关联 WebView/GPU 进程，并在报告中写明任何无法归属的排除项；性能回归 = 缺陷（宪法原则 IV）。
+Fixtures emit JSON reports with schema version, commit, hardware model, memory, exact OS/WebView versions, samples, statistics, budget, and verdict. They must not include machine-unique identifiers or secrets. Aggregation must cover the Tauri main process and related WebView/GPU processes, and the report must name any exclusion that could not be attributed. A performance regression is a defect (constitution principle IV).
 
-## 5. 中文 IME 验证（Linux 目标 OS 矩阵项）
+## 5. Chinese IME verification (Linux target-OS matrix item)
 
-拼音输入组合中：候选框紧随画布文本光标（含缩放/平移后）；组合事件不丢字、不重复。macOS 原生验收为必选；Ubuntu 24.04 可选执行一次记录配置的 smoke test，Fedora/其他 Linux 与完整显示协议/输入法矩阵不属于当前版本要求。
+While composing Pinyin, the candidate window tracks the canvas text caret (including after zoom/pan); composition events neither drop nor duplicate characters. Native macOS acceptance is required. Ubuntu 24.04 may optionally run one recorded-configuration smoke test. Fedora / other Linux and a full display-protocol / IME matrix are not requirements of this version.
 
-## 6. 验证证据汇总与统一门禁
+## 6. Evidence rollup and shared gates
 
-全量回归结果、三类验证证据（浏览器 UI、`APP_E2E=1` 进程级可靠性、记录配置的原生 OS 环境矩阵）统一记录于 `docs/evidence/validation-summary.md`，本文件不再重复明细。
+Full-regression results and the three evidence classes (browser UI, `APP_E2E=1` process-level reliability, recorded native OS environment matrix) are recorded in `docs/evidence/validation-summary.md`. This file does not repeat that detail.
 
-**可靠性阻断门禁**：以下三套故障测试合并为合并阻断门禁，任一失败即阻止合并，且不允许以本文件外的单套件结果替代：
+**Reliability merge gate**: the following three fault suites are a combined merge blocker. Any failure blocks merge, and a result from a suite outside this file must not substitute:
 
-1. `e2e/tests/us2-kill-during-save.spec.ts`：原子写八个故障点逐点 SIGKILL，目标文件必须为完整旧/新版本且恢复 UI 正确；
-2. `e2e/tests/us2-snapshot-corruption.spec.ts`：快照自损回退次新并提示实际恢复时间点；
-3. `e2e/tests/us4-external-changes.spec.ts`：外部变更自动重载/冲突/失联另存，决策前零写入。
+1. `e2e/tests/us2-kill-during-save.spec.ts`: SIGKILL at each of the eight atomic-write fault points; the destination file must be a complete old or complete new version, and recovery UI must be correct;
+2. `e2e/tests/us2-snapshot-corruption.spec.ts`: a damaged snapshot falls back to the next-newest and names the actual recovery timestamp;
+3. `e2e/tests/us4-external-changes.spec.ts`: external-change auto-reload / conflict / orphan Save As, with zero writes until the user decides.
 
-执行方式：`APP_E2E=1 pnpm e2e` 且 `EXCALIDRAW_E2E_BINARY` 指向故障注入测试构建（生产构建无 Harness 接口）。
+How to run: `APP_E2E=1 pnpm e2e` with `EXCALIDRAW_E2E_BINARY` pointing at the fault-injection test build (production builds have no harness interface).
 
-**性能参考测量**：冷启动 / 画布 I/O / 15 分钟 soak 在 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB VM 中完整执行；运行时设置 `PERF_REFERENCE_RUN=1`、`PERF_EXECUTION_ENVIRONMENT=virtual`、`PERF_HOST_HARDWARE`、`PERF_VIRTUALIZATION_NAME="Parallels Desktop Pro"` 与 `PERF_VIRTUALIZATION_VERSION`。报告必须产生真实 `pass`/`fail`，但预算失败不阻断合并或开源发布；不同环境结果不直接对比。壳层或 IPC 变更后的 before/after 必须另记，不得把架构意图写成已经改善。
+**Performance reference measurement**: cold start / canvas I/O / 15-minute soak run in full on Parallels Desktop Pro 26.4.1, macOS 26.5.2, 4 vCPU / 8GB VM, with `PERF_REFERENCE_RUN=1`, `PERF_EXECUTION_ENVIRONMENT=virtual`, `PERF_HOST_HARDWARE`, `PERF_VIRTUALIZATION_NAME="Parallels Desktop Pro"`, and `PERF_VIRTUALIZATION_VERSION`. Reports must emit a real `pass`/`fail`, but budget failure does not block merge or open-source release. Results from different environments are not compared directly. Before/after a shell or IPC change must be recorded separately; architectural intent must not be written as an already-measured improvement.
 
-在参考 VM 内手动执行时，先把最后一项替换为已安装的准确 Parallels Desktop Pro 版本：
+When running manually inside the reference VM, replace the last item with the exact installed Parallels Desktop Pro version:
 
 ```bash
 VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness
@@ -179,6 +181,6 @@ pnpm exec playwright test \
   e2e/perf/edit-soak.spec.ts
 ```
 
-若通过 GitHub Actions 执行，需先在该 macOS VM 安装 self-hosted runner 并赋予 `self-hosted`、`macOS`、`ARM64`、`excalidraw-perf` 标签，再配置仓库变量 `PERF_HOST_HARDWARE` 与 `PERF_VIRTUALIZATION_VERSION`，随后手动触发 `performance.yml`。
+To run via GitHub Actions, first install a self-hosted runner on that macOS VM with the `self-hosted`, `macOS`, `ARM64`, and `excalidraw-perf` labels, set repository variables `PERF_HOST_HARDWARE` and `PERF_VIRTUALIZATION_VERSION`, then manually dispatch `performance.yml`.
 
-**开源分发**：macOS 产物长期以未签名、未公证形式发布到 GitHub Releases；项目不规划 App Store、Developer ID 或 Apple 公证。README 与发布说明必须披露 Gatekeeper 风险与用户主动手动放行步骤。
+**Open-source distribution**: macOS artifacts are published long-term to GitHub Releases unsigned and unnotarized. The project does not plan an App Store listing, Developer ID, or Apple notarization. The README and release notes must disclose the Gatekeeper risk and the user-initiated manual-allow steps.
