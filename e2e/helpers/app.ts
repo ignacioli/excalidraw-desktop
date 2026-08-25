@@ -55,7 +55,7 @@ export function desktopBinaryCandidates(): string[] {
           target,
           "bundle",
           "macos",
-          "excalidraw-desktop.app",
+          "Excalidraw.app",
           "Contents",
           "MacOS",
           executableName(),
