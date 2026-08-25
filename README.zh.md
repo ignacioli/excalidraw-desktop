@@ -33,13 +33,13 @@
 | 正在画 | 每隔几十秒就地写整份文件 | 内存 → 合并草稿；`.excalidraw` 此时不动 |
 | 崩溃 / 掉电 | 可能丢掉整个间隔；文件可能截断 | 草稿 + 快照；目标文件要么完整旧版要么完整新版 |
 | 外部修改（git、iCloud、别的编辑器） | 常常无感知 | 自动重载或冲突对话框，从不静默覆盖 |
-| 文件夹 | 通常一棵目录树 | 多个工作区，缩略图按需生成 |
+| 文件夹 | 通常一棵目录树 | 多个工作区，同一棵连续虚拟化树 |
 
 ## 功能
 
 - 完全离线地创建、编辑并保存本地图纸，中文为手绘字体
 - 崩溃、强杀或掉电后恢复未保存的编辑
-- 工作区侧边栏浏览图纸；可挂载多个工作区
+- 在 canvas-first 工作区侧边栏浏览图纸（首次启动隐藏；覆盖层或固定）；可挂载多个工作区
 - 感知外部文件变更并消解冲突
 - 导出 PNG 或 SVG（SVG 内嵌捆绑字体）
 - 从 Finder 打开 `.excalidraw`；已运行时复用同一实例
@@ -105,10 +105,10 @@ APP_E2E=1 pnpm e2e                                   # Playwright E2E
 ## 文档
 
 - [DESIGN.md](DESIGN.md) / [DESIGN.zh.md](DESIGN.zh.md) — 视觉与交互契约
-- [docs/architecture.md](docs/architecture.md) — 架构说明
+- [docs/architecture.md](docs/architecture.md) / [docs/architecture.zh.md](docs/architecture.zh.md) — 架构说明
 - [docs/contracts/ipc-contracts.md](docs/contracts/ipc-contracts.md) — IPC 契约
 - [docs/adr/](docs/adr/) — 架构决策记录
-- [docs/quickstart.md](docs/quickstart.md) — 贡献者验证指南（不是最终用户手册）
+- [docs/quickstart.md](docs/quickstart.md) / [docs/quickstart.zh.md](docs/quickstart.zh.md) — 贡献者验证指南（不是最终用户手册）
 - [AGENTS.md](AGENTS.md) / [AGENTS.zh.md](AGENTS.zh.md) — 贡献者与维护者的约束、命令与贡献规则
 
 ## 许可证

@@ -1,4 +1,4 @@
-export const IPC_CONTRACT_VERSION = 1 as const;
+export const IPC_CONTRACT_VERSION = 2 as const;
 
 export type ErrorCode =
   | "PATH_ACCESS_DENIED"
@@ -54,14 +54,6 @@ export interface Workspace {
   name: string;
   rootPath: string;
   createdAt: number;
-}
-
-export interface DirEntry {
-  name: string;
-  relativePath: string;
-  kind: "dir" | "file";
-  mtime: number;
-  fileSize: number;
 }
 
 export interface FileEntry {
@@ -198,22 +190,6 @@ export interface IpcCommands {
     request: { workspaceId: string; relativePath: string };
     response: Record<string, never>;
   };
-  dir_list: {
-    request: { workspaceId: string; relativePath: string };
-    response: DirEntry[];
-  };
-  file_create: {
-    request: { workspaceId: string; relativePath: string };
-    response: FileEntry;
-  };
-  file_rename: {
-    request: { path: string; newName: string };
-    response: FileEntry;
-  };
-  file_delete: {
-    request: { path: string };
-    response: Record<string, never>;
-  };
   doc_open: {
     request: { path: string };
     response: { scene: SceneData; baseHash: string; hasNewerDraft: boolean };
@@ -227,7 +203,7 @@ export interface IpcCommands {
     response: { newBaseHash: string; mtime: number };
   };
   doc_close: {
-    request: { path: string; discardDraft: boolean };
+    request: { path: string; mode: "checkpointed" | "discardOrphan" };
     response: Record<string, never>;
   };
   doc_resolve_conflict: {
@@ -248,14 +224,6 @@ export interface IpcCommands {
       bytes: number[];
     };
     response: { writtenPath: string };
-  };
-  thumb_lookup: {
-    request: { path: string; theme: ColorScheme };
-    response: { hit: boolean; webpPath?: string };
-  };
-  thumb_store: {
-    request: { path: string; theme: string; key: string; webpBytes: number[] };
-    response: { webpPath: string };
   };
 }
 

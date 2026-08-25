@@ -1,10 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { installBrowserTauriHarness } from "./browserTauriHarness";
+import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
 
 const APPEARANCE_KEY = "excalidraw-desktop.appearance";
 
 test.beforeEach(async ({ page }) => {
   await installBrowserTauriHarness(page);
+  await persistPinnedWorkspaceSidebar(page);
   await page.goto("/");
   await page.evaluate(
     (key) => globalThis.localStorage.removeItem(key),

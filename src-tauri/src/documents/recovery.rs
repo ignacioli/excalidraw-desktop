@@ -17,7 +17,10 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::commands::error::AppError;
+use crate::{
+    commands::error::AppError,
+    database::repository::{is_path_or_descendant, migrate_path},
+};
 
 use super::atomic_write::{atomic_write, AtomicWriteError};
 
@@ -219,6 +222,118 @@ impl RecoveryStore {
         for (path, snapshot) in self.list_snapshots()? {
             if snapshot.document_id == document_id {
                 if let Some(parent) = path.parent() {
+                    directories.insert(parent.to_path_buf());
+                }
+            }
+        }
+        for directory in directories {
+            match fs::remove_dir_all(&directory) {
+                Ok(()) => {}
+                Err(source) if source.kind() == io::ErrorKind::NotFound => {}
+                Err(source) => {
+                    return Err(RecoveryError::Io {
+                        operation: "remove snapshot directory",
+                        path: directory,
+                        source,
+                    })
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Move recovery snapshots after a filesystem rename has committed.
+    ///
+    /// Snapshot directories are derived from the cold path, so a Drawing or
+    /// Directory rename must rewrite `original_path` / `document_id` and publish
+    /// the ring under the new path hash.  The operation is idempotent: a retry
+    /// after a crash rewrites the same slots and then removes any leftover
+    /// source directory.
+    pub fn migrate_entry_snapshots(
+        &self,
+        old_path: &Path,
+        new_path: &Path,
+    ) -> Result<(), RecoveryError> {
+        let old_prefix = path_string(old_path);
+        let new_prefix = path_string(new_path);
+        let snapshots = self.list_snapshots()?;
+        let mut old_directories = BTreeSet::new();
+        let mut new_directories = BTreeSet::new();
+
+        for (slot_path, snapshot) in snapshots {
+            let Some(original) = snapshot.original_path.as_deref() else {
+                continue;
+            };
+            if !is_path_or_descendant(original, &old_prefix) {
+                continue;
+            }
+            let migrated_original = migrate_path(original, &old_prefix, &new_prefix);
+            let updated = RecoverySnapshot {
+                document_id: document_id_for_path(Path::new(&migrated_original)),
+                original_path: Some(migrated_original.clone()),
+                ..snapshot
+            };
+            let new_directory = self.snapshot_directory_for_path(Path::new(&migrated_original));
+            fs::create_dir_all(&new_directory).map_err(|source| RecoveryError::Io {
+                operation: "create directory",
+                path: new_directory.clone(),
+                source,
+            })?;
+            let file_name = slot_path.file_name().ok_or_else(|| RecoveryError::Io {
+                operation: "inspect recovery snapshot",
+                path: slot_path.clone(),
+                source: io::Error::other("snapshot path has no file name"),
+            })?;
+            let new_slot = new_directory.join(file_name);
+            let contents =
+                serde_json::to_vec(&updated).map_err(|source| RecoveryError::Serialize {
+                    path: new_slot.clone(),
+                    source,
+                })?;
+            atomic_write(&new_slot, &contents)?;
+            new_directories.insert(new_directory);
+            if let Some(parent) = slot_path.parent() {
+                old_directories.insert(parent.to_path_buf());
+            }
+        }
+
+        for directory in old_directories {
+            if new_directories.contains(&directory) {
+                continue;
+            }
+            match fs::remove_dir_all(&directory) {
+                Ok(()) => {}
+                Err(source) if source.kind() == io::ErrorKind::NotFound => {}
+                Err(source) => {
+                    return Err(RecoveryError::Io {
+                        operation: "remove snapshot directory",
+                        path: directory,
+                        source,
+                    })
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Remove snapshots that belong to a deleted Drawing or Directory.
+    ///
+    /// Matches both the path-derived document id and any snapshot whose
+    /// `original_path` is the deleted path or a descendant.  Missing directories
+    /// are success so delete cleanup can retry after a crash.
+    pub fn remove_snapshots_for_path(&self, path: &Path) -> Result<(), RecoveryError> {
+        let prefix = path_string(path);
+        let document_id = document_id_for_path(path);
+        let mut directories = BTreeSet::new();
+        directories.insert(self.snapshot_directory_for_path(path));
+        for (slot_path, snapshot) in self.list_snapshots()? {
+            let matches_id = snapshot.document_id == document_id;
+            let matches_path = snapshot
+                .original_path
+                .as_deref()
+                .is_some_and(|original| is_path_or_descendant(original, &prefix));
+            if matches_id || matches_path {
+                if let Some(parent) = slot_path.parent() {
                     directories.insert(parent.to_path_buf());
                 }
             }

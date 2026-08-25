@@ -113,6 +113,10 @@ export class ExcalidrawAdapter {
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();
   }
+
+  refresh(): void {
+    this.api.refresh();
+  }
 }
 
 function normalizeZoom(value: number): NormalizedZoomValue {

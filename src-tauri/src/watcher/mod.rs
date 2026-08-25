@@ -7,7 +7,7 @@
 //! (plan data flow 2, FR-018/019/020, R7).
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -191,6 +191,20 @@ pub struct WatcherService {
     conflicts: ConflictRegistry,
     known: Arc<Mutex<KnownFileTable>>,
     tasks: Arc<Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
+    entry_operations: Arc<Mutex<HashMap<String, EntryOperation>>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum WatcherEchoKind {
+    Created,
+    Removed,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct EntryOperation {
+    pub(crate) workspace_id: String,
+    pub(crate) expected: HashSet<(String, WatcherEchoKind)>,
+    recorded_at: Instant,
 }
 
 #[derive(Clone)]
@@ -211,6 +225,7 @@ impl WatcherService {
             conflicts,
             known: Arc::new(Mutex::new(KnownFileTable::default())),
             tasks: Arc::new(Mutex::new(HashMap::new())),
+            entry_operations: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -256,6 +271,30 @@ impl WatcherService {
             .note(&path, FileTriplet { mtime, size, hash });
     }
 
+    /// Records the expected watcher echoes for an application-owned mutation
+    /// before the filesystem commit.  Each expected path/kind is consumed once
+    /// so a later Put Back or create on the same path is not treated as echo.
+    pub(crate) async fn note_entry_operation(
+        &self,
+        operation_id: String,
+        workspace_id: String,
+        echoes: Vec<(String, WatcherEchoKind)>,
+    ) {
+        let expected = echoes.into_iter().collect();
+        self.entry_operations.lock().await.insert(
+            operation_id,
+            EntryOperation {
+                workspace_id,
+                expected,
+                recorded_at: Instant::now(),
+            },
+        );
+    }
+
+    pub(crate) async fn forget_entry_operation(&self, operation_id: &str) {
+        self.entry_operations.lock().await.remove(operation_id);
+    }
+
     async fn run_workspace_watch(
         &self,
         workspace: WorkspaceRecord,
@@ -288,7 +327,7 @@ impl WatcherService {
                 _ = tick.tick() => {
                     let ready = engine.drain_ready(Instant::now());
                     if !ready.is_empty() {
-                        self.process_batch(&app, ready).await;
+                        self.process_batch(&app, &workspace, ready).await;
                     }
                 }
                 event = receiver.recv() => {
@@ -317,13 +356,33 @@ impl WatcherService {
         }
     }
 
-    async fn process_batch(&self, app: &AppHandle, events: Vec<(PathBuf, RawChangeKind)>) {
+    async fn process_batch(
+        &self,
+        app: &AppHandle,
+        workspace: &WorkspaceRecord,
+        events: Vec<(PathBuf, RawChangeKind)>,
+    ) {
         for (path, kind) in resolve_batch(events) {
-            self.process_change(app, &path, kind).await;
+            self.process_change(app, workspace, &path, kind).await;
         }
     }
 
-    async fn process_change(&self, app: &AppHandle, path: &Path, kind: ResolvedChangeKind) {
+    async fn process_change(
+        &self,
+        app: &AppHandle,
+        workspace: &WorkspaceRecord,
+        path: &Path,
+        kind: ResolvedChangeKind,
+    ) {
+        if self.is_entry_operation_echo(workspace, path, &kind).await {
+            self.record_echo_in_known_table(path, &kind).await;
+            return;
+        }
+
+        if is_complex_directory_event(path, &kind) || is_complex_removed_path(path, &kind) {
+            self.emit_parent_invalidation(app, workspace, path);
+            return;
+        }
         match kind {
             ResolvedChangeKind::Renamed { new_path } => {
                 let (mtime, content_hash) = match read_triplet(&new_path) {
@@ -452,6 +511,158 @@ impl WatcherService {
     fn current_triplet(&self, path: &Path) -> Result<FileTriplet, AppError> {
         read_triplet(path)
     }
+
+    async fn is_entry_operation_echo(
+        &self,
+        workspace: &WorkspaceRecord,
+        path: &Path,
+        kind: &ResolvedChangeKind,
+    ) -> bool {
+        let relative_path = match relative_workspace_path(workspace, path) {
+            Some(relative_path) => relative_path,
+            None => return false,
+        };
+        let now = Instant::now();
+        let mut operations = self.entry_operations.lock().await;
+        operations.retain(|_, operation| {
+            now.duration_since(operation.recorded_at) < Duration::from_secs(10)
+        });
+        consume_matching_echo(&mut operations, workspace, &relative_path, kind)
+    }
+
+    async fn record_echo_in_known_table(&self, path: &Path, kind: &ResolvedChangeKind) {
+        let mut known = self.known.lock().await;
+        apply_echo_to_known(&mut known, path, kind);
+    }
+
+    fn emit_parent_invalidation(&self, app: &AppHandle, workspace: &WorkspaceRecord, path: &Path) {
+        let root = Path::new(&workspace.root_path);
+        let relative_path = path
+            .strip_prefix(root)
+            .ok()
+            .and_then(|relative| relative.parent().or(Some(relative)))
+            .map(|relative| {
+                relative
+                    .to_string_lossy()
+                    .replace(std::path::MAIN_SEPARATOR, "/")
+            })
+            .unwrap_or_default();
+        let _ = app.emit(
+            "workspace-entries-changed",
+            serde_json::json!({
+                "workspaceId": workspace.id,
+                "change": "invalidated",
+                "relativePath": relative_path,
+            }),
+        );
+    }
+}
+
+fn apply_echo_to_known(known: &mut KnownFileTable, path: &Path, kind: &ResolvedChangeKind) {
+    match kind {
+        ResolvedChangeKind::Renamed { new_path } => {
+            known.remove(path);
+            if let Ok(triplet) = read_triplet(new_path) {
+                known.note(new_path, triplet);
+            }
+        }
+        ResolvedChangeKind::Removed => {
+            known.remove(path);
+        }
+        ResolvedChangeKind::Created | ResolvedChangeKind::Modified => {
+            if let Ok(triplet) = read_triplet(path) {
+                known.note(path, triplet);
+            }
+        }
+    }
+}
+
+fn relative_workspace_path(workspace: &WorkspaceRecord, path: &Path) -> Option<String> {
+    path.strip_prefix(Path::new(&workspace.root_path))
+        .ok()
+        .map(|relative| {
+            relative
+                .to_string_lossy()
+                .replace(std::path::MAIN_SEPARATOR, "/")
+        })
+}
+
+fn consume_matching_echo(
+    operations: &mut HashMap<String, EntryOperation>,
+    workspace: &WorkspaceRecord,
+    relative_path: &str,
+    kind: &ResolvedChangeKind,
+) -> bool {
+    let mut consumed_id = None;
+    for (operation_id, operation) in operations.iter_mut() {
+        if operation.workspace_id != workspace.id {
+            continue;
+        }
+        if !consume_echo_from_operation(operation, workspace, relative_path, kind) {
+            continue;
+        }
+        consumed_id = Some(operation_id.clone());
+        break;
+    }
+    let Some(operation_id) = consumed_id else {
+        return false;
+    };
+    if operations
+        .get(&operation_id)
+        .is_some_and(|operation| operation.expected.is_empty())
+    {
+        operations.remove(&operation_id);
+    }
+    true
+}
+
+fn consume_echo_from_operation(
+    operation: &mut EntryOperation,
+    workspace: &WorkspaceRecord,
+    relative_path: &str,
+    kind: &ResolvedChangeKind,
+) -> bool {
+    match kind {
+        ResolvedChangeKind::Created => operation
+            .expected
+            .remove(&(relative_path.to_owned(), WatcherEchoKind::Created)),
+        ResolvedChangeKind::Removed => operation
+            .expected
+            .remove(&(relative_path.to_owned(), WatcherEchoKind::Removed)),
+        ResolvedChangeKind::Renamed { new_path } => {
+            let Some(new_relative) = relative_workspace_path(workspace, new_path) else {
+                return false;
+            };
+            let removed = operation
+                .expected
+                .remove(&(relative_path.to_owned(), WatcherEchoKind::Removed));
+            let created = operation
+                .expected
+                .remove(&(new_relative, WatcherEchoKind::Created));
+            removed || created
+        }
+        ResolvedChangeKind::Modified => false,
+    }
+}
+
+fn path_is_directory(path: &Path) -> bool {
+    fs::metadata(path).is_ok_and(|metadata| metadata.is_dir())
+}
+
+fn is_complex_directory_event(path: &Path, kind: &ResolvedChangeKind) -> bool {
+    path_is_directory(path)
+        || matches!(kind, ResolvedChangeKind::Renamed { new_path } if path_is_directory(new_path))
+}
+
+fn is_complex_removed_path(path: &Path, kind: &ResolvedChangeKind) -> bool {
+    matches!(kind, ResolvedChangeKind::Removed)
+        && !path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| {
+                let lower = name.to_ascii_lowercase();
+                lower.ends_with(".excalidraw") || lower.ends_with(".excalidraw.json")
+            })
 }
 
 fn classify_event_kind(kind: &EventKind) -> Option<RawChangeKind> {

@@ -2,9 +2,15 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { installBrowserTauriHarness } from "./browserTauriHarness";
 import {
+  emitUiInteractionFileChanged,
+  installUiInteractionFileEvents,
+  installUiInteractionHarness,
+} from "./uiInteractionHarness";
+import {
   emitFileChanged,
   installUs4Harness,
 } from "./us4BrowserHarness";
+import { openWorkspaceSidebar } from "./workspaceSidebar";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
 
@@ -13,11 +19,26 @@ type Violation = AxeResults["violations"][number];
 
 const SHELL_CHROME: readonly (string | Locator)[] = [
   ".app-shell-tabs",
+  ".canvas-region",
+];
+const SHELL_CHROME_WITH_SIDEBAR: readonly (string | Locator)[] = [
+  ".app-shell-tabs",
   ".file-sidebar",
   ".canvas-region",
-  ".reload-notice",
 ];
 const EDITOR_EXCLUDE = [".excalidraw-editor"];
+const SHELL_PREFERENCES_STORAGE_KEY = "excalidraw-desktop.shell";
+const ACCESS_DENIED = {
+  code: "PATH_ACCESS_DENIED",
+  message: "Path is outside the mounted workspaces.",
+  retriable: false,
+} as const;
+const A11Y_WORKSPACE = {
+  id: "workspace-1",
+  name: "Workspace",
+  rootPath: "/workspace",
+  createdAt: 1,
+} as const;
 
 const EMPTY_SCENE = {
   type: "excalidraw",
@@ -117,7 +138,7 @@ type HarnessWindow = {
   };
 };
 
-/** Default browser harness plus the workspace/thumbnail stubs the shell needs. */
+/** Default browser harness plus the workspace stubs the shell needs. */
 async function installShellHarness(page: Page): Promise<void> {
   await installBrowserTauriHarness(page);
   await page.addInitScript(() => {
@@ -129,9 +150,6 @@ async function installShellHarness(page: Page): Promise<void> {
     browser.__TAURI_INTERNALS__!.invoke = async (command, args) => {
       if (command === "workspace_list") {
         return [];
-      }
-      if (command === "thumb_lookup") {
-        return { hit: false };
       }
       return original(command, args);
     };
@@ -152,7 +170,7 @@ async function installWorkspaceHarness(
         return;
       }
       let mounted = false;
-      let names = [...fileNames];
+      const names = [...fileNames];
       browser.__TAURI_INTERNALS__!.invoke = async (command, args = {}) => {
         if (command === "workspace_list") {
           return mounted
@@ -175,30 +193,22 @@ async function installWorkspaceHarness(
             createdAt: 1,
           };
         }
-        if (command === "dir_list") {
+        if (command === "workspace_entry_list") {
+          const parentRelativePath = String(args.parentRelativePath ?? "");
+          if (parentRelativePath !== "") {
+            return [];
+          }
           return names.map((name) => ({
-            name,
+            workspaceId: "workspace-1",
+            kind: "drawing",
+            canonicalPath: `/workspace/${name}`,
             relativePath: name,
-            kind: "file",
+            parentRelativePath: "",
+            name,
+            displayName: name.replace(/\.excalidraw(\.json)?$/i, ""),
             mtime: 1,
             fileSize: 100,
           }));
-        }
-        if (command === "file_create") {
-          const requested = String(args.relativePath ?? "drawing.excalidraw");
-          const name = requested.split("/").pop() ?? "drawing.excalidraw";
-          names = [...names, name];
-          return {
-            canonicalPath: `/workspace/${name}`,
-            workspaceId: "workspace-1",
-            displayName: name,
-            relativePath: name,
-            mtime: 1,
-            fileSize: 100,
-          };
-        }
-        if (command === "thumb_lookup") {
-          return { hit: false };
         }
         return original(command, args);
       };
@@ -207,22 +217,9 @@ async function installWorkspaceHarness(
   );
 }
 
-/** US4 event-channel harness (native window runtime) plus a thumbnail stub. */
+/** US4 event-channel harness (native window runtime). */
 async function installConflictHarness(page: Page): Promise<void> {
   await installUs4Harness(page);
-  await page.addInitScript(() => {
-    const browser = globalThis as HarnessWindow;
-    const original = browser.__TAURI_INTERNALS__?.invoke;
-    if (original === undefined) {
-      return;
-    }
-    browser.__TAURI_INTERNALS__!.invoke = async (command, args) => {
-      if (command === "thumb_lookup") {
-        return { hit: false };
-      }
-      return original(command, args);
-    };
-  });
 }
 
 /** US4 harness with an abnormal-exit handshake and two recovery candidates. */
@@ -236,12 +233,9 @@ async function installRecoveryHarness(page: Page): Promise<void> {
         return;
       }
       browser.__TAURI_INTERNALS__!.invoke = async (command, args) => {
-        if (command === "thumb_lookup") {
-          return { hit: false };
-        }
         if (command === "app_handshake") {
           return {
-            contractVersion: 1,
+            contractVersion: 2,
             appVersion: "0.1.0",
             abnormalExit: true,
           };
@@ -274,9 +268,6 @@ async function installExportHarness(
       browser.__TAURI_INTERNALS__!.invoke = async (command, args) => {
         if (command === "workspace_list") {
           return [];
-        }
-        if (command === "thumb_lookup") {
-          return { hit: false };
         }
         if (command === "doc_export") {
           if (exportMode === "fail") {
@@ -314,7 +305,31 @@ async function installDarkPreference(page: Page): Promise<void> {
   });
 }
 
+async function ensureFilesSidebar(page: Page): Promise<void> {
+  await openWorkspaceSidebar(page);
+}
+
+function a11yDrawing(
+  relativePath: string,
+  displayName: string,
+  parentRelativePath = "",
+) {
+  const name = relativePath.split("/").at(-1) ?? relativePath;
+  return {
+    workspaceId: A11Y_WORKSPACE.id,
+    kind: "drawing" as const,
+    canonicalPath: `${A11Y_WORKSPACE.rootPath}/${relativePath}`,
+    relativePath,
+    parentRelativePath,
+    name,
+    displayName,
+    mtime: 1,
+    fileSize: 100,
+  };
+}
+
 async function openDrawing(page: Page): Promise<void> {
+  await ensureFilesSidebar(page);
   await page.getByRole("button", { name: "New drawing" }).click();
   await expect(page.locator(".excalidraw-editor")).toBeVisible();
   await expect(page.getByRole("button", { name: "Export…" })).toBeEnabled({
@@ -337,11 +352,10 @@ async function drawRectangle(page: Page): Promise<void> {
 }
 
 async function openDirtyDrawing(page: Page): Promise<void> {
+  await ensureFilesSidebar(page);
   await page.getByRole("button", { name: /Mount folder/i }).click();
   await expect(page.getByRole("tree")).toBeVisible();
-  await page
-    .getByRole("button", { name: /Open drawing\.excalidraw/i })
-    .click();
+  await page.getByRole("treeitem", { name: "drawing" }).click();
   await expect(page.getByRole("tab", { name: "drawing.excalidraw" })).toBeVisible();
   await drawRectangle(page);
   await page.waitForTimeout(400);
@@ -372,12 +386,13 @@ for (const theme of ["light", "dark"] as const) {
       EDITOR_EXCLUDE,
     );
 
+    await ensureFilesSidebar(page);
     await page.getByRole("button", { name: "New drawing" }).click();
     await expect(page.locator(".excalidraw-editor")).toBeVisible();
     await expectAxeClean(
       page,
       `shell with drawing ${theme}`,
-      SHELL_CHROME,
+      SHELL_CHROME_WITH_SIDEBAR,
       EDITOR_EXCLUDE,
     );
   });
@@ -391,24 +406,23 @@ test("workspace file tree, context menu, and tab bar are axe-clean and keyboard 
     "second.excalidraw",
   ]);
   await page.goto("/");
+  await ensureFilesSidebar(page);
   await page.getByRole("button", { name: /Mount folder/i }).click();
   await expect(page.getByRole("tree")).toBeVisible();
-  await page
-    .getByRole("button", { name: /Open drawing\.excalidraw/i })
-    .click();
-  await page
-    .getByRole("button", { name: /Open second\.excalidraw/i })
-    .click();
+  await page.getByRole("treeitem", { name: "drawing" }).click();
+  await page.getByRole("treeitem", { name: "second" }).click();
   await expect(page.getByRole("tab")).toHaveCount(2);
-  await expectAxeClean(page, "workspace tree", SHELL_CHROME, EDITOR_EXCLUDE);
+  await expectAxeClean(
+    page,
+    "workspace tree",
+    SHELL_CHROME_WITH_SIDEBAR,
+    EDITOR_EXCLUDE,
+  );
 
-  await page
-    .getByRole("button", { name: /Actions for drawing\.excalidraw/i })
-    .first()
-    .click();
+  await page.getByRole("button", { name: "Actions for drawing" }).first().click();
   const menu = page.getByRole("menu");
   await expect(menu).toBeVisible();
-  await expectAxeClean(page, "file tree context menu", [".file-tree-menu"], []);
+  await expectAxeClean(page, "file tree context menu", [".application-context-menu"], []);
 
   const activeTab = page.getByRole("tab", { name: "second.excalidraw" });
   await activeTab.focus();
@@ -429,6 +443,15 @@ test("appearance radios are keyboard operable with a visible focus indicator", a
   await installShellHarness(page);
   await page.goto("/");
   await expect(page.locator(".app-shell")).toBeVisible();
+
+  await page.keyboard.press("Tab");
+  const sidebarToggle = page.getByRole("button", {
+    name: "Workspace sidebar",
+    exact: true,
+  });
+  await expect(sidebarToggle).toBeFocused();
+  await expect(sidebarToggle).toHaveCSS("outline-style", "solid");
+  await expect(sidebarToggle).toHaveCSS("outline-width", "2px");
 
   await page.keyboard.press("Tab");
   const system = page.getByRole("radio", { name: "System" });
@@ -457,7 +480,9 @@ test("appearance radios are keyboard operable with a visible focus indicator", a
   await expect(dark).toBeChecked();
   await expect(dark).toBeFocused();
 
-  await page.locator("body").click({ position: { x: 8, y: 8 } });
+  await page.locator(".canvas-region").click({ position: { x: 24, y: 24 } });
+  await page.keyboard.press("Tab");
+  await expect(sidebarToggle).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(dark).toBeChecked();
   await expect(dark).toBeFocused();
@@ -668,4 +693,215 @@ test("dirty and orphaned tab states are announced beyond color", async ({
   await expect(
     page.getByRole("tab", { name: /file unavailable/i }),
   ).toBeVisible();
+});
+
+test("entry dialogs are axe-clean, keyboard-trapped, and show inline errors", async ({
+  page,
+}) => {
+  await installUiInteractionHarness(page, {
+    workspaces: [A11Y_WORKSPACE],
+    entries: [a11yDrawing("drawing.excalidraw", "drawing")],
+  });
+  await page.goto("/");
+  await ensureFilesSidebar(page);
+
+  await page.getByRole("button", { name: "Actions for Workspace" }).click();
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+  await expectAxeClean(page, "workspace actions menu", [
+    ".application-context-menu",
+  ]);
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Actions for Workspace" }).click();
+  await page.getByRole("menuitem", { name: "New Drawing" }).click();
+  const dialog = page.getByRole("dialog", { name: "New drawing" });
+  await expect(dialog).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Name" })).toBeFocused();
+  await expectAxeClean(page, "new drawing dialog", [
+    ".application-dialog-backdrop",
+  ]);
+
+  await page.getByRole("textbox", { name: "Name" }).fill("drawing");
+  await page.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByRole("alert")).toContainText("already exists");
+  await expectAxeClean(page, "new drawing name conflict", [
+    ".application-dialog-backdrop",
+  ]);
+
+  const create = page.getByRole("button", { name: "Create" });
+  await create.focus();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("textbox", { name: "Name" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+});
+
+test("orphan close dialog is axe-clean and keyboard operable", async ({
+  page,
+}) => {
+  await installUiInteractionHarness(page, {
+    workspaces: [A11Y_WORKSPACE],
+    entries: [
+      a11yDrawing("alive.excalidraw", "alive"),
+      a11yDrawing("gone.excalidraw", "gone"),
+    ],
+  });
+  await installUiInteractionFileEvents(page);
+  await page.goto("/");
+  await ensureFilesSidebar(page);
+  await page.getByRole("treeitem", { name: "alive" }).click();
+  await page.getByRole("treeitem", { name: "gone" }).click();
+  await emitUiInteractionFileChanged(page, {
+    path: `${A11Y_WORKSPACE.rootPath}/gone.excalidraw`,
+    change: "removed",
+  });
+  await expect(
+    page.getByRole("tab", { name: /file unavailable/i }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".visually-hidden", { hasText: "File unavailable" }),
+  ).toHaveCount(1);
+
+  await page.getByRole("tab", { name: /gone\.excalidraw/ }).click({
+    button: "right",
+  });
+  await page.getByRole("menuitem", { name: "Close", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "File is unavailable" });
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Save As", exact: true }),
+  ).toBeFocused();
+  await expectAxeClean(page, "orphan close dialog", [
+    ".application-dialog-backdrop",
+  ]);
+
+  const cancel = dialog.getByRole("button", { name: "Cancel", exact: true });
+  await cancel.focus();
+  await page.keyboard.press("Tab");
+  await expect(
+    dialog.getByRole("button", { name: "Save As", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByRole("tab", { name: /file unavailable/i }),
+  ).toBeVisible();
+});
+
+test("sidebar overlay is keyboard operable with a visible focus indicator", async ({
+  page,
+}) => {
+  await installUiInteractionHarness(page, {
+    workspaces: [A11Y_WORKSPACE],
+    entries: [a11yDrawing("drawing.excalidraw", "drawing")],
+  });
+  await page.goto("/");
+  await expect(
+    page.getByRole("complementary", { name: "Files" }),
+  ).not.toBeVisible();
+
+  await page.keyboard.press("Tab");
+  const toggle = page.getByRole("button", {
+    name: "Workspace sidebar",
+    exact: true,
+  });
+  await expect(toggle).toBeFocused();
+  await expect(toggle).toHaveCSS("outline-style", "solid");
+  await expect(toggle).toHaveCSS("outline-width", "2px");
+  await page.keyboard.press("Enter");
+  const sidebar = page.getByRole("complementary", { name: "Files" });
+  await expect(sidebar).toBeVisible();
+  await expectAxeClean(
+    page,
+    "overlay sidebar",
+    SHELL_CHROME_WITH_SIDEBAR,
+    EDITOR_EXCLUDE,
+  );
+
+  await expect(
+    page.getByRole("button", { name: "Pin workspace sidebar" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sidebar).not.toBeVisible();
+});
+
+test("folder loading and permission-denied errors are announced without color alone", async ({
+  page,
+}) => {
+  await installUiInteractionHarness(page, {
+    workspaces: [A11Y_WORKSPACE],
+    entries: [a11yDrawing("drawing.excalidraw", "drawing")],
+    failures: { workspace_entry_list: ACCESS_DENIED },
+    latenciesMs: { workspace_entry_list: 800 },
+  });
+  await page.addInitScript(
+    ({ key, snapshot }) => {
+      localStorage.setItem(key, snapshot);
+    },
+    {
+      key: SHELL_PREFERENCES_STORAGE_KEY,
+      snapshot: JSON.stringify({
+        version: 1,
+        sidebarPinned: true,
+        expandedWorkspaceIds: [A11Y_WORKSPACE.id],
+      }),
+    },
+  );
+  await page.goto("/");
+  await expect(
+    page.locator(".workspace-panel").getByRole("status"),
+  ).toHaveText("Loading folder…");
+  await expect(page.getByRole("region", { name: "Workspaces" })).toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
+  await expectAxeClean(page, "workspace loading", [".workspace-panel"]);
+  await expect(page.getByRole("alert")).toHaveText(
+    "This location is outside the Workspace.",
+  );
+  await expect(page.locator(".workspace-panel").getByRole("status")).toHaveCount(
+    0,
+  );
+  await expectAxeClean(page, "workspace permission denied", [".workspace-panel"]);
+});
+
+test("create dialog announces permission-denied as an alert", async ({
+  page,
+}) => {
+  await installUiInteractionHarness(page, {
+    workspaces: [A11Y_WORKSPACE],
+    entries: [],
+    failures: { workspace_entry_create: ACCESS_DENIED },
+  });
+  await page.goto("/");
+  await ensureFilesSidebar(page);
+  await page.getByRole("button", { name: "Actions for Workspace" }).click();
+  await page.getByRole("menuitem", { name: "New Drawing" }).click();
+  await page.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "This location is outside the Workspace.",
+  );
+  await expect(page.getByRole("dialog")).not.toHaveAttribute("aria-busy");
+  await expectAxeClean(page, "permission-denied create", [
+    ".application-dialog-backdrop",
+  ]);
+});
+
+test("reduced motion keeps overlay usable without depending on animation", async ({
+  page,
+}) => {
+  await installUiInteractionHarness(page, {
+    workspaces: [A11Y_WORKSPACE],
+    entries: [a11yDrawing("drawing.excalidraw", "drawing")],
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await ensureFilesSidebar(page);
+  await expect(page.getByRole("complementary", { name: "Files" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("complementary", { name: "Files" }),
+  ).not.toBeVisible();
 });

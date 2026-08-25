@@ -10,7 +10,7 @@ This context describes the local drawing workspace and document-navigation langu
 
 **Workspace**:
 A user-authorized local directory whose drawings and ordinary directories are available in the application.
-_Avoid_: Project, repository, vault
+_Avoid_: Project, repository, vault, FileTree
 
 **Workspace Root**:
 The top-level directory of a Workspace. It can be mounted or removed from the application, but it is not an ordinary entry that can be renamed or deleted there.
@@ -49,13 +49,13 @@ _Avoid_: Selected file, focused tab
 ### Shell navigation
 
 **Workspace Sidebar**:
-The application region that presents mounted Workspaces and their entries.
-_Avoid_: File manager, explorer panel
+The application region that presents mounted Workspaces and their Workspace Entries as one continuous virtualized tree. Drawing rows use a file icon. There is no canvas-content thumbnail cache.
+_Avoid_: File manager, explorer panel, FileTree, thumbnail cache
 
 **Transient Sidebar**:
-A temporarily opened Workspace Sidebar that overlays the canvas and dismisses after the interaction ends.
+A temporarily opened Workspace Sidebar that overlays the canvas without changing the canvas box. It dismisses after pointer leave unless focus, a menu, a dialog, or a drag holds it.
 _Avoid_: Floating sidebar, auto-hide panel
 
 **Pinned Sidebar**:
-A Workspace Sidebar that remains in the window layout until the user unpins it.
+A Workspace Sidebar that remains in the window layout until the user unpins it. While pinned, the canvas remains at least 70% of the available content width at supported window sizes.
 _Avoid_: Fixed sidebar, permanent sidebar

@@ -1,14 +1,15 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { openWorkspaceSidebar } from "./workspaceSidebar";
 
 const OBSERVATION_SCHEMA_VERSION = "1.0.0" as const;
 const FIXTURE_FILE_COUNT = 10_000;
 const BASELINE_FILE_COUNT = 1_000;
 const FIXTURE_DIRECTORY = "bulk";
 const FIXTURE_SEED = 58_000;
-const FIRST_FIXTURE_FILE = "drawing-00000.excalidraw";
 const ROW_HEIGHT_PX = 32;
 const SCROLL_SAMPLE_DURATION_MS = 1_000;
 const MIN_SCROLL_FPS = 50;
+const MIN_SCROLL_DISTANCE_PX = 50;
 const EXPANSION_BUDGET_MS = 200;
 const MAX_RENDERED_ROWS = 300;
 
@@ -39,31 +40,38 @@ interface HeapSnapshot {
   reason: string | null;
 }
 
+interface ScaleHarnessActivity {
+  thumbnailCommands: string[];
+  docOpenCount: number;
+}
+
 test("10k-file fixture stays virtualized while scrolling", async ({
   page,
   context,
 }, testInfo) => {
+  test.setTimeout(180_000);
   await installScaleHarness(page, FIXTURE_FILE_COUNT);
+  const baseline = await measureBaselineFixture(context);
   await page.goto("/");
+  await openWorkspaceSidebar(page);
 
   const mount = page.getByRole("button", { name: /Mount folder/i });
   await expect(mount).toBeVisible();
-
-  // A smaller, independently mounted fixture gives us a DOM/heap comparison
-  // without changing the 10k workload or relying on a total-file-count proxy.
-  const baseline = await measureBaselineFixture(context);
-
   await mount.click();
   const tree = page.getByRole("tree");
   await expect(tree).toBeVisible();
   await expect(
-    page.getByRole("button", { name: `Expand ${FIXTURE_DIRECTORY}` }),
+    page.getByRole("treeitem", { name: FIXTURE_DIRECTORY, exact: true }),
   ).toBeVisible();
 
   const expansion = await measureExpansion(page);
   const virtualization = await collectVirtualization(tree);
   const scroll = await sampleScroll(tree);
   const heap = await readHeapSnapshot(page);
+  const activity = await readScaleHarnessActivity(page);
+  const thumbnailDomCount = await page
+    .locator("img.file-tree-thumbnail")
+    .count();
 
   const heapScaling = compareHeapSnapshots(
     baseline.heap,
@@ -76,7 +84,8 @@ test("10k-file fixture stays virtualized while scrolling", async ({
     scrollContainerIsScrollable:
       virtualization.scrollHeightPx > virtualization.clientHeightPx,
     scrollMovedDuringSample:
-      scroll.changedPositionCount > 0 && scroll.scrollDistancePx > 0,
+      scroll.changedPositionCount > 0 &&
+      scroll.scrollDistancePx >= MIN_SCROLL_DISTANCE_PX,
     expansionAtMost200Ms: expansion.elapsedMs <= EXPANSION_BUDGET_MS,
     tenThousandRowsRepresented:
       virtualization.estimatedRows >= FIXTURE_FILE_COUNT,
@@ -86,13 +95,17 @@ test("10k-file fixture stays virtualized while scrolling", async ({
       baseline.virtualization !== null &&
       baseline.virtualization.renderedRows < MAX_RENDERED_ROWS &&
       virtualization.renderedRows < MAX_RENDERED_ROWS,
+    noThumbnailIpcRenderOrExtraDocumentOpen:
+      activity.thumbnailCommands.length === 0 &&
+      thumbnailDomCount === 0 &&
+      activity.docOpenCount === 0,
   };
   const browserEvidencePasses = Object.values(comparisons).every(Boolean);
 
   const observation = {
     schemaVersion: OBSERVATION_SCHEMA_VERSION,
     workload: {
-      name: "phase-5-us3-10k-file-sidebar",
+      name: "phase-4-us2-10k-continuous-workspace-tree",
       fixture: {
         generator:
           "deterministic bulk directory with lexical drawing-00000..drawing-09999 names",
@@ -133,6 +146,10 @@ test("10k-file fixture stays virtualized while scrolling", async ({
         expansion,
         virtualization,
         scroll,
+        activity: {
+          ...activity,
+          thumbnailDomCount,
+        },
         heap,
       },
     },
@@ -165,6 +182,18 @@ test("10k-file fixture stays virtualized while scrolling", async ({
         unit: "DOM treeitem nodes",
         statistic: "post-expansion snapshot (virtualization guard)",
       },
+      minimumScrollDistance: {
+        value: MIN_SCROLL_DISTANCE_PX,
+        unit: "px",
+        statistic:
+          "maximum absolute scrollTop displacement during the active-scroll window",
+      },
+      noThumbnailWork: {
+        value: true,
+        unit: "boolean",
+        statistic:
+          "no thumbnail command, thumbnail image, renderer activity, or document-open side effect without a user row activation",
+      },
     },
     verdict: {
       overall: browserEvidencePasses ? "pass" : "fail",
@@ -175,11 +204,11 @@ test("10k-file fixture stays virtualized while scrolling", async ({
         ? "observed-diagnostic"
         : "not_evaluated",
       reason: browserEvidencePasses
-        ? "SC-007 scroll, expansion, and DOM virtualization evidence passed in the browser fixture."
-        : "At least one SC-007 browser fixture assertion failed.",
+        ? "SC-005/SC-012 scroll, expansion, DOM virtualization, and thumbnail-retirement evidence passed in the browser fixture."
+        : "At least one SC-005/SC-012 browser fixture assertion failed.",
     },
     limitations: [
-      "The harness supplies deterministic dir_list responses; it does not prove native filesystem indexing or IPC latency.",
+      "The harness supplies deterministic WorkspaceEntry responses; it does not prove native filesystem indexing or IPC latency.",
       "Browser rAF and JS heap observations do not include Tauri/WebView/GPU process-tree RSS; fixed-runner accounting remains outside this test.",
       "Heap snapshots include the browser harness and are recorded only when a supported browser memory API is exposed; no unapproved heap threshold is inferred.",
     ],
@@ -195,7 +224,9 @@ test("10k-file fixture stays virtualized while scrolling", async ({
     virtualization.clientHeightPx,
   );
   expect(scroll.changedPositionCount).toBeGreaterThan(0);
-  expect(scroll.scrollDistancePx).toBeGreaterThan(0);
+  expect(scroll.scrollDistancePx).toBeGreaterThanOrEqual(
+    MIN_SCROLL_DISTANCE_PX,
+  );
   expect(expansion.elapsedMs).toBeLessThanOrEqual(EXPANSION_BUDGET_MS);
   expect(virtualization.estimatedRows).toBeGreaterThanOrEqual(
     FIXTURE_FILE_COUNT,
@@ -204,7 +235,34 @@ test("10k-file fixture stays virtualized while scrolling", async ({
   expect(
     baseline.virtualization?.renderedRows ?? MAX_RENDERED_ROWS,
   ).toBeLessThan(MAX_RENDERED_ROWS);
+  expect(activity.thumbnailCommands).toEqual([]);
+  expect(thumbnailDomCount).toBe(0);
+  expect(activity.docOpenCount).toBe(0);
 });
+
+async function readScaleHarnessActivity(
+  page: Page,
+): Promise<ScaleHarnessActivity> {
+  return page.evaluate(() => {
+    const state = (
+      globalThis as typeof globalThis & {
+        __scaleHarness?: {
+          invocations: Array<{ command: string }>;
+        };
+      }
+    ).__scaleHarness;
+    const invocations = state?.invocations ?? [];
+    return {
+      thumbnailCommands: invocations
+        .map(({ command }) => command)
+        .filter((command) =>
+          ["thumb_lookup", "thumb_store", "thumbnail_render"].includes(command),
+        ),
+      docOpenCount: invocations.filter(({ command }) => command === "doc_open")
+        .length,
+    };
+  });
+}
 
 async function measureBaselineFixture(
   context: import("@playwright/test").BrowserContext,
@@ -214,20 +272,27 @@ async function measureBaselineFixture(
   unavailableReason: string | null;
 }> {
   const baselinePage = await context.newPage();
+  const abort = globalThis.setTimeout(() => {
+    void baselinePage.close();
+  }, 20_000);
   try {
     await installScaleHarness(baselinePage, BASELINE_FILE_COUNT);
     await baselinePage.goto("/");
+    await openWorkspaceSidebar(baselinePage);
     const mount = baselinePage.getByRole("button", { name: /Mount folder/i });
-    await expect(mount).toBeVisible();
+    await expect(mount).toBeVisible({ timeout: 8_000 });
     await mount.click();
     const tree = baselinePage.getByRole("tree");
-    await expect(tree).toBeVisible();
+    await expect(tree).toBeVisible({ timeout: 8_000 });
     await baselinePage
-      .getByRole("button", { name: `Expand ${FIXTURE_DIRECTORY}` })
-      .click();
+      .getByRole("treeitem", { name: FIXTURE_DIRECTORY, exact: true })
+      .click({ timeout: 8_000 });
     await expect(
-      baselinePage.getByRole("button", { name: `Open ${FIRST_FIXTURE_FILE}` }),
-    ).toBeVisible();
+      baselinePage.getByRole("treeitem", {
+        name: "drawing-00000",
+        exact: true,
+      }),
+    ).toBeVisible({ timeout: 8_000 });
     return {
       virtualization: await collectVirtualization(tree),
       heap: await readHeapSnapshot(baselinePage),
@@ -241,17 +306,20 @@ async function measureBaselineFixture(
       unavailableReason: reason,
     };
   } finally {
-    await baselinePage.close();
+    globalThis.clearTimeout(abort);
+    if (!baselinePage.isClosed()) {
+      await baselinePage.close();
+    }
   }
 }
 
 async function measureExpansion(page: Page): Promise<{ elapsedMs: number }> {
   await page.evaluate(() => performance.mark("us3-expansion-start"));
   await page
-    .getByRole("button", { name: `Expand ${FIXTURE_DIRECTORY}` })
+    .getByRole("treeitem", { name: FIXTURE_DIRECTORY, exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: `Open ${FIRST_FIXTURE_FILE}` }),
+    page.getByRole("treeitem", { name: "drawing-00000", exact: true }),
   ).toBeVisible();
   const elapsedMs = await page.evaluate(() => {
     const entries = performance.getEntriesByName("us3-expansion-start");
@@ -398,8 +466,15 @@ async function readHeapSnapshot(page: Page): Promise<HeapSnapshot> {
       typeof browserPerformance.measureUserAgentSpecificMemory === "function"
     ) {
       try {
-        const result =
-          await browserPerformance.measureUserAgentSpecificMemory();
+        const result = await Promise.race([
+          browserPerformance.measureUserAgentSpecificMemory(),
+          new Promise<never>((_, reject) => {
+            globalThis.setTimeout(
+              () => reject(new Error("memory measurement timed out")),
+              5_000,
+            );
+          }),
+        ]);
         return {
           api: "measureUserAgentSpecificMemory" as const,
           reportedBytes: result.bytes,
@@ -479,7 +554,7 @@ function compareHeapSnapshots(
     ratio:
       available && baselineBytes > 0 ? expandedBytes / baselineBytes : null,
     interpretation:
-      "diagnostic browser heap only; no approved SC-007 heap threshold and no native process-tree RSS claim",
+      "diagnostic browser heap only; no approved SC-005 heap threshold and no native process-tree RSS claim",
   };
 }
 
@@ -497,7 +572,18 @@ async function installScaleHarness(
       };
       const browser = globalThis as typeof globalThis & {
         __TAURI_INTERNALS__?: TauriInternals;
+        __scaleHarness?: {
+          invocations: Array<{
+            command: string;
+            args: Record<string, unknown>;
+          }>;
+        };
       };
+      const invocations: Array<{
+        command: string;
+        args: Record<string, unknown>;
+      }> = [];
+      browser.__scaleHarness = { invocations };
       let mounted = false;
       const workspace = {
         id: "workspace-1",
@@ -505,13 +591,17 @@ async function installScaleHarness(
         rootPath: "/workspace",
         createdAt: seed,
       };
-      const makeFiles = () =>
+      const makeWorkspaceEntries = () =>
         Array.from({ length: count }, (_, index) => {
           const name = `drawing-${String(index).padStart(5, "0")}.excalidraw`;
           return {
-            name,
+            workspaceId: workspace.id,
+            kind: "drawing",
+            canonicalPath: `/workspace/${directory}/${name}`,
             relativePath: `${directory}/${name}`,
-            kind: "file",
+            parentRelativePath: directory,
+            name,
+            displayName: `drawing-${String(index).padStart(5, "0")}`,
             mtime: seed + index,
             fileSize: 100,
           };
@@ -519,6 +609,7 @@ async function installScaleHarness(
 
       browser.__TAURI_INTERNALS__ = {
         async invoke(command, args = {}) {
+          invocations.push({ command, args: { ...args } });
           if (command === "plugin:dialog|open") return "/workspace";
           if (command === "workspace_list") return mounted ? [workspace] : [];
           if (command === "workspace_add") {
@@ -529,22 +620,41 @@ async function installScaleHarness(
             mounted = false;
             return {};
           }
-          if (command === "dir_list") {
-            const relativePath =
-              typeof args.relativePath === "string" ? args.relativePath : "";
-            if (relativePath === "") {
+          if (command === "workspace_entry_list") {
+            const parentRelativePath =
+              typeof args.parentRelativePath === "string"
+                ? args.parentRelativePath
+                : "";
+            if (parentRelativePath === "") {
               return [
                 {
-                  name: directory,
+                  workspaceId: workspace.id,
+                  kind: "directory",
+                  canonicalPath: `/workspace/${directory}`,
                   relativePath: directory,
-                  kind: "dir",
+                  parentRelativePath: "",
+                  name: directory,
+                  displayName: directory,
                   mtime: seed,
                   fileSize: 0,
                 },
               ];
             }
-            if (relativePath === directory) return makeFiles();
+            if (parentRelativePath === directory) return makeWorkspaceEntries();
             return [];
+          }
+          if (command === "doc_open") {
+            return {
+              scene: {
+                type: "excalidraw",
+                version: 2,
+                elements: [],
+                appState: {},
+                files: {},
+              },
+              baseHash: "scale-harness",
+              hasNewerDraft: false,
+            };
           }
           throw new Error(`Unexpected scale command ${command}`);
         },

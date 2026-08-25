@@ -1,4 +1,13 @@
-import { useEffect, useRef, type KeyboardEvent, type RefObject } from "react";
+import {
+  useId,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import type { MenuDismissalReason } from "./interactionStore";
 
 export interface ContextMenuItem {
@@ -14,6 +23,7 @@ interface ContextMenuProps {
   anchor: { x: number; y: number };
   onDismiss(reason: MenuDismissalReason): void;
   triggerRef?: RefObject<HTMLElement | null>;
+  description?: ReactNode;
 }
 
 export function ContextMenu({
@@ -22,24 +32,46 @@ export function ContextMenu({
   anchor,
   onDismiss,
   triggerRef,
+  description,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef(true);
+  const descriptionId = useId();
+  const [position, setPosition] = useState(anchor);
 
   useEffect(() => {
     const returnFocusTarget = triggerRef?.current;
+    restoreFocusRef.current = true;
     firstEnabledItem(menuRef.current)?.focus();
-    return () => returnFocusTarget?.focus();
+    return () => {
+      if (restoreFocusRef.current) returnFocusTarget?.focus();
+    };
   }, [triggerRef]);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) {
-        onDismiss("outsidePointer");
-      }
+      const target = event.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      if (triggerRef?.current?.contains(target)) return;
+      onDismiss("outsidePointer");
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [onDismiss]);
+  }, [onDismiss, triggerRef]);
+
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (menu === null) return;
+    const rect = menu.getBoundingClientRect();
+    const next = clampMenuPosition(
+      anchor,
+      { width: rect.width, height: rect.height },
+      { width: window.innerWidth, height: window.innerHeight },
+    );
+    setPosition((current) =>
+      current.x === next.x && current.y === next.y ? current : next,
+    );
+  }, [anchor, description, items]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const enabled = enabledItems(menuRef.current);
@@ -66,6 +98,10 @@ export function ContextMenu({
         event.preventDefault();
         onDismiss("escape");
         return;
+      case "Tab":
+        restoreFocusRef.current = false;
+        onDismiss("tab");
+        return;
       default:
         return;
     }
@@ -76,28 +112,58 @@ export function ContextMenu({
   return (
     <div
       ref={menuRef}
-      aria-label={label}
       className="application-context-menu"
       onKeyDown={handleKeyDown}
-      role="menu"
-      style={{ left: anchor.x, position: "fixed", top: anchor.y }}
+      style={{ left: position.x, position: "fixed", top: position.y }}
     >
-      {items.map((item) => (
-        <button
-          key={item.id}
-          disabled={item.disabled}
-          onClick={() => {
-            item.onSelect();
-            onDismiss("action");
-          }}
-          role="menuitem"
-          type="button"
-        >
-          {item.label}
-        </button>
-      ))}
+      {description ? (
+        <p className="application-context-menu-description" id={descriptionId}>
+          {description}
+        </p>
+      ) : null}
+      <div
+        aria-describedby={description === undefined ? undefined : descriptionId}
+        aria-label={label}
+        role="menu"
+      >
+        {items.map((item) => (
+          <button
+            key={item.id}
+            disabled={item.disabled}
+            onClick={() => {
+              item.onSelect();
+              onDismiss("action");
+            }}
+            role="menuitem"
+            type="button"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
+}
+
+function clampMenuPosition(
+  anchor: { x: number; y: number },
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+): { x: number; y: number } {
+  let x = anchor.x;
+  let y = anchor.y;
+  if (x + size.width > viewport.width) {
+    x = Math.max(0, viewport.width - size.width);
+  }
+  if (x < 0) x = 0;
+  if (y + size.height > viewport.height) {
+    y = anchor.y - size.height;
+  }
+  if (y + size.height > viewport.height) {
+    y = Math.max(0, viewport.height - size.height);
+  }
+  if (y < 0) y = 0;
+  return { x, y };
 }
 
 function enabledItems(menu: HTMLElement | null): HTMLElement[] {

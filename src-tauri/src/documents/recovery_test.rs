@@ -8,7 +8,9 @@ use crate::{
     database::repository::{SqliteRepository, WorkspaceRecord, WorkspaceRepository},
 };
 
-use super::recovery::{RecoverySnapshot, RecoveryStore, RECOVERY_SNAPSHOT_COUNT};
+use super::recovery::{
+    document_id_for_path, RecoverySnapshot, RecoveryStore, RECOVERY_SNAPSHOT_COUNT,
+};
 
 fn fixture_root(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -222,6 +224,70 @@ async fn lists_and_restores_a_newer_scene_then_cleans_up_the_ring() {
         .list_snapshots()
         .expect("list remaining snapshots")
         .is_empty());
+
+    fs::remove_dir_all(root).expect("remove recovery fixture");
+}
+
+#[test]
+fn migrate_entry_snapshots_rewrites_path_identity_and_directory() {
+    let root = fixture_root("migrate");
+    let old_path = root.join("workspace").join("old.excalidraw");
+    let new_path = root.join("workspace").join("new.excalidraw");
+    fs::create_dir_all(old_path.parent().expect("fixture parent")).expect("create fixture parent");
+    let store = RecoveryStore::with_app_version(&root, "0.1.0");
+    let document_id = document_id_for_path(&old_path);
+    store
+        .write_snapshot(
+            &document_id,
+            Some(&old_path),
+            "base-hash",
+            10,
+            &scene_json("migrated"),
+        )
+        .expect("write recovery snapshot");
+
+    store
+        .migrate_entry_snapshots(&old_path, &new_path)
+        .expect("migrate snapshots");
+    store
+        .migrate_entry_snapshots(&old_path, &new_path)
+        .expect("migration is idempotent");
+
+    assert!(!store.snapshot_directory_for_path(&old_path).exists());
+    let snapshots = store.list_snapshots().expect("list snapshots");
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].1.document_id, document_id_for_path(&new_path));
+    assert_eq!(
+        snapshots[0].1.original_path.as_deref(),
+        Some(new_path.display().to_string().as_str())
+    );
+
+    fs::remove_dir_all(root).expect("remove recovery fixture");
+}
+
+#[test]
+fn remove_snapshots_for_path_drops_the_ring() {
+    let root = fixture_root("remove-path");
+    let path = root.join("workspace").join("gone.excalidraw");
+    fs::create_dir_all(path.parent().expect("fixture parent")).expect("create fixture parent");
+    let store = RecoveryStore::with_app_version(&root, "0.1.0");
+    store
+        .write_snapshot(
+            &document_id_for_path(&path),
+            Some(&path),
+            "base-hash",
+            10,
+            &scene_json("gone"),
+        )
+        .expect("write recovery snapshot");
+
+    store
+        .remove_snapshots_for_path(&path)
+        .expect("remove snapshots");
+    store
+        .remove_snapshots_for_path(&path)
+        .expect("removal is idempotent");
+    assert!(store.list_snapshots().expect("list snapshots").is_empty());
 
     fs::remove_dir_all(root).expect("remove recovery fixture");
 }

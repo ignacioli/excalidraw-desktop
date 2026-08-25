@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
-export type ConflictResolution =
-  | "takeExternal"
-  | "keepLocal"
-  | "saveAsNew";
+export type ConflictResolution = "takeExternal" | "keepLocal" | "saveAsNew";
 
 export interface ConflictDialogProps {
   title: string;
@@ -111,7 +108,11 @@ export function ConflictDialog({
           </div>
         </dl>
         {errorMessage !== null ? (
-          <p aria-live="assertive" className="conflict-dialog-error" role="alert">
+          <p
+            aria-live="assertive"
+            className="conflict-dialog-error"
+            role="alert"
+          >
             {errorMessage}
           </p>
         ) : null}

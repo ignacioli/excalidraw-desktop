@@ -47,4 +47,119 @@ describe("ContextMenu", () => {
     );
     expect(triggerRef.current).toHaveFocus();
   });
+
+  it("dismisses on Tab without restoring the trigger so focus can leave", async () => {
+    const user = userEvent.setup();
+    const triggerRef = createRef<HTMLButtonElement>();
+    const onDismiss = vi.fn();
+    render(
+      <>
+        <button ref={triggerRef} type="button">
+          Drawing actions
+        </button>
+        <button type="button">After menu</button>
+        <ContextMenu
+          anchor={{ x: 40, y: 50 }}
+          items={[
+            { id: "rename", label: "Rename", onSelect: vi.fn() },
+            { id: "delete", label: "Delete", onSelect: vi.fn() },
+          ]}
+          label="Drawing actions"
+          onDismiss={onDismiss}
+          triggerRef={triggerRef}
+        />
+      </>,
+    );
+
+    expect(screen.getByRole("menuitem", { name: "Rename" })).toHaveFocus();
+    await user.tab();
+    expect(onDismiss).toHaveBeenCalledWith("tab");
+  });
+
+  it("renders a description without adding a menuitem", () => {
+    const triggerRef = createRef<HTMLButtonElement>();
+    render(
+      <ContextMenu
+        anchor={{ x: 8, y: 8 }}
+        description="Files on disk will not be deleted"
+        items={[{ id: "remove", label: "Remove Workspace", onSelect: vi.fn() }]}
+        label="Workspace actions"
+        onDismiss={vi.fn()}
+        triggerRef={triggerRef}
+      />,
+    );
+
+    const menu = screen.getByRole("menu");
+    expect(menu).toHaveAccessibleDescription(
+      "Files on disk will not be deleted",
+    );
+    expect(menu).toHaveAttribute("aria-describedby");
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Files on disk will not be deleted"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("menuitem")).toHaveLength(1);
+  });
+
+  it("clamps and flips the menu inside the viewport", () => {
+    const original = HTMLElement.prototype.getBoundingClientRect;
+    const menuRect = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.classList.contains("application-context-menu")) {
+          const left = Number.parseFloat(this.style.left || "0");
+          const top = Number.parseFloat(this.style.top || "0");
+          return {
+            x: left,
+            y: top,
+            width: 160,
+            height: 120,
+            left,
+            top,
+            right: left + 160,
+            bottom: top + 120,
+            toJSON() {
+              return {};
+            },
+          };
+        }
+        return original.call(this);
+      });
+    const innerWidth = Object.getOwnPropertyDescriptor(window, "innerWidth");
+    const innerHeight = Object.getOwnPropertyDescriptor(window, "innerHeight");
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 420,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 260,
+    });
+
+    render(
+      <ContextMenu
+        anchor={{ x: 400, y: 240 }}
+        items={[
+          { id: "rename", label: "Rename", onSelect: vi.fn() },
+          { id: "delete", label: "Delete", onSelect: vi.fn() },
+        ]}
+        label="Drawing actions"
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    const popup = document.querySelector(
+      ".application-context-menu",
+    ) as HTMLElement;
+    expect(Number.parseFloat(popup.style.left)).toBeLessThanOrEqual(260);
+    expect(Number.parseFloat(popup.style.left)).toBeGreaterThanOrEqual(0);
+    expect(Number.parseFloat(popup.style.top)).toBeLessThanOrEqual(140);
+    expect(Number.parseFloat(popup.style.top)).toBeGreaterThanOrEqual(0);
+    expect(Number.parseFloat(popup.style.left) + 160).toBeLessThanOrEqual(420);
+    expect(Number.parseFloat(popup.style.top) + 120).toBeLessThanOrEqual(260);
+
+    if (innerWidth) Object.defineProperty(window, "innerWidth", innerWidth);
+    if (innerHeight) Object.defineProperty(window, "innerHeight", innerHeight);
+    menuRect.mockRestore();
+  });
 });

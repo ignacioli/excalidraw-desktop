@@ -17,10 +17,7 @@ use crate::{
 };
 
 use super::{
-    dto::{
-        DirEntry, DirEntryKind, DirListRequest, EmptyResponse, Workspace, WorkspaceAddRequest,
-        WorkspaceRemoveRequest,
-    },
+    dto::{EmptyResponse, Workspace, WorkspaceAddRequest, WorkspaceRemoveRequest},
     error::{AppError, IpcError},
 };
 
@@ -114,88 +111,6 @@ impl WorkspaceService {
             .map_err(|error| IpcError::from(AppError::from(error)))
     }
 
-    pub async fn dir_list(&self, request: DirListRequest) -> Result<Vec<DirEntry>, IpcError> {
-        self.dir_list_inner(request).await.map_err(Into::into)
-    }
-
-    async fn dir_list_inner(&self, request: DirListRequest) -> Result<Vec<DirEntry>, AppError> {
-        let workspace = self
-            .repository
-            .workspace_get(request.workspace_id.clone())
-            .await?
-            .ok_or(AppError::WorkspaceNotFound(request.workspace_id))?;
-        let root = PathBuf::from(&workspace.root_path);
-        let policy = policy_for_repository(&self.repository).await?;
-        let relative = safe_relative_path(&request.relative_path)?;
-        let requested = root.join(relative);
-        let directory = policy.authorize_existing(&requested)?;
-        let metadata = fs::metadata(&directory).map_err(|source| AppError::Io {
-            path: Some(directory.clone()),
-            source,
-        })?;
-        if !metadata.is_dir() {
-            return Err(AppError::PathAccessDenied(directory));
-        }
-
-        let mut entries = Vec::new();
-        for entry in fs::read_dir(&directory).map_err(|source| AppError::Io {
-            path: Some(directory.clone()),
-            source,
-        })? {
-            let entry = entry.map_err(|source| AppError::Io {
-                path: Some(directory.clone()),
-                source,
-            })?;
-            let path = entry.path();
-            let file_type = entry.file_type().map_err(|source| AppError::Io {
-                path: Some(path.clone()),
-                source,
-            })?;
-            if file_type.is_symlink() {
-                continue;
-            }
-            let metadata = entry.metadata().map_err(|source| AppError::Io {
-                path: Some(path.clone()),
-                source,
-            })?;
-            let relative_path = path
-                .strip_prefix(&root)
-                .map_err(|_| AppError::PathAccessDenied(path.clone()))?;
-            let relative_path = relative_path
-                .to_string_lossy()
-                .replace(std::path::MAIN_SEPARATOR, "/");
-            let kind = if file_type.is_dir() {
-                DirEntryKind::Dir
-            } else if file_type.is_file() && is_supported_document(&path) {
-                DirEntryKind::File
-            } else {
-                continue;
-            };
-            entries.push(DirEntry {
-                name: entry.file_name().to_string_lossy().into_owned(),
-                relative_path,
-                kind,
-                mtime: modified_timestamp(&metadata, &path)?,
-                file_size: if kind == DirEntryKind::File {
-                    metadata.len() as i64
-                } else {
-                    0
-                },
-            });
-        }
-        entries.sort_by(|left, right| {
-            (
-                left.kind != DirEntryKind::Dir,
-                left.name.to_ascii_lowercase(),
-            )
-                .cmp(&(
-                    right.kind != DirEntryKind::Dir,
-                    right.name.to_ascii_lowercase(),
-                ))
-        });
-        Ok(entries)
-    }
-
     pub async fn start_index(&self, workspace: WorkspaceRecord, app: Option<AppHandle>) {
         Indexer::new(Arc::clone(&self.repository)).spawn(workspace, app);
     }
@@ -263,21 +178,6 @@ pub async fn workspace_remove(
 #[tauri::command]
 pub async fn workspace_list(state: State<'_, WorkspaceState>) -> Result<Vec<Workspace>, IpcError> {
     state.service.list().await
-}
-
-#[tauri::command]
-pub async fn dir_list(
-    workspace_id: String,
-    relative_path: String,
-    state: State<'_, WorkspaceState>,
-) -> Result<Vec<DirEntry>, IpcError> {
-    state
-        .service
-        .dir_list(DirListRequest {
-            workspace_id,
-            relative_path,
-        })
-        .await
 }
 
 pub(crate) async fn policy_for_repository(

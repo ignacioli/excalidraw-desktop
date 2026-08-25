@@ -45,18 +45,24 @@ export function ApplicationDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const returnFocusTarget = returnFocusRef?.current;
     const initial =
       initialFocusRef?.current ??
-      dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+      dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ??
+      dialogRef.current;
     initial?.focus();
-    return () => returnFocusTarget?.focus();
+    return () => {
+      // Read at unmount so a successful mutation can clear this ref and
+      // focus the created/surviving tree row instead of the old trigger.
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+      const target = returnFocusRef?.current;
+      if (target?.isConnected) target.focus();
+    };
   }, [initialFocusRef, returnFocusRef]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape") {
       event.preventDefault();
-      onDismiss("escape");
+      if (!busy) onDismiss("escape");
       return;
     }
     if (event.key !== "Tab") return;
@@ -87,14 +93,14 @@ export function ApplicationDialog({
       .join(" ") || undefined;
 
   return (
-    <div className="application-dialog-backdrop">
+    <div className="application-dialog-backdrop conflict-dialog-backdrop">
       <div
         ref={dialogRef}
         aria-busy={busy || undefined}
         aria-describedby={describedBy}
         aria-labelledby={titleId}
         aria-modal="true"
-        className="application-dialog"
+        className="application-dialog conflict-dialog"
         onKeyDown={handleKeyDown}
         role="dialog"
         tabIndex={-1}
@@ -103,7 +109,7 @@ export function ApplicationDialog({
         {description ? <p id={descriptionId}>{description}</p> : null}
         {children}
         {errorMessage ? (
-          <p id={errorId} role="alert">
+          <p className="conflict-dialog-error" id={errorId} role="alert">
             {errorMessage}
           </p>
         ) : null}

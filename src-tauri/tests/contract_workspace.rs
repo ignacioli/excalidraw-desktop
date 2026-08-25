@@ -2,14 +2,12 @@ use std::{fs, path::PathBuf, sync::Arc};
 
 use excalidraw_desktop_lib::{
     commands::{
-        dto::{
-            DirListRequest, FileCreateRequest, FileRenameRequest, PathRequest, WorkspaceAddRequest,
-        },
+        dto::{WorkspaceAddRequest, WorkspaceEntryListRequest},
         error::ErrorCode,
-        files::FileService,
         workspace::WorkspaceService,
     },
     database::repository::SqliteRepository,
+    workspace_entries::{WorkspaceEntryService, WorkspaceMutationGate},
 };
 
 struct Fixture {
@@ -17,7 +15,7 @@ struct Fixture {
     workspace: PathBuf,
     outside: PathBuf,
     workspaces: WorkspaceService,
-    files: FileService,
+    entries: WorkspaceEntryService,
 }
 
 impl Fixture {
@@ -37,13 +35,13 @@ impl Fixture {
                 .unwrap(),
         );
         let workspaces = WorkspaceService::new(Arc::clone(&repository));
-        let files = FileService::new(Arc::clone(&repository));
+        let entries = WorkspaceEntryService::new(repository, WorkspaceMutationGate::default());
         Self {
             root,
             workspace,
             outside,
             workspaces,
-            files,
+            entries,
         }
     }
 }
@@ -80,87 +78,13 @@ async fn workspace_contract_rejects_nested_roots_and_traversal() {
     assert_eq!(overlap.code, ErrorCode::WorkspaceOverlap);
 
     let traversal = fixture
-        .workspaces
-        .dir_list(DirListRequest {
+        .entries
+        .list(WorkspaceEntryListRequest {
             workspace_id: mounted.id,
-            relative_path: "../outside".to_owned(),
+            parent_relative_path: "../outside".to_owned(),
         })
         .await
         .unwrap_err();
     assert_eq!(traversal.code, ErrorCode::PathAccessDenied);
-}
-
-#[tokio::test]
-async fn file_contract_creates_renames_and_removes_documents() {
-    let fixture = Fixture::new().await;
-    let mounted = fixture
-        .workspaces
-        .add(WorkspaceAddRequest {
-            root_path: fixture.workspace.display().to_string(),
-            name: None,
-        })
-        .await
-        .unwrap();
-    fs::create_dir_all(fixture.workspace.join("nested")).unwrap();
-
-    let created = fixture
-        .files
-        .create(FileCreateRequest {
-            workspace_id: mounted.id.clone(),
-            relative_path: "nested/drawing.excalidraw".to_owned(),
-        })
-        .await
-        .unwrap();
-    assert_eq!(created.display_name, "drawing.excalidraw");
-    assert!(fixture.workspace.join("nested/drawing.excalidraw").exists());
-
-    let renamed = fixture
-        .files
-        .rename(FileRenameRequest {
-            path: created.canonical_path.clone(),
-            new_name: "renamed.excalidraw".to_owned(),
-        })
-        .await
-        .unwrap();
-    assert_eq!(renamed.display_name, "renamed.excalidraw");
-    assert!(!PathBuf::from(&created.canonical_path).exists());
-
-    if let Err(error) = fixture
-        .files
-        .delete(PathRequest {
-            path: renamed.canonical_path.clone(),
-        })
-        .await
-    {
-        // Sandboxed runners can lack a desktop Trash provider. The command
-        // still routes through `trash::delete`; preserve this environment gap
-        // as evidence rather than weakening production behavior.
-        assert_eq!(error.code, ErrorCode::IoError);
-        return;
-    }
-    assert!(!PathBuf::from(&renamed.canonical_path).exists());
-}
-
-#[tokio::test]
-async fn file_contract_rejects_paths_outside_the_mounted_workspace() {
-    let fixture = Fixture::new().await;
-    let mounted = fixture
-        .workspaces
-        .add(WorkspaceAddRequest {
-            root_path: fixture.workspace.display().to_string(),
-            name: None,
-        })
-        .await
-        .unwrap();
-    let outside = fixture.outside.join("outside.excalidraw");
-    let error = fixture
-        .files
-        .create(FileCreateRequest {
-            workspace_id: mounted.id,
-            relative_path: "../outside/outside.excalidraw".to_owned(),
-        })
-        .await
-        .unwrap_err();
-    assert_eq!(error.code, ErrorCode::PathAccessDenied);
-    assert!(!outside.exists());
+    assert!(!fixture.outside.join("drawing.excalidraw").exists());
 }

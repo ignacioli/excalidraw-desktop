@@ -8,6 +8,7 @@ import {
   readHarnessDraft,
   readHarnessFile,
 } from "./browserTauriHarness";
+import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
 
 test("two concurrent document checkpoints remain independent", async () => {
   const testInfo = test.info();
@@ -63,18 +64,24 @@ test("two visible tabs checkpoint independently without blocking the shell", asy
     firstPath,
     secondPath,
   ]);
+  await persistPinnedWorkspaceSidebar(page);
   await page.goto("/");
 
   await page.getByRole("button", { name: "New drawing" }).click();
   await expect(
     page.getByRole("tab", { name: "first.excalidraw" }),
   ).toBeVisible();
-  let canvas = page.locator(".excalidraw__canvas.interactive");
+  let canvas = page.locator(
+    ".canvas-document:not([hidden]) .excalidraw__canvas.interactive",
+  );
   let box = await canvas.boundingBox();
   if (box === null) {
     throw new Error("The first tab canvas was not measurable.");
   }
-  await page.getByTitle(/^Rectangle/).click();
+  await page
+    .locator(".canvas-document:not([hidden])")
+    .getByTitle(/^Rectangle/)
+    .click();
   await page.mouse.move(box.x + 500, box.y + 180);
   await page.mouse.down();
   await page.mouse.move(box.x + 620, box.y + 260, { steps: 8 });
@@ -95,12 +102,17 @@ test("two visible tabs checkpoint independently without blocking the shell", asy
     )
     .toBe(true);
 
-  canvas = page.locator(".excalidraw__canvas.interactive");
+  canvas = page.locator(
+    ".canvas-document:not([hidden]) .excalidraw__canvas.interactive",
+  );
   box = await canvas.boundingBox();
   if (box === null) {
     throw new Error("The second tab canvas was not measurable.");
   }
-  await page.getByTitle(/^Ellipse/).click();
+  await page
+    .locator(".canvas-document:not([hidden])")
+    .getByTitle(/^Ellipse/)
+    .click();
   await page.mouse.move(box.x + 500, box.y + 320);
   await page.mouse.down();
   await page.mouse.move(box.x + 600, box.y + 390, { steps: 8 });

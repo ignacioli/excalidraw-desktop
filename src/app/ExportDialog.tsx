@@ -7,10 +7,7 @@ import {
 } from "../editor/exportService";
 import { serializeScene } from "../editor/sceneSerializer";
 import type { ColorScheme, CommandResponse } from "../ipc/contracts";
-import {
-  createTauriCommandInvoker,
-  type CommandInvoker,
-} from "../ipc/client";
+import { createTauriCommandInvoker, type CommandInvoker } from "../ipc/client";
 
 type ExportScale = 1 | 2 | 3;
 type ExportBackground = "transparent" | "solid";
@@ -35,8 +32,7 @@ export function ExportDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
   const [format, setFormat] = useState<ExportFormat>("png");
   const [scale, setScale] = useState<ExportScale>(2);
-  const [background, setBackground] =
-    useState<ExportBackground>("transparent");
+  const [background, setBackground] = useState<ExportBackground>("transparent");
   const [theme, setTheme] = useState<ColorScheme>(defaultTheme);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -44,7 +40,7 @@ export function ExportDialog({
 
   useEffect(() => {
     const firstOption = dialogRef.current?.querySelector<HTMLInputElement>(
-      'input:not([disabled])',
+      "input:not([disabled])",
     );
     firstOption?.focus();
   }, []);

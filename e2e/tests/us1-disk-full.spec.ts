@@ -8,6 +8,7 @@ import {
   readHarnessDraft,
   readHarnessFile,
 } from "./browserTauriHarness";
+import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
 
 test("disk-full checkpoint preserves the file and recoverable draft", async () => {
   const testInfo = test.info();
@@ -52,8 +53,13 @@ test("disk-full IPC feedback keeps the editor open with its recovery draft", asy
   page,
 }) => {
   await installBrowserTauriHarness(page, undefined, undefined, undefined, 1);
+  await persistPinnedWorkspaceSidebar(page);
   await page.goto("/");
   await page.getByRole("button", { name: "New drawing" }).click();
+  await expect(
+    page.getByRole("tab", { name: "us1-drawing.excalidraw" }),
+  ).toBeVisible();
+  await expect.poll(async () => readHarnessFile(page)).not.toBeNull();
   const original = await readHarnessFile(page);
 
   const canvas = page.locator(".excalidraw__canvas.interactive");

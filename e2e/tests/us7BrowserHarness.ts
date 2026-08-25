@@ -11,9 +11,8 @@ const EMPTY_SCENE = JSON.stringify({
 
 /**
  * Browser UI mock for US7: the same `__TAURI_INTERNALS__` invoke mock style as
- * the other browser-ui suites, plus an in-page thumbnail cache so the app's
- * `thumb_lookup`/`thumb_store` flow can be observed without a native backend.
- * `convertFileSrc` is emulated so `asset://` webp paths render in the browser.
+ * the other browser-ui suites. `convertFileSrc` is emulated so Drawing
+ * `.excalidraw_assets` paths resolve in the browser without a native backend.
  */
 export async function installUs7Harness(
   page: Page,
@@ -42,7 +41,6 @@ export async function installUs7Harness(
       };
       interface Us7State {
         files: Map<string, string>;
-        thumbCache: Map<string, { webpPath: string }>;
         storeCalls: string[];
         lookupCalls: string[];
         generateCalls: string[];
@@ -52,7 +50,6 @@ export async function installUs7Harness(
 
       const state: Us7State = {
         files: new Map(),
-        thumbCache: new Map(),
         storeCalls: [],
         lookupCalls: [],
         generateCalls: [],
@@ -60,6 +57,19 @@ export async function installUs7Harness(
         convertCalls: [],
       };
       const browser = globalThis as BrowserWindow;
+
+      const drawingEntries = (workspaceId: string, rootPath: string) =>
+        fileNames.map((name) => ({
+          workspaceId,
+          kind: "drawing" as const,
+          canonicalPath: `${rootPath}/${name}`,
+          relativePath: name,
+          parentRelativePath: "",
+          name,
+          displayName: name.replace(/\.excalidraw(\.json)?$/i, ""),
+          mtime: 1,
+          fileSize: 100,
+        }));
 
       browser.__TAURI_INTERNALS__ = {
         convertFileSrc(path) {
@@ -71,7 +81,7 @@ export async function installUs7Harness(
           if (command === "plugin:dialog|save") return "/workspace/saved.excalidraw";
           if (command === "app_handshake")
             return {
-              contractVersion: 1,
+              contractVersion: 2,
               appVersion: "0.1.0",
               abnormalExit: false,
               pendingOpenPaths: [],
@@ -94,57 +104,21 @@ export async function installUs7Harness(
             );
             return {};
           }
-          if (command === "dir_list")
-            return fileNames.map((name) => ({
-              name,
-              relativePath: name,
-              kind: "file",
-              mtime: 1,
-              fileSize: 100,
-            }));
-          if (command === "file_create") {
-            const name =
-              String(args.relativePath ?? "drawing.excalidraw")
-                .split("/")
-                .pop() ?? "drawing.excalidraw";
-            fileNames.push(name);
-            return {
-              canonicalPath: `/workspace/${name}`,
-              workspaceId: "workspace-1",
-              displayName: name,
-              relativePath: name,
-              mtime: 1,
-              fileSize: 100,
-            };
-          }
-          if (command === "file_rename") {
-            const oldName = String(args.path ?? "")
-              .split("/")
-              .pop();
-            const next = String(args.newName ?? "");
-            fileNames.splice(
-              fileNames.findIndex((name) => name === oldName),
-              1,
-              next,
+          if (command === "workspace_entry_list") {
+            const workspaceId = String(args.workspaceId ?? "");
+            const parentRelativePath = String(args.parentRelativePath ?? "");
+            if (parentRelativePath !== "") {
+              return [];
+            }
+            const workspace = state.mountedWorkspaces.find(
+              (item) => item.id === workspaceId,
             );
-            return {};
-          }
-          if (command === "file_delete") {
-            const oldName = String(args.path ?? "")
-              .split("/")
-              .pop();
-            fileNames.splice(fileNames.indexOf(oldName), 1);
-            return {};
+            if (workspace === undefined) {
+              return [];
+            }
+            return drawingEntries(workspace.id, workspace.rootPath);
           }
           const path = String(args.path ?? "");
-          if (command === "thumb_lookup") {
-            state.lookupCalls.push(path);
-            const theme = String(args.theme ?? "light");
-            const cached = state.thumbCache.get(`${path}|${theme}`);
-            return cached
-              ? { hit: true, webpPath: cached.webpPath }
-              : { hit: false };
-          }
           if (command === "doc_open") {
             const sceneJson = state.files.get(path) ?? emptyScene;
             return {
@@ -152,17 +126,6 @@ export async function installUs7Harness(
               baseHash: `base-${path.length}`,
               hasNewerDraft: false,
             };
-          }
-          if (command === "thumb_store") {
-            state.storeCalls.push(path);
-            const theme = String(args.theme ?? "light");
-            const key = String(args.key ?? "");
-            const webpPath = `/cache/thumbnails/${key.slice(0, 2)}/${key.slice(
-              2,
-              4,
-            )}/${key}.webp`;
-            state.thumbCache.set(`${path}|${theme}`, { webpPath });
-            return { webpPath };
           }
           if (command === "doc_checkpoint")
             return { newBaseHash: "checkpointed", mtime: 2 };
@@ -189,9 +152,23 @@ export async function getUs7State(page: Page): Promise<{
   mountedWorkspaces: { id: string; name: string; rootPath: string }[];
 }> {
   return page.evaluate(() => {
-    const state = (globalThis as {
-      __us7?: { state: Us7State };
-    }).__us7?.state;
+    const state = (
+      globalThis as {
+        __us7?: {
+          state: {
+            storeCalls: string[];
+            lookupCalls: string[];
+            generateCalls: string[];
+            convertCalls: string[];
+            mountedWorkspaces: {
+              id: string;
+              name: string;
+              rootPath: string;
+            }[];
+          };
+        };
+      }
+    ).__us7?.state;
     return {
       storeCalls: state?.storeCalls ?? [],
       lookupCalls: state?.lookupCalls ?? [],

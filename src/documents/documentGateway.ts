@@ -17,7 +17,7 @@ export interface DocumentGateway {
     resolution: "takeExternal" | "keepLocal" | "saveAsNew",
     saveAsPath?: string,
   ): Promise<CommandResponse<"doc_resolve_conflict">>;
-  close(path: string, discardDraft: boolean): Promise<void>;
+  close(path: string, mode: "checkpointed" | "discardOrphan"): Promise<void>;
 }
 
 export function createDocumentGateway(
@@ -35,8 +35,8 @@ export function createDocumentGateway(
         resolution,
         ...(saveAsPath === undefined ? {} : { saveAsPath }),
       }),
-    async close(path, discardDraft) {
-      await invoker.invoke("doc_close", { path, discardDraft });
+    async close(path, mode) {
+      await invoker.invoke("doc_close", { path, mode });
     },
   };
 }

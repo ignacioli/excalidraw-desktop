@@ -9,7 +9,6 @@ mod e2e_performance;
 mod e2e_performance_test;
 pub mod indexing;
 pub mod security;
-pub mod thumbnails;
 mod watcher;
 pub mod workspace_entries;
 
@@ -24,15 +23,16 @@ use commands::{
         doc_checkpoint, doc_close, doc_open, doc_resolve_conflict, doc_save_draft,
         ConflictRegistry, DirectFileGrant, DocumentService, DocumentState,
     },
-    entries::{workspace_entry_list, WorkspaceEntryState},
+    entries::{
+        workspace_entry_create, workspace_entry_delete, workspace_entry_delete_preflight,
+        workspace_entry_list, workspace_entry_rename, workspace_entry_reveal, WorkspaceEntryState,
+    },
     export::{doc_export, ExportService, ExportState},
-    files::{file_create, file_delete, file_rename, FileState},
     recovery::{
         recovery_apply, recovery_list, RecoveryService, RecoveryState, TauriRecoveryPathGrant,
     },
     session::{app_handshake, SessionState},
-    thumbnails::{thumb_lookup, thumb_store, ThumbnailService, ThumbnailState},
-    workspace::{dir_list, workspace_add, workspace_list, workspace_remove, WorkspaceState},
+    workspace::{workspace_add, workspace_list, workspace_remove, WorkspaceState},
 };
 use database::repository::SqliteRepository;
 use documents::recovery::RecoveryStore;
@@ -43,8 +43,6 @@ use e2e_performance::{
 };
 use watcher::{WatcherService, WatcherState};
 use workspace_entries::WorkspaceMutationGate;
-
-use crate::thumbnails::ThumbnailCache;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -85,7 +83,6 @@ pub fn run() {
             let shared_repository = Arc::new(repository.clone());
             let workspace_mutation_gate = WorkspaceMutationGate::default();
             let recovery_store = Arc::new(RecoveryStore::new(&app_data_directory));
-            let thumbnail_cache = Arc::new(ThumbnailCache::new(&app_data_directory));
             #[cfg(feature = "e2e-harness")]
             let performance_state = tauri::async_runtime::block_on(
                 PerformanceHarnessState::from_environment(Arc::clone(&shared_repository)),
@@ -104,9 +101,17 @@ pub fn run() {
                 conflicts,
                 Some(Arc::new(watcher_service.clone())),
             );
+            if let Err(error) = tauri::async_runtime::block_on(
+                crate::workspace_entries::reconcile_pending_mutations(
+                    &shared_repository,
+                    recovery_store.as_ref(),
+                ),
+            ) {
+                eprintln!("failed to reconcile pending Workspace Entry mutations: {error}");
+            }
             let recovery_service = RecoveryService::with_path_grant(
                 Arc::clone(&shared_repository),
-                recovery_store,
+                Arc::clone(&recovery_store),
                 Arc::new(TauriRecoveryPathGrant(app.fs_scope())),
             );
             app.manage(repository);
@@ -119,17 +124,14 @@ pub fn run() {
             app.manage(WorkspaceEntryState::new(
                 Arc::clone(&shared_repository),
                 workspace_mutation_gate,
+                Arc::clone(&recovery_store),
+                watcher_service.clone(),
             ));
             app.manage(ExportState::new(ExportService::new(
                 Arc::clone(&shared_repository),
                 Arc::new(TauriFileGrant(app.fs_scope())),
                 DocumentService::DEFAULT_SCENE_LIMIT_BYTES,
             )));
-            app.manage(ThumbnailState::new(ThumbnailService::new(
-                Arc::clone(&shared_repository),
-                Arc::clone(&thumbnail_cache),
-            )));
-            app.manage(FileState::new(shared_repository));
             app.manage(session);
             app.manage(WatcherState::new(watcher_service.clone()));
             tauri::async_runtime::block_on(watcher_service.start_existing(app.handle().clone()))?;
@@ -159,13 +161,12 @@ pub fn run() {
         workspace_remove,
         workspace_list,
         workspace_entry_list,
-        dir_list,
-        file_create,
-        file_rename,
-        file_delete,
+        workspace_entry_create,
+        workspace_entry_rename,
+        workspace_entry_delete_preflight,
+        workspace_entry_delete,
+        workspace_entry_reveal,
         doc_export,
-        thumb_lookup,
-        thumb_store,
         e2e_harness::e2e_set_atomic_write_fault,
         e2e_harness::e2e_clear_atomic_write_fault,
         e2e_harness::e2e_corrupt_latest_snapshot,
@@ -190,13 +191,12 @@ pub fn run() {
         workspace_remove,
         workspace_list,
         workspace_entry_list,
-        dir_list,
-        file_create,
-        file_rename,
-        file_delete,
-        doc_export,
-        thumb_lookup,
-        thumb_store
+        workspace_entry_create,
+        workspace_entry_rename,
+        workspace_entry_delete_preflight,
+        workspace_entry_delete,
+        workspace_entry_reveal,
+        doc_export
     ]);
 
     let app = match builder.build(tauri::generate_context!()) {

@@ -26,7 +26,7 @@ describe("RecoveryStartup", () => {
     const manager = {
       start: vi.fn(async () => ({
         handshake: {
-          contractVersion: 1,
+          contractVersion: 2,
           appVersion: "0.1.0",
           abnormalExit: true,
         },
@@ -70,7 +70,7 @@ describe("RecoveryStartup", () => {
     const manager = {
       start: vi.fn(async () => ({
         handshake: {
-          contractVersion: 1,
+          contractVersion: 2,
           appVersion: "0.1.0",
           abnormalExit: true,
         },
@@ -115,7 +115,7 @@ describe("RecoveryStartup", () => {
     const manager = {
       start: vi.fn(async () => ({
         handshake: {
-          contractVersion: 1,
+          contractVersion: 2,
           appVersion: "0.1.0",
           abnormalExit: true,
         },

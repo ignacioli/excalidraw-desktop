@@ -1,21 +1,22 @@
-# 验证证据汇总（Phase 10 / T095）
+# 验证证据汇总（Phase 10 / T095；002 T066 指令）
 
-**日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17；§6/§7 原生发版与 T078/T080/T094 更新于 2026-08-18；002 修改前基线更新于 2026-08-19）
-**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总，并包含 feature 002 的修改前诊断基线；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。
+**日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17；§6/§7 原生发版与 T078/T080/T094 更新于 2026-08-18；002 修改前基线更新于 2026-08-19；002 Polish 验证指令 T066 更新于 2026-08-23；T067 前端/Rust 门禁更新于 2026-08-23；T068 浏览器 E2E 与 T069 二进制证明更新于 2026-08-23；T071 物理机 10k 树与 T072 可观测性更新于 2026-08-23；T070 原生矩阵更新于 2026-08-24；T073–T075 参考 VM 与 quickstart 收口更新于 2026-08-24）
+**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总，并包含 feature 002 的修改前诊断基线、Polish 门禁指令与 T067/T068/T069 成绩；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。T066 只更新指令与证据边界，不重分类下列 001 历史数字。T070 见 [native-verification.md](./native-verification.md) §9（2026-08-23/24 已执行）；T071/T072 见 §0.6/§0.7；T073 见 §0.8；T074 见 §0.9；T075 见 §0.10。
 
-先看下表再下钻各节。性能当前有效序列是 2026-08-16 ADR-007（同一份 e2e-harness `e8bef9b7…`）；§5.3 的日期流水账不可与之混比。
+先看下表再下钻各节。下表是 **001 Phase 10 / T095 历史成绩单一览**，不因 002 改写。性能当前有效序列是 2026-08-16 ADR-007（同一份 e2e-harness `e8bef9b7…`）；§5.3 的日期流水账不可与之混比。002 剩余门禁顺序与执行边界见 §0.1。
 
 | 门禁 | 状态 | 说明 |
 |------|------|------|
-| 浏览器回归（T095，§1） | **36 pass** · 2 已知 fail · 12 skip | 两例失败为断言/定位符脆性，先于本阶段；skip 依赖原生测试二进制 |
+| 浏览器回归（T095，§1） | **36 pass** · 2 已知 fail · 12 skip | 两例失败为断言/定位符脆性，先于本阶段；skip 依赖原生测试二进制。此为 001 历史计数，不是 T068 |
 | SC-012 可靠性（§2） | 前序 **pass**，本会话未复跑 | 合并阻断门禁；未在本会话重建 `e2e-harness` 复跑 |
 | SC-014 外观（§3） | **pass**（4/4） | light/dark/system 与截图基线 |
-| SC-015 无障碍（§4） | **pass**（15/15） | axe serious/critical = 0 |
-| T090 startup/idle（§5.2） | 物理机 **pass** · 参考 VM **fail** | VM 只败在冷启动 3704 ms；8 vCPU 诊断仍 fail（§5.2），未改 specs；空载 RSS 两边过 500 MB |
-| T090 canvas/I/O（§5.2） | 物理机 **pass** · 参考 VM **pass** | 10k 恒定 zoom 平移/编辑约 60 fps |
-| T108 15 min soak（§5.2） | 物理机 **fail** · 参考 VM **fail** | 只败在 RSS 增长；idle CPU 与静置 0 写入两边过 |
+| SC-015 无障碍（§4） | **pass**（15/15） | T093 历史：axe serious/critical = 0。002 跨故事审计结果以 [a11y-audit.md](./a11y-audit.md)（T063）为准，本文件不改写 |
+| T090 startup/idle（§5.2） | 物理机 **pass** · 参考 VM **fail** | VM 只败在冷启动 3704 ms；8 vCPU 诊断仍 fail（§5.2），未改 specs；空载 RSS 两边过 500 MB。001 历史；002 不得复用为 T073 |
+| T090 canvas/I/O（§5.2） | 物理机 **pass** · 参考 VM **pass** | 10k 恒定 zoom 平移/编辑约 60 fps。001 历史；002 不得复用为 T073 |
+| T108 15 min soak（§5.2） | 物理机 **fail** · 参考 VM **fail** | 只败在 RSS 增长；idle CPU 与静置 0 写入两边过。001 历史；002 不得复用为 T074 |
 | SC-010 开源分发（§6） | **v0.1.1 已发布** | 未签名/未公证 GitHub Release；macOS universal `.dmg` + Linux amd64 AppImage/deb/rpm |
-| T078/T080 原生验收（§7） | **通过**（2026-08-18） | 物理 macOS 26.5.2 下载真实 `v0.1.1`；T094 Ubuntu IME 可选已做 |
+| T078/T080 原生验收（§7） | **通过**（2026-08-18） | 001 历史：物理 macOS 26.5.2 下载真实 `v0.1.1`；T094 Ubuntu IME 可选已做。002 US1–US4 矩阵见 [native-verification.md](./native-verification.md) §9：2026-08-23/24 **已执行**（T070） |
+| 002 Polish 门禁（§0.1） | T063–T075 已执行 | T067 见 §0.2，T068 见 §0.3，T069 见 §0.4，T070 见 §0.5，T071 见 §0.6，T072 见 §0.7，T073 见 §0.8，T074 见 §0.9，T075 见 §0.10。不得用 §5.2 的 001 T090/T108 代替 |
 
 ## 0. Feature 002 修改前基线（T001，2026-08-19）
 
@@ -29,6 +30,195 @@
 | `prompt` / `confirm`      | 生产源码仍在 `FileTree.tsx` 使用 4 个 `window.prompt` 与 1 个 `window.confirm`，在 `WorkspacePanel.tsx` 使用 1 个 `window.confirm`。同日隔离原生复现确认 prompt 无声取消、confirm 无声接受；唯一 delete sentinel 未显示确认即进入 macOS Trash，随后通过 Finder **Put Back** 恢复 | 原生复现使用隔离 app-data/workspace/sentinel；本轮未重复执行 Trash mutation，避免把已完成的安全复现误当实现后验收                                                                                              |
 
 Focused browser 命令实际以仓库本地 Vite/Playwright 可执行文件运行；标准 `pnpm exec` 在当前环境尝试访问 registry 而失败，沙箱内 Chromium/Mach port 与 localhost bind 也被拒绝，因此最终在获准的本机执行边界运行。最终产品断言结果为 2 pass / 1 fail；前述环境启动失败不计入该结果。
+
+## 0.1 Feature 002 Polish 验证说明（T066，2026-08-23）
+
+本节记录 Polish 门禁顺序与证据边界。T067 成绩见 §0.2，T068 成绩见 §0.3，T069 成绩见 §0.4，T070 见 §0.5，T071 见 §0.6，T072 见 §0.7，T073 见 §0.8，T074 见 §0.9，T075 见 §0.10。§0 的 T001 基线、§1 的 T095、§4 的 T093、§5.2 的 001 T090/T108、§7 的 T078/T080 一律保持历史身份，不得重分类为 002 已验收。
+
+### 剩余门禁顺序
+
+文档与无障碍指令先于可执行门禁。顺序不得跳步把后面的成绩提前写成通过：
+
+1. **文档 / 无障碍（T063–T066）**：跨故事 a11y 审计写入 [a11y-audit.md](./a11y-audit.md)（T063，本文件不改写其结果）；产品文档与架构/IPC 由 T064/T065 同步；本文件与 [native-verification.md](./native-verification.md) 由 T066 更新指令。
+2. **前端 / Rust 门禁（T067）**：已执行，见 §0.2。仅修复 002 回归（Prettier 折行与一处未使用的 TabBar 测试绑定）。
+3. **全量浏览器 E2E（T068）**：已执行，见 §0.3。不得用 §1 的 T095「36 pass / 2 fail / 12 skip」代替。
+4. **生产 vs `e2e-harness` 二进制（T069）**：已执行，见 §0.4。
+5. **隔离 macOS 功能 / 原生矩阵（T070）**：已执行，见 §0.5 与 [native-verification.md](./native-verification.md) §9。
+6. **物理机 10k 连续树（T071）**：已执行，见 §0.6。不得把 §0 的修改前 10k fail 或 §5.2 的 001 canvas/I/O 写成 002 复测。
+7. **性能可观测性（T072）**：已执行且路径有效，见 §0.7。无效则记 `not_evaluated`，**不得消耗 T108 时间**。
+8. **T090 / T108 参考 VM（T073 / T074）**：仅当 T072 有效时，才跑未缩短的完整 T090 与 15 分钟 T108，并记录真实 `pass` / `fail`（T108 允许有依据的 `not_evaluated`）。T073 已执行，见 §0.8；T074 已执行，见 §0.9。权威门禁仍是声明配置的参考 VM（Parallels 4 vCPU / 8GB），不是本机 48 GB 物理机。VM 结果不得表述为未执行的真机覆盖。不得用 §5.2 的 001 报告代替。
+
+T075（`specs/002-desktop-ui-interactions/quickstart.md` 全量命令与手工场景、安全/无障碍/文档对齐）已收口，见 §0.10。Ubuntu 24.04 Desktop 仍为可选社区验证，002 未新跑；Fedora / 其他 Linux / Windows 不在当前支持承诺内。
+
+### Codex macOS 沙箱：浏览器 E2E
+
+在 **Codex managed macOS 沙箱**里跑浏览器可见 Playwright 时，不得让 Playwright 在沙箱内启动其配置的 `webServer`（`e2e/playwright.config.ts` 默认 `pnpm dev --host 127.0.0.1`，ready URL `http://127.0.0.1:1420`）。应：
+
+1. 在沙箱**外**启动 `pnpm dev --host 127.0.0.1`，等到 ready URL；
+2. 再设置 `PLAYWRIGHT_SKIP_WEBSERVER=1` 运行 Playwright；
+3. 使用非默认端口时同时设置 `PLAYWRIGHT_BASE_URL`。
+
+普通开发者 shell 与 CI 仍可使用配置中的 `webServer`。沙箱内 Chromium / Mach port / localhost bind 失败不得记进产品 pass/fail。
+
+### 缩略图退役
+
+002 **不得**把 thumbnail IPC / 渲染当作当前产品工作。§0 T001 记录的 `thumb_lookup` / 额外 `doc_open` / worker render / `thumb_store` 是**修改前**活动，只作历史对照。T069（§0.4）已证明当前生产二进制与生产 `dist` 无 harness / `thumb_*` handler，也无 thumbnail worker chunk。
+
+### 前序 002 US3/US4 会话交接（非本会话、非 T068）
+
+前序交接称：focused Vitest + `tsc` 通过；Playwright **18 pass / 1 skip**（skip = live native window-contract，因未配置 `APP_E2E=1` + `EXCALIDRAW_E2E_BINARY`）。这是**前序会话的 focused 浏览器证据**，T066 本会话未复跑这些命令，因此：
+
+- 不得当作 T068 全量套件成绩；
+- 不得当作 T067 前端/Rust 全部门禁（T067 以 §0.2 本会话复跑为准）；
+- 不得关闭 T070 的真实 Cmd+W / 中键 / 触控板 / 窗口堆叠行（见 [native-verification.md](./native-verification.md) §10：合成 harness 不是真机输入）。
+
+## 0.2 Feature 002 前端 / Rust 门禁（T067，2026-08-23）
+
+在 `codex/wip-desktop-ui-interactions`（产品 `178e890`）上执行。Prettier 先对 18 个 002 UI 文件折行，并去掉 `TabBar.test.tsx` 中未使用的 `betaTab` 绑定；随后全部门禁通过。这不是浏览器 E2E，也不是原生矩阵。
+
+| 命令 | 结果 |
+|------|------|
+| `pnpm format` | **pass**（修复后复跑） |
+| `pnpm lint` | **pass** |
+| `pnpm typecheck` | **pass** |
+| `pnpm test` | **pass**（211 passed / 30 files） |
+| `pnpm build` | **pass** |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | **pass** |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` | **pass** |
+| `cargo test --manifest-path src-tauri/Cargo.toml` | **pass**（lib 64；`contract_documents` 10；`contract_entries` 9；`contract_workspace` 1；`contract_workspace_tree` 3；`untrusted_scene` 3） |
+
+沙箱内首次 clippy 因 `libsqlite3-sys` `PermissionDenied` 失败，不计入产品成绩；获准本机执行后通过。
+
+## 0.3 Feature 002 全量浏览器 E2E（T068，2026-08-23）
+
+在 `codex/wip-desktop-ui-interactions` 上执行。Vite 在沙箱外监听 `http://127.0.0.1:1420`，Playwright 使用 `PLAYWRIGHT_SKIP_WEBSERVER=1`、`--workers=1`。侧栏默认隐藏后，测试改为 `openWorkspaceSidebar` / `persistPinnedWorkspaceSidebar`；钉住布局给树有界高度；tree 行键变化后恢复滚动锚点；`invalidated` 不再清空子树。外观基线已按钉住侧栏重录。磁盘满用例在捕获文件快照前等待 create 的第一次 checkpoint。这不是原生矩阵，也不是 T069 二进制证明。合成 harness 仍不是真实 Cmd+W / 中键 / 触控板证据。
+
+| 套件 | 命令 | 结果 |
+|------|------|------|
+| focused | `pnpm e2e tests/ui-entry-dialogs.spec.ts tests/ui-continuous-workspace-tree.spec.ts tests/ui-tab-close-wheel.spec.ts tests/ui-sidebar-modes.spec.ts tests/us3-scale-scroll.spec.ts tests/a11y-audit.spec.ts --workers=1` | **42 passed**（53.9s，exit 0） |
+| 全量 | `pnpm e2e --workers=1` | **69 passed** · **0 failed** · **27 skipped**（1.3m，exit 0；96 tests） |
+
+27 skip 均因未配置原生二进制，不计入产品失败：
+
+- US1 `native-entry-mutations` 9、US2 kill/recovery/snapshot 11、US3 `native-tab-close` 5、US4 live window-contract 1：需要 `APP_E2E=1` + `EXCALIDRAW_E2E_BINARY`（T070）
+- `production-harness-absence` 1：需要 `TAURI_PRODUCTION_BINARY`（T068 当时未设；随后 T069 对该生产二进制复跑 **1 passed**，见 §0.4）
+
+002 产物：`e2e/tests/workspaceSidebar.ts`；`us1-appearance.spec.ts-snapshots/us1-shell-{light,dark}-browser-ui-darwin.png`（钉住侧栏后的壳层基线）。
+
+## 0.4 Feature 002 生产 vs `e2e-harness` 二进制（T069，2026-08-23）
+
+在 `codex/wip-desktop-ui-interactions`（产品 `6ea1b2e`）上构建本机 macOS `.app`（`--bundles app`，不为 T069 打 dmg）。产物在 `CARGO_TARGET_DIR` 下；可执行文件副本留在 `/tmp/excalidraw-t069/`，**不提交**。这不是 T070 真机矩阵，也不是 T090/T108。
+
+| 构建 | 命令 | 结果 |
+|------|------|------|
+| 生产 | `pnpm tauri build --bundles app` | **pass**（exit 0；zsh 只读 `status` 使包装脚本非零，Tauri 本身 `Finished 1 bundle`） |
+| 测试 | `VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness --bundles app` | **pass**（exit 0） |
+| 生产缺席 | `TAURI_PRODUCTION_BINARY=/tmp/excalidraw-t069/excalidraw-desktop.production pnpm e2e tests/production-harness-absence.spec.ts` | **1 passed** |
+
+| 产物 | SHA-256 | 说明 |
+|------|---------|------|
+| 生产可执行文件 | `83d3140bff81eefa6c9a0ce7bcd485d12aae45404b8d15ae49865f92e6c4ddc6` | 无全部 `E2E_HARNESS_ARTIFACT_TOKENS`；无 `thumb_lookup` / `thumb_store` / `thumbnail_render` |
+| `e2e-harness` 可执行文件 | `8d84d09561dc1ae0efe0e123d102de9dfedfbe5c1efd47f7dcf774dcee93379c` | 含 `e2e_set_atomic_write_fault`、`e2e_corrupt_latest_snapshot`、`e2e_perf_*`、`EXCALIDRAW_PERF_CONTROL_DIR`；仍无 `thumb_*` |
+| 生产 `dist` | 构建时快照于 `/tmp/excalidraw-t069/dist.production` | 无 `thumb_*`；唯一 `*worker*` 是 Excalidraw 字体 `subset-worker.chunk-*.js`，不是 thumbnail worker；无 `performanceDriver` chunk |
+| harness `dist` | 随后 `VITE_E2E_HARNESS=1` 覆盖工作区 `dist/` | 仍无 `thumb_*` / thumbnail worker；出现 `performanceDriver-*.js`（测试专用） |
+
+## 0.5 Feature 002 隔离 macOS 原生矩阵（T070，2026-08-23/24 已执行）
+
+在物理机 `macos-physical-02`（macOS 26.5.2 25F84，Apple M5 Pro / 48 GB）上执行。2026-08-23 用 T069 生产 `.app`（SHA-256 `83d3140b…`）完成标题栏与遮挡/最小化。2026-08-24 用新生产 `.app`（SHA-256 `1e7b07a8bc6dfcce5be18904722c5487653c9d6078bbe46978808ef227307baa`，隔离根 `/tmp/excalidraw-t070.JPjQrP`）完成 Trash/Put Back、Open in Finder、钉住 70%，以及操作员 VoiceOver / Cmd+W / 中键 / 滚轮。明细见 [native-verification.md](./native-verification.md) §9。
+
+| 行 | 状态 | 一句话 |
+|----|------|--------|
+| Trash / Put Back | **pass** | 真实 Mount 后 Delete 进入系统废纸篓；Finder「放回原处」恢复 `empty-dir` 与 `drawing.excalidraw` |
+| Open in Finder | **pass** | 非空 `has-hidden` 出现「Folder isn’t empty」；显式 Open in Finder 打开工作区文件夹且未删除 |
+| VoiceOver | **pass** | 操作员开启系统 VoiceOver，菜单/对话框/树行/标签关闭朗读符合预期 |
+| 真实 Cmd+W | **pass** | 操作员物理 Cmd+W 只关活动标签；关完后窗口与侧栏仍在 |
+| 中键 | **pass** | 操作员对未激活标签真实中键关闭 |
+| 滚轮 / 触控板 | **pass** | 操作员真实滚轮/触控板垂直切换符合预期 |
+| 侧边栏 overlay / pin / 改宽 | **pass** | overlay 不改画布盒；默认 800×600 钉住画布 560/800=70%；无拖拽改宽控件（SC-010 不要求 splitter） |
+| 标题栏选择 A | **pass** | 2026-08-23：标题 Excalidraw Whiteboard；AXStandardWindow；layer 0；生产 conf 无 alwaysOnTop |
+| 遮挡 / 最小化 / 恢复 | **pass** | 2026-08-23：TextEdit 覆盖；缩小后 off-screen；Window 菜单恢复 |
+
+用户 `~/Library/Application Support/excalidraw-desktop` sqlite mtime 启动前后不变。
+
+同日进程级 `APP_E2E=1`（harness SHA-256 `8d84d09561dc1ae0efe0e123d102de9dfedfbe5c1efd47f7dcf774dcee93379c`）补跑 T068 跳过的原生套件：**30 passed** · **0 failed** · **1 skipped**（nightly 100-seed，未设 `RELIABILITY_NIGHTLY=1`）。含 US2 八点 SIGKILL。这是 CLI harness 进程证据，**不是** §9 的真实 Cmd+W / 中键 / 触控板 / VoiceOver / Put Back。
+
+## 0.6 Feature 002 物理机 10k 连续树（T071，2026-08-23）
+
+在 `macos-physical-02`（macOS 26.5.2 25F84，Apple M5 Pro / 48 GB）上，对产品 `e1058d7` 复跑与 T001 同一诊断面：`us3-scale-scroll.spec.ts` 浏览器 fixture（Vite `http://127.0.0.1:1420`，`PLAYWRIGHT_SKIP_WEBSERVER=1`）。这不是原生文件系统索引，也不是 §5.2 的 001 10k 画布 T090。原始观察 JSON 在 `/tmp/excalidraw-t071-observation.json`，**不提交**。
+
+| 指标 | T001 before（2026-08-19，`1346d29`） | T071 after（2026-08-23，`e1058d7`） | 预算 |
+|------|--------------------------------------|-------------------------------------|------|
+| 展开延迟 | **fail** 8088.5 ms | **pass** 44.1 ms | ≤200 ms |
+| 渲染行数 | **fail** 10,001 treeitem 全部进入 DOM | **pass** 26 行（估计 10,002） | <300 |
+| 滚动容器 | **fail** `scrollHeightPx == clientHeightPx == 320032`，位移 0 | **pass** 320064 > 566；位移 51,425 px；121 次位置变化 | 可滚动且位移 ≥50 px |
+| 滚动 FPS | 记录 118.98 但容器不可滚动，无效 | **pass** 119.99 | ≥50 |
+| 缩略图工作量 | 可见行 `thumb_lookup` / extra `doc_open` / render / `thumb_store` | **pass** `thumbnailCommands=[]`，DOM 缩略图 0，额外 `doc_open` 0 | 零缩略图 |
+
+命令：`pnpm e2e tests/us3-scale-scroll.spec.ts --workers=1` → **1 passed**（2.4 s，随后 JSON reporter 复跑 1 passed）。回归 verdict：**pass**（相对 T001 10k 树 fail 与缩略图链）。浏览器 rAF 不证明 Tauri/WebView 进程树 RSS。
+
+## 0.7 Feature 002 原生性能可观测性（T072，2026-08-23）
+
+在 `macos-physical-02` 上用 T069 二进制探测 `command.json` → `result.json`（及生产构建必须忽略该目录），再决定是否消耗 T108 时间。探针：`e2e/perf/observability-probe.spec.ts`（仅 `PERF_OBSERVABILITY=1` 执行，避免混进完整 T090）。
+
+| 项 | 结果 |
+|----|------|
+| 环境 | `macos-physical-02`；macOS 26.5.2 (25F84) |
+| harness | `/tmp/excalidraw-t069/excalidraw-desktop.e2e-harness` SHA-256 `8d84d09561dc1ae0efe0e123d102de9dfedfbe5c1efd47f7dcf774dcee93379c` |
+| 生产 | `/tmp/excalidraw-t069/excalidraw-desktop.production` SHA-256 `83d3140bff81eefa6c9a0ce7bcd485d12aae45404b8d15ae49865f92e6c4ddc6` |
+| 命令 | `PERF_TEST=1 PERF_OBSERVABILITY=1 APP_E2E=1 pnpm e2e perf/observability-probe.spec.ts --workers=1` |
+| 成绩 | **2 passed**（12.4 s）：`startup-editable` 后 3 s 可见 `pan-zoom` 写出 `result.json`（`commandId` 一致、`frameIntervalsMs` 非空）；生产进程 8 s 内无 `ready.json` / `result.json` / `error.json` |
+| 路径有效性 | **valid**。因此 **可以** 在声明配置的参考 VM 上跑未缩短的 T090/T108（T073/T074）。本机 48 GB 物理机 **不是** 该参考 VM，不得把本机 T090 写成 T073。 |
+
+未跑 T108。未把 T072 记为 `not_evaluated`。
+
+## 0.8 Feature 002 参考 VM T090（T073，2026-08-24）
+
+在声明配置的 Parallels 参考 VM `macOS26.5.2` 上执行未缩短的 T090（`startup-idle` + `canvas-io`）。来宾：macOS 26.5.2 (25F84)、arm64、4 逻辑 CPU、8589934592 bytes（8 GiB）、WebKit 21624.2.5.11.8。宿主硬件 `Apple M5 Pro / 48GB`，虚拟化 Parallels Desktop Pro 26.4.1。`PERF_REFERENCE_RUN=1`，`PERF_EXECUTION_ENVIRONMENT=virtual`。测量 commit `10fc040`；e2e-harness SHA-256 `8504a87a8d08cba2a762a506eaff9af236666aaad9fbd09de305e52aad579fae`（由该 HEAD 在宿主机 ARM64 重建后拷入来宾）。跑 T090 前在同一来宾对 harness 做 `observability-probe`：`result.json` **1 passed** / 生产忽略用例因未设 `TAURI_PRODUCTION_BINARY` 而 skip（生产忽略已由 T072 在物理机证明）。这不是 §5.2 的 001 序列。15 分钟 T108 见 §0.9。
+
+| 套件 | 报告 | overall | 要点 |
+|------|------|---------|------|
+| startup / idle | [startup-idle.002.ref.json](./startup-idle.002.ref.json) SHA-256 `b6d6c2ac…` | **fail** | 冷启动至可编辑 P95 **2175.199 ms**（预算 ≤2000 ms，n=10 最短 1598 ms、最长即 P95）；进程拉起 P95 26.6 ms；空载全树 RSS P95 **331.4 MB** · **pass**（≤500 MB） |
+| canvas / I/O | [canvas-io.002.ref.json](./canvas-io.002.ref.json) SHA-256 `bca08ae0…` | **pass** | 10k 稳定全树 RSS P95 **554.2 MB**（≤950 MB）；平移 59.95 fps / 最大冻结 33 ms；编辑 60.01 fps / 25 ms；写/编辑比 0 |
+
+Playwright 两份 spec 均 exit 0（预算失败仍写出完整 `fail` 报告，不把套件失败当成测量中断）。预算失败不阻断合并或开源发布（[ADR-008](../adr/ADR-008.md)）。§5.2 的 001 `startup-idle.ref.json` / `canvas-io.ref.json` 保持历史身份，未被覆盖。
+
+## 0.9 Feature 002 参考 VM 15 分钟 T108（T074，2026-08-24）
+
+同一声明参考 VM 与同一 e2e-harness SHA-256 `8504a87a…`、commit `10fc040`，在 T073 的来宾 `observability-probe` 有效之后跑**未缩短**的 `edit-soak.spec.ts`。Playwright 墙钟 **17.6 min**；工作负载 `editing.actualDurationMs` **900000**（= 要求的 15 分钟，seed 40000）。报告 [edit-soak.002.ref.json](./edit-soak.002.ref.json) SHA-256 `32ab2cd9…`。这不是 §5.2 的 001 soak，也未缩短为诊断时长。
+
+| 指标 | 预算 | 测量 | 判定 |
+|------|------|------|------|
+| RSS 增长绝对值 | ≤ 50 MB | +672.7 MB（预热 P95 556.6 MB → 静置 P95 1229.4 MB） | **fail** |
+| RSS 增长相对值 | ≤ 15% | +120.9% | **fail** |
+| 静置 idle CPU P95 | ≤ 35% 单逻辑核 | 23.5% | **pass** |
+| 静置写入 | 0 事件 / 0 路径 | 0 / 0 | **pass** |
+| 套件 overall | 全部过才 pass | RSS 增长两项失败 | **fail** |
+
+编辑事件 3600。预算失败不阻断合并或开源发布（[ADR-008](../adr/ADR-008.md)）。§5.2 的 001 `edit-soak.ref.json` 保持历史身份，未被覆盖。
+
+## 0.10 Feature 002 quickstart 收口（T075，2026-08-24）
+
+对照 `specs/002-desktop-ui-interactions/quickstart.md` 的适用命令与手工场景。本任务不重写 §1–§8 的 001 历史，也不把 Ubuntu/Fedora/Windows 写成已覆盖。
+
+| Quickstart 节 | 执行 | 证据 |
+|---------------|------|------|
+| 2 静态/单元 | 已执行 | T067 §0.2：typecheck/lint/test/build、cargo fmt/clippy/test **pass** |
+| 3 聚焦浏览器 UI | 已执行 | T068 §0.3：focused 42 passed；全量 69 passed / 27 skipped |
+| 4 原生测试二进制 | 已执行 | T069 §0.4；T073 另用当前 HEAD harness `8504a87a…` |
+| 5 隔离 macOS 功能矩阵 | 已执行 | T070 §0.5 与 [native-verification.md](./native-verification.md) §9 |
+| 6 标题栏选择 A | 已执行 | T070：标题栏 / 遮挡 / 最小化 / 恢复 **pass** |
+| 7 进程可靠性 | 已执行 | T070 同日 `APP_E2E=1`：**30 passed** / 1 skipped（nightly 100-seed） |
+| 8 性能回归 | 已执行 | 物理机 10k 树 T071 §0.6 **pass**；参考 VM T090 T073 §0.8（startup **fail** / canvas **pass**）；15 min T108 T074 §0.9 **fail** |
+| 9 文档与契约同步 | 已执行 | T063–T066；本轮 `git diff --check` 无空白错误；无产品代码改动，仅证据 JSON 与 tasks 勾选待提交 |
+
+安全 / 无障碍 / 文档对齐复查：T063 跨故事 axe serious/critical = 0，T070 含操作员 VoiceOver；T064–T066 已同步 DESIGN/README/AGENTS/CONTEXT、architecture/IPC/ADR-009 与证据指令；公开产品页不引用 SDD 任务号。本 Polish 切片未扩大 Tauri capabilities、未关 CSP、未把密钥写入仓库。
+
+剩余缺口（诚实保留，不阻断 002 收口）：
+
+- Ubuntu 24.04 Desktop 仍为可选社区验证；002 未新跑。001 T094 IME smoke 仍是该可选面的历史证据。
+- Fedora / 其他 Linux / Windows 不在当前支持承诺内。
+- 参考 VM 冷启动 2 s（T073）与 15 min soak RSS 增长（T074）为预算 **fail**，按 ADR-008 可见但不阻断合并或开源发布。
+- §1.1 两个 001 浏览器断言脆性仍在历史成绩单中；T068 全量已绿，不得把 T095 的 2 fail 算进 T068。
 
 ## 1. 全量浏览器回归（T095 执行）
 
@@ -48,6 +238,8 @@ Focused browser 命令实际以仓库本地 Vite/Playwright 可执行文件运�
 - `us3-scale-scroll.spec.ts:194`：`scrollHeightPx` 与 `clientHeightPx` 恰好相等（320032），1px 布局漂移即翻转断言；与 T093 审计中记录的外观基线像素漂移（字体/环境级）一致。
 
 处理意见：作为已知偏差记录在案，后续以定位符收敛（`.first()`/可见性过滤）与 `>=` 边界修正消除；修复不属本阶段范围。
+
+**002 现况（不改写上表）**：两条已在当前产品代码中消除，不得把 T068 的 69 passed 写回本节 T095 计数。`us1-concurrent-tabs-save` 只定位 `.canvas-document:not([hidden])` 内的画布；`us3-scale-scroll` 断言改为 `scrollHeightPx > clientHeightPx`，连续树虚拟化后容器可滚动。T068 全量浏览器 **69 passed / 0 failed**（2026-08-23）；T071 复跑 `us3-scale-scroll` **pass**（展开 44.1 ms，26 行虚拟化）。上表「失败 2」仍是 Phase 10 / `HEAD 9e6ea21` 的历史记录。
 
 ## 2. SC-012 统一可靠性阻断门禁
 
@@ -188,3 +380,4 @@ Focused browser 命令实际以仓库本地 Vite/Playwright 可执行文件运�
 - 空窗口 / Safari 对照在未禁用 App Nap 时 idle CPU P95 约为 0%，不能用来否定 harness（可见窗口 + 禁用 App Nap）下的 9–29% idle CPU 测量条件。
 - 宿主机 diagnostic 性能跑要求测量窗口全程可见（rAF 遮挡暂停约束，§5.3）；`visibilityState=hidden` 时 driver 10 秒失败，可见慢帧最多等 60 秒。
 - 上游 `@excalidraw/excalidraw` 内部 DOM 不在壳层 a11y 扫描范围（T093 残余说明）。
+- Feature 002 Polish：T063–T075 已执行（T067 见 §0.2，T068 见 §0.3，T069 见 §0.4，T070 见 §0.5，T071 见 §0.6，T072 见 §0.7，T073 见 §0.8，T074 见 §0.9，T075 见 §0.10）。T073 参考 VM startup/idle **fail**（冷启动 P95 2175 ms），canvas/I/O **pass**；T074 15 min soak **fail**（RSS +672.7 MB / +120.9%，idle CPU 与静置 0 写入通过）。不得把 §5.2 的 001 数字写成 002。002 无障碍数字以 [a11y-audit.md](./a11y-audit.md) 为准。前序会话 focused 18 pass / 1 skip 不是 T068。T068 的 27 skip 不是失败。

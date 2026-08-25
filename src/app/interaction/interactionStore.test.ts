@@ -34,6 +34,7 @@ describe("interactionReducer", () => {
     "outsidePointer",
     "escape",
     "action",
+    "tab",
     "ownerCollapsed",
     "treeScroll",
     "dialogOpened",

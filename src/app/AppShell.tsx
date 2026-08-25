@@ -9,6 +9,7 @@ import {
   documentManager,
   registerDocumentFileChangeEvents,
   useDocumentStore,
+  type CloseOutcome,
   type DocumentSaveState,
 } from "../documents/documentStore";
 import { conflictDetector } from "../documents/conflictDetector";
@@ -27,6 +28,10 @@ import {
 import { fileDialogActions, type FileDialogActions } from "./fileDialogs";
 import { registerOpenFileHandler } from "./openFileHandler";
 import { TabBar } from "./TabBar";
+import { OrphanCloseDialog } from "./OrphanCloseDialog";
+import { interactionStore } from "./interaction";
+import { createSidebarController } from "./sidebarController";
+import { ShellPreferences } from "./shellPreferences";
 import { useAppStore } from "./store";
 import {
   initializeBrowserThemeController,
@@ -75,6 +80,19 @@ export function AppShell({
   >(undefined);
   const exportButtonRef = useRef<HTMLButtonElement>(null);
   const [exportDocumentId, setExportDocumentId] = useState<string | null>(null);
+  const [orphanCloseId, setOrphanCloseId] = useState<string | null>(null);
+  const [preferences] = useState(() => new ShellPreferences());
+  const [sidebarController] = useState(() =>
+    createSidebarController({
+      initiallyPinned: preferences.getSnapshot().sidebarPinned,
+    }),
+  );
+  const sidebarSnapshot = useSyncExternalStore(
+    sidebarController.subscribe,
+    sidebarController.getSnapshot,
+    sidebarController.getSnapshot,
+  );
+  const pointerLeaveTimerRef = useRef<number | undefined>(undefined);
   const hasMountedWorkspace = useAppStore((state) => state.hasMountedWorkspace);
   const setHasMountedWorkspace = useAppStore(
     (state) => state.setHasMountedWorkspace,
@@ -130,6 +148,17 @@ export function AppShell({
     if (selectedPath !== null) {
       await documentManager.saveOrphanedAs(documentId, selectedPath);
     }
+  };
+  const applyCloseOutcome = (outcome: CloseOutcome) => {
+    if (outcome.status === "orphaned") {
+      setOrphanCloseId(outcome.documentId);
+      return;
+    }
+    if (outcome.status === "failed") {
+      setInteractionError(outcome.message);
+      return;
+    }
+    setOrphanCloseId(null);
   };
   const handleEditorReady = useCallback(
     (
@@ -280,11 +309,71 @@ export function AppShell({
     return () => window.removeEventListener("keydown", handleSaveShortcut);
   });
 
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (sidebarController.handleEscape()) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [sidebarController]);
+
+  useEffect(() => {
+    const syncHolds = () => {
+      const reasons = interactionStore.getState().holdReasons;
+      sidebarController.setHold("menu", reasons.has("menu"));
+      sidebarController.setHold("dialog", reasons.has("dialog"));
+      sidebarController.setHold("drag", reasons.has("drag"));
+    };
+    syncHolds();
+    return interactionStore.subscribe(syncHolds);
+  }, [sidebarController]);
+
+  useEffect(() => {
+    if (!sidebarSnapshot.closePending || sidebarSnapshot.hideAtMs === null) {
+      window.clearTimeout(pointerLeaveTimerRef.current);
+      return;
+    }
+    window.clearTimeout(pointerLeaveTimerRef.current);
+    const remainingMs = Math.max(0, sidebarSnapshot.hideAtMs - Date.now());
+    pointerLeaveTimerRef.current = window.setTimeout(() => {
+      sidebarController.tick(Date.now());
+    }, remainingMs);
+    return () => window.clearTimeout(pointerLeaveTimerRef.current);
+  }, [
+    sidebarSnapshot.closePending,
+    sidebarSnapshot.hideAtMs,
+    sidebarController,
+  ]);
+
   return (
     <div className="app-shell">
       <RecoveryStartup enabled={hasNativeWindowRuntime()} />
       <header className="app-shell-tabs">
-        <TabBar />
+        <button
+          aria-expanded={sidebarSnapshot.mode !== "hidden"}
+          aria-controls="workspace-sidebar"
+          onClick={() => {
+            if (sidebarSnapshot.mode === "hidden") {
+              sidebarController.openOverlay();
+            } else if (sidebarSnapshot.mode === "overlay") {
+              sidebarController.hide();
+            } else {
+              sidebarController.unpin();
+              preferences.setSidebarPinned(false);
+            }
+          }}
+          type="button"
+        >
+          Workspace sidebar
+        </button>
+        <TabBar
+          onCloseOutcome={(_, outcome) => {
+            applyCloseOutcome(outcome);
+          }}
+        />
         <div
           className="app-commands"
           role="toolbar"
@@ -350,15 +439,63 @@ export function AppShell({
         />
       ) : null}
 
-      <div className="app-shell-body">
-        <aside className="file-sidebar" aria-label="Files">
+      <div
+        className={
+          sidebarSnapshot.mode === "pinned"
+            ? "app-shell-body app-shell-body--pinned"
+            : "app-shell-body"
+        }
+        data-sidebar-mode={sidebarSnapshot.mode}
+      >
+        <aside
+          aria-label="Files"
+          className="file-sidebar"
+          hidden={sidebarSnapshot.mode === "hidden"}
+          id="workspace-sidebar"
+          inert={sidebarSnapshot.mode === "hidden"}
+          style={
+            sidebarSnapshot.mode === "overlay"
+              ? { position: "absolute" }
+              : undefined
+          }
+          onPointerEnter={() => sidebarController.handlePointerEnter()}
+          onPointerLeave={() => sidebarController.handlePointerLeave()}
+          onFocusCapture={() => sidebarController.setHold("focus", true)}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+              sidebarController.setHold("focus", false);
+            }
+          }}
+        >
+          {sidebarSnapshot.mode === "overlay" ? (
+            <button
+              onClick={() => {
+                sidebarController.pin();
+                preferences.setSidebarPinned(true);
+              }}
+              type="button"
+            >
+              Pin workspace sidebar
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                sidebarController.unpin();
+                preferences.setSidebarPinned(false);
+              }}
+              type="button"
+            >
+              Unpin workspace sidebar
+            </button>
+          )}
           {hasTauriCommandRuntime() ? (
             <WorkspacePanel
+              preferences={preferences}
+              captureFocus={sidebarSnapshot.mode === "pinned"}
               onOpenFile={(entry) => {
                 void runAction(() => documentManager.open(entry.canonicalPath));
               }}
               onWorkspacePresenceChange={setHasMountedWorkspace}
-              theme={themeSnapshot.resolvedColorScheme}
             />
           ) : null}
           {!hasMountedWorkspace ? (
@@ -420,6 +557,44 @@ export function AppShell({
           documentPath={activeSession.path}
           documentTitle={activeSession.title}
           onClose={closeExportDialog}
+        />
+      ) : null}
+      {orphanCloseId !== null ? (
+        <OrphanCloseDialog
+          key={orphanCloseId}
+          documentTitle={
+            sessionsById[orphanCloseId]?.title ?? "Untitled drawing"
+          }
+          onSaveAs={() => {
+            const documentId = orphanCloseId;
+            void runAction(async () => {
+              const session =
+                documentManager.store.getState().sessionsById[documentId];
+              if (session === undefined) return;
+              const selectedPath = await chooseSavePath(session.title);
+              if (selectedPath === null) return;
+              applyCloseOutcome(
+                await documentManager.confirmOrphanClose(
+                  documentId,
+                  "saveAs",
+                  selectedPath,
+                ),
+              );
+            });
+          }}
+          onDiscard={() => {
+            const documentId = orphanCloseId;
+            void runAction(async () => {
+              applyCloseOutcome(
+                await documentManager.confirmOrphanClose(documentId, "discard"),
+              );
+            });
+          }}
+          onCancel={() => {
+            void documentManager
+              .confirmOrphanClose(orphanCloseId, "cancel")
+              .then(applyCloseOutcome);
+          }}
         />
       ) : null}
     </div>

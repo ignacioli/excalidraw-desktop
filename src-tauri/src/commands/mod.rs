@@ -3,8 +3,6 @@ pub mod dto;
 pub mod entries;
 pub mod error;
 pub mod export;
-pub mod files;
 pub mod recovery;
 pub mod session;
-pub mod thumbnails;
 pub mod workspace;

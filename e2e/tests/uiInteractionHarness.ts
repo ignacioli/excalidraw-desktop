@@ -37,6 +37,7 @@ export interface UiInteractionHarnessOptions {
   workspaces?: readonly UiHarnessWorkspace[];
   entries?: readonly UiHarnessWorkspaceEntry[];
   failures?: Readonly<Record<string, UiHarnessFailure>>;
+  latenciesMs?: Readonly<Record<string, number>>;
   responses?: Readonly<Record<string, unknown>>;
   dialogPaths?: readonly (string | null)[];
   tenThousandRows?: {
@@ -119,6 +120,7 @@ export async function installUiInteractionHarness(
       workspaceSeeds,
       entrySeeds,
       failureSeeds,
+      latencySeeds,
       responseSeeds,
       pathSeeds,
       emptyScene,
@@ -128,6 +130,7 @@ export async function installUiInteractionHarness(
         workspaces: UiHarnessWorkspace[];
         entries: UiHarnessWorkspaceEntry[];
         failures: Record<string, UiHarnessFailure>;
+        latenciesMs: Record<string, number>;
         responses: Record<string, unknown>;
         dialogPaths: (string | null)[];
         nextDialogPath: number;
@@ -147,6 +150,7 @@ export async function installUiInteractionHarness(
         workspaces: workspaceSeeds.map((workspace) => ({ ...workspace })),
         entries: entrySeeds.map((entry) => ({ ...entry })),
         failures: { ...failureSeeds },
+        latenciesMs: { ...latencySeeds },
         responses: { ...responseSeeds },
         dialogPaths: [...pathSeeds],
         nextDialogPath: 0,
@@ -156,6 +160,12 @@ export async function installUiInteractionHarness(
       browser.__TAURI_INTERNALS__ = {
         async invoke(command, args = {}) {
           state.invocations.push({ command, args: { ...args } });
+          const latencyMs = state.latenciesMs[command];
+          if (typeof latencyMs === "number" && latencyMs > 0) {
+            await new Promise<void>((resolve) => {
+              globalThis.setTimeout(resolve, latencyMs);
+            });
+          }
           const failure = state.failures[command];
           if (failure !== undefined) {
             throw {
@@ -182,7 +192,7 @@ export async function installUiInteractionHarness(
           }
           if (command === "app_handshake") {
             return {
-              contractVersion: 1,
+              contractVersion: 2,
               appVersion: "0.2.0-e2e",
               abnormalExit: false,
               pendingOpenPaths: [],
@@ -190,6 +200,26 @@ export async function installUiInteractionHarness(
           }
           if (command === "workspace_list") {
             return state.workspaces.map((workspace) => ({ ...workspace }));
+          }
+          if (command === "workspace_add") {
+            const rootPath = String(
+              args.rootPath ?? "/ui-interactions/mounted",
+            );
+            const workspace = {
+              id: `workspace-${state.workspaces.length + 1}`,
+              name: rootPath.split("/").filter(Boolean).at(-1) ?? "Workspace",
+              rootPath,
+              createdAt: state.workspaces.length + 1,
+            };
+            state.workspaces.push(workspace);
+            return { ...workspace };
+          }
+          if (command === "workspace_remove") {
+            const workspaceId = String(args.workspaceId ?? "");
+            state.workspaces = state.workspaces.filter(
+              (workspace) => workspace.id !== workspaceId,
+            );
+            return {};
           }
           if (command === "workspace_entry_list") {
             const workspaceId = String(args.workspaceId ?? "");
@@ -202,23 +232,152 @@ export async function installUiInteractionHarness(
               )
               .map((entry) => ({ ...entry }));
           }
-          if (command === "dir_list") {
+          if (command === "workspace_entry_create") {
             const workspaceId = String(args.workspaceId ?? "");
-            const parentRelativePath = String(args.relativePath ?? "");
-            return state.entries
-              .filter(
+            const parentRelativePath = String(args.parentRelativePath ?? "");
+            const kind = args.kind === "directory" ? "directory" : "drawing";
+            const baseName = String(args.baseName ?? "");
+            const name =
+              kind === "drawing" ? `${baseName}.excalidraw` : baseName;
+            if (
+              state.entries.some(
                 (entry) =>
                   entry.workspaceId === workspaceId &&
-                  entry.parentRelativePath === parentRelativePath,
+                  entry.parentRelativePath === parentRelativePath &&
+                  entry.name.toLowerCase() === name.toLowerCase(),
+              )
+            ) {
+              throw {
+                code: "NAME_CONFLICT",
+                message: "Entry already exists",
+                retriable: false,
+              };
+            }
+            const workspace = state.workspaces.find(
+              (item) => item.id === workspaceId,
+            );
+            const relativePath = [parentRelativePath, name]
+              .filter(Boolean)
+              .join("/");
+            const entry = {
+              workspaceId,
+              kind,
+              canonicalPath: `${workspace?.rootPath ?? "/ui-interactions"}/${relativePath}`,
+              relativePath,
+              parentRelativePath,
+              name,
+              displayName: kind === "drawing" ? baseName : name,
+              mtime: Date.now(),
+              fileSize: 0,
+            } satisfies UiHarnessWorkspaceEntry;
+            state.entries.push(entry);
+            return { operationId: `create-${state.invocations.length}`, entry };
+          }
+          if (command === "workspace_entry_rename") {
+            const workspaceId = String(args.workspaceId ?? "");
+            const oldRelativePath = String(args.relativePath ?? "");
+            const baseName = String(args.baseName ?? "");
+            const source = state.entries.find(
+              (entry) =>
+                entry.workspaceId === workspaceId &&
+                entry.relativePath === oldRelativePath,
+            );
+            if (source === undefined)
+              throw new Error("Harness entry not found");
+            const suffix = source.name
+              .toLowerCase()
+              .endsWith(".excalidraw.json")
+              ? ".excalidraw.json"
+              : source.kind === "drawing"
+                ? ".excalidraw"
+                : "";
+            const nextName = `${baseName}${suffix}`;
+            const newRelativePath = [source.parentRelativePath, nextName]
+              .filter(Boolean)
+              .join("/");
+            const oldCanonicalPath = source.canonicalPath;
+            const newCanonicalPath =
+              oldCanonicalPath.slice(0, -source.name.length) + nextName;
+            const pathMigrations = state.entries
+              .filter(
+                (entry) =>
+                  entry.kind === "drawing" &&
+                  (entry.relativePath === oldRelativePath ||
+                    entry.relativePath.startsWith(`${oldRelativePath}/`)),
               )
               .map((entry) => ({
-                name: entry.name,
-                relativePath: entry.relativePath,
-                kind: entry.kind === "directory" ? "dir" : "file",
-                mtime: entry.mtime,
-                fileSize: entry.fileSize,
+                oldRelativePath: entry.relativePath,
+                newRelativePath: entry.relativePath.replace(
+                  oldRelativePath,
+                  newRelativePath,
+                ),
+                oldCanonicalPath: entry.canonicalPath,
+                newCanonicalPath: entry.canonicalPath.replace(
+                  oldCanonicalPath,
+                  newCanonicalPath,
+                ),
               }));
+            for (const entry of state.entries) {
+              if (
+                entry.relativePath === oldRelativePath ||
+                entry.relativePath.startsWith(`${oldRelativePath}/`)
+              ) {
+                entry.relativePath = entry.relativePath.replace(
+                  oldRelativePath,
+                  newRelativePath,
+                );
+                entry.canonicalPath = entry.canonicalPath.replace(
+                  oldCanonicalPath,
+                  newCanonicalPath,
+                );
+                entry.parentRelativePath = entry.parentRelativePath.replace(
+                  oldRelativePath,
+                  newRelativePath,
+                );
+              }
+            }
+            source.name = nextName;
+            source.displayName = baseName;
+            return {
+              operationId: `rename-${state.invocations.length}`,
+              entry: { ...source },
+              oldRelativePath,
+              newRelativePath,
+              pathMigrations,
+            };
           }
+          if (command === "workspace_entry_delete_preflight") {
+            const relativePath = String(args.relativePath ?? "");
+            const entry = state.entries.find(
+              (item) => item.relativePath === relativePath,
+            );
+            if (entry === undefined) throw new Error("Harness entry not found");
+            const nonEmpty =
+              entry.kind === "directory" &&
+              state.entries.some((item) =>
+                item.relativePath.startsWith(`${relativePath}/`),
+              );
+            return {
+              status: nonEmpty ? "directoryNotEmpty" : "confirmable",
+              entry: { ...entry },
+            };
+          }
+          if (command === "workspace_entry_delete") {
+            const relativePath = String(args.relativePath ?? "");
+            const entry = state.entries.find(
+              (item) => item.relativePath === relativePath,
+            );
+            if (entry === undefined) throw new Error("Harness entry not found");
+            state.entries = state.entries.filter(
+              (item) => item.relativePath !== relativePath,
+            );
+            return {
+              operationId: `delete-${state.invocations.length}`,
+              kind: entry.kind,
+              oldRelativePath: relativePath,
+            };
+          }
+          if (command === "workspace_entry_reveal") return {};
           if (command === "doc_open") {
             return {
               scene: emptyScene,
@@ -239,11 +398,6 @@ export async function installUiInteractionHarness(
             };
           }
           if (command === "doc_close") return {};
-          if (command === "thumb_lookup") return { hit: false };
-          if (command === "thumb_store") {
-            const key = String(args.key ?? "fixture");
-            return { webpPath: `/ui-interactions/thumbnails/${key}.webp` };
-          }
           throw new Error(
             `Unexpected UI interaction harness command: ${command}`,
           );
@@ -255,6 +409,7 @@ export async function installUiInteractionHarness(
       workspaceSeeds: workspaces,
       entrySeeds: entries,
       failureSeeds: { ...(options.failures ?? {}) },
+      latencySeeds: { ...(options.latenciesMs ?? {}) },
       responseSeeds: { ...(options.responses ?? {}) },
       pathSeeds: [...(options.dialogPaths ?? [])],
       emptyScene: EMPTY_SCENE,
@@ -322,5 +477,105 @@ export async function setUiInteractionHarnessFailure(
       }
     },
     { commandName: command, nextFailure: failure },
+  );
+}
+
+/**
+ * Opt-in file-changed emit for Orphaned Document journeys.
+ * AppShell only registers `file-changed` when transformCallback exists, so
+ * browser tests cannot mark a tab orphaned without this hook. Call after
+ * `installUiInteractionHarness` and before `page.goto`. Default harness
+ * behavior is unchanged.
+ */
+export async function installUiInteractionFileEvents(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    type EventCallback = (event: {
+      event: string;
+      id: number;
+      payload: unknown;
+    }) => void;
+    type EventInternals = {
+      invoke(command: string, args?: Record<string, unknown>): Promise<unknown>;
+      transformCallback?: (callback: EventCallback) => number;
+    };
+    const browser = globalThis as typeof globalThis & {
+      __TAURI_INTERNALS__?: EventInternals;
+      __TAURI_EVENT_PLUGIN_INTERNALS__?: {
+        unregisterListener(event: string, eventId: number): void;
+      };
+      __emitUiInteractionEvent?: (event: string, payload: unknown) => void;
+    };
+    const internals = browser.__TAURI_INTERNALS__;
+    if (internals === undefined) return;
+    const invoke = internals.invoke.bind(internals);
+    const callbacks = new Map<number, EventCallback>();
+    const listeners = new Map<string, Set<number>>();
+    let nextCallbackId = 1;
+    internals.transformCallback = (callback) => {
+      const id = nextCallbackId++;
+      callbacks.set(id, callback);
+      return id;
+    };
+    browser.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+      unregisterListener(event, eventId) {
+        listeners.get(event)?.delete(eventId);
+        callbacks.delete(eventId);
+      },
+    };
+    internals.invoke = async (command, args = {}) => {
+      if (command === "plugin:event|listen") {
+        const event = String(args.event ?? "");
+        const eventId = Number(args.handler);
+        const eventListeners = listeners.get(event) ?? new Set<number>();
+        eventListeners.add(eventId);
+        listeners.set(event, eventListeners);
+        return eventId;
+      }
+      if (command === "plugin:event|unlisten") {
+        const event = String(args.event ?? "");
+        const eventId = Number(args.eventId);
+        listeners.get(event)?.delete(eventId);
+        callbacks.delete(eventId);
+        return null;
+      }
+      if (
+        command === "plugin:window|on_close_requested" ||
+        command === "plugin:window|destroy"
+      ) {
+        return command === "plugin:window|on_close_requested" ? 1 : {};
+      }
+      return invoke(command, args);
+    };
+    browser.__emitUiInteractionEvent = (event, payload) => {
+      for (const eventId of listeners.get(event) ?? []) {
+        callbacks.get(eventId)?.({ event, id: eventId, payload });
+      }
+    };
+  });
+}
+
+export async function emitUiInteractionFileChanged(
+  page: Page,
+  payload: {
+    path: string;
+    change: "modified" | "created" | "removed" | "renamed";
+    newPath?: string;
+    mtime?: number;
+    contentHash?: string;
+  },
+): Promise<void> {
+  await page.evaluate(
+    ({ event, payload: eventPayload }) => {
+      const emit = (
+        globalThis as typeof globalThis & {
+          __emitUiInteractionEvent?: (eventName: string, next: unknown) => void;
+        }
+      ).__emitUiInteractionEvent;
+      if (emit === undefined) {
+        throw new Error("UI interaction file events are not installed.");
+      }
+      emit(event, eventPayload);
+    },
+    { event: "file-changed", payload },
   );
 }

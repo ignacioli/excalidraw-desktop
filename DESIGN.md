@@ -4,11 +4,11 @@
 
 **Status**: Approved design contract
 
-**Last updated**: 2026-08-06
+**Last updated**: 2026-08-23
 
 **Scope**: Application shell, desktop-specific UI, and the embedded Excalidraw editor
 
-This document is the in-repo visual and interaction contract for humans and coding agents. Product behavior is defined by the project specification.
+This document is the in-repo visual and interaction contract for humans and coding agents. Product behavior is defined by the project specification. Desktop-shell terms follow [CONTEXT.md](CONTEXT.md).
 
 ## Product character
 
@@ -23,14 +23,23 @@ Avoid decorative gradients, glassmorphism, excessive shadows, large corner radii
 
 ## Desktop information architecture
 
-The standard window uses the operating system’s ordinary decorated window. Do not redraw browser chrome, a PWA top bar, or macOS red/yellow/green traffic lights in the web content area.
+The window is an ordinary decorated native window titled **Excalidraw Whiteboard**. Title-bar color and title placement are controlled by the operating system (titlebar choice A). Do not redraw browser chrome, a PWA top bar, or macOS red/yellow/green traffic lights in the web content area. Do not force an app-wide native Dark appearance, a transparent/overlay/hybrid/frameless title bar, or production always-on-top.
 
 | Region | Purpose | Required behavior |
 |------|------|----------------|
-| Top tab bar | Navigation among open documents | Show the file name, active state, and unsaved state; support keyboard and pointer operation |
-| Left file pane | Mounted workspaces and drawing files | Own file navigation and file actions; show an actionable empty state when no workspace is mounted; collapsible, but must not cover the active canvas by default |
+| Native title bar | Window identity and OS chrome | Ordinary decorated window; system-colored title bar; title **Excalidraw Whiteboard** |
+| Top tab bar | Navigation among open documents | Show the file name, active state, and unsaved state; reserved close-control slot; keyboard and pointer operation |
+| Workspace Sidebar | Mounted workspaces and Workspace Entries | Canvas-first: hidden on first launch; explicit **Workspace sidebar** control opens a Transient Sidebar overlay; pin/unpin; overlay does not change the canvas box; pinned canvas width ≥ 70% of the content area at supported window sizes; no empty right sidebar |
 | Right editing area | Official Excalidraw editor | Occupy remaining space and remain the primary visual surface |
-| Dialog layer | Export, recovery, conflict, confirmation, and preferences | Use a unified dialog and focus-management model |
+| Dialog layer | Export, recovery, conflict, confirmation, naming, and preferences | Single application dialog layer and a single context menu; no `window.prompt` / `window.confirm` |
+
+**Canvas-first Workspace Sidebar.** First launch hides the sidebar. The **Workspace sidebar** control opens a Transient Sidebar that overlays the canvas without changing the canvas box. Pinning places the sidebar in the window layout; unpinning returns to overlay. Overlay auto-closes 500 ms after pointer leave unless focus, a context menu, a dialog, or a drag holds it. Escape closes the overlay unless a dialog or menu already consumed Escape.
+
+**Workspace tree.** Mounted workspaces and their visible descendants form one continuous virtualized tree of Workspace Entries. Drawing rows use a file icon. There is no FileTree, no production `dir_list` listing, and no canvas-content thumbnail worker or `thumb_*` IPC.
+
+**Tabs.** Every tab reserves a close-control slot. The tab context menu provides **Close**, **Close Others**, and **Close Tabs to the Right**. Middle-click closes the pointed tab. Cmd+W (macOS) and Ctrl+W (supported Linux) close the active drawing tab in the application shell. A predominantly vertical wheel gesture over the tab bar switches tabs and coalesces to the latest intent; overflow tabs scroll only to the nearest visible position, without smooth scrolling when reduced motion is requested. Closing an Orphaned Document offers **Save As**, **Close Without Saving**, and **Cancel**.
+
+Application-shell UI copy is English in this version.
 
 The first version does not recreate the official PWA main menu, browser/PWA title bar, Excalidraw+ entry points, account UI, realtime collaboration, or cloud-service controls.
 
@@ -57,7 +66,7 @@ Theme family and light/dark mode preference are independent concepts:
 
 The resolved light/dark mode controls both the application shell and the embedded editor. When `system` is selected, operating-system appearance changes must update both in the same frame; after a fixed `light` or `dark` choice, later system changes must not override the user selection.
 
-Appearance preference is application-local state, not document content. It must not change `.excalidraw` files, drawing semantics, the export contract, or the thumbnail-cache contract. Invalid preferences, or preferences from a future version, fall back to `system`.
+Appearance preference is application-local state, not document content. It must not change `.excalidraw` files, drawing semantics, or the export contract. Invalid preferences, or preferences from a future version, fall back to `system`. Native title-bar color stays OS-controlled even when the content mode is a fixed `light` or `dark` choice.
 
 Saved preferences must be applied before the first user-visible UI. Startup must not flash the opposite light/dark mode.
 
@@ -87,9 +96,10 @@ Light mode uses white and near-white surfaces, deep charcoal text, restrained co
 
 - Prefer semantic HTML and controls that match platform conventions. Every interactive element must have an accessible name and a visible focus indicator.
 - hover, active, selected, disabled, loading, empty, error, conflict, permission-denied, and offline are part of the component definition.
-- Tabs must show the file name and must not rely on icons alone; unsaved state uses both a visible marker and accessible text.
-- File hierarchy, the active document, selection, warnings, and conflicts must not be expressed by color alone.
-- When a modal dialog opens, focus moves into it and is constrained there; when it closes, focus returns to the triggering control.
+- Tabs must show the file name and must not rely on icons alone; unsaved state uses both a visible marker and accessible text. The close-control slot stays reserved so titles do not jump.
+- At most one context menu is open. The same trigger toggles it; another trigger replaces it.
+- File hierarchy, the active document, selection, warnings, and conflicts must not be expressed by color alone. Drawing rows in the Workspace Sidebar use a file icon, never a canvas thumbnail or a literal text dot.
+- When a modal dialog opens, focus moves into it and is constrained there; when it closes, focus returns to the triggering control. One dialog layer at a time; do not use `window.prompt` or `window.confirm`.
 - Motion exists only to aid state understanding and stays brief; respect reduced motion, and avoid animated layout jumps around the canvas.
 - Shadows express stacking only for floating controls, menus, and dialogs; persistent panels use borders or luminance difference.
 

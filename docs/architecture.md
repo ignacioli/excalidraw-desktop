@@ -1,151 +1,257 @@
-# Excalidraw Desktop 架构文档
+[English](architecture.md) | [简体中文](architecture.zh.md)
 
-**最后更新**：2026-08-10
+# Excalidraw Desktop architecture
 
-本文档描述 Excalidraw Desktop 的实现架构：分层视图、两条关键数据流、模块职责、依赖方向与信任边界、安全路径与存储层。产品行为以私有 specs 仓库的 `spec.md` 为准；决策记录见 `docs/adr/`；视觉与交互契约见根目录 `DESIGN.md`（英文正文；中文见 `DESIGN.zh.md`）。
+**Last updated**: 2026-08-24
 
-## 1. 总体结构
+This document describes the **current** implementation architecture of Excalidraw Desktop: layered view, reliability data flows, workspace-entry mutations, module responsibilities, dependency direction and trust boundaries, native-window boundary, and storage. Decision records live in `docs/adr/`. The visual and interaction contract is the root `DESIGN.md` (English; Chinese: `DESIGN.zh.md`). The public IPC contract is `docs/contracts/ipc-contracts.md` (v2).
 
-Tauri 2.x 双端布局：`src/` 为 React 19 + TypeScript strict 前端，`src-tauri/` 为 Rust 后端；两端经 IPC 契约边界通信（`docs/contracts/ipc-contracts.md`）。完整技术选型见 ADR-001（框架）、ADR-002/003（持久化）、ADR-004/006/007/008（参考性能测量与预算）、ADR-005（主题边界）。
+The current shell is a canvas-first overlay/pinned sidebar, IPC v2 Workspace Entry commands, and unified in-app menus/dialogs. Crash-safe persistence (drafts, atomic writes, recovery snapshots, external-change conflicts) still applies. What follows is the current path, not the retired FileTree + `thumbnails/` production implementation.
 
-## 2. 分层视图
+## 1. Overall structure
+
+Tauri 2.x dual-process layout: `src/` is the React 19 + TypeScript strict frontend; `src-tauri/` is the Rust backend. The two sides communicate across an IPC contract boundary (`docs/contracts/ipc-contracts.md`). Full technology choices: ADR-001 (framework), ADR-002/003 (persistence), ADR-004/006/007/008 (reference performance measurement and budgets), ADR-005 (theme boundary; the “file manager on the left / canvas on the right” shell layout and thumbnail-contract sentences are superseded by ADR-009), ADR-009 (desktop UI interactions: title-bar option A, canvas-first sidebar, thumbnail retirement, IPC v2 WorkspaceEntry, unified menus/dialogs).
+
+## 2. Layered view
 
 ```mermaid
 flowchart TB
-    subgraph frontend [前端 React 19 + TypeScript strict]
-        UI["app/ 布局·标签页·对话框·平台惯例"]
-        Theme["app/theme/ 主题注册·偏好解析·语义 token"]
-        Editor["editor/ ExcalidrawAdapter + 画布组件"]
-        Docs["documents/ 保存调度器·冲突·恢复 UI 状态机"]
-        Sidebar["sidebar/ + workspaces/ 虚拟化文件树"]
-        Store["zustand 内存编辑态 (isDirty)"]
-        IpcClient["ipc/ 强类型命令客户端 + 事件订阅"]
+    subgraph frontend [Frontend React 19 + TypeScript strict]
+        AppShell["app/AppShell: canvas-first · overlay/pinned sidebar"]
+        Interaction["interaction store: one global menu and dialog"]
+        Tree["workspaces/WorkspaceTree: continuous virtualized tree"]
+        Docs["documents/ DocumentManager: session · close/activation queues · path migration"]
+        Editor["editor/ official Excalidraw public integration"]
+        Theme["app/theme/ theme registry · preference resolution"]
+        Prefs["versioned local view prefs: pinned and expanded sets"]
+        IpcClient["ipc/ typed v2 client + event subscription"]
     end
-    subgraph boundary [IPC 信任边界]
-        Contracts["contracts: 命令/事件 Schema + 错误分类 + 输入校验"]
+    subgraph boundary [IPC trust boundary]
+        Contracts["contracts v2: WorkspaceEntry commands · structured errors · operationId"]
     end
-    subgraph backend [Rust 后端 Tauri 2.x]
-        Commands["commands/ IPC 入口 (薄层)"]
-        DomainDocs["documents/ 原子写·校验·恢复"]
-        Indexing["indexing/ 工作区异步索引"]
-        Watcher["watcher/ notify 监听 + 去抖"]
-        Thumbs["thumbnails/ 缓存元数据"]
-        Security["security/ 路径规范化 + 工作区 ACL"]
+    subgraph backend [Rust backend Tauri 2.x]
+        Commands["commands/ IPC entry (thin layer)"]
+        EntryDomain["workspace_entries/ names · protected items · emptiness · Trash · rename"]
+        Security["security/ path canonicalize + workspace containment"]
+        DomainDocs["documents/ atomic write · drafts · recovery · conflict"]
+        Indexing["indexing/ async workspace index"]
+        Watcher["watcher/ notify debounce + echo suppression"]
     end
-    subgraph storage [存储层]
-        Hot["热层 SQLite WAL: drafts / workspaces / file_index / file_meta"]
-        Cold["冷层 文件系统: *.excalidraw (原子替换)"]
-        Recovery["恢复快照: recovery/*.json 轮换"]
+    subgraph storage [Storage]
+        Hot["hot tier SQLite WAL: drafts / workspaces / file_index; file_meta leftover"]
+        Cold["cold tier filesystem: *.excalidraw (atomic replace)"]
+        Recovery["recovery snapshots: recovery/*.json rotation"]
+        Trash["OS Trash"]
     end
-    UI --> Theme
+    AppShell --> Interaction
+    AppShell --> Tree
+    AppShell --> Docs
+    AppShell --> Editor
+    Interaction --> Prefs
+    Tree --> Prefs
     Theme --> Editor
-    UI --> Editor --> Store
-    UI --> Docs
-    UI --> Sidebar
     Docs --> IpcClient
-    Sidebar --> IpcClient
-    Store --> Docs
+    Tree --> IpcClient
     IpcClient --> Contracts --> Commands
     Commands --> Security
+    Commands --> EntryDomain
     Commands --> DomainDocs
     Commands --> Indexing
-    Commands --> Thumbs
     Watcher --> Commands
+    EntryDomain --> Indexing
+    EntryDomain --> Cold
+    EntryDomain --> Trash
     DomainDocs --> Hot
     DomainDocs --> Cold
     DomainDocs --> Recovery
     Indexing --> Hot
-    Thumbs --> Hot
 ```
 
-依赖方向自上而下单向：UI → Theme → Editor → Store → Docs → IpcClient → Contracts → Commands → 领域服务 → 存储。主题模块仅管理非文档外观偏好并向壳层/画布提供解析结果，不进入 IPC 或文档模型；前端不直接触达文件系统或数据库；所有路径进入后端后先经 `security/` 规范化并校验工作区白名单（FR-031）。
+Dependencies flow one way, top down: shell / interaction / tree / DocumentManager → IpcClient → Contracts → Commands → `security/` → domain services → storage.
 
-## 3. 数据流图 1：编辑 → 草稿 → 落盘（三级削峰）
+Constraints (fixed jointly by the code and ADR-009):
+
+- The frontend does not decide path authorization, directory emptiness, protected entries, Trash eligibility, or whether a rename commit succeeded; those live in Rust `workspace_entries/` and `security/`.
+- The Workspace Entry domain does not take a frontend session id; the rename response returns `pathMigrations`, which DocumentManager applies to its own sessions.
+- Tab presentation is derived from DocumentManager; there is no second source of truth for path/title/dirty/orphan.
+- The interaction layer has at most one menu and one dialog globally (`src/app/interaction/interactionStore.ts`).
+- **No thumbnail runtime**: there is no `thumbnails/` module, thumbnail Worker, or production `thumb_lookup` / `thumb_store`. The asset protocol only serves real in-drawing image assets (`.excalidraw_assets`).
+- The native title bar is outside Web content: ordinary decorated `Visible` window, OS-controlled title-bar color, normal stacking; the production path is not always-on-top.
+
+The theme module only manages non-document appearance preferences and supplies resolved values to the shell/canvas. It does not enter IPC or the document model.
+
+## 3. Data-flow 1: edit → draft → disk (three-tier coalescing)
 
 ```mermaid
 flowchart LR
-    Change["onChange 编辑事件 (最高60fps)"] --> Mem["L1 内存: zustand 更新 + isDirty=true (不发 IPC)"]
-    Mem -->|"300ms 防抖"| DraftIpc["L2 IPC: save_draft (完整/增量场景 JSON)"]
-    DraftIpc --> WalWrite["SQLite WAL 追加写 drafts 表 (ACID)"]
-    WalWrite --> Snap["周期轮换恢复快照 (3-5份 Ring)"]
-    Mem -->|"Checkpoint 触发"| Ckpt{"触发源"}
-    Ckpt -->|"Cmd/Ctrl+S 立即"| Atomic
-    Ckpt -->|"关闭/切换 Tab 立即"| Atomic
-    Ckpt -->|"空闲 3s trailing"| Atomic
-    Ckpt -->|"应用退出 阻塞式"| Atomic
-    Ckpt -->|"兜底 60s 上限"| Atomic
-    Atomic["L3 原子写: .tmp → fsync → JSON校验 → rename → 父目录 fsync"] --> ColdFile["冷层 .excalidraw 文件"]
-    Atomic -->|"成功"| MarkClean["drafts.is_dirty=0 + 更新 file_index hash/mtime"]
+    Change["onChange edit events (up to 60fps)"] --> Mem["L1 memory: DocumentManager scene + isDirty (no IPC)"]
+    Mem -->|"300ms debounce"| DraftIpc["L2 IPC: doc_save_draft (full/delta scene JSON)"]
+    DraftIpc --> WalWrite["SQLite WAL append to drafts (ACID)"]
+    WalWrite --> Snap["rotating recovery snapshots (3–5 ring)"]
+    Mem -->|"Checkpoint trigger"| Ckpt{"trigger"}
+    Ckpt -->|"Cmd/Ctrl+S immediately"| Atomic
+    Ckpt -->|"tab close/switch immediately"| Atomic
+    Ckpt -->|"idle 3s trailing"| Atomic
+    Ckpt -->|"app quit blocking"| Atomic
+    Ckpt -->|"fallback 60s cap"| Atomic
+    Atomic["L3 atomic write: .tmp → fsync → JSON validate → rename → parent fsync"] --> ColdFile["cold .excalidraw file"]
+    Atomic -->|"success"| MarkClean["drafts.is_dirty=0 + update file_index hash/mtime"]
 ```
 
-高频编辑路径不逐事件执行完整场景序列化、IPC 传输或磁盘写入：L1 内存态更新（不发 IPC）、L2 经 300ms 防抖写入 SQLite WAL 草稿、L3 checkpoint 触发时原子落盘到冷层 `.excalidraw` 文件（SC-006 削峰 ≥95%）。原子写流水线与故障验证点见 ADR-002。
+The high-frequency edit path does not serialize the full scene, send IPC, or write disk on every event: L1 updates in-memory state (no IPC), L2 writes a SQLite WAL draft after a 300ms debounce, and L3 atomically lands the cold `.excalidraw` file when a checkpoint fires, so most edit events never write the cold file immediately. The atomic-write pipeline and fault-injection points are in ADR-002.
 
-## 4. 数据流图 2：外部变更 → 冲突消解
+## 4. Data-flow 2: external change → conflict resolution
+
+Entry rename or delete coordinates with this external-change flow. It does not weaken atomic writes, recovery snapshots, conflict blocking, or debounce/coalesce.
 
 ```mermaid
 flowchart TB
-    Ext["外部修改 (Git/云盘/第三方编辑器)"] --> Notify["notify 原始事件 (FSEvents/inotify)"]
-    Notify --> Debounce["后端 200ms 事件合并去抖"]
-    Debounce --> Verify["三元组校验 mtime/size/content_hash (排除自身写入回声)"]
-    Verify --> Emit["事件总线 file-changed → 前端"]
-    Emit --> Dirty{"该文档内存态 isDirty?"}
-    Dirty -->|"否"| Reload["自动重载最新内容 + 轻提示"]
-    Dirty -->|"是"| Conflict["冲突弹窗: 展示两版本时间"]
-    Conflict --> OptA["以外部版本覆盖本地草稿"]
-    Conflict --> OptB["保留本地草稿 (标记冲突态)"]
-    Conflict --> OptC["本地草稿另存为新文件"]
-    Emit --> Gone{"文件被删除/移动?"}
-    Gone -->|"是"| Orphan["标签页标示失联 → 引导另存"]
+    Ext["external edit (Git/cloud/third-party editor)"] --> Notify["notify raw events (FSEvents/inotify)"]
+    Notify --> Debounce["backend 200ms event coalesce"]
+    Debounce --> Verify["triple check mtime/size/content_hash (drop self-write echo)"]
+    Verify --> Emit["event bus file-changed → frontend"]
+    Emit --> Dirty{"document memory isDirty?"}
+    Dirty -->|"no"| Reload["auto-reload latest + light toast"]
+    Dirty -->|"yes"| Conflict["conflict dialog: show both timestamps"]
+    Conflict --> OptA["take external version over local draft"]
+    Conflict --> OptB["keep local draft (mark conflicted)"]
+    Conflict --> OptC["save local draft as a new file"]
+    Emit --> Gone{"file deleted/moved?"}
+    Gone -->|"yes"| Orphan["tab marked orphan → Save As / Discard / Cancel"]
+    Verify -->|"complex directory batch cannot be paired"| Invalidate["workspace-entries-changed: invalidated nearest known parent; do not invent a rename"]
 ```
 
-外部变更在 3s 内感知（SC-008），以 (mtime, size, content_hash) 三元组校验真实变更并抑制自身写入回声；冲突态禁止自动 checkpoint，直至用户决策（FR-019）。
+External changes are perceived within about 3 seconds. A (mtime, size, content_hash) triple confirms a real change and suppresses self-write echo. A conflicted document must not auto-checkpoint until the user chooses in the conflict dialog. The app's own entry mutations treat the command response as authoritative; watcher events that match `operationId` are echo.
 
-## 5. 模块职责
+## 5. Data-flow 3: workspace entry create / rename / delete
 
-### 前端（src/）
+A filesystem rename, the OS Trash, or an atomic create is the commit point. Failure before commit must keep the old path. After commit, derived index/watcher work may retry, but it must not report an already-committed disk change as uncommitted.
 
-| 模块 | 职责 |
-|------|------|
-| `app/` | 布局、标签页、全局对话框、菜单/快捷键（平台惯例集中层） |
-| `app/theme/` | 主题类型、registry、偏好解析、语义 token 与启动前应用（DESIGN.md） |
-| `editor/` | ExcalidrawAdapter + 画布组件、场景序列化、导出、离线字体加载、IME 桥接 |
-| `documents/` | 保存调度器、冲突检测/对话框、恢复 UI 状态机 |
-| `sidebar/` | 虚拟化文件树、缩略图懒生成队列（Worker） |
-| `workspaces/` | 工作区挂载/移除 UI 与状态 |
-| `ipc/` | 强类型命令绑定与事件订阅（contracts 的 TS 侧） |
+```mermaid
+flowchart LR
+    Intent["user entry action"] --> UIState{"action"}
+    UIState -->|"create / rename"| Naming["app naming dialog"]
+    Naming -->|"cancel"| NoMutation["close and restore focus; zero mutation"]
+    Naming -->|"submit"| Preflight["DocumentManager identifies affected Open Documents"]
+    Preflight --> Checkpoint["checkpoint affected sessions and capture baseHash"]
+    Checkpoint --> MutCmd["workspace_entry_create / workspace_entry_rename"]
+    UIState -->|"delete"| Dirty{"open and dirty/conflicted/saving?"}
+    Dirty -->|"yes"| FocusDoc["block and focus the Open Document"]
+    Dirty -->|"no"| DeleteCheck["workspace_entry_delete_preflight"]
+    DeleteCheck -->|"non-empty directory"| Blocker["app blocker dialog"]
+    DeleteCheck -->|"confirmable"| Confirm["app delete confirmation"]
+    Confirm -->|"confirm"| DeleteCmd["workspace_entry_delete; carries expectedOpenDocument"]
+    MutCmd --> RustGate["Rust Workspace mutation gate"]
+    DeleteCmd --> RustGate
+    RustGate --> SecurityCheck["containment, symlink, protected, name/conflict/emptiness"]
+    SecurityCheck -->|"fail"| StructuredError["structured error; dialog/tree/session unchanged"]
+    SecurityCheck -->|"Rename commit"| FsRename["filesystem rename"]
+    SecurityCheck -->|"Delete commit"| OsTrash["OS Trash"]
+    SecurityCheck -->|"Create commit"| FsCreate["atomic Drawing or Directory create"]
+    FsRename --> Result["response: operationId + pathMigrations"]
+    OsTrash --> Cleanup["delete exact clean draft/index metadata"]
+    Cleanup --> Result
+    FsCreate --> Result
+    Result --> Apply["DocumentManager applies session changes once"]
+    Apply --> Refresh["invalidate tree; restore scroll anchor and focus"]
+```
 
-### 后端（src-tauri/）
+Authoritative layers: `src-tauri/src/workspace_entries/` and `src/documents/documentStore.ts`. New drawings default to the visible name `Untitled`; Rust appends `.excalidraw`. New directories default to `Untitled Folder` (`src/app/interaction/EntryNamingDialog.tsx`). Protected targets include the workspace root, dot directories, and `.excalidraw_assets`.
 
-| 模块 | 职责 |
-|------|------|
-| `commands/` | IPC 命令入口（薄层：反序列化 → 校验 → 调领域服务） |
-| `documents/` | 原子写、恢复、校验、资产去重、会话锁 |
-| `database/` | 连接池、写线程、迁移、仓储 trait（隔离 SQLite/redb） |
-| `indexing/` | 工作区异步扫描与增量索引 |
-| `watcher/` | notify 封装 + 去抖 + 回声抑制 |
-| `thumbnails/` | 缩略图缓存元数据与磁盘管理 |
-| `security/` | 路径规范化、工作区 ACL 白名单 |
+## 6. Sequence: serialized close and latest-intent activation
 
-## 6. IPC 信任边界
+```mermaid
+sequenceDiagram
+    participant Input as Tab / wheel input
+    participant DM as DocumentManager
+    participant Scheduler as DraftScheduler
+    participant IPC as Rust document commands
+    participant UI as TabBar
+    Input->>DM: requestClose(id) or requestActivation(id)
+    alt the same close is already in flight
+        DM-->>Input: join the existing result
+    else start activation or close
+        DM->>Scheduler: checkpoint current/target as needed
+        Note over DM: a newer activation only replaces pendingLatestId
+        Scheduler->>IPC: doc_checkpoint
+        IPC-->>Scheduler: success or structured failure
+        alt success
+            DM->>IPC: on close, doc_close (checkpointed or discardOrphan)
+            DM->>UI: update the single session/tab order
+            DM->>DM: drain only the latest pending activation
+        else failure or cancel
+            DM->>UI: keep the tab and focus; show the error
+            Note over DM: a batch close stops before unprocessed ids
+        end
+    end
+```
 
-- 契约：命令/事件 Schema + 错误分类 + 输入校验，唯一定义于 `docs/contracts/ipc-contracts.md`；前端不得绕过。
-- 所有前端传入路径在后端经 `security/` 的 `std::fs::canonicalize` + 工作区白名单校验（FR-031）；文档 JSON 视为不可信输入（结构校验 + 尺寸上限，FR-032）。
-- 最小权限：Tauri Capabilities 最小集（core:default + 受限 dialog/fs scope），严格 CSP（FR-033）。
+Closing an orphaned document must not send a checkpoint that requires the missing path to exist. `doc_close` with `discardOrphan` only clears draft/recovery/session records for that path.
 
-## 7. 存储层
+## 7. Module responsibilities
 
-| 层 | 载体 | 说明 |
-|----|------|------|
-| 热层 | SQLite WAL（drafts / workspaces / file_index / file_meta） | 草稿与索引，PRAGMA 基线见 data-model.md |
-| 冷层 | 文件系统 `*.excalidraw`（原子替换） | 最终事实来源 |
-| 恢复 | `recovery/*.json` 轮换快照 + `session.lock` | 崩溃恢复（SC-004） |
+### Frontend (`src/`)
 
-存储层设计细节见 ADR-002（双层持久化）与 ADR-003（SQLite-first 与 redb 触发条件）。
+| Module | Responsibility |
+|--------|----------------|
+| `app/AppShell.tsx` | Canvas-first shell; overlay covers the canvas without changing the canvas box; pinned enters the layout; no empty right pane |
+| `app/sidebarController.ts` | Sidebar `hidden` / `overlay` / `pinned`; overlay auto-closes 500ms after pointer leave; focus/menu/dialog/drag hold pauses auto-close |
+| `app/interaction/` | One global menu and dialog, focus return; naming/delete/blocker dialogs; no `window.prompt` / `window.confirm` |
+| `app/theme/` | Theme types, registry, preference resolution, semantic tokens, and pre-startup apply (DESIGN.md); decoupled from system title-bar color |
+| `editor/` | ExcalidrawAdapter + canvas, scene serialization, export, offline fonts, IME bridge; only the locked package's public API |
+| `documents/` | DocumentManager: session identity, tab order, dirty/orphan/conflict, close/activation queues, path migration, recovery UI |
+| `workspaces/WorkspaceTree.tsx` | One continuous virtualized workspace tree (several workspaces, one scroll surface); no thumbnail rows |
+| `ipc/` | Typed v2 command bindings and event subscription (`IPC_CONTRACT_VERSION = 2`) |
 
-## 8. 相关文档
+### Backend (`src-tauri/`)
 
-- ADR：ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 声明参考环境性能测量、ADR-005 主题边界
-- `DESIGN.md`（视觉与交互契约）
-- `docs/quickstart.md`（贡献者验证指南）、`docs/contracts/ipc-contracts.md`（IPC 契约）
-- 私有 specs 仓库（spec.md、plan.md、research.md、data-model.md、checklists，经 `specs/` 软链接访问）
-- `docs/evidence/`（原生验证矩阵、无障碍审计与验证汇总，VM 或物理机）
+| Module | Responsibility |
+|--------|----------------|
+| `commands/` | IPC command entry (thin layer: deserialize → validate → call domain services) |
+| `workspace_entries/` | Workspace Entry domain: names, extension, protected items, real emptiness, conflicts, Trash, rename commit point, pathMigrations |
+| `documents/` | Atomic write, recovery, validation, asset dedup, session lock |
+| `database/` | Connection pool, writer thread, migrations, repository traits; runtime no longer reads/writes `file_meta` as a thumbnail cache |
+| `indexing/` | Async workspace scan and incremental index |
+| `watcher/` | notify wrapper + debounce + echo suppression; complex external directory events emit `invalidated` |
+| `security/` | Path canonicalize, workspace ACL allowlist, symlink-escape rejection |
+
+Historical `thumbnails/` and frontend `FileTree` / `useThumbnails` are **not** the current production path.
+
+## 8. IPC trust boundary
+
+- Contract: command/event schemas + error taxonomy + input validation are defined only in `docs/contracts/ipc-contracts.md`. The TypeScript source is `src/ipc/contracts.ts`; Rust DTOs are `src-tauri/src/commands/dto.rs`. The frontend must not bypass them. Current `IPC_CONTRACT_VERSION = 2`.
+- Entry-mutation authorization uses `workspaceId + relativePath` (plus `baseName` for create/rename). `canonicalPath` in the response is for opening and session migration. It is **not** authorization evidence the frontend may submit.
+- Every path is canonicalized in the backend by `security/` and checked against the workspace allowlist. Escape returns `PATH_ACCESS_DENIED`. Document JSON is untrusted input (structure validation + size cap).
+- Least privilege: Tauri capabilities are `core:default` + `dialog:allow-open` + `dialog:allow-save` (`src-tauri/capabilities/default.json`). Path ACL lives in Rust; extra fs capabilities are not used to give the WebView arbitrary filesystem access. Strict CSP; the asset protocol is limited to `.excalidraw_assets` images.
+- The production command set does not include `dir_list`, `file_create` / `file_rename` / `file_delete`, or `thumb_lookup` / `thumb_store`.
+
+## 9. Native-window boundary (option A)
+
+Configuration and implementation: `src-tauri/tauri.conf.json` (window `title`) and `src-tauri/src/lib.rs` (no production title-bar tint / always-on-top). ADR-009 records the choice.
+
+| Item | Current product behavior |
+|------|--------------------------|
+| Window model | Ordinary decorated window; Overlay / Transparent / frameless are not configured |
+| Title | `Excalidraw Whiteboard` |
+| Title-bar color | OS-controlled; not forced by content `light \| dark \| system` |
+| Content theme | Frontend resolves independently; `system` follows `prefers-color-scheme` |
+| Stacking | Normal z-order; other apps can cover it; it can minimize and restore |
+| always-on-top | Off in production. `e2e_harness` may pin the measurement window only when `EXCALIDRAW_PERF_CONTROL_DIR` exists; that must not leak into production |
+
+## 10. Storage
+
+| Tier | Carrier | Notes |
+|------|---------|-------|
+| Hot | SQLite WAL (`drafts` / `workspaces` / `file_index`) | Drafts and index. The v1 `file_meta` table is a lazy compatibility leftover, not an active thumbnail cache |
+| Cold | Filesystem `*.excalidraw` (atomic replace); `.excalidraw.json` is recognized | Source of truth; new drawings default to `.excalidraw` |
+| Recovery | `recovery/*.json` rotating snapshots + `session.lock` | Crash recovery |
+| Trash | OS Trash | Commit point for empty Directory and clean Drawing deletes; no recursive / permanent-delete command |
+
+Storage design detail is in ADR-002 (two-tier persistence) and ADR-003 (SQLite-first and the redb trigger). The hot tier keeps WAL drafts. Do not switch back to in-place cold-file overwrites, and do not remove recovery snapshots.
+
+## 11. Related documents
+
+- ADRs: ADR-001 framework choice, ADR-002 two-tier persistence, ADR-003 SQLite-first and redb trigger, ADR-004 declared reference-environment performance measurement, ADR-005 theme boundary (shell-layout / thumbnail sentences: see ADR-009), ADR-006/007/008 reference performance budgets and measurement series, ADR-009 desktop UI interactions
+- `DESIGN.md` / `DESIGN.zh.md` (visual and interaction contract)
+- `docs/quickstart.md` / `docs/quickstart.zh.md` (getting started and verification), `docs/contracts/ipc-contracts.md` (IPC contract v2)
+- `docs/evidence/` (native verification matrix, accessibility audit, and validation summary; VM or physical machine)

@@ -4,6 +4,7 @@ import {
   getHarnessState,
   installUs4Harness,
 } from "./us4BrowserHarness";
+import { openWorkspaceSidebar } from "./workspaceSidebar";
 
 const DRAWING = "/workspace/drawing.excalidraw";
 
@@ -64,11 +65,10 @@ test("does not reload repeatedly for duplicate external events on a clean docume
 });
 
 async function mountAndOpen(page: Page): Promise<void> {
+  await openWorkspaceSidebar(page);
   await page.getByRole("button", { name: /Mount folder/i }).click();
   await expect(page.getByRole("tree")).toBeVisible();
-  await page
-    .getByRole("button", { name: /Open drawing\.excalidraw/i })
-    .click();
+  await page.getByRole("treeitem", { name: "drawing" }).click();
   await expect(
     page.getByRole("tab", { name: "drawing.excalidraw" }),
   ).toBeVisible();

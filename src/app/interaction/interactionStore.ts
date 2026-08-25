@@ -6,6 +6,7 @@ export type MenuDismissalReason =
   | "outsidePointer"
   | "escape"
   | "action"
+  | "tab"
   | "ownerCollapsed"
   | "treeScroll"
   | "dialogOpened"

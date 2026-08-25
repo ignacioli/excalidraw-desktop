@@ -56,11 +56,14 @@ body {
 }
 
 .app-commands button:focus-visible,
+.app-shell-tabs > button:focus-visible,
 .file-sidebar button:focus-visible,
 .export-dialog button:focus-visible,
 .recovery-dialog button:focus-visible,
 .conflict-dialog button:focus-visible,
+.application-context-menu [role="menuitem"]:focus-visible,
 .tab:focus-visible,
+.tab-close:focus-visible,
 .export-option-group input:focus-visible + span,
 .appearance-option input:focus-visible + span {
   outline: 2px solid var(--focus-ring);
@@ -102,11 +105,25 @@ body {
 }
 
 .tab-list {
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: 1px;
   overflow-x: auto;
   padding: var(--space-1) var(--space-2) 0;
+}
+
+.tab-list-tablist {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tab-cluster {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  min-width: 0;
 }
 
 .tab {
@@ -122,6 +139,7 @@ body {
   background: transparent;
 }
 
+.tab.is-selected,
 .tab[aria-selected="true"] {
   border-color: var(--border-subtle);
   border-bottom-color: var(--canvas-background);
@@ -129,9 +147,27 @@ body {
 }
 
 .tab-title {
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tab-close {
+  flex: 0 0 1.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.25rem;
+  line-height: 1;
+}
+
+[data-slot="tab-close"] {
+  flex: 0 0 1.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 .dirty-indicator {
@@ -225,9 +261,29 @@ body {
 }
 
 .app-shell-body {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(14rem, 17.5rem) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
+  min-width: 0;
+}
+
+.app-shell-body--pinned {
+  grid-template-columns: minmax(0, min(17.5rem, 30%)) minmax(70%, 1fr);
+}
+
+.app-shell-body--pinned .canvas-region {
+  min-width: 0;
+}
+
+.app-shell-body[data-sidebar-mode="overlay"] .file-sidebar {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(17.5rem, 30vw);
+  box-shadow: var(--shadow-menu, 0 8px 24px rgb(0 0 0 / 18%));
 }
 
 .file-sidebar {
@@ -238,6 +294,10 @@ body {
   border-right: 1px solid var(--border-subtle);
   padding: var(--space-4);
   background: var(--panel-background);
+}
+
+.file-sidebar[hidden] {
+  display: none;
 }
 
 .workspace-empty-state {
@@ -255,96 +315,77 @@ body {
   font-size: 1rem;
 }
 
-.workspace-panel,
-.workspace-section,
-.file-tree {
+.file-sidebar > button {
+  flex: 0 0 auto;
+}
+
+.workspace-panel {
   display: flex;
+  flex: 1 1 auto;
   min-height: 0;
   flex-direction: column;
   gap: var(--space-2);
 }
 
-.workspace-panel {
-  height: 100%;
-}
-
-.workspace-panel-header,
-.workspace-section-header {
+.workspace-panel-header {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
 }
 
-.workspace-panel-header button,
-.workspace-section-header button,
-.file-tree-new-button {
+.workspace-panel-header button {
   min-height: 1.75rem;
   padding: var(--space-1) var(--space-2);
   font-size: 0.75rem;
 }
 
-.workspace-section {
+.workspace-tree {
+  min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
-  border-top: 1px solid var(--border-subtle);
-  padding-top: var(--space-2);
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
-.workspace-section-header h3 {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-secondary);
-  font-size: 0.8125rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-tree-scroll {
-  flex: 1 1 auto;
-  min-height: 8rem;
-  border-radius: var(--radius-control);
-}
-
-.file-tree-scroll:focus-visible {
+.workspace-tree:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-.file-tree-row {
-  display: flex;
-  height: 2rem;
-  align-items: center;
-  gap: var(--space-1);
+.workspace-tree-row.is-active {
+  background: var(--selection-background, rgb(0 0 0 / 8%));
 }
 
-.file-sidebar .file-tree-label {
-  min-width: 0;
+.workspace-tree-action {
   min-height: 1.75rem;
-  flex: 1;
-  overflow: hidden;
-  border-color: transparent;
-  padding: var(--space-1);
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-sidebar .file-tree-menu-button {
-  min-height: 1.75rem;
+  min-width: 2rem;
   padding: var(--space-1);
 }
 
-.file-tree-menu {
+.application-context-menu {
+  position: fixed;
   z-index: 20;
   display: grid;
-  min-width: 9rem;
+  min-width: 11rem;
   gap: 1px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
   padding: var(--space-1);
   background: var(--panel-background);
   box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 18%);
+}
+
+.application-context-menu [role="menu"] {
+  display: grid;
+  gap: 1px;
+}
+
+.application-context-menu-description {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
 }
 
 .recovery-dialog-backdrop {
@@ -570,7 +611,6 @@ body {
   margin-top: var(--space-4);
 }
 
-
 .recovery-startup-error {
   position: fixed;
   z-index: 90;
@@ -650,8 +690,8 @@ body {
     min-width: 0;
   }
 
-  .app-shell-body {
-    grid-template-columns: minmax(11rem, 38vw) minmax(0, 1fr);
+  .app-shell-body--pinned {
+    grid-template-columns: minmax(0, min(11rem, 30%)) minmax(70%, 1fr);
   }
 
   .save-status,

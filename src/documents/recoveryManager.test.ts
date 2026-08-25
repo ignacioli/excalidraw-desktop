@@ -21,7 +21,7 @@ function createGateway(
 ): RecoveryGateway {
   return {
     handshake: vi.fn(async () => ({
-      contractVersion: 1,
+      contractVersion: 2,
       appVersion: "0.1.0",
       abnormalExit: false,
       pendingOpenPaths: [],
@@ -47,7 +47,7 @@ describe("RecoveryManager", () => {
     const scene = { type: "excalidraw", elements: [], appState: {}, files: {} };
     const gateway = createGateway({
       handshake: vi.fn(async () => ({
-        contractVersion: 1,
+        contractVersion: 2,
         appVersion: "0.1.0",
         abnormalExit: true,
         pendingOpenPaths: [],
@@ -76,7 +76,7 @@ describe("RecoveryManager", () => {
   it("leaves the dialog open when the user cancels without applying a snapshot", async () => {
     const gateway = createGateway({
       handshake: vi.fn(async () => ({
-        contractVersion: 1,
+        contractVersion: 2,
         appVersion: "0.1.0",
         abnormalExit: true,
         pendingOpenPaths: [],

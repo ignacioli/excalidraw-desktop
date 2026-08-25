@@ -6,7 +6,7 @@
 
 将 `excalidraw-desktop` 做成 macOS 优先的桌面应用，使用 Tauri 2.x、React/TypeScript 前端与 Rust 后端。macOS 是必选原生验收平台；Ubuntu 24.04 Desktop 为可选社区验证；Fedora/其他 Linux 与 Windows 不在当前支持承诺内。保持原生桌面行为、严格安全边界、无障碍，以及可维护的前端/后端契约。
 
-本仓库是可运行的 Tauri 2.x + Vite/React 应用，实现七个用户故事：离线编辑与保存、崩溃安全持久化、工作区文件侧边栏、外部变更检测与冲突消解、PNG/SVG 导出、macOS 原生集成，以及多工作区浏览（含缩略图与资产去重）。持久化核心以可靠性为先：合并后的热层草稿、原子冷文件写入、恢复快照，以及故障注入测试。不得为了压低 RSS 或空闲 CPU 而回退该合同——不要改回原地覆盖写入、不要把加长草稿窗口当作降低资源占用的权宜之计，也不要移除恢复快照或空闲 checkpoint。
+本仓库是可运行的 Tauri 2.x + Vite/React 应用，实现七个用户故事：离线编辑与保存、崩溃安全持久化、工作区文件侧边栏、外部变更检测与冲突消解、PNG/SVG 导出、macOS 原生集成，以及多工作区浏览（连续虚拟化工作区树与资产去重）。壳层以画布为先：工作区侧边栏首次启动隐藏，作为覆盖层打开，并可固定。不要恢复 FileTree、生产环境 `dir_list` 列举、画布内容缩略图或 `thumb_*` IPC。持久化核心以可靠性为先：合并后的热层草稿、原子冷文件写入、恢复快照，以及故障注入测试。不得为了压低 RSS 或空闲 CPU 而回退该合同——不要改回原地覆盖写入、不要把加长草稿窗口当作降低资源占用的权宜之计，也不要移除恢复快照或空闲 checkpoint。
 
 ## 预期结构
 
@@ -34,17 +34,18 @@
 
 规格驱动交付物记录在下列规范路径。私有 specs 仓库为交付物命名；本公开仓库拥有这些路径。
 
-面向用户以及根目录贡献者文档以英文为规范文件名（无后缀），简体中文为同目录下的 `*.zh.md` 姊妹文件。`docs/architecture.md` 与 `docs/adr/` 不是双语。`docs/quickstart.md` 是中文贡献者验证指南，没有语言姊妹文件。
+面向用户以及根目录贡献者文档以英文为规范文件名（无后缀），简体中文为同目录下的 `*.zh.md` 姊妹文件。`docs/adr/` 不是双语。公开面向用户的页面（`README.md`、`DESIGN.md`、`CONTEXT.md`、`docs/architecture.md`、`docs/quickstart.md`）只描述产品、架构与如何运行；不得引用私有规格编号，例如特性 `001`/`002`、规格用户故事编号或 `T0xx` 任务号。那些标识属于 `docs/evidence/`，必要时也可出现在 ADR。
 
 | 交付物 | 路径 |
 |-------------|------|
 | 用户 README（英文 / 中文） | `README.md` / `README.zh.md` |
 | 视觉与交互契约（英文 / 中文） | `DESIGN.md` / `DESIGN.zh.md` |
+| 统一语言（英文 / 中文） | `CONTEXT.md` / `CONTEXT.zh.md` |
 | 贡献者与维护者说明（英文 / 中文） | `AGENTS.md` / `AGENTS.zh.md` |
 | 架构决策记录（ADR） | `docs/adr/` |
-| 架构概述 | `docs/architecture.md` |
+| 架构概述（英文 / 中文） | `docs/architecture.md` / `docs/architecture.zh.md` |
 | IPC 契约 | `docs/contracts/ipc-contracts.md` |
-| 贡献者验证指南 | `docs/quickstart.md` |
+| 上手与验证指南（英文 / 中文） | `docs/quickstart.md` / `docs/quickstart.zh.md` |
 | 原生验证证据 | `docs/evidence/native-verification.md` |
 | 无障碍审计 | `docs/evidence/a11y-audit.md` |
 | 验证摘要 | `docs/evidence/validation-summary.md` |

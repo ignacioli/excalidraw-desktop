@@ -18,6 +18,18 @@ class MemoryStorage implements Pick<Storage, "getItem" | "setItem"> {
 }
 
 describe("ShellPreferences", () => {
+  it("does not write defaults until a preference actually changes", () => {
+    const storage = new MemoryStorage();
+    const preferences = new ShellPreferences(storage);
+
+    expect(storage.getItem(SHELL_PREFERENCES_STORAGE_KEY)).toBeNull();
+    expect(preferences.getSnapshot()).toEqual({
+      version: SHELL_PREFERENCES_VERSION,
+      sidebarPinned: false,
+      expandedWorkspaceIds: [],
+    });
+  });
+
   it("persists pinned and independently expanded Workspaces", () => {
     const storage = new MemoryStorage();
     const preferences = new ShellPreferences(storage);
