@@ -34,7 +34,7 @@ What a change may touch is a project constraint, not a particular editor or assi
 
 Spec-driven deliverables are recorded at these canonical paths. The private specs repository names deliverables; this public repo owns the paths.
 
-User-facing and root contributor docs use English as the canonical filename (no suffix) and Simplified Chinese as a `*.zh.md` sibling next to it. `docs/adr/` is not bilingual. Public user-facing pages (`README.md`, `DESIGN.md`, `CONTEXT.md`, `docs/architecture.md`, `docs/quickstart.md`) describe the product, architecture, and how to run it; they must not cite private-spec numbering such as feature `001`/`002`, spec user-story IDs, or `T0xx` task IDs. Those identifiers belong in `docs/evidence/` and, when needed, ADRs.
+User-facing and root contributor docs use English as the canonical filename (no suffix) and Simplified Chinese as a `*.zh.md` sibling next to it. `docs/adr/` is not bilingual. Public user-facing pages (`README.md`, `DESIGN.md`, `CONTEXT.md`, `CHANGELOG.md`, `docs/architecture.md`, `docs/quickstart.md`) describe the product, architecture, and how to run it; they must not cite private-spec numbering such as feature `001`/`002`, spec user-story IDs, or `T0xx` task IDs. Those identifiers belong in `docs/evidence/` and, when needed, ADRs.
 
 | Deliverable | Path |
 |-------------|------|
@@ -42,6 +42,7 @@ User-facing and root contributor docs use English as the canonical filename (no 
 | Visual and interaction contract (English / Chinese) | `DESIGN.md` / `DESIGN.zh.md` |
 | Ubiquitous language (English / Chinese) | `CONTEXT.md` / `CONTEXT.zh.md` |
 | Contributor and maintainer instructions (English / Chinese) | `AGENTS.md` / `AGENTS.zh.md` |
+| Changelog | `CHANGELOG.md` |
 | Architecture decision records (ADR) | `docs/adr/` |
 | Architecture overview (English / Chinese) | `docs/architecture.md` / `docs/architecture.zh.md` |
 | IPC contract | `docs/contracts/ipc-contracts.md` |
@@ -93,7 +94,7 @@ The manifests establish the following workflows:
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`: run the Rust lint gate.
 - `cargo test --manifest-path src-tauri/Cargo.toml`: run the Rust unit and integration tests.
 
-The reference-performance workflow and test-only fault-injection harness are implemented infrastructure. T090/T108 produce auditable `pass`/`fail` measurements on the declared macOS 26.5.2, 4 vCPU / 8GB Parallels Desktop Pro VM; budget failures remain visible but do not block merging or open-source releases. Reference runs set `PERF_TEST=1`, `PERF_REFERENCE_RUN=1`, `PERF_EXECUTION_ENVIRONMENT=virtual`, `PERF_HOST_HARDWARE`, `PERF_VIRTUALIZATION_NAME="Parallels Desktop Pro"`, and `PERF_VIRTUALIZATION_VERSION`; the GitHub workflow reads host hardware and Parallels version from repository variables. macOS bundles are permanently distributed unsigned and unnotarized through GitHub Releases; pushing a `v*` tag publishes them, while App Store, Developer ID, and Apple notarization are not project requirements.
+The reference-performance workflow and test-only fault-injection harness are implemented infrastructure. T090/T108 produce auditable `pass`/`fail` measurements on the declared macOS 26.5.2, 4 vCPU / 8GB Parallels Desktop Pro VM; budget failures remain visible but do not block merging or open-source releases. Reference runs set `PERF_TEST=1`, `PERF_REFERENCE_RUN=1`, `PERF_EXECUTION_ENVIRONMENT=virtual`, `PERF_HOST_HARDWARE`, `PERF_VIRTUALIZATION_NAME="Parallels Desktop Pro"`, and `PERF_VIRTUALIZATION_VERSION`; the GitHub workflow reads host hardware and Parallels version from repository variables. macOS bundles are permanently distributed unsigned and unnotarized through GitHub Releases; App Store, Developer ID, and Apple notarization are not project requirements. Merging a version-bump PR to `main` (four version files plus one `CHANGELOG.md` section) creates annotated tag `vX.Y.Z` and publishes the GitHub Release. Pushing a `v*` tag still publishes. Ordinary feature PRs must not edit `CHANGELOG.md` or create tags. Do not open an empty GitHub Release in the UI before the workflow runs.
 
 Performance validation order: after feature development, run the physical-macOS functional and performance measurements first (fast iteration that surfaces product regressions and workload-design flaws before the slow VM gate), then the declared-reference VM measurement (T090/T108) as the auditable gate. The VM report is authoritative evidence, but the physical run precedes it.
 

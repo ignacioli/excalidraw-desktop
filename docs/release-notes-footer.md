@@ -1,0 +1,1 @@
+macOS bundles are intentionally unsigned and unnotarized. Gatekeeper may block the first launch. After trying to open the app once, go to System Settings > Privacy & Security, choose Open Anyway for the app, and confirm. Do not disable Gatekeeper; download only from this repository's Releases page.
