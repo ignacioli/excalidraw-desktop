@@ -298,7 +298,7 @@ The supplied `can-not-close-excalidraw-window.png` records that clicking the mac
 
 Per the user's update, this bug was fixed and merged in [PR #4: Fix macOS nativegit close button](https://github.com/ignacioli/excalidraw-desktop/pull/4). It is no longer an open UX/UI redesign item and remains tracked in the separate native bug workstream.
 
-The `codex/ui-ux-redesign` worktree has not been synchronized with the merge commit during this session, so this brief does not claim the fix's exact implementation or native runtime verification results. Do not reopen or modify this bug from the UX/UI worktree unless the user explicitly redirects it here.
+The `codex/ui-ux-redesign` worktree now contains PR #4 through merge commit `57a9007`, with `main` at `1131753`. This brief does not independently assess the fix's native runtime acceptance; those details remain in the separate native bug workstream. Do not reopen or modify this bug from the UX/UI worktree unless the user explicitly redirects it here.
 
 ### Token implications
 
