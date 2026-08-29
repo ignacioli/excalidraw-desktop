@@ -11,6 +11,9 @@ import {
 const TAURI_CONF_PATH = fileURLToPath(
   new URL("../../src-tauri/tauri.conf.json", import.meta.url),
 );
+const DEFAULT_CAPABILITY_PATH = fileURLToPath(
+  new URL("../../src-tauri/capabilities/default.json", import.meta.url),
+);
 const LIB_RS_PATH = fileURLToPath(
   new URL("../../src-tauri/src/lib.rs", import.meta.url),
 );
@@ -34,6 +37,11 @@ test.describe("US4 native window contract (titlebar choice A)", () => {
   test("production tauri.conf.json does not set alwaysOnTop", async () => {
     const windowConfig = await readPrimaryWindowConfig();
     expect(windowConfig.alwaysOnTop).not.toBe(true);
+  });
+
+  test("native close checkpoint may destroy the main window", async () => {
+    const permissions = await readDefaultCapabilityPermissions();
+    expect(permissions).toContain("core:window:allow-destroy");
   });
 
   test("lib.rs set_always_on_top stays behind e2e-harness and EXCALIDRAW_PERF_CONTROL_DIR", async () => {
@@ -126,9 +134,30 @@ async function readPrimaryWindowConfig(): Promise<Record<string, unknown>> {
   }
   const windowConfig = windows[0];
   if (!isRecord(windowConfig)) {
-    throw new Error("src-tauri/tauri.conf.json app.windows[0] is not an object.");
+    throw new Error(
+      "src-tauri/tauri.conf.json app.windows[0] is not an object.",
+    );
   }
   return windowConfig;
+}
+
+async function readDefaultCapabilityPermissions(): Promise<string[]> {
+  const parsed: unknown = JSON.parse(
+    await readFile(DEFAULT_CAPABILITY_PATH, "utf8"),
+  );
+  if (!isRecord(parsed) || !Array.isArray(parsed.permissions)) {
+    throw new Error(
+      "src-tauri/capabilities/default.json is missing permissions.",
+    );
+  }
+  if (
+    !parsed.permissions.every((permission) => typeof permission === "string")
+  ) {
+    throw new Error(
+      "src-tauri/capabilities/default.json permissions must be strings.",
+    );
+  }
+  return parsed.permissions;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
