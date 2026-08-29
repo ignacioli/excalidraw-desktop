@@ -281,22 +281,24 @@ These are now first-class shell constraints for the low-fidelity designs:
 - The visual language should use restrained radii, crisp edges, cool neutral surfaces, and clear hierarchy. “Technical” and “hard-edged” do not justify decorative gradients, heavy borders, or dense dashboard styling.
 - The row-level overflow trigger uses a vertical ellipsis (`⋮`) so the action remains compact and visually aligned within the trailing edge of a file or directory row. Its tooltip and accessible name should describe the action, for example `File actions` or `Directory actions`; the glyph itself is not the accessible label.
 
-## Separate native bug: macOS window close button
+## Separate native bug: macOS window close button — resolved out of band
 
 ### Observed behavior
 
 The supplied `can-not-close-excalidraw-window.png` records that clicking the macOS red close control does not close the Excalidraw Desktop window, while choosing `Quit Excalidraw` from the system menu does.
 
-### Current code evidence
+### Pre-fix code evidence
 
 - `src/app/AppShell.tsx` registers the native close handler when `hasNativeWindowRuntime()` is true.
 - `src/app/exitCheckpoint.ts` calls `event.preventDefault()`, awaits `documentManager.checkpointAll("appExit")`, then calls `appWindow.destroy()`.
 - `src-tauri/tauri.conf.json` does not disable native closing and configures an ordinary decorated window.
 - Existing `src/app/exitCheckpoint.test.ts` tests a mocked event/window only; `e2e/tests/native-window-contract.spec.ts` checks window configuration but does not click the real macOS close control.
 
-### Status and next verification
+### Status
 
-This is a high-priority native lifecycle bug, not yet a confirmed root cause. Tauri's current API documents that `destroy()` force-closes without emitting another `closeRequested` event, so the likely verification points are listener registration in the packaged runtime and whether `checkpointAll` resolves or reports an error. A native macOS reproduction with observable checkpoint/close evidence is required before changing the handler.
+Per the user's update, this bug was fixed and merged in [PR #4: Fix macOS nativegit close button](https://github.com/ignacioli/excalidraw-desktop/pull/4). It is no longer an open UX/UI redesign item and remains tracked in the separate native bug workstream.
+
+The `codex/ui-ux-redesign` worktree has not been synchronized with the merge commit during this session, so this brief does not claim the fix's exact implementation or native runtime verification results. Do not reopen or modify this bug from the UX/UI worktree unless the user explicitly redirects it here.
 
 ### Token implications
 
