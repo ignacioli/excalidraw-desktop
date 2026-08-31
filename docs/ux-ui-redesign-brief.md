@@ -101,13 +101,17 @@ The design carrier is replaceable; the reviewable and approvable design expressi
 | D-010 | Penpot SaaS plus the official local Penpot MCP is the provisional high-fidelity design workflow, pending a small runtime smoke test.                                                                                                         | Provisional                  |
 | D-011 | The current reference benchmark is limited to Cursor, VS Code, the official Excalidraw PWA, and ExcaliApp; ChatGPT is deferred.                                                                                                              | Confirmed                    |
 | D-012 | Each application window has one current Workspace. A Workspace may contain multiple directories; another Workspace opens in another window.                                                                                                  | Confirmed                    |
-| D-013 | Do not provide a Back icon in the first redesign; avoid introducing an undefined navigation-history model.                                                                                                                                   | Confirmed                    |
+| D-013 | Do not provide a Back icon until its navigation meaning is defined.                                                                                                                                                                         | Superseded by D-020          |
 | D-014 | Row-level overflow actions use a hidden vertical ellipsis `⋮` trigger revealed only when needed; the interaction must remain keyboard- and focus-accessible.                                                                                 | Confirmed direction          |
 | D-015 | Do not add a standalone Export button. Export remains an application/menu-level action and may delegate to the official SDK shortcut/action.                                                                                                 | Confirmed                    |
 | D-016 | The first redesign delivery is limited to Welcome Page, Workspace Sidebar, Tabs, and file-row operations. Do not expand the reference set or redesign the editor toolbar/canvas UI.                                                          | Confirmed                    |
 | D-017 | The tab strip must integrate the close affordance with each tab, remove the visible tab-strip scrollbar, and use a compact overflow strategy. The Workspace Sidebar scrollbar should be visually thin and unobtrusive.                       | Confirmed direction          |
 | D-018 | The shell should feel technical, restrained, and hard-edged, aligned with the official Excalidraw PWA language; avoid large rounded cards and excessive corner rounding.                                                                     | Confirmed visual direction   |
 | D-019 | The row-level overflow trigger must use a vertical three-dot icon (`⋮` / vertical ellipsis), not a horizontal ellipsis, to minimize row width and align with compact file-management controls.                                               | Confirmed interaction detail |
+| D-020 | Add a compact Back control beside the compact Sidebar control at the far-left of the topmost shell layer. Back returns to the previous browsing location; it is not an undefined route to Welcome or merely an up-one-directory control.       | Confirmed                    |
+| D-021 | Remove the global top-level `New Drawing` control. A compact Workspace-header `New Drawing` action creates a new `.excalidraw` drawing in the currently selected directory; use `New Drawing`, not `New File`, as the user-facing term.          | Confirmed                    |
+| D-022 | Round 2 will produce one focused Cursor-inspired shell direction rather than three abstract alternatives. Compare state variants within that direction: Workspace Sidebar hidden/overlay/pinned and grayscale Light/Dark.                     | Confirmed                    |
+| D-023 | Use a three-region desktop shell: left Workspace navigation, center official Excalidraw canvas, and the official Excalidraw right-side region reserved for Library and presentation mode. Preserve the right region as an SDK-owned placeholder; do not redesign or implement its internal functions. | Confirmed boundary           |
 
 ## Round 1: confirmed product direction
 
@@ -386,9 +390,9 @@ The Review Index keeps the content, viewport, and task paths constant while comp
 
 **Decision gate:** the two requested prototype gaps are closed and the revised artifact is ready for product-owner review, but round 1 remains unapproved. Choose or combine a direction and resolve the remaining product questions before creating or updating the behavior `spec.md`. High-fidelity design, `plan.md`, `tasks.md`, and implementation remain blocked until their stated approval gates. The missing exporter image and unverified real Tauri/native-window integration prevent describing the whole low-fidelity stage as 100% validated.
 
-## Product-owner review feedback — collection in progress
+## Product-owner review feedback — collection complete
 
-**Collection status:** Open. Record feedback without consolidating it into a redesign request, changing the OpenDesign artifact, or advancing to specs, high fidelity, planning, tasks, or implementation. Wait until the product owner explicitly says the review feedback is complete; then summarize the full problem set for approval before one revision-and-optimization round.
+**Collection status:** Closed by the product owner. Feedback batch 1 is the complete input for the next low-fidelity revision round. The decisions below authorize one OpenDesign prototype revision; they do not authorize specs, high fidelity, planning, tasks, implementation, or changes to the official Excalidraw editor internals.
 
 **Evidence supplied with this feedback:**
 
@@ -410,8 +414,22 @@ The Review Index keeps the content, viewport, and task paths constant while comp
 - None of the three current directions is satisfactory.
 - The prototype does not express the product owner's highest-priority intent for this UX restructuring.
 - The product owner is concerned that `docs/ux-ui-redesign-brief.md` may not have recorded that intent faithfully despite the many prior discussion and confirmation rounds.
-- Do not interpret, reconcile, prioritize, or implement this feedback yet. Continue collecting subsequent review feedback until the product owner explicitly closes the collection phase.
+- The product owner closed feedback collection and approved one focused revision direction after resolving the navigation, creation-action, and shell-region questions below.
+
+### Confirmed Round-2 synthesis
+
+1. Replace the three-direction comparison with one focused Cursor-inspired desktop shell. Borrow compact hierarchy and control placement, not Cursor branding or an IDE-specific information architecture.
+2. Treat the shell as three regions:
+   - **Left:** Workspace navigation and file-management shell, including the compact Sidebar and Back controls.
+   - **Center:** the official Excalidraw editor/canvas, still represented as an out-of-scope placeholder in low fidelity.
+   - **Right:** the official Excalidraw side region reserved for Library and presentation mode. Keep it visible as an SDK-owned placeholder where the state requires it, but do not implement or redesign its internal functions.
+3. Put the compact Sidebar and Back controls together at the far-left of the topmost shell layer. Back returns to the previous browsing location.
+4. Put drawing Tabs at the top of the center region. Remove the separate global `New Drawing` control and the persistent normal-autosave status strip so the Workspace content begins directly below the top layer.
+5. Place compact `New Drawing`, `New Folder`, Collapse, and Refresh icon actions on the Workspace-name row, right-aligned. `New Drawing` creates a `.excalidraw` drawing inside the currently selected directory.
+6. Preserve the left Workspace Sidebar hidden/overlay/pinned states. When pinned, protect the canvas-priority width contract; when hidden or overlaid, do not disturb the center canvas box.
+7. Keep directory and drawing icon slots explicit in low fidelity and reserve recognizable, distinct design-system icons for high fidelity. Do not treat triangle, letter, or diamond placeholders as the final icon design.
+8. Correct Dark-mode readability across tree rows, controls, Tabs, placeholders, and selected/focus states. Grayscale structure must remain legible without relying only on color.
 
 ## Open questions
 
-The next round will first resolve only the benchmark outputs and the welcome-page/sidebar information architecture. Lower-priority details such as exact icon choice, pixel values, and individual menu labels remain deferred.
+No blocking product question remains before the Round-2 low-fidelity revision. Exact icon artwork, pixel values, production tokens, detailed official right-panel behavior, and final node-menu permissions remain deferred to their later approval stages.
