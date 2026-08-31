@@ -112,6 +112,12 @@ The design carrier is replaceable; the reviewable and approvable design expressi
 | D-021 | Remove the global top-level `New Drawing` control. A compact Workspace-header `New Drawing` action creates a new `.excalidraw` drawing in the currently selected directory; use `New Drawing`, not `New File`, as the user-facing term.          | Confirmed                    |
 | D-022 | Round 2 will produce one focused Cursor-inspired shell direction rather than three abstract alternatives. Compare state variants within that direction: Workspace Sidebar hidden/overlay/pinned and grayscale Light/Dark.                     | Confirmed                    |
 | D-023 | Use a three-region desktop shell: left Workspace navigation, center official Excalidraw canvas, and the official Excalidraw right-side region reserved for Library and presentation mode. Preserve the right region as an SDK-owned placeholder; do not redesign or implement its internal functions. | Confirmed boundary           |
+| D-024 | Replace the plain `+` Workspace-header action with a recognizable drawing/file outline icon for `New Drawing`. Keep `New Folder` as a distinct folder action; both remain compact, accessible, and target the selected directory.              | Confirmed interaction detail |
+| D-025 | Replace one-way Collapse All with one compact toggle control. Its first activation collapses all directories; its next activation expands all Workspace entries. Icon, tooltip, and accessible name reflect the action that will occur next.   | Confirmed interaction detail |
+| D-026 | When the Workspace Sidebar is hidden, the center Tabs and canvas reclaim the released horizontal space and realign immediately. Hidden state must not retain the visible/pinned Sidebar offset or leave a large empty block in the top layer.   | Confirmed layout behavior    |
+| D-027 | Preserve Back's confirmed browsing-history behavior but replace the Round-2 arrow artwork with a restrained, compact navigation icon consistent with the Sidebar and top-layer icon system.                                                     | Confirmed visual direction   |
+| D-028 | For the complete-state low-fidelity shell, render Back as a simple left-pointing arrow: one horizontal shaft and a clear left chevron. Avoid rotated-box or decorative constructions; keep the existing history semantics, disabled state, accessible name, and top-layer placement. | Confirmed visual correction |
+| D-029 | The Back icon is semantically clear enough for low-fidelity approval. Defer refinement of stroke weight, arrow proportions, alignment, and visual polish to the high-fidelity stage rather than reopening the low-fidelity direction. | Confirmed handoff gate |
 
 ## Round 1: confirmed product direction
 
@@ -430,6 +436,59 @@ The Review Index keeps the content, viewport, and task paths constant while comp
 7. Keep directory and drawing icon slots explicit in low fidelity and reserve recognizable, distinct design-system icons for high fidelity. Do not treat triangle, letter, or diamond placeholders as the final icon design.
 8. Correct Dark-mode readability across tree rows, controls, Tabs, placeholders, and selected/focus states. Grayscale structure must remain legible without relying only on color.
 
+## Round-2 product-owner review feedback — collection complete
+
+**Collection status:** Closed by the product owner. Feedback batch 2 is the approved input for one complete-state low-fidelity revision. This authorizes an OpenDesign prototype revision only; it does not authorize high fidelity, specs, planning, tasks, production code, or changes inside the official Excalidraw SDK-owned regions.
+
+**Evidence supplied with this feedback:**
+
+- Cursor Workspace-header reference: `/Users/liyongqiang/Downloads/cursor-worksopace.png`.
+- Annotated Sidebar-hidden alignment screenshot: `/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/codex-clipboard-ea81c81f-ea6c-44bc-a6b2-fb62d945f443.png`.
+- Annotated Back-control screenshot: `/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/codex-clipboard-28c2f22b-54d8-4863-a727-15202f5445e7.png`.
+
+### Feedback batch 2
+
+1. The compact Workspace-header actions for `New Drawing` and collapse are too easy to confuse. A plain `+` does not clearly communicate a drawing/file action, and a plain `−` does not pair naturally with directory collapse. Represent `New Drawing` with a recognizable drawing/file outline icon comparable to Cursor's new-file affordance. The `New Folder` action is acceptable for now, although its icon can still be improved later. Replace the one-way collapse action with a single toggle: the first activation collapses all directories, and the next activation expands all Workspace entries again. Its icon and accessible label must reflect the current action.
+2. In the Sidebar-hidden state, Tabs do not reclaim and realign into the space released by the hidden left region. The top layer leaves a large empty block between the Sidebar/Back control group and Tabs. Hidden state must reflow and align the Tabs with the expanded center region instead of preserving the pinned/visible Sidebar offset.
+3. The current Back icon is visually unsatisfactory. Redesign it as a compact, recognizable, restrained desktop-navigation icon consistent with the Sidebar control and top-layer icon system; keep the already confirmed behavior of returning to the previous browsing location.
+
+### Current Round-2 assessment
+
+- The Cursor-inspired shell is substantially better than Round 1.
+- Other inspected areas are currently acceptable.
+- After the three issues above are resolved, the product owner believes the direction is ready for a complete low-fidelity pass covering Sidebar hidden/overlay/pinned and Light/Dark state variants.
+- The product owner closed feedback collection and authorized the complete-state low-fidelity pass described below.
+
+### Confirmed complete-state pass
+
+1. Preserve the single Cursor-inspired three-region shell and all Round-2 behavior not named in feedback batch 2.
+2. Correct the `New Drawing` icon, collapse/expand-all toggle, Sidebar-hidden Tab reflow, and Back icon as specified in D-024 through D-027.
+3. Make Sidebar hidden, overlay, and pinned independently reviewable in both Light and Dark structure modes. `System → Light` remains an explicit review fallback rather than a claim that OS listening is implemented.
+4. Cover no-recoverable-session and recoverable-session states, the official right region closed/Library/Presentation placeholders, Tab normal/overflow/close behavior, directory selection, row menus, destructive confirmation, keyboard focus, and reduced motion.
+5. Use an interactive Review Index plus a concise state-coverage matrix. The matrix must distinguish implemented prototype behavior, review-only placeholders, and later native/SDK validation boundaries; it need not duplicate all combinations as static screenshots.
+6. Keep the deliverable a grayscale structured wireframe. Exact production icons, tokens, measurements, typography, and official SDK internals remain deferred.
+
+### Complete-state generation and verification (2026-08-31)
+
+- **Generation:** Completed as a new independent artifact in the existing OpenDesign project `Excalidraw Desktop Low-Fidelity Shell`, using the selected Local Codex / GPT-5.6-Luna configuration with `high` reasoning effort. Round 1 (`excalidraw-desktop-shell-review.html`) and Round 2 (`excalidraw-desktop-shell-round2.html`) remain unchanged and available for comparison.
+- **New artifact:** `excalidraw-desktop-shell-complete-states.html` (54,998 bytes), a single interactive three-region shell with Review Index controls for Sidebar hidden/overlay/pinned, Light/Dark/System → Light, session recovery, and right SDK Closed/Library/Presentation placeholders.
+- **Static verification:** inline JavaScript syntax passed; all 17 required state/control markers were present; all three round artifacts were present; no global top-level `New Drawing` control or persistent normal-autosave status strip was found; `git diff --check` passed for this brief.
+- **Browser verification:** recoverable session bypassed the Welcome surface; Sidebar hidden reflowed Tabs into the released top-layer space; pinned retained a 70% canvas share; overlay preserved the canvas box; New Drawing created an in-memory unsaved `.excalidraw` tab in the selected directory; Collapse All / Expand All toggled labels and tree visibility; Back restored the previous drawing context; hidden-tab overflow selection re-centered the active Tab; row-menu destructive confirmation opened and was cancelled; Light/Dark geometry stayed stable and Dark foreground remained readable; System explicitly resolved to Light; SDK Closed/Library/Presentation placeholders rendered; warning/error console was empty.
+- **Responsive spot-check:** at 1024×768 the document had no horizontal overflow; at 800×700 there was a 5px document-width excess from the low-fidelity page shell, not a canvas-region failure. The artifact's declared comparison viewport remains 1280×760.
+- **Known boundary:** the OpenDesign image exporter was not rerun by request; this does not block HTML/browser review. Native Tauri window behavior, filesystem permissions, and official Excalidraw SDK internals remain later validation boundaries. This is a reviewable low-fidelity design artifact, not production UI or approval for specs/high fidelity/code.
+
+### Back icon correction (2026-08-31)
+
+- Product-owner review found that the complete-state artifact still showed the previous unusual Back artwork. The artifact was refined in place, without changing Round 1, Round 2, button placement, browsing-history behavior, or other states.
+- The new Back drawing uses a compact horizontal shaft plus two short left-chevron strokes. The old rotated-box CSS construction is absent.
+- Browser verification confirmed one visible Back icon with `transform: none`, a 30×30 compact button, preserved accessible name/title, and an empty warning/error console. The OpenDesign run completed successfully with exit code 0; its `deliverableValid: entry_missing` metadata remains an existing validator inconsistency, while direct artifact retrieval succeeded.
+
+### Low-fidelity handoff gate (2026-08-31)
+
+- Product-owner conclusion: the Back icon is not yet ideal, but its meaning is clear and it does not create interaction confusion. This is acceptable for the low-fidelity stage.
+- The complete-state low-fidelity direction is ready to hand off for the next design stage. High fidelity may refine the Back icon's stroke, proportions, optical alignment, hit-area treatment, and final icon-system relationship.
+- Do not reopen the low-fidelity generation for this visual polish item. The next gate is high-fidelity design preparation and review; specs, `plan.md`, `tasks.md`, and production code remain unauthorized until the applicable design approvals.
+
 ## Open questions
 
-No blocking product question remains before the Round-2 low-fidelity revision. Exact icon artwork, pixel values, production tokens, detailed official right-panel behavior, and final node-menu permissions remain deferred to their later approval stages.
+No blocking product question remains for the approved Round-2 complete-state low-fidelity direction. Exact icon artwork (including final Back-icon polish), pixel values, production tokens, detailed official right-panel behavior, and final node-menu permissions remain deferred to their later approval stages.
