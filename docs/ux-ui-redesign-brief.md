@@ -354,6 +354,64 @@ The benchmark is not intended to decide the embedded canvas UI, which remains ou
 
 No new evidence is required before the first benchmark pass. The supplied screenshots plus the public ExcaliApp repository are sufficient for the selected reference set.
 
+## Low-fidelity prototype round 1 — revised, awaiting product-owner review
+
+The first clickable grayscale shell prototype was generated on 2026-08-29 and revised on 2026-08-30 in the OpenDesign project `Excalidraw Desktop Low-Fidelity Shell`. Its artifact is `excalidraw-desktop-shell-review.html`. This is a review carrier, not an approved product decision or a replacement for this brief or `DESIGN.md`.
+
+The Review Index keeps the content, viewport, and task paths constant while comparing three interaction directions:
+
+1. **Stable hierarchy** — the Workspace tree is the primary spatial model; it is the clearest hierarchy but uses the most persistent shell structure.
+2. **Context rail** — the current location is emphasized and sibling context is quieter; density is lower but the full hierarchy is less visible.
+3. **Command surface** — next actions are emphasized within the same hierarchy; common actions are faster but progressive disclosure carries more discoverability risk.
+
+### Four-area state coverage
+
+| Area | Demonstrated in round 1 | Product decision or defect still open |
+| ---- | ----------------------- | ------------------------------------- |
+| Welcome Page | No-recoverable-session entry; `Open Workspace`; `New Drawing`; `Recent Workspaces`; standalone launch state and special non-persistent-tab alternatives; recoverable sessions bypass Welcome | Select standalone launch state or special non-persistent Tab; the latter must not become a persisted drawing or create navigation history |
+| Workspace Sidebar | Hidden by default; transient overlay; pinned state; Workspace → directory → drawing hierarchy; stable icons; truncated-path tooltip; empty directory; selected, hover/focus, and thin-scrollbar states | Choose the preferred hierarchy direction; confirm the final compact header/action balance |
+| Tabs | Active/inactive, close slot, unsaved marker, overflow menu, keyboard/middle-click paths, active-hidden-Tab visibility clamp, and close-to-remaining/Welcome paths | The visibility defect is closed: selecting a hidden Tab now shifts the minimum three-Tab window needed to reveal it while preserving open-tab order. Decide whether edge navigation is needed in addition to the overflow menu |
+| Row actions | Trailing vertical ellipsis; node-specific menus; rename/delete boundaries; disabled Workspace-root deletion; destructive confirmation and cancel path | Confirm the minimum action set and permissions for Workspace, directory, and drawing nodes |
+
+### Round-1 validation and limits
+
+- OpenDesign completed the generation and two narrow revisions successfully using Local Codex with the requested `GPT-5.6-Luna` model; the local Codex configuration supplied `high` reasoning effort.
+- Browser-visible checks confirmed all three direction selectors, no-session/recoverable-session switching, Welcome suppression during recovery, `Open Workspace`, Sidebar overlay and pinning, drawing-row menu focus, destructive-action cancellation and confirmation, keyboard overflow selection, `Cmd+W`, and close-to-remaining behavior.
+- The active-hidden-Tab defect is closed. In both pointer and keyboard paths, selecting a hidden Tab moves the minimum visible window needed to reveal it; closing it activates and reveals the adjacent remaining drawing.
+- Interactive grayscale `Light structure`, `Dark structure`, and explicit `System → Light` review states are present without locking final production tokens. Light and Dark retain identical geometry; the structure container establishes its local foreground, and browser-computed title, sidebar, tab, and canvas-placeholder text changes from dark-on-light to light-on-dark while semantic selected/unsaved/recovery labels remain unchanged.
+- At the Studio widths observed through 1440×1000 and 1024×768 outer browser viewports, the page had no horizontal overflow and a pinned Sidebar left 70% of the shell content width for the canvas. At an intentionally extreme 800×700 outer viewport, the embedded artifact was only 423px wide: the review coverage table overflowed by about 15px and the three-Tab window was clipped. This is below the fixed 1280×760 desktop review target and remains a review-page/minimum-window boundary, not proof of supported Tauri window behavior.
+- The OpenDesign image-export process again exited with code 134 and produced no image. Browser rendering, DOM interaction, computed-style checks, source retrieval, and an empty warning/error console all succeeded, so this remains an exporter verification gap rather than evidence that the prototype cannot render.
+- The earlier MCP project-list/read failure was resolved after the OpenDesign version alignment and restart: the existing project could be refined and its complete artifact retrieved without changing execution mode.
+- No public-repository production code, private specs, `DESIGN.md`, `plan.md`, or `tasks.md` changed during prototype generation.
+
+**Decision gate:** the two requested prototype gaps are closed and the revised artifact is ready for product-owner review, but round 1 remains unapproved. Choose or combine a direction and resolve the remaining product questions before creating or updating the behavior `spec.md`. High-fidelity design, `plan.md`, `tasks.md`, and implementation remain blocked until their stated approval gates. The missing exporter image and unverified real Tauri/native-window integration prevent describing the whole low-fidelity stage as 100% validated.
+
+## Product-owner review feedback — collection in progress
+
+**Collection status:** Open. Record feedback without consolidating it into a redesign request, changing the OpenDesign artifact, or advancing to specs, high fidelity, planning, tasks, or implementation. Wait until the product owner explicitly says the review feedback is complete; then summarize the full problem set for approval before one revision-and-optimization round.
+
+**Evidence supplied with this feedback:**
+
+- Annotated current-prototype screenshot: `/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/codex-clipboard-e622721a-e8ac-46ca-8336-9d6aa69920a4.png`.
+- Cursor Workspace-header reference: `/Users/liyongqiang/Downloads/cursor-worksopace.png`.
+- Current low-fidelity Dark-mode screenshot: `/Users/liyongqiang/Downloads/low-fi-darkmode.png`.
+
+### Feedback batch 1
+
+1. Remove the top-level `New Drawing` button from all three directions. It must not appear beside the Sidebar control, and no replacement top-level button is requested.
+2. The current Sidebar control is too large. Use a small, recognizable icon comparable in scale and clarity to Cursor and the ChatGPT desktop app. The Sidebar and Go Back controls belong together at the far-left side of the topmost layer, while Tabs occupy the top of the right-side region; the overall shell should read as two main left/right regions.
+3. Remove the extra vertical space between the Sidebar area and the Workspace content. Remove the persistent `All changes saved quietly` text; normal autosave does not need this visible description.
+4. Keep Workspace actions such as New File, New Folder, Collapse, and Refresh small and compact. Place them on the same row as the Workspace name and right-align them, using the supplied Cursor Workspace header as the reference.
+5. The current triangle-style disclosure and letter/diamond placeholders before directories and drawings are visually unsatisfactory. This may partly reflect low-fidelity representation, but high fidelity must give directories and drawings their own distinctive, well-designed icons placed at the start of each row.
+6. Dark-mode contrast is too low and the content is difficult to read.
+
+### Overall assessment in feedback batch 1
+
+- None of the three current directions is satisfactory.
+- The prototype does not express the product owner's highest-priority intent for this UX restructuring.
+- The product owner is concerned that `docs/ux-ui-redesign-brief.md` may not have recorded that intent faithfully despite the many prior discussion and confirmation rounds.
+- Do not interpret, reconcile, prioritize, or implement this feedback yet. Continue collecting subsequent review feedback until the product owner explicitly closes the collection phase.
+
 ## Open questions
 
 The next round will first resolve only the benchmark outputs and the welcome-page/sidebar information architecture. Lower-priority details such as exact icon choice, pixel values, and individual menu labels remain deferred.
