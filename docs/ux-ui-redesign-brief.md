@@ -79,8 +79,8 @@ Use targeted unit/integration tests, browser-visible interaction checks, visual 
 ## Tool roles
 
 - ChatGPT/Codex: clarify facts, assumptions, user jobs, flows, states, decisions, and acceptance criteria.
-- Open-Design: optionally explore low-fidelity alternatives and complex interaction concepts.
-- Figma or another selected design carrier: maintain the reviewable high-fidelity design and component/token handoff.
+- OpenDesign: retain the completed low-fidelity HTML artifacts as historical exploration and interaction evidence; do not use it as the high-fidelity source of truth.
+- Penpot SaaS through the official hosted Remote MCP: maintain the reviewable high-fidelity canvas, components, variants, and token handoff.
 - Repository documents: remain the authoritative record of approved product, interaction, architecture, and verification decisions.
 
 The design carrier is replaceable; the reviewable and approvable design expression is not.
@@ -98,7 +98,7 @@ The design carrier is replaceable; the reviewable and approvable design expressi
 | D-007 | Existing SDK-provided `Save To` and `Export Image` capabilities are not to be duplicated with a redundant top-level Export action. The sidebar should move toward a more compact, icon-led direction, subject to low-fidelity validation.    | Confirmed direction          |
 | D-008 | Work is delivered incrementally rather than as one large redesign.                                                                                                                                                                           | Confirmed                    |
 | D-009 | `DESIGN.md` is the canonical in-repository design-system document. ADR-009 remains historical rationale and existing implementation context; it is not silently erased, and any behavior conflict requires an explicit superseding decision. | Confirmed governance         |
-| D-010 | Penpot SaaS plus the official local Penpot MCP is the provisional high-fidelity design workflow, pending a small runtime smoke test.                                                                                                         | Provisional                  |
+| D-010 | Penpot SaaS plus the official local Penpot MCP is the provisional high-fidelity design workflow, pending a small runtime smoke test.                                                                                                         | Superseded by D-030          |
 | D-011 | The current reference benchmark is limited to Cursor, VS Code, the official Excalidraw PWA, and ExcaliApp; ChatGPT is deferred.                                                                                                              | Confirmed                    |
 | D-012 | Each application window has one current Workspace. A Workspace may contain multiple directories; another Workspace opens in another window.                                                                                                  | Confirmed                    |
 | D-013 | Do not provide a Back icon until its navigation meaning is defined.                                                                                                                                                                         | Superseded by D-020          |
@@ -118,6 +118,7 @@ The design carrier is replaceable; the reviewable and approvable design expressi
 | D-027 | Preserve Back's confirmed browsing-history behavior but replace the Round-2 arrow artwork with a restrained, compact navigation icon consistent with the Sidebar and top-layer icon system.                                                     | Confirmed visual direction   |
 | D-028 | For the complete-state low-fidelity shell, render Back as a simple left-pointing arrow: one horizontal shaft and a clear left chevron. Avoid rotated-box or decorative constructions; keep the existing history semantics, disabled state, accessible name, and top-layer placement. | Confirmed visual correction |
 | D-029 | The Back icon is semantically clear enough for low-fidelity approval. Defer refinement of stroke weight, arrow proportions, alignment, and visual polish to the high-fidelity stage rather than reopening the low-fidelity direction. | Confirmed handoff gate |
+| D-030 | Use Penpot SaaS with Penpot's official hosted Remote MCP as the high-fidelity design workflow. Do not use the local Penpot MCP, its localhost bridge, or the tmux workaround. The Penpot canvas is the review carrier; approved decisions still require repository write-back. | Confirmed high-fidelity carrier |
 
 ## Round 1: confirmed product direction
 
@@ -141,15 +142,19 @@ These are problem categories, not yet diagnoses of the attached screenshots.
 
 ### Tool decision: Penpot
 
-Penpot is adopted provisionally as the high-fidelity design carrier because it supports a SaaS workspace and a local MCP integration path. The official local MCP workflow requires a local MCP/plugin process, a Penpot file opened in the browser, loading the local plugin, and an active connection; “Penpot account works” and “MCP runtime works” are separate facts.
+Penpot SaaS is the confirmed high-fidelity design carrier because it provides the Figma-like vector canvas, reusable components, variants, layout constraints, and design-token workflow needed for pixel-level review and handoff. D-030 supersedes the earlier provisional local-MCP choice in D-010.
 
-Before it becomes a dependency of the design workflow, run a read-only smoke test that proves:
+The selected integration is Penpot's official hosted Remote MCP. Do not start the local Penpot MCP server, localhost plugin server, or tmux workaround. The product owner created Penpot project `Excalidraw` and file `excalidraw-desktop-uxui-redesign`; the file currently reports MCP `connected`. For this hosted workflow, that in-file connection state is the Penpot-side prerequisite; no separate plugin-marketplace installation is required.
 
-- the local MCP server starts;
-- the Penpot plugin loads in the selected Penpot SaaS workspace;
-- the local MCP client connects to the open design file;
-- the agent can inspect a test file and perform one controlled, reversible design operation;
-- the design file remains reviewable without the MCP process running.
+Before the first high-fidelity write, run a bounded smoke test that proves:
+
+- the Codex host has a Penpot Streamable HTTP server configured with the official Remote MCP URL without recording its MCP key in repository files, chat, or logs;
+- the remote MCP initializes while `excalidraw-desktop-uxui-redesign` is open and connected in Penpot;
+- the agent can inspect the current file and focused page through a read-only call;
+- one later, explicitly authorized design write can be read back and remains reversible;
+- the Penpot file remains directly reviewable without Codex running.
+
+Environment check on 2026-08-31: the Penpot file side is reported connected, but the current Excalidraw Desktop Codex host does not yet list a Penpot MCP server. Remote-MCP registration and a read-only protocol check remain pending.
 
 The repository remains the authority for approved decisions. Penpot is the design carrier, not a replacement for `DESIGN.md`, ADRs, specs, or validation evidence.
 

@@ -123,4 +123,4 @@ The initial implementation must provide evidence for:
 - Keyboard navigation, focus visibility, accessible names, contrast, non-color-only state, and reduced motion;
 - Native decorated-window behavior on macOS and supported Linux environments.
 
-Open Design is only an optional exploration tool for later original visual work, such as recovery flows, complex empty states, first-run guidance, or a theme editor. Adopted exploration results must be written back into this document and the in-repo token definitions; an external design workspace must not become a parallel source of truth.
+Penpot SaaS, accessed through Penpot's official hosted Remote MCP, is the approved high-fidelity review carrier for the current desktop-shell redesign. The completed OpenDesign HTML artifacts remain low-fidelity exploration and interaction evidence; they are not the high-fidelity source of truth. Adopted Penpot results must be written back into this document and the in-repo token definitions; an external design workspace must not become a parallel source of truth.
