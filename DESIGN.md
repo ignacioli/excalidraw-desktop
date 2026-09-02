@@ -72,7 +72,7 @@ Saved preferences must be applied before the first user-visible UI. Startup must
 
 ## Semantic tokens
 
-Application components consume semantic tokens and must not use palette literals directly. Initial values must be extracted from the locked Excalidraw light/dark styles, and the corresponding package version must be recorded at implementation time.
+Application components consume semantic tokens and must not use palette literals directly. The approved desktop-shell values are frozen in `docs/design/desktop-shell/hf-2/tokens.json`. At implementation time, reconcile shared roles with the locked Excalidraw package and record its version; SDK-owned editor styling continues to use documented upstream variables, while approved shell roles must not be silently replaced by screenshot-picked values or private SDK internals.
 
 | Token role | Purpose |
 |------------|------|
@@ -90,7 +90,9 @@ Application components consume semantic tokens and must not use palette literals
 | `radius-control` / `radius-panel` | Shared corner radii for controls and panels |
 | `space-*` | Shared spacing scale for the shell |
 
-Light mode uses white and near-white surfaces, deep charcoal text, restrained cool borders, and Excalidraw purple accents. Dark mode uses a near-black canvas surround, dark-gray panels, warm-white text with sufficient contrast, restrained borders, and corresponding light-purple accents. Exact values follow the locked upstream package.
+Light mode uses white and near-white surfaces, deep charcoal text, restrained cool borders, and Excalidraw purple accents. Dark mode uses a near-black canvas surround, dark-gray panels, warm-white text with sufficient contrast, restrained borders, and corresponding light-purple accents. Exact shell values follow the approved in-repository HF-2 token handoff; exact SDK-owned editor values follow the locked upstream package.
+
+The approved shell geometry uses a 4/8/12/16/24 px spacing scale; 8 px control and 12 px panel radii; 16 px icons with a 1.75 px stroke and at least a 32 px hit target; 28 px Workspace rows; 36 px Tabs; and a compact 11/12/14/20/28 px type scale. Component-specific 6 px radii for Tabs and Workspace rows are recorded in the HF-2 component contract.
 
 ## Component and interaction rules
 
@@ -123,4 +125,4 @@ The initial implementation must provide evidence for:
 - Keyboard navigation, focus visibility, accessible names, contrast, non-color-only state, and reduced motion;
 - Native decorated-window behavior on macOS and supported Linux environments.
 
-Open Design is only an optional exploration tool for later original visual work, such as recovery flows, complex empty states, first-run guidance, or a theme editor. Adopted exploration results must be written back into this document and the in-repo token definitions; an external design workspace must not become a parallel source of truth.
+Penpot SaaS, accessed through Penpot's official hosted Remote MCP, is the approved high-fidelity review carrier for the current desktop-shell redesign. HF-2 was approved on 2026-09-01 and is frozen in [`docs/design/desktop-shell/hf-2/`](docs/design/desktop-shell/hf-2/README.md), including the editable archive, manifest, exact token values, component contract, six screen baselines, and ten shell icons. The completed OpenDesign HTML artifacts remain low-fidelity exploration and interaction evidence; they are not the high-fidelity source of truth. An external design workspace must not become a parallel source of truth.
