@@ -108,6 +108,32 @@ function createInvoker(
         );
       }
       if (command === "workspace_add") return addedWorkspace;
+      if (command === "workspace_entry_create") {
+        const workspace = workspaces.find(
+          (item) => item.id === String(args.workspaceId ?? ""),
+        );
+        const parentRelativePath = String(args.parentRelativePath ?? "");
+        const baseName = String(args.baseName ?? "Untitled");
+        const kind = args.kind === "directory" ? "directory" : "drawing";
+        const relativePath =
+          parentRelativePath.length === 0
+            ? baseName
+            : `${parentRelativePath}/${baseName}`;
+        return {
+          operationId: "operation-1",
+          entry: {
+            workspaceId: String(args.workspaceId ?? ""),
+            kind,
+            canonicalPath: `${workspace?.rootPath ?? "/workspace"}/${relativePath}`,
+            relativePath,
+            parentRelativePath,
+            name: baseName,
+            displayName: baseName,
+            mtime: 1,
+            fileSize: 0,
+          },
+        };
+      }
       if (command === "workspace_remove") return {};
       throw new Error(`Unexpected command ${command}`);
     },
@@ -116,6 +142,57 @@ function createInvoker(
 }
 
 describe("WorkspacePanel", () => {
+  it("targets header creation at the root or selected directory and keeps cancel side-effect free", async () => {
+    const user = userEvent.setup();
+    const invoker = createInvoker();
+    render(
+      <WorkspacePanel invoker={invoker} selectDirectory={async () => null} />,
+    );
+
+    const newDrawing = await screen.findByRole("button", {
+      name: "New Drawing",
+    });
+    await user.click(newDrawing);
+    expect(
+      screen.getByRole("dialog", { name: "New drawing" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(invoker.invoke).not.toHaveBeenCalledWith(
+      "workspace_entry_create",
+      expect.anything(),
+    );
+
+    await user.click(await screen.findByRole("treeitem", { name: "notes" }));
+    await user.click(screen.getByRole("button", { name: "New Folder" }));
+    const dialog = screen.getByRole("dialog", { name: "New folder" });
+    await user.click(within(dialog).getByRole("button", { name: "Create" }));
+    expect(invoker.invoke).toHaveBeenCalledWith("workspace_entry_create", {
+      workspaceId: "workspace-1",
+      parentRelativePath: "notes",
+      kind: "directory",
+      baseName: "Untitled Folder",
+    });
+  });
+
+  it("toggles the single next-action expand/collapse control and refreshes the current Workspace", async () => {
+    const user = userEvent.setup();
+    const invoker = createInvoker();
+    render(
+      <WorkspacePanel invoker={invoker} selectDirectory={async () => null} />,
+    );
+
+    const expandAll = await screen.findByRole("button", { name: "Expand all" });
+    await user.click(expandAll);
+    expect(
+      screen.getByRole("button", { name: "Collapse all" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(invoker.invoke).toHaveBeenCalledWith("workspace_entry_list", {
+      workspaceId: "workspace-1",
+      parentRelativePath: "",
+    });
+  });
+
   it("mounts a workspace and reports sidebar presence", async () => {
     const user = userEvent.setup();
     const workspace = {

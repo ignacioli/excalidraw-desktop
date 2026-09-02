@@ -100,6 +100,21 @@ describe("AppShell", () => {
     expect(onOpenDocument).toHaveBeenCalledOnce();
   });
 
+  it("renders Welcome as a non-tab document state when the session is empty", async () => {
+    const user = userEvent.setup();
+    const onCreateDocument = vi.fn();
+    render(<AppShell onCreateDocument={onCreateDocument} />);
+
+    expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: /Welcome/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "New Drawing" }));
+    expect(onCreateDocument).toHaveBeenCalledOnce();
+  });
+
   it("exposes active and dirty tab state without relying on color", async () => {
     const user = userEvent.setup();
     setDocumentSessions([

@@ -1,4 +1,5 @@
 import { DEFAULT_THEME_ID, isThemeId } from "./themeRegistry";
+import hf2Tokens from "../../../docs/design/desktop-shell/hf-2/tokens.json";
 import {
   THEME_PREFERENCE_VERSION,
   type ModePreference,
@@ -171,6 +172,73 @@ export class ThemeController {
     this.root.dataset.theme = this.snapshot.preference.themeId;
     this.root.dataset.colorScheme = this.snapshot.resolvedColorScheme;
     this.root.style.colorScheme = this.snapshot.resolvedColorScheme;
+    applyHf2Tokens(this.root, this.snapshot.resolvedColorScheme);
+  }
+}
+
+const semanticVariableNames: Readonly<Record<string, string>> = {
+  "color.app.background": "--app-background",
+  "color.canvas.background": "--canvas-background",
+  "color.panel.background": "--panel-background",
+  "color.surface.background": "--surface-background",
+  "color.surface.hover": "--surface-hover",
+  "color.surface.active": "--surface-active",
+  "color.text.primary": "--text-primary",
+  "color.text.secondary": "--text-secondary",
+  "color.text.disabled": "--text-disabled",
+  "color.border.subtle": "--border-subtle",
+  "color.border.strong": "--border-strong",
+  "color.accent.base": "--accent",
+  "color.accent.hover": "--accent-hover",
+  "color.accent.contrast": "--accent-contrast",
+  "color.focus.ring": "--focus-ring",
+  "color.status.danger": "--danger",
+  "color.status.warning": "--warning",
+  "color.status.success": "--success",
+};
+
+function applyHf2Tokens(
+  root: HTMLElement,
+  colorScheme: ResolvedColorScheme,
+): void {
+  const semanticTokens = hf2Tokens.semantics[colorScheme];
+  for (const [tokenName, variableName] of Object.entries(
+    semanticVariableNames,
+  )) {
+    const token = semanticTokens[tokenName as keyof typeof semanticTokens];
+    if (
+      token !== undefined &&
+      "value" in token &&
+      typeof token.value === "string"
+    ) {
+      root.style.setProperty(variableName, token.value);
+    }
+  }
+
+  const primitives = hf2Tokens.primitives;
+  const primitiveVariables: Readonly<Record<string, string>> = {
+    "space.1": "--space-1",
+    "space.2": "--space-2",
+    "space.3": "--space-3",
+    "space.4": "--space-4",
+    "space.6": "--space-6",
+    "radius.control": "--radius-control",
+    "radius.panel": "--radius-panel",
+    "border.default": "--border-default",
+    "border.icon": "--border-icon",
+    "size.icon": "--icon-size",
+    "size.hit-target": "--hit-target-size",
+    "size.tree-row": "--tree-row-height",
+    "size.tab-height": "--tab-height",
+  };
+  for (const [tokenName, variableName] of Object.entries(primitiveVariables)) {
+    const token = primitives[tokenName as keyof typeof primitives];
+    if (token !== undefined && "value" in token) {
+      root.style.setProperty(
+        variableName,
+        `${token.value}${"unit" in token ? token.unit : ""}`,
+      );
+    }
   }
 }
 

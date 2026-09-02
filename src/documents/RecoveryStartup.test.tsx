@@ -142,4 +142,38 @@ describe("RecoveryStartup", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
   });
+
+  it("reports the recovery dialog before decisions and ready after the candidate resolves", async () => {
+    const user = userEvent.setup();
+    const states: string[] = [];
+    const manager = {
+      start: vi.fn(async () => ({
+        handshake: {
+          contractVersion: 2,
+          appVersion: "0.1.0",
+          abnormalExit: true,
+          pendingOpenPaths: [],
+        },
+        candidates: [candidate],
+        dialogRequired: true,
+      })),
+      apply: vi.fn(async () => ({ scene: null, newPath: null })),
+    } as unknown as RecoveryManager;
+
+    render(
+      <RecoveryStartup
+        enabled
+        manager={manager}
+        onStateChange={(state) => states.push(state.status)}
+      />,
+    );
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Keep disk version for drawing.excalidraw",
+      }),
+    );
+
+    await waitFor(() => expect(states.at(-1)).toBe("ready"));
+    expect(states).toContain("dialog");
+  });
 });

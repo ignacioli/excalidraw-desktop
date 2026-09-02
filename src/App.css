@@ -22,13 +22,14 @@ body {
 }
 
 .app-commands button,
+.app-shell-tabs > button,
 .file-sidebar button,
 .export-dialog button,
 .recovery-dialog button,
 .conflict-dialog button,
 .tab {
   min-height: 2rem;
-  border: 1px solid var(--border-strong);
+  border: var(--border-default) solid var(--border-strong);
   border-radius: var(--radius-control);
   padding: var(--space-2) var(--space-3);
   color: var(--text-primary);
@@ -38,6 +39,7 @@ body {
 }
 
 .app-commands button:hover,
+.app-shell-tabs > button:hover,
 .file-sidebar button:hover,
 .export-dialog button:hover,
 .recovery-dialog button:hover,
@@ -47,6 +49,7 @@ body {
 }
 
 .app-commands button:active,
+.app-shell-tabs > button:active,
 .file-sidebar button:active,
 .export-dialog button:active,
 .recovery-dialog button:active,
@@ -133,6 +136,8 @@ body {
   min-width: 7rem;
   max-width: 15rem;
   min-height: 0;
+  height: var(--tab-height);
+  border-radius: 6px 6px 0 0;
   border-color: transparent;
   border-bottom-right-radius: 0;
   border-bottom-left-radius: 0;
@@ -162,6 +167,27 @@ body {
   border: none;
   border-radius: 0.25rem;
   line-height: 1;
+}
+
+.icon-button {
+  display: inline-grid;
+  width: var(--hit-target-size);
+  min-width: var(--hit-target-size);
+  height: var(--hit-target-size);
+  min-height: var(--hit-target-size);
+  place-items: center;
+  padding: 0;
+}
+
+.icon-button img,
+.welcome-action img {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+.shell-back-button {
+  flex: 0 0 var(--hit-target-size);
+  margin: var(--space-1) 0 var(--space-1) var(--space-2);
 }
 
 [data-slot="tab-close"] {
@@ -333,6 +359,12 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+}
+
+.workspace-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .workspace-panel-header button {
@@ -648,6 +680,105 @@ body {
   background: var(--accent-hover);
 }
 
+.welcome-screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem);
+  gap: clamp(var(--space-6), 8vw, 7rem);
+  width: min(70rem, 100%);
+  margin: auto;
+  padding: clamp(var(--space-6), 8vw, 7rem);
+}
+
+.welcome-content {
+  align-self: center;
+  max-width: 34rem;
+}
+
+.welcome-eyebrow {
+  margin: 0 0 var(--space-2);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.welcome-content h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.welcome-description {
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}
+
+.welcome-action {
+  display: inline-flex;
+  min-width: 13.75rem;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.welcome-error {
+  margin: var(--space-4) 0 0;
+  color: var(--warning);
+}
+
+.recent-workspaces {
+  align-self: center;
+  min-width: 0;
+}
+
+.recent-workspaces h2 {
+  margin: 0 0 var(--space-2);
+  font-size: 0.875rem;
+}
+
+.recent-workspaces ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent-workspace {
+  display: grid;
+  width: 100%;
+  min-height: 3.5rem;
+  gap: var(--space-1);
+  justify-items: start;
+  text-align: start;
+}
+
+.recent-workspace-name {
+  overflow: hidden;
+  max-width: 100%;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-workspace-path {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .canvas-region {
   position: relative;
   min-width: 0;
@@ -685,6 +816,18 @@ body {
   margin: 0 0 var(--space-1);
 }
 
+.workspace-tree-row[aria-selected="true"] {
+  border-inline-start: 2px solid var(--accent);
+}
+
+.workspace-tree-row {
+  border-radius: 6px;
+}
+
+.workspace-tree-row[aria-selected="true"] {
+  border-inline-start: 2px solid var(--accent);
+}
+
 @media (max-width: 48rem) {
   .app-shell {
     min-width: 0;
@@ -701,5 +844,11 @@ body {
 
   .appearance-option span {
     padding-inline: var(--space-1);
+  }
+
+  .welcome-screen {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+    padding: var(--space-6);
   }
 }

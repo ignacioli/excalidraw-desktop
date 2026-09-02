@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import type { RecoveryCandidate } from "../ipc/contracts";
+import { useEffect, useRef, useState } from "react";
+import type { AppHandshakeResponse, RecoveryCandidate } from "../ipc/contracts";
 import { documentManager, type DocumentManager } from "./documentStore";
 import { RecoveryDialog, type RecoveryDecision } from "./RecoveryDialog";
 import { recoveryManager, type RecoveryManager } from "./recoveryManager";
@@ -9,6 +9,16 @@ interface RecoveryStartupProps {
   manager?: RecoveryManager;
   documents?: Pick<DocumentManager, "open" | "restore">;
   requestSaveAsPath?: (candidate: RecoveryCandidate) => Promise<string | null>;
+  onStateChange?: (state: RecoveryStartupState) => void;
+}
+
+export type RecoveryStartupStatus = "checking" | "dialog" | "ready";
+
+export interface RecoveryStartupState {
+  status: RecoveryStartupStatus;
+  handshake: AppHandshakeResponse | null;
+  candidates: readonly RecoveryCandidate[];
+  recoveredCount: number;
 }
 
 export function RecoveryStartup({
@@ -16,31 +26,60 @@ export function RecoveryStartup({
   manager = recoveryManager,
   documents = documentManager,
   requestSaveAsPath = chooseRecoveryPath,
+  onStateChange,
 }: RecoveryStartupProps) {
   const [candidates, setCandidates] = useState<RecoveryCandidate[]>([]);
   const [startupError, setStartupError] = useState<string | null>(null);
+  const [recoveredCount, setRecoveredCount] = useState(0);
+  const handshakeRef = useRef<AppHandshakeResponse | null>(null);
 
   useEffect(() => {
     if (!enabled) {
+      onStateChange?.({
+        status: "ready",
+        handshake: null,
+        candidates: [],
+        recoveredCount: 0,
+      });
       return;
     }
+    onStateChange?.({
+      status: "checking",
+      handshake: null,
+      candidates: [],
+      recoveredCount: 0,
+    });
     let disposed = false;
     void manager
       .start()
       .then((result) => {
-        if (!disposed && result.dialogRequired) {
-          setCandidates(result.candidates);
+        if (disposed) {
+          return;
         }
+        handshakeRef.current = result.handshake;
+        setCandidates(result.candidates);
+        onStateChange?.({
+          status: result.dialogRequired ? "dialog" : "ready",
+          handshake: result.handshake,
+          candidates: result.candidates,
+          recoveredCount: 0,
+        });
       })
       .catch((error: unknown) => {
         if (!disposed) {
+          onStateChange?.({
+            status: "ready",
+            handshake: handshakeRef.current,
+            candidates: [],
+            recoveredCount: 0,
+          });
           setStartupError(getErrorMessage(error));
         }
       });
     return () => {
       disposed = true;
     };
-  }, [enabled, manager]);
+  }, [enabled, manager, onStateChange]);
 
   const apply = async (decision: RecoveryDecision) => {
     const candidate = candidates.find(
@@ -76,9 +115,23 @@ export function RecoveryStartup({
     } else if (response.newPath !== undefined && response.newPath !== null) {
       await documents.open(response.newPath);
     }
-    setCandidates((current) =>
-      current.filter((item) => item.documentId !== decision.documentId),
+    const recovered =
+      (response.scene !== undefined &&
+        response.scene !== null &&
+        candidate.originalPath !== null) ||
+      (response.newPath !== undefined && response.newPath !== null);
+    const nextRecoveredCount = recovered ? recoveredCount + 1 : recoveredCount;
+    const nextCandidates = candidates.filter(
+      (item) => item.documentId !== decision.documentId,
     );
+    setRecoveredCount(nextRecoveredCount);
+    setCandidates(nextCandidates);
+    onStateChange?.({
+      status: nextCandidates.length > 0 ? "dialog" : "ready",
+      handshake: handshakeRef.current,
+      candidates: nextCandidates,
+      recoveredCount: nextRecoveredCount,
+    });
     return response;
   };
 
@@ -93,7 +146,15 @@ export function RecoveryStartup({
         <RecoveryDialog
           candidates={candidates}
           onApply={apply}
-          onCancel={() => setCandidates([])}
+          onCancel={() => {
+            setCandidates([]);
+            onStateChange?.({
+              status: "ready",
+              handshake: handshakeRef.current,
+              candidates: [],
+              recoveredCount,
+            });
+          }}
           requestSaveAsPath={requestSaveAsPath}
         />
       ) : null}

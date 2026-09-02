@@ -14,10 +14,19 @@ import {
 } from "../documents/documentStore";
 import { conflictDetector } from "../documents/conflictDetector";
 import { ConflictDialog } from "../documents/ConflictDialog";
-import { RecoveryStartup } from "../documents/RecoveryStartup";
+import {
+  RecoveryStartup,
+  type RecoveryStartupState,
+} from "../documents/RecoveryStartup";
 import { ExcalidrawEditor } from "../editor/ExcalidrawEditor";
 import type { ExcalidrawAdapter } from "../editor/ExcalidrawAdapter";
-import { hasTauriCommandRuntime } from "../ipc/client";
+import {
+  createTauriCommandInvoker,
+  hasTauriCommandRuntime,
+  type CommandInvoker,
+} from "../ipc/client";
+import type { Workspace } from "../ipc/contracts";
+import { BrowsingHistory, type BrowsingLocation } from "./browsingHistory";
 import { WorkspacePanel } from "../workspaces/WorkspacePanel";
 import { AppearanceControl } from "./AppearanceControl";
 import { ExportDialog } from "./ExportDialog";
@@ -29,9 +38,12 @@ import { fileDialogActions, type FileDialogActions } from "./fileDialogs";
 import { registerOpenFileHandler } from "./openFileHandler";
 import { TabBar } from "./TabBar";
 import { OrphanCloseDialog } from "./OrphanCloseDialog";
+import { WelcomeScreen } from "./WelcomeScreen";
+import backIcon from "../../docs/design/desktop-shell/hf-2/icons/back.svg";
 import { interactionStore } from "./interaction";
 import { createSidebarController } from "./sidebarController";
 import { ShellPreferences } from "./shellPreferences";
+import { deriveStartupRoute } from "./startupRoute";
 import { useAppStore } from "./store";
 import {
   initializeBrowserThemeController,
@@ -41,6 +53,9 @@ import {
 interface AppShellProps {
   onCreateDocument?: () => void | Promise<void>;
   onOpenDocument?: () => void | Promise<void>;
+  onOpenWorkspace?: () => void | Promise<void>;
+  workspaceInvoker?: CommandInvoker;
+  selectWorkspaceDirectory?: () => Promise<string | null>;
   dialogs?: FileDialogActions;
   themeController?: ThemeController;
 }
@@ -48,6 +63,9 @@ interface AppShellProps {
 export function AppShell({
   onCreateDocument,
   onOpenDocument,
+  onOpenWorkspace,
+  workspaceInvoker: providedWorkspaceInvoker,
+  selectWorkspaceDirectory = selectNativeWorkspaceDirectory,
   dialogs = fileDialogActions,
   themeController = initializeBrowserThemeController(),
 }: AppShellProps) {
@@ -82,6 +100,27 @@ export function AppShell({
   const [exportDocumentId, setExportDocumentId] = useState<string | null>(null);
   const [orphanCloseId, setOrphanCloseId] = useState<string | null>(null);
   const [preferences] = useState(() => new ShellPreferences());
+  const [workspaceInvoker] = useState(
+    () => providedWorkspaceInvoker ?? createTauriCommandInvoker(),
+  );
+  const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(
+    () => preferences.getSnapshot().currentWorkspaceId,
+  );
+  const [welcomeWorkspaces, setWelcomeWorkspaces] = useState<Workspace[]>([]);
+  const [welcomeBusy, setWelcomeBusy] = useState(false);
+  const [welcomeError, setWelcomeError] = useState<string | null>(null);
+  const [browsingHistory] = useState(() => new BrowsingHistory());
+  const currentBrowsingLocationRef = useRef<BrowsingLocation | null>(null);
+  const [backLocation, setBackLocation] = useState<BrowsingLocation | null>(
+    null,
+  );
+  const [, setHistoryVersion] = useState(0);
+  const [startupState, setStartupState] = useState<RecoveryStartupState>({
+    status: hasNativeWindowRuntime() ? "checking" : "ready",
+    handshake: null,
+    candidates: [],
+    recoveredCount: 0,
+  });
   const [sidebarController] = useState(() =>
     createSidebarController({
       initiallyPinned: preferences.getSnapshot().sidebarPinned,
@@ -102,6 +141,17 @@ export function AppShell({
   const activeSession =
     activeDocumentId === null ? undefined : sessionsById[activeDocumentId];
   const documentSessions = Object.values(sessionsById);
+  const startupRoute = deriveStartupRoute({
+    handshake:
+      startupState.handshake ??
+      ({ abnormalExit: false, pendingOpenPaths: [] } as const),
+    recoveryCandidates: startupState.candidates,
+    currentWorkspaceId,
+    workspaces: welcomeWorkspaces,
+    openDocumentCount: documentSessions.length,
+  });
+  const showWelcome =
+    startupState.status === "ready" && startupRoute.kind === "welcome";
   const themeSnapshot = useSyncExternalStore(
     themeController.subscribe,
     themeController.getSnapshot,
@@ -133,6 +183,141 @@ export function AppShell({
       setInteractionError(getErrorMessage(error));
     }
   };
+
+  const closeOpenDocumentsForWorkspaceSwitch = async (): Promise<void> => {
+    const tabOrder = documentManager.store.getState().tabOrder;
+    const outcome = await documentManager.closeMany(tabOrder);
+    if (outcome.status !== "closed") {
+      throw new Error(
+        outcome.status === "failed"
+          ? outcome.message
+          : "Close or save the open drawings before switching workspaces.",
+      );
+    }
+  };
+
+  const selectCurrentWorkspace = useCallback(
+    (workspace: Workspace): void => {
+      preferences.setCurrentWorkspaceId(workspace.id);
+      setCurrentWorkspaceId(workspace.id);
+    },
+    [preferences],
+  );
+
+  const openWorkspace = async (): Promise<void> => {
+    if (onOpenWorkspace !== undefined) {
+      await onOpenWorkspace();
+      return;
+    }
+    setWelcomeBusy(true);
+    setWelcomeError(null);
+    try {
+      const rootPath = await selectWorkspaceDirectory();
+      if (rootPath === null) return;
+      await closeOpenDocumentsForWorkspaceSwitch();
+      const workspace = await workspaceInvoker.invoke("workspace_add", {
+        rootPath,
+      });
+      selectCurrentWorkspace(workspace);
+      setWelcomeWorkspaces((current) => [
+        ...current.filter((item) => item.id !== workspace.id),
+        workspace,
+      ]);
+    } catch (error) {
+      setWelcomeError(getErrorMessage(error));
+    } finally {
+      setWelcomeBusy(false);
+    }
+  };
+
+  const openRecentWorkspace = async (workspace: Workspace): Promise<void> => {
+    setWelcomeBusy(true);
+    setWelcomeError(null);
+    try {
+      await closeOpenDocumentsForWorkspaceSwitch();
+      await workspaceInvoker.invoke("workspace_entry_list", {
+        workspaceId: workspace.id,
+        parentRelativePath: "",
+      });
+      selectCurrentWorkspace(workspace);
+    } catch (error) {
+      setWelcomeError(getErrorMessage(error));
+    } finally {
+      setWelcomeBusy(false);
+    }
+  };
+
+  const createWelcomeDrawing = async (): Promise<void> => {
+    setWelcomeBusy(true);
+    setWelcomeError(null);
+    try {
+      await (onCreateDocument === undefined
+        ? documentManager.createUntitled()
+        : onCreateDocument());
+    } catch (error) {
+      setWelcomeError(getErrorMessage(error));
+    } finally {
+      setWelcomeBusy(false);
+    }
+  };
+
+  const handleBrowse = (location: BrowsingLocation): void => {
+    const current = currentBrowsingLocationRef.current;
+    if (
+      current?.workspaceId === location.workspaceId &&
+      current.directoryRelativePath === location.directoryRelativePath
+    ) {
+      return;
+    }
+    if (current !== null) browsingHistory.push(current);
+    currentBrowsingLocationRef.current = location;
+    setHistoryVersion((version) => version + 1);
+  };
+
+  const goBack = (): void => {
+    const target = browsingHistory.pop(
+      (location) => location.workspaceId === currentWorkspaceId,
+    );
+    if (target === null) return;
+    currentBrowsingLocationRef.current = target;
+    setBackLocation(target);
+    setHistoryVersion((version) => version + 1);
+  };
+
+  const canGoBack = browsingHistory.canGoBack(
+    (location) => location.workspaceId === currentWorkspaceId,
+  );
+
+  useEffect(() => {
+    if (!hasTauriCommandRuntime()) return;
+    let disposed = false;
+    void workspaceInvoker
+      .invoke("workspace_list", {})
+      .then((items) => {
+        if (disposed) return;
+        setWelcomeWorkspaces(items);
+        const validIds = new Set(items.map((workspace) => workspace.id));
+        const nextCurrentWorkspaceId = preferences.resolveCurrentWorkspaceId(
+          validIds,
+          items[0]?.id ?? null,
+        );
+        const nextWorkspace = items.find(
+          (workspace) => workspace.id === nextCurrentWorkspaceId,
+        );
+        if (nextWorkspace === undefined) {
+          preferences.setCurrentWorkspaceId(null);
+          setCurrentWorkspaceId(null);
+        } else {
+          selectCurrentWorkspace(nextWorkspace);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!disposed) setWelcomeError(getErrorMessage(error));
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [preferences, selectCurrentWorkspace, workspaceInvoker]);
 
   const createDocument = () =>
     runAction(onCreateDocument ?? dialogs.createDocument);
@@ -350,8 +535,21 @@ export function AppShell({
 
   return (
     <div className="app-shell">
-      <RecoveryStartup enabled={hasNativeWindowRuntime()} />
+      <RecoveryStartup
+        enabled={hasNativeWindowRuntime()}
+        onStateChange={setStartupState}
+      />
       <header className="app-shell-tabs">
+        <button
+          aria-label="Back"
+          className="icon-button shell-back-button"
+          disabled={!canGoBack}
+          onClick={goBack}
+          title="Back"
+          type="button"
+        >
+          <img alt="" aria-hidden="true" src={backIcon} />
+        </button>
         <button
           aria-expanded={sidebarSnapshot.mode !== "hidden"}
           aria-controls="workspace-sidebar"
@@ -496,6 +694,13 @@ export function AppShell({
                 void runAction(() => documentManager.open(entry.canonicalPath));
               }}
               onWorkspacePresenceChange={setHasMountedWorkspace}
+              onCurrentWorkspaceChange={(workspace) => {
+                preferences.setCurrentWorkspaceId(workspace?.id ?? null);
+                setCurrentWorkspaceId(workspace?.id ?? null);
+              }}
+              onBrowse={handleBrowse}
+              backLocation={backLocation}
+              onBackLocationApplied={() => setBackLocation(null)}
             />
           ) : null}
           {!hasMountedWorkspace ? (
@@ -519,7 +724,16 @@ export function AppShell({
         </aside>
 
         <main className="canvas-region" aria-label="Drawing canvas">
-          {documentSessions.length > 0 ? (
+          {showWelcome ? (
+            <WelcomeScreen
+              busy={welcomeBusy}
+              error={welcomeError}
+              onNewDrawing={createWelcomeDrawing}
+              onOpenRecentWorkspace={openRecentWorkspace}
+              onOpenWorkspace={openWorkspace}
+              workspaces={welcomeWorkspaces}
+            />
+          ) : documentSessions.length > 0 ? (
             documentSessions.map((session) => (
               <section
                 aria-labelledby={`tab-${session.id}`}
@@ -678,4 +892,14 @@ async function chooseSavePath(defaultTitle: string): Promise<string | null> {
     ],
     title: "Save drawing as",
   });
+}
+
+async function selectNativeWorkspaceDirectory(): Promise<string | null> {
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const selected = await open({
+    directory: true,
+    multiple: false,
+    title: "Open workspace",
+  });
+  return typeof selected === "string" ? selected : null;
 }

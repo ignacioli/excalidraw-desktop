@@ -128,6 +128,19 @@ describe("ThemeController", () => {
     expect(controller.getSnapshot().preference.modePreference).toBe("dark");
   });
 
+  it("maps HF-2 semantic and geometry tokens onto the shell root", () => {
+    const { root } = createController({
+      stored: preference("light"),
+    });
+
+    expect(root.style.getPropertyValue("--accent")).toBe("#6965DB");
+    expect(root.style.getPropertyValue("--focus-ring")).toBe("#1C7ED6");
+    expect(root.style.getPropertyValue("--hit-target-size")).toBe("32px");
+    expect(root.style.getPropertyValue("--icon-size")).toBe("16px");
+    expect(root.style.getPropertyValue("--tree-row-height")).toBe("28px");
+    expect(root.style.getPropertyValue("--tab-height")).toBe("36px");
+  });
+
   it.each([
     "not-json",
     JSON.stringify({

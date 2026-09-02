@@ -25,6 +25,7 @@ export interface WorkspaceTreeProps {
   onToggleWorkspace?: (workspaceId: string, expanded: boolean) => void;
   onToggleDirectory?: (entry: WorkspaceEntry, expanded: boolean) => void;
   onOpenDrawing?: (entry: WorkspaceEntry) => void;
+  onSelectRow?: (row: WorkspaceTreeRow) => void;
   onRowAction?: (
     row: WorkspaceTreeRow,
     trigger: HTMLButtonElement,
@@ -40,7 +41,7 @@ export interface WorkspaceTreeProps {
   captureFocus?: boolean;
 }
 
-const DEFAULT_ROW_HEIGHT = 32;
+const DEFAULT_ROW_HEIGHT = 28;
 const DEFAULT_OVERSCAN = 8;
 const FALLBACK_VISIBLE_ROWS = 40;
 
@@ -55,6 +56,7 @@ export function WorkspaceTree({
   onToggleWorkspace,
   onToggleDirectory,
   onOpenDrawing,
+  onSelectRow,
   onRowAction,
   onScroll,
   focusRequestKey = null,
@@ -280,6 +282,7 @@ export function WorkspaceTree({
 
   const activateRow = (row: WorkspaceTreeRow): void => {
     setFocusedRowKey(row.key);
+    onSelectRow?.(row);
     if (row.kind === "workspace") {
       toggleWorkspace(row);
     } else if (row.kind === "directory") {
