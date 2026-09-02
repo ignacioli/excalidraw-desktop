@@ -120,6 +120,8 @@
 
 主分支是 `main`。改动保持聚焦，使用简短祈使主语；永远不要绕过 hook，也不要对主分支 force-push。不要丢弃或覆盖无关的本地改动。自动化编码工具 **不得** 在操作者未明确要求时创建提交。
 
+**受保护的主分支。** 不得在 `main` 或 `master` 上修改已跟踪文件、暂存或提交。先 fetch `origin/main`，再从该最新 tip 创建主题分支（或把 `origin/main` 合并进该主题分支），然后才改已跟踪文件。优先使用独立 git worktree，以便主 checkout 保持在 `main`。即使改动看起来很小，也禁止直接提交到 `main`/`master`；通过分支和 pull request 合入。主 checkout 上的 gitignore 本地状态可以保留：编辑器/agent skills、`.codex/`、`.handoff/`。
+
 只有当请求的结果在受影响路径上可用、相关测试与文档已更新、适用检查通过或确切缺口已报告、未引入密钥，且最终交接列出变更文件、验证、假设与残余风险时，任务才算完成。
 
 ## Worktree 安全与 SDD 提交节奏
@@ -128,5 +130,7 @@
 
 - **Worktree 安全（所有开发模式）**：工作前的未提交改动审计、破坏性 worktree 操作前的 WIP 分支备份，以及原生 Git 集成。这适用于每个仓库和每种开发模式，包括不使用 SpecKit 工具的手动 spec → plan → task → implement → validate 循环。
 - **Spec-Driven Development 提交节奏**：带安全与边界触发的 checkpoint 级提交，以及与满足它们的代码一起提交的任务跟踪复选框。只要工作由本仓库私有 `specs/` 的 spec/plan/tasks 工件驱动，无论用 SpecKit 工具还是手工执行，都适用。
+
+**本地工具链 bootstrap。** 编辑器 skills、SpecKit scripts/templates 和 `.handoff/` 属于开发者本地文件，已被 gitignore，以免公开仓库绑定某一种编辑器工具链。它们只安装在主 checkout。为本产品仓库执行 `git worktree add` 之后，以及在该 worktree 中使用项目 skills、SpecKit 脚本、`.handoff` 或项目 Cursor subagent 之前，把该 worktree 作为当前工作目录运行 `scripts/bootstrap-local-worktree.sh`。若当前分支还没有这份脚本，用另一份已更新 checkout 里的拷贝同样调用：以要接线的 worktree 为 `cwd`，而不是以脚本所在位置为准。脚本是幂等的：它把主 checkout 上已存在的目录做成相对 symlink，缺失的源则跳过。若目标已是普通目录，则停止并报告；`--force` 会先备份再替换，且不得用于主 checkout。不要把另一位开发者的 `.agents` 或 `.cursor` 拷进 git 或 worktree。不要把整个 `.specify/` 或 `.cursor/` 链过去——只链脚本列出的被忽略运行时子树。私有 specs worktree 属于另一个 Git 仓库，不受此脚本接线。
 
 本项目没有冲突规则；若将来需要项目级例外，在此显式记录，而不是复制全局策略。
