@@ -119,6 +119,8 @@ The design carrier is replaceable; the reviewable and approvable design expressi
 | D-028 | For the complete-state low-fidelity shell, render Back as a simple left-pointing arrow: one horizontal shaft and a clear left chevron. Avoid rotated-box or decorative constructions; keep the existing history semantics, disabled state, accessible name, and top-layer placement. | Confirmed visual correction |
 | D-029 | The Back icon is semantically clear enough for low-fidelity approval. Defer refinement of stroke weight, arrow proportions, alignment, and visual polish to the high-fidelity stage rather than reopening the low-fidelity direction. | Confirmed handoff gate |
 | D-030 | Use Penpot SaaS with Penpot's official hosted Remote MCP as the high-fidelity design workflow. Do not use the local Penpot MCP, its localhost bridge, or the tmux workaround. The Penpot canvas is the review carrier; approved decisions still require repository write-back. | Confirmed high-fidelity carrier |
+| D-031 | Approve the HF-1 semantic Light/Dark palette, system-UI typography density, restrained radii, visible focus treatment, and shell icon direction, including Back and Collapse/Expand. Advance to reusable component variants and HF-2 key-screen composition without reopening HF-1. | Confirmed HF-1 gate |
+| D-032 | Approve the HF-2 component variants and six key-screen compositions. Freeze the approved Penpot source, screen baselines, shell icons, tokens, and component contract in the product repository; authorize the SDD specification, planning, task-generation, and analysis cycle. Production implementation still requires a separate explicit approval after SDD review. | Confirmed HF-2 gate |
 
 ## Round 1: confirmed product direction
 
@@ -494,6 +496,21 @@ The Review Index keeps the content, viewport, and task paths constant while comp
 - The complete-state low-fidelity direction is ready to hand off for the next design stage. High fidelity may refine the Back icon's stroke, proportions, optical alignment, hit-area treatment, and final icon-system relationship.
 - Do not reopen the low-fidelity generation for this visual polish item. The next gate is high-fidelity design preparation and review; specs, `plan.md`, `tasks.md`, and production code remain unauthorized until the applicable design approvals.
 
+### HF-1 foundations and icon-system approval (2026-08-31)
+
+- The product owner approved the Penpot HF-1 Light/Dark semantic palette, typography density, restrained radii, focus treatment, and refined shell icon direction as highly satisfactory.
+- Approved icon details include Back and Collapse/Expand; the shared 16 px glyph, 1.75 px stroke, and 32 px minimum hit-target direction may advance into reusable component variants.
+- HF-2 is authorized for Welcome, recoverable-session, Tabs, Workspace rows, and Sidebar hidden/overlay/pinned key-screen composition in Light and Dark. This approval does not authorize specs, planning, tasks, production code, or redesign of SDK-owned editor internals.
+
+### HF-2 component and key-screen review package (2026-09-01)
+
+- Penpot now contains four reusable shell component families: Icon Button / Back (6 variants), Tab (7 variants), Workspace Row (8 variants), and Welcome Action (6 variants).
+- The review package contains six 1280 x 760 key screens: Welcome / Light, Restored Session / Sidebar Hidden / Light, Workspace / Sidebar Pinned / Light, Workspace / Sidebar Overlay / Light, Welcome / Dark, and Workspace / Sidebar Pinned / Dark.
+- The screens preserve the approved product boundaries: the desktop shell owns workspace, tabs, session restore, and sidebar behavior; the embedded editor canvas and right-side library or presentation surfaces remain SDK-owned placeholders.
+- Penpot file validation reports no structural errors. A parent-containment audit reports no violations with a 0.01 px tolerance for Penpot floating-point placement, and the pinned layout leaves 76.1% of the post-sidebar width to the canvas.
+- The product owner approved HF-2 on 2026-09-01. The immutable repository handoff is stored in `docs/design/desktop-shell/hf-2/`, including the Penpot archive, six screen baselines, ten normalized shell icons, the three-layer token handoff, component contract, manifest, and checksums.
+- This approval authorizes the SDD specification, planning, task-generation, and analysis cycle. Production implementation remains unauthorized until the resulting SDD artifacts and reconciliation findings receive a separate explicit approval.
+
 ## Open questions
 
-No blocking product question remains for the approved Round-2 complete-state low-fidelity direction. Exact icon artwork (including final Back-icon polish), pixel values, production tokens, detailed official right-panel behavior, and final node-menu permissions remain deferred to their later approval stages.
+No blocking product question remains for the approved HF-2 package. The next gate is reconciliation of HF-2 with the existing partially implemented desktop-UI interaction feature before changing its specification, plan, or remaining tasks. Detailed official right-panel behavior and final node-menu permissions remain deferred to their applicable later design or implementation stages.
