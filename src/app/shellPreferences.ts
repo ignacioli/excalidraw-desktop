@@ -5,6 +5,7 @@ export interface ShellPreferenceSnapshot {
   version: typeof SHELL_PREFERENCES_VERSION;
   sidebarPinned: boolean;
   expandedWorkspaceIds: string[];
+  currentWorkspaceId: string | null;
 }
 
 type ShellPreferenceStorage = Pick<Storage, "getItem" | "setItem">;
@@ -13,6 +14,7 @@ const defaultSnapshot = (): ShellPreferenceSnapshot => ({
   version: SHELL_PREFERENCES_VERSION,
   sidebarPinned: false,
   expandedWorkspaceIds: [],
+  currentWorkspaceId: null,
 });
 
 export class ShellPreferences {
@@ -42,6 +44,29 @@ export class ShellPreferences {
     if (this.snapshot.sidebarPinned === sidebarPinned) return;
     this.snapshot = { ...this.snapshot, sidebarPinned };
     this.persist();
+  }
+
+  setCurrentWorkspaceId(currentWorkspaceId: string | null): void {
+    if (this.snapshot.currentWorkspaceId === currentWorkspaceId) return;
+    this.snapshot = { ...this.snapshot, currentWorkspaceId };
+    this.persist();
+  }
+
+  resolveCurrentWorkspaceId(
+    validWorkspaceIds: ReadonlySet<string>,
+    fallbackWorkspaceId: string | null = null,
+  ): string | null {
+    const currentWorkspaceId = this.snapshot.currentWorkspaceId;
+    if (
+      currentWorkspaceId !== null &&
+      validWorkspaceIds.has(currentWorkspaceId)
+    ) {
+      return currentWorkspaceId;
+    }
+    return fallbackWorkspaceId !== null &&
+      validWorkspaceIds.has(fallbackWorkspaceId)
+      ? fallbackWorkspaceId
+      : null;
   }
 
   setWorkspaceExpanded(workspaceId: string, expanded: boolean): void {
@@ -82,6 +107,10 @@ function readSnapshot(stored: string | null): ShellPreferenceSnapshot {
       value.version !== SHELL_PREFERENCES_VERSION ||
       typeof value.sidebarPinned !== "boolean" ||
       !Array.isArray(value.expandedWorkspaceIds) ||
+      (value.currentWorkspaceId !== undefined &&
+        value.currentWorkspaceId !== null &&
+        (typeof value.currentWorkspaceId !== "string" ||
+          value.currentWorkspaceId.length === 0)) ||
       value.expandedWorkspaceIds.some(
         (id) => typeof id !== "string" || id.length === 0,
       )
@@ -92,6 +121,10 @@ function readSnapshot(stored: string | null): ShellPreferenceSnapshot {
       version: SHELL_PREFERENCES_VERSION,
       sidebarPinned: value.sidebarPinned,
       expandedWorkspaceIds: [...new Set(value.expandedWorkspaceIds)],
+      currentWorkspaceId:
+        value.currentWorkspaceId === undefined
+          ? null
+          : value.currentWorkspaceId,
     };
   } catch {
     return defaultSnapshot();

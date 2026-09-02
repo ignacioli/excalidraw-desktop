@@ -64,6 +64,24 @@ function entries(): WorkspaceTreeEntriesByWorkspace {
 }
 
 describe("workspaceTreeModel", () => {
+  it("filters visible rows to the current Workspace without changing source entries", () => {
+    const rows = buildWorkspaceTreeRows({
+      workspaces,
+      entriesByWorkspace: entries(),
+      currentWorkspaceId: "workspace-2",
+      expandedWorkspaceIds: new Set(["workspace-2"]),
+    });
+
+    expect(rows.map((row) => row.workspaceId)).toEqual([
+      "workspace-2",
+      "workspace-2",
+    ]);
+    expect(rows.map((row) => row.displayName)).toEqual([
+      "Blueprints",
+      "plan.excalidraw",
+    ]);
+  });
+
   it("flattens expanded workspaces into one depth-first visible row list", () => {
     const rows = buildWorkspaceTreeRows({
       workspaces,

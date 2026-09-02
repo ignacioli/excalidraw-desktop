@@ -100,6 +100,9 @@ export function WorkspacePanel({
   const openMenu = useInteractionStore((state) => state.menu);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(
+    () => preferences.getSnapshot().currentWorkspaceId,
+  );
   const [entriesByWorkspace, setEntriesByWorkspace] = useState<
     Record<string, Record<string, WorkspaceEntry[]>>
   >({});
@@ -212,6 +215,12 @@ export function WorkspacePanel({
     (items: Workspace[]) => {
       const liveIds = new Set(items.map((workspace) => workspace.id));
       preferences.pruneWorkspaceIds(liveIds);
+      const nextCurrentWorkspaceId = preferences.resolveCurrentWorkspaceId(
+        liveIds,
+        items[0]?.id ?? null,
+      );
+      preferences.setCurrentWorkspaceId(nextCurrentWorkspaceId);
+      setCurrentWorkspaceId(nextCurrentWorkspaceId);
       const known = knownWorkspaceIdsRef.current;
       const next = new Set(expandedWorkspaceIdsRef.current);
       if (known === null) {
@@ -352,6 +361,8 @@ export function WorkspacePanel({
       if (rootPath) {
         const workspace = await invoker.invoke("workspace_add", { rootPath });
         setWorkspaces((current) => [...current, workspace]);
+        preferences.setCurrentWorkspaceId(workspace.id);
+        setCurrentWorkspaceId(workspace.id);
         expandWorkspace(workspace.id);
         onWorkspacePresenceChange?.(true);
       }
@@ -372,6 +383,12 @@ export function WorkspacePanel({
     try {
       await invoker.invoke("workspace_remove", { workspaceId: workspace.id });
       const next = workspaces.filter((item) => item.id !== workspace.id);
+      const nextCurrentWorkspaceId =
+        workspace.id === currentWorkspaceId
+          ? (next[0]?.id ?? null)
+          : currentWorkspaceId;
+      preferences.setCurrentWorkspaceId(nextCurrentWorkspaceId);
+      setCurrentWorkspaceId(nextCurrentWorkspaceId);
       setWorkspaces(next);
       setExpandedWorkspaceIds((current) => {
         const withoutRemoved = new Set(current);
@@ -730,6 +747,7 @@ export function WorkspacePanel({
         <WorkspaceTree
           workspaces={workspaces}
           entriesByWorkspace={treeEntries}
+          currentWorkspaceId={currentWorkspaceId}
           expandedWorkspaceIds={expandedWorkspaceIds}
           expandedDirectoryKeys={expandedDirectoryKeys}
           activeDocumentPath={activeDocumentPath}

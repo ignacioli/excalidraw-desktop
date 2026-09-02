@@ -13,6 +13,7 @@ export interface ActiveDrawingReference {
 export interface WorkspaceTreeModelOptions {
   workspaces: readonly Workspace[];
   entriesByWorkspace: WorkspaceTreeEntriesByWorkspace;
+  currentWorkspaceId?: string | null;
   expandedWorkspaceIds?: ReadonlySet<string>;
   expandedDirectoryKeys?: ReadonlySet<string>;
   activeDrawing?: ActiveDrawingReference | null;
@@ -69,19 +70,24 @@ export function buildWorkspaceTreeRows(
   const {
     workspaces,
     entriesByWorkspace,
+    currentWorkspaceId,
     expandedWorkspaceIds = new Set<string>(),
     expandedDirectoryKeys = new Set<string>(),
     activeDrawing = null,
     activeDocumentPath = null,
   } = options;
+  const visibleWorkspaces =
+    currentWorkspaceId === undefined
+      ? workspaces
+      : workspaces.filter((workspace) => workspace.id === currentWorkspaceId);
   const rows: WorkspaceTreeRow[] = [];
   const visitedKeys = new Set<string>();
   const workspaceSiblingCount = new Set(
-    workspaces.map((workspace) => workspace.id),
+    visibleWorkspaces.map((workspace) => workspace.id),
   ).size;
   let workspaceSiblingIndex = 0;
 
-  for (const workspace of workspaces) {
+  for (const workspace of visibleWorkspaces) {
     const workspaceKey = makeWorkspaceRowKey(workspace.id);
     if (visitedKeys.has(workspaceKey)) continue;
     visitedKeys.add(workspaceKey);

@@ -17,6 +17,7 @@ import {
 export interface WorkspaceTreeProps {
   workspaces: readonly Workspace[];
   entriesByWorkspace: WorkspaceTreeEntriesByWorkspace;
+  currentWorkspaceId?: string | null;
   expandedWorkspaceIds?: ReadonlySet<string>;
   expandedDirectoryKeys?: ReadonlySet<string>;
   activeDrawing?: ActiveDrawingReference | null;
@@ -46,6 +47,7 @@ const FALLBACK_VISIBLE_ROWS = 40;
 export function WorkspaceTree({
   workspaces,
   entriesByWorkspace,
+  currentWorkspaceId,
   expandedWorkspaceIds: controlledWorkspaceIds,
   expandedDirectoryKeys: controlledDirectoryKeys,
   activeDrawing = null,
@@ -101,6 +103,7 @@ export function WorkspaceTree({
       buildWorkspaceTreeRows({
         workspaces,
         entriesByWorkspace,
+        currentWorkspaceId,
         expandedWorkspaceIds,
         expandedDirectoryKeys,
         activeDrawing,
@@ -112,6 +115,7 @@ export function WorkspaceTree({
       entriesByWorkspace,
       expandedDirectoryKeys,
       expandedWorkspaceIds,
+      currentWorkspaceId,
       workspaces,
     ],
   );

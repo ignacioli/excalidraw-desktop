@@ -27,6 +27,7 @@ describe("ShellPreferences", () => {
       version: SHELL_PREFERENCES_VERSION,
       sidebarPinned: false,
       expandedWorkspaceIds: [],
+      currentWorkspaceId: null,
     });
   });
 
@@ -34,6 +35,7 @@ describe("ShellPreferences", () => {
     const storage = new MemoryStorage();
     const preferences = new ShellPreferences(storage);
     preferences.setSidebarPinned(true);
+    preferences.setCurrentWorkspaceId("workspace-b");
     preferences.setWorkspaceExpanded("workspace-a", true);
     preferences.setWorkspaceExpanded("workspace-b", true);
     preferences.setWorkspaceExpanded("workspace-a", false);
@@ -42,6 +44,7 @@ describe("ShellPreferences", () => {
       version: SHELL_PREFERENCES_VERSION,
       sidebarPinned: true,
       expandedWorkspaceIds: ["workspace-b"],
+      currentWorkspaceId: "workspace-b",
     });
     expect(new ShellPreferences(storage).getSnapshot()).toEqual(
       preferences.getSnapshot(),
@@ -75,9 +78,65 @@ describe("ShellPreferences", () => {
       version: SHELL_PREFERENCES_VERSION,
       sidebarPinned: false,
       expandedWorkspaceIds: [],
+      currentWorkspaceId: null,
     });
     expect(storage.getItem(SHELL_PREFERENCES_STORAGE_KEY)).toBe(
       JSON.stringify(preferences.getSnapshot()),
     );
+  });
+
+  it("keeps a valid current Workspace and falls back to none when it is missing", () => {
+    const storage = new MemoryStorage();
+    const preferences = new ShellPreferences(storage);
+    preferences.setCurrentWorkspaceId("workspace-a");
+
+    expect(
+      preferences.resolveCurrentWorkspaceId(new Set(["workspace-a"])),
+    ).toBe("workspace-a");
+    expect(
+      preferences.resolveCurrentWorkspaceId(new Set(["workspace-b"])),
+    ).toBeNull();
+    expect(
+      preferences.resolveCurrentWorkspaceId(
+        new Set(["workspace-b"]),
+        "workspace-b",
+      ),
+    ).toBe("workspace-b");
+  });
+
+  it("accepts a null current Workspace in a persisted snapshot", () => {
+    const storage = new MemoryStorage();
+    storage.values.set(
+      SHELL_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({
+        version: SHELL_PREFERENCES_VERSION,
+        sidebarPinned: false,
+        expandedWorkspaceIds: [],
+        currentWorkspaceId: null,
+      }),
+    );
+
+    expect(new ShellPreferences(storage).getSnapshot().currentWorkspaceId).toBe(
+      null,
+    );
+  });
+
+  it("migrates an older snapshot without a current Workspace id", () => {
+    const storage = new MemoryStorage();
+    storage.values.set(
+      SHELL_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({
+        version: SHELL_PREFERENCES_VERSION,
+        sidebarPinned: true,
+        expandedWorkspaceIds: ["workspace-a"],
+      }),
+    );
+
+    expect(new ShellPreferences(storage).getSnapshot()).toEqual({
+      version: SHELL_PREFERENCES_VERSION,
+      sidebarPinned: true,
+      expandedWorkspaceIds: ["workspace-a"],
+      currentWorkspaceId: null,
+    });
   });
 });

@@ -185,7 +185,7 @@ describe("WorkspacePanel", () => {
     expect(screen.queryByText("Loading folder…")).not.toBeInTheDocument();
   });
 
-  it("renders multiple workspaces in parallel and collapses each independently", async () => {
+  it("renders only the current Workspace and collapses it", async () => {
     const user = userEvent.setup();
     const invoker = createInvoker();
 
@@ -196,20 +196,20 @@ describe("WorkspacePanel", () => {
     const firstToggle = await screen.findByRole("treeitem", {
       name: "Sketches",
     });
-    const secondToggle = screen.getByRole("treeitem", {
-      name: "Blueprints",
-    });
     expect(firstToggle).toHaveAttribute("aria-expanded", "true");
-    expect(secondToggle).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.queryByRole("treeitem", { name: "Blueprints" }),
+    ).not.toBeInTheDocument();
     expect(screen.getAllByRole("tree")).toHaveLength(1);
     expect(
       await screen.findAllByRole("treeitem", { name: "notes" }),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
 
     await user.click(firstToggle);
     expect(firstToggle).toHaveAttribute("aria-expanded", "false");
-    expect(secondToggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getAllByRole("treeitem", { name: "notes" })).toHaveLength(1);
+    expect(
+      screen.queryByRole("treeitem", { name: "notes" }),
+    ).not.toBeInTheDocument();
   });
 
   it("restores and persists each Workspace expansion preference", async () => {
@@ -220,6 +220,7 @@ describe("WorkspacePanel", () => {
         version: SHELL_PREFERENCES_VERSION,
         sidebarPinned: false,
         expandedWorkspaceIds: ["workspace-1"],
+        currentWorkspaceId: "workspace-1",
       }),
     );
     const invoker = createInvoker();
@@ -228,9 +229,10 @@ describe("WorkspacePanel", () => {
       <WorkspacePanel invoker={invoker} selectDirectory={async () => null} />,
     );
     const sketches = await screen.findByRole("treeitem", { name: "Sketches" });
-    const blueprints = screen.getByRole("treeitem", { name: "Blueprints" });
     expect(sketches).toHaveAttribute("aria-expanded", "true");
-    expect(blueprints).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.queryByRole("treeitem", { name: "Blueprints" }),
+    ).not.toBeInTheDocument();
 
     await user.click(sketches);
     expect(sketches).toHaveAttribute("aria-expanded", "false");
@@ -248,8 +250,8 @@ describe("WorkspacePanel", () => {
       await screen.findByRole("treeitem", { name: "Sketches" }),
     ).toHaveAttribute("aria-expanded", "false");
     expect(
-      screen.getByRole("treeitem", { name: "Blueprints" }),
-    ).toHaveAttribute("aria-expanded", "false");
+      screen.queryByRole("treeitem", { name: "Blueprints" }),
+    ).not.toBeInTheDocument();
   });
 
   it("expands a newly mounted Workspace even when an existing preference is collapsed", async () => {
@@ -339,14 +341,14 @@ describe("WorkspacePanel", () => {
     const firstActions = await screen.findByRole("button", {
       name: "Actions for Sketches",
     });
-    const secondActions = screen.getByRole("button", {
-      name: "Actions for Blueprints",
+    const secondActions = await screen.findByRole("button", {
+      name: "Actions for notes",
     });
     await user.click(firstActions);
     expect(screen.getAllByRole("menu")).toHaveLength(1);
     await user.click(secondActions);
     expect(screen.getAllByRole("menu")).toHaveLength(1);
-    expect(screen.getByRole("menu")).toHaveTextContent("Remove Workspace");
+    expect(screen.getByRole("menu")).toHaveTextContent("New Drawing");
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
@@ -358,7 +360,7 @@ describe("WorkspacePanel", () => {
     expect(firstActions).toHaveFocus();
 
     await user.click(secondActions);
-    await user.click(screen.getByRole("treeitem", { name: "Blueprints" }));
+    await user.click(screen.getByRole("treeitem", { name: "notes" }));
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 
     fireEvent.contextMenu(screen.getByRole("treeitem", { name: "Sketches" }), {
