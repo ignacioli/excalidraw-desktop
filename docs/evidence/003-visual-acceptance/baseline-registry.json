@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "task": "T008",
+  "generatedDate": "2026-09-03",
+  "manifest": {
+    "path": "docs/design/desktop-shell/hf-2/manifest.json",
+    "sha256": "a10b4fcbd362393b1558fe4c183d9aec45270977b33ade0cf086e5eb70983f97",
+    "status": "approved",
+    "approvedAt": "2026-09-01"
+  },
+  "expectedScreenDimensions": {
+    "width": 1280,
+    "height": 760
+  },
+  "results": [
+    {
+      "name": "01 · Welcome · Light",
+      "path": "docs/design/desktop-shell/hf-2/screens/welcome-light.png",
+      "expected": {
+        "width": 1280,
+        "height": 760,
+        "sha256": "ecf7dd4d4b3681bae5ce29a080ff77061e57318ea581f9c8bccc00f0fd9ce2f6"
+      },
+      "actual": {
+        "width": 1280,
+        "height": 760,
+        "sha256": "ecf7dd4d4b3681bae5ce29a080ff77061e57318ea581f9c8bccc00f0fd9ce2f6"
+      },
+      "result": "PASS"
+    },
+    {
+      "name": "02 · Restored · Hidden · Light",
+      "path": "docs/design/desktop-shell/hf-2/screens/restored-hidden-light.png",
+      "expected": {
+        "width": 1280,
+        "height": 760,
+        "sha256": "9d945cb2993b8b639921b35c1ab9d611dcce79ee35d542a1fe92a485d7c8e02f"
+      },
+      "actual": {
+        "width": 1280,
+        "height": 760,
+        "sha256": "9d945cb2993b8b639921b35c1ab9d611dcce79ee35d542a1fe92a485d7c8e02f"
+      },
+      "result": "PASS"
+    },
+    {
+      "name": "03 · Workspace · Pinned · Light",
+      "path": "docs/design/desktop-shell/hf-2/screens/workspace-pinned-light.png",
+      "expected": {
+        "width": 1280,
+        "height": 760,
+        "sha256": "040f6dfaf02fe94b665a6d1c34e38b983b0edbb96a871789bac65966c17e528f"
+      },
+      "actual": {
+        "width": 1280,
+        "height": 760,
+        "sha256": "040f6dfaf02fe94b665a6d1c34e38b983b0edbb96a871789bac65966c17e528f"
+      },
+      "result": "PASS"
+    },
+    {
+      "name": "04 · Workspace · Overlay · Light",
+      "path": "docs/design/desktop-shell/hf-2/screens/workspace-overlay-light.png",
+      "expected": {
+        "width": 1280,
+        "height": 760,
+        "sha256": "5fd991ee7b797617db35355cebbaf8faf0336a486dae43eb91fb513bf9182f8e"
+      },
+      "actual": {
+        "width": 1280,
+        "height": 760,
+        "sha256": "5fd991ee7b797617db35355cebbaf8faf0336a486dae43eb91fb513bf9182f8e"
+      },
+      "result": "PASS"
+    },
+    {
+      "name": "05 · Welcome · Dark",
+      "path": "docs/design/desktop-shell/hf-2/screens/welcome-dark.png",
+      "expected": {
+        "width": 1280,
+        "height": 760,
+        "sha256": "662b630727fc50f4b99fd4e5da5a19e3b3d8c50585fb39ac14d0b26655f21c6d"
+      },
+      "actual": {
+        "width": 1280,
+        "height": 760,
+        "sha256": "662b630727fc50f4b99fd4e5da5a19e3b3d8c50585fb39ac14d0b26655f21c6d"
+      },
+      "result": "PASS"
+    },
+    {
+      "name": "06 · Workspace · Pinned · Dark",
+      "path": "docs/design/desktop-shell/hf-2/screens/workspace-pinned-dark.png",
+      "expected": {
+        "width": 1280,
+        "height": 760,
+        "sha256": "47e9f3af6ab2a11fd44625f42e353dabd35a49d122cbd22932873e8fa9cea3a1"
+      },
+      "actual": {
+        "width": 1280,
+        "height": 760,
+        "sha256": "47e9f3af6ab2a11fd44625f42e353dabd35a49d122cbd22932873e8fa9cea3a1"
+      },
+      "result": "PASS"
+    }
+  ],
+  "summary": {
+    "screenCount": 6,
+    "passCount": 6,
+    "failCount": 0,
+    "result": "PASS"
+  }
+}
