@@ -4,7 +4,7 @@
 
 **Status**: Approved design contract
 
-**Last updated**: 2026-08-23
+**Last updated**: 2026-09-02
 
 **Scope**: Application shell, desktop-specific UI, and the embedded Excalidraw editor
 
@@ -25,15 +25,23 @@ Avoid decorative gradients, glassmorphism, excessive shadows, large corner radii
 
 The window is an ordinary decorated native window titled **Excalidraw Whiteboard**. Title-bar color and title placement are controlled by the operating system (titlebar choice A). Do not redraw browser chrome, a PWA top bar, or macOS red/yellow/green traffic lights in the web content area. Do not force an app-wide native Dark appearance, a transparent/overlay/hybrid/frameless title bar, or production always-on-top.
 
-| Region | Purpose | Required behavior |
-|------|------|----------------|
-| Native title bar | Window identity and OS chrome | Ordinary decorated window; system-colored title bar; title **Excalidraw Whiteboard** |
-| Top tab bar | Navigation among open documents | Show the file name, active state, and unsaved state; reserved close-control slot; keyboard and pointer operation |
-| Workspace Sidebar | Mounted workspaces and Workspace Entries | Canvas-first: hidden on first launch; explicit **Workspace sidebar** control opens a Transient Sidebar overlay; pin/unpin; overlay does not change the canvas box; pinned canvas width ≥ 70% of the content area at supported window sizes; no empty right sidebar |
-| Right editing area | Official Excalidraw editor | Occupy remaining space and remain the primary visual surface |
-| Dialog layer | Export, recovery, conflict, confirmation, naming, and preferences | Single application dialog layer and a single context menu; no `window.prompt` / `window.confirm` |
+| Region             | Purpose                                                           | Required behavior                                                                                                                                                                                                                                                  |
+| ------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Native title bar   | Window identity and OS chrome                                     | Ordinary decorated window; system-colored title bar; title **Excalidraw Whiteboard**                                                                                                                                                                               |
+| Top tab bar        | Navigation among open documents                                   | Show the file name, active state, and unsaved state; reserved close-control slot; keyboard and pointer operation                                                                                                                                                   |
+| Workspace Sidebar  | Mounted workspaces and Workspace Entries                          | Canvas-first: hidden on first launch; explicit **Workspace sidebar** control opens a Transient Sidebar overlay; pin/unpin; overlay does not change the canvas box; pinned canvas width ≥ 70% of the content area at supported window sizes; no empty right sidebar |
+| Right editing area | Official Excalidraw editor                                        | Occupy remaining space and remain the primary visual surface                                                                                                                                                                                                       |
+| Dialog layer       | Export, recovery, conflict, confirmation, naming, and preferences | Single application dialog layer and a single context menu; no `window.prompt` / `window.confirm`                                                                                                                                                                   |
 
 **Canvas-first Workspace Sidebar.** First launch hides the sidebar. The **Workspace sidebar** control opens a Transient Sidebar that overlays the canvas without changing the canvas box. Pinning places the sidebar in the window layout; unpinning returns to overlay. Overlay auto-closes 500 ms after pointer leave unless focus, a context menu, a dialog, or a drag holds it. Escape closes the overlay unless a dialog or menu already consumed Escape.
+
+### Startup and browsing states
+
+- **Welcome** is the empty, non-tab document state. It offers **New Drawing**, **Open Workspace**, and Recent Workspaces projected from the existing workspace records using only the visible name and root path. Cancelling workspace selection leaves the state unchanged.
+- **Restored** is the normal post-start shell when a valid Current Workspace or reopenable document exists. A clean reopen does not show the recovery dialog.
+- An abnormal exit with recovery candidates shows the recovery dialog first. The Restored shell appears only after the candidates have been resolved; recovery decisions do not overwrite the disk file before the decision is applied.
+- **Current Workspace** is the single workspace used by the sidebar tree and its header actions. A missing or invalid saved id falls back to an available workspace without creating a new workspace record.
+- **Back** returns to the previous valid browsing location within the Current Workspace. It is disabled when the browsing stack is empty and does not close open documents.
 
 **Workspace tree.** Mounted workspaces and their visible descendants form one continuous virtualized tree of Workspace Entries. Drawing rows use a file icon. There is no FileTree, no production `dir_list` listing, and no canvas-content thumbnail worker or `thumb_*` IPC.
 
@@ -74,21 +82,21 @@ Saved preferences must be applied before the first user-visible UI. Startup must
 
 Application components consume semantic tokens and must not use palette literals directly. The approved desktop-shell values are frozen in `docs/design/desktop-shell/hf-2/tokens.json`. At implementation time, reconcile shared roles with the locked Excalidraw package and record its version; SDK-owned editor styling continues to use documented upstream variables, while approved shell roles must not be silently replaced by screenshot-picked values or private SDK internals.
 
-| Token role | Purpose |
-|------------|------|
-| `app-background` | Window content background |
-| `canvas-background` | Default editor surface around document content |
-| `panel-background` | Sidebars, menus, dialogs, and persistent panels |
-| `surface-background` | Buttons, tabs, inputs, and floating controls |
-| `surface-hover` / `surface-active` | Hover and pressed states |
-| `text-primary` / `text-secondary` / `text-disabled` | Text hierarchy |
-| `border-subtle` / `border-strong` | Dividers, inputs, and selected borders |
-| `accent` / `accent-hover` / `accent-contrast` | Primary actions and selected controls |
-| `focus-ring` | Keyboard focus indicator |
-| `danger` / `warning` / `success` | Danger, warning, and completion states; must not be the only information channel |
-| `shadow-floating` | Menus and dialogs only |
-| `radius-control` / `radius-panel` | Shared corner radii for controls and panels |
-| `space-*` | Shared spacing scale for the shell |
+| Token role                                          | Purpose                                                                          |
+| --------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `app-background`                                    | Window content background                                                        |
+| `canvas-background`                                 | Default editor surface around document content                                   |
+| `panel-background`                                  | Sidebars, menus, dialogs, and persistent panels                                  |
+| `surface-background`                                | Buttons, tabs, inputs, and floating controls                                     |
+| `surface-hover` / `surface-active`                  | Hover and pressed states                                                         |
+| `text-primary` / `text-secondary` / `text-disabled` | Text hierarchy                                                                   |
+| `border-subtle` / `border-strong`                   | Dividers, inputs, and selected borders                                           |
+| `accent` / `accent-hover` / `accent-contrast`       | Primary actions and selected controls                                            |
+| `focus-ring`                                        | Keyboard focus indicator                                                         |
+| `danger` / `warning` / `success`                    | Danger, warning, and completion states; must not be the only information channel |
+| `shadow-floating`                                   | Menus and dialogs only                                                           |
+| `radius-control` / `radius-panel`                   | Shared corner radii for controls and panels                                      |
+| `space-*`                                           | Shared spacing scale for the shell                                               |
 
 Light mode uses white and near-white surfaces, deep charcoal text, restrained cool borders, and Excalidraw purple accents. Dark mode uses a near-black canvas surround, dark-gray panels, warm-white text with sufficient contrast, restrained borders, and corresponding light-purple accents. Exact shell values follow the approved in-repository HF-2 token handoff; exact SDK-owned editor values follow the locked upstream package.
 

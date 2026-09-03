@@ -12,7 +12,7 @@ interface RecoveryStartupProps {
   onStateChange?: (state: RecoveryStartupState) => void;
 }
 
-export type RecoveryStartupStatus = "checking" | "dialog" | "ready";
+export type RecoveryStartupStatus = "checking" | "dialog" | "ready" | "error";
 
 export interface RecoveryStartupState {
   status: RecoveryStartupStatus;
@@ -68,7 +68,7 @@ export function RecoveryStartup({
       .catch((error: unknown) => {
         if (!disposed) {
           onStateChange?.({
-            status: "ready",
+            status: "error",
             handshake: handshakeRef.current,
             candidates: [],
             recoveredCount: 0,
@@ -147,13 +147,7 @@ export function RecoveryStartup({
           candidates={candidates}
           onApply={apply}
           onCancel={() => {
-            setCandidates([]);
-            onStateChange?.({
-              status: "ready",
-              handshake: handshakeRef.current,
-              candidates: [],
-              recoveredCount,
-            });
+            setStartupError("Resolve recovery candidates before continuing.");
           }}
           requestSaveAsPath={requestSaveAsPath}
         />

@@ -66,23 +66,22 @@ export function RecoveryDialog({
       return;
     }
     setErrorMessage(null);
-    let saveAsPath: string | undefined;
-    if (action === "saveAsNew") {
-      if (requestSaveAsPath === undefined) {
-        setErrorMessage(
-          "Choose a destination before saving the recovery as a new drawing.",
-        );
-        return;
-      }
-      const selectedPath = await requestSaveAsPath(candidate);
-      if (selectedPath === null) {
-        return;
-      }
-      saveAsPath = selectedPath;
-    }
-
     setBusyDocumentId(candidate.documentId);
     try {
+      let saveAsPath: string | undefined;
+      if (action === "saveAsNew") {
+        if (requestSaveAsPath === undefined) {
+          setErrorMessage(
+            "Choose a destination before saving the recovery as a new drawing.",
+          );
+          return;
+        }
+        const selectedPath = await requestSaveAsPath(candidate);
+        if (selectedPath === null) {
+          return;
+        }
+        saveAsPath = selectedPath;
+      }
       await onApply({
         documentId: candidate.documentId,
         action,
@@ -124,7 +123,6 @@ export function RecoveryDialog({
           className="recovery-candidate-list"
         >
           {candidates.map((candidate) => {
-            const isBusy = busyDocumentId === candidate.documentId;
             return (
               <li className="recovery-candidate" key={candidate.documentId}>
                 <div className="recovery-candidate-details">
@@ -145,28 +143,28 @@ export function RecoveryDialog({
                   className="recovery-candidate-actions"
                 >
                   <button
-                    disabled={isBusy}
+                    disabled={busyDocumentId !== null}
                     onClick={() => void applyDecision(candidate, "restore")}
                     type="button"
                   >
                     Restore {candidate.displayName}
                   </button>
                   <button
-                    disabled={isBusy}
+                    disabled={busyDocumentId !== null}
                     onClick={() => void applyDecision(candidate, "keepDisk")}
                     type="button"
                   >
                     Keep disk version for {candidate.displayName}
                   </button>
                   <button
-                    disabled={isBusy}
+                    disabled={busyDocumentId !== null}
                     onClick={() => void applyDecision(candidate, "saveAsNew")}
                     type="button"
                   >
                     Save {candidate.displayName} as new
                   </button>
                   <button
-                    disabled={isBusy}
+                    disabled={busyDocumentId !== null}
                     onClick={() => void applyDecision(candidate, "discard")}
                     type="button"
                   >

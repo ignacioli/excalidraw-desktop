@@ -176,4 +176,52 @@ describe("RecoveryStartup", () => {
     await waitFor(() => expect(states.at(-1)).toBe("ready"));
     expect(states).toContain("dialog");
   });
+
+  it("keeps normal startup blocked when recovery inspection fails", async () => {
+    const states: string[] = [];
+    const manager = {
+      start: vi.fn(async () => {
+        throw new Error("Recovery service unavailable");
+      }),
+    } as unknown as RecoveryManager;
+
+    render(
+      <RecoveryStartup
+        enabled
+        manager={manager}
+        onStateChange={(state) => states.push(state.status)}
+      />,
+    );
+
+    await waitFor(() => expect(states.at(-1)).toBe("error"));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Recovery service unavailable",
+    );
+  });
+
+  it("does not dismiss unresolved recovery candidates on Escape", async () => {
+    const user = userEvent.setup();
+    const manager = {
+      start: vi.fn(async () => ({
+        handshake: {
+          contractVersion: 2,
+          appVersion: "0.1.0",
+          abnormalExit: true,
+        },
+        candidates: [candidate],
+        dialogRequired: true,
+      })),
+    } as unknown as RecoveryManager;
+
+    render(<RecoveryStartup enabled manager={manager} />);
+    const dialog = await screen.findByRole("dialog", {
+      name: "Recover unsaved drawings",
+    });
+    await user.keyboard("{Escape}");
+
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Resolve recovery candidates before continuing.",
+    );
+  });
 });

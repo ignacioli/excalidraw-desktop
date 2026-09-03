@@ -81,4 +81,38 @@ describe("RecoveryDialog", () => {
     await user.keyboard("{Escape}");
     expect(onCancel).toHaveBeenCalledOnce();
   });
+
+  it("disables every candidate action while one recovery decision is pending", async () => {
+    const user = userEvent.setup();
+    let resolveApply: (() => void) | undefined;
+    const onApply = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveApply = resolve;
+        }),
+    );
+    const secondCandidate = {
+      ...recoveryCandidate,
+      documentId: "document-2",
+      displayName: "second.excalidraw",
+    };
+    render(
+      <RecoveryDialog
+        candidates={[recoveryCandidate, secondCandidate]}
+        onApply={onApply}
+      />,
+    );
+
+    const firstRestore = screen.getByRole("button", {
+      name: "Restore drawing.excalidraw",
+    });
+    const secondRestore = screen.getByRole("button", {
+      name: "Restore second.excalidraw",
+    });
+    await user.click(firstRestore);
+
+    expect(firstRestore).toBeDisabled();
+    expect(secondRestore).toBeDisabled();
+    resolveApply?.();
+  });
 });
