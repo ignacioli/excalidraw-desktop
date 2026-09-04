@@ -35,6 +35,31 @@ export interface ViewportSize {
   readonly height: number;
 }
 
+export const VISUAL_VIEWPORT: ViewportSize = {
+  width: 1280,
+  height: 760,
+};
+
+export const COMPONENT_CROP_THRESHOLD = 0.01;
+
+/**
+ * Selectors owned by the application shell.  The editor wrapper is the only
+ * SDK boundary selector: it is rendered by Excalidraw Desktop, while all
+ * descendants remain deliberately opaque to these checks.
+ */
+export const SHELL_VISUAL_SELECTORS = [
+  ".app-shell-tabs",
+  ".file-sidebar",
+  ".workspace-panel-header",
+  ".workspace-tree-row",
+  ".workspace-tree-label",
+  ".tab-list",
+  ".welcome-screen",
+  ".excalidraw-editor",
+] as const;
+
+export const SDK_BOUNDARY_SELECTOR = ".excalidraw-editor";
+
 export interface PlatformFontValues {
   readonly deviationId: string;
   readonly uiStack: string;
@@ -184,5 +209,40 @@ export function assertComponentCropWithinViewport(
     `${crop.x},${crop.y},${crop.width},${crop.height}`,
     "within viewport bounds",
     valid,
+  );
+}
+
+export function assertComponentCropDiff(
+  name: string,
+  maxDiffPixelRatio: number,
+  threshold = COMPONENT_CROP_THRESHOLD,
+): AssertionResult {
+  return result(
+    `component-crop-diff.${name}`,
+    `<=${threshold}`,
+    String(maxDiffPixelRatio),
+    "auxiliary; component crop only",
+    Number.isFinite(maxDiffPixelRatio) &&
+      Number.isFinite(threshold) &&
+      threshold >= 0 &&
+      maxDiffPixelRatio >= 0 &&
+      maxDiffPixelRatio <= threshold,
+  );
+}
+
+export function assertNoPrivateSdkSelectors(
+  selectors: readonly string[],
+): AssertionResult {
+  const privateSelector =
+    /(?:\.excalidraw-(?!editor\b)|\.App-menu|\.ToolIcon|\[data-testid\s*=\s*["'](?:library|canvas|editor|toolbar))/iu;
+  const offenders = selectors.filter((selector) =>
+    privateSelector.test(selector),
+  );
+  return result(
+    "sdk-boundary.private-selectors",
+    "0",
+    String(offenders.length),
+    "shell selectors only",
+    offenders.length === 0,
   );
 }

@@ -14,7 +14,8 @@ export type FixtureId =
   | "overlay"
   | "nested-tree"
   | "selected-directory"
-  | "unsaved-tab";
+  | "unsaved-tab"
+  | "unicode-pinned";
 
 export interface ShellFixtureWorkspace {
   readonly id: string;
@@ -65,6 +66,14 @@ const WORKSPACE: ShellFixtureWorkspace = {
   createdAt: 1_700_000_000,
 };
 
+/** Stable Unicode fallback probe used by browser-visible visual checks. */
+export const UNICODE_WORKSPACE: ShellFixtureWorkspace = {
+  id: "fixture-unicode-workspace",
+  name: "设计 Workspace ✦",
+  rootPath: "/fixtures/设计-workspace/图纸",
+  createdAt: 1_700_000_010,
+};
+
 const ROOT_DRAWING: ShellFixtureEntry = {
   workspaceId: WORKSPACE.id,
   kind: "drawing",
@@ -112,6 +121,31 @@ const NESTED_ENTRIES: readonly ShellFixtureEntry[] = [
     fileSize: 512,
   },
   ROOT_DRAWING,
+];
+
+export const UNICODE_ENTRIES: readonly ShellFixtureEntry[] = [
+  {
+    workspaceId: UNICODE_WORKSPACE.id,
+    kind: "directory",
+    canonicalPath: `${UNICODE_WORKSPACE.rootPath}/流程`,
+    relativePath: "流程",
+    parentRelativePath: "",
+    name: "流程",
+    displayName: "流程",
+    mtime: 1_700_000_011,
+    fileSize: 0,
+  },
+  {
+    workspaceId: UNICODE_WORKSPACE.id,
+    kind: "drawing",
+    canonicalPath: `${UNICODE_WORKSPACE.rootPath}/流程/会议 ✦.excalidraw`,
+    relativePath: "流程/会议 ✦.excalidraw",
+    parentRelativePath: "流程",
+    name: "会议 ✦.excalidraw",
+    displayName: "会议 ✦",
+    mtime: 1_700_000_012,
+    fileSize: 512,
+  },
 ];
 
 const CLEAN_TAB: ShellFixtureTab = {
@@ -198,6 +232,15 @@ export const UNSAVED_TAB_SHELL_FIXTURE: ShellFixture = {
   tabs: [UNSAVED_TAB],
 };
 
+export const UNICODE_PINNED_SHELL_FIXTURE: ShellFixture = {
+  ...PINNED_SHELL_FIXTURE,
+  id: "unicode-pinned",
+  currentWorkspaceId: UNICODE_WORKSPACE.id,
+  workspaces: [UNICODE_WORKSPACE],
+  entries: UNICODE_ENTRIES,
+  expandedDirectoryPaths: ["流程"],
+};
+
 export const SHELL_FIXTURES: readonly ShellFixture[] = [
   EMPTY_SHELL_FIXTURE,
   RESTORED_SHELL_FIXTURE,
@@ -206,6 +249,7 @@ export const SHELL_FIXTURES: readonly ShellFixture[] = [
   NESTED_TREE_SHELL_FIXTURE,
   SELECTED_DIRECTORY_SHELL_FIXTURE,
   UNSAVED_TAB_SHELL_FIXTURE,
+  UNICODE_PINNED_SHELL_FIXTURE,
 ];
 
 export function getShellFixture(id: FixtureId): ShellFixture {

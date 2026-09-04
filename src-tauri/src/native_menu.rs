@@ -15,6 +15,9 @@ pub const APPEARANCE_SYSTEM_MENU_ID: &str = "native-menu.appearance.system";
 pub const APPEARANCE_LIGHT_MENU_ID: &str = "native-menu.appearance.light";
 pub const APPEARANCE_DARK_MENU_ID: &str = "native-menu.appearance.dark";
 
+const SAVE_MENU_ACCELERATOR: &str = "CmdOrCtrl+S";
+const EXPORT_IMAGE_MENU_ACCELERATOR: &str = "CmdOrCtrl+Alt+E";
+
 const FILE_SUBMENU_ID: &str = "native-menu.file";
 const EDIT_SUBMENU_ID: &str = "native-menu.edit";
 const VIEW_SUBMENU_ID: &str = "native-menu.view";
@@ -59,13 +62,13 @@ pub struct NativeMenuCommandEvent {
 /// setup failure aborts application setup instead of leaving a partially
 /// configured shell running.
 pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
-    let save = MenuItem::with_id(app, SAVE_MENU_ID, "Save", true, Some("CmdOrCtrl+S"))?;
+    let save = MenuItem::with_id(app, SAVE_MENU_ID, "Save", true, Some(SAVE_MENU_ACCELERATOR))?;
     let export_image = MenuItem::with_id(
         app,
         EXPORT_IMAGE_MENU_ID,
         "Export Image",
         true,
-        Some("CmdOrCtrl+Shift+E"),
+        Some(EXPORT_IMAGE_MENU_ACCELERATOR),
     )?;
 
     let appearance_system =
@@ -193,5 +196,15 @@ mod tests {
                 .unwrap_or_else(|error| panic!("serialize event: {error}")),
             serde_json::json!({ "command": "exportImage" })
         );
+    }
+
+    #[test]
+    fn keeps_export_image_accelerator_outside_the_sdk_shortcut() {
+        assert_eq!(EXPORT_IMAGE_MENU_ACCELERATOR, "CmdOrCtrl+Alt+E");
+        assert_ne!(
+            EXPORT_IMAGE_MENU_ACCELERATOR, "CmdOrCtrl+Shift+E",
+            "the SDK owns CmdOrCtrl+Shift+E; the native menu must not intercept it"
+        );
+        assert_eq!(SAVE_MENU_ACCELERATOR, "CmdOrCtrl+S");
     }
 }
