@@ -52,7 +52,7 @@ describe("WorkspaceTree", () => {
     expect(container.querySelectorAll('[role="treeitem"]').length).toBeLessThan(
       100,
     );
-    expect(container.querySelectorAll("img")).toHaveLength(0);
+    expect(container.querySelectorAll('img[src*="thumb"]').length).toBe(0);
     expect(
       container.querySelectorAll('[data-slot="workspace-tree-icon"]').length,
     ).toBeGreaterThan(0);
@@ -134,8 +134,8 @@ describe("WorkspaceTree", () => {
     const notes = screen.getByRole("treeitem", { name: "Notes" });
     expect(notes).toHaveAttribute("aria-expanded", "false");
     expect(
-      notes.querySelector('[data-slot="workspace-tree-icon"]'),
-    ).toHaveTextContent("▸");
+      notes.querySelector('[data-slot="workspace-tree-icon"] img'),
+    ).not.toBeNull();
     fireEvent.click(notes);
     expect(onToggleDirectory).toHaveBeenCalledWith(
       expect.objectContaining({ relativePath: "notes" }),

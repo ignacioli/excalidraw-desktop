@@ -13,6 +13,12 @@ import {
   type WorkspaceTreeEntriesByWorkspace,
   type WorkspaceTreeRow,
 } from "./workspaceTreeModel";
+import drawingIcon from "../../docs/design/desktop-shell/hf-2/icons/new-drawing.svg";
+import directoryIcon from "../../docs/design/desktop-shell/hf-2/icons/new-folder.svg";
+import workspaceIcon from "../../docs/design/desktop-shell/hf-2/icons/sidebar.svg";
+import collapseIcon from "../../docs/design/desktop-shell/hf-2/icons/collapse-all.svg";
+import expandIcon from "../../docs/design/desktop-shell/hf-2/icons/expand-all.svg";
+import moreVerticalIcon from "../../docs/design/desktop-shell/hf-2/icons/more-vertical.svg";
 
 export interface WorkspaceTreeProps {
   workspaces: readonly Workspace[];
@@ -444,14 +450,14 @@ function WorkspaceTreeRowView({
   registerRef,
 }: WorkspaceTreeRowViewProps) {
   const isExpandable = row.kind === "workspace" || row.kind === "directory";
-  const icon =
+  const iconSrc =
     row.kind === "workspace"
-      ? "▣"
+      ? workspaceIcon
       : row.kind === "directory"
-        ? expanded
-          ? "▾"
-          : "▸"
-        : "▧";
+        ? directoryIcon
+        : drawingIcon;
+  const disclosureSrc = expanded ? collapseIcon : expandIcon;
+  const [pointerFocused, setPointerFocused] = useState(false);
 
   return (
     <div
@@ -464,10 +470,13 @@ function WorkspaceTreeRowView({
       aria-expanded={isExpandable ? expanded : undefined}
       aria-selected={row.isActive || undefined}
       className={`workspace-tree-row${row.isActive ? " is-active" : ""}`}
+      data-pointer-focus={pointerFocused || focused ? "true" : "false"}
       data-row-key={row.key}
       data-kind={row.kind}
       tabIndex={focused ? 0 : -1}
       title={row.displayName}
+      onPointerEnter={() => setPointerFocused(true)}
+      onPointerLeave={() => setPointerFocused(false)}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         interactionStore.getState().dispatch({
@@ -531,12 +540,25 @@ function WorkspaceTreeRowView({
         className="workspace-tree-icon-slot"
         style={{
           display: "inline-flex",
-          flex: "0 0 1.25rem",
+          flex: "0 0 2.25rem",
           justifyContent: "center",
-          width: "1.25rem",
+          width: "2.25rem",
         }}
       >
-        {icon}
+        {isExpandable ? (
+          <img
+            alt=""
+            aria-hidden="true"
+            className="workspace-tree-disclosure-icon"
+            src={disclosureSrc}
+          />
+        ) : null}
+        <img
+          alt=""
+          aria-hidden="true"
+          className="workspace-tree-leading-icon"
+          src={iconSrc}
+        />
       </span>
       <span
         className="workspace-tree-label"
@@ -576,12 +598,10 @@ function WorkspaceTreeRowView({
             onAction(event.currentTarget);
           }}
           tabIndex={-1}
-          style={{
-            minWidth: "2rem",
-            visibility: focused ? "visible" : undefined,
-          }}
+          title={`Actions for ${row.displayName}`}
+          style={{ minWidth: "2rem" }}
         >
-          ⋯
+          <img alt="" aria-hidden="true" src={moreVerticalIcon} />
         </button>
       </span>
     </div>

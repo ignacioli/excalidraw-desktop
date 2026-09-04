@@ -28,7 +28,6 @@ import {
 import type { Workspace } from "../ipc/contracts";
 import { BrowsingHistory, type BrowsingLocation } from "./browsingHistory";
 import { WorkspacePanel } from "../workspaces/WorkspacePanel";
-import { AppearanceControl } from "./AppearanceControl";
 import { ExportDialog } from "./ExportDialog";
 import {
   hasNativeWindowRuntime,
@@ -40,11 +39,18 @@ import { TabBar } from "./TabBar";
 import { OrphanCloseDialog } from "./OrphanCloseDialog";
 import { WelcomeScreen } from "./WelcomeScreen";
 import backIcon from "../../docs/design/desktop-shell/hf-2/icons/back.svg";
+import pinIcon from "../../docs/design/desktop-shell/hf-2/icons/pin.svg";
+import sidebarIcon from "../../docs/design/desktop-shell/hf-2/icons/sidebar.svg";
 import { interactionStore } from "./interaction";
 import { createSidebarController } from "./sidebarController";
 import { ShellPreferences } from "./shellPreferences";
 import { deriveStartupRoute } from "./startupRoute";
 import { useAppStore } from "./store";
+import {
+  createNativeMenuCommandHandler,
+  registerNativeMenuCommand,
+  type NativeMenuCommand,
+} from "./nativeMenu";
 import {
   initializeBrowserThemeController,
   type ThemeController,
@@ -89,6 +95,9 @@ export function AppShell({
       }
     | undefined
   >(undefined);
+  const nativeMenuHandlerRef = useRef<(command: NativeMenuCommand) => void>(
+    () => undefined,
+  );
   const [readyEditor, setReadyEditor] = useState<
     | {
         documentId: string;
@@ -96,7 +105,6 @@ export function AppShell({
       }
     | undefined
   >(undefined);
-  const exportButtonRef = useRef<HTMLButtonElement>(null);
   const [exportDocumentId, setExportDocumentId] = useState<string | null>(null);
   const [orphanCloseId, setOrphanCloseId] = useState<string | null>(null);
   const [preferences] = useState(() => new ShellPreferences());
@@ -141,6 +149,8 @@ export function AppShell({
   const activeSession =
     activeDocumentId === null ? undefined : sessionsById[activeDocumentId];
   const documentSessions = Object.values(sessionsById);
+  const exportReady =
+    activeSession !== undefined && readyEditor?.documentId === activeSession.id;
   const startupRoute = deriveStartupRoute({
     handshake:
       startupState.handshake ??
@@ -157,24 +167,6 @@ export function AppShell({
     themeController.getSnapshot,
     themeController.getSnapshot,
   );
-  const saveShortcutLabel = /Mac|iPhone|iPad/.test(navigator.platform)
-    ? "⌘S"
-    : "Ctrl+S";
-  const exportReady =
-    activeSession !== undefined && readyEditor?.documentId === activeSession.id;
-
-  const openExportDialog = () => {
-    if (!exportReady || activeSession === undefined) {
-      return;
-    }
-    setExportDocumentId(activeSession.id);
-  };
-
-  const closeExportDialog = () => {
-    setExportDocumentId(null);
-    exportButtonRef.current?.focus();
-  };
-
   const runAction = async (action: () => void | Promise<unknown>) => {
     setInteractionError(null);
     try {
@@ -324,16 +316,25 @@ export function AppShell({
   const openDocument = () => runAction(onOpenDocument ?? dialogs.openDocument);
   const saveDocument = () =>
     runAction(() => documentManager.checkpointActive("manualSave"));
-  const saveOrphanedAs = async (documentId: string) => {
-    const session = documentManager.store.getState().sessionsById[documentId];
-    if (session === undefined) {
+  const openExportDialog = (): void => {
+    if (!exportReady || activeSession === undefined) {
+      setInteractionError(
+        "Export is unavailable until the active drawing is ready.",
+      );
       return;
     }
-    const selectedPath = await chooseSavePath(session.title);
-    if (selectedPath !== null) {
-      await documentManager.saveOrphanedAs(documentId, selectedPath);
-    }
+    setInteractionError(null);
+    setExportDocumentId(activeSession.id);
   };
+  const closeExportDialog = (): void => {
+    setExportDocumentId(null);
+  };
+  nativeMenuHandlerRef.current = createNativeMenuCommandHandler({
+    onSave: () => void saveDocument(),
+    onExportImage: openExportDialog,
+    onAppearance: (mode) =>
+      void runAction(() => themeController.setModePreference(mode)),
+  });
   const applyCloseOutcome = (outcome: CloseOutcome) => {
     if (outcome.status === "orphaned") {
       setOrphanCloseId(outcome.documentId);
@@ -362,6 +363,27 @@ export function AppShell({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void registerNativeMenuCommand((command) =>
+      nativeMenuHandlerRef.current(command),
+    )
+      .then((nextUnlisten) => {
+        if (disposed) {
+          nextUnlisten();
+        } else {
+          unlisten = nextUnlisten;
+        }
+      })
+      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (import.meta.env.VITE_E2E_HARNESS !== "1") {
@@ -540,76 +562,57 @@ export function AppShell({
         onStateChange={setStartupState}
       />
       <header className="app-shell-tabs">
-        <button
-          aria-label="Back"
-          className="icon-button shell-back-button"
-          disabled={!canGoBack}
-          onClick={goBack}
-          title="Back"
-          type="button"
-        >
-          <img alt="" aria-hidden="true" src={backIcon} />
-        </button>
-        <button
-          aria-expanded={sidebarSnapshot.mode !== "hidden"}
-          aria-controls="workspace-sidebar"
-          onClick={() => {
-            if (sidebarSnapshot.mode === "hidden") {
-              sidebarController.openOverlay();
-            } else if (sidebarSnapshot.mode === "overlay") {
-              sidebarController.hide();
-            } else {
-              sidebarController.unpin();
-              preferences.setSidebarPinned(false);
+        <div className="shell-left" aria-label="Shell navigation" role="group">
+          <button
+            aria-label="Back"
+            className="icon-button shell-back-button"
+            disabled={!canGoBack}
+            onClick={goBack}
+            title="Back"
+            type="button"
+          >
+            <img alt="" aria-hidden="true" src={backIcon} />
+          </button>
+          <button
+            aria-expanded={sidebarSnapshot.mode !== "hidden"}
+            aria-controls="workspace-sidebar"
+            aria-label="Toggle workspace sidebar"
+            className="icon-button shell-sidebar-toggle"
+            onClick={() => {
+              if (sidebarSnapshot.mode === "hidden") {
+                sidebarController.openOverlay();
+              } else if (sidebarSnapshot.mode === "overlay") {
+                sidebarController.hide();
+              } else {
+                sidebarController.unpin();
+                preferences.setSidebarPinned(false);
+              }
+            }}
+            title="Toggle workspace sidebar"
+            type="button"
+          >
+            <img alt="" aria-hidden="true" src={sidebarIcon} />
+          </button>
+        </div>
+        <div className="shell-center">
+          <TabBar
+            onCloseOutcome={(_, outcome) => {
+              applyCloseOutcome(outcome);
+            }}
+          />
+        </div>
+        <div className="app-commands" aria-live="polite">
+          <p
+            className={
+              interactionError
+                ? "save-status save-status--error"
+                : "save-status visually-hidden"
             }
-          }}
-          type="button"
-        >
-          Workspace sidebar
-        </button>
-        <TabBar
-          onCloseOutcome={(_, outcome) => {
-            applyCloseOutcome(outcome);
-          }}
-        />
-        <div
-          className="app-commands"
-          role="toolbar"
-          aria-label="Drawing commands"
-        >
-          <p className="save-status" role="status" aria-live="polite">
+            role="status"
+            aria-live="polite"
+          >
             {interactionError ?? getSaveStatus(activeSession?.saveState)}
           </p>
-          <button
-            aria-keyshortcuts="Meta+S Control+S"
-            disabled={activeSession === undefined}
-            onClick={() => void saveDocument()}
-            type="button"
-          >
-            Save
-            <span className="shortcut-hint" aria-hidden="true">
-              {saveShortcutLabel}
-            </span>
-          </button>
-          <button
-            disabled={!exportReady}
-            onClick={openExportDialog}
-            ref={exportButtonRef}
-            type="button"
-          >
-            Export…
-          </button>
-          {activeSession?.saveState === "orphaned" ? (
-            <button
-              onClick={() =>
-                void runAction(() => saveOrphanedAs(activeSession.id))
-              }
-              type="button"
-            >
-              Save as…
-            </button>
-          ) : null}
-          <AppearanceControl controller={themeController} />
         </div>
       </header>
 
@@ -667,23 +670,29 @@ export function AppShell({
         >
           {sidebarSnapshot.mode === "overlay" ? (
             <button
+              aria-label="Pin workspace sidebar"
+              className="icon-button sidebar-pin-button"
               onClick={() => {
                 sidebarController.pin();
                 preferences.setSidebarPinned(true);
               }}
+              title="Pin workspace sidebar"
               type="button"
             >
-              Pin workspace sidebar
+              <img alt="" aria-hidden="true" src={pinIcon} />
             </button>
           ) : (
             <button
+              aria-label="Unpin workspace sidebar"
+              className="icon-button sidebar-pin-button"
               onClick={() => {
                 sidebarController.unpin();
                 preferences.setSidebarPinned(false);
               }}
+              title="Unpin workspace sidebar"
               type="button"
             >
-              Unpin workspace sidebar
+              <img alt="" aria-hidden="true" src={pinIcon} />
             </button>
           )}
           {hasTauriCommandRuntime() ? (

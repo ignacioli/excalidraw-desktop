@@ -8,6 +8,7 @@ mod e2e_performance;
 #[cfg(all(test, feature = "e2e-harness"))]
 mod e2e_performance_test;
 pub mod indexing;
+mod native_menu;
 pub mod security;
 mod watcher;
 pub mod workspace_entries;
@@ -135,6 +136,9 @@ pub fn run() {
             app.manage(session);
             app.manage(WatcherState::new(watcher_service.clone()));
             tauri::async_runtime::block_on(watcher_service.start_existing(app.handle().clone()))?;
+            app.on_menu_event(crate::native_menu::handle_menu_event);
+            let menu = crate::native_menu::build_menu(app.handle())?;
+            app.set_menu(menu)?;
             // rAF-driven performance workloads stall when the window is
             // occluded (WebKit throttles occluded views); keep the test-only
             // measurement window unoccluded on busy diagnostic hosts.

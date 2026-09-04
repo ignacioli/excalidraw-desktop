@@ -11,6 +11,11 @@ import {
 export { THEME_PREFERENCE_VERSION } from "./types";
 
 export const THEME_PREFERENCE_STORAGE_KEY = "excalidraw-desktop.appearance";
+export const HF2_FONT_DEVIATION_ID = "HF2-FONT-001";
+export const HF2_NATIVE_UI_FONT_STACK =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+export const HF2_NATIVE_MONO_FONT_STACK =
+  "ui-monospace, SFMono-Regular, Menlo, monospace";
 const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
 
 type ThemeStorage = Pick<Storage, "getItem" | "setItem">;
@@ -216,6 +221,30 @@ function applyHf2Tokens(
   }
 
   const primitives = hf2Tokens.primitives;
+  const typographyVariables: Readonly<Record<string, string>> = {
+    "font.size.micro": "--font-size-micro",
+    "font.size.label": "--font-size-label",
+    "font.size.body": "--font-size-body",
+    "font.size.section": "--font-size-section",
+    "font.size.title": "--font-size-title",
+    "font.weight.regular": "--font-weight-regular",
+    "font.weight.medium": "--font-weight-medium",
+    "font.weight.semibold": "--font-weight-semibold",
+  };
+  for (const [tokenName, variableName] of Object.entries(typographyVariables)) {
+    const token = primitives[tokenName as keyof typeof primitives];
+    if (token !== undefined && "value" in token) {
+      root.style.setProperty(
+        variableName,
+        `${token.value}${"unit" in token ? token.unit : ""}`,
+      );
+    }
+  }
+  root.style.setProperty("--font-ui", HF2_NATIVE_UI_FONT_STACK);
+  root.style.setProperty("--font-mono", HF2_NATIVE_MONO_FONT_STACK);
+  root.style.setProperty("--line-height-body", "1.4");
+  root.style.setProperty("--line-height-row", "28px");
+
   const primitiveVariables: Readonly<Record<string, string>> = {
     "space.1": "--space-1",
     "space.2": "--space-2",

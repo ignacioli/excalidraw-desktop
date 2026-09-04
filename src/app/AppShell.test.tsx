@@ -16,9 +16,32 @@ import {
 import { useAppStore } from "./store";
 import { initializeBrowserThemeController } from "./theme/themeController";
 
+const nativeMenuHarness = vi.hoisted(() => ({
+  handler: undefined as
+    | ((
+        command:
+          | "save"
+          | "exportImage"
+          | "appearanceSystem"
+          | "appearanceLight"
+          | "appearanceDark",
+      ) => void)
+    | undefined,
+  cleanup: vi.fn(),
+}));
+const nativeRuntimeHarness = vi.hoisted(() => ({ enabled: false }));
+
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   save: vi.fn(async () => "/tmp/rescued.excalidraw"),
   open: vi.fn(async () => null),
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(async () => []),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async () => () => undefined),
 }));
 
 vi.mock("../editor/ExcalidrawEditor", () => ({
@@ -59,6 +82,34 @@ vi.mock("../ipc/events", () => ({
   defaultEventListener: vi.fn(async () => () => undefined),
 }));
 
+vi.mock("../documents/RecoveryStartup", () => ({
+  RecoveryStartup: () => null,
+}));
+
+vi.mock("./exitCheckpoint", async () => {
+  const actual =
+    await vi.importActual<typeof import("./exitCheckpoint")>(
+      "./exitCheckpoint",
+    );
+  return {
+    ...actual,
+    hasNativeWindowRuntime: () => nativeRuntimeHarness.enabled,
+    registerExitCheckpoint: vi.fn(async () => () => undefined),
+  };
+});
+
+vi.mock("./nativeMenu", async () => {
+  const actual =
+    await vi.importActual<typeof import("./nativeMenu")>("./nativeMenu");
+  return {
+    ...actual,
+    registerNativeMenuCommand: vi.fn(async (handler) => {
+      nativeMenuHarness.handler = handler;
+      return nativeMenuHarness.cleanup;
+    }),
+  };
+});
+
 describe("AppShell", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -69,6 +120,9 @@ describe("AppShell", () => {
     });
     useAppStore.setState({ hasMountedWorkspace: false });
     initializeBrowserThemeController().setModePreference("system");
+    nativeRuntimeHarness.enabled = false;
+    nativeMenuHarness.handler = undefined;
+    nativeMenuHarness.cleanup.mockReset();
   });
 
   it("renders the desktop shell and actionable workspace empty state", async () => {
@@ -139,17 +193,15 @@ describe("AppShell", () => {
       createdAt: 1,
     };
     let opened = false;
-    const invoke = vi.fn(
-      async (command: string) => {
-        if (command === "workspace_list") return opened ? [workspace] : [];
-        if (command === "workspace_add") {
-          opened = true;
-          return workspace;
-        }
-        if (command === "workspace_entry_list") return [];
-        throw new Error(`Unexpected command ${command}`);
-      },
-    ) as CommandInvoker["invoke"];
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return opened ? [workspace] : [];
+      if (command === "workspace_add") {
+        opened = true;
+        return workspace;
+      }
+      if (command === "workspace_entry_list") return [];
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
     vi.stubGlobal("__TAURI_INTERNALS__", {
       invoke: vi.fn(async () => []),
     });
@@ -168,7 +220,9 @@ describe("AppShell", () => {
       await screen.findByRole("button", { name: "Open Workspace" }),
     );
 
-    await user.click(screen.getByRole("button", { name: /workspace sidebar/i }));
+    await user.click(
+      screen.getByRole("button", { name: /workspace sidebar/i }),
+    );
     await waitFor(() => {
       expect(
         screen.getByRole("heading", { name: workspace.name }),
@@ -232,14 +286,85 @@ describe("AppShell", () => {
       "data-theme",
       "dark",
     );
-    await user.click(screen.getByRole("radio", { name: "Light" }));
-    expect(screen.getByTestId("excalidraw-editor")).toHaveAttribute(
-      "data-theme",
-      "light",
+    controller.setModePreference("light");
+    await waitFor(() =>
+      expect(screen.getByTestId("excalidraw-editor")).toHaveAttribute(
+        "data-theme",
+        "light",
+      ),
     );
 
     await user.keyboard("{Meta>}s{/Meta}");
     expect(save).toHaveBeenCalledWith("manualSave");
+  });
+
+  it("routes native Save through DocumentManager and exposes rejected saves", async () => {
+    nativeRuntimeHarness.enabled = true;
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "dirty"),
+    ]);
+    const checkpoint = vi
+      .spyOn(documentManager, "checkpointActive")
+      .mockRejectedValue(new Error("native save failed"));
+
+    const view = render(<AppShell />);
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+    nativeMenuHarness.handler?.("save");
+
+    expect(checkpoint).toHaveBeenCalledWith("manualSave");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "native save failed",
+    );
+    expect(
+      screen.queryByRole("button", { name: /^Save/ }),
+    ).not.toBeInTheDocument();
+    view.unmount();
+    expect(nativeMenuHarness.cleanup).toHaveBeenCalledOnce();
+  });
+
+  it("reports native export as unavailable until an active editor is ready", async () => {
+    nativeRuntimeHarness.enabled = true;
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "clean"),
+    ]);
+    const invoke = vi.fn(async () => []);
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+    nativeMenuHarness.handler?.("exportImage");
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Export is unavailable until the active drawing is ready.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith("doc_export", expect.anything());
+  });
+
+  it("routes native appearance commands through the injected theme controller", async () => {
+    nativeRuntimeHarness.enabled = true;
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "clean"),
+    ]);
+    const controller = initializeBrowserThemeController();
+    render(<AppShell themeController={controller} />);
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+
+    for (const [command, mode] of [
+      ["appearanceSystem", "system"],
+      ["appearanceLight", "light"],
+      ["appearanceDark", "dark"],
+    ] as const) {
+      nativeMenuHarness.handler?.(command);
+      await waitFor(() =>
+        expect(controller.getSnapshot().preference.modePreference).toBe(mode),
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("excalidraw-editor")).toHaveAttribute(
+          "data-theme",
+          mode === "system" ? "light" : mode,
+        ),
+      );
+    }
   });
 
   it("keeps each document editor mounted when switching tabs", async () => {
@@ -321,7 +446,7 @@ describe("AppShell", () => {
     });
 
     render(<AppShell />);
-    await user.click(screen.getByRole("button", { name: /^Save/ }));
+    await user.keyboard("{Meta>}s{/Meta}");
 
     expect(screen.getByRole("status")).toHaveTextContent(
       "The disk is full. Your recovery draft is still available.",
@@ -499,8 +624,7 @@ describe("AppShell", () => {
       assertRetainedChrome();
     });
 
-    it("keeps Save, Export…, Save as…, save status, and Appearance operable", async () => {
-      const user = userEvent.setup();
+    it("keeps legacy command chrome out of the shell header", () => {
       setDocumentSessions([
         createSession(
           "drawing",
@@ -511,19 +635,17 @@ describe("AppShell", () => {
       ]);
       const first = render(<AppShell />);
       expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "hidden");
-      assertRetainedChrome({ includeSaveAs: true });
-      await user.click(screen.getByRole("radio", { name: "Dark" }));
-      expect(screen.getByRole("radio", { name: "Dark" })).toBeChecked();
+      assertRetainedChrome();
 
-      await user.click(getWorkspaceSidebarOpenControl());
+      fireEvent.click(getWorkspaceSidebarOpenControl());
       expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "overlay");
-      assertRetainedChrome({ includeSaveAs: true });
+      assertRetainedChrome();
 
       first.unmount();
       seedShellPreferences({ sidebarPinned: true });
       render(<AppShell />);
       expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "pinned");
-      assertRetainedChrome({ includeSaveAs: true });
+      assertRetainedChrome();
     });
 
     it("does not hide overlay when Escape was already handled", async () => {
@@ -615,16 +737,17 @@ function getWorkspaceSidebarOpenControl(): HTMLElement {
   return screen.getByRole("button", { name: /workspace sidebar/i });
 }
 
-function assertRetainedChrome(options?: { includeSaveAs?: boolean }): void {
-  expect(screen.getByRole("button", { name: /^Save$/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Export…" })).toBeInTheDocument();
+function assertRetainedChrome(): void {
+  expect(
+    screen.queryByRole("button", { name: /^Save$/ }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Export…" }),
+  ).not.toBeInTheDocument();
   expect(screen.getByRole("status")).toBeInTheDocument();
-  expect(screen.getByRole("group", { name: "Appearance" })).toBeInTheDocument();
-  if (options?.includeSaveAs === true) {
-    expect(
-      screen.getByRole("button", { name: "Save as…" }),
-    ).toBeInTheDocument();
-  }
+  expect(
+    screen.queryByRole("group", { name: "Appearance" }),
+  ).not.toBeInTheDocument();
 }
 
 function assertNoRightSidebar(): void {

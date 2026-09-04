@@ -234,6 +234,7 @@ export type CommandResponse<Name extends CommandName> =
   IpcCommands[Name]["response"];
 
 export interface IpcEvents {
+  "native-menu-command": NativeMenuCommandEvent;
   "workspace-entries-changed": WorkspaceEntriesChangedEvent;
   "file-changed": {
     path: string;
@@ -263,6 +264,17 @@ export interface WorkspaceEntriesChangedEvent {
   change: "created" | "renamed" | "removed" | "invalidated";
   relativePath: string;
   newRelativePath?: string;
+}
+
+export type NativeMenuCommand =
+  | "save"
+  | "exportImage"
+  | "appearanceSystem"
+  | "appearanceLight"
+  | "appearanceDark";
+
+export interface NativeMenuCommandEvent {
+  command: NativeMenuCommand;
 }
 
 export type EventName = keyof IpcEvents;

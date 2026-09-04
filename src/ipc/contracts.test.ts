@@ -8,6 +8,7 @@ import {
   type ExpectedOpenDocument,
   type IpcCommands,
   type IpcEvents,
+  type NativeMenuCommandEvent,
   type PathMigration,
   type WorkspaceEntriesChangedEvent,
   type WorkspaceEntry,
@@ -119,5 +120,19 @@ describe("IPC v2 migration contract", () => {
     expectTypeOf<
       IpcEvents["workspace-entries-changed"]
     >().toEqualTypeOf<WorkspaceEntriesChangedEvent>();
+  });
+
+  it("defines the narrow native menu event payload", () => {
+    expectTypeOf<NativeMenuCommandEvent>().toEqualTypeOf<{
+      command:
+        | "save"
+        | "exportImage"
+        | "appearanceSystem"
+        | "appearanceLight"
+        | "appearanceDark";
+    }>();
+    expectTypeOf<
+      IpcEvents["native-menu-command"]
+    >().toEqualTypeOf<NativeMenuCommandEvent>();
   });
 });

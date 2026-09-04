@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  HF2_NATIVE_MONO_FONT_STACK,
+  HF2_NATIVE_UI_FONT_STACK,
   THEME_PREFERENCE_STORAGE_KEY,
   THEME_PREFERENCE_VERSION,
   ThemeController,
@@ -139,6 +141,14 @@ describe("ThemeController", () => {
     expect(root.style.getPropertyValue("--icon-size")).toBe("16px");
     expect(root.style.getPropertyValue("--tree-row-height")).toBe("28px");
     expect(root.style.getPropertyValue("--tab-height")).toBe("36px");
+    expect(root.style.getPropertyValue("--font-ui")).toBe(
+      HF2_NATIVE_UI_FONT_STACK,
+    );
+    expect(root.style.getPropertyValue("--font-mono")).toBe(
+      HF2_NATIVE_MONO_FONT_STACK,
+    );
+    expect(root.style.getPropertyValue("--font-size-title")).toBe("28px");
+    expect(root.style.getPropertyValue("--font-weight-semibold")).toBe("600");
   });
 
   it.each([
