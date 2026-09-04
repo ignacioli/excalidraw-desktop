@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "task": "T012",
+  "task": "T012; HF2-FONT-001 approved 2026-09-03",
   "deviations": [
     {
       "deviationId": "HF2-RECENT-COUNT-TIME",
@@ -24,6 +24,36 @@
           "specs/003-desktop-shell-ux-ui/spec.md",
           "specs/003-desktop-shell-ux-ui/data-model.md",
           "specs/003-desktop-shell-ux-ui/plan.md"
+        ]
+      }
+    },
+    {
+      "deviationId": "HF2-FONT-001",
+      "baselineRegion": "All 003 shell typography family assignments",
+      "deviation": "Frozen HF-2 font.ui/font.mono family names are not bundled or selectable in 003; the shell uses the explicit platform-native UI and monospace stacks instead.",
+      "implementationExpectation": "Use -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif for shell UI and ui-monospace, SFMono-Regular, Menlo, monospace only for existing path/technical fields; do not add @font-face, CDN, runtime font download, or a font-settings control.",
+      "owner": "product-owner",
+      "status": "APPROVED",
+      "constraints": {
+        "bundleInter": "FORBIDDEN",
+        "bundleIbmPlexMono": "FORBIDDEN",
+        "fontSettings": "FORBIDDEN",
+        "remoteFontRequest": "FORBIDDEN",
+        "fontFamilyExceptionOnly": "REQUIRED",
+        "fontSizeWeightLineHeight": "EXACT",
+        "componentGeometry": "UNCHANGED",
+        "truncationWrappingLayout": "REQUIRED"
+      },
+      "provenance": {
+        "decision": "APPROVED",
+        "actor": "product-owner",
+        "approvedAt": "2026-09-03",
+        "evidenceRef": "docs/evidence/003-visual-acceptance/font-decision.md",
+        "basis": "The frozen component contract does not map Inter or IBM Plex Mono to components, the repository contains neither asset, and product owner approved a platform-native family exception without relaxing typography metrics or layout acceptance.",
+        "specRefs": [
+          "specs/003-desktop-shell-ux-ui/spec.md",
+          "specs/003-desktop-shell-ux-ui/plan.md",
+          "specs/003-desktop-shell-ux-ui/contracts/ui-shell-contracts.md"
         ]
       }
     }

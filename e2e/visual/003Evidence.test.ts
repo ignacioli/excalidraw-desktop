@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   EvidenceValidationError,
+  HF2_FONT_DEVIATION_ID,
+  PLATFORM_MONO_FONT_STACK,
+  PLATFORM_UI_FONT_STACK,
   type EnvironmentEvidence,
   type VisualReport,
   validateMaskEvidence,
@@ -42,6 +45,17 @@ function environment(): EnvironmentEvidence {
     viewport: { width: 1280, height: 760 },
     browserOrAppBuild: "browser-preflight",
     fontReady: true,
+    fontPolicy: {
+      deviationId: HF2_FONT_DEVIATION_ID,
+      uiStack: PLATFORM_UI_FONT_STACK,
+      monoStack: PLATFORM_MONO_FONT_STACK,
+      computedUiFamily:
+        '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      computedMonoFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      remoteFontRequests: 0,
+      englishTargetVerified: true,
+      unicodeFallbackVerified: true,
+    },
     theme: "light",
     sidebar: "pinned",
     session: "restored",
@@ -95,9 +109,9 @@ function report(overrides: Partial<VisualReport> = {}): VisualReport {
     ],
     tokenAssertions: [
       {
-        name: "font.ui",
-        expected: "Inter",
-        actual: "Inter",
+        name: "font.family.exception",
+        expected: "HF2-FONT-001",
+        actual: "HF2-FONT-001",
         tolerance: "exact",
         result: "PASS",
       },
@@ -212,6 +226,41 @@ describe("003 evidence schema", () => {
       validateVisualReport({
         ...report({ reviewerVerdict: "BLOCKED" }),
         productOwnerDecision: "APPROVED",
+      }),
+    ).toThrow(EvidenceValidationError);
+  });
+
+  it("requires the approved native-font deviation and its offline fallback evidence", () => {
+    expect(() =>
+      validateVisualReport({
+        ...report(),
+        environment: { ...environment(), fontReady: false },
+      }),
+    ).toThrow(EvidenceValidationError);
+
+    expect(() =>
+      validateVisualReport({
+        ...report(),
+        environment: {
+          ...environment(),
+          fontPolicy: {
+            ...environment().fontPolicy,
+            remoteFontRequests: 1,
+          },
+        },
+      }),
+    ).toThrow(EvidenceValidationError);
+
+    expect(() =>
+      validateVisualReport({
+        ...report(),
+        environment: {
+          ...environment(),
+          fontPolicy: {
+            ...environment().fontPolicy,
+            unicodeFallbackVerified: false,
+          },
+        },
       }),
     ).toThrow(EvidenceValidationError);
   });

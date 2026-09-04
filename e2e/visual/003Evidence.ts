@@ -45,6 +45,12 @@ const FINDING_SEVERITIES = [
   "CRITICAL",
 ] as const;
 
+export const HF2_FONT_DEVIATION_ID = "HF2-FONT-001";
+export const PLATFORM_UI_FONT_STACK =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+export const PLATFORM_MONO_FONT_STACK =
+  "ui-monospace, SFMono-Regular, Menlo, monospace";
+
 export type GateId = (typeof GATE_IDS)[number];
 export type Verdict = (typeof VERDICTS)[number];
 export type ProductOwnerDecision = (typeof OWNER_DECISIONS)[number];
@@ -70,12 +76,24 @@ export interface EnvironmentEvidence {
   readonly viewport: { readonly width: number; readonly height: number };
   readonly browserOrAppBuild: string;
   readonly fontReady: boolean;
+  readonly fontPolicy: PlatformFontEvidence;
   readonly theme: (typeof THEMES)[number];
   readonly sidebar: (typeof SIDEBAR_STATES)[number];
   readonly session: (typeof SESSION_STATES)[number];
   readonly fixture: string;
   readonly implementation: RuntimeIdentity;
   readonly reviewer: RuntimeIdentity;
+}
+
+export interface PlatformFontEvidence {
+  readonly deviationId: typeof HF2_FONT_DEVIATION_ID;
+  readonly uiStack: typeof PLATFORM_UI_FONT_STACK;
+  readonly monoStack: typeof PLATFORM_MONO_FONT_STACK;
+  readonly computedUiFamily: string;
+  readonly computedMonoFamily: string;
+  readonly remoteFontRequests: 0;
+  readonly englishTargetVerified: true;
+  readonly unicodeFallbackVerified: true;
 }
 
 export interface MaskDeclaration {
@@ -233,11 +251,65 @@ function requireRuntimeIdentity(
   };
 }
 
+function validatePlatformFontEvidence(value: unknown): PlatformFontEvidence {
+  const record = requireRecord(value, "environment.fontPolicy");
+  if (record.deviationId !== HF2_FONT_DEVIATION_ID) {
+    throw new EvidenceValidationError(
+      `environment.fontPolicy.deviationId must be ${HF2_FONT_DEVIATION_ID}`,
+    );
+  }
+  if (record.uiStack !== PLATFORM_UI_FONT_STACK) {
+    throw new EvidenceValidationError(
+      "environment.fontPolicy.uiStack must match the approved platform UI stack",
+    );
+  }
+  if (record.monoStack !== PLATFORM_MONO_FONT_STACK) {
+    throw new EvidenceValidationError(
+      "environment.fontPolicy.monoStack must match the approved platform mono stack",
+    );
+  }
+  if (record.remoteFontRequests !== 0) {
+    throw new EvidenceValidationError(
+      "environment.fontPolicy.remoteFontRequests must be zero",
+    );
+  }
+  if (
+    record.englishTargetVerified !== true ||
+    record.unicodeFallbackVerified !== true
+  ) {
+    throw new EvidenceValidationError(
+      "environment.fontPolicy must verify English target and Unicode fallback rendering",
+    );
+  }
+  return {
+    deviationId: HF2_FONT_DEVIATION_ID,
+    uiStack: PLATFORM_UI_FONT_STACK,
+    monoStack: PLATFORM_MONO_FONT_STACK,
+    computedUiFamily: requireString(
+      record.computedUiFamily,
+      "environment.fontPolicy.computedUiFamily",
+    ),
+    computedMonoFamily: requireString(
+      record.computedMonoFamily,
+      "environment.fontPolicy.computedMonoFamily",
+    ),
+    remoteFontRequests: 0,
+    englishTargetVerified: true,
+    unicodeFallbackVerified: true,
+  };
+}
+
 export function validateEnvironmentEvidence(
   value: unknown,
 ): EnvironmentEvidence {
   const record = requireRecord(value, "environment");
   const viewport = requireRecord(record.viewport, "environment.viewport");
+  const fontReady = requireBoolean(record.fontReady, "environment.fontReady");
+  if (!fontReady) {
+    throw new EvidenceValidationError(
+      "environment.fontReady must confirm document.fonts.ready before capture",
+    );
+  }
   return {
     commit: requireCommit(record.commit, "environment.commit"),
     os: requireString(record.os, "environment.os"),
@@ -255,7 +327,8 @@ export function validateEnvironmentEvidence(
       record.browserOrAppBuild,
       "environment.browserOrAppBuild",
     ),
-    fontReady: requireBoolean(record.fontReady, "environment.fontReady"),
+    fontReady,
+    fontPolicy: validatePlatformFontEvidence(record.fontPolicy),
     theme: requireEnum(record.theme, THEMES, "environment.theme"),
     sidebar: requireEnum(record.sidebar, SIDEBAR_STATES, "environment.sidebar"),
     session: requireEnum(record.session, SESSION_STATES, "environment.session"),
