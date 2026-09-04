@@ -19,6 +19,7 @@ const defaultSnapshot = (): ShellPreferenceSnapshot => ({
 
 export class ShellPreferences {
   private snapshot: ShellPreferenceSnapshot;
+  private readonly listeners = new Set<() => void>();
 
   constructor(
     private readonly storage: ShellPreferenceStorage = createDefaultShellStorage(),
@@ -40,16 +41,23 @@ export class ShellPreferences {
     };
   }
 
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
   setSidebarPinned(sidebarPinned: boolean): void {
     if (this.snapshot.sidebarPinned === sidebarPinned) return;
     this.snapshot = { ...this.snapshot, sidebarPinned };
     this.persist();
+    this.notify();
   }
 
   setCurrentWorkspaceId(currentWorkspaceId: string | null): void {
     if (this.snapshot.currentWorkspaceId === currentWorkspaceId) return;
     this.snapshot = { ...this.snapshot, currentWorkspaceId };
     this.persist();
+    this.notify();
   }
 
   resolveCurrentWorkspaceId(
@@ -76,6 +84,7 @@ export class ShellPreferences {
     else ids.delete(workspaceId);
     this.snapshot = { ...this.snapshot, expandedWorkspaceIds: [...ids] };
     this.persist();
+    this.notify();
   }
 
   pruneWorkspaceIds(validWorkspaceIds: ReadonlySet<string>): void {
@@ -88,6 +97,7 @@ export class ShellPreferences {
       return;
     this.snapshot = { ...this.snapshot, expandedWorkspaceIds };
     this.persist();
+    this.notify();
   }
 
   private persist(): void {
@@ -95,6 +105,10 @@ export class ShellPreferences {
       SHELL_PREFERENCES_STORAGE_KEY,
       JSON.stringify(this.snapshot),
     );
+  }
+
+  private notify(): void {
+    for (const listener of this.listeners) listener();
   }
 }
 

@@ -12,8 +12,9 @@ import { createInteractionState, interactionStore } from "../app/interaction";
 import {
   SHELL_PREFERENCES_STORAGE_KEY,
   SHELL_PREFERENCES_VERSION,
+  ShellPreferences,
 } from "../app/shellPreferences";
-import type { Workspace } from "../ipc/contracts";
+import type { Workspace, WorkspaceEntry } from "../ipc/contracts";
 import { WorkspacePanel } from "./WorkspacePanel";
 
 vi.mock("@excalidraw/excalidraw", () => ({
@@ -193,6 +194,74 @@ describe("WorkspacePanel", () => {
     });
   });
 
+  it("loads every not-yet-loaded nested directory from one Expand all activation", async () => {
+    const user = userEvent.setup();
+    const nestedEntries: Record<string, WorkspaceEntry[]> = {
+      "": [
+        {
+          workspaceId: "workspace-1",
+          kind: "directory" as const,
+          canonicalPath: "/workspace/one/notes",
+          relativePath: "notes",
+          parentRelativePath: "",
+          name: "notes",
+          displayName: "notes",
+          mtime: 1,
+          fileSize: 0,
+        },
+      ],
+      notes: [
+        {
+          workspaceId: "workspace-1",
+          kind: "directory" as const,
+          canonicalPath: "/workspace/one/notes/deep",
+          relativePath: "notes/deep",
+          parentRelativePath: "notes",
+          name: "deep",
+          displayName: "deep",
+          mtime: 1,
+          fileSize: 0,
+        },
+      ],
+      "notes/deep": [
+        {
+          workspaceId: "workspace-1",
+          kind: "drawing" as const,
+          canonicalPath: "/workspace/one/notes/deep/drawing.excalidraw",
+          relativePath: "notes/deep/drawing.excalidraw",
+          parentRelativePath: "notes/deep",
+          name: "drawing.excalidraw",
+          displayName: "drawing",
+          mtime: 1,
+          fileSize: 10,
+        },
+      ],
+    };
+    const invoke = vi.fn(
+      async (command: string, args: Record<string, unknown>) => {
+        if (command === "workspace_list") return [WORKSPACES[0]];
+        if (command === "workspace_entry_list") {
+          return nestedEntries[String(args.parentRelativePath ?? "")] ?? [];
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+
+    render(
+      <WorkspacePanel invoker={{ invoke }} selectDirectory={async () => null} />,
+    );
+
+    await screen.findByRole("treeitem", { name: "notes" });
+    await user.click(screen.getByRole("button", { name: "Expand all" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("workspace_entry_list", {
+        workspaceId: "workspace-1",
+        parentRelativePath: "notes/deep",
+      });
+    });
+  });
+
   it("mounts a workspace and reports sidebar presence", async () => {
     const user = userEvent.setup();
     const workspace = {
@@ -289,6 +358,31 @@ describe("WorkspacePanel", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("follows the shared Current Workspace when Recent selection changes it", async () => {
+    const preferences = new ShellPreferences();
+    preferences.setCurrentWorkspaceId("workspace-1");
+    const invoker = createInvoker();
+    render(
+      <WorkspacePanel
+        invoker={invoker}
+        preferences={preferences}
+        selectDirectory={async () => null}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Sketches" }),
+    ).toBeInTheDocument();
+
+    preferences.setCurrentWorkspaceId("workspace-2");
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Blueprints" }),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("restores and persists each Workspace expansion preference", async () => {
     const user = userEvent.setup();
     window.localStorage.setItem(
@@ -348,10 +442,12 @@ describe("WorkspacePanel", () => {
       createdAt: 3,
     };
     const invoker = createInvoker([], workspace);
+    const onCurrentWorkspaceChange = vi.fn();
 
     render(
       <WorkspacePanel
         invoker={invoker}
+        onCurrentWorkspaceChange={onCurrentWorkspaceChange}
         selectDirectory={async () => workspace.rootPath}
       />,
     );
@@ -363,13 +459,19 @@ describe("WorkspacePanel", () => {
       name: "New sketches",
     });
     expect(mounted).toHaveAttribute("aria-expanded", "true");
+    expect(onCurrentWorkspaceChange).toHaveBeenLastCalledWith(workspace);
   });
 
   it("keeps Remove Workspace in the Workspace header menu and confirms mount-only removal", async () => {
     const user = userEvent.setup();
     const invoker = createInvoker();
+    const onCurrentWorkspaceChange = vi.fn();
     render(
-      <WorkspacePanel invoker={invoker} selectDirectory={async () => null} />,
+      <WorkspacePanel
+        invoker={invoker}
+        onCurrentWorkspaceChange={onCurrentWorkspaceChange}
+        selectDirectory={async () => null}
+      />,
     );
 
     expect(
@@ -406,6 +508,7 @@ describe("WorkspacePanel", () => {
         screen.getByRole("treeitem", { name: "Blueprints" }),
       ).toHaveFocus(),
     );
+    expect(onCurrentWorkspaceChange).toHaveBeenLastCalledWith(WORKSPACES[1]);
   });
 
   it("enforces one global menu, every dismissal path, and trigger focus restoration", async () => {

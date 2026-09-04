@@ -45,6 +45,7 @@ import {
 
 export interface WorkspacePanelProps {
   invoker?: CommandInvoker;
+  currentWorkspaceId?: string | null;
   selectDirectory?: () => Promise<string | null>;
   onOpenFile?: (entry: FileEntry) => void;
   onCurrentWorkspaceChange?: (workspace: Workspace | null) => void;
@@ -83,6 +84,7 @@ const firstListAppliedByStorage = new WeakMap<object, boolean>();
 
 export function WorkspacePanel({
   invoker: providedInvoker,
+  currentWorkspaceId: controlledCurrentWorkspaceId,
   selectDirectory: providedSelectDirectory,
   onOpenFile,
   onCurrentWorkspaceChange,
@@ -107,6 +109,9 @@ export function WorkspacePanel({
     {},
   );
   const loadingRef = useRef(new Set<string>());
+  const loadingPromisesRef = useRef(
+    new Map<string, Promise<WorkspaceEntry[] | undefined>>(),
+  );
   const loadGenerationRef = useRef(new Map<string, number>());
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const menuTriggerRef = useRef<HTMLElement | null>(null);
@@ -115,7 +120,10 @@ export function WorkspacePanel({
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(
-    () => preferences.getSnapshot().currentWorkspaceId,
+    () =>
+      controlledCurrentWorkspaceId === undefined
+        ? preferences.getSnapshot().currentWorkspaceId
+        : controlledCurrentWorkspaceId,
   );
   const [entriesByWorkspace, setEntriesByWorkspace] = useState<
     Record<string, Record<string, WorkspaceEntry[]>>
@@ -147,6 +155,16 @@ export function WorkspacePanel({
 
   entriesRef.current = entriesByWorkspace;
   expandedWorkspaceIdsRef.current = expandedWorkspaceIds;
+
+  useEffect(() => {
+    if (controlledCurrentWorkspaceId !== undefined) {
+      setCurrentWorkspaceId(controlledCurrentWorkspaceId);
+      return;
+    }
+    return preferences.subscribe(() => {
+      setCurrentWorkspaceId(preferences.getSnapshot().currentWorkspaceId);
+    });
+  }, [controlledCurrentWorkspaceId, preferences]);
 
   const dismissMenu = useCallback((reason: MenuDismissalReason): void => {
     if (interactionStore.getState().menu !== null) {
@@ -182,47 +200,60 @@ export function WorkspacePanel({
   );
 
   const loadEntries = useCallback(
-    async (workspaceId: string, parentRelativePath: string, force = false) => {
+    (
+      workspaceId: string,
+      parentRelativePath: string,
+      force = false,
+    ): Promise<WorkspaceEntry[] | undefined> => {
       const loadKey = `${workspaceId}:${parentRelativePath}`;
       if (!force) {
-        if (loadingRef.current.has(loadKey)) return;
-        if (entriesRef.current[workspaceId]?.[parentRelativePath] !== undefined)
-          return;
+        const pending = loadingPromisesRef.current.get(loadKey);
+        if (pending !== undefined) return pending;
+        const cached = entriesRef.current[workspaceId]?.[parentRelativePath];
+        if (cached !== undefined) return Promise.resolve(cached);
       }
-      const generation = (loadGenerationRef.current.get(loadKey) ?? 0) + 1;
-      loadGenerationRef.current.set(loadKey, generation);
-      loadingRef.current.add(loadKey);
-      setLoadingKeys((current) => {
-        const next = new Set(current);
-        next.add(loadKey);
-        return next;
-      });
-      try {
-        const entries = await invoker.invoke("workspace_entry_list", {
-          workspaceId,
-          parentRelativePath,
+      const pending = (async (): Promise<WorkspaceEntry[] | undefined> => {
+        const generation = (loadGenerationRef.current.get(loadKey) ?? 0) + 1;
+        loadGenerationRef.current.set(loadKey, generation);
+        loadingRef.current.add(loadKey);
+        setLoadingKeys((current) => {
+          const next = new Set(current);
+          next.add(loadKey);
+          return next;
         });
-        if (loadGenerationRef.current.get(loadKey) !== generation) return;
-        setEntriesByWorkspace((current) => ({
-          ...current,
-          [workspaceId]: {
-            ...(current[workspaceId] ?? {}),
-            [parentRelativePath]: entries,
-          },
-        }));
-      } catch (nextError) {
-        if (loadGenerationRef.current.get(loadKey) !== generation) return;
-        setError(operationError(nextError, "Unable to load this folder."));
-      } finally {
-        if (loadGenerationRef.current.get(loadKey) === generation) {
-          loadingRef.current.delete(loadKey);
-          setLoadingKeys((current) => {
-            const next = new Set(current);
-            next.delete(loadKey);
-            return next;
+        try {
+          const entries = await invoker.invoke("workspace_entry_list", {
+            workspaceId,
+            parentRelativePath,
           });
+          if (loadGenerationRef.current.get(loadKey) !== generation)
+            return undefined;
+          setEntriesByWorkspace((current) => ({
+            ...current,
+            [workspaceId]: {
+              ...(current[workspaceId] ?? {}),
+              [parentRelativePath]: entries,
+            },
+          }));
+          return entries;
+        } catch (nextError) {
+          if (loadGenerationRef.current.get(loadKey) !== generation) return;
+          setError(operationError(nextError, "Unable to load this folder."));
+          return undefined;
+        } finally {
+          if (loadGenerationRef.current.get(loadKey) === generation) {
+            loadingRef.current.delete(loadKey);
+            loadingPromisesRef.current.delete(loadKey);
+            setLoadingKeys((current) => {
+              const next = new Set(current);
+              next.delete(loadKey);
+              return next;
+            });
+          }
         }
-      }
+      })();
+      loadingPromisesRef.current.set(loadKey, pending);
+      return pending;
     },
     [invoker],
   );
@@ -231,11 +262,19 @@ export function WorkspacePanel({
     (items: Workspace[]) => {
       const liveIds = new Set(items.map((workspace) => workspace.id));
       preferences.pruneWorkspaceIds(liveIds);
-      const nextCurrentWorkspaceId = preferences.resolveCurrentWorkspaceId(
-        liveIds,
-        items[0]?.id ?? null,
-      );
-      preferences.setCurrentWorkspaceId(nextCurrentWorkspaceId);
+      const nextCurrentWorkspaceId =
+        controlledCurrentWorkspaceId === undefined
+          ? preferences.resolveCurrentWorkspaceId(
+              liveIds,
+              items[0]?.id ?? null,
+            )
+          : controlledCurrentWorkspaceId !== null &&
+              liveIds.has(controlledCurrentWorkspaceId)
+            ? controlledCurrentWorkspaceId
+            : null;
+      if (controlledCurrentWorkspaceId === undefined) {
+        preferences.setCurrentWorkspaceId(nextCurrentWorkspaceId);
+      }
       setCurrentWorkspaceId(nextCurrentWorkspaceId);
       onCurrentWorkspaceChange?.(
         items.find((workspace) => workspace.id === nextCurrentWorkspaceId) ??
@@ -287,7 +326,13 @@ export function WorkspacePanel({
         }
       }
     },
-    [firstLaunch, loadEntries, onCurrentWorkspaceChange, preferences],
+    [
+      controlledCurrentWorkspaceId,
+      firstLaunch,
+      loadEntries,
+      onCurrentWorkspaceChange,
+      preferences,
+    ],
   );
 
   useEffect(() => {
@@ -312,6 +357,41 @@ export function WorkspacePanel({
       disposed = true;
     };
   }, [applyWorkspaceList, invoker, onWorkspacePresenceChange]);
+
+  useEffect(() => {
+    if (
+      controlledCurrentWorkspaceId === undefined ||
+      controlledCurrentWorkspaceId === null
+    ) {
+      return;
+    }
+    let disposed = false;
+    void invoker
+      .invoke("workspace_list", {})
+      .then((items) => {
+        if (!disposed) {
+          applyWorkspaceList(items);
+          onWorkspacePresenceChange?.(items.length > 0);
+        }
+      })
+      .catch((nextError: unknown) => {
+        if (!disposed) {
+          setError(
+            nextError instanceof Error
+              ? nextError.message
+              : "Unable to load workspaces.",
+          );
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [
+    applyWorkspaceList,
+    controlledCurrentWorkspaceId,
+    invoker,
+    onWorkspacePresenceChange,
+  ]);
 
   useEffect(() => {
     if (!hasTauriCommandRuntime()) return;
@@ -790,6 +870,35 @@ export function WorkspacePanel({
     currentWorkspaceId !== null &&
     expandedWorkspaceIds.has(currentWorkspaceId) &&
     knownDirectoryKeys.every((key) => expandedDirectoryKeys.has(key));
+
+  const expandAllDirectories = async (
+    workspaceId: string,
+    parentRelativePath: string,
+    visited: Set<string>,
+  ): Promise<void> => {
+    const pathKey = `${workspaceId}:${parentRelativePath}`;
+    if (visited.has(pathKey)) return;
+    visited.add(pathKey);
+    const entries = await loadEntries(workspaceId, parentRelativePath);
+    if (entries === undefined) return;
+    const directories = entries.filter((entry) => entry.kind === "directory");
+    if (directories.length === 0) return;
+    setExpandedDirectoryKeys((current) => {
+      const next = new Set(current);
+      for (const directory of directories) {
+        next.add(
+          makeEntryRowKey(directory.workspaceId, directory.relativePath),
+        );
+      }
+      return next;
+    });
+    await Promise.all(
+      directories.map((directory) =>
+        expandAllDirectories(workspaceId, directory.relativePath, visited),
+      ),
+    );
+  };
+
   const toggleAllCurrentWorkspace = (): void => {
     if (currentWorkspaceId === null) return;
     const shouldExpand = !allCurrentDirectoriesExpanded;
@@ -810,12 +919,7 @@ export function WorkspacePanel({
       return next;
     });
     if (shouldExpand) {
-      void loadEntries(currentWorkspaceId, "");
-      for (const key of knownDirectoryKeys) {
-        const prefix = `entry:${encodeURIComponent(currentWorkspaceId)}:`;
-        const relativePath = decodeURIComponent(key.slice(prefix.length));
-        void loadEntries(currentWorkspaceId, relativePath);
-      }
+      void expandAllDirectories(currentWorkspaceId, "", new Set());
     }
   };
 

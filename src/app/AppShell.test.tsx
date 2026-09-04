@@ -7,6 +7,7 @@ import {
   type DocumentSaveState,
   type DocumentSession,
 } from "../documents/documentStore";
+import type { CommandInvoker } from "../ipc/client";
 import { AppShell } from "./AppShell";
 import {
   SHELL_PREFERENCES_STORAGE_KEY,
@@ -52,6 +53,10 @@ vi.mock("@excalidraw/excalidraw", () => ({
       appState,
       files,
     }),
+}));
+
+vi.mock("../ipc/events", () => ({
+  defaultEventListener: vi.fn(async () => () => undefined),
 }));
 
 describe("AppShell", () => {
@@ -113,6 +118,65 @@ describe("AppShell", () => {
 
     await user.click(screen.getByRole("button", { name: "New Drawing" }));
     expect(onCreateDocument).toHaveBeenCalledOnce();
+  });
+
+  it("synchronizes an Open Workspace selection into the visible sidebar", async () => {
+    const user = userEvent.setup();
+    const values = new Map<string, string>();
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key),
+        clear: () => values.clear(),
+      },
+    });
+    const workspace = {
+      id: "workspace-opened",
+      name: "Opened workspace",
+      rootPath: "/workspace/opened",
+      createdAt: 1,
+    };
+    let opened = false;
+    const invoke = vi.fn(
+      async (command: string) => {
+        if (command === "workspace_list") return opened ? [workspace] : [];
+        if (command === "workspace_add") {
+          opened = true;
+          return workspace;
+        }
+        if (command === "workspace_entry_list") return [];
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(
+      <AppShell
+        workspaceInvoker={{ invoke }}
+        selectWorkspaceDirectory={async () => workspace.rootPath}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("workspace_list", {});
+    });
+    await user.click(
+      await screen.findByRole("button", { name: "Open Workspace" }),
+    );
+
+    await user.click(screen.getByRole("button", { name: /workspace sidebar/i }));
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: workspace.name }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      await screen.findByRole("treeitem", { name: workspace.name }),
+    ).toBeInTheDocument();
   });
 
   it("exposes active and dirty tab state without relying on color", async () => {

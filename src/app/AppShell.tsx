@@ -688,6 +688,8 @@ export function AppShell({
           )}
           {hasTauriCommandRuntime() ? (
             <WorkspacePanel
+              currentWorkspaceId={currentWorkspaceId}
+              invoker={workspaceInvoker}
               preferences={preferences}
               captureFocus={sidebarSnapshot.mode === "pinned"}
               onOpenFile={(entry) => {
