@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "task": "T012",
+  "deviations": [
+    {
+      "deviationId": "HF2-RECENT-COUNT-TIME",
+      "baselineRegion": "Recent Workspaces count/time copy",
+      "deviation": "baseline count/time copy is not product data",
+      "implementationExpectation": "show only approved name/rootPath",
+      "owner": "product-owner",
+      "status": "APPROVED",
+      "constraints": {
+        "sdkMasking": "FORBIDDEN",
+        "addDrawingCountField": "FORBIDDEN",
+        "addLastOpenedField": "FORBIDDEN"
+      },
+      "provenance": {
+        "decision": "APPROVED",
+        "actor": "product-owner",
+        "approvedAt": "2026-09-03",
+        "evidenceRef": "docs/evidence/003-visual-acceptance/design-reconciliation.md",
+        "basis": "Approved 003 spec and data model define Recent Workspaces as the existing name/rootPath projection sorted by createdAt; drawingCount and lastOpenedAt are not product data.",
+        "specRefs": [
+          "specs/003-desktop-shell-ux-ui/spec.md",
+          "specs/003-desktop-shell-ux-ui/data-model.md",
+          "specs/003-desktop-shell-ux-ui/plan.md"
+        ]
+      }
+    }
+  ]
+}
