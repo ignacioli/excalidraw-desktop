@@ -470,7 +470,7 @@ function WorkspaceTreeRowView({
       aria-expanded={isExpandable ? expanded : undefined}
       aria-selected={row.isActive || undefined}
       className={`workspace-tree-row${row.isActive ? " is-active" : ""}`}
-      data-pointer-focus={pointerFocused || focused ? "true" : "false"}
+      data-pointer-focus={pointerFocused ? "true" : "false"}
       data-row-key={row.key}
       data-kind={row.kind}
       tabIndex={focused ? 0 : -1}
@@ -573,6 +573,14 @@ function WorkspaceTreeRowView({
       >
         {row.displayName}
       </span>
+      {row.isActive ? (
+        <span
+          aria-hidden="true"
+          className="workspace-tree-active-indicator"
+          data-slot="workspace-tree-active-indicator"
+          title="Active drawing"
+        />
+      ) : null}
       <span
         data-slot="workspace-tree-action"
         className="workspace-tree-action-slot"

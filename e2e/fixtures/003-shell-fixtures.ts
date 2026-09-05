@@ -168,6 +168,16 @@ const UNSAVED_TAB: ShellFixtureTab = {
   conflictState: "none",
 };
 
+const UNICODE_TAB: ShellFixtureTab = {
+  documentId: "fixture-document-unicode",
+  title: "会议 ✦",
+  workspaceId: UNICODE_WORKSPACE.id,
+  path: UNICODE_ENTRIES[1].canonicalPath,
+  saveState: "clean",
+  availability: "available",
+  conflictState: "none",
+};
+
 export const EMPTY_SHELL_FIXTURE: ShellFixture = {
   id: "empty",
   shell: "empty",
@@ -239,6 +249,8 @@ export const UNICODE_PINNED_SHELL_FIXTURE: ShellFixture = {
   workspaces: [UNICODE_WORKSPACE],
   entries: UNICODE_ENTRIES,
   expandedDirectoryPaths: ["流程"],
+  activeDocumentId: UNICODE_TAB.documentId,
+  tabs: [UNICODE_TAB],
 };
 
 export const SHELL_FIXTURES: readonly ShellFixture[] = [

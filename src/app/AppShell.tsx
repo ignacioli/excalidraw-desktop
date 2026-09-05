@@ -329,11 +329,13 @@ export function AppShell({
   const closeExportDialog = (): void => {
     setExportDocumentId(null);
   };
-  nativeMenuHandlerRef.current = createNativeMenuCommandHandler({
-    onSave: () => void saveDocument(),
-    onExportImage: openExportDialog,
-    onAppearance: (mode) =>
-      void runAction(() => themeController.setModePreference(mode)),
+  useEffect(() => {
+    nativeMenuHandlerRef.current = createNativeMenuCommandHandler({
+      onSave: () => void saveDocument(),
+      onExportImage: openExportDialog,
+      onAppearance: (mode) =>
+        void runAction(() => themeController.setModePreference(mode)),
+    });
   });
   const applyCloseOutcome = (outcome: CloseOutcome) => {
     if (outcome.status === "orphaned") {
@@ -561,7 +563,10 @@ export function AppShell({
         enabled={hasNativeWindowRuntime()}
         onStateChange={setStartupState}
       />
-      <header className="app-shell-tabs">
+      <header
+        className="app-shell-tabs"
+        data-sidebar-mode={sidebarSnapshot.mode}
+      >
         <div className="shell-left" aria-label="Shell navigation" role="group">
           <button
             aria-label="Back"
@@ -681,26 +686,13 @@ export function AppShell({
             >
               <img alt="" aria-hidden="true" src={pinIcon} />
             </button>
-          ) : (
-            <button
-              aria-label="Unpin workspace sidebar"
-              className="icon-button sidebar-pin-button"
-              onClick={() => {
-                sidebarController.unpin();
-                preferences.setSidebarPinned(false);
-              }}
-              title="Unpin workspace sidebar"
-              type="button"
-            >
-              <img alt="" aria-hidden="true" src={pinIcon} />
-            </button>
-          )}
+          ) : null}
           {hasTauriCommandRuntime() ? (
             <WorkspacePanel
               currentWorkspaceId={currentWorkspaceId}
               invoker={workspaceInvoker}
               preferences={preferences}
-              captureFocus={sidebarSnapshot.mode === "pinned"}
+              captureFocus={sidebarSnapshot.mode === "overlay"}
               onOpenFile={(entry) => {
                 void runAction(() => documentManager.open(entry.canonicalPath));
               }}

@@ -268,3 +268,30 @@ observed. The record cannot be accepted as a complete T023b PASS because:
 
 No production files, private specs, task checkboxes, or commits were changed
 by this evidence task. Existing concurrent worktree changes were preserved.
+
+## 2026-09-05 Phase 2 remediation revalidation
+
+**Status: FAIL / partial.** The corrective working tree was based on
+`fa7474920f56a76ffeacccaf2588f3212495f0c1`. An intermediate bundle built from
+source patch `e96dc96769fe5e3ce690bb429b7630890fd2bdc0108c90601198207befb39c8a`
+was launched directly from its `/private/tmp` bundle path. Accessibility
+identified `tauri://localhost`, the corrected Welcome shell, and the native
+macOS File menu with `Save` and `Export Image`.
+
+On a memory-only Untitled drawing, native File > Save was invoked and the
+drawing remained `Untitled, unsaved changes`; no visible error was exposed, so
+this does **not** satisfy the required native Save-error evidence. Native
+File > Export Image opened the application-owned `Export drawing` dialog with
+PNG/SVG, scale, background, theme, Export, and Cancel controls. No export target
+was selected and no user file was written.
+
+After the final lint and responsive-token corrections, a fresh working-tree
+bundle was built successfully at
+`/private/tmp/excalidraw-003-phase2-final.m0xQv0/cargo-target/release/bundle/macos/Excalidraw.app`.
+Its executable SHA-256 is
+`9935bbf90b16a3c774ae82b8ac4950770cf0cb70c5c7f737d1c798fb6ea88170`,
+bundle identifier `excalidraw-desktop`, version `0.2.0`, architecture `arm64`.
+It was not launched for another Computer Use pass because the source remains
+uncommitted and the already-known native 1280 x 760 and Save-error conditions
+were still unavailable. T023b therefore remains open; this section is not a
+native PASS or product approval.

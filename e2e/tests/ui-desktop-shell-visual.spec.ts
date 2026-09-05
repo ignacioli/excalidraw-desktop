@@ -34,6 +34,12 @@ const CAPTURE_NAMES = {
 } as const;
 
 type Box = { x: number; y: number; width: number; height: number };
+type ComputedTypography = {
+  fontFamily: string;
+  fontSize: string;
+  fontWeight: string;
+  lineHeight: string;
+};
 const remoteFontRequestsByPage = new WeakMap<Page, number>();
 
 test.describe("003 shell visual harness", () => {
@@ -50,8 +56,9 @@ test.describe("003 shell visual harness", () => {
   test("captures Restored / Hidden / Light without old top-level commands", async ({
     page,
   }, testInfo) => {
-    await prepare(page, getShellFixture("restored"), "light");
-    await expect(page.locator(".canvas-empty-state")).toBeVisible();
+    const fixture = getShellFixture("restored");
+    await prepare(page, fixture, "light");
+    await assertRestoredFixture(page, fixture);
     await expect(page.locator(".file-sidebar")).not.toBeVisible();
     await assertShellContract(page, { session: "restored", sidebar: "hidden" });
     await capture(page, testInfo, CAPTURE_NAMES.restoredHiddenLight);
@@ -61,11 +68,15 @@ test.describe("003 shell visual harness", () => {
   test("captures Workspace / Pinned / Light with exact shell geometry", async ({
     page,
   }, testInfo) => {
-    await prepare(page, getShellFixture("pinned"), "light");
+    const fixture = getShellFixture("pinned");
+    await prepare(page, fixture, "light");
     await expect(page.locator(".file-sidebar")).toBeVisible();
     await expect(
       page.getByRole("treeitem", { name: "Design Workspace" }),
     ).toBeVisible();
+    await assertRestoredFixture(page, fixture);
+    await assertPinnedWorkspaceHeader(page);
+    await assertDefaultWorkspaceRowState(page);
     await assertShellContract(page, { session: "restored", sidebar: "pinned" });
     await assertGeometrySet(page, "pinned");
     await capture(page, testInfo, CAPTURE_NAMES.workspacePinnedLight);
@@ -128,11 +139,56 @@ test.describe("003 shell visual harness", () => {
       page.getByRole("treeitem", { name: UNICODE_WORKSPACE.name }),
     ).toBeVisible();
     await expect(page.getByRole("treeitem", { name: "流程" })).toBeVisible();
+    await assertRestoredFixture(page, getShellFixture("unicode-pinned"));
     await assertShellContract(page, { session: "restored", sidebar: "pinned" });
     await assertGeometrySet(page, "pinned");
     await assertUnicodeFallback(page, getShellFixture("unicode-pinned"));
     await capture(page, testInfo, CAPTURE_NAMES.workspacePinnedDark);
     await compareCropStability(page.locator(".file-sidebar"), "sidebar-dark");
+  });
+
+  test("records computed HF2-FONT-001 styles while externally offline", async ({
+    page,
+    context,
+  }, testInfo) => {
+    const fixture = getShellFixture("unicode-pinned");
+    await prepare(page, fixture, "dark");
+    await context.setOffline(true);
+    try {
+      const fontPolicy = await readFontPolicy(page);
+      const offline = await page.evaluate(() => navigator.onLine === false);
+      expect(offline).toBe(true);
+      expect(documentFontsLoaded(fontPolicy)).toBe(true);
+      expect(remoteFontRequestsByPage.get(page) ?? 0).toBe(0);
+      expect(fontPolicy.computedUiFamily).not.toMatch(/\bInter\b/iu);
+      expect(fontPolicy.computedMonoFamily).not.toMatch(/IBM Plex Mono/iu);
+      expect(fontPolicy.styles).toMatchObject({
+        body: { fontSize: "14px", fontWeight: "400", lineHeight: "19.6px" },
+        header: { fontSize: "20px", fontWeight: "600", lineHeight: "28px" },
+        tab: { fontSize: "14px", fontWeight: "400", lineHeight: "19.6px" },
+        workspaceRow: {
+          fontSize: "14px",
+          fontWeight: "400",
+          lineHeight: "28px",
+        },
+      });
+      await assertUnicodeFallback(page, fixture);
+      const evidence = {
+        fixture: fixture.id,
+        offline,
+        remoteFontRequests: remoteFontRequestsByPage.get(page) ?? 0,
+        ...fontPolicy,
+      };
+      if (process.env.PHASE2_PRINT_FONT_EVIDENCE === "1") {
+        console.info(`PHASE2_FONT_EVIDENCE=${JSON.stringify(evidence)}`);
+      }
+      await testInfo.attach("phase2-font-policy.json", {
+        body: Buffer.from(`${JSON.stringify(evidence, null, 2)}\n`),
+        contentType: "application/json",
+      });
+    } finally {
+      await context.setOffline(false);
+    }
   });
 
   test("proves the visual harness has no private SDK selector dependency", async ({
@@ -160,9 +216,8 @@ async function prepare(
   remoteFontRequestsByPage.set(page, 0);
   page.on("request", (request) => {
     if (request.resourceType() !== "font") return;
-    const requestOrigin = new URL(request.url()).origin;
-    const baseOrigin = new URL("http://127.0.0.1:1420/").origin;
-    if (requestOrigin !== baseOrigin) {
+    const requestHost = new URL(request.url()).hostname;
+    if (requestHost !== "127.0.0.1" && requestHost !== "localhost") {
       remoteFontRequestsByPage.set(
         page,
         (remoteFontRequestsByPage.get(page) ?? 0) + 1,
@@ -195,9 +250,115 @@ async function prepare(
     },
   );
   await page.goto("/");
+  await openFixtureDocuments(page, fixture);
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
+}
+
+async function openFixtureDocuments(
+  page: Page,
+  fixture: ShellFixture,
+): Promise<void> {
+  if (fixture.tabs.length === 0) return;
+  const sidebar = page.locator(".file-sidebar");
+  const startedVisible = await sidebar.isVisible();
+  if (!startedVisible) {
+    await page
+      .getByRole("button", { name: "Toggle workspace sidebar" })
+      .click();
+    await expect(sidebar).toBeVisible();
+  }
+  for (const tab of fixture.tabs) {
+    if (tab.path === null) {
+      throw new Error(
+        `Fixture ${fixture.id} needs a persisted path for visual restore.`,
+      );
+    }
+    const entry = fixture.entries.find(
+      ({ canonicalPath }) => canonicalPath === tab.path,
+    );
+    if (entry === undefined) {
+      throw new Error(
+        `Fixture ${fixture.id} is missing the entry for ${tab.path}.`,
+      );
+    }
+    const parentDirectories = fixture.entries
+      .filter(
+        (candidate) =>
+          candidate.kind === "directory" &&
+          entry.relativePath.startsWith(`${candidate.relativePath}/`),
+      )
+      .sort(
+        (left, right) =>
+          left.relativePath.split("/").length -
+          right.relativePath.split("/").length,
+      );
+    for (const directory of parentDirectories) {
+      const directoryRow = page.getByRole("treeitem", {
+        name: directory.displayName,
+      });
+      await expect(directoryRow).toBeVisible();
+      if ((await directoryRow.getAttribute("aria-expanded")) !== "true") {
+        await directoryRow.click();
+      }
+    }
+    await page.getByRole("treeitem", { name: entry.displayName }).click();
+    await expect(
+      page.getByRole("tab", { name: new RegExp(tab.title) }),
+    ).toBeVisible();
+  }
+  if (!startedVisible) {
+    await page
+      .getByRole("button", { name: "Toggle workspace sidebar" })
+      .click();
+    await expect(sidebar).not.toBeVisible();
+  }
+  if (fixture.sidebar === "pinned") {
+    const libraryButton = page.getByRole("checkbox", {
+      name: "Library",
+      exact: true,
+    });
+    await expect(libraryButton).toBeVisible();
+    // This public checkbox is visually wrapped by the SDK trigger. Force is
+    // limited to deterministic fixture setup; acceptance never inspects SDK DOM.
+    await libraryButton.check({ force: true });
+    await expect(libraryButton).toBeChecked();
+  }
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  });
+  await page.mouse.move(VISUAL_VIEWPORT.width - 8, VISUAL_VIEWPORT.height - 8);
+}
+
+async function assertRestoredFixture(
+  page: Page,
+  fixture: ShellFixture,
+): Promise<void> {
+  const activeTab = fixture.tabs.find(
+    ({ documentId }) => documentId === fixture.activeDocumentId,
+  );
+  expect(
+    activeTab,
+    "restored fixture must declare an active tab",
+  ).toBeDefined();
+  await expect(page.locator(".canvas-empty-state")).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("tab", { name: new RegExp(activeTab?.title ?? "") })
+      .filter({ has: page.locator(".tab-title") }),
+  ).toHaveCount(1);
+  if (activeTab?.saveState === "clean") {
+    await expect(
+      page.getByRole("tab", {
+        name: new RegExp(`${activeTab.title}(?!.*unsaved changes)`, "i"),
+      }),
+    ).toBeVisible();
+    await expect(page.locator(".dirty-indicator")).toHaveCount(0);
+  }
+  await expect(page.locator(SDK_BOUNDARY_SELECTOR)).toBeVisible();
 }
 
 async function assertShellContract(
@@ -217,16 +378,16 @@ async function assertShellContract(
     expected.sidebar,
   );
   const fontPolicy = await readFontPolicy(page);
-  expect(
-    assertPlatformFontPolicy({
-      deviationId: "HF2-FONT-001",
-      uiStack: fontPolicy.uiStack,
-      monoStack: fontPolicy.monoStack,
-      remoteFontRequests: remoteFontRequestsByPage.get(page) ?? 0,
-      englishTargetVerified: fontPolicy.englishTargetVerified,
-      unicodeFallbackVerified: fontPolicy.unicodeFallbackVerified,
-    }).every(({ result }) => result === "PASS"),
-  ).toBe(true);
+  const fontAssertions = assertPlatformFontPolicy({
+    deviationId: "HF2-FONT-001",
+    uiStack: fontPolicy.uiStack,
+    monoStack: fontPolicy.monoStack,
+    remoteFontRequests: remoteFontRequestsByPage.get(page) ?? 0,
+    englishTargetVerified: fontPolicy.englishTargetVerified,
+    unicodeFallbackVerified: fontPolicy.unicodeFallbackVerified,
+  });
+  expect(fontPolicy.computedUiFamily).not.toMatch(/\bInter\b/iu);
+  expect(fontAssertions.filter(({ result }) => result === "FAIL")).toEqual([]);
   const counts = await readLegacyCounts(page);
   expect(
     assertLegacyCounts(counts).every(({ result }) => result === "PASS"),
@@ -240,20 +401,22 @@ async function assertShellContract(
 
 async function assertGeometrySet(page: Page, state: "pinned"): Promise<void> {
   const selectors = [
+    ["top-layer", ".app-shell-tabs", 44, "height"],
+    ["workspace-sidebar", ".file-sidebar", 360, "width"],
     ["icon-hit-target", ".workspace-panel-actions .icon-button", 32],
     ["workspace-action-icon", ".workspace-panel-actions .icon-button img", 16],
     ["workspace-row", ".workspace-tree-row", 28],
+    ["tab-width", ".tab-cluster", 196, "width"],
+    ["tab-height", ".tab-cluster", 36, "height"],
   ] as const;
-  for (const [name, selector, expected] of selectors) {
+  for (const [name, selector, expected, dimension] of selectors) {
     const locator = page.locator(selector).first();
     await expect(locator).toBeVisible();
     const box = await readBox(locator);
     const value =
-      name === "workspace-action-icon"
-        ? box.width
-        : name === "workspace-row"
-          ? box.height
-          : box.width;
+      dimension === "height" || name === "workspace-row"
+        ? box.height
+        : box.width;
     expect(
       assertGeometry({
         name: `${state}.${name}`,
@@ -263,6 +426,46 @@ async function assertGeometrySet(page: Page, state: "pinned"): Promise<void> {
       }),
     ).toMatchObject({ result: "PASS" });
   }
+  const sidebarBox = await readBox(page.locator(".file-sidebar"));
+  const canvasBox = await readBox(page.locator(".canvas-region"));
+  const editorBox = await readBox(page.locator(SDK_BOUNDARY_SELECTOR));
+  expect(
+    Math.abs(sidebarBox.x + sidebarBox.width - canvasBox.x),
+  ).toBeLessThanOrEqual(GEOMETRY_TOLERANCE_PX);
+  expect(editorBox.x).toBeGreaterThanOrEqual(canvasBox.x);
+  expect(editorBox.x + editorBox.width).toBeLessThanOrEqual(
+    canvasBox.x + canvasBox.width + GEOMETRY_TOLERANCE_PX,
+  );
+}
+
+async function assertPinnedWorkspaceHeader(page: Page): Promise<void> {
+  const toolbar = page.getByRole("toolbar", { name: "Workspace actions" });
+  await expect(toolbar.getByRole("button")).toHaveCount(4);
+  await expect(page.getByRole("button", { name: "Mount folder…" })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("button", { name: "Unpin workspace sidebar" }),
+  ).toHaveCount(0);
+  const titleMetrics = await page
+    .locator(".workspace-panel-title-row h2")
+    .evaluate((title) => {
+      const style = getComputedStyle(title);
+      return {
+        clientHeight: title.clientHeight,
+        scrollHeight: title.scrollHeight,
+        whiteSpace: style.whiteSpace,
+      };
+    });
+  expect(titleMetrics.scrollHeight).toBeLessThanOrEqual(
+    titleMetrics.clientHeight,
+  );
+  expect(titleMetrics.whiteSpace).toBe("nowrap");
+}
+
+async function assertDefaultWorkspaceRowState(page: Page): Promise<void> {
+  await expect(page.locator(".workspace-tree")).not.toBeFocused();
+  await expect(page.locator(".workspace-tree-action").first()).toBeHidden();
 }
 
 async function assertUnicodeFallback(
@@ -339,9 +542,28 @@ async function readLegacyCounts(
       ),
       horizontalEllipsis: visibleText("button", /⋯/u),
       duplicateWorkspaceRoots: Math.max(0, workspaceRoots - 1),
-      headerActionOverflow: count(
-        ".workspace-panel-actions [aria-label*='overflow' i], .workspace-panel-actions [data-overflow]",
-      ),
+      headerActionOverflow:
+        count(
+          ".workspace-panel-actions [aria-label*='overflow' i], .workspace-panel-actions [data-overflow]",
+        ) +
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            ".workspace-panel-title-row",
+          ),
+        ].filter((row) => {
+          const title = row.querySelector<HTMLElement>("h2");
+          const actions = row.querySelector<HTMLElement>(
+            ".workspace-panel-actions",
+          );
+          if (title === null || actions === null || !visible(row)) return false;
+          const rowBox = row.getBoundingClientRect();
+          const actionsBox = actions.getBoundingClientRect();
+          return (
+            title.scrollHeight > title.clientHeight ||
+            actionsBox.right > rowBox.right + 0.5 ||
+            actions.scrollWidth > actions.clientWidth
+          );
+        }).length,
     };
   });
 }
@@ -349,6 +571,15 @@ async function readLegacyCounts(
 async function readFontPolicy(page: Page): Promise<{
   uiStack: string;
   monoStack: string;
+  computedUiFamily: string;
+  computedMonoFamily: string;
+  fontStatus: FontFaceSetLoadStatus;
+  styles: {
+    body: ComputedTypography;
+    header: ComputedTypography;
+    tab: ComputedTypography;
+    workspaceRow: ComputedTypography;
+  };
   englishTargetVerified: boolean;
   unicodeFallbackVerified: boolean;
 }> {
@@ -357,15 +588,73 @@ async function readFontPolicy(page: Page): Promise<{
     const body = document.body;
     const uiStack = root.style.getPropertyValue("--font-ui").trim();
     const monoStack = root.style.getPropertyValue("--font-mono").trim();
+    const uiTargets = [
+      ...document.querySelectorAll<HTMLElement>(
+        ".workspace-panel-eyebrow, .workspace-panel-title-row h2, .welcome-content h1, .tab-title",
+      ),
+    ];
+    const uiTarget =
+      uiTargets.find((element) =>
+        /[A-Za-z]/u.test(element.textContent ?? ""),
+      ) ??
+      uiTargets[0] ??
+      null;
+    const computedUiFamily =
+      uiTarget === null ? "" : getComputedStyle(uiTarget).fontFamily;
+    const uiTargetText = uiTarget?.textContent?.trim() ?? "";
+    const monoProbe = document.createElement("span");
+    monoProbe.textContent = "font-policy-probe";
+    monoProbe.style.position = "fixed";
+    monoProbe.style.visibility = "hidden";
+    monoProbe.style.fontFamily = "var(--font-mono)";
+    body.append(monoProbe);
+    const computedMonoFamily = getComputedStyle(monoProbe).fontFamily;
+    monoProbe.remove();
+    const typography = (selector: string) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (element === null) {
+        return { fontFamily: "", fontSize: "", fontWeight: "", lineHeight: "" };
+      }
+      const style = getComputedStyle(element);
+      return {
+        fontFamily: style.fontFamily,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        lineHeight: style.lineHeight,
+      };
+    };
+    const normalizeFamily = (value: string) =>
+      value.replace(/[\s"']/gu, "").toLowerCase();
+    const normalizedComputedUi = normalizeFamily(computedUiFamily);
+    const computedUiUsesApprovedNativeStack =
+      normalizedComputedUi === normalizeFamily(uiStack) ||
+      (normalizedComputedUi.includes("-apple-system") &&
+        normalizedComputedUi.includes("system-ui") &&
+        normalizedComputedUi.includes("segoeui") &&
+        normalizedComputedUi.includes("sans-serif"));
     return {
       uiStack,
       monoStack,
+      computedUiFamily,
+      computedMonoFamily,
+      fontStatus: document.fonts.status,
+      styles: {
+        body: typography("body"),
+        header: typography(".workspace-panel-title-row h2"),
+        tab: typography(".tab-title"),
+        workspaceRow: typography(".workspace-tree-row"),
+      },
       englishTargetVerified:
-        body.textContent?.includes("Welcome") === true ||
-        body.textContent?.includes("Select a drawing") === true,
+        /[A-Za-z]/u.test(uiTargetText) && computedUiUsesApprovedNativeStack,
       unicodeFallbackVerified: !(body.textContent ?? "").includes("�"),
     };
   });
+}
+
+function documentFontsLoaded(value: {
+  fontStatus: FontFaceSetLoadStatus;
+}): boolean {
+  return value.fontStatus === "loaded";
 }
 
 async function readBox(locator: Locator): Promise<Box> {

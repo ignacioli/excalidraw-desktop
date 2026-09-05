@@ -264,10 +264,7 @@ export function WorkspacePanel({
       preferences.pruneWorkspaceIds(liveIds);
       const nextCurrentWorkspaceId =
         controlledCurrentWorkspaceId === undefined
-          ? preferences.resolveCurrentWorkspaceId(
-              liveIds,
-              items[0]?.id ?? null,
-            )
+          ? preferences.resolveCurrentWorkspaceId(liveIds, items[0]?.id ?? null)
           : controlledCurrentWorkspaceId !== null &&
               liveIds.has(controlledCurrentWorkspaceId)
             ? controlledCurrentWorkspaceId
@@ -940,80 +937,83 @@ export function WorkspacePanel({
       className="workspace-panel"
     >
       <div className="workspace-panel-header">
-        <h2>{currentWorkspace?.name ?? "Workspace"}</h2>
-        <div
-          aria-label="Workspace actions"
-          className="workspace-panel-actions"
-          role="toolbar"
-        >
-          <button
-            aria-label="New Drawing"
-            className="icon-button"
-            disabled={busy || currentWorkspaceId === null}
-            onClick={() =>
-              currentWorkspaceId !== null &&
-              beginNaming("newDrawing", currentWorkspaceId, targetRelativePath)
-            }
-            title="New Drawing"
-            type="button"
+        <p className="workspace-panel-eyebrow">Workspace</p>
+        <div className="workspace-panel-title-row">
+          <h2 title={currentWorkspace?.name ?? "Workspace"}>
+            {currentWorkspace?.name ?? "Workspace"}
+          </h2>
+          <div
+            aria-label="Workspace actions"
+            className="workspace-panel-actions"
+            role="toolbar"
           >
-            <img alt="" aria-hidden="true" src={newDrawingIcon} />
-          </button>
-          <button
-            aria-label="New Folder"
-            className="icon-button"
-            disabled={busy || currentWorkspaceId === null}
-            onClick={() =>
-              currentWorkspaceId !== null &&
-              beginNaming(
-                "newDirectory",
-                currentWorkspaceId,
-                targetRelativePath,
-              )
-            }
-            title="New Folder"
-            type="button"
-          >
-            <img alt="" aria-hidden="true" src={newFolderIcon} />
-          </button>
-          <button
-            aria-label={
-              allCurrentDirectoriesExpanded ? "Collapse all" : "Expand all"
-            }
-            className="icon-button"
-            disabled={busy || currentWorkspaceId === null}
-            onClick={toggleAllCurrentWorkspace}
-            title={
-              allCurrentDirectoriesExpanded ? "Collapse all" : "Expand all"
-            }
-            type="button"
-          >
-            <img
-              alt=""
-              aria-hidden="true"
-              src={
-                allCurrentDirectoriesExpanded ? collapseAllIcon : expandAllIcon
+            <button
+              aria-label="New Drawing"
+              className="icon-button"
+              disabled={busy || currentWorkspaceId === null}
+              onClick={() =>
+                currentWorkspaceId !== null &&
+                beginNaming(
+                  "newDrawing",
+                  currentWorkspaceId,
+                  targetRelativePath,
+                )
               }
-            />
-          </button>
-          <button
-            aria-label="Refresh"
-            className="icon-button"
-            disabled={busy || currentWorkspaceId === null}
-            onClick={refreshCurrentWorkspace}
-            title="Refresh"
-            type="button"
-          >
-            <img alt="" aria-hidden="true" src={refreshIcon} />
-          </button>
-          <button
-            ref={mountButtonRef}
-            type="button"
-            disabled={busy}
-            onClick={() => void mountWorkspace()}
-          >
-            Mount folder…
-          </button>
+              title="New Drawing"
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src={newDrawingIcon} />
+            </button>
+            <button
+              aria-label="New Folder"
+              className="icon-button"
+              disabled={busy || currentWorkspaceId === null}
+              onClick={() =>
+                currentWorkspaceId !== null &&
+                beginNaming(
+                  "newDirectory",
+                  currentWorkspaceId,
+                  targetRelativePath,
+                )
+              }
+              title="New Folder"
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src={newFolderIcon} />
+            </button>
+            <button
+              aria-label={
+                allCurrentDirectoriesExpanded ? "Collapse all" : "Expand all"
+              }
+              className="icon-button"
+              disabled={busy || currentWorkspaceId === null}
+              onClick={toggleAllCurrentWorkspace}
+              title={
+                allCurrentDirectoriesExpanded ? "Collapse all" : "Expand all"
+              }
+              type="button"
+            >
+              <img
+                alt=""
+                aria-hidden="true"
+                src={
+                  allCurrentDirectoriesExpanded
+                    ? collapseAllIcon
+                    : expandAllIcon
+                }
+              />
+            </button>
+            <button
+              aria-label="Refresh"
+              className="icon-button"
+              disabled={busy || currentWorkspaceId === null}
+              onClick={refreshCurrentWorkspace}
+              title="Refresh"
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src={refreshIcon} />
+            </button>
+          </div>
         </div>
       </div>
       {loadingKeys.size > 0 ? (
@@ -1025,7 +1025,17 @@ export function WorkspacePanel({
         <p role="alert">{error}</p>
       ) : null}
       {workspaces.length === 0 ? (
-        <p className="sidebar-placeholder">No workspace mounted.</p>
+        <div className="sidebar-placeholder">
+          <p>No workspace mounted.</p>
+          <button
+            ref={mountButtonRef}
+            type="button"
+            disabled={busy}
+            onClick={() => void mountWorkspace()}
+          >
+            Mount folder…
+          </button>
+        </div>
       ) : (
         <WorkspaceTree
           workspaces={workspaces}

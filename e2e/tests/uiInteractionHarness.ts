@@ -77,7 +77,12 @@ const EMPTY_SCENE = {
   version: 2,
   source: "excalidraw-desktop-ui-interaction-e2e",
   elements: [],
-  appState: {},
+  appState: {
+    gridModeEnabled: false,
+    gridSize: 20,
+    gridStep: 5,
+    viewBackgroundColor: "#ffffff",
+  },
   files: {},
 };
 

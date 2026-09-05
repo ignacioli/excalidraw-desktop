@@ -230,7 +230,7 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
             isActive || hoveredId === session.id || focusedId === session.id;
           return (
             <div
-              className="tab-cluster"
+              className={isActive ? "tab-cluster is-selected" : "tab-cluster"}
               data-tab-id={session.id}
               key={session.id}
               onBlur={(event) => {
