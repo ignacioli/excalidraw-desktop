@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../App.css";
@@ -113,6 +114,7 @@ vi.mock("./nativeMenu", async () => {
 describe("AppShell", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.mocked(invoke).mockResolvedValue([]);
     documentManager.store.setState({
       sessionsById: {},
       tabOrder: [],
@@ -528,6 +530,10 @@ describe("AppShell", () => {
 
     beforeEach(() => {
       testLocalStorage.clear();
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: 1280,
+      });
       Object.defineProperty(globalThis, "localStorage", {
         configurable: true,
         value: {
@@ -622,6 +628,51 @@ describe("AppShell", () => {
       expect(inFlowColumns[0]).toHaveClass("canvas-region");
       assertNoRightSidebar();
       assertRetainedChrome();
+    });
+
+    it("uses one Sidebar button for overlay, pinned, and hidden transitions", async () => {
+      const user = userEvent.setup();
+      render(<AppShell />);
+      const toggle = getWorkspaceSidebarOpenControl();
+
+      await user.click(toggle);
+      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "overlay");
+      expect(
+        screen.queryByRole("button", { name: /pin workspace sidebar/i }),
+      ).not.toBeInTheDocument();
+
+      await user.click(toggle);
+      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "pinned");
+
+      await user.click(toggle);
+      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "hidden");
+    });
+
+    it("reveals the hidden Sidebar from the left edge", () => {
+      render(<AppShell />);
+
+      fireEvent.pointerEnter(screen.getByTestId("sidebar-reveal-zone"));
+
+      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "overlay");
+    });
+
+    it("resizes a pinned Sidebar with the keyboard and persists the width", async () => {
+      seedShellPreferences({ sidebarPinned: true });
+      const user = userEvent.setup();
+      render(<AppShell />);
+      const separator = screen.getByRole("separator", {
+        name: "Resize workspace sidebar",
+      });
+
+      expect(separator).toHaveAttribute("aria-valuenow", "360");
+      await user.click(separator);
+      await user.keyboard("{ArrowRight}");
+      expect(separator).toHaveAttribute("aria-valuenow", "368");
+      expect(
+        JSON.parse(
+          globalThis.localStorage.getItem(SHELL_PREFERENCES_STORAGE_KEY) ?? "{}",
+        ).sidebarWidth,
+      ).toBe(368);
     });
 
     it("keeps legacy command chrome out of the shell header", () => {

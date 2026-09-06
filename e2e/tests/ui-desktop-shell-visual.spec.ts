@@ -97,9 +97,7 @@ test.describe("003 shell visual harness", () => {
     });
     const canvas = page.locator(".canvas-region");
     const before = await readBox(canvas);
-    await page
-      .getByRole("button", { name: "Toggle workspace sidebar" })
-      .click();
+    await page.keyboard.press("Escape");
     await expect(page.locator(".file-sidebar")).not.toBeVisible();
     const after = await readBox(canvas);
     expect(Math.abs(after.width - before.width)).toBeLessThanOrEqual(
@@ -309,9 +307,15 @@ async function openFixtureDocuments(
     ).toBeVisible();
   }
   if (!startedVisible) {
-    await page
-      .getByRole("button", { name: "Toggle workspace sidebar" })
-      .click();
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
     await expect(sidebar).not.toBeVisible();
   }
   if (fixture.sidebar === "pinned") {
@@ -447,6 +451,12 @@ async function assertPinnedWorkspaceHeader(page: Page): Promise<void> {
   await expect(
     page.getByRole("button", { name: "Unpin workspace sidebar" }),
   ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Pin workspace sidebar" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("separator", { name: "Resize workspace sidebar" }),
+  ).toBeVisible();
   const titleMetrics = await page
     .locator(".workspace-panel-title-row h2")
     .evaluate((title) => {

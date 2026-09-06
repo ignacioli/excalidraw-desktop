@@ -139,6 +139,11 @@ describe("ThemeController", () => {
     expect(root.style.getPropertyValue("--focus-ring")).toBe("#1C7ED6");
     expect(root.style.getPropertyValue("--hit-target-size")).toBe("32px");
     expect(root.style.getPropertyValue("--icon-size")).toBe("16px");
+    expect(root.style.getPropertyValue("--border-icon")).toBe("1px");
+    expect(root.style.getPropertyValue("--border-icon-directional")).toBe(
+      "1.25px",
+    );
+    expect(root.style.getPropertyValue("--surface-hover")).toBe("#F1F0FF");
     expect(root.style.getPropertyValue("--tree-row-height")).toBe("28px");
     expect(root.style.getPropertyValue("--tab-height")).toBe("36px");
     expect(root.style.getPropertyValue("--font-ui")).toBe(

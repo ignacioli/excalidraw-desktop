@@ -4,6 +4,9 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
   documentManager,
@@ -39,11 +42,15 @@ import { TabBar } from "./TabBar";
 import { OrphanCloseDialog } from "./OrphanCloseDialog";
 import { WelcomeScreen } from "./WelcomeScreen";
 import backIcon from "../../docs/design/desktop-shell/hf-2/icons/back.svg";
-import pinIcon from "../../docs/design/desktop-shell/hf-2/icons/pin.svg";
 import sidebarIcon from "../../docs/design/desktop-shell/hf-2/icons/sidebar.svg";
 import { interactionStore } from "./interaction";
 import { createSidebarController } from "./sidebarController";
-import { ShellPreferences } from "./shellPreferences";
+import {
+  SIDEBAR_WIDTH_MAX,
+  SIDEBAR_WIDTH_MIN,
+  ShellPreferences,
+  clampSidebarWidth,
+} from "./shellPreferences";
 import { deriveStartupRoute } from "./startupRoute";
 import { useAppStore } from "./store";
 import {
@@ -108,6 +115,16 @@ export function AppShell({
   const [exportDocumentId, setExportDocumentId] = useState<string | null>(null);
   const [orphanCloseId, setOrphanCloseId] = useState<string | null>(null);
   const [preferences] = useState(() => new ShellPreferences());
+  const [sidebarWidth, setSidebarWidth] = useState(
+    () => preferences.getSnapshot().sidebarWidth,
+  );
+  const [sidebarMaximum, setSidebarMaximum] = useState(SIDEBAR_WIDTH_MAX);
+  const appShellRef = useRef<HTMLDivElement | null>(null);
+  const sidebarResizeRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
   const [workspaceInvoker] = useState(
     () => providedWorkspaceInvoker ?? createTauriCommandInvoker(),
   );
@@ -140,6 +157,68 @@ export function AppShell({
     sidebarController.getSnapshot,
   );
   const pointerLeaveTimerRef = useRef<number | undefined>(undefined);
+
+  const getSidebarMaximum = useCallback(() => {
+    const measuredWidth =
+      appShellRef.current?.getBoundingClientRect().width ?? 0;
+    const shellWidth = measuredWidth > 0 ? measuredWidth : window.innerWidth;
+    if (shellWidth <= 0) return SIDEBAR_WIDTH_MAX;
+    return Math.max(
+      SIDEBAR_WIDTH_MIN,
+      Math.min(SIDEBAR_WIDTH_MAX, Math.floor(shellWidth * 0.3)),
+    );
+  }, []);
+
+  const renderedSidebarWidth = Math.min(sidebarWidth, sidebarMaximum);
+
+  const commitSidebarWidth = useCallback(
+    (candidate: number) => {
+      const width = Math.min(clampSidebarWidth(candidate), getSidebarMaximum());
+      setSidebarWidth(width);
+      preferences.setSidebarWidth(width);
+    },
+    [getSidebarMaximum, preferences],
+  );
+
+  const handleSidebarResizeKeyDown = (
+    event: ReactKeyboardEvent<HTMLDivElement>,
+  ) => {
+    let nextWidth: number | null = null;
+    if (event.key === "ArrowLeft") nextWidth = renderedSidebarWidth - 8;
+    if (event.key === "ArrowRight") nextWidth = renderedSidebarWidth + 8;
+    if (event.key === "Home") nextWidth = SIDEBAR_WIDTH_MIN;
+    if (event.key === "End") nextWidth = getSidebarMaximum();
+    if (nextWidth === null) return;
+    event.preventDefault();
+    commitSidebarWidth(nextWidth);
+  };
+
+  const handleSidebarResizePointerDown = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    sidebarResizeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: renderedSidebarWidth,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleSidebarResizePointerMove = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    const resize = sidebarResizeRef.current;
+    if (resize === null || resize.pointerId !== event.pointerId) return;
+    commitSidebarWidth(resize.startWidth + event.clientX - resize.startX);
+  };
+
+  const handleSidebarResizePointerEnd = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    if (sidebarResizeRef.current?.pointerId !== event.pointerId) return;
+    sidebarResizeRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
   const hasMountedWorkspace = useAppStore((state) => state.hasMountedWorkspace);
   const setHasMountedWorkspace = useAppStore(
     (state) => state.setHasMountedWorkspace,
@@ -279,6 +358,21 @@ export function AppShell({
   const canGoBack = browsingHistory.canGoBack(
     (location) => location.workspaceId === currentWorkspaceId,
   );
+
+  useEffect(() => {
+    const updateMaximum = () => setSidebarMaximum(getSidebarMaximum());
+    updateMaximum();
+    window.addEventListener("resize", updateMaximum);
+    const observer =
+      typeof ResizeObserver === "function"
+        ? new ResizeObserver(updateMaximum)
+        : null;
+    if (appShellRef.current !== null) observer?.observe(appShellRef.current);
+    return () => {
+      window.removeEventListener("resize", updateMaximum);
+      observer?.disconnect();
+    };
+  }, [getSidebarMaximum]);
 
   useEffect(() => {
     if (!hasTauriCommandRuntime()) return;
@@ -558,7 +652,15 @@ export function AppShell({
   ]);
 
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      ref={appShellRef}
+      style={
+        {
+          "--workspace-sidebar-width": `${renderedSidebarWidth}px`,
+        } as CSSProperties
+      }
+    >
       <RecoveryStartup
         enabled={hasNativeWindowRuntime()}
         onStateChange={setStartupState}
@@ -587,9 +689,11 @@ export function AppShell({
               if (sidebarSnapshot.mode === "hidden") {
                 sidebarController.openOverlay();
               } else if (sidebarSnapshot.mode === "overlay") {
-                sidebarController.hide();
+                sidebarController.pin();
+                preferences.setSidebarPinned(true);
               } else {
                 sidebarController.unpin();
+                sidebarController.hide();
                 preferences.setSidebarPinned(false);
               }
             }}
@@ -653,6 +757,15 @@ export function AppShell({
         }
         data-sidebar-mode={sidebarSnapshot.mode}
       >
+        {sidebarSnapshot.mode === "hidden" ? (
+          <div
+            aria-hidden="true"
+            className="sidebar-reveal-zone"
+            data-testid="sidebar-reveal-zone"
+            onPointerEnter={() => sidebarController.openOverlay()}
+            style={{ position: "absolute" }}
+          />
+        ) : null}
         <aside
           aria-label="Files"
           className="file-sidebar"
@@ -673,20 +786,6 @@ export function AppShell({
             }
           }}
         >
-          {sidebarSnapshot.mode === "overlay" ? (
-            <button
-              aria-label="Pin workspace sidebar"
-              className="icon-button sidebar-pin-button"
-              onClick={() => {
-                sidebarController.pin();
-                preferences.setSidebarPinned(true);
-              }}
-              title="Pin workspace sidebar"
-              type="button"
-            >
-              <img alt="" aria-hidden="true" src={pinIcon} />
-            </button>
-          ) : null}
           {hasTauriCommandRuntime() ? (
             <WorkspacePanel
               currentWorkspaceId={currentWorkspaceId}
@@ -723,6 +822,23 @@ export function AppShell({
                 </button>
               </div>
             </div>
+          ) : null}
+          {sidebarSnapshot.mode === "pinned" ? (
+            <div
+              aria-label="Resize workspace sidebar"
+              aria-orientation="vertical"
+              aria-valuemax={sidebarMaximum}
+              aria-valuemin={SIDEBAR_WIDTH_MIN}
+              aria-valuenow={renderedSidebarWidth}
+              className="sidebar-resizer"
+              onKeyDown={handleSidebarResizeKeyDown}
+              onPointerCancel={handleSidebarResizePointerEnd}
+              onPointerDown={handleSidebarResizePointerDown}
+              onPointerMove={handleSidebarResizePointerMove}
+              onPointerUp={handleSidebarResizePointerEnd}
+              role="separator"
+              tabIndex={0}
+            />
           ) : null}
         </aside>
 

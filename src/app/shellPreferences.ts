@@ -1,9 +1,13 @@
 export const SHELL_PREFERENCES_VERSION = 1 as const;
 export const SHELL_PREFERENCES_STORAGE_KEY = "excalidraw-desktop.shell";
+export const SIDEBAR_WIDTH_DEFAULT = 360;
+export const SIDEBAR_WIDTH_MIN = 280;
+export const SIDEBAR_WIDTH_MAX = 480;
 
 export interface ShellPreferenceSnapshot {
   version: typeof SHELL_PREFERENCES_VERSION;
   sidebarPinned: boolean;
+  sidebarWidth: number;
   expandedWorkspaceIds: string[];
   currentWorkspaceId: string | null;
 }
@@ -13,6 +17,7 @@ type ShellPreferenceStorage = Pick<Storage, "getItem" | "setItem">;
 const defaultSnapshot = (): ShellPreferenceSnapshot => ({
   version: SHELL_PREFERENCES_VERSION,
   sidebarPinned: false,
+  sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
   expandedWorkspaceIds: [],
   currentWorkspaceId: null,
 });
@@ -49,6 +54,14 @@ export class ShellPreferences {
   setSidebarPinned(sidebarPinned: boolean): void {
     if (this.snapshot.sidebarPinned === sidebarPinned) return;
     this.snapshot = { ...this.snapshot, sidebarPinned };
+    this.persist();
+    this.notify();
+  }
+
+  setSidebarWidth(sidebarWidth: number): void {
+    const nextWidth = clampSidebarWidth(sidebarWidth);
+    if (this.snapshot.sidebarWidth === nextWidth) return;
+    this.snapshot = { ...this.snapshot, sidebarWidth: nextWidth };
     this.persist();
     this.notify();
   }
@@ -120,6 +133,9 @@ function readSnapshot(stored: string | null): ShellPreferenceSnapshot {
     if (
       value.version !== SHELL_PREFERENCES_VERSION ||
       typeof value.sidebarPinned !== "boolean" ||
+      (value.sidebarWidth !== undefined &&
+        (typeof value.sidebarWidth !== "number" ||
+          !Number.isFinite(value.sidebarWidth))) ||
       !Array.isArray(value.expandedWorkspaceIds) ||
       (value.currentWorkspaceId !== undefined &&
         value.currentWorkspaceId !== null &&
@@ -134,6 +150,10 @@ function readSnapshot(stored: string | null): ShellPreferenceSnapshot {
     return {
       version: SHELL_PREFERENCES_VERSION,
       sidebarPinned: value.sidebarPinned,
+      sidebarWidth:
+        value.sidebarWidth === undefined
+          ? SIDEBAR_WIDTH_DEFAULT
+          : clampSidebarWidth(value.sidebarWidth),
       expandedWorkspaceIds: [...new Set(value.expandedWorkspaceIds)],
       currentWorkspaceId:
         value.currentWorkspaceId === undefined
@@ -143,6 +163,13 @@ function readSnapshot(stored: string | null): ShellPreferenceSnapshot {
   } catch {
     return defaultSnapshot();
   }
+}
+
+export function clampSidebarWidth(sidebarWidth: number): number {
+  return Math.min(
+    SIDEBAR_WIDTH_MAX,
+    Math.max(SIDEBAR_WIDTH_MIN, Math.round(sidebarWidth)),
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

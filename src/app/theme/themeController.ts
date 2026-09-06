@@ -255,6 +255,7 @@ function applyHf2Tokens(
     "radius.panel": "--radius-panel",
     "border.default": "--border-default",
     "border.icon": "--border-icon",
+    "border.iconDirectional": "--border-icon-directional",
     "size.icon": "--icon-size",
     "size.hit-target": "--hit-target-size",
     "size.tree-row": "--tree-row-height",
