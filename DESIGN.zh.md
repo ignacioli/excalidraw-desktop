@@ -33,11 +33,11 @@
 | 右侧 SDK 边界 | 官方 Library 与 Presentation surface | 保持 SDK-owned boundary 或占位关系。不得出现空的 app-owned right sidebar；003 不重绘、不替换，也不依赖编辑器、Library 或 Presentation 的私有 DOM。 |
 | 对话框层 | 恢复、冲突、确认、命名、偏好与应用/菜单动作 | 单一应用对话框层与单一上下文菜单；不得使用 `window.prompt` / `window.confirm`。 |
 
-**Canvas-first 三分区壳层。** 每个可达状态都使用上述 Left / Center / Right 层级。首次启动为 Hidden。紧凑 Sidebar 图标打开 Overlay，且不改变 canvas box。Pinned 使 Left shell 参与布局；在支持尺寸下，canvas 保留至少 post-Sidebar content width 的 70%（批准的 1280×760 参考值为 76.1%）。指针离开后 500 ms 自动关闭 Overlay，除非焦点、上下文菜单、对话框或拖放仍将其保持。Escape 关闭 Overlay，除非对话框或菜单已经消费 Escape。
+**Canvas-first 三分区壳层。** 每个可达状态都使用上述 Left / Center / Right 层级。首次启动为 Hidden。一个紧凑 Sidebar 按钮负责所有可见模式切换：Hidden 打开 Overlay，Overlay 固定为 Pinned，Pinned 隐藏并取消固定；进入左侧边缘 reveal zone 也可打开 Overlay，且不改变 canvas box，不显示独立 Pin/Unpin 控件。Pinned Sidebar 默认宽 360px，可在 280–480px 内调整，并按需进一步限制以确保 canvas 至少保留 post-Sidebar content width 的 70%（批准的 1280×760 参考值为 76.1%）；所选宽度持久化。指针离开后 500 ms 自动关闭 Overlay，除非焦点、上下文菜单、对话框或拖放仍将其保持。Escape 关闭 Overlay，除非对话框或菜单已经消费 Escape。
 
 ### 启动与浏览状态
 
-- **Welcome** 是空启动时的非标签文档状态，提供 **New Drawing**、**Open Workspace** 和 Recent Workspaces。Recent Workspaces 只从现有记录投影 `name` 与 `rootPath`，并按既有 `createdAt` 降序；取消选择工作区后状态不变。不可访问的 Recent Workspace 显示可理解的错误，仍保留 Welcome 与该记录。
+- **Welcome** 是空启动时的非标签文档状态，提供 **New Drawing**、**Open Workspace** 和 Recent Workspaces。Recent Workspaces 只从现有记录投影 `name` 与 `rootPath`，并按既有 `createdAt` 降序；所有记录均保留，默认区域最多显示五行，超出后内部纵向滚动。Recent 行使用与 Sidebar row 相同的语义 hover/focus 表面，不增加 last-opened time 或 drawing count。取消选择工作区后状态不变。不可访问的 Recent Workspace 显示可理解的错误，仍保留 Welcome 与该记录。
 - **Restored** 是存在有效 Current Workspace 或可重新打开文档时的正常启动壳层。干净重启不会显示恢复对话框。
 - 异常退出且存在恢复候选时，必须先显示恢复对话框。候选全部处理完成后才显示 Restored；在用户应用恢复决定前不得覆盖磁盘文件。
 - **Current Workspace** 是侧边栏树和标题行操作唯一使用的工作区。保存的 id 缺失或无效时回退到可用工作区，不创建新的工作区记录。
@@ -108,7 +108,7 @@ accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍�
 
 浅色模式使用白色与近白表面、深炭色文字、克制的冷色边框和 Excalidraw 紫色强调色。深色模式使用近黑画布周边、深灰面板、具有足够对比度的暖白文字、克制边框和对应的浅紫强调色。壳层精确数值使用仓库内已批准 HF-2 token handoff 的 canonical ID；SDK 所有的编辑器精确数值跟随锁定上游包。floating shadow 的使用是 component stacking rule，不是冻结的 semantic token。
 
-已批准的壳层几何采用 4/8/12/16/24 px 间距尺度、8 px 控件与 12 px 面板圆角、16 px 图标与 1.75 px 描边及至少 32 px 命中区域、28 px 工作区行、36 px 标签页，以及紧凑的 11/12/14/20/28 px 字号尺度。标签页与工作区行的组件级 6 px 圆角记录在 HF-2 组件契约中。
+已批准的壳层几何采用 4/8/12/16/24 px 间距尺度、8 px 控件与 12 px 面板圆角、16 px 图标与默认 1 px 描边（方向性 chevron/collapse/expand 为 1.25 px）及至少 32 px 命中区域、28 px 工作区行、36 px 标签页，以及紧凑的 11/12/14/20/28 px 字号尺度。这与锁定的公开 `@excalidraw/excalidraw` 0.18.1 图标集在 16 px 下的有效视觉重量一致。标签页与工作区行的组件级 6 px 圆角记录在 HF-2 组件契约中。
 
 ## 组件与交互规则
 
@@ -120,7 +120,7 @@ accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍�
 - 模态对话框打开时焦点进入并被约束在其中；关闭后焦点返回触发控件。同一时刻只有一层对话框；不得使用 `window.prompt` 或 `window.confirm`。
 - 动效只服务于状态理解且保持短暂；必须尊重 reduced motion，避免画布周围发生动画布局跳动。
 - 阴影只表达浮动控件、菜单和对话框的层级；常驻面板使用边框或明度差分隔。
-- shell icon control 使用冻结的 16×16 icon 和 32×32 hit target。Current Workspace header 将 New Drawing、New Folder、Collapse-or-Expand-All 与 Refresh 保持为同一名称行上的紧凑控件。Row action 仅在 pointer 或 keyboard focus 存在时使用 vertical ellipsis。
+- shell icon control 使用冻结的 16×16 icon 和 32×32 hit target。紧凑图标控件默认无填充、无边框，前景色为 secondary（Light `#5C5C5C`、Dark `#CED4DA`），仅在交互时使用语义 hover/pressed 表面与更高对比度。Current Workspace header 将 New Drawing、New Folder、Collapse-or-Expand-All 与 Refresh 保持为同一名称行上的紧凑控件。Row action 仅在 pointer 或 keyboard focus 存在时使用无边框 vertical ellipsis；Tab close 在预留槽位内视觉整合，不显示为单独的方框按钮。
 - [`docs/design/desktop-shell/hf-2/components.md`](docs/design/desktop-shell/hf-2/components.md) 是 Icon Button/Back、Tab、Workspace Row 与 Welcome Action variant 的规范来源：其中的 2px theme focus ring、disabled-to-default state priority、可见的 non-colour cue、row-action tooltip/accessibility rule，以及 primary/secondary Welcome Action emphasis 与这些更广泛的 interaction rule 同时适用。
 
 ## 后续主题扩展
@@ -143,6 +143,6 @@ accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍�
 - 键盘导航、焦点可见性、accessible name、对比度、非颜色唯一状态与 reduced motion；
 - macOS 与受支持 Linux 环境中的系统原生装饰窗口行为。
 
-每个 visual gate 都记录冻结 manifest hash、仅 SDK 的 mask declaration、shell geometry/token assertion、legacy count、browser preflight 与 macOS package evidence。独立 visual reviewer 必须逐个检查 gate；其 runtime identity 和 verdict 是证据，而不是产品负责人决定的替代品。产品负责人已于 2026-09-03 批准该已对账 contract；该批准不豁免剩余 Phase 1 evidence，也不提前授权后续 visual implementation。
+每个 visual gate 都记录冻结 manifest hash、仅 SDK 的 mask declaration、shell geometry/token assertion、legacy count、browser preflight 与 macOS package evidence。独立 visual reviewer 必须逐个检查 gate；其 runtime identity 和 verdict 是证据，而不是产品负责人决定的替代品。产品负责人已于 2026-09-03 批准该已对账 contract，并于 2026-09-06 批准 Penpot revision 59 修订；这些批准不替代屏幕级实现证据或后续视觉评审。
 
-Penpot SaaS 是当前桌面壳层重设计已批准的高保真评审载体，通过 Penpot 官方托管的 Remote MCP 访问。HF-2 已于 2026-09-01 批准，并冻结在 [`docs/design/desktop-shell/hf-2/`](docs/design/desktop-shell/hf-2/README.md)，其中包含可编辑归档、manifest、精确 Token、组件契约、六张屏幕基准图和十个壳层图标。已完成的 OpenDesign HTML 产物仅作为低保真探索与交互证据，不是高保真事实来源；外部设计工作区不得成为并行事实来源。
+Penpot SaaS 是当前桌面壳层重设计已批准的高保真评审载体，通过 Penpot 官方托管的 Remote MCP 访问。HF-2 revision 59 已于 2026-09-06 批准，并冻结在 [`docs/design/desktop-shell/hf-2/`](docs/design/desktop-shell/hf-2/README.md)，其中包含可编辑归档、manifest、精确 Token、组件契约、六张屏幕基准图和十个壳层图标。已完成的 OpenDesign HTML 产物仅作为低保真探索与交互证据，不是高保真事实来源；外部设计工作区不得成为并行事实来源。
