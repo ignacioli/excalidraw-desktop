@@ -106,6 +106,14 @@ Validation must be proportional to risk and should eventually include, as applic
 - Playwright CLI flows for browser-visible UI behavior.
 - Manual macOS/Tauri checks for windows, menus, dialogs, permissions, filesystem behavior, Gatekeeper user override, and packaging that browser tests cannot prove. A recorded target-OS VM or physical machine is acceptable evidence; never claim unexecuted physical-device coverage.
 
+### UI debugging and visual-evidence efficiency
+
+- Validate app-owned shell UI through source inspection, focused unit/integration tests, semantic DOM/accessibility locators, and deterministic Playwright fixtures before using screenshots. Prefer roles, names, and labels; add `data-testid` only for stable app-owned gaps, and never depend on private Excalidraw SDK DOM or test IDs.
+- Use the viewport, theme, fixture, font state, and tolerances defined by the active feature contract. Do not replace them with a generic viewport or ad-hoc desktop state.
+- Capture or inspect images only at an explicit visual/native evidence gate or when structured checks cannot explain a failure. Work one required screen or failing region at a time; do not impose an arbitrary screenshot cap when the gate requires multiple captures.
+- Treat browser rendering as preflight. Use the exact packaged Tauri build for native menus, windows, dialogs, filesystem error paths, system appearance, packaging, and other behavior that browser automation cannot prove.
+- Bind evidence to the exact product commit, package identity, and recorded environment. Keep automated results, independent visual-review verdicts, and product-owner decisions distinct; none substitutes for another.
+
 Never claim a check passed unless it actually ran successfully. If validation requires unavailable services, target operating systems, or declared VM configuration details, report the exact gap without weakening code or tests.
 
 ## Long-Running Tasks
