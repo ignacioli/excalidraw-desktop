@@ -77,3 +77,24 @@ T023b remains `FAIL / partial` for two non-substitutable gaps:
 
 Because T023b is incomplete and the tasks require `T023a -> T023b -> T024`, the
 successful T024 command set above is pre-review evidence only; T024 remains open.
+
+## 2026-09-07 exact-commit native update
+
+The implementation was committed at `f4f9943735ba7b0125186c00b31295d19a72d849`.
+The later clean product commit
+`668c6df14797ccc3625c93d5120796892a882cef` was built and launched from
+`src-tauri/target/release/bundle/macos/Excalidraw.app` for a new native pass.
+
+Both blockers listed above are now resolved as observations: the window was
+measured at exactly 1280 x 760 logical points with 2.0 backing scale, and a
+controlled read-only-directory fixture produced the real runtime message
+`The filesystem operation failed.` through `File > Save` and human-assisted
+`Command+S`, while the document remained unsaved. `Command+Option+E` and
+`File > Export Image` opened the application-owned ExportDialog, and
+System/Light/Dark Appearance routing was observed. Raw uncropped captures and
+environment metadata are stored under
+`docs/evidence/003-visual-acceptance/668c6df14797ccc3625c93d5120796892a882cef/T023b/`.
+
+T023b remains partial because the exact-commit pass did not complete fresh PNG
+and SVG outputs. T024 was not rerun after the native pass. No Phase 2 checkbox,
+independent visual verdict, or product-owner decision is changed by this update.

@@ -295,3 +295,33 @@ It was not launched for another Computer Use pass because the source remains
 uncommitted and the already-known native 1280 x 760 and Save-error conditions
 were still unavailable. T023b therefore remains open; this section is not a
 native PASS or product approval.
+
+## 668c6df exact-commit revalidation (2026-09-07)
+
+The clean product commit
+`668c6df14797ccc3625c93d5120796892a882cef` was built with
+`pnpm tauri build --bundles app`, and the exact bundle was relaunched from
+`src-tauri/target/release/bundle/macos/Excalidraw.app`. The bundle identifier is
+`excalidraw-desktop`, version `0.2.0`, and its arm64 executable SHA-256 is
+`00c6566f3d93b80633be1672035c9a24199b2fee20e18fa9d4f99c194066edba`.
+
+This revalidation resolves the two prior native blockers:
+
+- CoreGraphics measured the native window at X=54, Y=30, exactly 1280 x 760
+  logical points. The display backing scale is 2.0, so uncropped raw PNGs are
+  2560 x 1520 pixels.
+- A controlled mode-`0555` workspace directory induced
+  `The filesystem operation failed.` through both native `File > Save` and a
+  human-assisted `Command+S`; the tab remained unsaved and the directory was
+  restored to mode `0755`.
+
+Human-assisted `Command+Option+E` and native `File > Export Image` both opened
+the application-owned `Export drawing` dialog. Native System, Light, and Dark
+Appearance selections all rendered at the exact window size. Evidence is under
+`docs/evidence/003-visual-acceptance/668c6df14797ccc3625c93d5120796892a882cef/T023b/`.
+
+**Status remains PARTIAL.** The exact-commit run did not finish new PNG and SVG
+writes before the session-end handoff, and T024 was not run afterward. Older
+successful export files corroborate behavior but are not substituted for this
+exact-commit gap. This section claims neither independent visual PASS nor
+product-owner approval.

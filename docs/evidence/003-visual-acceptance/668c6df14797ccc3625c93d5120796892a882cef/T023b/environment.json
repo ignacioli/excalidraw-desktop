@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-07T19:21:36-0700",
+  "status": "PARTIAL",
+  "productCommit": "668c6df14797ccc3625c93d5120796892a882cef",
+  "implementationCommit": "f4f9943735ba7b0125186c00b31295d19a72d849",
+  "bundle": {
+    "path": "src-tauri/target/release/bundle/macos/Excalidraw.app",
+    "identifier": "excalidraw-desktop",
+    "version": "0.2.0",
+    "architecture": "arm64",
+    "executableSha256": "00c6566f3d93b80633be1672035c9a24199b2fee20e18fa9d4f99c194066edba",
+    "builtAt": "2026-09-07T01:47:51-0700"
+  },
+  "platform": {
+    "name": "macOS",
+    "version": "26.6.2",
+    "build": "25G83",
+    "mainScreenPoints": {
+      "width": 1352,
+      "height": 878
+    },
+    "backingScaleFactor": 2.0
+  },
+  "window": {
+    "cgWindowId": 2602,
+    "logicalBounds": {
+      "x": 54,
+      "y": 30,
+      "width": 1280,
+      "height": 760
+    },
+    "capturePixels": {
+      "width": 2560,
+      "height": 1520
+    }
+  },
+  "nativeObservations": {
+    "menuDiscoverable": true,
+    "saveMenuInvocation": true,
+    "saveKeyboardInvocation": "Command+S, human-assisted",
+    "saveError": "The filesystem operation failed.",
+    "documentRemainedUnsaved": true,
+    "exportMenuOpenedApplicationDialog": true,
+    "exportKeyboardInvocation": "Command+Option+E, human-assisted",
+    "exportDialogName": "Export drawing",
+    "exactCommitPngSvgWriteCompleted": false,
+    "appearanceModesObserved": [
+      "System",
+      "Light",
+      "Dark"
+    ],
+    "saveToActiveFileFalse": "corroborated by source and focused regression coverage"
+  },
+  "saveErrorFixture": {
+    "workspace": "/private/tmp/excalidraw-phase2-save-error.5nEbQv",
+    "drawing": "/private/tmp/excalidraw-phase2-save-error.5nEbQv/save-error.excalidraw",
+    "directoryModeDuringFailure": "0555",
+    "directoryModeAfterTest": "0755"
+  },
+  "captures": [
+    {
+      "path": "native-window-1280x760.png",
+      "sha256": "21c832e793a266c37521599991f5d7f4faba09b8590da0d06ffff288d19aeb0e"
+    },
+    {
+      "path": "native-save-error.png",
+      "sha256": "b181733b84da611e5bf9d85c711664a2b7c8520c8c880900b7d7e064ebc8b2f0"
+    },
+    {
+      "path": "native-export-dialog-command-option-e.png",
+      "sha256": "08539fada85397c73b51c72d14801b1fbb6009cf0df2a9b13fd5967223512b13"
+    },
+    {
+      "path": "native-appearance-dark.png",
+      "sha256": "b5db6cc8cb41a845f801ee1ebf111c1a28762a6e03fd48ca5024cc27a00e4d88"
+    },
+    {
+      "path": "native-appearance-light.png",
+      "sha256": "838ddc5216c747a26f7575505e178a545ddcdcf17d6b55e12adc932f647b3a21"
+    },
+    {
+      "path": "native-appearance-system.png",
+      "sha256": "838ddc5216c747a26f7575505e178a545ddcdcf17d6b55e12adc932f647b3a21"
+    }
+  ]
+}
