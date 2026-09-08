@@ -1,13 +1,27 @@
-use serde::Serialize;
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex, OnceLock,
+    },
+};
+
+use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{Menu, MenuBuilder, MenuEvent, MenuItem, PredefinedMenuItem, SubmenuBuilder},
-    AppHandle, Emitter, Runtime,
+    AppHandle, Emitter, Listener, Runtime,
 };
 
 /// Event delivered to the main webview when an application menu command is
 /// activated. The frontend owns the corresponding document/export/theme
 /// operation; this module only exposes the native discoverability boundary.
 pub const NATIVE_MENU_EVENT: &str = "native-menu-command";
+const NATIVE_MENU_VALIDATION_ACK_EVENT: &str = "native-menu-validation-ack";
+const NATIVE_MENU_VALIDATION_ENV: &str = "EXCALIDRAW_NATIVE_MENU_VALIDATION";
+const NATIVE_MENU_VALIDATION_LOG_PREFIX: &str = "EXCALIDRAW_NATIVE_MENU_VALIDATION ";
+static NATIVE_MENU_VALIDATION_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+static PENDING_NATIVE_MENU_VALIDATIONS: OnceLock<Mutex<HashMap<u64, NativeMenuCommand>>> =
+    OnceLock::new();
 
 pub const SAVE_MENU_ID: &str = "native-menu.save";
 pub const EXPORT_IMAGE_MENU_ID: &str = "native-menu.export-image";
@@ -27,7 +41,7 @@ const HELP_SUBMENU_ID: &str = "native-menu.help";
 #[cfg(target_os = "macos")]
 const APPLICATION_SUBMENU_ID: &str = "native-menu.application";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NativeMenuCommand {
     Save,
@@ -54,6 +68,23 @@ impl NativeMenuCommand {
 #[serde(rename_all = "camelCase")]
 pub struct NativeMenuCommandEvent {
     pub command: NativeMenuCommand,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validation_id: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeMenuValidationAck {
+    validation_id: u64,
+    command: NativeMenuCommand,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeMenuValidationObservation {
+    stage: &'static str,
+    validation_id: u64,
+    command: NativeMenuCommand,
 }
 
 /// Build the app-wide menu using Tauri's native menu APIs.
@@ -157,9 +188,113 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
         return;
     };
 
-    let payload = NativeMenuCommandEvent { command };
+    let validation_id = register_pending_validation(command);
+    if let Some(validation_id) = validation_id {
+        log_validation_observation("nativeEntry", validation_id, command);
+    }
+    let payload = NativeMenuCommandEvent {
+        command,
+        validation_id,
+    };
     if let Err(error) = app.emit_to("main", NATIVE_MENU_EVENT, payload) {
+        if let Some(validation_id) = validation_id {
+            discard_pending_validation(validation_id);
+        }
         eprintln!("failed to forward native menu command: {error}");
+    }
+}
+
+/// Install the dormant validation acknowledgement listener only when the exact
+/// packaged process was launched by the terminal native-menu harness.
+///
+/// This is an observation channel, not a second command path: the frontend can
+/// acknowledge only the validation id carried by the real native menu event.
+pub fn register_validation_listener<R: Runtime>(app: &AppHandle<R>) {
+    if !native_menu_validation_enabled() {
+        return;
+    }
+
+    app.listen_any(NATIVE_MENU_VALIDATION_ACK_EVENT, |event| {
+        let ack = match serde_json::from_str::<NativeMenuValidationAck>(event.payload()) {
+            Ok(ack) if ack.validation_id > 0 => ack,
+            Ok(_) => {
+                eprintln!("native menu validation acknowledgement used an invalid id");
+                return;
+            }
+            Err(error) => {
+                eprintln!("failed to parse native menu validation acknowledgement: {error}");
+                return;
+            }
+        };
+
+        let result = {
+            let mut pending = pending_native_menu_validations()
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            consume_pending_validation(&mut pending, ack.validation_id, ack.command)
+        };
+        match result {
+            Ok(()) => {
+                log_validation_observation("applicationRoute", ack.validation_id, ack.command)
+            }
+            Err(error) => eprintln!("rejected native menu validation acknowledgement: {error}"),
+        }
+    });
+}
+
+fn native_menu_validation_enabled() -> bool {
+    std::env::var(NATIVE_MENU_VALIDATION_ENV).as_deref() == Ok("1")
+}
+
+fn pending_native_menu_validations() -> &'static Mutex<HashMap<u64, NativeMenuCommand>> {
+    PENDING_NATIVE_MENU_VALIDATIONS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn register_pending_validation(command: NativeMenuCommand) -> Option<u64> {
+    if !native_menu_validation_enabled() {
+        return None;
+    }
+    let validation_id = NATIVE_MENU_VALIDATION_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    pending_native_menu_validations()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(validation_id, command);
+    Some(validation_id)
+}
+
+fn discard_pending_validation(validation_id: u64) {
+    pending_native_menu_validations()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .remove(&validation_id);
+}
+
+fn consume_pending_validation(
+    pending: &mut HashMap<u64, NativeMenuCommand>,
+    validation_id: u64,
+    command: NativeMenuCommand,
+) -> Result<(), String> {
+    let Some(expected) = pending.get(&validation_id).copied() else {
+        return Err(format!("unknown validation id {validation_id}"));
+    };
+    if expected != command {
+        return Err(format!(
+            "command mismatch for validation id {validation_id}: expected {expected:?}, got {command:?}"
+        ));
+    }
+    pending.remove(&validation_id);
+    Ok(())
+}
+
+fn log_validation_observation(stage: &'static str, validation_id: u64, command: NativeMenuCommand) {
+    let observation = NativeMenuValidationObservation {
+        stage,
+        validation_id,
+        command,
+    };
+    match serde_json::to_string(&observation) {
+        Ok(serialized) => eprintln!("{NATIVE_MENU_VALIDATION_LOG_PREFIX}{serialized}"),
+        Err(error) => eprintln!("failed to serialize native menu validation observation: {error}"),
     }
 }
 
@@ -190,12 +325,53 @@ mod tests {
     fn serializes_the_narrow_frontend_event_contract() {
         let payload = NativeMenuCommandEvent {
             command: NativeMenuCommand::ExportImage,
+            validation_id: None,
         };
         assert_eq!(
             serde_json::to_value(payload)
                 .unwrap_or_else(|error| panic!("serialize event: {error}")),
             serde_json::json!({ "command": "exportImage" })
         );
+    }
+
+    #[test]
+    fn serializes_validation_correlation_only_when_enabled() {
+        let payload = NativeMenuCommandEvent {
+            command: NativeMenuCommand::Save,
+            validation_id: Some(7),
+        };
+        assert_eq!(
+            serde_json::to_value(payload)
+                .unwrap_or_else(|error| panic!("serialize validation event: {error}")),
+            serde_json::json!({ "command": "save", "validationId": 7 })
+        );
+    }
+
+    #[test]
+    fn parses_frontend_validation_acknowledgement() {
+        let ack: NativeMenuValidationAck = serde_json::from_value(serde_json::json!({
+            "validationId": 9,
+            "command": "appearanceDark"
+        }))
+        .unwrap_or_else(|error| panic!("parse validation acknowledgement: {error}"));
+        assert_eq!(ack.validation_id, 9);
+        assert_eq!(ack.command, NativeMenuCommand::AppearanceDark);
+    }
+
+    #[test]
+    fn consumes_only_matching_issued_validation_acknowledgements_once() {
+        let mut pending = HashMap::from([(12, NativeMenuCommand::Save)]);
+
+        assert!(consume_pending_validation(&mut pending, 11, NativeMenuCommand::Save).is_err());
+        assert!(
+            consume_pending_validation(&mut pending, 12, NativeMenuCommand::ExportImage).is_err()
+        );
+        assert_eq!(pending.get(&12), Some(&NativeMenuCommand::Save));
+        assert_eq!(
+            consume_pending_validation(&mut pending, 12, NativeMenuCommand::Save),
+            Ok(())
+        );
+        assert!(consume_pending_validation(&mut pending, 12, NativeMenuCommand::Save).is_err());
     }
 
     #[test]

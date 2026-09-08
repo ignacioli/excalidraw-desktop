@@ -24,3 +24,9 @@ The pre-reconciliation English and Simplified-Chinese documents were semanticall
 ## Product-owner decision (T007)
 
 **APPROVED** — On 2026-09-03, the product owner reviewed T002–T006, the paired `DESIGN.md` / `DESIGN.zh.md` update, and this reconciliation record, and explicitly approved the canonical contract. This unblocks only the remaining Phase 1 setup/reconciliation tasks. Phase 2 and VSL-001 remain blocked until the Phase 1 checkpoint has all required evidence and its stated exit gate.
+
+## HF-2 revision-59 provenance refresh
+
+The T007 decision above remains the canonical DESIGN approval recorded on 2026-09-03. The product owner subsequently approved the refreshed HF-2 handoff on 2026-09-06: Penpot revision 59 (`HF-2 product-approved · icon and interaction refinement`), as recorded in [`docs/design/desktop-shell/hf-2/README.md`](../../design/desktop-shell/hf-2/README.md) and `manifest.json`.
+
+The repository-owned HF-2 assets and manifest were frozen by commit `404175840e9096effb4a286dc75ba053c31400b0` (`Freeze approved Penpot revision 59`). This entry is a provenance refresh for the approved design input; it is not a new approval request and does not reopen or alter T007's canonical DESIGN contract. T008/T009 evidence was regenerated against this revision-59 manifest and its current assets on 2026-09-08.

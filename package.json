@@ -15,6 +15,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test --config e2e/playwright.config.ts",
+    "hf2:verify": "node scripts/verify-hf2-handoff.mjs",
+    "native:macos:seal": "node scripts/native-macos-validation.mjs seal",
+    "native:macos:validate": "node scripts/native-macos-validation.mjs validate",
+    "native:macos:test": "node --test scripts/native-macos-validation.test.mjs",
     "fonts:build": "uv run --frozen scripts/build-fonts.py",
     "preview": "vite preview",
     "tauri": "tauri"

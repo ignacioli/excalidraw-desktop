@@ -137,6 +137,7 @@ pub fn run() {
             app.manage(WatcherState::new(watcher_service.clone()));
             tauri::async_runtime::block_on(watcher_service.start_existing(app.handle().clone()))?;
             app.on_menu_event(crate::native_menu::handle_menu_event);
+            crate::native_menu::register_validation_listener(app.handle());
             let menu = crate::native_menu::build_menu(app.handle())?;
             app.set_menu(menu)?;
             // rAF-driven performance workloads stall when the window is

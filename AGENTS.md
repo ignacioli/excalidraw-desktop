@@ -108,10 +108,20 @@ Validation must be proportional to risk and should eventually include, as applic
 
 ### UI debugging and visual-evidence efficiency
 
-- Validate app-owned shell UI through source inspection, focused unit/integration tests, semantic DOM/accessibility locators, and deterministic Playwright fixtures before using screenshots. Prefer roles, names, and labels; add `data-testid` only for stable app-owned gaps, and never depend on private Excalidraw SDK DOM or test IDs.
+- Native evidence does not imply visual evidence. Use this evidence precedence, in order:
+  1. shell, filesystem, package metadata, and other artifact inspection;
+  2. semantic browser automation for WebView-owned UI;
+  3. macOS Accessibility/System Events (including `osascript`) for native menus and native UI actions;
+  4. deterministic application state, logs, events, and filesystem outcomes;
+  5. existing regression tests for implementation-level delegation;
+  6. Computer Use or screenshots only for a remaining fact that is inherently visual and cannot be established structurally.
+- Route each acceptance fact to the least visual evidence source that can prove it. Validate app-owned shell UI through source inspection, focused unit/integration tests, semantic DOM/accessibility locators, and deterministic Playwright fixtures before using screenshots. Prefer roles, names, and labels; add `data-testid` only for stable app-owned gaps, and never depend on private Excalidraw SDK DOM or test IDs.
 - Use the viewport, theme, fixture, font state, and tolerances defined by the active feature contract. Do not replace them with a generic viewport or ad-hoc desktop state.
-- Capture or inspect images only at an explicit visual/native evidence gate or when structured checks cannot explain a failure. Work one required screen or failing region at a time; do not impose an arbitrary screenshot cap when the gate requires multiple captures.
-- Treat browser rendering as preflight. Use the exact packaged Tauri build for native menus, windows, dialogs, filesystem error paths, system appearance, packaging, and other behavior that browser automation cannot prove.
+- A native evidence gate is not by itself authorization for screenshot-driven exploration.
+- Screenshots must not be the primary proof for the git commit; bundle identifier; application version; package identity or hash; macOS or environment metadata; menu existence, labels, or enabled/disabled state; keyboard equivalents; command delegation; save/export filesystem outcomes; `saveToActiveFile`; direct-write or SDK-default bypasses; or error routing when it is structurally observable.
+- If repeated screenshots are needed to understand whether a native behavior occurred, stop the visual loop and add or improve a deterministic probe instead. When an existing probe is insufficient, create or extend a maintainable project-local deterministic harness before using Computer Use.
+- Capture or inspect images only for an explicit inherently-visual gate or the narrowly scoped last-mile fact that structured checks cannot establish. Work one required screen or failing region at a time; do not impose an arbitrary screenshot cap when the gate genuinely requires multiple captures.
+- Treat browser rendering as preflight. Use the exact packaged Tauri build for native menus, windows, dialogs, filesystem error paths, system appearance, packaging, and other behavior that browser automation cannot prove; record native menu inspection and invocation through Accessibility/System Events where possible.
 - Bind evidence to the exact product commit, package identity, and recorded environment. Keep automated results, independent visual-review verdicts, and product-owner decisions distinct; none substitutes for another.
 
 Never claim a check passed unless it actually ran successfully. If validation requires unavailable services, target operating systems, or declared VM configuration details, report the exact gap without weakening code or tests.

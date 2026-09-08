@@ -5,6 +5,10 @@ export type { NativeMenuCommand } from "../ipc/contracts";
 
 export type NativeMenuCommandListener = EventListener<"native-menu-command">;
 export type NativeMenuCommandHandler = (command: NativeMenuCommand) => void;
+export type NativeMenuValidationEmitter = (
+  eventName: "native-menu-validation-ack",
+  payload: { validationId: number; command: NativeMenuCommand },
+) => Promise<void>;
 
 export interface NativeMenuCommandActions {
   onSave: () => void;
@@ -25,6 +29,18 @@ function isNativeMenuCommand(value: unknown): value is NativeMenuCommand {
     typeof value === "string" &&
     nativeMenuCommands.includes(value as NativeMenuCommand)
   );
+}
+
+async function defaultNativeMenuValidationEmitter(
+  eventName: "native-menu-validation-ack",
+  payload: { validationId: number; command: NativeMenuCommand },
+): Promise<void> {
+  const { emit } = await import("@tauri-apps/api/event");
+  await emit(eventName, payload);
+}
+
+function isValidationId(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) > 0;
 }
 
 export function createNativeMenuCommandHandler({
@@ -56,12 +72,24 @@ export function createNativeMenuCommandHandler({
 export function registerNativeMenuCommand(
   handler: NativeMenuCommandHandler,
   listener: NativeMenuCommandListener = defaultEventListener,
+  emitValidationAck: NativeMenuValidationEmitter = defaultNativeMenuValidationEmitter,
 ): Promise<() => void> {
   return listener("native-menu-command", (event) => {
-    const command = (event.payload as EventPayload<"native-menu-command">)
-      .command;
+    const payload = event.payload as EventPayload<"native-menu-command">;
+    const { command, validationId } = payload;
     if (isNativeMenuCommand(command)) {
       handler(command);
+      if (isValidationId(validationId)) {
+        void emitValidationAck("native-menu-validation-ack", {
+          validationId,
+          command,
+        }).catch((error: unknown) => {
+          console.error(
+            "Failed to record native menu validation acknowledgement.",
+            error,
+          );
+        });
+      }
     }
   });
 }

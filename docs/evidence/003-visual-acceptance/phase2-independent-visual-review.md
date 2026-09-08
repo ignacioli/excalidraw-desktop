@@ -1,5 +1,7 @@
 # Phase 2 independent visual review — VSL-001 first gate
 
+> **SUPERSEDED BASELINE IDENTITY:** This 2026-09-04 blocked review used the then-current HF-2 assets and is retained only as historical failure evidence. The product owner approved Penpot revision 59 on 2026-09-06; its manifest and T008/T009 evidence now define the baseline. The hash recorded below MUST NOT be reused for current or future acceptance.
+
 **Review date:** 2026-09-04
 **Overall verdict:** **BLOCKED**
 **Assigned screen verdict:** **FAIL — VSL-001 / 03 · Workspace · Pinned · Light**

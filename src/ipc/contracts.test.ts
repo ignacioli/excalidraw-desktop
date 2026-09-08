@@ -130,6 +130,7 @@ describe("IPC v2 migration contract", () => {
         | "appearanceSystem"
         | "appearanceLight"
         | "appearanceDark";
+      validationId?: number;
     }>();
     expectTypeOf<
       IpcEvents["native-menu-command"]

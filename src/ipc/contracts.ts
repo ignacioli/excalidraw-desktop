@@ -275,6 +275,13 @@ export type NativeMenuCommand =
 
 export interface NativeMenuCommandEvent {
   command: NativeMenuCommand;
+  /**
+   * Present only when the packaged app is launched by the native macOS
+   * validation harness. It lets the harness correlate the native menu event
+   * with the already-tested frontend command router without relying on a
+   * screenshot or exposing a production IPC command.
+   */
+  validationId?: number;
 }
 
 export type EventName = keyof IpcEvents;

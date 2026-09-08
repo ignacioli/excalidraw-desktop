@@ -108,10 +108,20 @@
 
 ### UI 调试与视觉证据效率
 
-- 在使用截图前，先通过源码检查、聚焦的单元/集成测试、语义化 DOM/无障碍定位器和确定性 Playwright fixture 验证应用自有壳层 UI。优先使用 role、name 与 label；仅在应用自有元素缺少稳定语义时补充 `data-testid`，且不得依赖 Excalidraw SDK 私有 DOM 或 test ID。
+- 原生证据不等于视觉证据。按以下顺序选择证据来源：
+  1. shell、文件系统、安装包元数据及其他构件检查；
+  2. 面向 WebView 自有 UI 的语义化浏览器自动化；
+  3. 面向原生菜单和原生 UI 操作的 macOS Accessibility/System Events（包括 `osascript`）；
+  4. 确定性的应用状态、日志、事件与文件系统结果；
+  5. 证明实现层委托关系的现有回归测试；
+  6. 只有在剩余事实本质上是视觉事实且无法通过结构化方式建立时，才使用 Computer Use 或截图。
+- 将每个验收事实路由到能够证明它的最低视觉证据来源。在使用截图前，先通过源码检查、聚焦的单元/集成测试、语义化 DOM/无障碍定位器和确定性 Playwright fixture 验证应用自有壳层 UI。优先使用 role、name 与 label；仅在应用自有元素缺少稳定语义时补充 `data-testid`，且不得依赖 Excalidraw SDK 私有 DOM 或 test ID。
 - 使用当前 feature contract 规定的 viewport、主题、fixture、字体状态与 tolerance；不得用通用 viewport 或临时桌面状态替换。
-- 仅在明确的视觉/原生证据门禁，或结构化检查无法解释失败时捕获或查看图像。一次处理一张必需屏幕或一个失败区域；当门禁要求多张截图时，不设置任意数量上限。
-- 浏览器渲染只作为 preflight。原生菜单、窗口、对话框、文件系统错误路径、系统外观、打包及浏览器无法证明的行为，必须使用精确的 Tauri 安装包验证。
+- 原生证据门禁本身并不授权截图驱动的探索（A native evidence gate is not by itself authorization for screenshot-driven exploration）。
+- 截图不得作为以下事实的主要证明：git commit；bundle identifier；应用版本；安装包身份或 hash；macOS 或环境元数据；菜单存在性、标签或启用/禁用状态；键盘等价键；命令委托；保存/导出的文件系统结果；`saveToActiveFile`；直接写入或 SDK 默认路径绕过；以及能够通过结构观察的错误路由。
+- 如果需要反复截图才能判断原生行为是否发生，停止视觉循环，改为新增或改进确定性 probe。现有 probe 不足时，必须先创建或扩展可维护的项目本地确定性 harness，再考虑使用 Computer Use。
+- 仅为明确的本质视觉门禁，或结构化检查无法建立且范围严格限定的最后一公里事实，才捕获或查看图像。一次处理一张必需屏幕或一个失败区域；当门禁确实要求多张截图时，不设置任意数量上限。
+- 浏览器渲染只作为 preflight。原生菜单、窗口、对话框、文件系统错误路径、系统外观、打包及浏览器无法证明的行为，必须使用精确的 Tauri 安装包验证；在可能时通过 Accessibility/System Events 记录原生菜单检查与调用。
 - 证据必须绑定精确产品 commit、安装包身份与已记录环境。自动化结果、独立视觉 reviewer verdict 与产品负责人决定相互独立，不能彼此替代。
 
 除非检查确实成功跑过，否则不得声称它通过。若验证需要不可用的服务、目标操作系统，或声明 VM 配置细节，报告确切缺口，而不削弱代码或测试。
