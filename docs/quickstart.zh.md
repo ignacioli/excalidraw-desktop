@@ -120,6 +120,25 @@ APP_E2E=1 pnpm e2e           # Playwright 桌面 E2E（测试专用构建，暴�
 
 第 3 步的系统着色标题栏与窗口管理是物理 macOS 证据。静态读取 `tauri.conf.json` 只能核对标题字符串，不能代替目视标题栏。
 
+最终安装包的原生入口 collection 必须同时提供 sealed manifest 与 immutable binding（不可变绑定），且输出目录必须尚不存在：
+
+```bash
+pnpm native:macos:validate -- \
+  --manifest <sealed-package-manifest.json> \
+  --collection-dir <new-native-entrypoint-collection> \
+  --binding <evidence-binding.json>
+```
+
+adapter 写入 collector 自有的 `environment.json`、`route-acknowledgements.json`、`filesystem-outcomes.json`、`native-report.json` 与 `collector-report.json`，绝不写 reviewer 或 product owner 状态。只有 VSL-001 或 FINAL-003 所需角色各自封存 artifact 后，才能发布完整 gate：
+
+```bash
+pnpm evidence:publish -- \
+  --source <sealed-gate-dir> \
+  --destination docs/evidence/003-visual-acceptance/<commit>/<gate-id>
+```
+
+目标必须是 003 evidence root 内的新目录。发布器验证 digest 与角色边界，逐字节复制全部来源文件，再次计算来源/目标 hash，并在复制树旁写 `<gate-id>.publication.json`。退出码固定为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
+
 ### 多工作区与资产去重
 
 1. 挂载两个工作区 → 在同一连续树中并列展示、独立移除（不删磁盘文件）。

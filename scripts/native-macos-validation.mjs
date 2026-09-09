@@ -158,6 +158,178 @@ export function buildReport({
   };
 }
 
+function nativeCollectionDigest(artifacts) {
+  const canonical = [...artifacts]
+    .sort((left, right) => left.path.localeCompare(right.path))
+    .map((artifact) => `${artifact.path}\0${artifact.sha256}`)
+    .join("\n");
+  return crypto.createHash("sha256").update(canonical).digest("hex");
+}
+
+function requireNativeAdapterBinding(value) {
+  if (!value || typeof value !== "object") {
+    throw new NativeValidationBlockedError(
+      "native evidence binding must be an object",
+    );
+  }
+  for (const [key, pattern] of [
+    ["productCommit", /^[0-9a-f]{40}$/u],
+    ["hf2ManifestSha256", /^[0-9a-f]{64}$/u],
+    ["fixtureDigest", /^[0-9a-f]{64}$/u],
+    ["packageArtifactSha256", /^[0-9a-f]{64}$/u],
+  ]) {
+    if (!pattern.test(value[key] ?? "")) {
+      throw new NativeValidationBlockedError(
+        `native evidence binding.${key} is invalid`,
+      );
+    }
+  }
+  if (typeof value.harnessVersion !== "string" || value.harnessVersion === "") {
+    throw new NativeValidationBlockedError(
+      "native evidence binding.harnessVersion is invalid",
+    );
+  }
+  return value;
+}
+
+export function adaptNativeValidationReport(report, bindingValue) {
+  const binding = requireNativeAdapterBinding(bindingValue);
+  if (!report || typeof report !== "object" || !Array.isArray(report.checks)) {
+    throw new NativeValidationBlockedError(
+      "native validation report is malformed",
+    );
+  }
+  const actions = report.checks
+    .filter((check) => /^(?:save|export|appearance)-/u.test(check.id))
+    .map((check) => ({
+      checkId: check.id,
+      command: check.command,
+      validationId: check.validationId,
+      result: check.status,
+    }));
+  const filesystemChecks = report.checks
+    .filter((check) => /(?:filesystem|outcome|partial-target)/u.test(check.id))
+    .map((check) => ({ checkId: check.id, result: check.status }));
+  const environment = {
+    schemaVersion: 1,
+    collectionId: "native-entrypoints",
+    gateId: "T023b",
+    route: "macos-accessibility",
+    binding,
+    os: report.environment?.productVersion ?? "unknown macOS",
+    browserOrAppBuild:
+      report.manifest?.appPath ?? report.manifestPath ?? "unknown package",
+    fixture: "T023b-disposable-profile",
+    collector: {
+      tool: "native-macos-validation",
+      version: "2",
+      runIdentity: `${binding.productCommit}:T023b`,
+    },
+  };
+  return {
+    environment,
+    routeAcknowledgements: {
+      schemaVersion: 1,
+      collectionId: "native-entrypoints",
+      gateId: "T023b",
+      binding,
+      actions,
+    },
+    filesystemOutcomes: {
+      schemaVersion: 1,
+      collectionId: "native-entrypoints",
+      gateId: "T023b",
+      binding,
+      checks: filesystemChecks,
+      result:
+        filesystemChecks.length === 0
+          ? "BLOCKED"
+          : aggregateStatus(filesystemChecks),
+    },
+  };
+}
+
+export async function writeNativeValidationCollection(
+  collectionDir,
+  report,
+  bindingValue,
+) {
+  const records = adaptNativeValidationReport(report, bindingValue);
+  try {
+    await fsp.mkdir(collectionDir);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      await fsp.mkdir(path.dirname(collectionDir), { recursive: true });
+      await fsp.mkdir(collectionDir);
+    } else if (error?.code === "EEXIST") {
+      throw new NativeValidationBlockedError(
+        "native collection destination already exists",
+        error,
+      );
+    } else {
+      throw error;
+    }
+  }
+  const payloads = {
+    "environment.json": records.environment,
+    "route-acknowledgements.json": records.routeAcknowledgements,
+    "filesystem-outcomes.json": records.filesystemOutcomes,
+    "native-report.json": report,
+  };
+  for (const [name, value] of Object.entries(payloads)) {
+    await fsp.writeFile(
+      path.join(collectionDir, name),
+      `${JSON.stringify(value, null, 2)}\n`,
+      { encoding: "utf8", flag: "wx" },
+    );
+  }
+  const artifactDigests = [];
+  for (const name of Object.keys(payloads)) {
+    artifactDigests.push({
+      path: name,
+      sha256: await sha256File(path.join(collectionDir, name)),
+    });
+  }
+  const result = aggregateStatus([
+    report.status,
+    records.filesystemOutcomes.result,
+  ]);
+  const collectorReport = {
+    schemaVersion: 1,
+    collectionId: "native-entrypoints",
+    gateId: "T023b",
+    route: "macos-accessibility",
+    binding: records.environment.binding,
+    collector: records.environment.collector,
+    environmentPath: "environment.json",
+    claims: [
+      {
+        claimId: "native-menu-entrypoints",
+        factClass: "native-menu-action",
+        primaryRoute: "macos-accessibility",
+        result: report.status,
+        artifactRefs: ["native-report.json", "route-acknowledgements.json"],
+      },
+      {
+        claimId: "native-filesystem-outcomes",
+        factClass: "application-route-outcome",
+        primaryRoute: "macos-accessibility",
+        result: records.filesystemOutcomes.result,
+        artifactRefs: ["filesystem-outcomes.json"],
+      },
+    ],
+    artifactDigests,
+    collectionDigest: nativeCollectionDigest(artifactDigests),
+    result,
+  };
+  await fsp.writeFile(
+    path.join(collectionDir, "collector-report.json"),
+    `${JSON.stringify(collectorReport, null, 2)}\n`,
+    { encoding: "utf8", flag: "wx" },
+  );
+  return collectorReport;
+}
+
 export function decodeAXModifiers(value) {
   if (value === "" || value === null || value === undefined) return [];
   const number = Number(value);
@@ -1044,6 +1216,8 @@ export async function validateProductionBundle({
   repoRoot = REPO_ROOT,
   manifestPath,
   reportPath,
+  collectionDir,
+  bindingPath,
   timeoutMs = 5000,
 } = {}) {
   const startedAt = new Date().toISOString();
@@ -1054,6 +1228,21 @@ export async function validateProductionBundle({
     defaultManifestPath(repoRoot, gitState(repoRoot).commit ?? "unknown");
   const finish = async (report) => {
     if (reportPath) await writeJson(reportPath, report);
+    if (collectionDir || bindingPath) {
+      if (!collectionDir || !bindingPath) {
+        throw new NativeValidationBlockedError(
+          "--collection-dir and --binding must be supplied together",
+        );
+      }
+      const evidenceBinding = JSON.parse(
+        await fsp.readFile(bindingPath, "utf8"),
+      );
+      await writeNativeValidationCollection(
+        collectionDir,
+        report,
+        evidenceBinding,
+      );
+    }
     return report;
   };
   let manifest;
@@ -1241,7 +1430,7 @@ export async function validateProductionBundle({
 
 function printUsage() {
   console.log(
-    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--report PATH]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots.`,
+    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. Adapter outputs are collector-owned and never contain reviewer or owner decisions.`,
   );
 }
 
@@ -1266,6 +1455,8 @@ async function main() {
       repoRoot,
       manifestPath: optionValue(args, "--manifest"),
       reportPath: optionValue(args, "--report"),
+      collectionDir: optionValue(args, "--collection-dir"),
+      bindingPath: optionValue(args, "--binding"),
     });
   } else {
     printUsage();

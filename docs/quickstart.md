@@ -120,6 +120,25 @@ The browser can cover dialogs, the tree, and the keyboard. Process-level proof o
 
 Step 3's system-tinted title bar and window management are physical macOS evidence. Statically reading `tauri.conf.json` can only check the title string; it does not replace looking at the title bar.
 
+For final-package native entrypoint collection, provide the sealed manifest and an immutable binding together. The output path must not exist:
+
+```bash
+pnpm native:macos:validate -- \
+  --manifest <sealed-package-manifest.json> \
+  --collection-dir <new-native-entrypoint-collection> \
+  --binding <evidence-binding.json>
+```
+
+The adapter writes collector-owned `environment.json`, `route-acknowledgements.json`, `filesystem-outcomes.json`, `native-report.json`, and `collector-report.json`. It never writes reviewer or product-owner state. Publish a completed VSL-001 or FINAL-003 gate only after all required roles have sealed their own artifacts:
+
+```bash
+pnpm evidence:publish -- \
+  --source <sealed-gate-dir> \
+  --destination docs/evidence/003-visual-acceptance/<commit>/<gate-id>
+```
+
+The destination must be new and remain inside the 003 evidence root. Publication validates digests and role boundaries, copies every source byte unchanged, re-hashes source and destination, and writes `<gate-id>.publication.json` adjacent to the copied tree. Exit codes are `0=PASS`, `1=FAIL`, `2=BLOCKED`, and `64=invalid invocation`.
+
 ### Multiple workspaces and asset deduplication
 
 1. Mount two workspaces → they appear side by side in the same continuous tree and can be removed independently (disk files are not deleted).

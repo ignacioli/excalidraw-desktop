@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
@@ -5,10 +6,29 @@ export const GATE_IDS = [
   "VSL-001",
   "HF2-01",
   "HF2-02",
+  "HF2-03",
   "HF2-04",
   "HF2-05",
   "HF2-06",
   "FINAL-003",
+  "T023b",
+  "T024",
+] as const;
+
+export const EVIDENCE_ROUTES = [
+  "shell-filesystem",
+  "semantic-browser",
+  "macos-accessibility",
+  "deterministic-runtime",
+  "fixed-capture-review",
+] as const;
+
+export const FACT_CLASSES = [
+  "repository-package-identity",
+  "webview-semantic",
+  "native-menu-action",
+  "application-route-outcome",
+  "visual-fidelity",
 ] as const;
 
 export const LEGACY_CHECK_IDS = [
@@ -31,19 +51,20 @@ const SDK_MASK_SURFACES = [
   "library",
   "presentation",
 ] as const;
-
 const THEMES = ["light", "dark"] as const;
 const SIDEBAR_STATES = ["hidden", "overlay", "pinned"] as const;
-const SESSION_STATES = ["empty", "restored"] as const;
+const SESSION_STATES = ["empty", "restored", "workspace", "recovery"] as const;
 const VERDICTS = ["PASS", "FAIL", "BLOCKED"] as const;
-const OWNER_DECISIONS = ["APPROVED", "PENDING", "REJECTED"] as const;
-const FINDING_SEVERITIES = [
-  "INFO",
-  "LOW",
-  "MEDIUM",
-  "HIGH",
-  "CRITICAL",
-] as const;
+const PROHIBITED_COLLECTOR_KEYS = new Set([
+  "reviewer",
+  "reviewerIdentity",
+  "reviewerVerdict",
+  "reviewedCollections",
+  "productOwnerDecision",
+  "productOwnerDecisionPath",
+  "ownerDecision",
+  "ownerRequirement",
+]);
 
 export const HF2_FONT_DEVIATION_ID = "HF2-FONT-001";
 export const PLATFORM_UI_FONT_STACK =
@@ -53,7 +74,8 @@ export const PLATFORM_MONO_FONT_STACK =
 
 export type GateId = (typeof GATE_IDS)[number];
 export type Verdict = (typeof VERDICTS)[number];
-export type ProductOwnerDecision = (typeof OWNER_DECISIONS)[number];
+export type EvidenceRoute = (typeof EVIDENCE_ROUTES)[number];
+export type FactClass = (typeof FACT_CLASSES)[number];
 export type SdkMaskSurface = (typeof SDK_MASK_SURFACES)[number];
 
 export class EvidenceValidationError extends Error {
@@ -63,26 +85,18 @@ export class EvidenceValidationError extends Error {
   }
 }
 
-export interface RuntimeIdentity {
-  readonly agent: string;
-  readonly runIdentity: string;
-  readonly configuredModel: string;
-  readonly configuredReasoningEffort: string;
+export interface EvidenceBinding {
+  readonly productCommit: string;
+  readonly hf2ManifestSha256: string;
+  readonly fixtureDigest: string;
+  readonly harnessVersion: string;
+  readonly packageArtifactSha256?: string;
 }
 
-export interface EnvironmentEvidence {
-  readonly commit: string;
-  readonly os: string;
-  readonly viewport: { readonly width: number; readonly height: number };
-  readonly browserOrAppBuild: string;
-  readonly fontReady: boolean;
-  readonly fontPolicy: PlatformFontEvidence;
-  readonly theme: (typeof THEMES)[number];
-  readonly sidebar: (typeof SIDEBAR_STATES)[number];
-  readonly session: (typeof SESSION_STATES)[number];
-  readonly fixture: string;
-  readonly implementation: RuntimeIdentity;
-  readonly reviewer: RuntimeIdentity;
+export interface CollectorIdentity {
+  readonly tool: string;
+  readonly version: string;
+  readonly runIdentity: string;
 }
 
 export interface PlatformFontEvidence {
@@ -96,6 +110,24 @@ export interface PlatformFontEvidence {
   readonly unicodeFallbackVerified: true;
 }
 
+export interface EnvironmentEvidence {
+  readonly schemaVersion: 1;
+  readonly collectionId: string;
+  readonly gateId: GateId;
+  readonly route: EvidenceRoute;
+  readonly binding: EvidenceBinding;
+  readonly os: string;
+  readonly viewport?: { readonly width: number; readonly height: number };
+  readonly browserOrAppBuild: string;
+  readonly fontReady?: true;
+  readonly fontPolicy?: PlatformFontEvidence;
+  readonly theme?: (typeof THEMES)[number];
+  readonly sidebar?: (typeof SIDEBAR_STATES)[number];
+  readonly session?: (typeof SESSION_STATES)[number];
+  readonly fixture: string;
+  readonly collector: CollectorIdentity;
+}
+
 export interface MaskDeclaration {
   readonly maskId: string;
   readonly selectorOrRect: string;
@@ -106,28 +138,11 @@ export interface MaskDeclaration {
 }
 
 export interface MaskEvidence {
+  readonly schemaVersion: 1;
+  readonly collectionId: string;
   readonly gateId: GateId;
+  readonly binding: EvidenceBinding;
   readonly masks: readonly MaskDeclaration[];
-}
-
-export interface VisualReport {
-  readonly gateId: GateId;
-  readonly commit: string;
-  readonly baseline: { readonly path: string; readonly sha256: string };
-  readonly actualPath: string;
-  readonly environment: EnvironmentEvidence;
-  readonly maskDeclarations: readonly MaskDeclaration[];
-  readonly legacyCounts: Readonly<
-    Record<(typeof LEGACY_CHECK_IDS)[number], number>
-  >;
-  readonly geometryAssertions: readonly AssertionResult[];
-  readonly tokenAssertions: readonly AssertionResult[];
-  readonly rasterSummary: RasterSummary;
-  readonly findings: readonly Finding[];
-  readonly reviewer: RuntimeIdentity;
-  readonly reviewerVerdict: Verdict;
-  readonly productOwnerDecision: ProductOwnerDecision;
-  readonly productOwnerDecisionPath: string;
 }
 
 export interface AssertionResult {
@@ -138,16 +153,32 @@ export interface AssertionResult {
   readonly result: "PASS" | "FAIL";
 }
 
-export interface RasterSummary {
-  readonly scope: "component-crops-only";
-  readonly maxDiffPixelRatio: number;
-  readonly threshold: number;
-  readonly auxiliary: true;
+export interface EvidenceClaim {
+  readonly claimId: string;
+  readonly factClass: FactClass;
+  readonly primaryRoute: EvidenceRoute;
+  readonly result: Verdict;
+  readonly artifactRefs: readonly string[];
 }
 
-export interface Finding {
-  readonly severity: (typeof FINDING_SEVERITIES)[number];
-  readonly description: string;
+export interface ArtifactDigest {
+  readonly path: string;
+  readonly sha256: string;
+}
+
+export interface CollectorReport {
+  readonly schemaVersion: 1;
+  readonly collectionId: string;
+  readonly gateId: GateId;
+  readonly route: EvidenceRoute;
+  readonly binding: EvidenceBinding;
+  readonly collector: CollectorIdentity;
+  readonly environmentPath: string;
+  readonly maskPath?: string;
+  readonly claims: readonly EvidenceClaim[];
+  readonly artifactDigests: readonly ArtifactDigest[];
+  readonly collectionDigest: string;
+  readonly result: Verdict;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -156,43 +187,20 @@ function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function requireRecord(value: unknown, label: string): UnknownRecord {
-  if (!isRecord(value)) {
+function record(value: unknown, label: string): UnknownRecord {
+  if (!isRecord(value))
     throw new EvidenceValidationError(`${label} must be an object`);
-  }
   return value;
 }
 
-function requireString(value: unknown, label: string): string {
+function string(value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim() === "") {
     throw new EvidenceValidationError(`${label} must be a non-empty string`);
   }
   return value;
 }
 
-function requireBoolean(value: unknown, label: string): boolean {
-  if (typeof value !== "boolean") {
-    throw new EvidenceValidationError(`${label} must be a boolean`);
-  }
-  return value;
-}
-
-function requireFiniteNumber(value: unknown, label: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new EvidenceValidationError(`${label} must be a finite number`);
-  }
-  return value;
-}
-
-function requirePositiveInteger(value: unknown, label: string): number {
-  const number = requireFiniteNumber(value, label);
-  if (!Number.isInteger(number) || number <= 0) {
-    throw new EvidenceValidationError(`${label} must be a positive integer`);
-  }
-  return number;
-}
-
-function requireEnum<T extends readonly string[]>(
+function enumeration<T extends readonly string[]>(
   value: unknown,
   choices: T,
   label: string,
@@ -205,92 +213,112 @@ function requireEnum<T extends readonly string[]>(
   return value as T[number];
 }
 
-function requireArray(value: unknown, label: string): readonly unknown[] {
-  if (!Array.isArray(value)) {
+function array(value: unknown, label: string): readonly unknown[] {
+  if (!Array.isArray(value))
     throw new EvidenceValidationError(`${label} must be an array`);
+  return value;
+}
+
+function sha(value: unknown, label: string, length: 40 | 64): string {
+  const candidate = string(value, label);
+  if (!new RegExp(`^[0-9a-f]{${length}}$`, "u").test(candidate)) {
+    throw new EvidenceValidationError(
+      `${label} must be a lowercase ${length === 40 ? "SHA-1" : "SHA-256"}`,
+    );
+  }
+  return candidate;
+}
+
+function positiveInteger(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new EvidenceValidationError(`${label} must be a positive integer`);
   }
   return value;
 }
 
-function requireCommit(value: unknown, label: string): string {
-  const commit = requireString(value, label);
-  if (!/^[0-9a-f]{40}$/u.test(commit)) {
+function relativePath(value: unknown, label: string): string {
+  const candidate = string(value, label);
+  if (candidate.startsWith("/") || candidate.split(/[\\/]/u).includes("..")) {
     throw new EvidenceValidationError(
-      `${label} must be a 40-character lowercase SHA-1`,
+      `${label} must stay inside the collection`,
     );
   }
-  return commit;
+  return candidate;
 }
 
-function requireSha256(value: unknown, label: string): string {
-  const sha256 = requireString(value, label);
-  if (!/^[0-9a-f]{64}$/u.test(sha256)) {
-    throw new EvidenceValidationError(
-      `${label} must be a 64-character lowercase SHA-256`,
+function rejectForeignRoleFields(value: unknown, label: string): void {
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) =>
+      rejectForeignRoleFields(entry, `${label}[${index}]`),
     );
+  } else if (isRecord(value)) {
+    for (const [key, entry] of Object.entries(value)) {
+      if (PROHIBITED_COLLECTOR_KEYS.has(key)) {
+        throw new EvidenceValidationError(
+          `${label}.${key} crosses the collector/reviewer/owner role boundary`,
+        );
+      }
+      rejectForeignRoleFields(entry, `${label}.${key}`);
+    }
   }
-  return sha256;
 }
 
-function requireRuntimeIdentity(
-  value: unknown,
-  label: string,
-): RuntimeIdentity {
-  const record = requireRecord(value, label);
+function binding(value: unknown, label: string): EvidenceBinding {
+  const item = record(value, label);
   return {
-    agent: requireString(record.agent, `${label}.agent`),
-    runIdentity: requireString(record.runIdentity, `${label}.runIdentity`),
-    configuredModel: requireString(
-      record.configuredModel,
-      `${label}.configuredModel`,
+    productCommit: sha(item.productCommit, `${label}.productCommit`, 40),
+    hf2ManifestSha256: sha(
+      item.hf2ManifestSha256,
+      `${label}.hf2ManifestSha256`,
+      64,
     ),
-    configuredReasoningEffort: requireString(
-      record.configuredReasoningEffort,
-      `${label}.configuredReasoningEffort`,
-    ),
+    fixtureDigest: sha(item.fixtureDigest, `${label}.fixtureDigest`, 64),
+    harnessVersion: string(item.harnessVersion, `${label}.harnessVersion`),
+    ...(item.packageArtifactSha256 === undefined
+      ? {}
+      : {
+          packageArtifactSha256: sha(
+            item.packageArtifactSha256,
+            `${label}.packageArtifactSha256`,
+            64,
+          ),
+        }),
   };
 }
 
-function validatePlatformFontEvidence(value: unknown): PlatformFontEvidence {
-  const record = requireRecord(value, "environment.fontPolicy");
-  if (record.deviationId !== HF2_FONT_DEVIATION_ID) {
-    throw new EvidenceValidationError(
-      `environment.fontPolicy.deviationId must be ${HF2_FONT_DEVIATION_ID}`,
-    );
-  }
-  if (record.uiStack !== PLATFORM_UI_FONT_STACK) {
-    throw new EvidenceValidationError(
-      "environment.fontPolicy.uiStack must match the approved platform UI stack",
-    );
-  }
-  if (record.monoStack !== PLATFORM_MONO_FONT_STACK) {
-    throw new EvidenceValidationError(
-      "environment.fontPolicy.monoStack must match the approved platform mono stack",
-    );
-  }
-  if (record.remoteFontRequests !== 0) {
-    throw new EvidenceValidationError(
-      "environment.fontPolicy.remoteFontRequests must be zero",
-    );
-  }
+function collector(value: unknown, label: string): CollectorIdentity {
+  const item = record(value, label);
+  return {
+    tool: string(item.tool, `${label}.tool`),
+    version: string(item.version, `${label}.version`),
+    runIdentity: string(item.runIdentity, `${label}.runIdentity`),
+  };
+}
+
+function fontPolicy(value: unknown): PlatformFontEvidence {
+  const item = record(value, "environment.fontPolicy");
   if (
-    record.englishTargetVerified !== true ||
-    record.unicodeFallbackVerified !== true
+    item.deviationId !== HF2_FONT_DEVIATION_ID ||
+    item.uiStack !== PLATFORM_UI_FONT_STACK ||
+    item.monoStack !== PLATFORM_MONO_FONT_STACK ||
+    item.remoteFontRequests !== 0 ||
+    item.englishTargetVerified !== true ||
+    item.unicodeFallbackVerified !== true
   ) {
     throw new EvidenceValidationError(
-      "environment.fontPolicy must verify English target and Unicode fallback rendering",
+      "environment.fontPolicy must match HF2-FONT-001 and prove offline fallback",
     );
   }
   return {
     deviationId: HF2_FONT_DEVIATION_ID,
     uiStack: PLATFORM_UI_FONT_STACK,
     monoStack: PLATFORM_MONO_FONT_STACK,
-    computedUiFamily: requireString(
-      record.computedUiFamily,
+    computedUiFamily: string(
+      item.computedUiFamily,
       "environment.fontPolicy.computedUiFamily",
     ),
-    computedMonoFamily: requireString(
-      record.computedMonoFamily,
+    computedMonoFamily: string(
+      item.computedMonoFamily,
       "environment.fontPolicy.computedMonoFamily",
     ),
     remoteFontRequests: 0,
@@ -302,240 +330,231 @@ function validatePlatformFontEvidence(value: unknown): PlatformFontEvidence {
 export function validateEnvironmentEvidence(
   value: unknown,
 ): EnvironmentEvidence {
-  const record = requireRecord(value, "environment");
-  const viewport = requireRecord(record.viewport, "environment.viewport");
-  const fontReady = requireBoolean(record.fontReady, "environment.fontReady");
-  if (!fontReady) {
+  rejectForeignRoleFields(value, "environment");
+  const item = record(value, "environment");
+  if (item.schemaVersion !== 1)
+    throw new EvidenceValidationError("environment.schemaVersion must be 1");
+  const route = enumeration(item.route, EVIDENCE_ROUTES, "environment.route");
+  const viewport =
+    item.viewport === undefined
+      ? undefined
+      : record(item.viewport, "environment.viewport");
+  const parsedFontPolicy =
+    item.fontPolicy === undefined ? undefined : fontPolicy(item.fontPolicy);
+  if (
+    route === "semantic-browser" &&
+    (item.fontReady !== true || !parsedFontPolicy)
+  ) {
     throw new EvidenceValidationError(
-      "environment.fontReady must confirm document.fonts.ready before capture",
+      "semantic-browser environment requires document.fonts.ready and HF2-FONT-001 evidence",
     );
   }
   return {
-    commit: requireCommit(record.commit, "environment.commit"),
-    os: requireString(record.os, "environment.os"),
-    viewport: {
-      width: requirePositiveInteger(
-        viewport.width,
-        "environment.viewport.width",
-      ),
-      height: requirePositiveInteger(
-        viewport.height,
-        "environment.viewport.height",
-      ),
-    },
-    browserOrAppBuild: requireString(
-      record.browserOrAppBuild,
+    schemaVersion: 1,
+    collectionId: string(item.collectionId, "environment.collectionId"),
+    gateId: enumeration(item.gateId, GATE_IDS, "environment.gateId"),
+    route,
+    binding: binding(item.binding, "environment.binding"),
+    os: string(item.os, "environment.os"),
+    ...(viewport === undefined
+      ? {}
+      : {
+          viewport: {
+            width: positiveInteger(
+              viewport.width,
+              "environment.viewport.width",
+            ),
+            height: positiveInteger(
+              viewport.height,
+              "environment.viewport.height",
+            ),
+          },
+        }),
+    browserOrAppBuild: string(
+      item.browserOrAppBuild,
       "environment.browserOrAppBuild",
     ),
-    fontReady,
-    fontPolicy: validatePlatformFontEvidence(record.fontPolicy),
-    theme: requireEnum(record.theme, THEMES, "environment.theme"),
-    sidebar: requireEnum(record.sidebar, SIDEBAR_STATES, "environment.sidebar"),
-    session: requireEnum(record.session, SESSION_STATES, "environment.session"),
-    fixture: requireString(record.fixture, "environment.fixture"),
-    implementation: requireRuntimeIdentity(
-      record.implementation,
-      "environment.implementation",
-    ),
-    reviewer: requireRuntimeIdentity(record.reviewer, "environment.reviewer"),
+    ...(item.fontReady === true ? { fontReady: true as const } : {}),
+    ...(parsedFontPolicy === undefined ? {} : { fontPolicy: parsedFontPolicy }),
+    ...(item.theme === undefined
+      ? {}
+      : { theme: enumeration(item.theme, THEMES, "environment.theme") }),
+    ...(item.sidebar === undefined
+      ? {}
+      : {
+          sidebar: enumeration(
+            item.sidebar,
+            SIDEBAR_STATES,
+            "environment.sidebar",
+          ),
+        }),
+    ...(item.session === undefined
+      ? {}
+      : {
+          session: enumeration(
+            item.session,
+            SESSION_STATES,
+            "environment.session",
+          ),
+        }),
+    fixture: string(item.fixture, "environment.fixture"),
+    collector: collector(item.collector, "environment.collector"),
   };
 }
 
-function validateMaskDeclaration(
-  value: unknown,
-  label: string,
-): MaskDeclaration {
-  const record = requireRecord(value, label);
-  const selectorOrRect = requireString(
-    record.selectorOrRect,
-    `${label}.selectorOrRect`,
-  );
+function maskDeclaration(value: unknown, label: string): MaskDeclaration {
+  const item = record(value, label);
+  const selectorOrRect = string(item.selectorOrRect, `${label}.selectorOrRect`);
   if (/shell|sidebar|tab|workspace|header|\bback\b/iu.test(selectorOrRect)) {
     throw new EvidenceValidationError(`${label} may not mask shell-owned UI`);
   }
-  if (record.perimeterChecked !== true || record.approved !== true) {
+  if (item.perimeterChecked !== true || item.approved !== true) {
     throw new EvidenceValidationError(
-      `${label} must have perimeterChecked and approved set to true`,
+      `${label} must be approved with its perimeter checked`,
     );
   }
   return {
-    maskId: requireString(record.maskId, `${label}.maskId`),
+    maskId: string(item.maskId, `${label}.maskId`),
     selectorOrRect,
-    surface: requireEnum(record.surface, SDK_MASK_SURFACES, `${label}.surface`),
-    reason: requireString(record.reason, `${label}.reason`),
+    surface: enumeration(item.surface, SDK_MASK_SURFACES, `${label}.surface`),
+    reason: string(item.reason, `${label}.reason`),
     perimeterChecked: true,
     approved: true,
   };
 }
 
 export function validateMaskEvidence(value: unknown): MaskEvidence {
-  const record = requireRecord(value, "mask");
+  rejectForeignRoleFields(value, "mask");
+  const item = record(value, "mask");
+  if (item.schemaVersion !== 1)
+    throw new EvidenceValidationError("mask.schemaVersion must be 1");
   return {
-    gateId: requireEnum(record.gateId, GATE_IDS, "mask.gateId"),
-    masks: requireArray(record.masks, "mask.masks").map((mask, index) =>
-      validateMaskDeclaration(mask, `mask.masks[${index}]`),
+    schemaVersion: 1,
+    collectionId: string(item.collectionId, "mask.collectionId"),
+    gateId: enumeration(item.gateId, GATE_IDS, "mask.gateId"),
+    binding: binding(item.binding, "mask.binding"),
+    masks: array(item.masks, "mask.masks").map((entry, index) =>
+      maskDeclaration(entry, `mask.masks[${index}]`),
     ),
   };
 }
 
-function validateAssertions(
-  value: unknown,
-  label: string,
-): readonly AssertionResult[] {
-  return requireArray(value, label).map((assertion, index) => {
-    const record = requireRecord(assertion, `${label}[${index}]`);
-    return {
-      name: requireString(record.name, `${label}[${index}].name`),
-      expected: requireString(record.expected, `${label}[${index}].expected`),
-      actual: requireString(record.actual, `${label}[${index}].actual`),
-      tolerance: requireString(
-        record.tolerance,
-        `${label}[${index}].tolerance`,
-      ),
-      result: requireEnum(
-        record.result,
-        ["PASS", "FAIL"] as const,
-        `${label}[${index}].result`,
-      ),
-    };
-  });
+export function collectionDigestFor(
+  artifactDigests: readonly ArtifactDigest[],
+): string {
+  const canonical = [...artifactDigests]
+    .sort((left, right) => left.path.localeCompare(right.path))
+    .map(({ path, sha256 }) => `${path}\u0000${sha256}`)
+    .join("\n");
+  return createHash("sha256").update(canonical).digest("hex");
 }
 
-function validateFindings(value: unknown): readonly Finding[] {
-  return requireArray(value, "report.findings").map((finding, index) => {
-    const record = requireRecord(finding, `report.findings[${index}]`);
-    return {
-      severity: requireEnum(
-        record.severity,
-        FINDING_SEVERITIES,
-        `report.findings[${index}].severity`,
-      ),
-      description: requireString(
-        record.description,
-        `report.findings[${index}].description`,
-      ),
-    };
-  });
-}
-
-function validateLegacyCounts(value: unknown): VisualReport["legacyCounts"] {
-  const record = requireRecord(value, "report.legacyCounts");
-  const result = {} as Record<(typeof LEGACY_CHECK_IDS)[number], number>;
-  for (const id of LEGACY_CHECK_IDS) {
-    const count = requireFiniteNumber(record[id], `report.legacyCounts.${id}`);
-    if (!Number.isInteger(count) || count < 0) {
-      throw new EvidenceValidationError(
-        `report.legacyCounts.${id} must be a non-negative integer`,
-      );
-    }
-    result[id] = count;
-  }
-  return result;
-}
-
-export function validateVisualReport(value: unknown): VisualReport {
-  const record = requireRecord(value, "report");
-  const baseline = requireRecord(record.baseline, "report.baseline");
-  const rasterSummary = requireRecord(
-    record.rasterSummary,
-    "report.rasterSummary",
+export function validateCollectorReport(value: unknown): CollectorReport {
+  rejectForeignRoleFields(value, "collectorReport");
+  const item = record(value, "collectorReport");
+  if (item.schemaVersion !== 1)
+    throw new EvidenceValidationError(
+      "collectorReport.schemaVersion must be 1",
+    );
+  const route = enumeration(
+    item.route,
+    EVIDENCE_ROUTES,
+    "collectorReport.route",
   );
-  const report: VisualReport = {
-    gateId: requireEnum(record.gateId, GATE_IDS, "report.gateId"),
-    commit: requireCommit(record.commit, "report.commit"),
-    baseline: {
-      path: requireString(baseline.path, "report.baseline.path"),
-      sha256: requireSha256(baseline.sha256, "report.baseline.sha256"),
+  const claims = array(item.claims, "collectorReport.claims").map(
+    (entry, index): EvidenceClaim => {
+      const claim = record(entry, `collectorReport.claims[${index}]`);
+      const primaryRoute = enumeration(
+        claim.primaryRoute,
+        EVIDENCE_ROUTES,
+        `collectorReport.claims[${index}].primaryRoute`,
+      );
+      if (primaryRoute !== route)
+        throw new EvidenceValidationError(
+          `collectorReport.claims[${index}] must use the collection route`,
+        );
+      return {
+        claimId: string(
+          claim.claimId,
+          `collectorReport.claims[${index}].claimId`,
+        ),
+        factClass: enumeration(
+          claim.factClass,
+          FACT_CLASSES,
+          `collectorReport.claims[${index}].factClass`,
+        ),
+        primaryRoute,
+        result: enumeration(
+          claim.result,
+          VERDICTS,
+          `collectorReport.claims[${index}].result`,
+        ),
+        artifactRefs: array(
+          claim.artifactRefs,
+          `collectorReport.claims[${index}].artifactRefs`,
+        ).map((artifact, artifactIndex) =>
+          relativePath(
+            artifact,
+            `collectorReport.claims[${index}].artifactRefs[${artifactIndex}]`,
+          ),
+        ),
+      };
     },
-    actualPath: requireString(record.actualPath, "report.actualPath"),
-    environment: validateEnvironmentEvidence(record.environment),
-    maskDeclarations: requireArray(
-      record.maskDeclarations,
-      "report.maskDeclarations",
-    ).map((mask, index) =>
-      validateMaskDeclaration(mask, `report.maskDeclarations[${index}]`),
-    ),
-    legacyCounts: validateLegacyCounts(record.legacyCounts),
-    geometryAssertions: validateAssertions(
-      record.geometryAssertions,
-      "report.geometryAssertions",
-    ),
-    tokenAssertions: validateAssertions(
-      record.tokenAssertions,
-      "report.tokenAssertions",
-    ),
-    rasterSummary: {
-      scope: requireEnum(
-        rasterSummary.scope,
-        ["component-crops-only"] as const,
-        "report.rasterSummary.scope",
+  );
+  const artifactDigests = array(
+    item.artifactDigests,
+    "collectorReport.artifactDigests",
+  ).map((entry, index): ArtifactDigest => {
+    const artifact = record(entry, `collectorReport.artifactDigests[${index}]`);
+    return {
+      path: relativePath(
+        artifact.path,
+        `collectorReport.artifactDigests[${index}].path`,
       ),
-      maxDiffPixelRatio: requireFiniteNumber(
-        rasterSummary.maxDiffPixelRatio,
-        "report.rasterSummary.maxDiffPixelRatio",
+      sha256: sha(
+        artifact.sha256,
+        `collectorReport.artifactDigests[${index}].sha256`,
+        64,
       ),
-      threshold: requireFiniteNumber(
-        rasterSummary.threshold,
-        "report.rasterSummary.threshold",
-      ),
-      auxiliary:
-        rasterSummary.auxiliary === true
-          ? true
-          : (() => {
-              throw new EvidenceValidationError(
-                "report.rasterSummary.auxiliary must be true",
-              );
-            })(),
-    },
-    findings: validateFindings(record.findings),
-    reviewer: requireRuntimeIdentity(record.reviewer, "report.reviewer"),
-    reviewerVerdict: requireEnum(
-      record.reviewerVerdict,
-      VERDICTS,
-      "report.reviewerVerdict",
+    };
+  });
+  const collectionDigest = sha(
+    item.collectionDigest,
+    "collectorReport.collectionDigest",
+    64,
+  );
+  if (collectionDigest !== collectionDigestFor(artifactDigests)) {
+    throw new EvidenceValidationError(
+      "collectorReport.collectionDigest does not match artifactDigests",
+    );
+  }
+  return {
+    schemaVersion: 1,
+    collectionId: string(item.collectionId, "collectorReport.collectionId"),
+    gateId: enumeration(item.gateId, GATE_IDS, "collectorReport.gateId"),
+    route,
+    binding: binding(item.binding, "collectorReport.binding"),
+    collector: collector(item.collector, "collectorReport.collector"),
+    environmentPath: relativePath(
+      item.environmentPath,
+      "collectorReport.environmentPath",
     ),
-    productOwnerDecision: requireEnum(
-      record.productOwnerDecision,
-      OWNER_DECISIONS,
-      "report.productOwnerDecision",
-    ),
-    productOwnerDecisionPath: requireString(
-      record.productOwnerDecisionPath,
-      "report.productOwnerDecisionPath",
-    ),
+    ...(item.maskPath === undefined
+      ? {}
+      : { maskPath: relativePath(item.maskPath, "collectorReport.maskPath") }),
+    claims,
+    artifactDigests,
+    collectionDigest,
+    result: enumeration(item.result, VERDICTS, "collectorReport.result"),
   };
-  if (!report.baseline.path.startsWith("screens/")) {
-    throw new EvidenceValidationError(
-      "report.baseline.path must be a frozen manifest screen path",
-    );
-  }
-  if (!report.productOwnerDecisionPath.endsWith("product-owner-decision.md")) {
-    throw new EvidenceValidationError(
-      "report.productOwnerDecisionPath must reference product-owner-decision.md",
-    );
-  }
-  if (
-    report.rasterSummary.maxDiffPixelRatio < 0 ||
-    report.rasterSummary.threshold !== 0.01
-  ) {
-    throw new EvidenceValidationError(
-      "report.rasterSummary must use a non-negative value and 0.01 threshold",
-    );
-  }
-  if (
-    report.productOwnerDecision === "APPROVED" &&
-    report.reviewerVerdict !== "PASS"
-  ) {
-    throw new EvidenceValidationError(
-      "owner approval requires an independent reviewer PASS",
-    );
-  }
-  return report;
 }
 
 async function writeValidatedJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+  });
 }
 
 export async function writeEnvironmentEvidence(
@@ -556,23 +575,11 @@ export async function writeMaskEvidence(
   return evidence;
 }
 
-export async function writeVisualReport(
+export async function writeCollectorReport(
   path: string,
   value: unknown,
-): Promise<VisualReport> {
-  const report = validateVisualReport(value);
-  await writeValidatedJson(path, report);
-  return report;
-}
-
-export async function writePendingProductOwnerDecision(
-  path: string,
-): Promise<void> {
-  if (!path.endsWith("product-owner-decision.md")) {
-    throw new EvidenceValidationError(
-      "product-owner decision path must end in product-owner-decision.md",
-    );
-  }
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, "# Product-owner decision\n\n**PENDING**\n", "utf8");
+): Promise<CollectorReport> {
+  const evidence = validateCollectorReport(value);
+  await writeValidatedJson(path, evidence);
+  return evidence;
 }

@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import {
   EXPECTED_MENU_ITEMS,
   EXPECTED_WINDOW_SIZE,
+  adaptNativeValidationReport,
   aggregateStatus,
   ambiguousAppProcesses,
   buildReport,
@@ -18,6 +19,7 @@ import {
   parseNativeValidationLine,
   sha256Path,
   validationPair,
+  writeNativeValidationCollection,
 } from "./native-macos-validation.mjs";
 
 describe("native macOS validation helpers", () => {
@@ -201,6 +203,67 @@ describe("native macOS validation helpers", () => {
     assert.equal(
       buildReport({ command: "seal", checks: [check] }).status,
       "BLOCKED",
+    );
+  });
+
+  it("adapts native output without crossing reviewer or owner roles", async () => {
+    const binding = {
+      productCommit: "ab".repeat(20),
+      hf2ManifestSha256: "cd".repeat(32),
+      fixtureDigest: "ef".repeat(32),
+      harnessVersion: "native-v2",
+      packageArtifactSha256: "12".repeat(32),
+    };
+    const report = buildReport({
+      command: "validate",
+      environment: { productVersion: "macOS 26.5.2" },
+      manifest: { appPath: "/tmp/Excalidraw.app" },
+      checks: [
+        makeCheck("native-menu", "menu", "PASS"),
+        makeCheck("save-menu", "save", "PASS", {
+          command: "save",
+          validationId: 7,
+        }),
+        makeCheck("save-filesystem-outcome", "saved", "PASS"),
+      ],
+    });
+    const adapted = adaptNativeValidationReport(report, binding);
+    assert.equal(adapted.environment.route, "macos-accessibility");
+    assert.equal(adapted.routeAcknowledgements.actions[0].validationId, 7);
+    assert.equal(adapted.filesystemOutcomes.result, "PASS");
+    assert.equal("reviewerVerdict" in adapted.environment, false);
+    assert.equal("productOwnerDecision" in adapted.environment, false);
+
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "excalidraw-native-adapter-"),
+    );
+    try {
+      const collection = path.join(root, "collection");
+      const collectorReport = await writeNativeValidationCollection(
+        collection,
+        report,
+        binding,
+      );
+      assert.equal(collectorReport.result, "PASS");
+      assert.equal(
+        JSON.parse(
+          await fs.readFile(path.join(collection, "environment.json"), "utf8"),
+        ).binding.packageArtifactSha256,
+        binding.packageArtifactSha256,
+      );
+      await assert.rejects(
+        writeNativeValidationCollection(collection, report, binding),
+        /already exists/u,
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects malformed native collection bindings", () => {
+    assert.throws(
+      () => adaptNativeValidationReport(buildReport({ checks: [] }), {}),
+      /binding\.productCommit/u,
     );
   });
 });

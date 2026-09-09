@@ -90,6 +90,9 @@ The manifests establish the following workflows:
 - `pnpm tauri dev`: run the Tauri development application through the package script.
 - `pnpm tauri build`: build the current Tauri bundle through the package script.
 - `VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness`: build the test-only native binary required by T090/T108; production releases MUST omit this feature.
+- `pnpm native:macos:validate -- --manifest <path> --collection-dir <new-path> --binding <binding.json>`: validate final-package native menu entrypoints and adapt the report into a new collector-owned immutable collection. `--collection-dir` and `--binding` are an atomic pair; the adapter never writes reviewer or owner artifacts.
+- `pnpm evidence:publish -- --source <sealed-gate-dir> --destination <new-evidence-dir>`: validate role boundaries and every declared digest, require an absent destination, copy the sealed gate byte-for-byte, and write an adjacent publication receipt. Exit codes are `0=PASS`, `1=FAIL`, `2=BLOCKED`, and `64=invalid invocation`.
+- `pnpm evidence:publish:test`: run destination-absence, digest, path, role-boundary, and byte-preservation tests for the publisher.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: check Rust formatting.
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`: run the Rust lint gate.
 - `cargo test --manifest-path src-tauri/Cargo.toml`: run the Rust unit and integration tests.

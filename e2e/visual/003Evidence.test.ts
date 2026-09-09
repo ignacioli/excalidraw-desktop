@@ -7,14 +7,13 @@ import {
   HF2_FONT_DEVIATION_ID,
   PLATFORM_MONO_FONT_STACK,
   PLATFORM_UI_FONT_STACK,
-  type EnvironmentEvidence,
-  type VisualReport,
+  collectionDigestFor,
+  validateCollectorReport,
+  validateEnvironmentEvidence,
   validateMaskEvidence,
-  validateVisualReport,
+  writeCollectorReport,
   writeEnvironmentEvidence,
   writeMaskEvidence,
-  writePendingProductOwnerDecision,
-  writeVisualReport,
 } from "./003Evidence";
 
 const TEST_COMMIT = "ab".repeat(20);
@@ -29,18 +28,25 @@ afterEach(async () => {
   );
 });
 
-function runtimeIdentity(agent: string) {
-  return {
-    agent,
-    runIdentity: `${agent}-run-001`,
-    configuredModel: "gpt-5.6-sol",
-    configuredReasoningEffort: "high",
-  };
-}
+const evidenceBinding = {
+  productCommit: TEST_COMMIT,
+  hf2ManifestSha256: TEST_SHA256,
+  fixtureDigest: "ef".repeat(32),
+  harnessVersion: "003-browser-v2",
+};
+const collector = {
+  tool: "playwright-003-shell",
+  version: "2",
+  runIdentity: "run-001",
+};
 
-function environment(): EnvironmentEvidence {
+function environment() {
   return {
-    commit: TEST_COMMIT,
+    schemaVersion: 1,
+    collectionId: "VSL-001-browser",
+    gateId: "VSL-001",
+    route: "semantic-browser",
+    binding: evidenceBinding,
     os: "macOS 26.5.2",
     viewport: { width: 1280, height: 760 },
     browserOrAppBuild: "browser-preflight",
@@ -49,227 +55,151 @@ function environment(): EnvironmentEvidence {
       deviationId: HF2_FONT_DEVIATION_ID,
       uiStack: PLATFORM_UI_FONT_STACK,
       monoStack: PLATFORM_MONO_FONT_STACK,
-      computedUiFamily:
-        '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      computedMonoFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      computedUiFamily: PLATFORM_UI_FONT_STACK,
+      computedMonoFamily: PLATFORM_MONO_FONT_STACK,
       remoteFontRequests: 0,
       englishTargetVerified: true,
       unicodeFallbackVerified: true,
     },
     theme: "light",
     sidebar: "pinned",
-    session: "restored",
+    session: "workspace",
     fixture: "pinned",
-    implementation: runtimeIdentity("implementation-task"),
-    reviewer: runtimeIdentity("ui-visual-acceptance-reviewer"),
-  };
+    collector,
+  } as const;
 }
 
-function report(overrides: Partial<VisualReport> = {}): VisualReport {
+function mask() {
   return {
+    schemaVersion: 1,
+    collectionId: "VSL-001-browser",
     gateId: "VSL-001",
-    commit: TEST_COMMIT,
-    baseline: {
-      path: "screens/workspace-pinned-light.png",
-      sha256: TEST_SHA256,
-    },
-    actualPath: "actual.png",
-    environment: environment(),
-    maskDeclarations: [
+    binding: evidenceBinding,
+    masks: [
       {
-        maskId: "canvas-internal",
-        selectorOrRect: "#editor-canvas .scene",
+        maskId: "sdk-canvas",
+        selectorOrRect: ".excalidraw-editor",
         surface: "canvas",
-        reason: "Official SDK-owned canvas internals",
+        reason: "official SDK-owned editor interior",
         perimeterChecked: true,
         approved: true,
       },
     ],
-    legacyCounts: {
-      globalNewDrawing: 0,
-      textSidebar: 0,
-      largePinUnpin: 0,
-      topLevelSaveExportAppearance: 0,
-      autosaveStrip: 0,
-      tabScrollbar: 0,
-      sidebarScrollbar: 0,
-      placeholderIcons: 0,
-      horizontalEllipsis: 0,
-      duplicateWorkspaceRoots: 0,
-      headerActionOverflow: 0,
-    },
-    geometryAssertions: [
-      {
-        name: "canvas share",
-        expected: "0.761",
-        actual: "0.761",
-        tolerance: "2px",
-        result: "PASS",
-      },
-    ],
-    tokenAssertions: [
-      {
-        name: "font.family.exception",
-        expected: "HF2-FONT-001",
-        actual: "HF2-FONT-001",
-        tolerance: "exact",
-        result: "PASS",
-      },
-    ],
-    rasterSummary: {
-      scope: "component-crops-only",
-      maxDiffPixelRatio: 0,
-      threshold: 0.01,
-      auxiliary: true,
-    },
-    findings: [],
-    reviewer: runtimeIdentity("ui-visual-acceptance-reviewer"),
-    reviewerVerdict: "PASS",
-    productOwnerDecision: "PENDING",
-    productOwnerDecisionPath: "product-owner-decision.md",
-    ...overrides,
-  };
+  } as const;
 }
 
-describe("003 evidence schema", () => {
-  it("writes validated environment, report, and pending owner-decision evidence", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "003-evidence-"));
-    temporaryDirectories.push(directory);
-    const environmentPath = join(directory, "environment.json");
-    const maskPath = join(directory, "mask.json");
-    const reportPath = join(directory, "report.json");
-    const decisionPath = join(directory, "product-owner-decision.md");
-
-    await writeEnvironmentEvidence(environmentPath, environment());
-    await writeMaskEvidence(maskPath, {
-      gateId: "VSL-001",
-      masks: report().maskDeclarations,
-    });
-    await writeVisualReport(reportPath, report());
-    await writePendingProductOwnerDecision(decisionPath);
-
-    expect(JSON.parse(await readFile(environmentPath, "utf8"))).toMatchObject({
-      implementation: { runIdentity: "implementation-task-run-001" },
-      reviewer: { runIdentity: "ui-visual-acceptance-reviewer-run-001" },
-    });
-    expect(JSON.parse(await readFile(reportPath, "utf8"))).toMatchObject({
-      gateId: "VSL-001",
-      reviewerVerdict: "PASS",
-      productOwnerDecision: "PENDING",
-    });
-    expect(JSON.parse(await readFile(maskPath, "utf8"))).toMatchObject({
-      gateId: "VSL-001",
-      masks: [{ surface: "canvas", perimeterChecked: true }],
-    });
-    await expect(readFile(decisionPath, "utf8")).resolves.toContain(
-      "**PENDING**",
-    );
-  });
-
-  it("rejects a broad shell mask and unallowlisted surface", () => {
-    expect(() =>
-      validateMaskEvidence({
-        gateId: "VSL-001",
-        masks: [
-          {
-            maskId: "bad",
-            selectorOrRect: ".shell .sidebar",
-            surface: "canvas",
-            reason: "hide mismatch",
-            perimeterChecked: true,
-            approved: true,
-          },
-        ],
-      }),
-    ).toThrow(EvidenceValidationError);
-    expect(() =>
-      validateMaskEvidence({
-        gateId: "VSL-001",
-        masks: [
-          {
-            maskId: "bad-surface",
-            selectorOrRect: "#unknown",
-            surface: "menu",
-            reason: "not SDK owned",
-            perimeterChecked: true,
-            approved: true,
-          },
-        ],
-      }),
-    ).toThrow(EvidenceValidationError);
-  });
-
-  it("rejects missing runtime identity, invalid owner decision, and unreviewed approval", () => {
-    const missingIdentity = report({
-      reviewer: {
-        ...runtimeIdentity("ui-visual-acceptance-reviewer"),
-        runIdentity: "",
+function report() {
+  const artifactDigests = [
+    { path: "environment.json", sha256: TEST_SHA256 },
+    { path: "mask.json", sha256: "ef".repeat(32) },
+  ];
+  return {
+    schemaVersion: 1,
+    collectionId: "VSL-001-browser",
+    gateId: "VSL-001",
+    route: "semantic-browser",
+    binding: evidenceBinding,
+    collector,
+    environmentPath: "environment.json",
+    maskPath: "mask.json",
+    claims: [
+      {
+        claimId: "shell-geometry",
+        factClass: "webview-semantic",
+        primaryRoute: "semantic-browser",
+        result: "PASS",
+        artifactRefs: ["environment.json", "mask.json"],
       },
-    });
-    expect(() => validateVisualReport(missingIdentity)).toThrow(
-      EvidenceValidationError,
-    );
+    ],
+    artifactDigests,
+    collectionDigest: collectionDigestFor(artifactDigests),
+    result: "PASS",
+  } as const;
+}
 
-    expect(() =>
-      validateVisualReport({
-        ...report(),
-        productOwnerDecision: "MAYBE" as "PENDING",
-      }),
-    ).toThrow(EvidenceValidationError);
-    expect(() =>
-      validateVisualReport({
-        ...report(),
-        baseline: { path: "", sha256: TEST_SHA256 },
-      }),
-    ).toThrow(EvidenceValidationError);
-    expect(() =>
-      validateVisualReport({
-        ...report({ reviewerVerdict: "BLOCKED" }),
-        productOwnerDecision: "APPROVED",
-      }),
-    ).toThrow(EvidenceValidationError);
-  });
-
-  it("requires the approved native-font deviation and its offline fallback evidence", () => {
-    expect(() =>
-      validateVisualReport({
-        ...report(),
-        environment: { ...environment(), fontReady: false },
-      }),
-    ).toThrow(EvidenceValidationError);
-
-    expect(() =>
-      validateVisualReport({
-        ...report(),
-        environment: {
-          ...environment(),
-          fontPolicy: {
-            ...environment().fontPolicy,
-            remoteFontRequests: 1,
-          },
-        },
-      }),
-    ).toThrow(EvidenceValidationError);
-
-    expect(() =>
-      validateVisualReport({
-        ...report(),
-        environment: {
-          ...environment(),
-          fontPolicy: {
-            ...environment().fontPolicy,
-            unicodeFallbackVerified: false,
-          },
-        },
-      }),
-    ).toThrow(EvidenceValidationError);
-  });
-
-  it("refuses to initialize an owner decision as approved", async () => {
+describe("003 collector-owned evidence schemas", () => {
+  it("accepts immutable environment, mask, and collector report records", async () => {
     const directory = await mkdtemp(join(tmpdir(), "003-evidence-"));
     temporaryDirectories.push(directory);
+    await writeEnvironmentEvidence(
+      join(directory, "environment.json"),
+      environment(),
+    );
+    await writeMaskEvidence(join(directory, "mask.json"), mask());
+    await writeCollectorReport(
+      join(directory, "collector-report.json"),
+      report(),
+    );
+    expect(
+      JSON.parse(
+        await readFile(join(directory, "collector-report.json"), "utf8"),
+      ),
+    ).toMatchObject({ route: "semantic-browser", result: "PASS" });
     await expect(
-      writePendingProductOwnerDecision(join(directory, "owner.md")),
-    ).rejects.toThrow(EvidenceValidationError);
+      writeCollectorReport(join(directory, "collector-report.json"), report()),
+    ).rejects.toMatchObject({ code: "EEXIST" });
+  });
+
+  it("rejects collector attempts to author reviewer or owner state", () => {
+    expect(() =>
+      validateCollectorReport({ ...report(), reviewerVerdict: "PASS" }),
+    ).toThrow(EvidenceValidationError);
+    expect(() =>
+      validateEnvironmentEvidence({
+        ...environment(),
+        ownerRequirement: "NOT_REQUIRED",
+      }),
+    ).toThrow(EvidenceValidationError);
+  });
+
+  it("rejects stale digests, path escape, route substitution, and broad masks", () => {
+    expect(() =>
+      validateCollectorReport({ ...report(), collectionDigest: TEST_SHA256 }),
+    ).toThrow(EvidenceValidationError);
+    expect(() =>
+      validateCollectorReport({
+        ...report(),
+        claims: [
+          { ...report().claims[0], artifactRefs: ["../owner/decision.json"] },
+        ],
+      }),
+    ).toThrow(EvidenceValidationError);
+    expect(() =>
+      validateCollectorReport({
+        ...report(),
+        claims: [
+          {
+            ...report().claims[0],
+            primaryRoute: "fixed-capture-review",
+          },
+        ],
+      }),
+    ).toThrow(EvidenceValidationError);
+    expect(() =>
+      validateMaskEvidence({
+        ...mask(),
+        masks: [{ ...mask().masks[0], selectorOrRect: ".app-shell-tabs" }],
+      }),
+    ).toThrow(EvidenceValidationError);
+  });
+
+  it("requires font readiness and offline fallback for semantic browser evidence", () => {
+    expect(() =>
+      validateEnvironmentEvidence({ ...environment(), fontReady: false }),
+    ).toThrow(EvidenceValidationError);
+    expect(() =>
+      validateEnvironmentEvidence({
+        ...environment(),
+        fontPolicy: { ...environment().fontPolicy, remoteFontRequests: 1 },
+      }),
+    ).toThrow(EvidenceValidationError);
+  });
+
+  it("produces a deterministic digest independent of artifact order", () => {
+    const digests = report().artifactDigests;
+    expect(collectionDigestFor(digests)).toBe(
+      collectionDigestFor([...digests].reverse()),
+    );
+    expect(collectionDigestFor(digests)).toMatch(/^[0-9a-f]{64}$/u);
   });
 });
