@@ -87,6 +87,10 @@ vi.mock("../documents/RecoveryStartup", () => ({
   RecoveryStartup: () => null,
 }));
 
+vi.mock("./openFileHandler", () => ({
+  registerOpenFileHandler: vi.fn(async () => () => undefined),
+}));
+
 vi.mock("./exitCheckpoint", async () => {
   const actual =
     await vi.importActual<typeof import("./exitCheckpoint")>(
@@ -670,7 +674,8 @@ describe("AppShell", () => {
       expect(separator).toHaveAttribute("aria-valuenow", "368");
       expect(
         JSON.parse(
-          globalThis.localStorage.getItem(SHELL_PREFERENCES_STORAGE_KEY) ?? "{}",
+          globalThis.localStorage.getItem(SHELL_PREFERENCES_STORAGE_KEY) ??
+            "{}",
         ).sidebarWidth,
       ).toBe(368);
     });
