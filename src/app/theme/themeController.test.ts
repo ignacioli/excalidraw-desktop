@@ -154,6 +154,31 @@ describe("ThemeController", () => {
     );
     expect(root.style.getPropertyValue("--font-size-title")).toBe("28px");
     expect(root.style.getPropertyValue("--font-weight-semibold")).toBe("600");
+    expect(root.style.getPropertyValue("--icon-button-size")).toBe("32px");
+    expect(root.style.getPropertyValue("--icon-button-focus-ring-width")).toBe(
+      "2px",
+    );
+    expect(
+      root.style.getPropertyValue("--icon-button-default-foreground"),
+    ).toBe("#5C5C5C");
+    expect(root.style.getPropertyValue("--tab-reference-width")).toBe("196px");
+    expect(root.style.getPropertyValue("--tab-component-height")).toBe("36px");
+    expect(root.style.getPropertyValue("--tab-radius")).toBe("6px");
+    expect(root.style.getPropertyValue("--workspace-row-reference-width")).toBe(
+      "360px",
+    );
+    expect(root.style.getPropertyValue("--workspace-row-radius")).toBe("6px");
+    expect(root.style.getPropertyValue("--workspace-row-height")).toBe("28px");
+    expect(root.style.getPropertyValue("--welcome-action-height")).toBe("40px");
+    expect(
+      root.style.getPropertyValue("--welcome-action-reference-width"),
+    ).toBe("220px");
+    expect(
+      root.style.getPropertyValue("--workspace-sidebar-default-width"),
+    ).toBe("360px");
+    expect(
+      root.style.getPropertyValue("--workspace-sidebar-min-canvas-share"),
+    ).toBe("0.7");
   });
 
   it.each([

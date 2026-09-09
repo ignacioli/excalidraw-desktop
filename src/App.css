@@ -169,12 +169,12 @@ body {
   display: flex;
   flex: 0 0 auto;
   align-items: stretch;
-  width: 12.25rem;
+  width: var(--tab-reference-width, 196px);
   height: var(--tab-height);
   min-width: 0;
   overflow: hidden;
-  border: var(--border-default) solid transparent;
-  border-radius: 6px 6px 0 0;
+  border: var(--tab-border-width, var(--border-default)) solid transparent;
+  border-radius: var(--tab-radius, 6px) var(--tab-radius, 6px) 0 0;
   background: transparent;
 }
 
@@ -241,21 +241,26 @@ body {
 
 .icon-button {
   display: inline-grid;
-  width: var(--hit-target-size);
-  min-width: var(--hit-target-size);
-  height: var(--hit-target-size);
-  min-height: var(--hit-target-size);
+  width: var(--icon-button-size, var(--hit-target-size));
+  min-width: var(--icon-button-size, var(--hit-target-size));
+  height: var(--icon-button-size, var(--hit-target-size));
+  min-height: var(--icon-button-size, var(--hit-target-size));
   place-items: center;
-  border-color: transparent;
+  border-color: var(--icon-button-default-border, transparent);
+  border-radius: var(--icon-button-radius, var(--radius-control));
   padding: 0;
-  color: var(--text-secondary);
-  background: transparent;
+  color: var(--icon-button-default-foreground, var(--text-secondary));
+  background: var(--icon-button-default-background, transparent);
+}
+
+.icon-button:focus-visible {
+  outline-width: var(--icon-button-focus-ring-width, 2px);
 }
 
 .icon-button img,
 .welcome-action img {
-  width: var(--icon-size);
-  height: var(--icon-size);
+  width: var(--icon-button-icon-size, var(--icon-size));
+  height: var(--icon-button-icon-size, var(--icon-size));
 }
 
 .icon-button img,
@@ -636,8 +641,8 @@ body {
 }
 
 .workspace-tree-action img {
-  width: var(--icon-size, 16px);
-  height: var(--icon-size, 16px);
+  width: var(--workspace-row-icon-size, var(--icon-size, 16px));
+  height: var(--workspace-row-icon-size, var(--icon-size, 16px));
 }
 
 .sidebar-placeholder {
@@ -652,9 +657,9 @@ body {
 
 .workspace-tree-disclosure-icon,
 .workspace-tree-leading-icon {
-  width: var(--icon-size, 16px);
-  height: var(--icon-size, 16px);
-  flex: 0 0 var(--icon-size, 16px);
+  width: var(--workspace-row-icon-size, var(--icon-size, 16px));
+  height: var(--workspace-row-icon-size, var(--icon-size, 16px));
+  flex: 0 0 var(--workspace-row-icon-size, var(--icon-size, 16px));
 }
 
 .workspace-tree-icon-slot {
@@ -989,11 +994,18 @@ body {
 
 .welcome-action {
   display: inline-flex;
-  min-width: 13.75rem;
-  min-height: 2.5rem;
+  width: min(var(--welcome-action-reference-width, 220px), 100%);
+  min-height: var(--welcome-action-height, 40px);
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
+  border-width: var(--welcome-action-border-width, var(--border-default));
+  border-radius: var(--welcome-action-radius, var(--radius-control));
+}
+
+.welcome-action img {
+  width: var(--welcome-action-icon-size, var(--icon-size));
+  height: var(--welcome-action-icon-size, var(--icon-size));
 }
 
 .welcome-error {
@@ -1089,7 +1101,7 @@ body {
 }
 
 .workspace-tree-row {
-  border-radius: 6px;
+  border-radius: var(--workspace-row-radius, 6px);
   font-size: var(--font-size-body, 14px);
   line-height: var(--line-height-row, 28px);
 }

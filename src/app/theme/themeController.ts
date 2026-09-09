@@ -270,6 +270,54 @@ function applyHf2Tokens(
       );
     }
   }
+
+  const components = hf2Tokens.components;
+  const componentVariables: Readonly<Record<string, string | number>> = {
+    "--icon-button-size": components.iconButton.size,
+    "--icon-button-icon-size": components.iconButton.iconSize,
+    "--icon-button-stroke": components.iconButton.iconStroke,
+    "--icon-button-radius": components.iconButton.radius,
+    "--icon-button-focus-ring-width": `${components.iconButton.focusRingWidth.value}${components.iconButton.focusRingWidth.unit}`,
+    "--icon-button-default-background":
+      components.iconButton.defaultBackground.value,
+    "--icon-button-default-border": components.iconButton.defaultBorder.value,
+    "--icon-button-default-foreground":
+      semanticTokens["color.text.secondary"].value,
+    "--tab-reference-width": `${components.tab.referenceWidth.value}${components.tab.referenceWidth.unit}`,
+    "--tab-component-height": components.tab.height,
+    "--tab-radius": `${components.tab.radius.value}${components.tab.radius.unit}`,
+    "--tab-border-width": components.tab.borderWidth,
+    "--workspace-row-reference-width": `${components.workspaceRow.referenceWidth.value}${components.workspaceRow.referenceWidth.unit}`,
+    "--workspace-row-height": components.workspaceRow.height,
+    "--workspace-row-radius": `${components.workspaceRow.radius.value}${components.workspaceRow.radius.unit}`,
+    "--workspace-row-icon-size": components.workspaceRow.iconSize,
+    "--welcome-action-height": `${components.welcomeAction.height.value}${components.welcomeAction.height.unit}`,
+    "--welcome-action-reference-width": `${components.welcomeAction.referenceWidth.value}${components.welcomeAction.referenceWidth.unit}`,
+    "--welcome-action-radius": components.welcomeAction.radius,
+    "--welcome-action-border-width": components.welcomeAction.borderWidth,
+    "--welcome-action-icon-size": components.welcomeAction.iconSize,
+    "--workspace-sidebar-default-width": `${components.workspaceSidebar.defaultWidth.value}${components.workspaceSidebar.defaultWidth.unit}`,
+    "--workspace-sidebar-min-width": `${components.workspaceSidebar.minimumWidth.value}${components.workspaceSidebar.minimumWidth.unit}`,
+    "--workspace-sidebar-max-width": `${components.workspaceSidebar.maximumWidth.value}${components.workspaceSidebar.maximumWidth.unit}`,
+    "--workspace-sidebar-min-canvas-share":
+      components.workspaceSidebar.pinnedMinimumCanvasShare.value,
+    "--workspace-sidebar-approved-canvas-share":
+      components.workspaceSidebar.approvedPinnedCanvasShare.value,
+  };
+  for (const [variableName, tokenValue] of Object.entries(componentVariables)) {
+    if (typeof tokenValue === "string" && tokenValue.startsWith("{")) {
+      const primitiveName = tokenValue.slice("{primitives.".length, -1);
+      const primitive = primitives[primitiveName as keyof typeof primitives];
+      if (primitive !== undefined && "value" in primitive) {
+        root.style.setProperty(
+          variableName,
+          `${primitive.value}${"unit" in primitive ? primitive.unit : ""}`,
+        );
+      }
+    } else {
+      root.style.setProperty(variableName, String(tokenValue));
+    }
+  }
 }
 
 let browserThemeController: ThemeController | undefined;
