@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "T024-foundation-regression",
+  "gateId": "T024",
+  "route": "deterministic-runtime",
+  "binding": {
+    "productCommit": "a34b11d9bd499fa6aab2d46114ddad05a76e15c9",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "c2659da4c997726dcaa36c46e3d5308c6390fe3bc1ec90e58babb6669ca5ce59",
+    "harnessVersion": "003-foundation-v1"
+  },
+  "collector": {
+    "tool": "phase2-foundation-regression",
+    "version": "1",
+    "runIdentity": "a34b11d9bd499fa6aab2d46114ddad05a76e15c9:T024"
+  },
+  "environmentPath": "environment.json",
+  "claims": [
+    {
+      "claimId": "T024-focused-regressions",
+      "factClass": "application-route-outcome",
+      "primaryRoute": "deterministic-runtime",
+      "result": "PASS",
+      "artifactRefs": []
+    },
+    {
+      "claimId": "T024-documentation-contract",
+      "factClass": "webview-semantic",
+      "primaryRoute": "deterministic-runtime",
+      "result": "PASS",
+      "artifactRefs": []
+    }
+  ],
+  "artifactDigests": [
+    {
+      "path": "environment.json",
+      "sha256": "370ee30172d58d5a75c5b832a7c25088e7a08f2047492dd731e53c5106dc3fc7"
+    }
+  ],
+  "collectionDigest": "317057a3a49d5173cf697174e271c061b58340b1ce348408a76c12c5138ebb55",
+  "commands": [
+    {
+      "command": "pnpm exec vitest run src/app/AppShell.test.tsx src/app/shellPreferences.test.ts src/app/sidebarController.test.ts src/app/theme/themeController.test.ts src/app/TabBar.test.tsx src/app/nativeMenu.test.ts src/app/nativeCaptureReady.test.ts src/workspaces/WorkspacePanel.test.tsx src/workspaces/WorkspaceTree.test.tsx src/app/WelcomeScreen.test.tsx src/ipc/contracts.test.ts e2e/visual/003Evidence.test.ts e2e/visual/003ShellAssertions.test.ts",
+      "result": "PASS",
+      "summary": "13 files, 127 tests"
+    },
+    {
+      "command": "node --test scripts/native-macos-validation.test.mjs scripts/publish-evidence.test.mjs scripts/native-screen-prepare.test.mjs scripts/native-screen-capture.test.mjs scripts/evidence-aggregate.test.mjs",
+      "result": "PASS",
+      "summary": "5 suites, 34 tests"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "result": "PASS",
+      "summary": "71 unit and 26 integration tests"
+    },
+    {
+      "command": "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
+      "result": "PASS"
+    },
+    {
+      "command": "pnpm typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "pnpm lint",
+      "result": "PASS"
+    },
+    {
+      "command": "PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1421 APP_E2E=1 SHELL_EVIDENCE_RUN_ROOT=/private/tmp/excalidraw-003-t024-a34b11d.FOccwK pnpm exec playwright test --config=e2e/playwright.config.ts --project=browser-ui --retries=0 e2e/tests/ui-desktop-shell-visual.spec.ts",
+      "result": "PASS",
+      "summary": "8 scenarios; 6 immutable screen collections bound to the product commit"
+    },
+    {
+      "command": "CLI help/invalid-invocation and bilingual documentation consistency probe",
+      "result": "PASS",
+      "summary": "publisher, prepare, capture, and aggregate help=0; invalid invocation=64; package scripts, IPC contract, English/Chinese architecture and Mermaid data flow present"
+    }
+  ],
+  "browserCollections": [
+    {"gateId": "VSL-001", "collectionDigest": "551994b75edd7dcc9303a9ade974bd14aa66581396bcde96a43fae70e1c6ab84"},
+    {"gateId": "HF2-01", "collectionDigest": "fcfe1b2a15c02d5f4d6742150d1d6e3e36a19a6a288cd95b812f507e16175ca4"},
+    {"gateId": "HF2-02", "collectionDigest": "ad16ca3d8e5f6d03acbc220c8e2d0fba070d7a4af8375f241824adc80ece7858"},
+    {"gateId": "HF2-04", "collectionDigest": "a250795ee58c756cc71bd69c7954ca9a527c19c88743ec9a12d7aa1cb90e7e07"},
+    {"gateId": "HF2-05", "collectionDigest": "3b5fa2aa3155a33d0e1facb9b9149ff81c28a37b18f287fe2be75ff4971dcd71"},
+    {"gateId": "HF2-06", "collectionDigest": "06d8def83daf2f5d408d3585a1de068b73577c0d72676332352ea9ffe7df49a0"}
+  ],
+  "documentationChecks": {
+    "contributorEnglish": "PASS",
+    "contributorChinese": "PASS",
+    "quickstartEnglish": "PASS",
+    "quickstartChinese": "PASS",
+    "ipcContract": "PASS",
+    "architectureEnglishMermaid": "PASS",
+    "architectureChineseMermaid": "PASS"
+  },
+  "scopeExclusions": {
+    "productionPackageBuiltOrLaunched": false,
+    "finalNativeEntrypointAcceptanceRun": false,
+    "independentVisualReview": false,
+    "productOwnerDecisionAuthored": false
+  },
+  "result": "PASS"
+}
