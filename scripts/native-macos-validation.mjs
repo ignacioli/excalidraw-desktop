@@ -158,6 +158,40 @@ export function buildReport({
   };
 }
 
+export function validatePreparedNativeProfile(plan, manifest) {
+  if (
+    !plan ||
+    typeof plan !== "object" ||
+    plan.schemaVersion !== 1 ||
+    !plan.nativeEntrypointRequest ||
+    plan.nativeEntrypointRequest.gateId !== "T023b" ||
+    plan.nativeEntrypointRequest.profileRoot !==
+      plan.nativeEntrypointProfileRoot ||
+    !path.isAbsolute(plan.nativeEntrypointProfileRoot ?? "") ||
+    !path.isAbsolute(plan.isolation?.root ?? "") ||
+    path
+      .relative(plan.isolation.root, plan.nativeEntrypointProfileRoot)
+      .startsWith("..") ||
+    plan.productCommit !== manifest.gitCommit ||
+    plan.packageManifest?.artifactSha256 !==
+      (manifest.artifactSha256 ?? manifest.packageSha256) ||
+    !/^[0-9a-f]{64}$/u.test(plan.runNonce ?? "")
+  ) {
+    throw new NativeValidationBlockedError(
+      "capture plan does not provide a matching disposable T023b profile",
+    );
+  }
+  return {
+    profileRoot: plan.nativeEntrypointProfileRoot,
+    environment: {
+      HOME: plan.nativeEntrypointProfileRoot,
+      EXCALIDRAW_NATIVE_CAPTURE_PLAN: plan.__planPath,
+      EXCALIDRAW_NATIVE_CAPTURE_GATE: "T023b",
+      EXCALIDRAW_NATIVE_CAPTURE_NONCE: plan.runNonce,
+    },
+  };
+}
+
 function nativeCollectionDigest(artifacts) {
   const canonical = [...artifacts]
     .sort((left, right) => left.path.localeCompare(right.path))
@@ -877,10 +911,14 @@ function waitForValidationPair(events, command, ignoredIds, timeoutMs) {
   });
 }
 
-function spawnBundle(executablePath) {
+function spawnBundle(executablePath, launchEnvironment = {}) {
   const child = spawn(executablePath, [], {
     cwd: path.dirname(executablePath),
-    env: { ...process.env, EXCALIDRAW_NATIVE_MENU_VALIDATION: "1" },
+    env: {
+      ...process.env,
+      ...launchEnvironment,
+      EXCALIDRAW_NATIVE_MENU_VALIDATION: "1",
+    },
     stdio: ["ignore", "ignore", "pipe"],
   });
   const events = [];
@@ -1218,6 +1256,7 @@ export async function validateProductionBundle({
   reportPath,
   collectionDir,
   bindingPath,
+  capturePlanPath,
   timeoutMs = 5000,
 } = {}) {
   const startedAt = new Date().toISOString();
@@ -1246,6 +1285,7 @@ export async function validateProductionBundle({
     return report;
   };
   let manifest;
+  let nativeProfile = null;
   try {
     manifest = JSON.parse(await fsp.readFile(resolvedManifestPath, "utf8"));
     checks.push(
@@ -1283,6 +1323,51 @@ export async function validateProductionBundle({
         manifest,
       }),
     );
+  }
+  if (capturePlanPath) {
+    try {
+      const capturePlan = JSON.parse(
+        await fsp.readFile(capturePlanPath, "utf8"),
+      );
+      Object.defineProperty(capturePlan, "__planPath", {
+        value: path.resolve(capturePlanPath),
+        enumerable: false,
+      });
+      nativeProfile = validatePreparedNativeProfile(capturePlan, manifest);
+      if ((await fsp.readdir(nativeProfile.profileRoot)).length !== 0) {
+        throw new NativeValidationBlockedError(
+          "T023b disposable profile must be empty before launch",
+        );
+      }
+      checks.push(
+        makeCheck(
+          "disposable-profile",
+          "nonce-bound prepared T023b profile",
+          "PASS",
+          { profileRoot: nativeProfile.profileRoot },
+        ),
+      );
+    } catch (error) {
+      checks.push(
+        makeCheck(
+          "disposable-profile",
+          "nonce-bound prepared T023b profile",
+          "BLOCKED",
+          {
+            error: String(error.message ?? error),
+          },
+        ),
+      );
+      return finish(
+        buildReport({
+          command: "validate",
+          manifestPath: resolvedManifestPath,
+          startedAt,
+          checks,
+          manifest,
+        }),
+      );
+    }
   }
   try {
     const observed = await inspectBundle(manifest.appPath, repoRoot);
@@ -1380,7 +1465,10 @@ export async function validateProductionBundle({
     checks.push(
       makeCheck("process-safety", "no ambiguous existing app process", "PASS"),
     );
-    const processInfo = spawnBundle(observed.executablePath);
+    const processInfo = spawnBundle(
+      observed.executablePath,
+      nativeProfile?.environment,
+    );
     try {
       await wait(1000);
       try {
@@ -1430,7 +1518,7 @@ export async function validateProductionBundle({
 
 function printUsage() {
   console.log(
-    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. Adapter outputs are collector-owned and never contain reviewer or owner decisions.`,
+    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--capture-plan FINAL_PLAN] [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. A capture plan supplies the distinct nonce-bound T023b disposable profile. Adapter outputs are collector-owned and never contain reviewer or owner decisions.`,
   );
 }
 
@@ -1457,6 +1545,7 @@ async function main() {
       reportPath: optionValue(args, "--report"),
       collectionDir: optionValue(args, "--collection-dir"),
       bindingPath: optionValue(args, "--binding"),
+      capturePlanPath: optionValue(args, "--capture-plan"),
     });
   } else {
     printUsage();

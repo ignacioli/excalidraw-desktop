@@ -19,6 +19,8 @@
     "native:macos:seal": "node scripts/native-macos-validation.mjs seal",
     "native:macos:validate": "node scripts/native-macos-validation.mjs validate",
     "native:macos:test": "node --test scripts/native-macos-validation.test.mjs",
+    "native:screen:prepare": "node scripts/native-screen-prepare.mjs",
+    "native:screen:prepare:test": "node --test scripts/native-screen-prepare.test.mjs",
     "evidence:publish": "node scripts/publish-evidence.mjs",
     "evidence:publish:test": "node --test scripts/publish-evidence.test.mjs",
     "fonts:build": "uv run --frozen scripts/build-fonts.py",

@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import {
   EXPECTED_MENU_ITEMS,
   EXPECTED_WINDOW_SIZE,
+  NativeValidationBlockedError,
   adaptNativeValidationReport,
   aggregateStatus,
   ambiguousAppProcesses,
@@ -18,6 +19,7 @@ import {
   parseNativeValidationEvents,
   parseNativeValidationLine,
   sha256Path,
+  validatePreparedNativeProfile,
   validationPair,
   writeNativeValidationCollection,
 } from "./native-macos-validation.mjs";
@@ -264,6 +266,47 @@ describe("native macOS validation helpers", () => {
     assert.throws(
       () => adaptNativeValidationReport(buildReport({ checks: [] }), {}),
       /binding\.productCommit/u,
+    );
+  });
+
+  it("binds T023b to its distinct prepared disposable profile", () => {
+    const profileRoot = "/tmp/run/profiles/T023b";
+    const plan = {
+      schemaVersion: 1,
+      productCommit: "ab".repeat(20),
+      runNonce: "cd".repeat(32),
+      isolation: { root: "/tmp/run/profiles" },
+      packageManifest: { artifactSha256: "ef".repeat(32) },
+      nativeEntrypointProfileRoot: profileRoot,
+      nativeEntrypointRequest: { gateId: "T023b", profileRoot },
+    };
+    Object.defineProperty(plan, "__planPath", {
+      value: "/tmp/run/capture-plan.json",
+      enumerable: false,
+    });
+    const result = validatePreparedNativeProfile(plan, {
+      gitCommit: "ab".repeat(20),
+      artifactSha256: "ef".repeat(32),
+    });
+    assert.equal(result.profileRoot, profileRoot);
+    assert.equal(result.environment.EXCALIDRAW_NATIVE_CAPTURE_GATE, "T023b");
+    assert.equal(
+      result.environment.EXCALIDRAW_NATIVE_CAPTURE_NONCE,
+      plan.runNonce,
+    );
+    assert.throws(
+      () =>
+        validatePreparedNativeProfile(
+          {
+            ...plan,
+            nativeEntrypointProfileRoot: "/tmp/outside",
+          },
+          {
+            gitCommit: "ab".repeat(20),
+            artifactSha256: "ef".repeat(32),
+          },
+        ),
+      NativeValidationBlockedError,
     );
   });
 });

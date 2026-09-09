@@ -90,7 +90,8 @@
 - `pnpm tauri dev`：通过 package script 运行 Tauri 开发应用。
 - `pnpm tauri build`：通过 package script 构建当前 Tauri 包。
 - `VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness`：构建 T090/T108 所需的测试专用原生二进制；生产发布 **必须** 省略该 feature。
-- `pnpm native:macos:validate -- --manifest <path> --collection-dir <new-path> --binding <binding.json>`：验证最终安装包的原生菜单入口，并把报告适配为新的、collector 自有的 immutable collection（不可变证据集合）。`--collection-dir` 与 `--binding` 必须成对提供；adapter 不得写 reviewer 或 owner artifact。
+- `pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute-path> --run-root <absolute-empty-dir> --plan <absolute-new-path> --isolation-mode <mode>`：验证 exact production package binding，只 provision 已声明 fixture，为各 gate 创建独立 disposable profile，并写一个 immutable capture plan。允许的 mode 为 `disposable-macos-user`、`ephemeral-vm`、`verified-os-home-redirect`；在 runtime path 被实际观察前，prepare 只记录 isolation 尚未验证。
+- `pnpm native:macos:validate -- --manifest <path> --capture-plan <final-plan> --collection-dir <new-path> --binding <binding.json>`：在 plan 的独立 nonce-bound profile 中验证最终安装包的原生菜单入口，并把报告适配为新的、collector 自有的 immutable collection（不可变证据集合）。`--collection-dir` 与 `--binding` 必须成对提供；adapter 不得写 reviewer 或 owner artifact。
 - `pnpm evidence:publish -- --source <sealed-gate-dir> --destination <new-evidence-dir>`：验证角色边界及全部已声明 digest，要求目标目录不存在，逐字节复制 sealed gate，并在目标旁写 publication receipt。退出码固定为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
 - `pnpm evidence:publish:test`：运行目标不存在、digest、路径、角色边界与 byte-preserving（字节保持）发布测试。
 - `cargo fmt --manifest-path src-tauri/Cargo.toml --check`：检查 Rust 格式。

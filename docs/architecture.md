@@ -249,7 +249,59 @@ Configuration and implementation: `src-tauri/tauri.conf.json` (window `title`) a
 
 Storage design detail is in ADR-002 (two-tier persistence) and ADR-003 (SQLite-first and the redb trigger). The hot tier keeps WAL drafts. Do not switch back to in-place cold-file overwrites, and do not remove recovery snapshots.
 
-## 11. Related documents
+## 11. Native visual validation layers
+
+The production application contains an observation-only ready probe. It is inert unless a launcher supplies a complete capture plan, gate, and nonce. The prepare tool owns disposable fixture/profile creation; React observes rendered shell state; Rust validates the immutable binding and actual storage containment; the native capture driver owns PID/window lookup and image capture. No layer may use the probe to set theme, sidebar, documents, workspace data, or permissions.
+
+```mermaid
+flowchart TB
+  Prepare["Prepare CLI: plan + fixture + distinct profiles"] --> Plan["Immutable capture plan"]
+  Plan --> Launcher["Owned child launcher"]
+  Launcher --> App["Production Tauri application"]
+  subgraph Frontend["React observation layer"]
+    Shell["Rendered shell/session/theme state"] --> Probe["nativeCaptureReady.ts"]
+  end
+  subgraph Boundary["Typed Tauri IPC boundary"]
+    Bootstrap["native_capture_bootstrap"]
+    Publish["native_capture_publish_ready"]
+  end
+  subgraph Backend["Rust validation layer"]
+    State["NativeCaptureState"] --> Candidate["Atomic ready-candidate.json"]
+  end
+  App --> Shell
+  Probe --> Bootstrap --> State
+  Probe --> Publish --> State
+  Candidate --> Driver["Native capture driver: PID/window/scale"]
+  Driver --> Ready["Final ready.json + immutable collection"]
+```
+
+## 12. Native capture request-to-ready flow
+
+```mermaid
+sequenceDiagram
+  participant P as Prepare CLI
+  participant L as Owned launcher
+  participant R as Rust NativeCaptureState
+  participant W as React WebView
+  participant D as Native capture driver
+  P->>P: Validate package/manifest/fixture paths
+  P->>P: Create distinct empty profiles and plan
+  L->>R: Launch with plan + gate + nonce
+  R->>R: Resolve actual app-data/WebKit paths
+  R-->>W: Bootstrap immutable expected binding
+  W->>W: Observe shell state; await document.fonts.ready
+  W->>W: Confirm zero remote fonts, zero pending work, two stable frames
+  W->>R: Publish typed ready observation
+  R->>R: Validate nonce/fingerprint/window size/path containment
+  R-->>D: Atomically publish ready-candidate.json
+  D->>D: Bind owned PID to one native window and backing scale
+  D->>D: Validate dimensions and finalize ready.json
+  D->>D: Capture once; normalize without crop or repair
+```
+
+The launcher owns only its child process and profile. Missing isolation, a storage path outside the profile, an ambiguous process/window, a ready timeout, or a changed package/plan produces structured `BLOCKED` evidence. The observation candidate is not visual evidence and cannot replace native window facts or independent visual review.
+
+## 13. Related documents
 
 - ADRs: ADR-001 framework choice, ADR-002 two-tier persistence, ADR-003 SQLite-first and redb trigger, ADR-004 declared reference-environment performance measurement, ADR-005 theme boundary (shell-layout / thumbnail sentences: see ADR-009), ADR-006/007/008 reference performance budgets and measurement series, ADR-009 desktop UI interactions
 - `DESIGN.md` / `DESIGN.zh.md` (visual and interaction contract)

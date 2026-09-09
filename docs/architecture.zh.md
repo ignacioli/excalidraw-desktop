@@ -249,7 +249,59 @@ sequenceDiagram
 
 存储层设计细节见 ADR-002（双层持久化）与 ADR-003（SQLite-first 与 redb 触发条件）。热层保持 WAL 草稿，不改回就地覆盖冷文件，也不拆除恢复快照。
 
-## 11. 相关文档
+## 11. 原生视觉验收分层
+
+production application（生产应用）包含 observation-only ready probe（只观察 ready 探针），但只有 launcher 同时提供完整 capture plan、gate 与 nonce 时才会激活。prepare tool 负责 disposable fixture/profile；React 只观察已渲染 shell；Rust 验证 immutable binding 与实际 storage containment；native capture driver 负责 PID/window lookup 与截图。任何一层都不得借该 probe 设置 theme、Sidebar、document、Workspace 数据或权限。
+
+```mermaid
+flowchart TB
+  Prepare["Prepare CLI：plan + fixture + 独立 profile"] --> Plan["Immutable capture plan"]
+  Plan --> Launcher["Owned child launcher"]
+  Launcher --> App["Production Tauri application"]
+  subgraph Frontend["React observation layer"]
+    Shell["Rendered shell/session/theme state"] --> Probe["nativeCaptureReady.ts"]
+  end
+  subgraph Boundary["Typed Tauri IPC boundary"]
+    Bootstrap["native_capture_bootstrap"]
+    Publish["native_capture_publish_ready"]
+  end
+  subgraph Backend["Rust validation layer"]
+    State["NativeCaptureState"] --> Candidate["Atomic ready-candidate.json"]
+  end
+  App --> Shell
+  Probe --> Bootstrap --> State
+  Probe --> Publish --> State
+  Candidate --> Driver["Native capture driver：PID/window/scale"]
+  Driver --> Ready["Final ready.json + immutable collection"]
+```
+
+## 12. 原生 capture request-to-ready 数据流
+
+```mermaid
+sequenceDiagram
+  participant P as Prepare CLI
+  participant L as Owned launcher
+  participant R as Rust NativeCaptureState
+  participant W as React WebView
+  participant D as Native capture driver
+  P->>P: 校验 package/manifest/fixture path
+  P->>P: 创建独立 empty profile 与 plan
+  L->>R: 携带 plan + gate + nonce 启动
+  R->>R: 解析实际 app-data/WebKit path
+  R-->>W: Bootstrap immutable expected binding
+  W->>W: 观察 shell state；等待 document.fonts.ready
+  W->>W: 确认 remote font=0、pending=0、连续两帧稳定
+  W->>R: 发布 typed ready observation
+  R->>R: 校验 nonce/fingerprint/window size/path containment
+  R-->>D: Atomic publish ready-candidate.json
+  D->>D: 把 owned PID 绑定到唯一 native window/backing scale
+  D->>D: 校验尺寸并完成 ready.json
+  D->>D: 单次 capture；只做无 crop/repair 的 normalization
+```
+
+launcher 只拥有自己启动的 child process 与 profile。缺少 isolation、storage path 越界、process/window 歧义、ready timeout 或 package/plan 改变时，必须输出结构化 `BLOCKED`。observation candidate 不是视觉证据，不能替代 native window facts 或 independent visual review。
+
+## 13. 相关文档
 
 - ADR：ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 声明参考环境性能测量、ADR-005 主题边界（壳层布局/缩略图句见 ADR-009）、ADR-006/007/008 参考性能预算与测量序列、ADR-009 桌面 UI 交互
 - `DESIGN.md` / `DESIGN.zh.md`（视觉与交互契约）

@@ -120,11 +120,25 @@ APP_E2E=1 pnpm e2e           # Playwright 桌面 E2E（测试专用构建，暴�
 
 第 3 步的系统着色标题栏与窗口管理是物理 macOS 证据。静态读取 `tauri.conf.json` 只能核对标题字符串，不能代替目视标题栏。
 
-最终安装包的原生入口 collection 必须同时提供 sealed manifest 与 immutable binding（不可变绑定），且输出目录必须尚不存在：
+原生验收 run 只能从已存在且为空的 absolute directory 与 exact production package manifest 创建。`--isolation-mode` 必须选择 operator 实际提供的隔离边界；prepare 不会宣称 OS 已经落实该隔离：
+
+```bash
+pnpm native:screen:prepare -- \
+  --checkpoint VSL \
+  --package-manifest <absolute-sealed-package-manifest.json> \
+  --run-root <absolute-empty-run-root> \
+  --plan <absolute-new-capture-plan.json> \
+  --isolation-mode ephemeral-vm
+```
+
+六屏 final plan 使用 `FINAL`。允许的 isolation mode 为 `disposable-macos-user`、`ephemeral-vm`、`verified-os-home-redirect`。命令只 provision 仓库已声明 fixture，为每张屏创建独立 profile，并另建原生入口 profile，然后写 immutable、nonce-bound plan。production ready probe 在缺少 launcher 提供的 plan/gate/nonce 时完全 inert。runtime app-data 与 WebKit path 仍必须实际落在所选 profile 内，否则后续 driver 返回 `BLOCKED`。
+
+最终安装包的原生入口 collection 必须同时提供上述 FINAL plan、sealed manifest 与 immutable binding，且输出目录必须尚不存在：
 
 ```bash
 pnpm native:macos:validate -- \
   --manifest <sealed-package-manifest.json> \
+  --capture-plan <final-capture-plan.json> \
   --collection-dir <new-native-entrypoint-collection> \
   --binding <evidence-binding.json>
 ```

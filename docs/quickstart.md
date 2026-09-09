@@ -120,11 +120,25 @@ The browser can cover dialogs, the tree, and the keyboard. Process-level proof o
 
 Step 3's system-tinted title bar and window management are physical macOS evidence. Statically reading `tauri.conf.json` can only check the title string; it does not replace looking at the title bar.
 
-For final-package native entrypoint collection, provide the sealed manifest and an immutable binding together. The output path must not exist:
+Prepare a native validation run only from an existing empty absolute directory and an exact production-package manifest. Select the real isolation boundary supplied by the operator; preparation does not claim that the OS honored it:
+
+```bash
+pnpm native:screen:prepare -- \
+  --checkpoint VSL \
+  --package-manifest <absolute-sealed-package-manifest.json> \
+  --run-root <absolute-empty-run-root> \
+  --plan <absolute-new-capture-plan.json> \
+  --isolation-mode ephemeral-vm
+```
+
+Use `FINAL` for the six-screen final plan. Allowed isolation modes are `disposable-macos-user`, `ephemeral-vm`, and `verified-os-home-redirect`. The command provisions only the repository-declared fixture, creates one distinct profile per screen plus a separate native-entrypoint profile, and writes an immutable nonce-bound plan. The production ready probe is inert without the plan/gate/nonce launcher environment. Runtime app-data and WebKit paths must still resolve inside the selected profile or the later driver returns `BLOCKED`.
+
+For final-package native entrypoint collection, provide that FINAL plan together with the sealed manifest and immutable binding. The output path must not exist:
 
 ```bash
 pnpm native:macos:validate -- \
   --manifest <sealed-package-manifest.json> \
+  --capture-plan <final-capture-plan.json> \
   --collection-dir <new-native-entrypoint-collection> \
   --binding <evidence-binding.json>
 ```

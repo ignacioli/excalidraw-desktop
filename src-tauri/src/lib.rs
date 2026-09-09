@@ -8,6 +8,7 @@ mod e2e_performance;
 #[cfg(all(test, feature = "e2e-harness"))]
 mod e2e_performance_test;
 pub mod indexing;
+mod native_capture;
 mod native_menu;
 pub mod security;
 mod watcher;
@@ -42,6 +43,7 @@ use e2e_performance::{
     e2e_perf_bootstrap, e2e_perf_next_command, e2e_perf_publish_error, e2e_perf_publish_ready,
     e2e_perf_publish_result, PerformanceHarnessState,
 };
+use native_capture::{native_capture_bootstrap, native_capture_publish_ready, NativeCaptureState};
 use watcher::{WatcherService, WatcherState};
 use workspace_entries::WorkspaceMutationGate;
 
@@ -75,6 +77,11 @@ pub fn run() {
         .setup(|app| {
             let app_data_directory = resolve_app_data_directory(app)?;
             std::fs::create_dir_all(&app_data_directory)?;
+            let web_kit_data_directory = app.path().app_local_data_dir()?;
+            std::fs::create_dir_all(&web_kit_data_directory)?;
+            let native_capture_state =
+                NativeCaptureState::from_environment(&app_data_directory, &web_kit_data_directory)
+                    .map_err(std::io::Error::other)?;
 
             let pending_open_paths = drawing_paths_from_env_args();
             let repository = tauri::async_runtime::block_on(SqliteRepository::open(
@@ -116,6 +123,7 @@ pub fn run() {
                 Arc::new(TauriRecoveryPathGrant(app.fs_scope())),
             );
             app.manage(repository);
+            app.manage(native_capture_state);
             #[cfg(feature = "e2e-harness")]
             app.manage(performance_state);
             app.manage(DocumentState::new(document_service));
@@ -180,6 +188,8 @@ pub fn run() {
         e2e_perf_next_command,
         e2e_perf_publish_result,
         e2e_perf_publish_error,
+        native_capture_bootstrap,
+        native_capture_publish_ready,
     ]);
 
     #[cfg(not(feature = "e2e-harness"))]
@@ -201,7 +211,9 @@ pub fn run() {
         workspace_entry_delete_preflight,
         workspace_entry_delete,
         workspace_entry_reveal,
-        doc_export
+        doc_export,
+        native_capture_bootstrap,
+        native_capture_publish_ready
     ]);
 
     let app = match builder.build(tauri::generate_context!()) {

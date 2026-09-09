@@ -58,6 +58,7 @@ import {
   registerNativeMenuCommand,
   type NativeMenuCommand,
 } from "./nativeMenu";
+import { publishNativeCaptureReady } from "./nativeCaptureReady";
 import {
   initializeBrowserThemeController,
   type ThemeController,
@@ -622,6 +623,55 @@ export function AppShell({
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [sidebarController]);
+
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) return;
+    const pendingOperations =
+      (welcomeBusy ? 1 : 0) +
+      (startupState.status === "checking" ? 1 : 0) +
+      (exportDocumentId === null ? 0 : 1) +
+      (orphanCloseId === null ? 0 : 1) +
+      (activeSession?.saveState === "conflicted" ? 1 : 0);
+    const currentWorkspace = welcomeWorkspaces.find(
+      (workspace) => workspace.id === currentWorkspaceId,
+    );
+    const sessionState = showWelcome
+      ? "empty"
+      : startupState.candidates.length > 0
+        ? "recovery"
+        : currentWorkspaceId !== null
+          ? "workspace"
+          : "restored";
+    void publishNativeCaptureReady({
+      theme: themeSnapshot.resolvedColorScheme,
+      sessionState,
+      sidebarState: sidebarSnapshot.mode,
+      workspaceName: currentWorkspace?.name ?? null,
+      selectedDirectory:
+        currentBrowsingLocationRef.current?.directoryRelativePath ?? null,
+      tabs: documentSessions.map((session) => session.title),
+      activeDocument: activeSession?.title ?? null,
+      unsaved:
+        activeSession !== undefined && activeSession.saveState !== "clean",
+      pendingOperations,
+    }).catch(() => {
+      // The nonce-bound harness records the failure as a timeout/BLOCKED.
+      // Do not mutate visible product state from an observation-only probe.
+    });
+  }, [
+    activeSession,
+    currentWorkspaceId,
+    documentSessions,
+    exportDocumentId,
+    orphanCloseId,
+    showWelcome,
+    sidebarSnapshot.mode,
+    startupState.candidates.length,
+    startupState.status,
+    themeSnapshot.resolvedColorScheme,
+    welcomeBusy,
+    welcomeWorkspaces,
+  ]);
 
   useEffect(() => {
     const syncHolds = () => {

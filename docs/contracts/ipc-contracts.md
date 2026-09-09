@@ -187,6 +187,48 @@ interface ExportOptions {
 type SceneData = unknown; // 官方 .excalidraw JSON；后端只做结构校验
 ```
 
+### 1.5 原生视觉验收的 observation-only ready probe
+
+以下两个 command 编译进普通 production binary，但默认完全 inert。只有受控 launcher 同时提供 `EXCALIDRAW_NATIVE_CAPTURE_PLAN`、`EXCALIDRAW_NATIVE_CAPTURE_GATE` 与 `EXCALIDRAW_NATIVE_CAPTURE_NONCE`，且 Rust 能验证 plan、nonce、disposable profile（一次性配置目录）和实际 app-data/WebKit 路径时，bootstrap 才返回非空值。
+
+| 命令 | 请求 | 响应 | 说明 |
+|------|------|------|------|
+| `native_capture_bootstrap` | `{}` | `NativeCaptureBootstrap \| null` | 未启用时返回 `null`；启用时只返回 immutable binding（不可变绑定），不设置 UI 状态 |
+| `native_capture_publish_ready` | `{ ready: NativeCaptureReadyInput }` | `{}` | 仅接受 nonce、commit、package、state fingerprint、字体、pending operation、稳定帧与 1280×760 window observation 全部匹配的报告 |
+
+```typescript
+interface NativeCaptureBootstrap {
+  schemaVersion: 1;
+  runId: string;
+  runNonce: string;
+  gateId: string;
+  productCommit: string;
+  packageArtifactSha256: string;
+  fixtureDigest: string;
+  expectedStateFingerprint: string;
+  stateFingerprintVersion: "shell-state-v1";
+}
+
+interface NativeCaptureReadyInput {
+  schemaVersion: 1;
+  runId: string;
+  runNonce: string;
+  gateId: string;
+  productCommit: string;
+  packageArtifactSha256: string;
+  stateFingerprint: string;
+  stateFingerprintVersion: "shell-state-v1";
+  fontReady: true;
+  remoteFontRequests: 0;
+  stableFrames: number;       // >= 2
+  pendingOperations: 0;
+  logicalWindow: { width: 1280; height: 760 };
+  frontmost: true;
+}
+```
+
+Frontend 只能提交 observation，不能提交 fixture path、任意 filesystem path、theme/sidebar setter 或 privileged command。Rust 从 launcher-owned plan 获取 expected binding，重新验证实际 storage path 位于当前 gate 的 disposable profile 后，以 atomic create + rename 写 `<gate>.ready-candidate.json`。该 candidate 仍不包含 native window ID（identifier）或 backing scale；capture driver 必须通过 owned PID（process identifier，进程标识）确定这些原生事实并生成最终 `ready.json`。缺失、重复、stale、path escape 或不匹配均为 `BLOCKED`，不得由截图猜测。
+
 ## 2. 事件契约（后端 → 前端）
 
 | 事件 | 载荷 | 触发 |
