@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "version": "003-ownership-v1",
+  "rules": [
+    {
+      "id": "shell-runtime",
+      "pathPrefixes": ["src/app/", "src/workspaces/", "src/App.css"],
+      "owners": ["shell-semantics", "shell-geometry", "visual-screens"],
+      "claimIds": ["shell-semantic", "shell-geometry", "visual-fidelity"]
+    },
+    {
+      "id": "document-runtime",
+      "pathPrefixes": ["src/documents/", "src/editor/", "src/ipc/"],
+      "owners": ["document-safety", "application-route"],
+      "claimIds": ["document-regression", "native-entrypoint-route"]
+    },
+    {
+      "id": "frontend-entry-assets",
+      "pathPrefixes": [
+        "src/assets/",
+        "src/e2e/",
+        "src/App.tsx",
+        "src/main.tsx",
+        "src/test-setup.ts",
+        "src/vite-env.d.ts",
+        "public/",
+        "index.html"
+      ],
+      "owners": ["frontend-build"],
+      "claimIds": ["shell-semantic", "final-regression"]
+    },
+    {
+      "id": "native-runtime",
+      "pathPrefixes": ["src-tauri/"],
+      "owners": ["native-package", "native-entrypoint", "persistence"],
+      "claimIds": [
+        "package-identity",
+        "native-entrypoint-route",
+        "persistence-regression"
+      ]
+    },
+    {
+      "id": "validation-harness",
+      "pathPrefixes": ["e2e/", "scripts/"],
+      "owners": ["fixture", "collector", "capture", "aggregation"],
+      "claimIds": [
+        "shell-semantic",
+        "visual-fidelity",
+        "native-entrypoint-route",
+        "technical-aggregate"
+      ]
+    },
+    {
+      "id": "frozen-design",
+      "pathPrefixes": ["docs/design/"],
+      "owners": ["hf2-baseline"],
+      "claimIds": ["visual-fidelity", "shell-geometry"]
+    },
+    {
+      "id": "tracked-evidence",
+      "pathPrefixes": ["docs/evidence/"],
+      "owners": ["evidence-artifacts"],
+      "claimIds": ["technical-aggregate", "final-regression"]
+    },
+    {
+      "id": "public-architecture-docs",
+      "pathPrefixes": [
+        "docs/adr/",
+        "docs/contracts/",
+        "docs/architecture.md",
+        "docs/architecture.zh.md",
+        "docs/quickstart.md",
+        "docs/quickstart.zh.md",
+        "docs/release-notes-footer.md",
+        "docs/ux-ui-redesign-brief.md"
+      ],
+      "owners": ["documentation-contract"],
+      "claimIds": ["final-regression"]
+    },
+    {
+      "id": "build-tooling",
+      "pathPrefixes": [
+        ".github/",
+        ".specify/",
+        ".gitignore",
+        ".prettierignore",
+        ".prettierrc",
+        ".python-version",
+        "eslint.config.js",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pyproject.toml",
+        "tsconfig.json",
+        "tsconfig.node.json",
+        "uv.lock",
+        "vite.config.ts",
+        "vitest.config.ts"
+      ],
+      "owners": ["build-and-validation-config"],
+      "claimIds": ["final-regression", "package-identity"]
+    },
+    {
+      "id": "root-product-docs",
+      "pathPrefixes": [
+        "AGENTS.md",
+        "AGENTS.zh.md",
+        "CHANGELOG.md",
+        "CONTEXT.md",
+        "CONTEXT.zh.md",
+        "DESIGN.md",
+        "DESIGN.zh.md",
+        "LICENSE",
+        "README.md",
+        "README.zh.md"
+      ],
+      "owners": ["product-documentation"],
+      "claimIds": ["final-regression", "visual-fidelity"]
+    }
+  ]
+}

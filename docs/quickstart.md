@@ -169,6 +169,20 @@ pnpm evidence:publish -- \
 
 The destination must be new and remain inside the 003 evidence root. Publication validates digests and role boundaries, copies every source byte unchanged, re-hashes source and destination, and writes `<gate-id>.publication.json` adjacent to the copied tree. Exit codes are `0=PASS`, `1=FAIL`, `2=BLOCKED`, and `64=invalid invocation`.
 
+### Read-only evidence aggregation
+
+Every mode reads immutable inputs, validates raw artifact bytes and transitive bindings, and writes only a new requested output. It never edits source evidence, reviewer/owner artifacts, the product repository, or `tasks.md`:
+
+```bash
+pnpm evidence:aggregate -- --mode delta --product-root <path> --checkpoint-map <json> --final-commit <sha> --ownership-map e2e/visual/003EvidenceOwnership.json --output <new-json>
+pnpm evidence:aggregate -- --mode technical --input <final-input.json> --output-dir <new-dir>
+pnpm evidence:aggregate -- --mode task-proof --tasks <tasks.md> --proof-source <proof-source.json> --output <new-map.json>
+pnpm evidence:aggregate -- --mode closure --technical-report <report.json> --task-proof-map <map.json> --tasks <tasks.md> --self-task <id> --output-dir <new-dir>
+pnpm evidence:aggregate -- --mode closure-verify --closure-report <report.json> --tasks <tasks.md> --output <new-json>
+```
+
+`delta` requires a clean product HEAD and classifies every changed path through the versioned ownership map; zero or multiple owners is `BLOCKED`. `technical` requires six distinct final screen collections plus package and regression claim sets, and independently validates every referenced artifact digest. `task-proof` requires exactly one proof record per task. `closure` permits only the declared unchecked self task; it computes the expected post-transition hash but does not edit the task. After the human/task writer changes exactly that checkbox, `closure-verify` validates the expected hash. Exit codes are `0=PASS`, `1=FAIL`, `2=BLOCKED`, and `64=invalid invocation`.
+
 ### Multiple workspaces and asset deduplication
 
 1. Mount two workspaces → they appear side by side in the same continuous tree and can be removed independently (disk files are not deleted).

@@ -169,6 +169,20 @@ pnpm evidence:publish -- \
 
 目标必须是 003 evidence root 内的新目录。发布器验证 digest 与角色边界，逐字节复制全部来源文件，再次计算来源/目标 hash，并在复制树旁写 `<gate-id>.publication.json`。退出码固定为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
 
+### Read-only evidence aggregation（只读证据聚合）
+
+所有 mode 都读取 immutable input，校验 raw artifact bytes 与 transitive binding，只写指定的新 output；绝不编辑 source evidence、reviewer/owner artifact、product repository 或 `tasks.md`：
+
+```bash
+pnpm evidence:aggregate -- --mode delta --product-root <path> --checkpoint-map <json> --final-commit <sha> --ownership-map e2e/visual/003EvidenceOwnership.json --output <new-json>
+pnpm evidence:aggregate -- --mode technical --input <final-input.json> --output-dir <new-dir>
+pnpm evidence:aggregate -- --mode task-proof --tasks <tasks.md> --proof-source <proof-source.json> --output <new-map.json>
+pnpm evidence:aggregate -- --mode closure --technical-report <report.json> --task-proof-map <map.json> --tasks <tasks.md> --self-task <id> --output-dir <new-dir>
+pnpm evidence:aggregate -- --mode closure-verify --closure-report <report.json> --tasks <tasks.md> --output <new-json>
+```
+
+`delta` 要求 clean product HEAD，并通过 versioned ownership map 对每个 changed path 分类；零个或多个 owner 都是 `BLOCKED`。`technical` 要求六个互不重复的 final screen collection 以及 package/regression claim set，并独立校验每个 referenced artifact digest。`task-proof` 要求 tasks 中每个 task 恰有一条 proof record。`closure` 只允许声明的 self task 保持 unchecked；它计算预期 transition 后 hash，但不编辑 task。human/task writer 仅切换该 checkbox 后，再由 `closure-verify` 校验预期 hash。退出码为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
+
 ### 多工作区与资产去重
 
 1. 挂载两个工作区 → 在同一连续树中并列展示、独立移除（不删磁盘文件）。

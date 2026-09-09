@@ -25,6 +25,8 @@
     "native:screen:capture:test": "node --test scripts/native-screen-capture.test.mjs",
     "evidence:publish": "node scripts/publish-evidence.mjs",
     "evidence:publish:test": "node --test scripts/publish-evidence.test.mjs",
+    "evidence:aggregate": "node scripts/evidence-aggregate.mjs",
+    "evidence:aggregate:test": "node --test scripts/evidence-aggregate.test.mjs",
     "fonts:build": "uv run --frozen scripts/build-fonts.py",
     "preview": "vite preview",
     "tauri": "tauri"
