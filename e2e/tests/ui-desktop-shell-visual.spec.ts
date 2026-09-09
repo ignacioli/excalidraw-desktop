@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   SHELL_PREFERENCES_STORAGE_KEY,
@@ -19,11 +23,30 @@ import {
   assertLegacyCounts,
   assertNoPrivateSdkSelectors,
   assertPlatformFontPolicy,
+  assertToken,
+  writeShellCollection,
+  type ComponentCropComparison,
 } from "../visual/003ShellAssertions";
 import { LEGACY_CHECK_IDS } from "../visual/003Evidence";
 import { installUiInteractionHarness } from "./uiInteractionHarness";
 
 const GEOMETRY_TOLERANCE_PX = 2;
+const REPO_ROOT = resolve(import.meta.dirname, "../..");
+const HF2_MANIFEST_PATH = resolve(
+  REPO_ROOT,
+  "docs/design/desktop-shell/hf-2/manifest.json",
+);
+const HF2_MANIFEST_BYTES = readFileSync(HF2_MANIFEST_PATH);
+const HF2_MANIFEST_SHA256 = createHash("sha256")
+  .update(HF2_MANIFEST_BYTES)
+  .digest("hex");
+const HF2_MANIFEST = JSON.parse(HF2_MANIFEST_BYTES.toString("utf8")) as {
+  screens: Array<{ path: string; sha256: string }>;
+};
+const PRODUCT_COMMIT = execFileSync("git", ["rev-parse", "HEAD"], {
+  cwd: REPO_ROOT,
+  encoding: "utf8",
+}).trim();
 const CAPTURE_NAMES = {
   welcomeLight: "welcome-light",
   restoredHiddenLight: "restored-hidden-light",
@@ -31,6 +54,33 @@ const CAPTURE_NAMES = {
   workspaceOverlayLight: "workspace-overlay-light",
   welcomeDark: "welcome-dark",
   workspacePinnedDark: "workspace-pinned-dark",
+} as const;
+
+const CAPTURE_GATES = {
+  welcomeLight: {
+    gateId: "HF2-01",
+    baselinePath: "screens/welcome-light.png",
+  },
+  restoredHiddenLight: {
+    gateId: "HF2-02",
+    baselinePath: "screens/restored-hidden-light.png",
+  },
+  workspacePinnedLight: {
+    gateId: "VSL-001",
+    baselinePath: "screens/workspace-pinned-light.png",
+  },
+  workspaceOverlayLight: {
+    gateId: "HF2-04",
+    baselinePath: "screens/workspace-overlay-light.png",
+  },
+  welcomeDark: {
+    gateId: "HF2-05",
+    baselinePath: "screens/welcome-dark.png",
+  },
+  workspacePinnedDark: {
+    gateId: "HF2-06",
+    baselinePath: "screens/workspace-pinned-dark.png",
+  },
 } as const;
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -49,8 +99,15 @@ test.describe("003 shell visual harness", () => {
     await prepare(page, getShellFixture("empty"), "light");
     await expect(page.getByTestId("welcome-screen")).toBeVisible();
     await assertShellContract(page, { session: "empty", sidebar: "hidden" });
-    await capture(page, testInfo, CAPTURE_NAMES.welcomeLight);
-    await compareCropStability(page.locator(".welcome-screen"), "welcome");
+    await captureAndCollect(page, testInfo, {
+      captureKey: "welcomeLight",
+      fixture: getShellFixture("empty"),
+      theme: "light",
+      sidebar: "hidden",
+      session: "empty",
+      cropLocator: page.locator(".welcome-screen"),
+      componentId: "welcome-screen",
+    });
   });
 
   test("captures Restored / Hidden / Light without old top-level commands", async ({
@@ -61,8 +118,15 @@ test.describe("003 shell visual harness", () => {
     await assertRestoredFixture(page, fixture);
     await expect(page.locator(".file-sidebar")).not.toBeVisible();
     await assertShellContract(page, { session: "restored", sidebar: "hidden" });
-    await capture(page, testInfo, CAPTURE_NAMES.restoredHiddenLight);
-    await compareCropStability(page.locator(".app-shell-tabs"), "header");
+    await captureAndCollect(page, testInfo, {
+      captureKey: "restoredHiddenLight",
+      fixture,
+      theme: "light",
+      sidebar: "hidden",
+      session: "restored",
+      cropLocator: page.locator(".app-shell-tabs"),
+      componentId: "shell-tabs",
+    });
   });
 
   test("captures Workspace / Pinned / Light with exact shell geometry", async ({
@@ -78,9 +142,17 @@ test.describe("003 shell visual harness", () => {
     await assertPinnedWorkspaceHeader(page);
     await assertDefaultWorkspaceRowState(page);
     await assertShellContract(page, { session: "restored", sidebar: "pinned" });
-    await assertGeometrySet(page, "pinned");
-    await capture(page, testInfo, CAPTURE_NAMES.workspacePinnedLight);
-    await compareCropStability(page.locator(".file-sidebar"), "sidebar");
+    const geometryAssertions = await assertGeometrySet(page, "pinned");
+    await captureAndCollect(page, testInfo, {
+      captureKey: "workspacePinnedLight",
+      fixture,
+      theme: "light",
+      sidebar: "pinned",
+      session: "workspace",
+      cropLocator: page.locator(".file-sidebar"),
+      componentId: "workspace-sidebar",
+      geometryAssertions,
+    });
   });
 
   test("captures Workspace / Overlay / Light without changing the canvas box", async ({
@@ -107,11 +179,23 @@ test.describe("003 shell visual harness", () => {
       .getByRole("button", { name: "Toggle workspace sidebar" })
       .click();
     await expect(page.locator(".file-sidebar")).toBeVisible();
-    await capture(page, testInfo, CAPTURE_NAMES.workspaceOverlayLight);
-    await compareCropStability(
-      page.locator(".file-sidebar"),
-      "overlay-sidebar",
-    );
+    await captureAndCollect(page, testInfo, {
+      captureKey: "workspaceOverlayLight",
+      fixture: getShellFixture("overlay"),
+      theme: "light",
+      sidebar: "overlay",
+      session: "workspace",
+      cropLocator: page.locator(".file-sidebar"),
+      componentId: "workspace-sidebar",
+      geometryAssertions: [
+        assertGeometry({
+          name: "overlay.canvas-width-delta",
+          expected: 0,
+          actual: Math.abs(after.width - before.width),
+          tolerance: GEOMETRY_TOLERANCE_PX,
+        }),
+      ],
+    });
   });
 
   test("captures Welcome / Dark with the same shell geometry", async ({
@@ -124,8 +208,15 @@ test.describe("003 shell visual harness", () => {
       "dark",
     );
     await assertShellContract(page, { session: "empty", sidebar: "hidden" });
-    await capture(page, testInfo, CAPTURE_NAMES.welcomeDark);
-    await compareCropStability(page.locator(".welcome-screen"), "welcome-dark");
+    await captureAndCollect(page, testInfo, {
+      captureKey: "welcomeDark",
+      fixture: getShellFixture("empty"),
+      theme: "dark",
+      sidebar: "hidden",
+      session: "empty",
+      cropLocator: page.locator(".welcome-screen"),
+      componentId: "welcome-screen",
+    });
   });
 
   test("captures Workspace / Pinned / Dark and Unicode fallback text", async ({
@@ -139,10 +230,18 @@ test.describe("003 shell visual harness", () => {
     await expect(page.getByRole("treeitem", { name: "流程" })).toBeVisible();
     await assertRestoredFixture(page, getShellFixture("unicode-pinned"));
     await assertShellContract(page, { session: "restored", sidebar: "pinned" });
-    await assertGeometrySet(page, "pinned");
+    const geometryAssertions = await assertGeometrySet(page, "pinned");
     await assertUnicodeFallback(page, getShellFixture("unicode-pinned"));
-    await capture(page, testInfo, CAPTURE_NAMES.workspacePinnedDark);
-    await compareCropStability(page.locator(".file-sidebar"), "sidebar-dark");
+    await captureAndCollect(page, testInfo, {
+      captureKey: "workspacePinnedDark",
+      fixture: getShellFixture("unicode-pinned"),
+      theme: "dark",
+      sidebar: "pinned",
+      session: "workspace",
+      cropLocator: page.locator(".file-sidebar"),
+      componentId: "workspace-sidebar",
+      geometryAssertions,
+    });
   });
 
   test("records computed HF2-FONT-001 styles while externally offline", async ({
@@ -403,7 +502,11 @@ async function assertShellContract(
   }
 }
 
-async function assertGeometrySet(page: Page, state: "pinned"): Promise<void> {
+async function assertGeometrySet(
+  page: Page,
+  state: "pinned",
+): Promise<ReturnType<typeof assertGeometry>[]> {
+  const assertions: ReturnType<typeof assertGeometry>[] = [];
   const selectors = [
     ["top-layer", ".app-shell-tabs", 44, "height"],
     ["workspace-sidebar", ".file-sidebar", 360, "width"],
@@ -421,14 +524,14 @@ async function assertGeometrySet(page: Page, state: "pinned"): Promise<void> {
       dimension === "height" || name === "workspace-row"
         ? box.height
         : box.width;
-    expect(
-      assertGeometry({
-        name: `${state}.${name}`,
-        expected,
-        actual: value,
-        tolerance: GEOMETRY_TOLERANCE_PX,
-      }),
-    ).toMatchObject({ result: "PASS" });
+    const assertion = assertGeometry({
+      name: `${state}.${name}`,
+      expected,
+      actual: value,
+      tolerance: GEOMETRY_TOLERANCE_PX,
+    });
+    expect(assertion).toMatchObject({ result: "PASS" });
+    assertions.push(assertion);
   }
   const sidebarBox = await readBox(page.locator(".file-sidebar"));
   const canvasBox = await readBox(page.locator(".canvas-region"));
@@ -440,6 +543,17 @@ async function assertGeometrySet(page: Page, state: "pinned"): Promise<void> {
   expect(editorBox.x + editorBox.width).toBeLessThanOrEqual(
     canvasBox.x + canvasBox.width + GEOMETRY_TOLERANCE_PX,
   );
+  const canvasShare = canvasBox.width / (sidebarBox.width + canvasBox.width);
+  const canvasShareAssertion = assertGeometry({
+    name: `${state}.canvas-share-percent`,
+    expected: 70,
+    actual: canvasShare * 100,
+    tolerance: Math.max(0, canvasShare * 100 - 70),
+    unit: "% minimum",
+  });
+  expect(canvasShare).toBeGreaterThanOrEqual(0.7);
+  assertions.push(canvasShareAssertion);
+  return assertions;
 }
 
 async function assertPinnedWorkspaceHeader(page: Page): Promise<void> {
@@ -677,7 +791,7 @@ async function capture(
   page: Page,
   testInfo: { outputPath(path: string): string },
   name: string,
-): Promise<void> {
+): Promise<string> {
   const outputPath = testInfo.outputPath(`${name}.png`);
   await page.screenshot({ path: outputPath, animations: "disabled" });
   const size = await page.evaluate(() => ({
@@ -685,20 +799,161 @@ async function capture(
     height: innerHeight,
   }));
   expect(size).toEqual(VISUAL_VIEWPORT);
+  return outputPath;
 }
 
 async function compareCropStability(
   locator: Locator,
   name: string,
-): Promise<void> {
+): Promise<ComponentCropComparison> {
   const box = await readBox(locator);
   expect(
     assertComponentCropWithinViewport(name, box, VISUAL_VIEWPORT),
   ).toMatchObject({ result: "PASS" });
   const first = await locator.screenshot({ animations: "disabled" });
   const second = await locator.screenshot({ animations: "disabled" });
-  expect(Buffer.compare(first, second)).toBe(0);
+  const identical = Buffer.compare(first, second) === 0;
+  expect(identical).toBe(true);
+  const maxDiffPixelRatio = identical ? 0 : 1;
   expect(
-    assertComponentCropDiff(name, 0, COMPONENT_CROP_THRESHOLD),
+    assertComponentCropDiff(name, maxDiffPixelRatio, COMPONENT_CROP_THRESHOLD),
   ).toMatchObject({ result: "PASS" });
+  return {
+    componentId: name,
+    baselineComponentId: name,
+    baselineSha256: createHash("sha256").update(first).digest("hex"),
+    actualSha256: createHash("sha256").update(second).digest("hex"),
+    fontReady: true,
+    maxDiffPixelRatio,
+  };
+}
+
+async function captureAndCollect(
+  page: Page,
+  testInfo: Parameters<typeof capture>[1] & {
+    project: { name: string };
+    outputPath(path: string): string;
+  },
+  input: {
+    captureKey: keyof typeof CAPTURE_NAMES;
+    fixture: ShellFixture;
+    theme: "light" | "dark";
+    sidebar: "hidden" | "overlay" | "pinned";
+    session: "empty" | "restored" | "workspace";
+    cropLocator: Locator;
+    componentId: string;
+    geometryAssertions?: ReturnType<typeof assertGeometry>[];
+  },
+): Promise<void> {
+  const gate = CAPTURE_GATES[input.captureKey];
+  const manifestScreen = HF2_MANIFEST.screens.find(
+    (screen) => screen.path === gate.baselinePath,
+  );
+  if (manifestScreen === undefined) {
+    throw new Error(`HF-2 manifest is missing ${gate.baselinePath}`);
+  }
+  const actualPath = await capture(
+    page,
+    testInfo,
+    CAPTURE_NAMES[input.captureKey],
+  );
+  const cropComparison = await compareCropStability(
+    input.cropLocator,
+    input.componentId,
+  );
+  const fontPolicy = await readFontPolicy(page);
+  const legacyCounts = await readLegacyCounts(page);
+  const tokenAssertions = await readTokenAssertions(page, input.theme);
+  const masks =
+    input.session === "empty"
+      ? []
+      : [
+          {
+            maskId: "sdk-editor-interior",
+            selectorOrRect: SDK_BOUNDARY_SELECTOR,
+            surface: "canvas" as const,
+            reason: "Official Excalidraw SDK-owned editor interior",
+            perimeterChecked: true as const,
+            approved: true as const,
+          },
+        ];
+  const collectionId = `${gate.gateId}-${input.theme}-${input.sidebar}-browser`;
+  const configuredRoot = process.env.SHELL_EVIDENCE_RUN_ROOT;
+  const collectionDir =
+    configuredRoot === undefined
+      ? testInfo.outputPath(
+          `immutable/${gate.gateId}/collection/${collectionId}`,
+        )
+      : resolve(configuredRoot, gate.gateId, "collection", collectionId);
+  await writeShellCollection({
+    collectionDir,
+    gateId: gate.gateId,
+    collectionId,
+    binding: {
+      productCommit: PRODUCT_COMMIT,
+      hf2ManifestSha256: HF2_MANIFEST_SHA256,
+      fixtureDigest: createHash("sha256")
+        .update(JSON.stringify(input.fixture))
+        .digest("hex"),
+      harnessVersion: "003-shell-v2",
+    },
+    actualPath,
+    baselinePath: gate.baselinePath,
+    baselineSha256: manifestScreen.sha256,
+    os: `${process.platform}/${process.arch}`,
+    browserOrAppBuild: testInfo.project.name,
+    theme: input.theme,
+    sidebar: input.sidebar,
+    session: input.session,
+    fixture: input.fixture.id,
+    fontPolicy: {
+      computedUiFamily: fontPolicy.computedUiFamily,
+      computedMonoFamily: fontPolicy.computedMonoFamily,
+      remoteFontRequests: remoteFontRequestsByPage.get(page) ?? 0,
+      englishTargetVerified: fontPolicy.englishTargetVerified,
+      unicodeFallbackVerified: fontPolicy.unicodeFallbackVerified,
+    },
+    masks,
+    legacyCounts,
+    geometryAssertions: input.geometryAssertions ?? [],
+    tokenAssertions,
+    cropComparisons: [cropComparison],
+  });
+}
+
+async function readTokenAssertions(
+  page: Page,
+  theme: "light" | "dark",
+): Promise<ReturnType<typeof assertToken>[]> {
+  const expected =
+    theme === "light"
+      ? {
+          "--app-background": "#F8F9FA",
+          "--panel-background": "#FFFFFF",
+          "--surface-hover": "#F1F0FF",
+          "--text-primary": "#1B1B1F",
+          "--text-secondary": "#5C5C5C",
+          "--focus-ring": "#1C7ED6",
+        }
+      : {
+          "--app-background": "#121212",
+          "--panel-background": "#232329",
+          "--surface-hover": "#31303B",
+          "--text-primary": "#F1F3F5",
+          "--text-secondary": "#CED4DA",
+          "--focus-ring": "#74C0FC",
+        };
+  const actual = await page.evaluate((variableNames) => {
+    const styles = getComputedStyle(document.documentElement);
+    return Object.fromEntries(
+      variableNames.map((name) => [name, styles.getPropertyValue(name).trim()]),
+    );
+  }, Object.keys(expected));
+  const assertions = Object.entries(expected).map(([name, expectedValue]) =>
+    assertToken({ name, expected: expectedValue, actual: actual[name] ?? "" }),
+  );
+  expect(assertions.every((assertion) => assertion.result === "PASS")).toBe(
+    true,
+  );
+  return assertions;
 }

@@ -1,10 +1,20 @@
+import { createHash } from "node:crypto";
+import { constants as fsConstants } from "node:fs";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import {
   HF2_FONT_DEVIATION_ID,
   LEGACY_CHECK_IDS,
   PLATFORM_MONO_FONT_STACK,
   PLATFORM_UI_FONT_STACK,
+  collectionDigestFor,
   type AssertionResult,
+  type EvidenceBinding,
+  type GateId,
   type MaskDeclaration,
+  writeCollectorReport,
+  writeEnvironmentEvidence,
+  writeMaskEvidence,
 } from "./003Evidence";
 
 export type LegacyCheckId = (typeof LEGACY_CHECK_IDS)[number];
@@ -33,6 +43,44 @@ export interface ComponentCrop {
 export interface ViewportSize {
   readonly width: number;
   readonly height: number;
+}
+
+export interface ComponentCropComparison {
+  readonly componentId: string;
+  readonly baselineComponentId: string;
+  readonly baselineSha256: string;
+  readonly actualSha256: string;
+  readonly fontReady: boolean;
+  readonly maxDiffPixelRatio: number;
+  readonly threshold?: number;
+}
+
+export interface ShellCollectionInput {
+  readonly collectionDir: string;
+  readonly gateId: GateId;
+  readonly collectionId: string;
+  readonly binding: EvidenceBinding;
+  readonly actualPath: string;
+  readonly baselinePath: string;
+  readonly baselineSha256: string;
+  readonly os: string;
+  readonly browserOrAppBuild: string;
+  readonly theme: "light" | "dark";
+  readonly sidebar: "hidden" | "overlay" | "pinned";
+  readonly session: "empty" | "restored" | "workspace" | "recovery";
+  readonly fixture: string;
+  readonly fontPolicy: {
+    readonly computedUiFamily: string;
+    readonly computedMonoFamily: string;
+    readonly remoteFontRequests: number;
+    readonly englishTargetVerified: boolean;
+    readonly unicodeFallbackVerified: boolean;
+  };
+  readonly masks: readonly MaskDeclaration[];
+  readonly legacyCounts: Readonly<Partial<Record<LegacyCheckId, number>>>;
+  readonly geometryAssertions: readonly AssertionResult[];
+  readonly tokenAssertions: readonly AssertionResult[];
+  readonly cropComparisons: readonly ComponentCropComparison[];
 }
 
 export const VISUAL_VIEWPORT: ViewportSize = {
@@ -230,6 +278,31 @@ export function assertComponentCropDiff(
   );
 }
 
+export function assertBoundComponentCropComparison(
+  comparison: ComponentCropComparison,
+): AssertionResult {
+  const threshold = comparison.threshold ?? COMPONENT_CROP_THRESHOLD;
+  const hashesAreValid =
+    /^[0-9a-f]{64}$/u.test(comparison.baselineSha256) &&
+    /^[0-9a-f]{64}$/u.test(comparison.actualSha256);
+  const sameSemanticComponent =
+    comparison.componentId === comparison.baselineComponentId;
+  const ratioPass =
+    Number.isFinite(comparison.maxDiffPixelRatio) &&
+    comparison.maxDiffPixelRatio >= 0 &&
+    comparison.maxDiffPixelRatio <= threshold;
+  return result(
+    `component-crop-binding.${comparison.componentId}`,
+    `same semantic component; fonts ready; valid digests; diff <=${threshold}`,
+    `baseline=${comparison.baselineComponentId}; fontReady=${comparison.fontReady}; diff=${comparison.maxDiffPixelRatio}`,
+    "auxiliary; component crop only",
+    sameSemanticComponent &&
+      comparison.fontReady &&
+      hashesAreValid &&
+      ratioPass,
+  );
+}
+
 export function assertNoPrivateSdkSelectors(
   selectors: readonly string[],
 ): AssertionResult {
@@ -244,5 +317,136 @@ export function assertNoPrivateSdkSelectors(
     String(offenders.length),
     "shell selectors only",
     offenders.length === 0,
+  );
+}
+
+async function sha256File(path: string): Promise<string> {
+  return createHash("sha256")
+    .update(await readFile(path))
+    .digest("hex");
+}
+
+export async function writeShellCollection(
+  input: ShellCollectionInput,
+): Promise<void> {
+  await mkdir(dirname(input.collectionDir), { recursive: true });
+  await mkdir(input.collectionDir);
+  const actualOutput = join(input.collectionDir, "actual.png");
+  await copyFile(input.actualPath, actualOutput, fsConstants.COPYFILE_EXCL);
+  await writeFile(
+    join(input.collectionDir, "baseline.sha256"),
+    `${input.baselinePath} ${input.baselineSha256}\n`,
+    { encoding: "utf8", flag: "wx" },
+  );
+  await writeEnvironmentEvidence(
+    join(input.collectionDir, "environment.json"),
+    {
+      schemaVersion: 1,
+      collectionId: input.collectionId,
+      gateId: input.gateId,
+      route: "semantic-browser",
+      binding: input.binding,
+      os: input.os,
+      viewport: VISUAL_VIEWPORT,
+      browserOrAppBuild: input.browserOrAppBuild,
+      fontReady: true,
+      fontPolicy: {
+        deviationId: HF2_FONT_DEVIATION_ID,
+        uiStack: PLATFORM_UI_FONT_STACK,
+        monoStack: PLATFORM_MONO_FONT_STACK,
+        ...input.fontPolicy,
+      },
+      theme: input.theme,
+      sidebar: input.sidebar,
+      session: input.session,
+      fixture: input.fixture,
+      collector: {
+        tool: "playwright-003-shell",
+        version: "2",
+        runIdentity: `${input.binding.productCommit}:${input.collectionId}`,
+      },
+    },
+  );
+  await writeMaskEvidence(join(input.collectionDir, "mask.json"), {
+    schemaVersion: 1,
+    collectionId: input.collectionId,
+    gateId: input.gateId,
+    binding: input.binding,
+    masks: input.masks,
+  });
+  const cropAssertions = input.cropComparisons.map(
+    assertBoundComponentCropComparison,
+  );
+  const legacyAssertions = assertLegacyCounts(input.legacyCounts);
+  const assertions = {
+    schemaVersion: 1,
+    legacyCounts: input.legacyCounts,
+    legacyAssertions,
+    geometryAssertions: input.geometryAssertions,
+    tokenAssertions: input.tokenAssertions,
+    cropComparisons: input.cropComparisons,
+    cropAssertions,
+  };
+  await writeFile(
+    join(input.collectionDir, "assertions.json"),
+    `${JSON.stringify(assertions, null, 2)}\n`,
+    { encoding: "utf8", flag: "wx" },
+  );
+  const artifactNames = [
+    "actual.png",
+    "assertions.json",
+    "baseline.sha256",
+    "environment.json",
+    "mask.json",
+  ];
+  const artifactDigests = await Promise.all(
+    artifactNames.map(async (artifactPath) => ({
+      path: artifactPath,
+      sha256: await sha256File(join(input.collectionDir, artifactPath)),
+    })),
+  );
+  const allAssertions = [
+    ...legacyAssertions,
+    ...input.geometryAssertions,
+    ...input.tokenAssertions,
+    ...cropAssertions,
+  ];
+  const result = allAssertions.every((assertion) => assertion.result === "PASS")
+    ? "PASS"
+    : "FAIL";
+  const collectorReport = {
+    schemaVersion: 1,
+    collectionId: input.collectionId,
+    gateId: input.gateId,
+    route: "semantic-browser",
+    binding: input.binding,
+    collector: {
+      tool: "playwright-003-shell",
+      version: "2",
+      runIdentity: `${input.binding.productCommit}:${input.collectionId}`,
+    },
+    environmentPath: "environment.json",
+    maskPath: "mask.json",
+    claims: [
+      {
+        claimId: `${input.gateId}-shell-semantic`,
+        factClass: "webview-semantic",
+        primaryRoute: "semantic-browser",
+        result,
+        artifactRefs: artifactNames,
+      },
+    ],
+    artifactDigests,
+    collectionDigest: collectionDigestFor(artifactDigests),
+    result,
+  } as const;
+  await writeCollectorReport(
+    join(input.collectionDir, "collector-report.json"),
+    collectorReport,
+  );
+  await writeFile(
+    join(input.collectionDir, "collector-report.md"),
+    `# ${input.gateId} semantic browser collection\n\n- Collection: \`${input.collectionId}\`\n- Result: **${result}**\n- Baseline: \`${basename(input.baselinePath)}\`\n- Collection digest: \`${collectorReport.collectionDigest}\`\n- Visual reviewer verdict: not authored by this collector\n`,
+    { encoding: "utf8", flag: "wx" },
   );
 }

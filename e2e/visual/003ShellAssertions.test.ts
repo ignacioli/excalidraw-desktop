@@ -1,3 +1,6 @@
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   HF2_FONT_DEVIATION_ID,
@@ -9,11 +12,13 @@ import {
   SDK_BOUNDARY_SELECTOR,
   SHELL_VISUAL_SELECTORS,
   assertComponentCropDiff,
+  assertBoundComponentCropComparison,
   assertComponentCropWithinViewport,
   assertGeometry,
   assertLegacyCounts,
   assertNoPrivateSdkSelectors,
   assertPlatformFontPolicy,
+  writeShellCollection,
 } from "./003ShellAssertions";
 
 describe("HF2-FONT-001 visual assertions", () => {
@@ -118,5 +123,133 @@ describe("003 shell visual contract assertions", () => {
     expect(assertNoPrivateSdkSelectors([".App-menu__items"])).toMatchObject({
       result: "FAIL",
     });
+  });
+
+  it("requires component-crop semantic, font, digest, and ratio bindings", () => {
+    const comparison = {
+      componentId: "workspace-header",
+      baselineComponentId: "workspace-header",
+      baselineSha256: "ab".repeat(32),
+      actualSha256: "cd".repeat(32),
+      fontReady: true,
+      maxDiffPixelRatio: 0.009,
+    };
+    expect(assertBoundComponentCropComparison(comparison)).toMatchObject({
+      result: "PASS",
+    });
+    expect(
+      assertBoundComponentCropComparison({
+        ...comparison,
+        baselineComponentId: "welcome-actions",
+      }),
+    ).toMatchObject({ result: "FAIL" });
+    expect(
+      assertBoundComponentCropComparison({
+        ...comparison,
+        fontReady: false,
+      }),
+    ).toMatchObject({ result: "FAIL" });
+    expect(
+      assertBoundComponentCropComparison({
+        ...comparison,
+        maxDiffPixelRatio: 0.011,
+      }),
+    ).toMatchObject({ result: "FAIL" });
+  });
+
+  it("writes the immutable T011 collector layout without reviewer state", async () => {
+    const root = await mkdtemp(join(tmpdir(), "003-shell-collection-"));
+    try {
+      const actualPath = join(root, "source.png");
+      await writeFile(actualPath, Buffer.from("deterministic-png-fixture"));
+      const collectionDir = join(root, "gate", "collection", "browser");
+      await writeShellCollection({
+        collectionDir,
+        collectionId: "VSL-001-browser",
+        gateId: "VSL-001",
+        binding: {
+          productCommit: "ab".repeat(20),
+          hf2ManifestSha256: "cd".repeat(32),
+          fixtureDigest: "ef".repeat(32),
+          harnessVersion: "003-shell-v2",
+        },
+        actualPath,
+        baselinePath: "screens/workspace-pinned-light.png",
+        baselineSha256: "12".repeat(32),
+        os: "darwin",
+        browserOrAppBuild: "chromium",
+        theme: "light",
+        sidebar: "pinned",
+        session: "workspace",
+        fixture: "pinned",
+        fontPolicy: {
+          computedUiFamily: PLATFORM_UI_FONT_STACK,
+          computedMonoFamily: PLATFORM_MONO_FONT_STACK,
+          remoteFontRequests: 0,
+          englishTargetVerified: true,
+          unicodeFallbackVerified: true,
+        },
+        masks: [
+          {
+            maskId: "sdk-canvas",
+            selectorOrRect: ".excalidraw-editor",
+            surface: "canvas",
+            reason: "SDK-owned interior",
+            perimeterChecked: true,
+            approved: true,
+          },
+        ],
+        legacyCounts: Object.fromEntries(
+          [
+            "globalNewDrawing",
+            "textSidebar",
+            "largePinUnpin",
+            "topLevelSaveExportAppearance",
+            "autosaveStrip",
+            "tabScrollbar",
+            "sidebarScrollbar",
+            "placeholderIcons",
+            "horizontalEllipsis",
+            "duplicateWorkspaceRoots",
+            "headerActionOverflow",
+          ].map((id) => [id, 0]),
+        ),
+        geometryAssertions: [
+          assertGeometry({
+            name: "sidebar",
+            expected: 360,
+            actual: 360,
+            tolerance: 2,
+          }),
+        ],
+        tokenAssertions: [],
+        cropComparisons: [
+          {
+            componentId: "workspace-header",
+            baselineComponentId: "workspace-header",
+            baselineSha256: "34".repeat(32),
+            actualSha256: "56".repeat(32),
+            fontReady: true,
+            maxDiffPixelRatio: 0,
+          },
+        ],
+      });
+      const report = JSON.parse(
+        await readFile(join(collectionDir, "collector-report.json"), "utf8"),
+      );
+      expect(report).toMatchObject({
+        route: "semantic-browser",
+        result: "PASS",
+      });
+      expect(report).not.toHaveProperty("reviewerVerdict");
+      expect(report).not.toHaveProperty("productOwnerDecision");
+      await expect(
+        writeShellCollection({
+          collectionDir,
+        } as never),
+      ).rejects.toMatchObject({ code: "EEXIST" });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
