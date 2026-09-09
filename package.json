@@ -21,6 +21,8 @@
     "native:macos:test": "node --test scripts/native-macos-validation.test.mjs",
     "native:screen:prepare": "node scripts/native-screen-prepare.mjs",
     "native:screen:prepare:test": "node --test scripts/native-screen-prepare.test.mjs",
+    "native:screen:capture": "node scripts/native-screen-capture.mjs",
+    "native:screen:capture:test": "node --test scripts/native-screen-capture.test.mjs",
     "evidence:publish": "node scripts/publish-evidence.mjs",
     "evidence:publish:test": "node --test scripts/publish-evidence.test.mjs",
     "fonts:build": "uv run --frozen scripts/build-fonts.py",

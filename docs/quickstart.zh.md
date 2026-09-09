@@ -133,6 +133,22 @@ pnpm native:screen:prepare -- \
 
 六屏 final plan 使用 `FINAL`。允许的 isolation mode 为 `disposable-macos-user`、`ephemeral-vm`、`verified-os-home-redirect`。命令只 provision 仓库已声明 fixture，为每张屏创建独立 profile，并另建原生入口 profile，然后写 immutable、nonce-bound plan。production ready probe 在缺少 launcher 提供的 plan/gate/nonce 时完全 inert。runtime app-data 与 WebKit path 仍必须实际落在所选 profile 内，否则后续 driver 返回 `BLOCKED`。
 
+requested state 到达 nonce-bound ready candidate 后，只 capture 该 child 的 owned native window：
+
+```bash
+pnpm native:screen:capture -- \
+  --plan <absolute-capture-plan.json> \
+  --gate VSL-001 \
+  --collection-dir <absolute-new-collection-dir>
+
+pnpm native:screen:capture -- \
+  --plan <absolute-final-capture-plan.json> \
+  --all-final \
+  --collection-root <absolute-new-final-collection-root>
+```
+
+driver 通过 child PID 解析唯一 window，调用 macOS window-only capture，把 raw dimension 校验为严格的 `1280×760 × backingScale`，再经一次 `lanczos3-srgb-v1` 比例 normalization 输出 `actual.png`。禁止 full-screen/coordinate search、crop、padding、超出 scale normalization 的 stretch 或 visual repair。每个输出目录必须不存在。退出码为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
+
 最终安装包的原生入口 collection 必须同时提供上述 FINAL plan、sealed manifest 与 immutable binding，且输出目录必须尚不存在：
 
 ```bash
