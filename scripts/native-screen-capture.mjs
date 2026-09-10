@@ -8,7 +8,6 @@ import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { validateCapturePlan } from "./native-screen-prepare.mjs";
 import { inspectBundle } from "./native-macos-validation.mjs";
-import { withVoiceOverActivation } from "./native-voiceover.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
@@ -218,114 +217,106 @@ function appleScriptString(value) {
   return JSON.stringify(String(value));
 }
 
-async function waitForNamedUi(
-  helper,
-  pid,
-  name,
-  press = false,
-  timeoutMs = 10_000,
-) {
+function namedUiScript(pid, name, press) {
+  return `
+tell application "System Events"
+  if not (exists application process whose unix id is ${Number(pid)}) then return "missing-process"
+  set appProcess to first application process whose unix id is ${Number(pid)}
+  tell appProcess
+    set frontmost to true
+    if not (exists front window) then return "missing-window"
+    repeat with candidate in entire contents of front window
+      try
+        if (name of candidate as text) is ${appleScriptString(name)} then
+          ${press ? 'perform action "AXPress" of candidate' : ""}
+          return "found"
+        end if
+      end try
+    end repeat
+  end tell
+end tell
+return "not-found"`;
+}
+
+async function waitForNamedUi(pid, name, press = false, timeoutMs = 10_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const result = spawnSync(
-      helper,
-      [String(pid), press ? "press" : "query", name],
-      {
-        encoding: "utf8",
-        timeout: 5000,
-      },
+      "/usr/bin/osascript",
+      ["-e", namedUiScript(pid, name, press)],
+      { encoding: "utf8" },
     );
     if (result.status === 0 && result.stdout.trim() === "found") return;
-    if (result.status !== 3)
+    if (
+      result.status !== 0 &&
+      !/Invalid index|Can.t get/u.test(result.stderr)
+    ) {
       blocked(
-        "AX operation failed for " +
-          name +
-          ": " +
-          (result.stderr || result.stdout).trim(),
+        `Accessibility failed while waiting for ${name}: ${result.stderr.trim()}`,
       );
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-  blocked("Accessibility could not reach user-facing control: " + name);
-}
-
-function voiceOverState() {
-  return (
-    run(
-      "/usr/bin/defaults",
-      ["read", "com.apple.universalaccess", "voiceOverOnOffKey"],
-      "VoiceOver state",
-    ).trim() === "1"
-  );
-}
-
-async function waitForVoiceOver(expected) {
-  const deadline = Date.now() + 10_000;
-  while (Date.now() < deadline) {
-    if (voiceOverState() === expected) return;
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-  blocked("VoiceOver did not reach the requested state");
-}
-
-async function driveNativeScreenState(plan, screen, pid, helper) {
-  const ready = async () => {
-    try {
-      await waitForNamedUi(helper, pid, "Open Workspace", false, 2500);
-      return true;
-    } catch (error) {
-      if (!error.message.startsWith("Accessibility could not reach"))
-        throw error;
-      return false;
     }
-  };
-  await withVoiceOverActivation(
-    {
-      read: voiceOverState,
-      toggle: () =>
-        run(
-          "/usr/bin/osascript",
-          [
-            "-e",
-            'tell application "System Events" to key code 96 using command down',
-          ],
-          "VoiceOver toggle",
-        ),
-      wait: waitForVoiceOver,
-      ready,
-    },
-    async () => {
-      run(helper, [String(pid), "resize"], "owned-window resize");
-      for (const action of nativeStateActions(plan, screen)) {
-        if (action.type === "press") {
-          await waitForNamedUi(helper, pid, action.name, true);
-        } else {
-          run(helper, [String(pid), "raise"], "owned-window focus");
-          const script = [
-            'tell application "System Events"',
-            'keystroke "g" using {command down, shift down}',
-            "delay 0.3",
-            "keystroke " + appleScriptString(action.path),
-            "key code 36",
-            "delay 0.5",
-            "key code 36",
-            "end tell",
-          ].join("\n");
-          run(
-            "/usr/bin/osascript",
-            ["-e", script],
-            "native directory selection",
-          );
-          if (screen.workspaceName)
-            await waitForNamedUi(helper, pid, screen.workspaceName);
-        }
-      }
-    },
-  );
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  blocked(`Accessibility could not reach user-facing control: ${name}`);
 }
 
-function observeOwnedWindow(pid, helper) {
+function chooseDirectory(pid, directory) {
+  const script = `
+tell application "System Events"
+  set appProcess to first application process whose unix id is ${Number(pid)}
+  tell appProcess to set frontmost to true
+  keystroke "g" using {command down, shift down}
+  delay 0.2
+  keystroke ${appleScriptString(directory)}
+  key code 36
+  delay 0.4
+  key code 36
+end tell`;
+  run("/usr/bin/osascript", ["-e", script], "native directory selection");
+}
+
+function resizeOwnedWindow(pid) {
+  const script = `
+tell application "System Events"
+  set appProcess to first application process whose unix id is ${Number(pid)}
+  tell appProcess
+    set frontmost to true
+    set size of front window to {1280, 760}
+  end tell
+end tell`;
+  run("/usr/bin/osascript", ["-e", script], "native window sizing");
+}
+
+async function driveNativeScreenState(plan, screen, pid) {
+  await waitForNamedUi(pid, "Open Workspace");
+  resizeOwnedWindow(pid);
+  for (const action of nativeStateActions(plan, screen)) {
+    if (action.type === "press") {
+      await waitForNamedUi(pid, action.name, true);
+    } else {
+      chooseDirectory(pid, action.path);
+      if (screen.workspaceName) {
+        await waitForNamedUi(pid, screen.workspaceName);
+      }
+    }
+  }
+}
+
+function observeOwnedWindow(pid) {
+  const script = `
+tell application "System Events"
+  set appProcess to first application process whose unix id is ${Number(pid)}
+  tell appProcess
+    set frontmost to true
+    set targetWindow to first window
+    set windowNumber to value of attribute "AXWindowNumber" of targetWindow
+    set windowSize to size of targetWindow
+    set windowPosition to position of targetWindow
+    return {windowNumber, item 1 of windowSize, item 2 of windowSize, item 1 of windowPosition, item 2 of windowPosition, 1}
+  end tell
+end tell`;
   return parseAxWindowObservation(
-    run(helper, [String(pid), "window"], "owned-window lookup"),
+    run("/usr/bin/osascript", ["-e", script], "owned-window lookup"),
   );
 }
 
@@ -446,12 +437,6 @@ async function captureGate({
   await fsp.mkdir(collectionDir);
   if ((await fsp.readdir(screen.profileRoot)).length !== 0)
     blocked(`${screen.gateId} profile is not empty`);
-  const helper = path.join(collectionDir, "native-screen-ax");
-  run(
-    "/usr/bin/swiftc",
-    [path.join(REPO_ROOT, "scripts/native-screen-ax.swift"), "-o", helper],
-    "compile AX client",
-  );
   const child = launchPackage(
     inputs.packageManifest,
     planPath,
@@ -460,7 +445,7 @@ async function captureGate({
   );
   let candidate;
   try {
-    await driveNativeScreenState(inputs.plan, screen, child.pid, helper);
+    await driveNativeScreenState(inputs.plan, screen, child.pid);
     candidate = await waitForReadyCandidate(
       path.join(
         inputs.plan.controlDir,
@@ -469,7 +454,7 @@ async function captureGate({
       timeoutMs,
     );
     validateReadyCandidate(inputs.plan, screen, candidate, child.pid);
-    const window = observeOwnedWindow(child.pid, helper);
+    const window = observeOwnedWindow(child.pid);
     if (!window.frontmost) blocked("owned window is not frontmost");
     const rawPath = path.join(collectionDir, "raw-window.png");
     run(
@@ -552,7 +537,6 @@ async function captureGate({
       masks: [],
     });
     const artifactNames = [
-      "native-screen-ax",
       "actual.png",
       "baseline.sha256",
       "capture-plan.json",
@@ -608,15 +592,6 @@ async function captureGate({
       { encoding: "utf8", flag: "wx" },
     );
     return report;
-  } catch (error) {
-    await writeJson(path.join(collectionDir, "failure.json"), {
-      result: "BLOCKED",
-      phase: candidate ? "capture-or-verification" : "state-or-readiness",
-      message: String(error.message ?? error),
-      productCommit: inputs.plan.productCommit,
-      pid: child.pid,
-    });
-    throw error;
   } finally {
     await stopOwnedChild(child);
   }
