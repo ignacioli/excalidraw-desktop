@@ -187,7 +187,18 @@ async function writeJsonExclusive(filePath, value) {
 }
 
 async function provisionFixture(runRoot, screens) {
-  const workspaceRoot = path.join(runRoot, "fixture", "workspace");
+  const declaredWorkspaceName =
+    screens.length === 1 && typeof screens[0]?.workspaceName === "string"
+      ? screens[0].workspaceName
+      : "workspace";
+  if (
+    declaredWorkspaceName === "." ||
+    declaredWorkspaceName === ".." ||
+    /[\\/\0]/u.test(declaredWorkspaceName)
+  ) {
+    blocked("fixture workspace name is not a safe path component");
+  }
+  const workspaceRoot = path.join(runRoot, "fixture", declaredWorkspaceName);
   await fsp.mkdir(path.join(workspaceRoot, "flows"), { recursive: true });
   const drawingNames = new Set(
     screens

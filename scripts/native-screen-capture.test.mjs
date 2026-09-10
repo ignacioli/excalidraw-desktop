@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { describe, it } from "node:test";
 import {
   NativeScreenCaptureError,
+  nativeStateActions,
   normalizationArgs,
   parseAxWindowObservation,
   readPngDimensions,
@@ -133,6 +134,41 @@ describe("native screen capture", () => {
         NativeScreenCaptureError,
       );
     }
+  });
+
+  it("drives VSL state only through declared user-facing entrypoints", () => {
+    assert.deepEqual(
+      nativeStateActions(
+        { fixture: { workspaceRoot: "/tmp/run/fixture/Design Workspace" } },
+        {
+          sessionState: "workspace",
+          sidebarState: "pinned",
+          selectedDirectory: "flows",
+          tabs: [
+            "Architecture.excalidraw",
+            "Migration.excalidraw",
+            "Research.excalidraw",
+          ],
+          activeDocument: "Architecture.excalidraw",
+        },
+      ),
+      [
+        { type: "press", name: "Open Workspace" },
+        {
+          type: "choose-directory",
+          path: "/tmp/run/fixture/Design Workspace",
+        },
+        { type: "press", name: "Toggle workspace sidebar" },
+        { type: "press", name: "flows" },
+        { type: "press", name: "Architecture" },
+        { type: "press", name: "Migration" },
+        { type: "press", name: "Research" },
+        { type: "press", name: "flows" },
+        { type: "press", name: "Architecture.excalidraw" },
+        { type: "press", name: "Toggle workspace sidebar" },
+        { type: "press", name: "Library" },
+      ],
+    );
   });
 
   it("exposes fixed help and invalid-invocation exit semantics", () => {

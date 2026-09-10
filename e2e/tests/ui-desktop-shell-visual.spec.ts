@@ -234,7 +234,7 @@ test.describe("003 shell visual harness", () => {
     await expect(page.locator(".file-sidebar")).toBeVisible();
     await expect(
       page.locator('[role="treeitem"][data-kind="workspace"]', {
-        hasText: "Architecture",
+        hasText: "Design Workspace",
       }),
     ).toBeVisible();
     await expect(page.getByRole("treeitem", { name: "Flows" })).toBeVisible();

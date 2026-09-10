@@ -63,6 +63,7 @@ describe("native screen prepare", () => {
     });
     assert.equal(plan.screens.length, 1);
     assert.equal(plan.screens[0].gateId, "VSL-001");
+    assert.equal(path.basename(plan.fixture.workspaceRoot), "Design Workspace");
     assert.equal(plan.screens[0].viewport.width, 1280);
     assert.match(plan.screens[0].expectedStateFingerprint, /^[0-9a-f]{64}$/u);
     assert.equal(

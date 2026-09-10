@@ -160,8 +160,8 @@ const CLEAN_TAB: ShellFixtureTab = {
 
 const VSL_WORKSPACE: ShellFixtureWorkspace = {
   id: "fixture-vsl-workspace",
-  name: "Architecture",
-  rootPath: "/fixtures/architecture",
+  name: "Design Workspace",
+  rootPath: "/fixtures/design-workspace",
   createdAt: 1_700_000_020,
 };
 

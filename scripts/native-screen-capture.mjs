@@ -183,6 +183,125 @@ function run(command, args, label) {
   return result.stdout;
 }
 
+function drawingDisplayName(name) {
+  return String(name).replace(/\.excalidraw(?:\.json)?$/iu, "");
+}
+
+export function nativeStateActions(plan, screen) {
+  if (screen.sessionState !== "workspace") return [];
+  const actions = [
+    { type: "press", name: "Open Workspace" },
+    { type: "choose-directory", path: plan.fixture.workspaceRoot },
+    { type: "press", name: "Toggle workspace sidebar" },
+  ];
+  if (screen.selectedDirectory) {
+    actions.push({ type: "press", name: screen.selectedDirectory });
+  }
+  for (const tab of screen.tabs ?? []) {
+    actions.push({ type: "press", name: drawingDisplayName(tab) });
+  }
+  if (screen.selectedDirectory) {
+    actions.push({ type: "press", name: screen.selectedDirectory });
+  }
+  if (screen.activeDocument) {
+    actions.push({ type: "press", name: screen.activeDocument });
+  }
+  if (screen.sidebarState === "pinned") {
+    actions.push({ type: "press", name: "Toggle workspace sidebar" });
+  }
+  actions.push({ type: "press", name: "Library" });
+  return actions;
+}
+
+function appleScriptString(value) {
+  return JSON.stringify(String(value));
+}
+
+function namedUiScript(pid, name, press) {
+  return `
+tell application "System Events"
+  if not (exists application process whose unix id is ${Number(pid)}) then return "missing-process"
+  set appProcess to first application process whose unix id is ${Number(pid)}
+  tell appProcess
+    set frontmost to true
+    if not (exists front window) then return "missing-window"
+    repeat with candidate in entire contents of front window
+      try
+        if (name of candidate as text) is ${appleScriptString(name)} then
+          ${press ? 'perform action "AXPress" of candidate' : ""}
+          return "found"
+        end if
+      end try
+    end repeat
+  end tell
+end tell
+return "not-found"`;
+}
+
+async function waitForNamedUi(pid, name, press = false, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = spawnSync(
+      "/usr/bin/osascript",
+      ["-e", namedUiScript(pid, name, press)],
+      { encoding: "utf8" },
+    );
+    if (result.status === 0 && result.stdout.trim() === "found") return;
+    if (
+      result.status !== 0 &&
+      !/Invalid index|Can.t get/u.test(result.stderr)
+    ) {
+      blocked(
+        `Accessibility failed while waiting for ${name}: ${result.stderr.trim()}`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  blocked(`Accessibility could not reach user-facing control: ${name}`);
+}
+
+function chooseDirectory(pid, directory) {
+  const script = `
+tell application "System Events"
+  set appProcess to first application process whose unix id is ${Number(pid)}
+  tell appProcess to set frontmost to true
+  keystroke "g" using {command down, shift down}
+  delay 0.2
+  keystroke ${appleScriptString(directory)}
+  key code 36
+  delay 0.4
+  key code 36
+end tell`;
+  run("/usr/bin/osascript", ["-e", script], "native directory selection");
+}
+
+function resizeOwnedWindow(pid) {
+  const script = `
+tell application "System Events"
+  set appProcess to first application process whose unix id is ${Number(pid)}
+  tell appProcess
+    set frontmost to true
+    set size of front window to {1280, 760}
+  end tell
+end tell`;
+  run("/usr/bin/osascript", ["-e", script], "native window sizing");
+}
+
+async function driveNativeScreenState(plan, screen, pid) {
+  await waitForNamedUi(pid, "Open Workspace");
+  resizeOwnedWindow(pid);
+  for (const action of nativeStateActions(plan, screen)) {
+    if (action.type === "press") {
+      await waitForNamedUi(pid, action.name, true);
+    } else {
+      chooseDirectory(pid, action.path);
+      if (screen.workspaceName) {
+        await waitForNamedUi(pid, screen.workspaceName);
+      }
+    }
+  }
+}
+
 function observeOwnedWindow(pid) {
   const script = `
 tell application "System Events"
@@ -326,6 +445,7 @@ async function captureGate({
   );
   let candidate;
   try {
+    await driveNativeScreenState(inputs.plan, screen, child.pid);
     candidate = await waitForReadyCandidate(
       path.join(
         inputs.plan.controlDir,
