@@ -3,9 +3,10 @@ import { spawnSync } from "node:child_process";
 import { describe, it } from "node:test";
 import {
   NativeScreenCaptureError,
-  nativeStateActions,
   normalizationArgs,
+  operatorPreparationMessage,
   parseAxWindowObservation,
+  readyTimeoutForScreen,
   readPngDimensions,
   validateRawDimensions,
   validateReadyCandidate,
@@ -30,6 +31,15 @@ const plan = {
 const screen = {
   gateId: "VSL-001",
   profileRoot,
+  preparationMode: "operator-assisted",
+  theme: "light",
+  sessionState: "workspace",
+  sidebarState: "pinned",
+  workspaceName: "Design Workspace",
+  selectedDirectory: "flows",
+  tabs: ["Architecture.excalidraw"],
+  activeDocument: "Architecture.excalidraw",
+  unsaved: false,
   expectedStateFingerprint: "12".repeat(32),
 };
 
@@ -136,39 +146,17 @@ describe("native screen capture", () => {
     }
   });
 
-  it("drives VSL state only through declared user-facing entrypoints", () => {
-    assert.deepEqual(
-      nativeStateActions(
-        { fixture: { workspaceRoot: "/tmp/run/fixture/Design Workspace" } },
-        {
-          sessionState: "workspace",
-          sidebarState: "pinned",
-          selectedDirectory: "flows",
-          tabs: [
-            "Architecture.excalidraw",
-            "Migration.excalidraw",
-            "Research.excalidraw",
-          ],
-          activeDocument: "Architecture.excalidraw",
-        },
-      ),
-      [
-        { type: "press", name: "Open Workspace" },
-        {
-          type: "choose-directory",
-          path: "/tmp/run/fixture/Design Workspace",
-        },
-        { type: "press", name: "Toggle workspace sidebar" },
-        { type: "press", name: "flows" },
-        { type: "press", name: "Architecture" },
-        { type: "press", name: "Migration" },
-        { type: "press", name: "Research" },
-        { type: "press", name: "flows" },
-        { type: "press", name: "Architecture.excalidraw" },
-        { type: "press", name: "Toggle workspace sidebar" },
-        { type: "press", name: "Library" },
-      ],
+  it("waits for attested operator setup without defining content actions", () => {
+    assert.equal(readyTimeoutForScreen(screen, 15_000), 180_000);
+    assert.equal(
+      readyTimeoutForScreen({ ...screen, preparationMode: "fixture" }, 15_000),
+      15_000,
     );
+    const message = operatorPreparationMessage(screen);
+    assert.match(message, /VSL-001/u);
+    assert.match(message, /Design Workspace/u);
+    assert.match(message, /Architecture\.excalidraw/u);
+    assert.match(message, /operator actions are state setup, not evidence/u);
   });
 
   it("exposes fixed help and invalid-invocation exit semantics", () => {
@@ -184,6 +172,8 @@ describe("native screen capture", () => {
       help.stdout,
       /0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation/u,
     );
+    assert.match(help.stdout, /OPERATOR_SETUP_REQUIRED/u);
+    assert.match(help.stdout, /operator actions are not evidence/u);
     const invalidRun = spawnSync(
       process.execPath,
       ["scripts/native-screen-capture.mjs"],

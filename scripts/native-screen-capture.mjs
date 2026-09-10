@@ -20,6 +20,7 @@ const FINAL_GATES = [
   "HF2-06",
 ];
 const READY_TIMEOUT_MS = 15_000;
+const OPERATOR_READY_TIMEOUT_MS = 180_000;
 
 export class NativeScreenCaptureError extends Error {
   constructor(message, exitCode = 2) {
@@ -183,141 +184,72 @@ function run(command, args, label) {
   return result.stdout;
 }
 
-function drawingDisplayName(name) {
-  return String(name).replace(/\.excalidraw(?:\.json)?$/iu, "");
+export function readyTimeoutForScreen(screen, defaultTimeoutMs) {
+  return screen.preparationMode === "operator-assisted"
+    ? Math.max(defaultTimeoutMs, OPERATOR_READY_TIMEOUT_MS)
+    : defaultTimeoutMs;
 }
 
-export function nativeStateActions(plan, screen) {
-  if (screen.sessionState !== "workspace") return [];
-  const actions = [
-    { type: "press", name: "Open Workspace" },
-    { type: "choose-directory", path: plan.fixture.workspaceRoot },
-    { type: "press", name: "Toggle workspace sidebar" },
-  ];
-  if (screen.selectedDirectory) {
-    actions.push({ type: "press", name: screen.selectedDirectory });
-  }
-  for (const tab of screen.tabs ?? []) {
-    actions.push({ type: "press", name: drawingDisplayName(tab) });
-  }
-  if (screen.selectedDirectory) {
-    actions.push({ type: "press", name: screen.selectedDirectory });
-  }
-  if (screen.activeDocument) {
-    actions.push({ type: "press", name: screen.activeDocument });
-  }
-  if (screen.sidebarState === "pinned") {
-    actions.push({ type: "press", name: "Toggle workspace sidebar" });
-  }
-  actions.push({ type: "press", name: "Library" });
-  return actions;
+export function operatorPreparationMessage(screen, workspaceRoot) {
+  return [
+    "OPERATOR_SETUP_REQUIRED",
+    JSON.stringify({
+      gateId: screen.gateId,
+      workspaceRoot: workspaceRoot ?? null,
+      theme: screen.theme,
+      sessionState: screen.sessionState,
+      sidebarState: screen.sidebarState,
+      workspaceName: screen.workspaceName,
+      selectedDirectory: screen.selectedDirectory,
+      tabs: screen.tabs,
+      activeDocument: screen.activeDocument,
+      unsaved: screen.unsaved,
+    }),
+    "Use normal application UI to establish this state; operator actions are state setup, not evidence.",
+  ].join("\n");
 }
 
-function appleScriptString(value) {
-  return JSON.stringify(String(value));
-}
-
-function namedUiScript(pid, name, press) {
-  return `
-tell application "System Events"
-  if not (exists application process whose unix id is ${Number(pid)}) then return "missing-process"
-  set appProcess to first application process whose unix id is ${Number(pid)}
-  tell appProcess
-    set frontmost to true
-    if not (exists front window) then return "missing-window"
-    repeat with candidate in entire contents of front window
-      try
-        if (name of candidate as text) is ${appleScriptString(name)} then
-          ${press ? 'perform action "AXPress" of candidate' : ""}
-          return "found"
-        end if
-      end try
-    end repeat
-  end tell
-end tell
-return "not-found"`;
-}
-
-async function waitForNamedUi(pid, name, press = false, timeoutMs = 10_000) {
-  const deadline = Date.now() + timeoutMs;
+async function resizeOwnedWindow(pid, helper) {
+  const deadline = Date.now() + 10_000;
+  let detail = "application window did not become available";
   while (Date.now() < deadline) {
-    const result = spawnSync(
-      "/usr/bin/osascript",
-      ["-e", namedUiScript(pid, name, press)],
-      { encoding: "utf8" },
-    );
-    if (result.status === 0 && result.stdout.trim() === "found") return;
-    if (
-      result.status !== 0 &&
-      !/Invalid index|Can.t get/u.test(result.stderr)
-    ) {
-      blocked(
-        `Accessibility failed while waiting for ${name}: ${result.stderr.trim()}`,
-      );
-    }
+    const result = spawnSync(helper, [String(pid), "resize"], {
+      encoding: "utf8",
+    });
+    if (result.status === 0) return;
+    detail = (result.stderr || result.stdout || detail).trim();
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  blocked(`Accessibility could not reach user-facing control: ${name}`);
+  blocked(`native window sizing failed: ${detail}`);
 }
 
-function chooseDirectory(pid, directory) {
-  const script = `
-tell application "System Events"
-  set appProcess to first application process whose unix id is ${Number(pid)}
-  tell appProcess to set frontmost to true
-  keystroke "g" using {command down, shift down}
-  delay 0.2
-  keystroke ${appleScriptString(directory)}
-  key code 36
-  delay 0.4
-  key code 36
-end tell`;
-  run("/usr/bin/osascript", ["-e", script], "native directory selection");
+function observeOwnedWindow(pid, helper) {
+  return parseAxWindowObservation(
+    run(helper, [String(pid), "window"], "owned-window lookup"),
+  );
 }
 
-function resizeOwnedWindow(pid) {
-  const script = `
-tell application "System Events"
-  set appProcess to first application process whose unix id is ${Number(pid)}
-  tell appProcess
-    set frontmost to true
-    set size of front window to {1280, 760}
-  end tell
-end tell`;
-  run("/usr/bin/osascript", ["-e", script], "native window sizing");
-}
-
-async function driveNativeScreenState(plan, screen, pid) {
-  await waitForNamedUi(pid, "Open Workspace");
-  resizeOwnedWindow(pid);
-  for (const action of nativeStateActions(plan, screen)) {
-    if (action.type === "press") {
-      await waitForNamedUi(pid, action.name, true);
-    } else {
-      chooseDirectory(pid, action.path);
-      if (screen.workspaceName) {
-        await waitForNamedUi(pid, screen.workspaceName);
-      }
+async function compileWindowHelper(controlDir) {
+  const helper = path.join(controlDir, "native-screen-window");
+  try {
+    await fsp.access(helper, fsConstants.X_OK);
+    return helper;
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      blocked(`native window adapter is unavailable: ${String(error)}`);
     }
   }
-}
-
-function observeOwnedWindow(pid) {
-  const script = `
-tell application "System Events"
-  set appProcess to first application process whose unix id is ${Number(pid)}
-  tell appProcess
-    set frontmost to true
-    set targetWindow to first window
-    set windowNumber to value of attribute "AXWindowNumber" of targetWindow
-    set windowSize to size of targetWindow
-    set windowPosition to position of targetWindow
-    return {windowNumber, item 1 of windowSize, item 2 of windowSize, item 1 of windowPosition, item 2 of windowPosition, 1}
-  end tell
-end tell`;
-  return parseAxWindowObservation(
-    run("/usr/bin/osascript", ["-e", script], "owned-window lookup"),
+  run(
+    "/usr/bin/xcrun",
+    [
+      "swiftc",
+      path.join(REPO_ROOT, "scripts/native-screen-window.swift"),
+      "-o",
+      helper,
+    ],
+    "compile native window adapter",
   );
+  return helper;
 }
 
 async function waitForReadyCandidate(filePath, timeoutMs = READY_TIMEOUT_MS) {
@@ -437,6 +369,7 @@ async function captureGate({
   await fsp.mkdir(collectionDir);
   if ((await fsp.readdir(screen.profileRoot)).length !== 0)
     blocked(`${screen.gateId} profile is not empty`);
+  const windowHelper = await compileWindowHelper(inputs.plan.controlDir);
   const child = launchPackage(
     inputs.packageManifest,
     planPath,
@@ -445,16 +378,21 @@ async function captureGate({
   );
   let candidate;
   try {
-    await driveNativeScreenState(inputs.plan, screen, child.pid);
+    await resizeOwnedWindow(child.pid, windowHelper);
+    if (screen.preparationMode === "operator-assisted") {
+      console.log(
+        operatorPreparationMessage(screen, inputs.plan.fixture.workspaceRoot),
+      );
+    }
     candidate = await waitForReadyCandidate(
       path.join(
         inputs.plan.controlDir,
         `${screen.gateId}.ready-candidate.json`,
       ),
-      timeoutMs,
+      readyTimeoutForScreen(screen, timeoutMs),
     );
     validateReadyCandidate(inputs.plan, screen, candidate, child.pid);
-    const window = observeOwnedWindow(child.pid);
+    const window = observeOwnedWindow(child.pid, windowHelper);
     if (!window.frontmost) blocked("owned window is not frontmost");
     const rawPath = path.join(collectionDir, "raw-window.png");
     run(
@@ -509,6 +447,8 @@ async function captureGate({
       viewport: { width: 1280, height: 760 },
       browserOrAppBuild: inputs.packageManifest.appPath,
       fixture: inputs.plan.fixture.id,
+      preparationMode: screen.preparationMode,
+      operatorActionsAreEvidence: false,
       collector: {
         tool: "native-screen-capture",
         version: "1",
@@ -570,6 +510,8 @@ async function captureGate({
         version: "1",
         runIdentity: `${inputs.plan.runId}:${screen.gateId}`,
       },
+      preparationMode: screen.preparationMode,
+      operatorActionsAreEvidence: false,
       environmentPath: "environment.json",
       maskPath: "mask.json",
       claims: [
@@ -588,7 +530,7 @@ async function captureGate({
     await writeJson(path.join(collectionDir, "collector-report.json"), report);
     await fsp.writeFile(
       path.join(collectionDir, "collector-report.md"),
-      `# ${screen.gateId} native capture collection\n\n- Result: **PASS**\n- Owned PID: \`${child.pid}\`\n- Window ID: \`${window.windowId}\`\n- Backing scale: \`${backingScale}\`\n- Normalization: \`lanczos3-srgb-v1\`\n- Reviewer verdict: not authored by this collector\n`,
+      `# ${screen.gateId} native capture collection\n\n- Result: **PASS**\n- Preparation mode: \`${screen.preparationMode}\`\n- Operator actions are evidence: \`false\`\n- Owned PID: \`${child.pid}\`\n- Window ID: \`${window.windowId}\`\n- Backing scale: \`${backingScale}\`\n- Normalization: \`lanczos3-srgb-v1\`\n- Reviewer verdict: not authored by this collector\n`,
       { encoding: "utf8", flag: "wx" },
     );
     return report;
@@ -652,7 +594,7 @@ export async function captureNativeScreens({
 
 function usage() {
   console.log(
-    "Usage:\n  pnpm native:screen:capture -- --plan <absolute-plan> --gate VSL-001 --collection-dir <absolute-new-dir>\n  pnpm native:screen:capture -- --plan <absolute-final-plan> --all-final --collection-root <absolute-new-root>\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. Capture is owned-window-only; no full-screen or coordinate search is permitted.",
+    "Usage:\n  pnpm native:screen:capture -- --plan <absolute-plan> --gate VSL-001 --collection-dir <absolute-new-dir>\n  pnpm native:screen:capture -- --plan <absolute-final-plan> --all-final --collection-root <absolute-new-root>\nOperator-assisted screens print OPERATOR_SETUP_REQUIRED and wait up to 180 seconds for the observation-only ready signal; operator actions are not evidence.\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. Capture is owned-window-only; content-GUI automation, full-screen capture, and coordinate search are prohibited.",
   );
 }
 

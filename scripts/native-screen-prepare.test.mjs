@@ -38,6 +38,7 @@ async function setup(buildCommand = ["pnpm", "tauri", "build"]) {
       gitCommit: "ab".repeat(20),
       artifactSha256: "cd".repeat(32),
       appPath,
+      bundleIdentifier: "excalidraw-desktop",
       buildCommand,
       expectedWindowSize: { width: 1280, height: 760 },
     })}\n`,
@@ -63,6 +64,7 @@ describe("native screen prepare", () => {
     });
     assert.equal(plan.screens.length, 1);
     assert.equal(plan.screens[0].gateId, "VSL-001");
+    assert.equal(plan.screens[0].preparationMode, "operator-assisted");
     assert.equal(path.basename(plan.fixture.workspaceRoot), "Design Workspace");
     assert.equal(plan.screens[0].viewport.width, 1280);
     assert.match(plan.screens[0].expectedStateFingerprint, /^[0-9a-f]{64}$/u);
@@ -158,6 +160,7 @@ describe("native screen prepare", () => {
               (gateId) => ({
                 gateId,
                 profileRoot: "/tmp/same",
+                preparationMode: "operator-assisted",
                 viewport: { width: 1280, height: 760 },
                 expectedStateFingerprint: "ef".repeat(32),
               }),
@@ -165,6 +168,35 @@ describe("native screen prepare", () => {
           ],
         }),
       /distinct profileRoot/u,
+    );
+    assert.throws(
+      () =>
+        validateCapturePlan({
+          ...manifest,
+          schemaVersion: 1,
+          checkpoint: "VSL",
+          runId: "run",
+          runNonce: "ab".repeat(32),
+          productCommit: "cd".repeat(20),
+          stateFingerprintVersion: "shell-state-v1",
+          normalizationAlgorithm: "lanczos3-srgb-v1",
+          isolation: { mode: "ephemeral-vm" },
+          nativeEntrypointProfileRoot: "/tmp/native",
+          nativeEntrypointRequest: {
+            gateId: "T023b",
+            profileRoot: "/tmp/native",
+            expectedStateFingerprint: "34".repeat(32),
+          },
+          screens: [
+            {
+              gateId: "VSL-001",
+              profileRoot: "/tmp/vsl",
+              viewport: { width: 1280, height: 760 },
+              expectedStateFingerprint: "ef".repeat(32),
+            },
+          ],
+        }),
+      /preparationMode/u,
     );
   });
 

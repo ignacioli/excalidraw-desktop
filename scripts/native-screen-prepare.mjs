@@ -101,6 +101,8 @@ export function validatePackageManifest(value) {
     ) ||
     typeof manifest.appPath !== "string" ||
     !path.isAbsolute(manifest.appPath) ||
+    typeof manifest.bundleIdentifier !== "string" ||
+    manifest.bundleIdentifier.length === 0 ||
     manifest.expectedWindowSize?.width !== 1280 ||
     manifest.expectedWindowSize?.height !== 760
   ) {
@@ -163,6 +165,11 @@ export function validateCapturePlan(value) {
   }
   const profiles = new Set([plan.nativeEntrypointProfileRoot]);
   for (const screen of plan.screens) {
+    if (!["fixture", "operator-assisted"].includes(screen.preparationMode)) {
+      blocked(
+        `capture plan screen ${screen.gateId ?? "unknown"} preparationMode is invalid`,
+      );
+    }
     if (
       !path.isAbsolute(screen.profileRoot ?? "") ||
       screen.viewport?.width !== 1280 ||
@@ -224,6 +231,10 @@ async function provisionFixture(runRoot, screens) {
     schemaVersion: 1,
     fixtureId: "003-native-capture-v1",
     workspaceRoot,
+    screens: screens.map(({ gateId, preparationMode }) => ({
+      gateId,
+      preparationMode,
+    })),
     files,
   };
   const manifestPath = path.join(runRoot, "fixture", "fixture-manifest.json");

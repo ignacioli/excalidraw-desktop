@@ -5,6 +5,7 @@
     {
       "gateId": "VSL-001",
       "checkpoint": "VSL",
+      "preparationMode": "operator-assisted",
       "manifestName": "03 · Workspace · Pinned · Light",
       "baselinePath": "screens/workspace-pinned-light.png",
       "theme": "light",
@@ -23,6 +24,7 @@
     {
       "gateId": "HF2-01",
       "checkpoint": "FINAL",
+      "preparationMode": "operator-assisted",
       "manifestName": "01 · Welcome · Light",
       "baselinePath": "screens/welcome-light.png",
       "theme": "light",
@@ -37,6 +39,7 @@
     {
       "gateId": "HF2-02",
       "checkpoint": "FINAL",
+      "preparationMode": "operator-assisted",
       "manifestName": "02 · Restored · Hidden · Light",
       "baselinePath": "screens/restored-hidden-light.png",
       "theme": "light",
@@ -51,6 +54,7 @@
     {
       "gateId": "HF2-03",
       "checkpoint": "FINAL",
+      "preparationMode": "operator-assisted",
       "manifestName": "03 · Workspace · Pinned · Light",
       "baselinePath": "screens/workspace-pinned-light.png",
       "theme": "light",
@@ -65,6 +69,7 @@
     {
       "gateId": "HF2-04",
       "checkpoint": "FINAL",
+      "preparationMode": "operator-assisted",
       "manifestName": "04 · Workspace · Overlay · Light",
       "baselinePath": "screens/workspace-overlay-light.png",
       "theme": "light",
@@ -79,6 +84,7 @@
     {
       "gateId": "HF2-05",
       "checkpoint": "FINAL",
+      "preparationMode": "operator-assisted",
       "manifestName": "05 · Welcome · Dark",
       "baselinePath": "screens/welcome-dark.png",
       "theme": "dark",
@@ -93,6 +99,7 @@
     {
       "gateId": "HF2-06",
       "checkpoint": "FINAL",
+      "preparationMode": "operator-assisted",
       "manifestName": "06 · Workspace · Pinned · Dark",
       "baselinePath": "screens/workspace-pinned-dark.png",
       "theme": "dark",

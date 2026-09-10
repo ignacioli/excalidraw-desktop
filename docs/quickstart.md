@@ -131,9 +131,9 @@ pnpm native:screen:prepare -- \
   --isolation-mode ephemeral-vm
 ```
 
-Use `FINAL` for the six-screen final plan. Allowed isolation modes are `disposable-macos-user`, `ephemeral-vm`, and `verified-os-home-redirect`. The command provisions only the repository-declared fixture, creates one distinct profile per screen plus a separate native-entrypoint profile, and writes an immutable nonce-bound plan. The production ready probe is inert without the plan/gate/nonce launcher environment. Runtime app-data and WebKit paths must still resolve inside the selected profile or the later driver returns `BLOCKED`.
+Use `FINAL` for the six-screen final plan. Allowed isolation modes are `disposable-macos-user`, `ephemeral-vm`, and `verified-os-home-redirect`. The command provisions only safely representable repository-declared fixture data, records each screen's `fixture|operator-assisted` preparation mode, creates one distinct profile per screen plus a separate native-entrypoint profile, and writes an immutable nonce-bound plan. It does not write private WebKit storage. The production ready probe is inert without the plan/gate/nonce launcher environment. Runtime app-data and WebKit paths must still resolve inside the selected profile or the later collector returns `BLOCKED`.
 
-After the requested state reaches the nonce-bound ready candidate, capture only its owned native window:
+Run capture and, when it prints `OPERATOR_SETUP_REQUIRED`, use normal application UI to establish the exact printed target within 180 seconds. Those actions are setup only and create no interaction PASS; focused tests and the semantic Playwright collection own that evidence. The observation-only ready probe must independently attest the state before capture proceeds:
 
 ```bash
 pnpm native:screen:capture -- \
@@ -147,7 +147,7 @@ pnpm native:screen:capture -- \
   --collection-root <absolute-new-final-collection-root>
 ```
 
-The driver looks up one window from the child PID, calls macOS window-only capture, verifies raw dimensions as exactly `1280×760 × backingScale`, and emits `actual.png` through one `lanczos3-srgb-v1` proportional normalization. It never uses full-screen/coordinate search, crop, padding, stretch beyond scale normalization, or visual repair. Every output directory must be absent. Exit codes are `0=PASS`, `1=FAIL`, `2=BLOCKED`, and `64=invalid invocation`.
+The collector matches the launched child to one bundle-owned window, calls macOS window-only capture, verifies raw dimensions as exactly `1280×760 × backingScale`, and emits `actual.png` through one `lanczos3-srgb-v1` proportional normalization. It never automates application content, uses full-screen/coordinate search, crops, pads, stretches beyond scale normalization, or performs visual repair. Every output directory must be absent. Exit codes are `0=PASS`, `1=FAIL`, `2=BLOCKED`, and `64=invalid invocation`.
 
 For final-package native entrypoint collection, provide that FINAL plan together with the sealed manifest and immutable binding. The output path must not exist:
 
