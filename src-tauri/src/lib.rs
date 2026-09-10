@@ -43,7 +43,10 @@ use e2e_performance::{
     e2e_perf_bootstrap, e2e_perf_next_command, e2e_perf_publish_error, e2e_perf_publish_ready,
     e2e_perf_publish_result, PerformanceHarnessState,
 };
-use native_capture::{native_capture_bootstrap, native_capture_publish_ready, NativeCaptureState};
+use native_capture::{
+    native_capture_bootstrap, native_capture_publish_diagnostic, native_capture_publish_ready,
+    NativeCaptureState,
+};
 use watcher::{WatcherService, WatcherState};
 use workspace_entries::WorkspaceMutationGate;
 
@@ -189,6 +192,7 @@ pub fn run() {
         e2e_perf_publish_result,
         e2e_perf_publish_error,
         native_capture_bootstrap,
+        native_capture_publish_diagnostic,
         native_capture_publish_ready,
     ]);
 
@@ -213,6 +217,7 @@ pub fn run() {
         workspace_entry_reveal,
         doc_export,
         native_capture_bootstrap,
+        native_capture_publish_diagnostic,
         native_capture_publish_ready
     ]);
 

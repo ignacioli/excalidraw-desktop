@@ -98,6 +98,7 @@ describe("native capture ready probe", () => {
     vi.spyOn(document, "hasFocus").mockReturnValue(true);
     vi.mocked(invoke)
       .mockResolvedValueOnce(bootstrap)
+      .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined);
 
     await expect(publishNativeCaptureReady(observation)).resolves.toBe(true);
@@ -109,6 +110,46 @@ describe("native capture ready probe", () => {
           stableFrames: 2,
           fontReady: true,
           pendingOperations: 0,
+        }),
+      }),
+    );
+  });
+
+  it("publishes a bounded diagnostic before rejecting a state mismatch", async () => {
+    const bootstrap = {
+      schemaVersion: 1,
+      runId: "run-001",
+      runNonce: "ab".repeat(32),
+      gateId: "VSL-001",
+      productCommit: "cd".repeat(20),
+      packageArtifactSha256: "ef".repeat(32),
+      fixtureDigest: "12".repeat(32),
+      expectedStateFingerprint: "34".repeat(32),
+      stateFingerprintVersion: "shell-state-v1",
+    } as const;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: { ready: Promise.resolve() },
+    });
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(bootstrap)
+      .mockResolvedValueOnce(undefined);
+
+    await expect(publishNativeCaptureReady(observation)).resolves.toBe(false);
+    expect(invoke).toHaveBeenLastCalledWith(
+      "native_capture_publish_diagnostic",
+      expect.objectContaining({
+        diagnostic: expect.objectContaining({
+          runNonce: bootstrap.runNonce,
+          expectedStateFingerprint: bootstrap.expectedStateFingerprint,
+          projection: expect.objectContaining({
+            workspaceName: "Design Workspace",
+            selectedDirectory: "flows",
+          }),
         }),
       }),
     );

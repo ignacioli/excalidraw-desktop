@@ -96,6 +96,38 @@ pub(crate) struct NativeCaptureReadyInput {
     frontmost: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct NativeCaptureDiagnosticInput {
+    schema_version: u8,
+    run_id: String,
+    #[serde(skip_serializing)]
+    run_nonce: String,
+    gate_id: String,
+    product_commit: String,
+    package_artifact_sha256: String,
+    projection: NativeCaptureStateProjection,
+    state_fingerprint: String,
+    expected_state_fingerprint: String,
+    stable_frames: u8,
+    pending_operations: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NativeCaptureStateProjection {
+    gate_id: String,
+    theme: String,
+    session_state: String,
+    sidebar_state: String,
+    workspace_name: Option<String>,
+    selected_directory: Option<String>,
+    tabs: Vec<String>,
+    active_document: Option<String>,
+    unsaved: bool,
+    fixture_digest: String,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct NativeCaptureReadyCandidate {
@@ -269,6 +301,21 @@ impl NativeCaptureState {
             &candidate,
         )
     }
+
+    fn publish_diagnostic(&self, diagnostic: NativeCaptureDiagnosticInput) -> Result<(), String> {
+        let active = self
+            .active
+            .as_ref()
+            .ok_or_else(|| "native capture is inactive".to_owned())?;
+        validate_diagnostic(active, &diagnostic)?;
+        atomic_write_replace_json(
+            &active.control_dir.join(format!(
+                "{}.observation-diagnostic.json",
+                active.bootstrap.gate_id
+            )),
+            &diagnostic,
+        )
+    }
 }
 
 #[tauri::command]
@@ -284,6 +331,14 @@ pub(crate) fn native_capture_publish_ready(
     ready: NativeCaptureReadyInput,
 ) -> Result<(), String> {
     state.publish_ready(ready)
+}
+
+#[tauri::command]
+pub(crate) fn native_capture_publish_diagnostic(
+    state: State<'_, NativeCaptureState>,
+    diagnostic: NativeCaptureDiagnosticInput,
+) -> Result<(), String> {
+    state.publish_diagnostic(diagnostic)
 }
 
 fn validate_plan_identity(plan: &CapturePlan, launcher_nonce: &str) -> Result<(), String> {
@@ -321,6 +376,27 @@ fn validate_ready(active: &ActiveCapture, ready: &NativeCaptureReadyInput) -> Re
         || !has_valid_webview_dimensions(&ready.logical_window)
     {
         return Err("ready observation does not prove a stable capture state".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_diagnostic(
+    active: &ActiveCapture,
+    diagnostic: &NativeCaptureDiagnosticInput,
+) -> Result<(), String> {
+    let expected = &active.bootstrap;
+    if diagnostic.schema_version != SCHEMA_VERSION
+        || diagnostic.run_id != expected.run_id
+        || diagnostic.run_nonce != expected.run_nonce
+        || diagnostic.gate_id != expected.gate_id
+        || diagnostic.product_commit != expected.product_commit
+        || diagnostic.package_artifact_sha256 != expected.package_artifact_sha256
+        || diagnostic.expected_state_fingerprint != expected.expected_state_fingerprint
+        || !is_hex(&diagnostic.state_fingerprint, 64)
+    {
+        return Err(
+            "diagnostic observation does not match the immutable capture binding".to_owned(),
+        );
     }
     Ok(())
 }
@@ -384,11 +460,30 @@ fn atomic_write_new_json<T: Serialize>(path: &Path, value: &T) -> Result<(), Str
         .map_err(|error| format!("failed to publish ready candidate atomically: {error}"))
 }
 
+fn atomic_write_replace_json<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+    let bytes = serde_json::to_vec_pretty(value)
+        .map_err(|error| format!("failed to serialize capture diagnostic: {error}"))?;
+    let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&temporary)
+        .map_err(|error| format!("failed to create capture diagnostic temporary file: {error}"))?;
+    file.write_all(&bytes)
+        .and_then(|_| file.write_all(b"\n"))
+        .and_then(|_| file.sync_all())
+        .map_err(|error| format!("failed to persist capture diagnostic: {error}"))?;
+    fs::rename(&temporary, path)
+        .map_err(|error| format!("failed to publish capture diagnostic atomically: {error}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         has_valid_webview_dimensions, is_hex, validate_plan_identity, CapturePlan, FixtureBinding,
-        PackageManifestBinding, Viewport,
+        NativeCaptureDiagnosticInput, NativeCaptureStateProjection, PackageManifestBinding,
+        Viewport,
     };
     use std::path::PathBuf;
 
@@ -430,5 +525,36 @@ mod tests {
             width: 1280,
             height: 0,
         }));
+    }
+
+    #[test]
+    fn diagnostic_serialization_excludes_the_run_nonce() {
+        let diagnostic = NativeCaptureDiagnosticInput {
+            schema_version: 1,
+            run_id: "run".to_owned(),
+            run_nonce: "ab".repeat(32),
+            gate_id: "VSL-001".to_owned(),
+            product_commit: "cd".repeat(20),
+            package_artifact_sha256: "ef".repeat(32),
+            projection: NativeCaptureStateProjection {
+                gate_id: "VSL-001".to_owned(),
+                theme: "light".to_owned(),
+                session_state: "workspace".to_owned(),
+                sidebar_state: "pinned".to_owned(),
+                workspace_name: Some("Design Workspace".to_owned()),
+                selected_directory: Some("flows".to_owned()),
+                tabs: vec!["Architecture.excalidraw".to_owned()],
+                active_document: Some("Architecture.excalidraw".to_owned()),
+                unsaved: false,
+                fixture_digest: "12".repeat(32),
+            },
+            state_fingerprint: "34".repeat(32),
+            expected_state_fingerprint: "56".repeat(32),
+            stable_frames: 2,
+            pending_operations: 0,
+        };
+        let serialized = serde_json::to_string(&diagnostic).expect("serialize diagnostic");
+        assert!(!serialized.contains("runNonce"));
+        assert!(!serialized.contains(&"ab".repeat(32)));
     }
 }

@@ -58,6 +58,20 @@ interface NativeCaptureReadyInput {
   readonly frontmost: boolean;
 }
 
+interface NativeCaptureDiagnosticInput {
+  readonly schemaVersion: typeof NATIVE_CAPTURE_SCHEMA_VERSION;
+  readonly runId: string;
+  readonly runNonce: string;
+  readonly gateId: string;
+  readonly productCommit: string;
+  readonly packageArtifactSha256: string;
+  readonly projection: NativeCaptureStateProjection;
+  readonly stateFingerprint: string;
+  readonly expectedStateFingerprint: string;
+  readonly stableFrames: number;
+  readonly pendingOperations: number;
+}
+
 let publishedBinding: string | null = null;
 
 export function deriveNativeCaptureSessionState(input: {
@@ -148,6 +162,20 @@ export async function publishNativeCaptureReady(
   await document.fonts.ready;
   const stableFrames = await waitForStableFrames(projection);
   const stateFingerprint = await hashNativeCaptureState(projection);
+  const diagnostic: NativeCaptureDiagnosticInput = {
+    schemaVersion: NATIVE_CAPTURE_SCHEMA_VERSION,
+    runId: bootstrap.runId,
+    runNonce: bootstrap.runNonce,
+    gateId: bootstrap.gateId,
+    productCommit: bootstrap.productCommit,
+    packageArtifactSha256: bootstrap.packageArtifactSha256,
+    projection,
+    stateFingerprint,
+    expectedStateFingerprint: bootstrap.expectedStateFingerprint,
+    stableFrames,
+    pendingOperations: observation.pendingOperations,
+  };
+  await invoke("native_capture_publish_diagnostic", { diagnostic });
   if (
     stateFingerprint !== bootstrap.expectedStateFingerprint ||
     observation.pendingOperations !== 0 ||
