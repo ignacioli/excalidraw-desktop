@@ -133,7 +133,7 @@ pnpm native:screen:prepare -- \
 
 Use `FINAL` for the six-screen final plan. Allowed isolation modes are `disposable-macos-user`, `ephemeral-vm`, and `verified-os-home-redirect`. The command provisions only safely representable repository-declared fixture data, records each screen's `fixture|operator-assisted` preparation mode, creates one distinct profile per screen plus a separate native-entrypoint profile, and writes an immutable nonce-bound plan. It does not write private WebKit storage. The production ready probe is inert without the plan/gate/nonce launcher environment. Runtime app-data and WebKit paths must still resolve inside the selected profile or the later collector returns `BLOCKED`.
 
-Run capture and, when it prints `OPERATOR_SETUP_REQUIRED`, use normal application UI to establish the exact printed target within 180 seconds. Those actions are setup only and create no interaction PASS; focused tests and the semantic Playwright collection own that evidence. The observation-only ready probe must independently attest the state before capture proceeds:
+Run capture and, when it prints `OPERATOR_SETUP_REQUIRED`, use normal application UI to establish the exact printed target within 600 seconds. Those actions are setup only and create no interaction PASS; focused tests and the semantic Playwright collection own that evidence. The observation-only ready probe must independently attest the state before capture proceeds:
 
 ```bash
 pnpm native:screen:capture -- \

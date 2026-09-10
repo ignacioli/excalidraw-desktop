@@ -147,7 +147,7 @@ describe("native screen capture", () => {
   });
 
   it("waits for attested operator setup without defining content actions", () => {
-    assert.equal(readyTimeoutForScreen(screen, 15_000), 180_000);
+    assert.equal(readyTimeoutForScreen(screen, 15_000), 600_000);
     assert.equal(
       readyTimeoutForScreen({ ...screen, preparationMode: "fixture" }, 15_000),
       15_000,

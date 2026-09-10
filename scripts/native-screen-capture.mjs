@@ -20,7 +20,7 @@ const FINAL_GATES = [
   "HF2-06",
 ];
 const READY_TIMEOUT_MS = 15_000;
-const OPERATOR_READY_TIMEOUT_MS = 180_000;
+const OPERATOR_READY_TIMEOUT_MS = 600_000;
 
 export class NativeScreenCaptureError extends Error {
   constructor(message, exitCode = 2) {
@@ -594,7 +594,7 @@ export async function captureNativeScreens({
 
 function usage() {
   console.log(
-    "Usage:\n  pnpm native:screen:capture -- --plan <absolute-plan> --gate VSL-001 --collection-dir <absolute-new-dir>\n  pnpm native:screen:capture -- --plan <absolute-final-plan> --all-final --collection-root <absolute-new-root>\nOperator-assisted screens print OPERATOR_SETUP_REQUIRED and wait up to 180 seconds for the observation-only ready signal; operator actions are not evidence.\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. Capture is owned-window-only; content-GUI automation, full-screen capture, and coordinate search are prohibited.",
+    "Usage:\n  pnpm native:screen:capture -- --plan <absolute-plan> --gate VSL-001 --collection-dir <absolute-new-dir>\n  pnpm native:screen:capture -- --plan <absolute-final-plan> --all-final --collection-root <absolute-new-root>\nOperator-assisted screens print OPERATOR_SETUP_REQUIRED and wait up to 600 seconds for the observation-only ready signal; operator actions are not evidence.\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. Capture is owned-window-only; content-GUI automation, full-screen capture, and coordinate search are prohibited.",
   );
 }
 
