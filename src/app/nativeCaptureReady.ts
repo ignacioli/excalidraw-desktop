@@ -60,6 +60,17 @@ interface NativeCaptureReadyInput {
 
 let publishedBinding: string | null = null;
 
+export function deriveNativeCaptureSessionState(input: {
+  readonly showWelcome: boolean;
+  readonly currentWorkspaceId: string | null;
+  readonly recoveryCandidateCount: number;
+}): NativeCaptureStateProjection["sessionState"] {
+  if (input.showWelcome) return "empty";
+  if (input.currentWorkspaceId !== null) return "workspace";
+  if (input.recoveryCandidateCount > 0) return "recovery";
+  return "restored";
+}
+
 export function canonicalNativeCaptureJson(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map(canonicalNativeCaptureJson).join(",")}]`;

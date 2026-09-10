@@ -2,10 +2,33 @@ import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   canonicalNativeCaptureJson,
+  deriveNativeCaptureSessionState,
   hashNativeCaptureState,
   publishNativeCaptureReady,
   resetNativeCaptureReadyForTests,
 } from "./nativeCaptureReady";
+
+describe("deriveNativeCaptureSessionState", () => {
+  it("keeps an open workspace authoritative when recovery candidates exist", () => {
+    expect(
+      deriveNativeCaptureSessionState({
+        showWelcome: false,
+        currentWorkspaceId: "workspace-1",
+        recoveryCandidateCount: 3,
+      }),
+    ).toBe("workspace");
+  });
+
+  it("reports recovery only when no workspace is open", () => {
+    expect(
+      deriveNativeCaptureSessionState({
+        showWelcome: false,
+        currentWorkspaceId: null,
+        recoveryCandidateCount: 1,
+      }),
+    ).toBe("recovery");
+  });
+});
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 

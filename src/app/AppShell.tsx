@@ -57,7 +57,10 @@ import {
   registerNativeMenuCommand,
   type NativeMenuCommand,
 } from "./nativeMenu";
-import { publishNativeCaptureReady } from "./nativeCaptureReady";
+import {
+  deriveNativeCaptureSessionState,
+  publishNativeCaptureReady,
+} from "./nativeCaptureReady";
 import {
   initializeBrowserThemeController,
   type ThemeController,
@@ -626,13 +629,11 @@ export function AppShell({
     const currentWorkspace = welcomeWorkspaces.find(
       (workspace) => workspace.id === currentWorkspaceId,
     );
-    const sessionState = showWelcome
-      ? "empty"
-      : startupState.candidates.length > 0
-        ? "recovery"
-        : currentWorkspaceId !== null
-          ? "workspace"
-          : "restored";
+    const sessionState = deriveNativeCaptureSessionState({
+      showWelcome,
+      currentWorkspaceId,
+      recoveryCandidateCount: startupState.candidates.length,
+    });
     void publishNativeCaptureReady({
       theme: themeSnapshot.resolvedColorScheme,
       sessionState,
