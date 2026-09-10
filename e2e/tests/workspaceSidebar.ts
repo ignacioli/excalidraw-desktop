@@ -12,7 +12,7 @@ export async function openWorkspaceSidebar(page: Page): Promise<void> {
     return;
   }
   await page
-    .getByRole("button", { name: "Workspace sidebar", exact: true })
+    .getByRole("button", { name: "Toggle workspace sidebar", exact: true })
     .click();
   await expect(sidebar).toBeVisible();
 }
@@ -36,4 +36,3 @@ export async function persistPinnedWorkspaceSidebar(
     },
   );
 }
-

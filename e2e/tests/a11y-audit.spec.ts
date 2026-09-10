@@ -6,10 +6,7 @@ import {
   installUiInteractionFileEvents,
   installUiInteractionHarness,
 } from "./uiInteractionHarness";
-import {
-  emitFileChanged,
-  installUs4Harness,
-} from "./us4BrowserHarness";
+import { emitFileChanged, installUs4Harness } from "./us4BrowserHarness";
 import { openWorkspaceSidebar } from "./workspaceSidebar";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
@@ -115,10 +112,7 @@ async function expectAxeClean(
     found.length === 0
       ? "none"
       : found
-          .map(
-            (violation) =>
-              `${violation.id} x${violation.nodes.length}`,
-          )
+          .map((violation) => `${violation.id} x${violation.nodes.length}`)
           .join(", ");
   console.log(
     `[a11y-audit] ${label}: violations=${results.violations.length} seriousCritical=${found.length} (${summary})`,
@@ -131,10 +125,7 @@ async function expectAxeClean(
 
 type HarnessWindow = {
   __TAURI_INTERNALS__?: {
-    invoke(
-      command: string,
-      args?: Record<string, unknown>,
-    ): Promise<unknown>;
+    invoke(command: string, args?: Record<string, unknown>): Promise<unknown>;
   };
 };
 
@@ -286,11 +277,6 @@ async function installExportHarness(
   );
 }
 
-async function setTheme(page: Page, theme: "light" | "dark"): Promise<void> {
-  await page.getByRole("radio", { name: theme === "dark" ? "Dark" : "Light" }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-color-scheme", theme);
-}
-
 /** Applies a persisted appearance preference before any app module runs. */
 async function installDarkPreference(page: Page): Promise<void> {
   await page.addInitScript(() => {
@@ -356,7 +342,9 @@ async function openDirtyDrawing(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Mount folder/i }).click();
   await expect(page.getByRole("tree")).toBeVisible();
   await page.getByRole("treeitem", { name: "drawing" }).click();
-  await expect(page.getByRole("tab", { name: "drawing.excalidraw" })).toBeVisible();
+  await expect(
+    page.getByRole("tab", { name: "drawing.excalidraw" }),
+  ).toBeVisible();
   await drawRectangle(page);
   await page.waitForTimeout(400);
 }
@@ -376,8 +364,12 @@ async function triggerConflict(page: Page): Promise<Locator> {
 for (const theme of ["light", "dark"] as const) {
   test(`shell chrome is axe-clean in ${theme} theme`, async ({ page }) => {
     await installShellHarness(page);
+    if (theme === "dark") await installDarkPreference(page);
     await page.goto("/");
-    await setTheme(page, theme);
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-color-scheme",
+      theme,
+    );
     await expect(page.locator(".app-shell")).toBeVisible();
     await expectAxeClean(
       page,
@@ -387,8 +379,16 @@ for (const theme of ["light", "dark"] as const) {
     );
 
     await ensureFilesSidebar(page);
-    await page.getByRole("button", { name: "New drawing" }).click();
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("complementary", { name: "Files" }),
+    ).not.toBeVisible();
+    await page
+      .getByTestId("welcome-screen")
+      .getByRole("button", { name: "New Drawing" })
+      .click();
     await expect(page.locator(".excalidraw-editor")).toBeVisible();
+    await ensureFilesSidebar(page);
     await expectAxeClean(
       page,
       `shell with drawing ${theme}`,
@@ -419,10 +419,17 @@ test("workspace file tree, context menu, and tab bar are axe-clean and keyboard 
     EDITOR_EXCLUDE,
   );
 
-  await page.getByRole("button", { name: "Actions for drawing" }).first().click();
+  const drawingRow = page.getByRole("treeitem", { name: "drawing" });
+  await drawingRow.focus();
+  await page.keyboard.press("Shift+F10");
   const menu = page.getByRole("menu");
   await expect(menu).toBeVisible();
-  await expectAxeClean(page, "file tree context menu", [".application-context-menu"], []);
+  await expectAxeClean(
+    page,
+    "file tree context menu",
+    [".application-context-menu"],
+    [],
+  );
 
   const activeTab = page.getByRole("tab", { name: "second.excalidraw" });
   await activeTab.focus();
@@ -437,7 +444,7 @@ test("workspace file tree, context menu, and tab bar are axe-clean and keyboard 
   await expect(activeTab).toBeFocused();
 });
 
-test("appearance radios are keyboard operable with a visible focus indicator", async ({
+test("migrated Appearance controls add no stale shell focus stops", async ({
   page,
 }) => {
   await installShellHarness(page);
@@ -446,49 +453,15 @@ test("appearance radios are keyboard operable with a visible focus indicator", a
 
   await page.keyboard.press("Tab");
   const sidebarToggle = page.getByRole("button", {
-    name: "Workspace sidebar",
-    exact: true,
+    name: "Toggle workspace sidebar",
   });
   await expect(sidebarToggle).toBeFocused();
   await expect(sidebarToggle).toHaveCSS("outline-style", "solid");
   await expect(sidebarToggle).toHaveCSS("outline-width", "2px");
-
-  await page.keyboard.press("Tab");
-  const system = page.getByRole("radio", { name: "System" });
-  await expect(system).toBeFocused();
-  await expect(
-    page.locator(".appearance-option input:focus-visible + span"),
-  ).toHaveCSS("outline-style", "solid");
-
-  const dark = page.getByRole("radio", { name: "Dark" });
-  await page.keyboard.press("ArrowLeft");
-  await expect(dark).toBeChecked();
-  await expect(dark).toBeFocused();
-  const indicator = page.locator(".appearance-option input:focus-visible + span");
-  await expect(indicator).toHaveCSS("outline-style", "solid");
-  await expect(indicator).toHaveCSS("outline-width", "2px");
-  await expect(indicator).toHaveCSS("outline-color", "rgb(116, 192, 252)");
-
-  await page.keyboard.press("ArrowLeft");
-  const light = page.getByRole("radio", { name: "Light" });
-  await expect(light).toBeChecked();
-  await expect(light).toBeFocused();
-  await expect(
-    page.locator(".appearance-option input:focus-visible + span"),
-  ).toHaveCSS("outline-color", "rgb(28, 126, 214)");
-  await page.keyboard.press("ArrowRight");
-  await expect(dark).toBeChecked();
-  await expect(dark).toBeFocused();
-
-  await page.locator(".canvas-region").click({ position: { x: 24, y: 24 } });
-  await page.keyboard.press("Tab");
-  await expect(sidebarToggle).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(dark).toBeChecked();
-  await expect(dark).toBeFocused();
-  await expect(
-    page.locator(".appearance-option input:focus-visible + span"),
-  ).toHaveCSS("outline-color", "rgb(116, 192, 252)");
+  await expect(page.getByRole("group", { name: "Appearance" })).toHaveCount(0);
+  await expect(page.getByRole("radio", { name: "System" })).toHaveCount(0);
+  await expect(page.getByRole("radio", { name: "Light" })).toHaveCount(0);
+  await expect(page.getByRole("radio", { name: "Dark" })).toHaveCount(0);
 });
 
 test("conflict dialog is axe-clean and traps focus", async ({ page }) => {
@@ -500,7 +473,12 @@ test("conflict dialog is axe-clean and traps focus", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Use external version" }),
   ).toBeFocused();
-  await expectAxeClean(page, "conflict dialog", [".conflict-dialog-backdrop"], []);
+  await expectAxeClean(
+    page,
+    "conflict dialog",
+    [".conflict-dialog-backdrop"],
+    [],
+  );
 
   const first = page.getByRole("button", { name: "Use external version" });
   const last = page.getByRole("button", { name: "Save local changes as new…" });
@@ -552,7 +530,12 @@ test("recovery dialog is axe-clean with Esc/Enter/tab-loop handling", async ({
     name: /Discard recovery for untitled\.excalidraw/,
   });
   await expect(first).toBeFocused();
-  await expectAxeClean(page, "recovery dialog dark", [".recovery-dialog-backdrop"], []);
+  await expectAxeClean(
+    page,
+    "recovery dialog dark",
+    [".recovery-dialog-backdrop"],
+    [],
+  );
 
   await last.focus();
   await page.keyboard.press("Tab");
@@ -572,7 +555,9 @@ test("recovery dialog is axe-clean with Esc/Enter/tab-loop handling", async ({
   await expect(
     page.getByRole("button", { name: /Restore drawing\.excalidraw/ }),
   ).toHaveCount(0);
-  await expect(page.getByRole("tab", { name: "drawing.excalidraw" })).toBeVisible();
+  await expect(
+    page.getByRole("tab", { name: "drawing.excalidraw" }),
+  ).toBeVisible();
 });
 
 for (const theme of ["light", "dark"] as const) {
@@ -580,15 +565,24 @@ for (const theme of ["light", "dark"] as const) {
     page,
   }) => {
     await installExportHarness(page, "ok");
+    if (theme === "dark") await installDarkPreference(page);
     await page.goto("/");
     await openDrawing(page);
-    await setTheme(page, theme);
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-color-scheme",
+      theme,
+    );
 
     await page.getByRole("button", { name: "Export…" }).click();
     const dialog = page.getByRole("dialog", { name: "Export drawing" });
     await expect(dialog).toBeVisible();
     await expect(page.getByRole("radio", { name: "PNG image" })).toBeFocused();
-    await expectAxeClean(page, `export dialog ${theme}`, [".export-dialog-backdrop"], []);
+    await expectAxeClean(
+      page,
+      `export dialog ${theme}`,
+      [".export-dialog-backdrop"],
+      [],
+    );
 
     const png = page.getByRole("radio", { name: "PNG image" });
     const cancel = page.getByRole("button", { name: "Cancel" });
@@ -606,9 +600,13 @@ for (const theme of ["light", "dark"] as const) {
       page,
     }) => {
       await installExportHarness(page, mode);
+      if (theme === "dark") await installDarkPreference(page);
       await page.goto("/");
       await openDrawing(page);
-      await setTheme(page, theme);
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-color-scheme",
+        theme,
+      );
 
       await page.getByRole("button", { name: "Export…" }).click();
       const dialog = page.getByRole("dialog", { name: "Export drawing" });
@@ -804,7 +802,7 @@ test("sidebar overlay is keyboard operable with a visible focus indicator", asyn
 
   await page.keyboard.press("Tab");
   const toggle = page.getByRole("button", {
-    name: "Workspace sidebar",
+    name: "Toggle workspace sidebar",
     exact: true,
   });
   await expect(toggle).toBeFocused();
@@ -850,21 +848,22 @@ test("folder loading and permission-denied errors are announced without color al
     },
   );
   await page.goto("/");
-  await expect(
-    page.locator(".workspace-panel").getByRole("status"),
-  ).toHaveText("Loading folder…");
-  await expect(page.getByRole("region", { name: "Workspaces" })).toHaveAttribute(
-    "aria-busy",
-    "true",
+  await expect(page.locator(".workspace-panel").getByRole("status")).toHaveText(
+    "Loading folder…",
   );
+  await expect(
+    page.getByRole("region", { name: "Workspaces" }),
+  ).toHaveAttribute("aria-busy", "true");
   await expectAxeClean(page, "workspace loading", [".workspace-panel"]);
   await expect(page.getByRole("alert")).toHaveText(
     "This location is outside the Workspace.",
   );
-  await expect(page.locator(".workspace-panel").getByRole("status")).toHaveCount(
-    0,
-  );
-  await expectAxeClean(page, "workspace permission denied", [".workspace-panel"]);
+  await expect(
+    page.locator(".workspace-panel").getByRole("status"),
+  ).toHaveCount(0);
+  await expectAxeClean(page, "workspace permission denied", [
+    ".workspace-panel",
+  ]);
 });
 
 test("create dialog announces permission-denied as an alert", async ({
@@ -899,7 +898,9 @@ test("reduced motion keeps overlay usable without depending on animation", async
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await ensureFilesSidebar(page);
-  await expect(page.getByRole("complementary", { name: "Files" })).toBeVisible();
+  await expect(
+    page.getByRole("complementary", { name: "Files" }),
+  ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(
     page.getByRole("complementary", { name: "Files" }),

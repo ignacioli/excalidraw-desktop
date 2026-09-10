@@ -36,7 +36,6 @@ import {
   hasNativeWindowRuntime,
   registerExitCheckpoint,
 } from "./exitCheckpoint";
-import { fileDialogActions, type FileDialogActions } from "./fileDialogs";
 import { registerOpenFileHandler } from "./openFileHandler";
 import { TabBar } from "./TabBar";
 import { OrphanCloseDialog } from "./OrphanCloseDialog";
@@ -66,21 +65,17 @@ import {
 
 interface AppShellProps {
   onCreateDocument?: () => void | Promise<void>;
-  onOpenDocument?: () => void | Promise<void>;
   onOpenWorkspace?: () => void | Promise<void>;
   workspaceInvoker?: CommandInvoker;
   selectWorkspaceDirectory?: () => Promise<string | null>;
-  dialogs?: FileDialogActions;
   themeController?: ThemeController;
 }
 
 export function AppShell({
   onCreateDocument,
-  onOpenDocument,
   onOpenWorkspace,
   workspaceInvoker: providedWorkspaceInvoker,
   selectWorkspaceDirectory = selectNativeWorkspaceDirectory,
-  dialogs = fileDialogActions,
   themeController = initializeBrowserThemeController(),
 }: AppShellProps) {
   const [interactionError, setInteractionError] = useState<string | null>(null);
@@ -220,7 +215,6 @@ export function AppShell({
     sidebarResizeRef.current = null;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
-  const hasMountedWorkspace = useAppStore((state) => state.hasMountedWorkspace);
   const setHasMountedWorkspace = useAppStore(
     (state) => state.setHasMountedWorkspace,
   );
@@ -406,9 +400,6 @@ export function AppShell({
     };
   }, [preferences, selectCurrentWorkspace, workspaceInvoker]);
 
-  const createDocument = () =>
-    runAction(onCreateDocument ?? dialogs.createDocument);
-  const openDocument = () => runAction(onOpenDocument ?? dialogs.openDocument);
   const saveDocument = () =>
     runAction(() => documentManager.checkpointActive("manualSave"));
   const openExportDialog = (): void => {
@@ -854,24 +845,6 @@ export function AppShell({
               backLocation={backLocation}
               onBackLocationApplied={() => setBackLocation(null)}
             />
-          ) : null}
-          {!hasMountedWorkspace ? (
-            <div className="workspace-empty-state">
-              <h2>No workspace mounted</h2>
-              <p>Open a drawing directly, or create a new local drawing.</p>
-              <div className="empty-state-actions">
-                <button
-                  className="primary-action"
-                  type="button"
-                  onClick={() => void createDocument()}
-                >
-                  New drawing
-                </button>
-                <button type="button" onClick={() => void openDocument()}>
-                  Open drawing…
-                </button>
-              </div>
-            </div>
           ) : null}
           {sidebarSnapshot.mode === "pinned" ? (
             <div

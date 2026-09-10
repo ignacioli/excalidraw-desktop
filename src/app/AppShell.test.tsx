@@ -134,13 +134,7 @@ describe("AppShell", () => {
   it("renders the desktop shell and actionable workspace empty state", async () => {
     const user = userEvent.setup();
     const onCreateDocument = vi.fn();
-    const onOpenDocument = vi.fn();
-    render(
-      <AppShell
-        onCreateDocument={onCreateDocument}
-        onOpenDocument={onOpenDocument}
-      />,
-    );
+    render(<AppShell onCreateDocument={onCreateDocument} />);
 
     expect(
       screen.getByRole("navigation", { name: "Open drawings" }),
@@ -159,17 +153,21 @@ describe("AppShell", () => {
       screen.queryByRole("complementary", { name: "Files" }),
     ).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "New Drawing" }));
+    expect(onCreateDocument).toHaveBeenCalledOnce();
+
     await user.click(
       screen.getByRole("button", { name: /workspace sidebar/i }),
     );
     expect(
       screen.getByRole("complementary", { name: "Files" }),
     ).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "New drawing" }));
-    await user.click(screen.getByRole("button", { name: "Open drawing…" }));
-    expect(onCreateDocument).toHaveBeenCalledOnce();
-    expect(onOpenDocument).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByRole("button", { name: "New drawing" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open drawing…" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders Welcome as a non-tab document state when the session is empty", async () => {

@@ -83,7 +83,7 @@ test("clean startup with a current Workspace routes to Restored", async ({
         commands: expect.arrayContaining(["app_handshake", "workspace_list"]),
       }),
     );
-  await page.getByRole("button", { name: "Workspace sidebar" }).click();
+  await page.getByRole("button", { name: "Toggle workspace sidebar" }).click();
   await expect(
     page.getByRole("treeitem", { name: "Design Workspace" }),
   ).toBeVisible();

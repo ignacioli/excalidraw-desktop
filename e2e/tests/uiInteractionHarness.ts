@@ -231,6 +231,7 @@ export async function installUiInteractionHarness(
               pendingOpenPaths: [],
             };
           }
+          if (command === "native_capture_bootstrap") return null;
           if (command === "recovery_list") {
             return startup.recoveryCandidates.map((candidate) => ({
               ...candidate,
