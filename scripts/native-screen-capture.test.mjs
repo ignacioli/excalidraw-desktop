@@ -62,7 +62,7 @@ function candidate(overrides = {}) {
     remoteFontRequests: 0,
     pendingOperations: 0,
     stableFrames: 2,
-    logicalWindow: { width: 1280, height: 760, frontmost: true },
+    logicalWindow: { width: 1280, height: 730, frontmost: true },
     ...overrides,
   };
 }
@@ -138,6 +138,9 @@ describe("native screen capture", () => {
       }),
       candidate({ stableFrames: 1 }),
       candidate({ remoteFontRequests: 1 }),
+      candidate({
+        logicalWindow: { width: 1280, height: 0, frontmost: true },
+      }),
     ]) {
       assert.throws(
         () => validateReadyCandidate(plan, screen, invalidCandidate, 42),

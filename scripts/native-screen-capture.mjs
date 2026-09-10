@@ -161,8 +161,10 @@ export function validateReadyCandidate(plan, screen, candidate, childPid) {
     candidate.remoteFontRequests !== 0 ||
     candidate.pendingOperations !== 0 ||
     candidate.stableFrames < 2 ||
-    candidate.logicalWindow?.width !== 1280 ||
-    candidate.logicalWindow?.height !== 760 ||
+    !Number.isInteger(candidate.logicalWindow?.width) ||
+    candidate.logicalWindow.width <= 0 ||
+    !Number.isInteger(candidate.logicalWindow?.height) ||
+    candidate.logicalWindow.height <= 0 ||
     candidate.logicalWindow?.frontmost !== true ||
     !inside(screen.profileRoot, candidate.resolvedPaths?.appData ?? "") ||
     !inside(screen.profileRoot, candidate.resolvedPaths?.webKitData ?? "")

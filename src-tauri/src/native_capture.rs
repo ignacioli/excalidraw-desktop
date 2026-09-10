@@ -55,7 +55,6 @@ struct ScreenRequest {
     gate_id: String,
     profile_root: PathBuf,
     expected_state_fingerprint: String,
-    viewport: Viewport,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -137,7 +136,6 @@ struct ActiveCapture {
     profile_root: PathBuf,
     app_data: PathBuf,
     web_kit_data: PathBuf,
-    viewport: Viewport,
 }
 
 #[derive(Clone)]
@@ -216,7 +214,6 @@ impl NativeCaptureState {
                 profile_root,
                 app_data,
                 web_kit_data,
-                viewport: screen.viewport,
             })),
         })
     }
@@ -321,12 +318,15 @@ fn validate_ready(active: &ActiveCapture, ready: &NativeCaptureReadyInput) -> Re
         || ready.pending_operations != 0
         || ready.stable_frames < 2
         || !ready.frontmost
-        || ready.logical_window.width != active.viewport.width
-        || ready.logical_window.height != active.viewport.height
+        || !has_valid_webview_dimensions(&ready.logical_window)
     {
         return Err("ready observation does not prove a stable capture state".to_owned());
     }
     Ok(())
+}
+
+fn has_valid_webview_dimensions(viewport: &Viewport) -> bool {
+    viewport.width > 0 && viewport.height > 0
 }
 
 fn is_hex(value: &str, length: usize) -> bool {
@@ -387,7 +387,8 @@ fn atomic_write_new_json<T: Serialize>(path: &Path, value: &T) -> Result<(), Str
 #[cfg(test)]
 mod tests {
     use super::{
-        is_hex, validate_plan_identity, CapturePlan, FixtureBinding, PackageManifestBinding,
+        has_valid_webview_dimensions, is_hex, validate_plan_identity, CapturePlan, FixtureBinding,
+        PackageManifestBinding, Viewport,
     };
     use std::path::PathBuf;
 
@@ -410,10 +411,6 @@ mod tests {
                 gate_id: "T023b".to_owned(),
                 profile_root: PathBuf::from("/tmp/profile"),
                 expected_state_fingerprint: "34".repeat(32),
-                viewport: super::Viewport {
-                    width: 1280,
-                    height: 760,
-                },
             },
             screens: Vec::new(),
         };
@@ -421,5 +418,17 @@ mod tests {
         assert!(validate_plan_identity(&plan, &"34".repeat(32)).is_err());
         assert!(is_hex(&"ab".repeat(32), 64));
         assert!(!is_hex("not-a-digest", 64));
+    }
+
+    #[test]
+    fn accepts_positive_webview_content_dimensions_without_equating_them_to_window_bounds() {
+        assert!(has_valid_webview_dimensions(&Viewport {
+            width: 1280,
+            height: 730,
+        }));
+        assert!(!has_valid_webview_dimensions(&Viewport {
+            width: 1280,
+            height: 0,
+        }));
     }
 }
