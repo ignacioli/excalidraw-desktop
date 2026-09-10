@@ -158,6 +158,52 @@ const CLEAN_TAB: ShellFixtureTab = {
   conflictState: "none",
 };
 
+const VSL_WORKSPACE: ShellFixtureWorkspace = {
+  id: "fixture-vsl-workspace",
+  name: "Architecture",
+  rootPath: "/fixtures/architecture",
+  createdAt: 1_700_000_020,
+};
+
+const VSL_ENTRIES: readonly ShellFixtureEntry[] = [
+  {
+    workspaceId: VSL_WORKSPACE.id,
+    kind: "directory",
+    canonicalPath: `${VSL_WORKSPACE.rootPath}/flows`,
+    relativePath: "flows",
+    parentRelativePath: "",
+    name: "flows",
+    displayName: "Flows",
+    mtime: 1_700_000_021,
+    fileSize: 0,
+  },
+  ...["Architecture", "Migration", "Research"].map(
+    (title, index): ShellFixtureEntry => ({
+      workspaceId: VSL_WORKSPACE.id,
+      kind: "drawing",
+      canonicalPath: `${VSL_WORKSPACE.rootPath}/flows/${title}.excalidraw`,
+      relativePath: `flows/${title}.excalidraw`,
+      parentRelativePath: "flows",
+      name: `${title}.excalidraw`,
+      displayName: title,
+      mtime: 1_700_000_022 + index,
+      fileSize: 512,
+    }),
+  ),
+];
+
+const VSL_TABS: readonly ShellFixtureTab[] = VSL_ENTRIES.filter(
+  (entry) => entry.kind === "drawing",
+).map((entry, index) => ({
+  documentId: `fixture-vsl-document-${index + 1}`,
+  title: entry.displayName,
+  workspaceId: VSL_WORKSPACE.id,
+  path: entry.canonicalPath,
+  saveState: "clean",
+  availability: "available",
+  conflictState: "none",
+}));
+
 const UNSAVED_TAB: ShellFixtureTab = {
   documentId: "fixture-document-unsaved",
   title: "Untitled",
@@ -205,9 +251,16 @@ export const RESTORED_SHELL_FIXTURE: ShellFixture = {
 };
 
 export const PINNED_SHELL_FIXTURE: ShellFixture = {
-  ...RESTORED_SHELL_FIXTURE,
   id: "pinned",
+  shell: "restored",
   sidebar: "pinned",
+  currentWorkspaceId: VSL_WORKSPACE.id,
+  workspaces: [VSL_WORKSPACE],
+  entries: VSL_ENTRIES,
+  expandedDirectoryPaths: ["flows"],
+  selectedDirectoryRelativePath: "flows",
+  activeDocumentId: VSL_TABS[0]?.documentId ?? null,
+  tabs: VSL_TABS,
 };
 
 export const OVERLAY_SHELL_FIXTURE: ShellFixture = {
@@ -217,8 +270,9 @@ export const OVERLAY_SHELL_FIXTURE: ShellFixture = {
 };
 
 export const NESTED_TREE_SHELL_FIXTURE: ShellFixture = {
-  ...PINNED_SHELL_FIXTURE,
+  ...RESTORED_SHELL_FIXTURE,
   id: "nested-tree",
+  sidebar: "pinned",
   entries: NESTED_ENTRIES,
   expandedDirectoryPaths: ["planning", "planning/weekly"],
 };
@@ -243,12 +297,14 @@ export const UNSAVED_TAB_SHELL_FIXTURE: ShellFixture = {
 };
 
 export const UNICODE_PINNED_SHELL_FIXTURE: ShellFixture = {
-  ...PINNED_SHELL_FIXTURE,
+  ...RESTORED_SHELL_FIXTURE,
   id: "unicode-pinned",
+  sidebar: "pinned",
   currentWorkspaceId: UNICODE_WORKSPACE.id,
   workspaces: [UNICODE_WORKSPACE],
   entries: UNICODE_ENTRIES,
   expandedDirectoryPaths: ["流程"],
+  selectedDirectoryRelativePath: "流程",
   activeDocumentId: UNICODE_TAB.documentId,
   tabs: [UNICODE_TAB],
 };

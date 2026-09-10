@@ -149,6 +149,13 @@ describe("AppShell", () => {
       screen.getByRole("main", { name: "Drawing canvas" }),
     ).toBeInTheDocument();
     expect(
+      [
+        ...screen
+          .getByRole("group", { name: "Shell navigation" })
+          .querySelectorAll("button"),
+      ].map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["Toggle workspace sidebar", "Back"]);
+    expect(
       screen.queryByRole("complementary", { name: "Files" }),
     ).not.toBeInTheDocument();
 

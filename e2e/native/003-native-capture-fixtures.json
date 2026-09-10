@@ -10,10 +10,14 @@
       "theme": "light",
       "sessionState": "workspace",
       "sidebarState": "pinned",
-      "workspaceName": "Design Workspace",
+      "workspaceName": "Architecture",
       "selectedDirectory": "flows",
-      "tabs": ["Overview.excalidraw", "Checkout Flow.excalidraw"],
-      "activeDocument": "Checkout Flow.excalidraw",
+      "tabs": [
+        "Architecture.excalidraw",
+        "Migration.excalidraw",
+        "Research.excalidraw"
+      ],
+      "activeDocument": "Architecture.excalidraw",
       "unsaved": false
     },
     {

@@ -106,6 +106,31 @@ describe("TabBar", () => {
     ).toHaveAccessibleName("Close Beta");
   });
 
+  it("exposes active, inactive, and unsaved Tab states without moving the close slot", () => {
+    setDocumentSessions([
+      createSession("alpha", "Alpha", "/tmp/alpha.excalidraw", "clean"),
+      createSession("beta", "Beta", "/tmp/beta.excalidraw", "dirty"),
+      createSession("gamma", "Gamma", "/tmp/gamma.excalidraw", "clean"),
+    ]);
+    documentManager.store.setState({ activeDocumentId: "alpha" });
+    render(<TabBar />);
+
+    const alpha = screen.getByRole("tab", { name: "Alpha" });
+    const beta = screen.getByRole("tab", {
+      name: "Beta, unsaved changes",
+    });
+    const gamma = screen.getByRole("tab", { name: "Gamma" });
+    expect(alpha.closest(".tab-cluster")).toHaveClass("is-selected");
+    expect(beta.closest(".tab-cluster")).toHaveClass("is-unsaved");
+    expect(gamma.closest(".tab-cluster")).not.toHaveClass(
+      "is-selected",
+      "is-unsaved",
+    );
+    expect(
+      beta.closest(".tab-cluster")?.querySelector("[data-slot='tab-close']"),
+    ).toBeInTheDocument();
+  });
+
   it("offers Close, Close Others, and Close Tabs to the Right from the tab context menu", async () => {
     const user = userEvent.setup();
     setDocumentSessions([

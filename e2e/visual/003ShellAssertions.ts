@@ -90,6 +90,9 @@ export const VISUAL_VIEWPORT: ViewportSize = {
 
 export const COMPONENT_CROP_THRESHOLD = 0.01;
 
+export const SDK_BOUNDARY_SELECTOR =
+  ".canvas-document:not([hidden]) .excalidraw-editor";
+
 /**
  * Selectors owned by the application shell.  The editor wrapper is the only
  * SDK boundary selector: it is rendered by Excalidraw Desktop, while all
@@ -103,10 +106,8 @@ export const SHELL_VISUAL_SELECTORS = [
   ".workspace-tree-label",
   ".tab-list",
   ".welcome-screen",
-  ".excalidraw-editor",
+  SDK_BOUNDARY_SELECTOR,
 ] as const;
-
-export const SDK_BOUNDARY_SELECTOR = ".excalidraw-editor";
 
 export interface PlatformFontValues {
   readonly deviationId: string;

@@ -173,14 +173,26 @@ body {
   height: var(--tab-height);
   min-width: 0;
   overflow: hidden;
-  border: var(--tab-border-width, var(--border-default)) solid transparent;
+  border: var(--tab-border-width, var(--border-default)) solid
+    var(--border-subtle);
   border-radius: var(--tab-radius, 6px) var(--tab-radius, 6px) 0 0;
-  background: transparent;
+  background: var(--surface-background);
 }
 
 .tab-cluster.is-selected {
-  border-color: var(--border-subtle);
-  border-bottom-color: var(--canvas-background);
+  border-bottom-color: var(--accent);
+  background: var(--canvas-background);
+}
+
+.tab-cluster.is-unsaved {
+  border-bottom-color: var(--accent);
+}
+
+.tab-cluster:hover {
+  background: var(--surface-hover);
+}
+
+.tab-cluster.is-selected:hover {
   background: var(--canvas-background);
 }
 
@@ -507,7 +519,7 @@ body {
   flex: 1 1 auto;
   min-height: 0;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-4);
 }
 
 .workspace-panel-header {
@@ -516,7 +528,7 @@ body {
   gap: var(--space-1);
   min-width: 0;
   border-bottom: var(--border-default) solid var(--border-subtle);
-  padding-bottom: var(--space-2);
+  padding-bottom: var(--space-3);
 }
 
 .workspace-panel-eyebrow {

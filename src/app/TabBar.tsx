@@ -228,9 +228,16 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
           const isOrphaned = session.saveState === "orphaned";
           const closeVisible =
             isActive || hoveredId === session.id || focusedId === session.id;
+          const clusterClassName = [
+            "tab-cluster",
+            isActive ? "is-selected" : null,
+            isDirty ? "is-unsaved" : null,
+          ]
+            .filter((value): value is string => value !== null)
+            .join(" ");
           return (
             <div
-              className={isActive ? "tab-cluster is-selected" : "tab-cluster"}
+              className={clusterClassName}
               data-tab-id={session.id}
               key={session.id}
               onBlur={(event) => {

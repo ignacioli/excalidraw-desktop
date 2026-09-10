@@ -721,16 +721,6 @@ export function AppShell({
       >
         <div className="shell-left" aria-label="Shell navigation" role="group">
           <button
-            aria-label="Back"
-            className="icon-button shell-back-button"
-            disabled={!canGoBack}
-            onClick={goBack}
-            title="Back"
-            type="button"
-          >
-            <img alt="" aria-hidden="true" src={backIcon} />
-          </button>
-          <button
             aria-expanded={sidebarSnapshot.mode !== "hidden"}
             aria-controls="workspace-sidebar"
             aria-label="Toggle workspace sidebar"
@@ -751,6 +741,16 @@ export function AppShell({
             type="button"
           >
             <img alt="" aria-hidden="true" src={sidebarIcon} />
+          </button>
+          <button
+            aria-label="Back"
+            className="icon-button shell-back-button"
+            disabled={!canGoBack}
+            onClick={goBack}
+            title="Back"
+            type="button"
+          >
+            <img alt="" aria-hidden="true" src={backIcon} />
           </button>
         </div>
         <div className="shell-center">

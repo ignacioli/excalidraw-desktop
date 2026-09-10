@@ -143,9 +143,9 @@ test.describe("003 shell visual harness", () => {
     await page.getByRole("button", { name: "Create" }).click();
     await expect(page.getByRole("treeitem", { name: "Sprint" })).toBeVisible();
     state = await getUiInteractionHarnessState(page);
-    expect(
-      state.entryCountByParent["fixture-workspace:planning/weekly"],
-    ).toBe(2);
+    expect(state.entryCountByParent["fixture-workspace:planning/weekly"]).toBe(
+      2,
+    );
     expect(
       state.invocations.filter(
         (call) =>
@@ -233,8 +233,12 @@ test.describe("003 shell visual harness", () => {
     await prepare(page, fixture, "light");
     await expect(page.locator(".file-sidebar")).toBeVisible();
     await expect(
-      page.getByRole("treeitem", { name: "Design Workspace" }),
+      page.locator('[role="treeitem"][data-kind="workspace"]', {
+        hasText: "Architecture",
+      }),
     ).toBeVisible();
+    await expect(page.getByRole("treeitem", { name: "Flows" })).toBeVisible();
+    await expect(page.locator(".tab-list").getByRole("tab")).toHaveCount(3);
     await assertRestoredFixture(page, fixture);
     await assertPinnedWorkspaceHeader(page);
     await assertDefaultWorkspaceRowState(page);
@@ -497,10 +501,25 @@ async function openFixtureDocuments(
         await directoryRow.click();
       }
     }
-    await page.getByRole("treeitem", { name: entry.displayName }).click();
+    await page
+      .locator('[role="treeitem"][data-kind="drawing"]', {
+        hasText: entry.displayName,
+      })
+      .click();
     await expect(
       page.getByRole("tab", { name: new RegExp(tab.title) }),
     ).toBeVisible();
+  }
+  const activeTab = fixture.tabs.find(
+    ({ documentId }) => documentId === fixture.activeDocumentId,
+  );
+  if (activeTab !== undefined) {
+    const activeTabControl = page
+      .locator(".tab-list")
+      .getByRole("tab", { name: new RegExp(activeTab.title) });
+    await activeTabControl.click();
+    await expect(activeTabControl).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(SDK_BOUNDARY_SELECTOR)).toBeVisible();
   }
   if (!startedVisible) {
     await page.evaluate(() => {
@@ -656,6 +675,11 @@ async function assertGeometrySet(
 async function assertPinnedWorkspaceHeader(page: Page): Promise<void> {
   const toolbar = page.getByRole("toolbar", { name: "Workspace actions" });
   await expect(toolbar.getByRole("button")).toHaveCount(4);
+  expect(
+    await toolbar.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth,
+    ),
+  ).toBe(true);
   await expect(page.getByRole("button", { name: "Mount folder…" })).toHaveCount(
     0,
   );
@@ -682,6 +706,13 @@ async function assertPinnedWorkspaceHeader(page: Page): Promise<void> {
     titleMetrics.clientHeight,
   );
   expect(titleMetrics.whiteSpace).toBe("nowrap");
+  const headerBox = await readBox(page.locator(".workspace-panel-header"));
+  const firstRowBox = await readBox(
+    page.locator(".workspace-tree-row").first(),
+  );
+  expect(
+    firstRowBox.y - (headerBox.y + headerBox.height),
+  ).toBeGreaterThanOrEqual(14);
 }
 
 async function assertDefaultWorkspaceRowState(page: Page): Promise<void> {
