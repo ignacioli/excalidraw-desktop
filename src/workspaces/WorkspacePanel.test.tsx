@@ -163,6 +163,15 @@ describe("WorkspacePanel", () => {
       expect.anything(),
     );
 
+    await user.click(screen.getByRole("button", { name: "New Drawing" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    expect(invoker.invoke).toHaveBeenCalledWith("workspace_entry_create", {
+      workspaceId: "workspace-1",
+      parentRelativePath: "",
+      kind: "drawing",
+      baseName: "Untitled",
+    });
+
     await user.click(await screen.findByRole("treeitem", { name: "notes" }));
     await user.click(screen.getByRole("button", { name: "New Folder" }));
     const dialog = screen.getByRole("dialog", { name: "New folder" });
@@ -173,6 +182,61 @@ describe("WorkspacePanel", () => {
       kind: "directory",
       baseName: "Untitled Folder",
     });
+  });
+
+  it("keeps a conflicting header create side-effect free and retryable", async () => {
+    const user = userEvent.setup();
+    const onOpenFile = vi.fn();
+    let listCount = 0;
+    const invoke = vi.fn(
+      async (command: string, args: Record<string, unknown>) => {
+        if (command === "workspace_list") return [WORKSPACES[0]];
+        if (command === "workspace_entry_list") {
+          listCount += 1;
+          return ROOT_ENTRIES.filter(
+            (entry) =>
+              entry.workspaceId === "workspace-1" &&
+              entry.parentRelativePath ===
+                String(args.parentRelativePath ?? ""),
+          );
+        }
+        if (command === "workspace_entry_create") {
+          throw {
+            code: "NAME_CONFLICT",
+            message: "already exists",
+            retriable: false,
+          };
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        onOpenFile={onOpenFile}
+        selectDirectory={async () => null}
+      />,
+    );
+
+    await screen.findByRole("treeitem", { name: "notes" });
+    const listCountBeforeCreate = listCount;
+    await user.click(screen.getByRole("button", { name: "New Drawing" }));
+    const input = screen.getByRole("textbox", { name: "Name" });
+    await user.clear(input);
+    await user.type(input, "drawing");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "already exists",
+    );
+    expect(
+      screen.getByRole("dialog", { name: "New drawing" }),
+    ).toBeInTheDocument();
+    expect(input).toHaveValue("drawing");
+    expect(listCount).toBe(listCountBeforeCreate);
+    expect(onOpenFile).not.toHaveBeenCalled();
+    expect(invoke).toHaveBeenCalledTimes(listCountBeforeCreate + 2);
   });
 
   it("toggles the single next-action expand/collapse control and refreshes the current Workspace", async () => {
@@ -248,7 +312,10 @@ describe("WorkspacePanel", () => {
     ) as CommandInvoker["invoke"];
 
     render(
-      <WorkspacePanel invoker={{ invoke }} selectDirectory={async () => null} />,
+      <WorkspacePanel
+        invoker={{ invoke }}
+        selectDirectory={async () => null}
+      />,
     );
 
     await screen.findByRole("treeitem", { name: "notes" });
@@ -260,6 +327,19 @@ describe("WorkspacePanel", () => {
         parentRelativePath: "notes/deep",
       });
     });
+    expect(
+      await screen.findByRole("treeitem", { name: "drawing" }),
+    ).toBeInTheDocument();
+    const collapseAll = screen.getByRole("button", { name: "Collapse all" });
+    expect(collapseAll).toHaveAttribute("title", "Collapse all");
+    await user.click(collapseAll);
+    expect(screen.getByRole("button", { name: "Expand all" })).toHaveAttribute(
+      "title",
+      "Expand all",
+    );
+    expect(
+      screen.queryByRole("treeitem", { name: "notes" }),
+    ).not.toBeInTheDocument();
   });
 
   it("mounts a workspace and reports sidebar presence", async () => {

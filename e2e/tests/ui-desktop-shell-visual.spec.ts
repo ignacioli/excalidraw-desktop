@@ -28,7 +28,10 @@ import {
   type ComponentCropComparison,
 } from "../visual/003ShellAssertions";
 import { LEGACY_CHECK_IDS } from "../visual/003Evidence";
-import { installUiInteractionHarness } from "./uiInteractionHarness";
+import {
+  getUiInteractionHarnessState,
+  installUiInteractionHarness,
+} from "./uiInteractionHarness";
 
 const GEOMETRY_TOLERANCE_PX = 2;
 const REPO_ROOT = resolve(import.meta.dirname, "../..");
@@ -93,6 +96,100 @@ type ComputedTypography = {
 const remoteFontRequestsByPage = new WeakMap<Page, number>();
 
 test.describe("003 shell visual harness", () => {
+  test("exercises Current Workspace header actions through keyboard and pointer routes", async ({
+    page,
+  }) => {
+    const fixture = getShellFixture("nested-tree");
+    await prepare(page, fixture, "light");
+
+    const workspace = page.getByRole("treeitem", { name: "Design Workspace" });
+    await workspace.click();
+    await workspace.click();
+    await expect(
+      page.getByRole("treeitem", { name: "planning" }),
+    ).toBeVisible();
+
+    const newDrawing = page.getByRole("button", { name: "New Drawing" });
+    await newDrawing.focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("textbox", { name: "Name" }).fill("Root sketch");
+    await page.getByRole("button", { name: "Create" }).click();
+    await expect(
+      page.getByRole("treeitem", { name: "Root sketch" }),
+    ).toBeVisible();
+    let state = await getUiInteractionHarnessState(page);
+    expect(
+      state.invocations.filter(
+        (call) =>
+          call.command === "workspace_entry_create" &&
+          call.args.parentRelativePath === "" &&
+          call.args.kind === "drawing",
+      ),
+    ).toHaveLength(1);
+
+    await page.getByRole("treeitem", { name: "planning" }).click();
+    await page.getByRole("treeitem", { name: "weekly" }).click();
+    const beforeCancel = (await getUiInteractionHarnessState(page)).entryCount;
+    const newFolder = page.getByRole("button", { name: "New Folder" });
+    await newFolder.focus();
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Escape");
+    expect((await getUiInteractionHarnessState(page)).entryCount).toBe(
+      beforeCancel,
+    );
+
+    await newFolder.click();
+    await page.getByRole("textbox", { name: "Name" }).fill("Sprint");
+    await page.getByRole("button", { name: "Create" }).click();
+    await expect(page.getByRole("treeitem", { name: "Sprint" })).toBeVisible();
+    state = await getUiInteractionHarnessState(page);
+    expect(
+      state.entryCountByParent["fixture-workspace:planning/weekly"],
+    ).toBe(2);
+    expect(
+      state.invocations.filter(
+        (call) =>
+          call.command === "workspace_entry_create" &&
+          call.args.parentRelativePath === "planning/weekly" &&
+          call.args.kind === "directory",
+      ),
+    ).toHaveLength(1);
+
+    const beforeConflict = state.entryCount;
+    await newDrawing.click();
+    await page.getByRole("textbox", { name: "Name" }).fill("notes");
+    await page.getByRole("button", { name: "Create" }).click();
+    await expect(page.getByRole("alert")).toContainText("already exists");
+    expect((await getUiInteractionHarnessState(page)).entryCount).toBe(
+      beforeConflict,
+    );
+    await page.getByRole("button", { name: "Cancel" }).click();
+
+    const collapseAll = page.getByRole("button", { name: "Collapse all" });
+    await collapseAll.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("treeitem", { name: "planning" })).toHaveCount(
+      0,
+    );
+    await page.getByRole("button", { name: "Expand all" }).click();
+    await expect(page.getByRole("treeitem", { name: "notes" })).toBeVisible();
+
+    const listsBeforeRefresh = (
+      await getUiInteractionHarnessState(page)
+    ).invocations.filter(
+      (call) => call.command === "workspace_entry_list",
+    ).length;
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await expect
+      .poll(
+        async () =>
+          (await getUiInteractionHarnessState(page)).invocations.filter(
+            (call) => call.command === "workspace_entry_list",
+          ).length,
+      )
+      .toBeGreaterThan(listsBeforeRefresh);
+  });
+
   test("captures Welcome / Light at the fixed 1280x760 viewport", async ({
     page,
   }, testInfo) => {
