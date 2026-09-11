@@ -2,15 +2,17 @@ import { invoke } from "@tauri-apps/api/core";
 
 export const NATIVE_CAPTURE_SCHEMA_VERSION = 1 as const;
 export const NATIVE_CAPTURE_STATE_FINGERPRINT_VERSION =
-  "shell-state-v1" as const;
+  "shell-state-v2" as const;
 
 export interface NativeCaptureStateProjection {
   readonly gateId: string;
   readonly theme: "light" | "dark";
   readonly sessionState: "empty" | "restored" | "workspace" | "recovery";
   readonly sidebarState: "hidden" | "overlay" | "pinned";
+  readonly sidebarWidth: number;
   readonly workspaceName: string | null;
   readonly selectedDirectory: string | null;
+  readonly expandedDirectories: readonly string[];
   readonly tabs: readonly string[];
   readonly activeDocument: string | null;
   readonly unsaved: boolean;
@@ -33,8 +35,10 @@ export interface NativeCaptureObservationInput {
   readonly theme: NativeCaptureStateProjection["theme"];
   readonly sessionState: NativeCaptureStateProjection["sessionState"];
   readonly sidebarState: NativeCaptureStateProjection["sidebarState"];
+  readonly sidebarWidth: number;
   readonly workspaceName: string | null;
   readonly selectedDirectory: string | null;
+  readonly expandedDirectories: readonly string[];
   readonly tabs: readonly string[];
   readonly activeDocument: string | null;
   readonly unsaved: boolean;
@@ -152,8 +156,10 @@ export async function publishNativeCaptureReady(
     theme: observation.theme,
     sessionState: observation.sessionState,
     sidebarState: observation.sidebarState,
+    sidebarWidth: observation.sidebarWidth,
     workspaceName: observation.workspaceName,
     selectedDirectory: observation.selectedDirectory,
+    expandedDirectories: [...observation.expandedDirectories].sort(),
     tabs: [...observation.tabs],
     activeDocument: observation.activeDocument,
     unsaved: observation.unsaved,

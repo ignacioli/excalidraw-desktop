@@ -156,7 +156,7 @@ export function validateReadyCandidate(plan, screen, candidate, childPid) {
     candidate.productCommit !== plan.productCommit ||
     candidate.packageArtifactSha256 !== plan.packageManifest.artifactSha256 ||
     candidate.stateFingerprint !== screen.expectedStateFingerprint ||
-    candidate.stateFingerprintVersion !== "shell-state-v1" ||
+    candidate.stateFingerprintVersion !== "shell-state-v2" ||
     candidate.fontReady !== true ||
     candidate.remoteFontRequests !== 0 ||
     candidate.pendingOperations !== 0 ||
@@ -201,14 +201,21 @@ export function operatorPreparationMessage(screen, workspaceRoot) {
       theme: screen.theme,
       sessionState: screen.sessionState,
       sidebarState: screen.sidebarState,
+      sidebarWidth: screen.sidebarWidth,
       workspaceName: screen.workspaceName,
       selectedDirectory: screen.selectedDirectory,
+      expandedDirectories: screen.expandedDirectories,
+      sdkPanelState: screen.sdkPanelState,
       tabs: screen.tabs,
       activeDocument: screen.activeDocument,
       unsaved: screen.unsaved,
     }),
     "Use normal application UI to establish this state; operator actions are state setup, not evidence.",
   ].join("\n");
+}
+
+export function nativeMasksForScreen(screen) {
+  return screen.nativeMasks ?? [];
 }
 
 async function resizeOwnedWindow(pid, helper) {
@@ -476,7 +483,7 @@ async function captureGate({
         harnessVersion: inputs.plan.harnessVersion,
         packageArtifactSha256: inputs.plan.packageManifest.artifactSha256,
       },
-      masks: [],
+      masks: nativeMasksForScreen(screen),
     });
     const artifactNames = [
       "actual.png",

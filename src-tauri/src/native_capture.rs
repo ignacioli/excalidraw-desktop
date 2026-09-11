@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 const SCHEMA_VERSION: u8 = 1;
-const STATE_FINGERPRINT_VERSION: &str = "shell-state-v1";
+const STATE_FINGERPRINT_VERSION: &str = "shell-state-v2";
 const MAX_PLAN_BYTES: u64 = 1024 * 1024;
 const PLAN_ENV: &str = "EXCALIDRAW_NATIVE_CAPTURE_PLAN";
 const GATE_ENV: &str = "EXCALIDRAW_NATIVE_CAPTURE_GATE";
@@ -120,8 +120,10 @@ struct NativeCaptureStateProjection {
     theme: String,
     session_state: String,
     sidebar_state: String,
+    sidebar_width: u32,
     workspace_name: Option<String>,
     selected_directory: Option<String>,
+    expanded_directories: Vec<String>,
     tabs: Vec<String>,
     active_document: Option<String>,
     unsaved: bool,
@@ -497,7 +499,7 @@ mod tests {
             package_manifest: PackageManifestBinding {
                 artifact_sha256: "ef".repeat(32),
             },
-            state_fingerprint_version: "shell-state-v1".to_owned(),
+            state_fingerprint_version: "shell-state-v2".to_owned(),
             control_dir: PathBuf::from("/tmp/control"),
             fixture: FixtureBinding {
                 digest: "12".repeat(32),
@@ -541,8 +543,10 @@ mod tests {
                 theme: "light".to_owned(),
                 session_state: "workspace".to_owned(),
                 sidebar_state: "pinned".to_owned(),
+                sidebar_width: 360,
                 workspace_name: Some("Design Workspace".to_owned()),
                 selected_directory: Some("flows".to_owned()),
+                expanded_directories: vec!["flows".to_owned()],
                 tabs: vec!["Architecture.excalidraw".to_owned()],
                 active_document: Some("Architecture.excalidraw".to_owned()),
                 unsaved: false,

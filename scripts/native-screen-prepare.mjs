@@ -28,6 +28,12 @@ const ISOLATION_MODES = new Set([
   "ephemeral-vm",
   "verified-os-home-redirect",
 ]);
+const NATIVE_MASK_SURFACES = new Set([
+  "canvas",
+  "editor-toolbar",
+  "library",
+  "presentation",
+]);
 
 export class NativeScreenPrepareError extends Error {
   constructor(message, exitCode = 2) {
@@ -125,8 +131,10 @@ function stateProjection(screen, fixtureDigest) {
     theme: screen.theme,
     sessionState: screen.sessionState,
     sidebarState: screen.sidebarState,
+    sidebarWidth: screen.sidebarWidth,
     workspaceName: screen.workspaceName,
     selectedDirectory: screen.selectedDirectory,
+    expandedDirectories: screen.expandedDirectories,
     tabs: screen.tabs,
     activeDocument: screen.activeDocument,
     unsaved: screen.unsaved,
@@ -142,7 +150,7 @@ export function validateCapturePlan(value) {
     typeof plan.runId !== "string" ||
     !/^[0-9a-f]{64}$/u.test(plan.runNonce ?? "") ||
     !/^[0-9a-f]{40}$/u.test(plan.productCommit ?? "") ||
-    plan.stateFingerprintVersion !== "shell-state-v1" ||
+    plan.stateFingerprintVersion !== "shell-state-v2" ||
     plan.normalizationAlgorithm !== "lanczos3-srgb-v1" ||
     !ISOLATION_MODES.has(plan.isolation?.mode) ||
     !path.isAbsolute(plan.nativeEntrypointProfileRoot ?? "") ||
@@ -174,6 +182,26 @@ export function validateCapturePlan(value) {
       !path.isAbsolute(screen.profileRoot ?? "") ||
       screen.viewport?.width !== 1280 ||
       screen.viewport?.height !== 760 ||
+      !Number.isInteger(screen.sidebarWidth) ||
+      screen.sidebarWidth < 0 ||
+      !Array.isArray(screen.expandedDirectories) ||
+      screen.expandedDirectories.some(
+        (entry) => typeof entry !== "string" || entry.length === 0,
+      ) ||
+      (screen.nativeMasks !== undefined &&
+        (!Array.isArray(screen.nativeMasks) ||
+          screen.nativeMasks.some(
+            (mask) =>
+              typeof mask?.maskId !== "string" ||
+              !/^rect\(\d+,\d+,\d+,\d+\)$/u.test(
+                mask.selectorOrRect ?? "",
+              ) ||
+              !NATIVE_MASK_SURFACES.has(mask.surface) ||
+              typeof mask.reason !== "string" ||
+              mask.reason.length === 0 ||
+              mask.perimeterChecked !== true ||
+              mask.approved !== true,
+          ))) ||
       !/^[0-9a-f]{64}$/u.test(screen.expectedStateFingerprint ?? "")
     ) {
       blocked(`capture plan screen ${screen.gateId ?? "unknown"} is invalid`);
@@ -305,14 +333,10 @@ export async function prepareNativeScreenPlan({
   );
   if (!nativeEntrypointSource)
     blocked("fixture registry is missing T023b source state");
-  const nativeEntrypointState = {
-    ...nativeEntrypointSource,
-    gateId: "T023b",
-    fixtureDigest: fixture.digest,
-  };
-  delete nativeEntrypointState.checkpoint;
-  delete nativeEntrypointState.baselinePath;
-  delete nativeEntrypointState.manifestName;
+  const nativeEntrypointState = stateProjection(
+    { ...nativeEntrypointSource, gateId: "T023b" },
+    fixture.digest,
+  );
   const nativeEntrypointRequest = {
     gateId: "T023b",
     profileRoot: nativeEntrypointProfileRoot,
@@ -354,7 +378,7 @@ export async function prepareNativeScreenPlan({
     },
     hf2Manifest: { path: HF2_MANIFEST_PATH, sha256: sha256Bytes(hf2Bytes) },
     harnessVersion: "003-native-capture-v1",
-    stateFingerprintVersion: "shell-state-v1",
+    stateFingerprintVersion: "shell-state-v2",
     normalizationAlgorithm: "lanczos3-srgb-v1",
     isolation: {
       mode: isolationMode,

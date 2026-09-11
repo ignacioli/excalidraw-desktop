@@ -138,6 +138,8 @@ export function AppShell({
   const [backLocation, setBackLocation] = useState<BrowsingLocation | null>(
     null,
   );
+  const [nativeCaptureExpandedDirectories, setNativeCaptureExpandedDirectories] =
+    useState<readonly string[]>([]);
   const [, setHistoryVersion] = useState(0);
   const [startupState, setStartupState] = useState<RecoveryStartupState>({
     status: hasNativeWindowRuntime() ? "checking" : "ready",
@@ -638,9 +640,11 @@ export function AppShell({
       theme: themeSnapshot.resolvedColorScheme,
       sessionState,
       sidebarState: sidebarSnapshot.mode,
+      sidebarWidth: renderedSidebarWidth,
       workspaceName: currentWorkspace?.name ?? null,
       selectedDirectory:
         currentBrowsingLocationRef.current?.directoryRelativePath ?? null,
+      expandedDirectories: nativeCaptureExpandedDirectories,
       tabs: documentSessions.map((session) => session.title),
       activeDocument: activeSession?.title ?? null,
       unsaved:
@@ -656,6 +660,8 @@ export function AppShell({
     documentSessions,
     exportDocumentId,
     orphanCloseId,
+    nativeCaptureExpandedDirectories,
+    renderedSidebarWidth,
     showWelcome,
     sidebarSnapshot.mode,
     startupState.candidates.length,
@@ -843,6 +849,7 @@ export function AppShell({
                 setCurrentWorkspaceId(workspace?.id ?? null);
               }}
               onBrowse={handleBrowse}
+              onExpandedDirectoriesChange={setNativeCaptureExpandedDirectories}
               backLocation={backLocation}
               onBackLocationApplied={() => setBackLocation(null)}
             />

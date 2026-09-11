@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { describe, it } from "node:test";
 import {
   NativeScreenCaptureError,
+  nativeMasksForScreen,
   normalizationArgs,
   operatorPreparationMessage,
   parseAxWindowObservation,
@@ -35,8 +36,21 @@ const screen = {
   theme: "light",
   sessionState: "workspace",
   sidebarState: "pinned",
+  sidebarWidth: 360,
   workspaceName: "Design Workspace",
   selectedDirectory: "flows",
+  expandedDirectories: ["flows"],
+  sdkPanelState: "library-open",
+  nativeMasks: [
+    {
+      maskId: "sdk-canvas",
+      selectorOrRect: "rect(360,74,626,686)",
+      surface: "canvas",
+      reason: "official SDK-owned editor interior below the native titlebar",
+      perimeterChecked: true,
+      approved: true,
+    },
+  ],
   tabs: ["Architecture.excalidraw"],
   activeDocument: "Architecture.excalidraw",
   unsaved: false,
@@ -57,7 +71,7 @@ function candidate(overrides = {}) {
       webKitData: `${profileRoot}/Library/WebKit/app`,
     },
     stateFingerprint: screen.expectedStateFingerprint,
-    stateFingerprintVersion: "shell-state-v1",
+    stateFingerprintVersion: "shell-state-v2",
     fontReady: true,
     remoteFontRequests: 0,
     pendingOperations: 0,
@@ -159,7 +173,9 @@ describe("native screen capture", () => {
     assert.match(message, /VSL-001/u);
     assert.match(message, /Design Workspace/u);
     assert.match(message, /Architecture\.excalidraw/u);
+    assert.match(message, /library-open/u);
     assert.match(message, /operator actions are state setup, not evidence/u);
+    assert.deepEqual(nativeMasksForScreen(screen), screen.nativeMasks);
   });
 
   it("exposes fixed help and invalid-invocation exit semantics", () => {

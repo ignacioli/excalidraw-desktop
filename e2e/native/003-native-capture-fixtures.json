@@ -11,8 +11,29 @@
       "theme": "light",
       "sessionState": "workspace",
       "sidebarState": "pinned",
+      "sidebarWidth": 360,
       "workspaceName": "Design Workspace",
       "selectedDirectory": "flows",
+      "expandedDirectories": ["flows"],
+      "sdkPanelState": "library-open",
+      "nativeMasks": [
+        {
+          "maskId": "sdk-canvas",
+          "selectorOrRect": "rect(360,74,626,686)",
+          "surface": "canvas",
+          "reason": "official SDK-owned editor interior below the native titlebar",
+          "perimeterChecked": true,
+          "approved": true
+        },
+        {
+          "maskId": "sdk-library",
+          "selectorOrRect": "rect(986,74,294,686)",
+          "surface": "library",
+          "reason": "official SDK-owned Library interior below the native titlebar",
+          "perimeterChecked": true,
+          "approved": true
+        }
+      ],
       "tabs": [
         "Architecture.excalidraw",
         "Migration.excalidraw",
@@ -30,8 +51,10 @@
       "theme": "light",
       "sessionState": "empty",
       "sidebarState": "hidden",
+      "sidebarWidth": 360,
       "workspaceName": null,
       "selectedDirectory": null,
+      "expandedDirectories": [],
       "tabs": [],
       "activeDocument": null,
       "unsaved": false
@@ -45,8 +68,10 @@
       "theme": "light",
       "sessionState": "restored",
       "sidebarState": "hidden",
+      "sidebarWidth": 360,
       "workspaceName": "Design Workspace",
       "selectedDirectory": "flows",
+      "expandedDirectories": ["flows"],
       "tabs": ["Overview.excalidraw", "Checkout Flow.excalidraw"],
       "activeDocument": "Checkout Flow.excalidraw",
       "unsaved": false
@@ -60,8 +85,29 @@
       "theme": "light",
       "sessionState": "workspace",
       "sidebarState": "pinned",
+      "sidebarWidth": 360,
       "workspaceName": "Design Workspace",
       "selectedDirectory": "flows",
+      "expandedDirectories": ["flows"],
+      "sdkPanelState": "library-open",
+      "nativeMasks": [
+        {
+          "maskId": "sdk-canvas",
+          "selectorOrRect": "rect(360,74,626,686)",
+          "surface": "canvas",
+          "reason": "official SDK-owned editor interior below the native titlebar",
+          "perimeterChecked": true,
+          "approved": true
+        },
+        {
+          "maskId": "sdk-library",
+          "selectorOrRect": "rect(986,74,294,686)",
+          "surface": "library",
+          "reason": "official SDK-owned Library interior below the native titlebar",
+          "perimeterChecked": true,
+          "approved": true
+        }
+      ],
       "tabs": ["Overview.excalidraw", "Checkout Flow.excalidraw"],
       "activeDocument": "Checkout Flow.excalidraw",
       "unsaved": false
@@ -75,8 +121,10 @@
       "theme": "light",
       "sessionState": "workspace",
       "sidebarState": "overlay",
+      "sidebarWidth": 360,
       "workspaceName": "Design Workspace",
       "selectedDirectory": "flows",
+      "expandedDirectories": ["flows"],
       "tabs": ["Overview.excalidraw", "Checkout Flow.excalidraw"],
       "activeDocument": "Checkout Flow.excalidraw",
       "unsaved": false
@@ -90,8 +138,10 @@
       "theme": "dark",
       "sessionState": "empty",
       "sidebarState": "hidden",
+      "sidebarWidth": 360,
       "workspaceName": null,
       "selectedDirectory": null,
+      "expandedDirectories": [],
       "tabs": [],
       "activeDocument": null,
       "unsaved": false
@@ -105,8 +155,10 @@
       "theme": "dark",
       "sessionState": "workspace",
       "sidebarState": "pinned",
+      "sidebarWidth": 360,
       "workspaceName": "设计 Workspace",
       "selectedDirectory": "流程",
+      "expandedDirectories": ["流程"],
       "tabs": ["总览.excalidraw", "Checkout 流程.excalidraw"],
       "activeDocument": "Checkout 流程.excalidraw",
       "unsaved": true

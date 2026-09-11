@@ -65,6 +65,12 @@ describe("native screen prepare", () => {
     assert.equal(plan.screens.length, 1);
     assert.equal(plan.screens[0].gateId, "VSL-001");
     assert.equal(plan.screens[0].preparationMode, "operator-assisted");
+    assert.equal(plan.stateFingerprintVersion, "shell-state-v2");
+    assert.equal(plan.screens[0].sidebarWidth, 360);
+    assert.deepEqual(plan.screens[0].expandedDirectories, ["flows"]);
+    assert.equal(plan.screens[0].sdkPanelState, "library-open");
+    assert.equal(plan.screens[0].nativeMasks.length, 2);
+    assert.equal(plan.screens[0].nativeMasks[0].perimeterChecked, true);
     assert.equal(path.basename(plan.fixture.workspaceRoot), "Design Workspace");
     assert.equal(plan.screens[0].viewport.width, 1280);
     assert.match(plan.screens[0].expectedStateFingerprint, /^[0-9a-f]{64}$/u);
@@ -146,7 +152,7 @@ describe("native screen prepare", () => {
           runId: "run",
           runNonce: "ab".repeat(32),
           productCommit: "cd".repeat(20),
-          stateFingerprintVersion: "shell-state-v1",
+          stateFingerprintVersion: "shell-state-v2",
           normalizationAlgorithm: "lanczos3-srgb-v1",
           isolation: { mode: "ephemeral-vm" },
           nativeEntrypointProfileRoot: "/tmp/same",
@@ -161,6 +167,8 @@ describe("native screen prepare", () => {
                 gateId,
                 profileRoot: "/tmp/same",
                 preparationMode: "operator-assisted",
+                sidebarWidth: 360,
+                expandedDirectories: [],
                 viewport: { width: 1280, height: 760 },
                 expectedStateFingerprint: "ef".repeat(32),
               }),
@@ -178,7 +186,7 @@ describe("native screen prepare", () => {
           runId: "run",
           runNonce: "ab".repeat(32),
           productCommit: "cd".repeat(20),
-          stateFingerprintVersion: "shell-state-v1",
+          stateFingerprintVersion: "shell-state-v2",
           normalizationAlgorithm: "lanczos3-srgb-v1",
           isolation: { mode: "ephemeral-vm" },
           nativeEntrypointProfileRoot: "/tmp/native",
@@ -197,6 +205,47 @@ describe("native screen prepare", () => {
           ],
         }),
       /preparationMode/u,
+    );
+    assert.throws(
+      () =>
+        validateCapturePlan({
+          schemaVersion: 1,
+          checkpoint: "VSL",
+          runId: "run",
+          runNonce: "ab".repeat(32),
+          productCommit: "cd".repeat(20),
+          stateFingerprintVersion: "shell-state-v2",
+          normalizationAlgorithm: "lanczos3-srgb-v1",
+          isolation: { mode: "ephemeral-vm" },
+          nativeEntrypointProfileRoot: "/tmp/native",
+          nativeEntrypointRequest: {
+            gateId: "T023b",
+            profileRoot: "/tmp/native",
+            expectedStateFingerprint: "34".repeat(32),
+          },
+          screens: [
+            {
+              gateId: "VSL-001",
+              profileRoot: "/tmp/vsl",
+              preparationMode: "operator-assisted",
+              sidebarWidth: 360,
+              expandedDirectories: ["flows"],
+              nativeMasks: [
+                {
+                  maskId: "too-broad",
+                  selectorOrRect: ".app-shell",
+                  surface: "canvas",
+                  reason: "invalid broad mask",
+                  perimeterChecked: true,
+                  approved: true,
+                },
+              ],
+              viewport: { width: 1280, height: 760 },
+              expectedStateFingerprint: "ef".repeat(32),
+            },
+          ],
+        }),
+      /invalid/u,
     );
   });
 

@@ -36,8 +36,10 @@ const observation = {
   theme: "light",
   sessionState: "workspace",
   sidebarState: "pinned",
+  sidebarWidth: 360,
   workspaceName: "Design Workspace",
   selectedDirectory: "flows",
+  expandedDirectories: ["flows"],
   tabs: ["Overview.excalidraw"],
   activeDocument: "Overview.excalidraw",
   unsaved: false,
@@ -69,8 +71,10 @@ describe("native capture ready probe", () => {
       theme: observation.theme,
       sessionState: observation.sessionState,
       sidebarState: observation.sidebarState,
+      sidebarWidth: observation.sidebarWidth,
       workspaceName: observation.workspaceName,
       selectedDirectory: observation.selectedDirectory,
+      expandedDirectories: observation.expandedDirectories,
       tabs: observation.tabs,
       activeDocument: observation.activeDocument,
       unsaved: observation.unsaved,
@@ -85,7 +89,7 @@ describe("native capture ready probe", () => {
       packageArtifactSha256: "ef".repeat(32),
       fixtureDigest: "12".repeat(32),
       expectedStateFingerprint,
-      stateFingerprintVersion: "shell-state-v1",
+      stateFingerprintVersion: "shell-state-v2",
     } as const;
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       callback(0);
@@ -125,7 +129,7 @@ describe("native capture ready probe", () => {
       packageArtifactSha256: "ef".repeat(32),
       fixtureDigest: "12".repeat(32),
       expectedStateFingerprint: "34".repeat(32),
-      stateFingerprintVersion: "shell-state-v1",
+      stateFingerprintVersion: "shell-state-v2",
     } as const;
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       callback(0);
