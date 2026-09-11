@@ -34,6 +34,10 @@ const NATIVE_MASK_SURFACES = new Set([
   "library",
   "presentation",
 ]);
+const HEX = {
+  commit: /^[0-9a-f]{40}$/u,
+  digest: /^[0-9a-f]{64}$/u,
+};
 
 export class NativeScreenPrepareError extends Error {
   constructor(message, exitCode = 2) {
@@ -65,21 +69,6 @@ async function sha256File(filePath) {
   return sha256Bytes(await fsp.readFile(filePath));
 }
 
-export function canonicalJson(value) {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value && typeof value === "object") {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
-export function shellStateFingerprint(value) {
-  return sha256Bytes(canonicalJson(value));
-}
-
 function pathInside(root, target) {
   const relative = path.relative(root, target);
   return (
@@ -97,14 +86,27 @@ async function assertRealPathInside(root, target, label) {
     blocked(`${label} escapes the run root`);
 }
 
+function validateMask(mask, label) {
+  if (
+    !mask ||
+    typeof mask.maskId !== "string" ||
+    !/^rect\(\d+,\d+,\d+,\d+\)$/u.test(mask.selectorOrRect ?? "") ||
+    !NATIVE_MASK_SURFACES.has(mask.surface) ||
+    typeof mask.reason !== "string" ||
+    mask.reason.length === 0 ||
+    mask.perimeterChecked !== true ||
+    mask.approved !== true
+  ) {
+    blocked(`${label} is invalid`);
+  }
+}
+
 export function validatePackageManifest(value) {
   const manifest = assertObject(value, "package manifest");
   if (
     manifest.schemaVersion !== 1 ||
-    !/^[0-9a-f]{40}$/u.test(manifest.gitCommit ?? "") ||
-    !/^[0-9a-f]{64}$/u.test(
-      manifest.artifactSha256 ?? manifest.packageSha256 ?? "",
-    ) ||
+    !HEX.commit.test(manifest.gitCommit ?? "") ||
+    !HEX.digest.test(manifest.artifactSha256 ?? manifest.packageSha256 ?? "") ||
     typeof manifest.appPath !== "string" ||
     !path.isAbsolute(manifest.appPath) ||
     typeof manifest.bundleIdentifier !== "string" ||
@@ -125,87 +127,83 @@ export function validatePackageManifest(value) {
   return manifest;
 }
 
-function stateProjection(screen, fixtureDigest) {
-  return {
-    gateId: screen.gateId,
-    theme: screen.theme,
-    sessionState: screen.sessionState,
-    sidebarState: screen.sidebarState,
-    sidebarWidth: screen.sidebarWidth,
-    workspaceName: screen.workspaceName,
-    selectedDirectory: screen.selectedDirectory,
-    expandedDirectories: screen.expandedDirectories,
-    tabs: screen.tabs,
-    activeDocument: screen.activeDocument,
-    unsaved: screen.unsaved,
-    fixtureDigest,
-  };
+function validateScreenRequest(
+  screen,
+  label = `screen ${screen?.gateId ?? "unknown"}`,
+) {
+  if (
+    !screen ||
+    typeof screen.gateId !== "string" ||
+    typeof screen.manifestName !== "string" ||
+    typeof screen.baselinePath !== "string" ||
+    !HEX.digest.test(screen.baselineSha256 ?? "") ||
+    !path.isAbsolute(screen.profileRoot ?? "") ||
+    !["fixture", "operator-assisted"].includes(screen.preparationMode) ||
+    !assertObject(screen.visualTarget, `${label}.visualTarget`).summary ||
+    !Array.isArray(screen.visualTarget.operatorChecklist) ||
+    screen.visualTarget.operatorChecklist.some(
+      (item) => typeof item !== "string" || item.length === 0,
+    ) ||
+    screen.operatorConfirmation?.mode !== "terminal-exact-line" ||
+    screen.operatorConfirmation?.timeoutSeconds !== 600 ||
+    screen.viewport?.width !== 1280 ||
+    screen.viewport?.height !== 760 ||
+    !Array.isArray(screen.nativeMasks)
+  ) {
+    blocked(`${label} is invalid`);
+  }
+  for (const mask of screen.nativeMasks) validateMask(mask, `${label} mask`);
+  return screen;
 }
 
 export function validateCapturePlan(value) {
   const plan = assertObject(value, "capture plan");
   if (
-    plan.schemaVersion !== 1 ||
+    plan.schemaVersion !== 2 ||
     !["VSL", "FINAL"].includes(plan.checkpoint) ||
     typeof plan.runId !== "string" ||
-    !/^[0-9a-f]{64}$/u.test(plan.runNonce ?? "") ||
-    !/^[0-9a-f]{40}$/u.test(plan.productCommit ?? "") ||
-    plan.stateFingerprintVersion !== "shell-state-v2" ||
+    !/^[0-9a-f-]{36}$/u.test(plan.runId) ||
+    !HEX.commit.test(plan.productCommit ?? "") ||
+    !assertObject(plan.packageManifest, "capture plan packageManifest").path ||
+    !path.isAbsolute(plan.packageManifest.path) ||
+    !HEX.digest.test(plan.packageManifest.sha256 ?? "") ||
+    !HEX.digest.test(plan.packageManifest.artifactSha256 ?? "") ||
+    !assertObject(plan.hf2Manifest, "capture plan hf2Manifest").path ||
+    !path.isAbsolute(plan.hf2Manifest.path) ||
+    !HEX.digest.test(plan.hf2Manifest.sha256 ?? "") ||
+    typeof plan.harnessVersion !== "string" ||
+    plan.harnessVersion.length === 0 ||
     plan.normalizationAlgorithm !== "lanczos3-srgb-v1" ||
-    !ISOLATION_MODES.has(plan.isolation?.mode) ||
-    !path.isAbsolute(plan.nativeEntrypointProfileRoot ?? "") ||
-    plan.nativeEntrypointRequest?.gateId !== "T023b" ||
-    plan.nativeEntrypointRequest?.profileRoot !==
-      plan.nativeEntrypointProfileRoot ||
-    !/^[0-9a-f]{64}$/u.test(
-      plan.nativeEntrypointRequest?.expectedStateFingerprint ?? "",
-    ) ||
+    !assertObject(plan.isolation, "capture plan isolation") ||
+    !ISOLATION_MODES.has(plan.isolation.mode) ||
+    !path.isAbsolute(plan.isolation.root ?? "") ||
+    !path.isAbsolute(plan.isolation.expectedAppDataRoot ?? "") ||
+    typeof plan.isolation.evidence !== "string" ||
+    !path.isAbsolute(plan.isolation.evidence) ||
+    !pathInside(plan.isolation.root, plan.isolation.evidence) ||
+    !assertObject(plan.fixture, "capture plan fixture").id ||
+    !path.isAbsolute(plan.fixture.manifestPath ?? "") ||
+    !HEX.digest.test(plan.fixture.digest ?? "") ||
+    !path.isAbsolute(plan.fixture.workspaceRoot ?? "") ||
     !Array.isArray(plan.screens)
   ) {
     blocked("capture plan schema is invalid");
   }
+  if (
+    "stateFingerprintVersion" in plan ||
+    "nativeEntrypointRequest" in plan ||
+    "nativeEntrypointProfileRoot" in plan ||
+    "controlDir" in plan
+  ) {
+    blocked("capture plan contains removed diagnostic state or control fields");
+  }
   const expectedGates = plan.checkpoint === "VSL" ? ["VSL-001"] : FINAL_GATES;
   const observedGates = plan.screens.map((screen) => screen.gateId).sort();
-  if (
-    JSON.stringify(observedGates) !== JSON.stringify([...expectedGates].sort())
-  ) {
+  if (JSON.stringify(observedGates) !== JSON.stringify([...expectedGates].sort()))
     blocked("capture plan has missing or duplicate screen gates");
-  }
-  const profiles = new Set([plan.nativeEntrypointProfileRoot]);
+  const profiles = new Set();
   for (const screen of plan.screens) {
-    if (!["fixture", "operator-assisted"].includes(screen.preparationMode)) {
-      blocked(
-        `capture plan screen ${screen.gateId ?? "unknown"} preparationMode is invalid`,
-      );
-    }
-    if (
-      !path.isAbsolute(screen.profileRoot ?? "") ||
-      screen.viewport?.width !== 1280 ||
-      screen.viewport?.height !== 760 ||
-      !Number.isInteger(screen.sidebarWidth) ||
-      screen.sidebarWidth < 0 ||
-      !Array.isArray(screen.expandedDirectories) ||
-      screen.expandedDirectories.some(
-        (entry) => typeof entry !== "string" || entry.length === 0,
-      ) ||
-      (screen.nativeMasks !== undefined &&
-        (!Array.isArray(screen.nativeMasks) ||
-          screen.nativeMasks.some(
-            (mask) =>
-              typeof mask?.maskId !== "string" ||
-              !/^rect\(\d+,\d+,\d+,\d+\)$/u.test(
-                mask.selectorOrRect ?? "",
-              ) ||
-              !NATIVE_MASK_SURFACES.has(mask.surface) ||
-              typeof mask.reason !== "string" ||
-              mask.reason.length === 0 ||
-              mask.perimeterChecked !== true ||
-              mask.approved !== true,
-          ))) ||
-      !/^[0-9a-f]{64}$/u.test(screen.expectedStateFingerprint ?? "")
-    ) {
-      blocked(`capture plan screen ${screen.gateId ?? "unknown"} is invalid`);
-    }
+    validateScreenRequest(screen);
     if (profiles.has(screen.profileRoot))
       blocked("each screen must have a distinct profileRoot");
     profiles.add(screen.profileRoot);
@@ -219,6 +217,24 @@ async function writeJsonExclusive(filePath, value) {
     encoding: "utf8",
     flag: "wx",
   });
+}
+
+function visualTargetForScreen(screen) {
+  const checklist = [
+    `Establish the declared ${screen.manifestName} composition through ordinary UI`,
+  ];
+  if (screen.gateId === "VSL-001") {
+    checklist.push(
+      "Sidebar visually at the 360px reference",
+      "flows selected and expanded",
+      "Architecture/Migration/Research visible",
+      "Library panel visible",
+    );
+  }
+  return {
+    summary: screen.manifestName,
+    operatorChecklist: checklist,
+  };
 }
 
 async function provisionFixture(runRoot, screens) {
@@ -237,7 +253,7 @@ async function provisionFixture(runRoot, screens) {
   await fsp.mkdir(path.join(workspaceRoot, "flows"), { recursive: true });
   const drawingNames = new Set(
     screens
-      .flatMap((screen) => screen.tabs)
+      .flatMap((screen) => screen.tabs ?? [])
       .filter((name) => typeof name === "string"),
   );
   const files = [];
@@ -256,8 +272,9 @@ async function provisionFixture(runRoot, screens) {
     });
   }
   const manifest = {
-    schemaVersion: 1,
-    fixtureId: "003-native-capture-v1",
+    schemaVersion: 2,
+    fixtureVersion: "003-native-capture-v2",
+    fixtureId: "003-native-capture-v2",
     workspaceRoot,
     screens: screens.map(({ gateId, preparationMode }) => ({
       gateId,
@@ -294,56 +311,45 @@ export async function prepareNativeScreenPlan({
   const runStats = await fsp.lstat(runRoot).catch(() => null);
   if (runStats === null || !runStats.isDirectory() || runStats.isSymbolicLink())
     blocked("run root must be an existing real directory");
-  if ((await fsp.readdir(runRoot)).length !== 0)
-    blocked("run root must be empty");
-  if (!pathInside(runRoot, planPath))
-    blocked("plan path must be inside the run root");
+  if ((await fsp.readdir(runRoot)).length !== 0) blocked("run root must be empty");
+  if (!pathInside(runRoot, planPath)) blocked("plan path must be inside the run root");
 
   const packageBytes = await fsp.readFile(packageManifestPath);
   const packageManifest = validatePackageManifest(
     JSON.parse(packageBytes.toString("utf8")),
   );
-  const fixtureRegistryBytes = await fsp.readFile(FIXTURE_REGISTRY_PATH);
   const fixtureRegistry = assertObject(
-    JSON.parse(fixtureRegistryBytes.toString("utf8")),
+    JSON.parse(await fsp.readFile(FIXTURE_REGISTRY_PATH, "utf8")),
     "fixture registry",
   );
   if (
-    fixtureRegistry.schemaVersion !== 1 ||
+    fixtureRegistry.schemaVersion !== 2 ||
+    fixtureRegistry.fixtureVersion !== "003-native-capture-v2" ||
     !Array.isArray(fixtureRegistry.screens)
-  )
+  ) {
     blocked("fixture registry schema is invalid");
+  }
   const requestedScreens = fixtureRegistry.screens.filter(
     (screen) => screen.checkpoint === checkpoint,
   );
+  const expectedGates = checkpoint === "VSL" ? ["VSL-001"] : FINAL_GATES;
+  if (
+    JSON.stringify(requestedScreens.map((screen) => screen.gateId).sort()) !==
+    JSON.stringify([...expectedGates].sort())
+  ) {
+    blocked("fixture registry does not declare the requested checkpoint");
+  }
   const hf2Bytes = await fsp.readFile(HF2_MANIFEST_PATH);
   const hf2 = assertObject(
     JSON.parse(hf2Bytes.toString("utf8")),
     "HF-2 manifest",
   );
   if (!Array.isArray(hf2.screens)) blocked("HF-2 manifest screens are missing");
+
   const fixture = await provisionFixture(runRoot, requestedScreens);
   const profilesRoot = path.join(runRoot, "profiles");
-  const controlDir = path.join(runRoot, "control");
-  await fsp.mkdir(controlDir, { recursive: true });
-  const nativeEntrypointProfileRoot = path.join(profilesRoot, "T023b");
-  await fsp.mkdir(nativeEntrypointProfileRoot, { recursive: true });
-  const nativeEntrypointSource = fixtureRegistry.screens.find(
-    (screen) => screen.gateId === "VSL-001",
-  );
-  if (!nativeEntrypointSource)
-    blocked("fixture registry is missing T023b source state");
-  const nativeEntrypointState = stateProjection(
-    { ...nativeEntrypointSource, gateId: "T023b" },
-    fixture.digest,
-  );
-  const nativeEntrypointRequest = {
-    gateId: "T023b",
-    profileRoot: nativeEntrypointProfileRoot,
-    expectedStateFingerprint: shellStateFingerprint(nativeEntrypointState),
-    viewport: { width: 1280, height: 760 },
-    state: nativeEntrypointState,
-  };
+  await fsp.mkdir(profilesRoot, { recursive: true });
+  await fsp.mkdir(path.join(profilesRoot, "T023b"));
   const screens = [];
   for (const screen of requestedScreens) {
     const baseline = hf2.screens.find(
@@ -352,23 +358,27 @@ export async function prepareNativeScreenPlan({
     if (!baseline || baseline.name !== screen.manifestName)
       blocked(`HF-2 baseline mismatch for ${screen.gateId}`);
     const profileRoot = path.join(profilesRoot, screen.gateId);
-    await fsp.mkdir(profileRoot, { recursive: true });
-    const expectedStateFingerprint = shellStateFingerprint(
-      stateProjection(screen, fixture.digest),
-    );
+    await fsp.mkdir(profileRoot);
     screens.push({
-      ...screen,
+      gateId: screen.gateId,
       profileRoot,
+      preparationMode: screen.preparationMode,
+      manifestName: screen.manifestName,
+      baselinePath: screen.baselinePath,
       baselineSha256: baseline.sha256,
-      expectedStateFingerprint,
+      visualTarget: visualTargetForScreen(screen),
+      operatorConfirmation: {
+        mode: "terminal-exact-line",
+        timeoutSeconds: 600,
+      },
+      nativeMasks: screen.nativeMasks ?? [],
       viewport: { width: 1280, height: 760 },
     });
   }
   const plan = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     checkpoint,
     runId: crypto.randomUUID(),
-    runNonce: crypto.randomBytes(32).toString("hex"),
     productCommit: packageManifest.gitCommit,
     packageManifest: {
       path: packageManifestPath,
@@ -377,35 +387,27 @@ export async function prepareNativeScreenPlan({
         packageManifest.artifactSha256 ?? packageManifest.packageSha256,
     },
     hf2Manifest: { path: HF2_MANIFEST_PATH, sha256: sha256Bytes(hf2Bytes) },
-    harnessVersion: "003-native-capture-v1",
-    stateFingerprintVersion: "shell-state-v2",
+    harnessVersion: "003-native-capture-v2",
     normalizationAlgorithm: "lanczos3-srgb-v1",
     isolation: {
       mode: isolationMode,
-      root: profilesRoot,
+      root: runRoot,
       expectedAppDataRoot: profilesRoot,
-      verification: "BLOCKED_UNTIL_RUNTIME_PATHS_ARE_OBSERVED",
+      evidence: path.join(runRoot, "isolation.json"),
     },
-    controlDir,
-    nativeEntrypointProfileRoot,
-    nativeEntrypointRequest,
     fixture,
     screens,
   };
   validateCapturePlan(plan);
-  await assertRealPathInside(
-    runRoot,
-    fixture.workspaceRoot,
-    "fixture workspace",
-  );
-  await assertRealPathInside(runRoot, controlDir, "control directory");
+  await assertRealPathInside(runRoot, fixture.workspaceRoot, "fixture workspace");
+  await assertRealPathInside(runRoot, profilesRoot, "profile root");
   await writeJsonExclusive(planPath, plan);
   return plan;
 }
 
 function usage() {
   console.log(
-    "Usage: pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute.json> --run-root <absolute-empty-dir> --plan <absolute-new.json> --isolation-mode disposable-macos-user|ephemeral-vm|verified-os-home-redirect\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation.",
+    "Usage: pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute.json> --run-root <absolute-empty-dir> --plan <absolute-new.json> --isolation-mode disposable-macos-user|ephemeral-vm|verified-os-home-redirect\nPlan schema: v2. Exit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation.",
   );
 }
 

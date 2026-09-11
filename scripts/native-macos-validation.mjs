@@ -159,35 +159,27 @@ export function buildReport({
 }
 
 export function validatePreparedNativeProfile(plan, manifest) {
+  const profileRoot = path.join(plan?.isolation?.root ?? "", "profiles", "T023b");
   if (
     !plan ||
     typeof plan !== "object" ||
-    plan.schemaVersion !== 1 ||
-    !plan.nativeEntrypointRequest ||
-    plan.nativeEntrypointRequest.gateId !== "T023b" ||
-    plan.nativeEntrypointRequest.profileRoot !==
-      plan.nativeEntrypointProfileRoot ||
-    !path.isAbsolute(plan.nativeEntrypointProfileRoot ?? "") ||
+    plan.schemaVersion !== 2 ||
     !path.isAbsolute(plan.isolation?.root ?? "") ||
-    path
-      .relative(plan.isolation.root, plan.nativeEntrypointProfileRoot)
-      .startsWith("..") ||
+    path.relative(plan.isolation.root, profileRoot).startsWith("..") ||
+    !/^[0-9a-f-]{36}$/u.test(plan.runId ?? "") ||
     plan.productCommit !== manifest.gitCommit ||
     plan.packageManifest?.artifactSha256 !==
       (manifest.artifactSha256 ?? manifest.packageSha256) ||
-    !/^[0-9a-f]{64}$/u.test(plan.runNonce ?? "")
+    !Array.isArray(plan.screens)
   ) {
     throw new NativeValidationBlockedError(
       "capture plan does not provide a matching disposable T023b profile",
     );
   }
   return {
-    profileRoot: plan.nativeEntrypointProfileRoot,
+    profileRoot,
     environment: {
-      HOME: plan.nativeEntrypointProfileRoot,
-      EXCALIDRAW_NATIVE_CAPTURE_PLAN: plan.__planPath,
-      EXCALIDRAW_NATIVE_CAPTURE_GATE: "T023b",
-      EXCALIDRAW_NATIVE_CAPTURE_NONCE: plan.runNonce,
+      HOME: profileRoot,
     },
   };
 }
@@ -1518,7 +1510,7 @@ export async function validateProductionBundle({
 
 function printUsage() {
   console.log(
-    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--capture-plan FINAL_PLAN] [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. A capture plan supplies the distinct nonce-bound T023b disposable profile. Adapter outputs are collector-owned and never contain reviewer or owner decisions.`,
+    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--capture-plan FINAL_PLAN] [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. A schema-v2 capture plan supplies the distinct T023b profile without capture-specific production IPC. Adapter outputs are collector-owned and never contain reviewer or owner decisions.`,
   );
 }
 
@@ -1531,6 +1523,7 @@ async function main() {
   const [, , command, ...args] = process.argv;
   if (!command || command === "help" || command === "--help")
     return printUsage();
+  if (args.includes("--help") || args.includes("help")) return printUsage();
   const repoRoot = optionValue(args, "--repo") ?? REPO_ROOT;
   let report;
   if (command === "seal") {

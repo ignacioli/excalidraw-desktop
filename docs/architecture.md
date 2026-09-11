@@ -251,30 +251,27 @@ Storage design detail is in ADR-002 (two-tier persistence) and ADR-003 (SQLite-f
 
 ## 11. Native visual validation layers
 
-The production application contains an observation-only ready probe. It is inert unless a launcher supplies a complete capture plan, gate, and nonce. The prepare tool owns disposable fixture/profile creation; React observes rendered shell state; Rust validates the immutable binding and actual storage containment; the native capture driver owns PID/window lookup and image capture. No layer may use the probe to set theme, sidebar, documents, workspace data, or permissions.
+Native visual capture is a collector-side validation path, not a production IPC path. The collector prepares safe fixtures and immutable schema-v2 plans, launches the ordinary production package with an isolated profile, and records only package/isolation/window/capture facts. Semantic browser evidence remains the owner of app state and interaction facts.
 
 ```mermaid
 flowchart TB
-  Prepare["Prepare CLI: plan + fixture + distinct profiles"] --> Plan["Immutable capture plan"]
+  Prepare["Prepare CLI: schema-v2 plan + safe fixture + profiles"] --> Plan["Immutable capture plan"]
   Plan --> Launcher["Owned child launcher"]
-  Launcher --> App["Production Tauri application"]
-  subgraph Frontend["React observation layer"]
-    Shell["Rendered shell/session/theme/width/expansion state"] --> Probe["nativeCaptureReady.ts"]
+  Launcher --> App["Normal production Tauri package"]
+  subgraph Collector["Collector-owned native facts"]
+    Isolation["Isolation/path evidence"]
+    Window["Owned PID/window + 1280x760 + scale"]
+    Confirm["One exact terminal confirmation"]
+    Capture["One capture + normalization + digests"]
   end
-  subgraph Boundary["Typed Tauri IPC boundary"]
-    Bootstrap["native_capture_bootstrap"]
-    Diagnostic["native_capture_publish_diagnostic"]
-    Publish["native_capture_publish_ready"]
+  subgraph AppEvidence["Application-owned semantic facts"]
+    Browser["Semantic browser collection"]
+    Reviewer["Independent visual reviewer"]
   end
-  subgraph Backend["Rust validation layer"]
-    State["NativeCaptureState"] --> Candidate["Atomic ready-candidate.json"]
-  end
-  App --> Shell
-  Probe --> Bootstrap --> State
-  Probe --> Diagnostic --> State
-  Probe --> Publish --> State
-  Candidate --> Driver["Native capture driver: PID/window/scale"]
-  Driver --> Ready["Final ready.json + immutable collection"]
+  App --> Browser
+  Plan --> Isolation --> Window --> Confirm --> Capture
+  Capture --> Reviewer
+  Browser --> Reviewer
 ```
 
 ## 12. Native capture request-to-ready flow
@@ -283,26 +280,23 @@ flowchart TB
 sequenceDiagram
   participant P as Prepare CLI
   participant L as Owned launcher
-  participant R as Rust NativeCaptureState
-  participant W as React WebView
-  participant D as Native capture driver
-  P->>P: Validate package/manifest/fixture paths
-  P->>P: Create distinct empty profiles and plan
-  L->>R: Launch with plan + gate + nonce
-  R->>R: Resolve actual app-data/WebKit paths
-  R-->>W: Bootstrap immutable expected binding
-  W->>W: Observe shell state, Sidebar width and expanded directories; await document.fonts.ready
-  W->>W: Confirm zero remote fonts, zero pending work, two stable frames
-  W->>R: Atomically replace bounded mismatch diagnostic (not evidence)
-  W->>R: Publish typed ready observation
-  R->>R: Validate nonce/fingerprint/WebView validity/path containment
-  R-->>D: Atomically publish ready-candidate.json
-  D->>D: Bind owned PID to one native window and backing scale
-  D->>D: Validate exact native 1280x760 dimensions and finalize ready.json
-  D->>D: Capture once; normalize without crop or repair
+  participant A as Production package
+  participant D as Native collector
+  participant W as Semantic browser collector
+  P->>P: Validate package, manifest, fixture and isolation paths
+  P->>P: Create distinct empty profiles and schema-v2 plan
+  L->>A: Launch normal package with isolated HOME
+  D->>D: Validate child PID, one owned window and two stable 1280x760 samples
+  D-->>L: Print visual checklist and CAPTURE gate challenge
+  L->>D: Accept exact confirmation once within timeout
+  D->>D: Revalidate same PID/window/bounds/scale
+  D->>D: Capture once and write capture-readiness/isolation artifacts
+  D->>D: Normalize without crop or repair; hash immutable outputs
+  W->>W: Independently prove semantic state, geometry, fonts and interaction
+  D-->>W: Bind package/capture collection for later independent review
 ```
 
-The launcher owns only its child process and profile. Missing isolation, a storage path outside the profile, an ambiguous process/window, a ready timeout, or a changed package/plan produces structured `BLOCKED` evidence. The observation candidate is not visual evidence and cannot replace native window facts or independent visual review.
+The collector owns only its child process and declared profile. Missing isolation, an ambiguous process/window, confirmation mismatch/timeout, path escape, changed package/plan, dimension mismatch or a fourth same-direction retry produces structured `BLOCKED`/`FAIL`; the collector never claims that the requested UI state is visible.
 
 ## 13. Related documents
 

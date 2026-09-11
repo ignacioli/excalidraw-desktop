@@ -251,30 +251,27 @@ sequenceDiagram
 
 ## 11. 原生视觉验收分层
 
-production application（生产应用）包含 observation-only ready probe（只观察 ready 探针），但只有 launcher 同时提供完整 capture plan、gate 与 nonce 时才会激活。prepare tool 负责 disposable fixture/profile；React 只观察已渲染 shell；Rust 验证 immutable binding 与实际 storage containment；native capture driver 负责 PID/window lookup 与截图。任何一层都不得借该 probe 设置 theme、Sidebar、document、Workspace 数据或权限。
+Native visual capture 是 collector 侧验证路径，不是 production IPC 路径。Collector 负责安全 fixture、schema v2 immutable plan、隔离 profile、owned PID/window、一次性 terminal confirmation、normalization 与 digest；应用状态和交互事实仍由 semantic browser evidence 负责。
 
 ```mermaid
 flowchart TB
-  Prepare["Prepare CLI：plan + fixture + 独立 profile"] --> Plan["Immutable capture plan"]
+  Prepare["Prepare CLI：schema-v2 plan + safe fixture + profiles"] --> Plan["Immutable capture plan"]
   Plan --> Launcher["Owned child launcher"]
-  Launcher --> App["Production Tauri application"]
-  subgraph Frontend["React observation layer"]
-    Shell["Rendered shell/session/theme/width/expansion state"] --> Probe["nativeCaptureReady.ts"]
+  Launcher --> App["Normal production Tauri package"]
+  subgraph Collector["Collector-owned native facts"]
+    Isolation["Isolation/path evidence"]
+    Window["Owned PID/window + 1280x760 + scale"]
+    Confirm["One exact terminal confirmation"]
+    Capture["One capture + normalization + digests"]
   end
-  subgraph Boundary["Typed Tauri IPC boundary"]
-    Bootstrap["native_capture_bootstrap"]
-    Diagnostic["native_capture_publish_diagnostic"]
-    Publish["native_capture_publish_ready"]
+  subgraph AppEvidence["Application-owned semantic facts"]
+    Browser["Semantic browser collection"]
+    Reviewer["Independent visual reviewer"]
   end
-  subgraph Backend["Rust validation layer"]
-    State["NativeCaptureState"] --> Candidate["Atomic ready-candidate.json"]
-  end
-  App --> Shell
-  Probe --> Bootstrap --> State
-  Probe --> Diagnostic --> State
-  Probe --> Publish --> State
-  Candidate --> Driver["Native capture driver：PID/window/scale"]
-  Driver --> Ready["Final ready.json + immutable collection"]
+  App --> Browser
+  Plan --> Isolation --> Window --> Confirm --> Capture
+  Capture --> Reviewer
+  Browser --> Reviewer
 ```
 
 ## 12. 原生 capture request-to-ready 数据流
@@ -283,26 +280,23 @@ flowchart TB
 sequenceDiagram
   participant P as Prepare CLI
   participant L as Owned launcher
-  participant R as Rust NativeCaptureState
-  participant W as React WebView
-  participant D as Native capture driver
-  P->>P: 校验 package/manifest/fixture path
-  P->>P: 创建独立 empty profile 与 plan
-  L->>R: 携带 plan + gate + nonce 启动
-  R->>R: 解析实际 app-data/WebKit path
-  R-->>W: Bootstrap immutable expected binding
-  W->>W: 观察 shell state、Sidebar width 与 expanded directories；等待 document.fonts.ready
-  W->>W: 确认 remote font=0、pending=0、连续两帧稳定
-  W->>R: Atomic replace bounded mismatch diagnostic（非 evidence）
-  W->>R: 发布 typed ready observation
-  R->>R: 校验 nonce/fingerprint/WebView validity/path containment
-  R-->>D: Atomic publish ready-candidate.json
-  D->>D: 把 owned PID 绑定到唯一 native window/backing scale
-  D->>D: 校验 exact native 1280x760 尺寸并完成 ready.json
-  D->>D: 单次 capture；只做无 crop/repair 的 normalization
+  participant A as Production package
+  participant D as Native collector
+  participant W as Semantic browser collector
+  P->>P: 校验 package、manifest、fixture 与 isolation path
+  P->>P: 创建独立 empty profiles 与 schema-v2 plan
+  L->>A: 携带 isolated HOME 启动普通 production package
+  D->>D: 校验 child PID、唯一 owned window 与两次稳定 1280x760 sample
+  D-->>L: 打印 visual checklist 与 CAPTURE gate challenge
+  L->>D: 在 timeout 内只接受一次精确 confirmation
+  D->>D: 重新校验同一 PID/window/bounds/scale
+  D->>D: 写 capture-readiness/isolation 并 capture 一次
+  D->>D: 无 crop/repair normalization，并 hash immutable outputs
+  W->>W: 独立证明 semantic state、geometry、fonts 与 interaction
+  D-->>W: 以 package/capture binding 供后续 independent review
 ```
 
-launcher 只拥有自己启动的 child process 与 profile。缺少 isolation、storage path 越界、process/window 歧义、ready timeout 或 package/plan 改变时，必须输出结构化 `BLOCKED`。observation candidate 不是视觉证据，不能替代 native window facts 或 independent visual review。
+Collector 只拥有自己启动的 child process 与声明的 profile。缺少 isolation、process/window 歧义、confirmation mismatch/timeout、path escape、package/plan 改变、dimension mismatch 或同一方向第四次 retry 时，输出结构化 `BLOCKED`/`FAIL`；collector 不声称目标 UI 状态可见。
 
 ## 13. 相关文档
 

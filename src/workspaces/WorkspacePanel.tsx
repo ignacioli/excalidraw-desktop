@@ -50,7 +50,6 @@ export interface WorkspacePanelProps {
   onOpenFile?: (entry: FileEntry) => void;
   onCurrentWorkspaceChange?: (workspace: Workspace | null) => void;
   onBrowse?: (location: BrowsingLocation) => void;
-  onExpandedDirectoriesChange?: (relativePaths: readonly string[]) => void;
   backLocation?: BrowsingLocation | null;
   onBackLocationApplied?: () => void;
   onWorkspacePresenceChange?: (hasAny: boolean) => void;
@@ -90,7 +89,6 @@ export function WorkspacePanel({
   onOpenFile,
   onCurrentWorkspaceChange,
   onBrowse,
-  onExpandedDirectoriesChange,
   backLocation = null,
   onBackLocationApplied,
   onWorkspacePresenceChange,
@@ -157,30 +155,6 @@ export function WorkspacePanel({
 
   entriesRef.current = entriesByWorkspace;
   expandedWorkspaceIdsRef.current = expandedWorkspaceIds;
-
-  useEffect(() => {
-    if (currentWorkspaceId === null) {
-      onExpandedDirectoriesChange?.([]);
-      return;
-    }
-    const expanded = Object.values(entriesByWorkspace[currentWorkspaceId] ?? {})
-      .flat()
-      .filter(
-        (entry) =>
-          entry.kind === "directory" &&
-          expandedDirectoryKeys.has(
-            makeEntryRowKey(entry.workspaceId, entry.relativePath),
-          ),
-      )
-      .map((entry) => entry.relativePath)
-      .sort();
-    onExpandedDirectoriesChange?.(expanded);
-  }, [
-    currentWorkspaceId,
-    entriesByWorkspace,
-    expandedDirectoryKeys,
-    onExpandedDirectoriesChange,
-  ]);
 
   useEffect(() => {
     if (controlledCurrentWorkspaceId !== undefined) {

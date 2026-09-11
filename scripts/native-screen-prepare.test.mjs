@@ -6,7 +6,6 @@ import { afterEach, describe, it } from "node:test";
 import {
   NativeScreenPrepareError,
   prepareNativeScreenPlan,
-  shellStateFingerprint,
   validateCapturePlan,
   validatePackageManifest,
 } from "./native-screen-prepare.mjs";
@@ -22,9 +21,7 @@ afterEach(async () => {
 });
 
 async function setup(buildCommand = ["pnpm", "tauri", "build"]) {
-  const root = await fsp.mkdtemp(
-    path.join(os.tmpdir(), "native-screen-prepare-"),
-  );
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "native-screen-prepare-"));
   roots.push(root);
   const runRoot = path.join(root, "run");
   await fsp.mkdir(runRoot);
@@ -53,7 +50,7 @@ async function setup(buildCommand = ["pnpm", "tauri", "build"]) {
 }
 
 describe("native screen prepare", () => {
-  it("prepares one immutable VSL profile and fixture", async () => {
+  it("prepares one immutable v2 VSL plan without application-state projection", async () => {
     const fixture = await setup();
     const plan = await prepareNativeScreenPlan({
       checkpoint: "VSL",
@@ -62,24 +59,21 @@ describe("native screen prepare", () => {
       planPath: fixture.planPath,
       isolationMode: "ephemeral-vm",
     });
+    assert.equal(plan.schemaVersion, 2);
     assert.equal(plan.screens.length, 1);
     assert.equal(plan.screens[0].gateId, "VSL-001");
     assert.equal(plan.screens[0].preparationMode, "operator-assisted");
-    assert.equal(plan.stateFingerprintVersion, "shell-state-v2");
-    assert.equal(plan.screens[0].sidebarWidth, 360);
-    assert.deepEqual(plan.screens[0].expandedDirectories, ["flows"]);
-    assert.equal(plan.screens[0].sdkPanelState, "library-open");
+    assert.equal(plan.screens[0].operatorConfirmation.timeoutSeconds, 600);
+    assert.equal(plan.screens[0].visualTarget.summary, "03 · Workspace · Pinned · Light");
     assert.equal(plan.screens[0].nativeMasks.length, 2);
-    assert.equal(plan.screens[0].nativeMasks[0].perimeterChecked, true);
+    assert.equal(plan.isolation.mode, "ephemeral-vm");
+    assert.equal(plan.harnessVersion, "003-native-capture-v2");
+    assert.equal(plan.fixture.schemaVersion, undefined);
+    assert.equal("stateFingerprintVersion" in plan, false);
+    assert.equal("nativeEntrypointRequest" in plan, false);
+    assert.equal("controlDir" in plan, false);
     assert.equal(path.basename(plan.fixture.workspaceRoot), "Design Workspace");
-    assert.equal(plan.screens[0].viewport.width, 1280);
-    assert.match(plan.screens[0].expectedStateFingerprint, /^[0-9a-f]{64}$/u);
-    assert.equal(
-      plan.isolation.verification,
-      "BLOCKED_UNTIL_RUNTIME_PATHS_ARE_OBSERVED",
-    );
-    assert.match(plan.nativeEntrypointProfileRoot, /profiles\/T023b$/u);
-    assert.equal(plan.nativeEntrypointRequest.gateId, "T023b");
+    assert.equal(path.basename(plan.isolation.evidence), "isolation.json");
     assert.equal(validateCapturePlan(plan), plan);
     await assert.rejects(
       prepareNativeScreenPlan({
@@ -89,12 +83,11 @@ describe("native screen prepare", () => {
         planPath: fixture.planPath,
         isolationMode: "ephemeral-vm",
       }),
-      (error) =>
-        error instanceof NativeScreenPrepareError && error.exitCode === 2,
+      (error) => error instanceof NativeScreenPrepareError && error.exitCode === 2,
     );
   });
 
-  it("prepares six FINAL profiles with unique fingerprints", async () => {
+  it("prepares six distinct FINAL profiles and a dedicated T023b profile", async () => {
     const fixture = await setup();
     const plan = await prepareNativeScreenPlan({
       checkpoint: "FINAL",
@@ -116,13 +109,14 @@ describe("native screen prepare", () => {
       6,
     );
     assert.equal(
-      new Set(plan.screens.map((screen) => screen.expectedStateFingerprint))
-        .size,
-      6,
+      await fsp.stat(path.join(fixture.runRoot, "profiles", "T023b")).then(
+        (stat) => stat.isDirectory(),
+      ),
+      true,
     );
   });
 
-  it("rejects test-only package manifests, unsafe paths, and duplicate profiles", async () => {
+  it("rejects schema v1, test-only packages, unsafe paths, and duplicate profiles", async () => {
     const testOnly = await setup([
       "pnpm",
       "tauri",
@@ -134,125 +128,29 @@ describe("native screen prepare", () => {
       await fsp.readFile(testOnly.packageManifestPath, "utf8"),
     );
     assert.throws(() => validatePackageManifest(manifest), /test-only/u);
-    await assert.rejects(
-      prepareNativeScreenPlan({
-        checkpoint: "VSL",
-        packageManifestPath: testOnly.packageManifestPath,
-        runRoot: testOnly.runRoot,
-        planPath: path.join(testOnly.root, "escape.json"),
-        isolationMode: "ephemeral-vm",
-      }),
-      NativeScreenPrepareError,
-    );
-    assert.throws(
-      () =>
-        validateCapturePlan({
-          schemaVersion: 1,
-          checkpoint: "FINAL",
-          runId: "run",
-          runNonce: "ab".repeat(32),
-          productCommit: "cd".repeat(20),
-          stateFingerprintVersion: "shell-state-v2",
-          normalizationAlgorithm: "lanczos3-srgb-v1",
-          isolation: { mode: "ephemeral-vm" },
-          nativeEntrypointProfileRoot: "/tmp/same",
-          nativeEntrypointRequest: {
-            gateId: "T023b",
-            profileRoot: "/tmp/same",
-            expectedStateFingerprint: "34".repeat(32),
-          },
-          screens: [
-            ...["HF2-01", "HF2-02", "HF2-03", "HF2-04", "HF2-05", "HF2-06"].map(
-              (gateId) => ({
-                gateId,
-                profileRoot: "/tmp/same",
-                preparationMode: "operator-assisted",
-                sidebarWidth: 360,
-                expandedDirectories: [],
-                viewport: { width: 1280, height: 760 },
-                expectedStateFingerprint: "ef".repeat(32),
-              }),
-            ),
-          ],
-        }),
-      /distinct profileRoot/u,
-    );
-    assert.throws(
-      () =>
-        validateCapturePlan({
-          ...manifest,
-          schemaVersion: 1,
-          checkpoint: "VSL",
-          runId: "run",
-          runNonce: "ab".repeat(32),
-          productCommit: "cd".repeat(20),
-          stateFingerprintVersion: "shell-state-v2",
-          normalizationAlgorithm: "lanczos3-srgb-v1",
-          isolation: { mode: "ephemeral-vm" },
-          nativeEntrypointProfileRoot: "/tmp/native",
-          nativeEntrypointRequest: {
-            gateId: "T023b",
-            profileRoot: "/tmp/native",
-            expectedStateFingerprint: "34".repeat(32),
-          },
-          screens: [
-            {
-              gateId: "VSL-001",
-              profileRoot: "/tmp/vsl",
-              viewport: { width: 1280, height: 760 },
-              expectedStateFingerprint: "ef".repeat(32),
-            },
-          ],
-        }),
-      /preparationMode/u,
-    );
-    assert.throws(
-      () =>
-        validateCapturePlan({
-          schemaVersion: 1,
-          checkpoint: "VSL",
-          runId: "run",
-          runNonce: "ab".repeat(32),
-          productCommit: "cd".repeat(20),
-          stateFingerprintVersion: "shell-state-v2",
-          normalizationAlgorithm: "lanczos3-srgb-v1",
-          isolation: { mode: "ephemeral-vm" },
-          nativeEntrypointProfileRoot: "/tmp/native",
-          nativeEntrypointRequest: {
-            gateId: "T023b",
-            profileRoot: "/tmp/native",
-            expectedStateFingerprint: "34".repeat(32),
-          },
-          screens: [
-            {
-              gateId: "VSL-001",
-              profileRoot: "/tmp/vsl",
-              preparationMode: "operator-assisted",
-              sidebarWidth: 360,
-              expandedDirectories: ["flows"],
-              nativeMasks: [
-                {
-                  maskId: "too-broad",
-                  selectorOrRect: ".app-shell",
-                  surface: "canvas",
-                  reason: "invalid broad mask",
-                  perimeterChecked: true,
-                  approved: true,
-                },
-              ],
-              viewport: { width: 1280, height: 760 },
-              expectedStateFingerprint: "ef".repeat(32),
-            },
-          ],
-        }),
-      /invalid/u,
-    );
-  });
 
-  it("fingerprints canonical shell state independently of key order", () => {
-    assert.equal(
-      shellStateFingerprint({ theme: "light", tabs: ["A"] }),
-      shellStateFingerprint({ tabs: ["A"], theme: "light" }),
+    const valid = await setup();
+    const plan = await prepareNativeScreenPlan({
+      checkpoint: "VSL",
+      packageManifestPath: valid.packageManifestPath,
+      runRoot: valid.runRoot,
+      planPath: valid.planPath,
+      isolationMode: "ephemeral-vm",
+    });
+    assert.throws(
+      () => validateCapturePlan({ ...plan, schemaVersion: 1 }),
+      /capture plan schema is invalid/u,
+    );
+    assert.throws(
+      () =>
+        validateCapturePlan({
+          ...plan,
+          screens: [
+            { ...plan.screens[0], profileRoot: plan.screens[0].profileRoot },
+          ],
+          stateFingerprintVersion: "legacy",
+        }),
+      /removed diagnostic/u,
     );
   });
 });

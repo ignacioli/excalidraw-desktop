@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 1,
-  "fixtureVersion": "003-native-capture-v1",
+  "schemaVersion": 2,
+  "fixtureVersion": "003-native-capture-v2",
   "screens": [
     {
       "gateId": "VSL-001",

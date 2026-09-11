@@ -187,48 +187,11 @@ interface ExportOptions {
 type SceneData = unknown; // 官方 .excalidraw JSON；后端只做结构校验
 ```
 
-### 1.5 原生视觉验收的 observation-only ready probe
+### 1.5 原生视觉验收边界
 
-以下两个 command 编译进普通 production binary，但默认完全 inert。只有受控 launcher 同时提供 `EXCALIDRAW_NATIVE_CAPTURE_PLAN`、`EXCALIDRAW_NATIVE_CAPTURE_GATE` 与 `EXCALIDRAW_NATIVE_CAPTURE_NONCE`，且 Rust 能验证 plan、nonce、disposable profile（一次性配置目录）和实际 app-data/WebKit 路径时，bootstrap 才返回非空值。
+原生视觉 capture 不属于 production IPC contract。`native:screen:prepare` 生成 schema v2 的 immutable plan 和安全 fixture；`native:screen:capture` 在 collector 侧验证 isolation、owned PID/window、1280×760 bounds、backing scale、一次性 terminal confirmation、单次 capture、normalization 与 artifact digests。它不得通过 React、Rust command、隐藏 state channel 或 production diagnostic projection 读取或写入 app-owned UI state。
 
-| 命令 | 请求 | 响应 | 说明 |
-|------|------|------|------|
-| `native_capture_bootstrap` | `{}` | `NativeCaptureBootstrap \| null` | 未启用时返回 `null`；启用时只返回 immutable binding（不可变绑定），不设置 UI 状态 |
-| `native_capture_publish_diagnostic` | `{ diagnostic: NativeCaptureDiagnosticInput }` | `{}` | capture 激活时以原子替换写入最新的白名单 shell projection；只用于定位 mismatch，不构成 PASS，且不序列化 run nonce |
-| `native_capture_publish_ready` | `{ ready: NativeCaptureReadyInput }` | `{}` | 仅接受 nonce、commit、package、state fingerprint、字体、pending operation、稳定帧与有效 WebView observation 全部匹配的报告；native outer window 1280×760 由 collector 独立验证 |
-
-```typescript
-interface NativeCaptureBootstrap {
-  schemaVersion: 1;
-  runId: string;
-  runNonce: string;
-  gateId: string;
-  productCommit: string;
-  packageArtifactSha256: string;
-  fixtureDigest: string;
-  expectedStateFingerprint: string;
-  stateFingerprintVersion: "shell-state-v2";
-}
-
-interface NativeCaptureReadyInput {
-  schemaVersion: 1;
-  runId: string;
-  runNonce: string;
-  gateId: string;
-  productCommit: string;
-  packageArtifactSha256: string;
-  stateFingerprint: string;
-  stateFingerprintVersion: "shell-state-v2";
-  fontReady: true;
-  remoteFontRequests: 0;
-  stableFrames: number;       // >= 2
-  pendingOperations: 0;
-  logicalWindow: { width: number; height: number }; // positive WebView content size
-  frontmost: true;
-}
-```
-
-`shell-state-v2` 的白名单 projection 包含 session/theme/sidebar mode、实际 Sidebar width、Current Workspace、selected directory、expanded directories、tabs、active document、unsaved 与 fixture digest。Frontend 只能提交 observation，不能提交 fixture path、任意 filesystem path、theme/sidebar setter 或 privileged command。Rust 从 launcher-owned plan 获取 expected binding，重新验证实际 storage path 位于当前 gate 的 disposable profile 后，以 atomic create + rename 写 `<gate>.ready-candidate.json`。Mismatch diagnostic 只原子替换 `<gate>.observation-diagnostic.json`，不进入 collection，也不改变 verdict。Candidate 仍不包含 native window ID（identifier）或 backing scale；capture driver 必须通过 owned PID（process identifier，进程标识）确定这些原生事实并生成最终 `ready.json`。缺失、重复、stale、path escape 或不匹配均为 `BLOCKED`，不得由截图猜测。
+React/WebView 的 session、theme、Sidebar、workspace、selection、expanded rows、fonts、tokens、geometry 与 interaction facts 由 semantic browser evidence 证明；native collector 只记录 package/isolation/window/capture integrity。`CAPTURE <gate-id> <challenge>` 只控制 capture 时机，不构成交互或 UI 状态证据。详见 `contracts/native-screen-capture-contract.md` 与 `docs/quickstart.md`。
 
 ## 2. 事件契约（后端 → 前端）
 

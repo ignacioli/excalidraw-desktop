@@ -505,30 +505,6 @@ describe("WorkspacePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("reports expanded directory paths for native capture observation", async () => {
-    const user = userEvent.setup();
-    const onExpandedDirectoriesChange = vi.fn();
-    const preferences = new ShellPreferences();
-    preferences.setCurrentWorkspaceId("workspace-1");
-    render(
-      <WorkspacePanel
-        invoker={createInvoker()}
-        onExpandedDirectoriesChange={onExpandedDirectoriesChange}
-        preferences={preferences}
-        selectDirectory={async () => null}
-      />,
-    );
-
-    const workspace = await screen.findByRole("treeitem", { name: "Sketches" });
-    await user.click(workspace);
-    const notes = await screen.findByRole("treeitem", { name: "notes" });
-    await user.click(notes);
-
-    await waitFor(() => {
-      expect(onExpandedDirectoriesChange).toHaveBeenLastCalledWith(["notes"]);
-    });
-  });
-
   it("expands a newly mounted Workspace even when an existing preference is collapsed", async () => {
     const user = userEvent.setup();
     window.localStorage.setItem(

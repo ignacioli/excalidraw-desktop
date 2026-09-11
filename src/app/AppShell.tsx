@@ -58,10 +58,6 @@ import {
   type NativeMenuCommand,
 } from "./nativeMenu";
 import {
-  deriveNativeCaptureSessionState,
-  publishNativeCaptureReady,
-} from "./nativeCaptureReady";
-import {
   initializeBrowserThemeController,
   type ThemeController,
 } from "./theme/themeController";
@@ -138,8 +134,6 @@ export function AppShell({
   const [backLocation, setBackLocation] = useState<BrowsingLocation | null>(
     null,
   );
-  const [nativeCaptureExpandedDirectories, setNativeCaptureExpandedDirectories] =
-    useState<readonly string[]>([]);
   const [, setHistoryVersion] = useState(0);
   const [startupState, setStartupState] = useState<RecoveryStartupState>({
     status: hasNativeWindowRuntime() ? "checking" : "ready",
@@ -621,57 +615,6 @@ export function AppShell({
   }, [sidebarController]);
 
   useEffect(() => {
-    if (!hasNativeWindowRuntime()) return;
-    const pendingOperations =
-      (welcomeBusy ? 1 : 0) +
-      (startupState.status === "checking" ? 1 : 0) +
-      (exportDocumentId === null ? 0 : 1) +
-      (orphanCloseId === null ? 0 : 1) +
-      (activeSession?.saveState === "conflicted" ? 1 : 0);
-    const currentWorkspace = welcomeWorkspaces.find(
-      (workspace) => workspace.id === currentWorkspaceId,
-    );
-    const sessionState = deriveNativeCaptureSessionState({
-      showWelcome,
-      currentWorkspaceId,
-      recoveryCandidateCount: startupState.candidates.length,
-    });
-    void publishNativeCaptureReady({
-      theme: themeSnapshot.resolvedColorScheme,
-      sessionState,
-      sidebarState: sidebarSnapshot.mode,
-      sidebarWidth: renderedSidebarWidth,
-      workspaceName: currentWorkspace?.name ?? null,
-      selectedDirectory:
-        currentBrowsingLocationRef.current?.directoryRelativePath ?? null,
-      expandedDirectories: nativeCaptureExpandedDirectories,
-      tabs: documentSessions.map((session) => session.title),
-      activeDocument: activeSession?.title ?? null,
-      unsaved:
-        activeSession !== undefined && activeSession.saveState !== "clean",
-      pendingOperations,
-    }).catch(() => {
-      // The nonce-bound harness records the failure as a timeout/BLOCKED.
-      // Do not mutate visible product state from an observation-only probe.
-    });
-  }, [
-    activeSession,
-    currentWorkspaceId,
-    documentSessions,
-    exportDocumentId,
-    orphanCloseId,
-    nativeCaptureExpandedDirectories,
-    renderedSidebarWidth,
-    showWelcome,
-    sidebarSnapshot.mode,
-    startupState.candidates.length,
-    startupState.status,
-    themeSnapshot.resolvedColorScheme,
-    welcomeBusy,
-    welcomeWorkspaces,
-  ]);
-
-  useEffect(() => {
     const syncHolds = () => {
       const reasons = interactionStore.getState().holdReasons;
       sidebarController.setHold("menu", reasons.has("menu"));
@@ -849,7 +792,6 @@ export function AppShell({
                 setCurrentWorkspaceId(workspace?.id ?? null);
               }}
               onBrowse={handleBrowse}
-              onExpandedDirectoriesChange={setNativeCaptureExpandedDirectories}
               backLocation={backLocation}
               onBackLocationApplied={() => setBackLocation(null)}
             />

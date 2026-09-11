@@ -272,34 +272,26 @@ describe("native macOS validation helpers", () => {
   it("binds T023b to its distinct prepared disposable profile", () => {
     const profileRoot = "/tmp/run/profiles/T023b";
     const plan = {
-      schemaVersion: 1,
+      schemaVersion: 2,
+      runId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       productCommit: "ab".repeat(20),
-      runNonce: "cd".repeat(32),
-      isolation: { root: "/tmp/run/profiles" },
+      isolation: { root: "/tmp/run" },
       packageManifest: { artifactSha256: "ef".repeat(32) },
-      nativeEntrypointProfileRoot: profileRoot,
-      nativeEntrypointRequest: { gateId: "T023b", profileRoot },
+      screens: [{ gateId: "HF2-01" }],
     };
-    Object.defineProperty(plan, "__planPath", {
-      value: "/tmp/run/capture-plan.json",
-      enumerable: false,
-    });
     const result = validatePreparedNativeProfile(plan, {
       gitCommit: "ab".repeat(20),
       artifactSha256: "ef".repeat(32),
     });
     assert.equal(result.profileRoot, profileRoot);
-    assert.equal(result.environment.EXCALIDRAW_NATIVE_CAPTURE_GATE, "T023b");
-    assert.equal(
-      result.environment.EXCALIDRAW_NATIVE_CAPTURE_NONCE,
-      plan.runNonce,
-    );
+    assert.equal(result.environment.HOME, profileRoot);
+    assert.equal("EXCALIDRAW_NATIVE_CAPTURE_PLAN" in result.environment, false);
     assert.throws(
       () =>
         validatePreparedNativeProfile(
           {
             ...plan,
-            nativeEntrypointProfileRoot: "/tmp/outside",
+            packageManifest: { artifactSha256: "12".repeat(32) },
           },
           {
             gitCommit: "ab".repeat(20),

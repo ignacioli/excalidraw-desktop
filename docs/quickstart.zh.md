@@ -131,11 +131,11 @@ pnpm native:screen:prepare -- \
   --isolation-mode ephemeral-vm
 ```
 
-六屏 final plan 使用 `FINAL`。允许的 isolation mode 为 `disposable-macos-user`、`ephemeral-vm`、`verified-os-home-redirect`。命令只 provision 能通过当前安全格式表达的仓库已声明 fixture data，记录每张屏的 `fixture|operator-assisted` preparation mode，为每张屏创建独立 profile，并另建原生入口 profile，然后写 immutable、nonce-bound plan；它不写 WebKit 私有存储。production ready probe 在缺少 launcher 提供的 plan/gate/nonce 时完全 inert。runtime app-data 与 WebKit path 仍必须实际落在所选 profile 内，否则后续 collector 返回 `BLOCKED`。
+六屏 final plan 使用 `FINAL`。允许的 isolation mode 为 `disposable-macos-user`、`ephemeral-vm`、`verified-os-home-redirect`。命令只 provision 能通过当前安全格式表达的仓库已声明 fixture data，记录每张屏的 `fixture|operator-assisted` preparation mode，为每张屏创建独立 profile，并另建 T023b profile，然后写 immutable schema-v2 plan；它不写 WebKit 私有存储，也不增加 production diagnostic/state channel。runtime app-data path 仍必须实际落在所选 profile 内，否则后续 collector 返回 `BLOCKED`。
 
-运行 capture 后，若终端打印 `OPERATOR_SETUP_REQUIRED`，请在 600 秒内使用正常应用 UI 建立打印出的 exact target。Operator action 只用于状态准备，不构成交互 PASS；对应 evidence 仍由 focused tests 与 semantic Playwright collection 持有。只有 observation-only ready probe 独立确认状态后，capture 才会继续：
+运行 capture 后，若终端打印 `OPERATOR_SETUP_REQUIRED`，请在 600 秒内使用正常应用 UI 建立打印出的 exact target。Operator action 只用于状态准备，不构成交互 PASS；对应 evidence 仍由 focused tests 与 semantic Playwright collection 持有。随后 collector 打印一次性的精确 `CAPTURE <gate-id> <challenge>`，在同一终端输入整行以确认 capture 时机；collector 会重新校验同一 PID/window/bounds/scale，并只 capture 一次：
 
-VSL-001 必须先把 Sidebar 调整为准确 360px、打开 Library panel、选中 `flows`，最后通过 disclosure control 保持 `flows` 展开并显示三条 drawing row。Sidebar width 与 expanded directories 属于 `shell-state-v2`；Library 是 SDK-owned visual state，仍由 reviewer 验证。Plan 同时为 native `mask.json` 声明固定 canvas/Library rectangles，shell perimeter 不得被 mask。
+VSL-001 的打印 checklist 会要求 Sidebar 准确 360px、Library panel 打开、`flows` 选中并展开、三条 drawing row 可见。Sidebar width、expanded directories 与 Library visibility 仍由 semantic/reviewer evidence 负责；terminal confirmation 不是 evidence。Plan 同时为 native `mask.json` 声明固定 canvas/Library rectangles，shell perimeter 不得被 mask。
 
 ```bash
 pnpm native:screen:capture -- \
