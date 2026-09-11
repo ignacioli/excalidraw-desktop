@@ -12,6 +12,10 @@ import { inspectBundle } from "./native-macos-validation.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
+const HF2_MANIFEST_PATH = path.join(
+  REPO_ROOT,
+  "docs/design/desktop-shell/hf-2/manifest.json",
+);
 const FINAL_GATES = [
   "HF2-01",
   "HF2-02",
