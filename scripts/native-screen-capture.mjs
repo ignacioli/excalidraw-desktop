@@ -7,7 +7,10 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import readline from "node:readline";
-import { validateCapturePlan } from "./native-screen-prepare.mjs";
+import {
+  validateCapturePlan,
+  validateSemanticCollectorReport,
+} from "./native-screen-prepare.mjs";
 import { inspectBundle } from "./native-macos-validation.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -247,6 +250,24 @@ export async function observeBackendIsolation({
   };
 }
 
+export function validateSemanticEvidenceBytes(reference, bytes) {
+  if (sha256Bytes(bytes) !== reference.collectorReportSha256)
+    blocked("semantic collector report digest changed");
+  const report = validateSemanticCollectorReport(
+    JSON.parse(bytes.toString("utf8")),
+    reference.hf2ManifestSha256,
+  );
+  if (
+    report.collectionId !== reference.collectionId ||
+    report.collectionDigest !== reference.collectionDigest ||
+    report.binding.productCommit !== reference.productCommit ||
+    report.binding.harnessVersion !== reference.harnessVersion
+  ) {
+    blocked("semantic collector report binding changed");
+  }
+  return report;
+}
+
 function run(command, args, label, options = {}) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
@@ -422,6 +443,13 @@ async function loadInputs(planPath) {
     blocked("HF-2 manifest digest changed");
   if ((await sha256File(plan.fixture.manifestPath)) !== plan.fixture.digest)
     blocked("fixture manifest digest changed");
+  let semanticBytes = null;
+  if (plan.semanticEvidence) {
+    semanticBytes = await fsp.readFile(
+      plan.semanticEvidence.collectorReportPath,
+    );
+    validateSemanticEvidenceBytes(plan.semanticEvidence, semanticBytes);
+  }
   const bundle = await inspectBundle(packageManifest.appPath, REPO_ROOT);
   if (
     bundle.artifactSha256 !== plan.packageManifest.artifactSha256 ||
@@ -430,7 +458,14 @@ async function loadInputs(planPath) {
   ) {
     blocked("sealed production package identity changed");
   }
-  return { plan, planBytes, packageManifest, packageBytes, runRoot };
+  return {
+    plan,
+    planBytes,
+    packageManifest,
+    packageBytes,
+    runRoot,
+    semanticBytes,
+  };
 }
 
 async function writeJson(filePath, value) {
@@ -510,6 +545,15 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
     const actualDimensions = readPngDimensions(await fsp.readFile(actualPath));
     if (actualDimensions.width !== 1280 || actualDimensions.height !== 760)
       failed("normalized image is not 1280x760");
+    if (inputs.semanticBytes) {
+      const currentSemanticBytes = await fsp.readFile(
+        inputs.plan.semanticEvidence.collectorReportPath,
+      );
+      validateSemanticEvidenceBytes(
+        inputs.plan.semanticEvidence,
+        currentSemanticBytes,
+      );
+    }
 
     await writeJson(path.join(collectionDir, "isolation.json"), isolation);
     const isolationSha256 = await sha256File(
@@ -571,11 +615,12 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
       viewport: { width: 1280, height: 760 },
       browserOrAppBuild: inputs.packageManifest.appPath,
       fixture: inputs.plan.fixture.id,
+      semanticEvidence: inputs.plan.semanticEvidence,
       preparationMode: screen.preparationMode,
       operatorActionsAreEvidence: false,
       collector: {
         tool: "native-screen-capture",
-        version: "3",
+        version: "4",
         runIdentity: `${inputs.plan.runId}:${screen.gateId}`,
       },
       pid: child.pid,
@@ -633,12 +678,13 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
       },
       collector: {
         tool: "native-screen-capture",
-        version: "3",
+        version: "4",
         runIdentity: `${inputs.plan.runId}:${screen.gateId}`,
       },
       preparationMode: screen.preparationMode,
       operatorActionsAreEvidence: false,
       applicationStateClaims: [],
+      composedSemanticEvidence: inputs.plan.semanticEvidence,
       environmentPath: "environment.json",
       readinessPath: "capture-readiness.json",
       isolationPath: "isolation.json",
@@ -660,7 +706,7 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
     await writeJson(path.join(collectionDir, "collector-report.json"), report);
     await fsp.writeFile(
       path.join(collectionDir, "collector-report.md"),
-      `# ${screen.gateId} native capture collection\n\n- Result: **PASS**\n- Schema: \`v2\`\n- Harness: \`003-native-capture-v3\`\n- Backend app-data isolation: \`PASS\`\n- WebKit filesystem isolation claimed: \`false\`\n- Operator confirmation: \`terminal-exact-line\`\n- Operator actions are evidence: \`false\`\n- Owned PID: \`${child.pid}\`\n- Window ID: \`${after.windowId}\`\n- Backing scale: \`${backingScale}\`\n- Capture count: \`${captureCount}\`\n- Normalization: \`lanczos3-srgb-v1\`\n- Application-state claims: none\n- Reviewer verdict: not authored by this collector\n`,
+      `# ${screen.gateId} native capture collection\n\n- Result: **PASS**\n- Schema: \`v2\`\n- Harness: \`003-native-capture-v4\`\n- Semantic collection: \`${inputs.plan.semanticEvidence?.collectionId ?? "NOT_REQUIRED"}\`\n- Semantic collection digest: \`${inputs.plan.semanticEvidence?.collectionDigest ?? "NOT_REQUIRED"}\`\n- Backend app-data isolation: \`PASS\`\n- WebKit filesystem isolation claimed: \`false\`\n- Operator confirmation: \`terminal-exact-line\`\n- Operator actions are evidence: \`false\`\n- Owned PID: \`${child.pid}\`\n- Window ID: \`${after.windowId}\`\n- Backing scale: \`${backingScale}\`\n- Capture count: \`${captureCount}\`\n- Normalization: \`lanczos3-srgb-v1\`\n- Application-state claims: none\n- Reviewer verdict: not authored by this collector\n`,
       { encoding: "utf8", flag: "wx" },
     );
     return report;
@@ -723,12 +769,12 @@ export async function captureNativeScreens({
         });
         recordValidationAttempt(
           budget,
-          "native-screen-capture-v3",
+          "native-screen-capture-v4",
           report.result,
         );
         reports.push(report);
       } catch (error) {
-        recordValidationAttempt(budget, "native-screen-capture-v3", "FAIL");
+        recordValidationAttempt(budget, "native-screen-capture-v4", "FAIL");
         if (budget.stopped)
           blocked(
             "three consecutive native capture failures; stop for direction review",
@@ -747,7 +793,7 @@ export async function captureNativeScreens({
 
 function usage() {
   console.log(
-    "Usage:\n  pnpm native:screen:capture -- --plan <absolute-plan> --gate VSL-001 --collection-dir <absolute-new-dir>\n  pnpm native:screen:capture -- --plan <absolute-final-plan> --all-final --collection-root <absolute-new-root>\nEach gate prints the declared visual checklist and one exact CAPTURE <gate-id> <challenge> line; confirmation controls timing only and is not evidence. In Codex, forward the line to the agent-held collector PTY only after the operator replies ready. Backend app-data is checked inside the run root; WebKit filesystem isolation is not claimed.\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. Capture is owned-window-only; content-GUI automation, full-screen capture, coordinate search and visual repair are prohibited.",
+    "Usage:\n  pnpm native:screen:capture -- --plan <absolute-plan> --gate VSL-001 --collection-dir <absolute-new-dir>\n  pnpm native:screen:capture -- --plan <absolute-final-plan> --all-final --collection-root <absolute-new-root>\nVSL plans bind one PASS T031 semantic collector report by file SHA and collection digest. Each gate prints the declared visual checklist and one exact CAPTURE <gate-id> <challenge> line; confirmation controls timing only and is not evidence. In Codex, forward the line to the agent-held collector PTY only after the operator replies ready. Backend app-data is checked inside the run root; WebKit filesystem isolation is not claimed.\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. Capture is owned-window-only; content-GUI automation, full-screen capture, coordinate search and visual repair are prohibited.",
   );
 }
 

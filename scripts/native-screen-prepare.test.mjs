@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +9,7 @@ import {
   prepareNativeScreenPlan,
   validateCapturePlan,
   validatePackageManifest,
+  validateSemanticCollectorReport,
 } from "./native-screen-prepare.mjs";
 
 const roots = [];
@@ -42,21 +44,72 @@ async function setup(buildCommand = ["pnpm", "tauri", "build"]) {
       expectedWindowSize: { width: 1280, height: 760 },
     })}\n`,
   );
+  const hf2Bytes = await fsp.readFile(
+    "docs/design/desktop-shell/hf-2/manifest.json",
+  );
+  const hf2ManifestSha256 = crypto
+    .createHash("sha256")
+    .update(hf2Bytes)
+    .digest("hex");
+  const semanticCollectionPath = path.join(
+    root,
+    "semantic-collector-report.json",
+  );
+  await fsp.writeFile(
+    semanticCollectionPath,
+    `${JSON.stringify({
+      schemaVersion: 1,
+      collectionId: "VSL-001-light-pinned-browser",
+      gateId: "VSL-001",
+      binding: {
+        productCommit: "ef".repeat(20),
+        hf2ManifestSha256,
+        fixtureDigest: "12".repeat(32),
+        harnessVersion: "003-shell-v2",
+      },
+      collectionDigest: "34".repeat(32),
+      result: "PASS",
+    })}\n`,
+  );
   return {
     root,
     runRoot,
     appPath,
     packageManifestPath,
+    semanticCollectionPath,
     planPath: path.join(runRoot, "capture-plan.json"),
   };
 }
 
 describe("native screen prepare", () => {
+  it("rejects semantic reports that are not a bound VSL PASS", () => {
+    assert.throws(
+      () =>
+        validateSemanticCollectorReport(
+          {
+            schemaVersion: 1,
+            collectionId: "VSL-001-light-pinned-browser",
+            gateId: "VSL-001",
+            binding: {
+              productCommit: "ef".repeat(20),
+              hf2ManifestSha256: "12".repeat(32),
+              harnessVersion: "003-shell-v2",
+            },
+            collectionDigest: "34".repeat(32),
+            result: "BLOCKED",
+          },
+          "12".repeat(32),
+        ),
+      /bound PASS/u,
+    );
+  });
+
   it("prepares one immutable v2 VSL plan without application-state projection", async () => {
     const fixture = await setup();
     const plan = await prepareNativeScreenPlan({
       checkpoint: "VSL",
       packageManifestPath: fixture.packageManifestPath,
+      semanticCollectionPath: fixture.semanticCollectionPath,
       runRoot: fixture.runRoot,
       planPath: fixture.planPath,
       isolationMode: "backend-app-data-home-redirect",
@@ -82,7 +135,12 @@ describe("native screen prepare", () => {
     );
     assert.equal(plan.isolation.mode, "backend-app-data-home-redirect");
     assert.equal(plan.isolation.webkitFilesystemIsolationClaimed, false);
-    assert.equal(plan.harnessVersion, "003-native-capture-v3");
+    assert.equal(plan.harnessVersion, "003-native-capture-v4");
+    assert.equal(
+      plan.semanticEvidence.collectionId,
+      "VSL-001-light-pinned-browser",
+    );
+    assert.equal(plan.semanticEvidence.collectionDigest, "34".repeat(32));
     assert.equal(plan.fixture.schemaVersion, undefined);
     assert.equal("stateFingerprintVersion" in plan, false);
     assert.equal("nativeEntrypointRequest" in plan, false);
@@ -94,6 +152,7 @@ describe("native screen prepare", () => {
       prepareNativeScreenPlan({
         checkpoint: "VSL",
         packageManifestPath: fixture.packageManifestPath,
+        semanticCollectionPath: fixture.semanticCollectionPath,
         runRoot: fixture.runRoot,
         planPath: fixture.planPath,
         isolationMode: "backend-app-data-home-redirect",
@@ -149,6 +208,7 @@ describe("native screen prepare", () => {
     const plan = await prepareNativeScreenPlan({
       checkpoint: "VSL",
       packageManifestPath: valid.packageManifestPath,
+      semanticCollectionPath: valid.semanticCollectionPath,
       runRoot: valid.runRoot,
       planPath: valid.planPath,
       isolationMode: "backend-app-data-home-redirect",
@@ -156,6 +216,10 @@ describe("native screen prepare", () => {
     assert.throws(
       () => validateCapturePlan({ ...plan, schemaVersion: 1 }),
       /capture plan schema is invalid/u,
+    );
+    assert.throws(
+      () => validateCapturePlan({ ...plan, semanticEvidence: undefined }),
+      /semanticEvidence/u,
     );
     assert.throws(
       () =>

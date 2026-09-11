@@ -123,6 +123,26 @@ export function validatePackageManifest(value) {
   return manifest;
 }
 
+export function validateSemanticCollectorReport(value, hf2ManifestSha256) {
+  const report = assertObject(value, "semantic collector report");
+  if (
+    report.schemaVersion !== 1 ||
+    report.gateId !== "VSL-001" ||
+    report.result !== "PASS" ||
+    typeof report.collectionId !== "string" ||
+    report.collectionId.length === 0 ||
+    !HEX.digest.test(report.collectionDigest ?? "") ||
+    !assertObject(report.binding, "semantic collector binding").productCommit ||
+    !HEX.commit.test(report.binding.productCommit) ||
+    report.binding.hf2ManifestSha256 !== hf2ManifestSha256 ||
+    typeof report.binding.harnessVersion !== "string" ||
+    report.binding.harnessVersion.length === 0
+  ) {
+    blocked("semantic collector report is not a bound PASS for VSL-001");
+  }
+  return report;
+}
+
 function validateScreenRequest(
   screen,
   label = `screen ${screen?.gateId ?? "unknown"}`,
@@ -207,6 +227,25 @@ export function validateCapturePlan(value) {
   ) {
     blocked("capture plan contains removed diagnostic state or control fields");
   }
+  if (plan.checkpoint === "VSL") {
+    const semantic = assertObject(
+      plan.semanticEvidence,
+      "capture plan semanticEvidence",
+    );
+    if (
+      !path.isAbsolute(semantic.collectorReportPath ?? "") ||
+      !HEX.digest.test(semantic.collectorReportSha256 ?? "") ||
+      typeof semantic.collectionId !== "string" ||
+      semantic.collectionId.length === 0 ||
+      !HEX.digest.test(semantic.collectionDigest ?? "") ||
+      !HEX.commit.test(semantic.productCommit ?? "") ||
+      typeof semantic.harnessVersion !== "string" ||
+      semantic.harnessVersion.length === 0 ||
+      !HEX.digest.test(semantic.hf2ManifestSha256 ?? "")
+    ) {
+      blocked("capture plan semantic evidence binding is invalid");
+    }
+  }
   const expectedGates = plan.checkpoint === "VSL" ? ["VSL-001"] : FINAL_GATES;
   const observedGates = plan.screens.map((screen) => screen.gateId).sort();
   if (
@@ -286,8 +325,8 @@ async function provisionFixture(runRoot, screens) {
   }
   const manifest = {
     schemaVersion: 2,
-    fixtureVersion: "003-native-capture-v3",
-    fixtureId: "003-native-capture-v3",
+    fixtureVersion: "003-native-capture-v4",
+    fixtureId: "003-native-capture-v4",
     workspaceRoot,
     screens: screens.map(({ gateId, preparationMode }) => ({
       gateId,
@@ -308,12 +347,14 @@ async function provisionFixture(runRoot, screens) {
 export async function prepareNativeScreenPlan({
   checkpoint,
   packageManifestPath,
+  semanticCollectionPath,
   runRoot,
   planPath,
   isolationMode,
 }) {
   if (
     !path.isAbsolute(packageManifestPath) ||
+    (checkpoint === "VSL" && !path.isAbsolute(semanticCollectionPath ?? "")) ||
     !path.isAbsolute(runRoot) ||
     !path.isAbsolute(planPath)
   ) {
@@ -339,7 +380,7 @@ export async function prepareNativeScreenPlan({
   );
   if (
     fixtureRegistry.schemaVersion !== 2 ||
-    fixtureRegistry.fixtureVersion !== "003-native-capture-v3" ||
+    fixtureRegistry.fixtureVersion !== "003-native-capture-v4" ||
     !Array.isArray(fixtureRegistry.screens)
   ) {
     blocked("fixture registry schema is invalid");
@@ -360,6 +401,24 @@ export async function prepareNativeScreenPlan({
     "HF-2 manifest",
   );
   if (!Array.isArray(hf2.screens)) blocked("HF-2 manifest screens are missing");
+  let semanticEvidence;
+  if (checkpoint === "VSL") {
+    const semanticBytes = await fsp.readFile(semanticCollectionPath);
+    const hf2ManifestSha256 = sha256Bytes(hf2Bytes);
+    const semanticReport = validateSemanticCollectorReport(
+      JSON.parse(semanticBytes.toString("utf8")),
+      hf2ManifestSha256,
+    );
+    semanticEvidence = {
+      collectorReportPath: semanticCollectionPath,
+      collectorReportSha256: sha256Bytes(semanticBytes),
+      collectionId: semanticReport.collectionId,
+      collectionDigest: semanticReport.collectionDigest,
+      productCommit: semanticReport.binding.productCommit,
+      harnessVersion: semanticReport.binding.harnessVersion,
+      hf2ManifestSha256,
+    };
+  }
 
   const fixture = await provisionFixture(runRoot, requestedScreens);
   const profilesRoot = path.join(runRoot, "profiles");
@@ -402,7 +461,8 @@ export async function prepareNativeScreenPlan({
         packageManifest.artifactSha256 ?? packageManifest.packageSha256,
     },
     hf2Manifest: { path: HF2_MANIFEST_PATH, sha256: sha256Bytes(hf2Bytes) },
-    harnessVersion: "003-native-capture-v3",
+    ...(semanticEvidence ? { semanticEvidence } : {}),
+    harnessVersion: "003-native-capture-v4",
     normalizationAlgorithm: "lanczos3-srgb-v1",
     isolation: {
       mode: isolationMode,
@@ -427,7 +487,7 @@ export async function prepareNativeScreenPlan({
 
 function usage() {
   console.log(
-    "Usage: pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute.json> --run-root <absolute-empty-dir> --plan <absolute-new.json> --isolation-mode backend-app-data-home-redirect\nPlan schema: v2. Backend app-data only; WebKit filesystem isolation is not claimed. Exit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation.",
+    "Usage: pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute.json> [--semantic-collection <absolute-T031-collector-report.json> for VSL] --run-root <absolute-empty-dir> --plan <absolute-new.json> --isolation-mode backend-app-data-home-redirect\nPlan schema: v2. VSL binds one PASS semantic collection by file and collection digest. Backend app-data only; WebKit filesystem isolation is not claimed. Exit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation.",
   );
 }
 
@@ -441,12 +501,14 @@ async function main() {
   if (args.includes("--help") || args.includes("help")) return usage();
   const checkpoint = option(args, "--checkpoint");
   const packageManifestPath = option(args, "--package-manifest");
+  const semanticCollectionPath = option(args, "--semantic-collection");
   const runRoot = option(args, "--run-root");
   const planPath = option(args, "--plan");
   const isolationMode = option(args, "--isolation-mode");
   if (
     !["VSL", "FINAL"].includes(checkpoint) ||
     !packageManifestPath ||
+    (checkpoint === "VSL" && !semanticCollectionPath) ||
     !runRoot ||
     !planPath ||
     !isolationMode
@@ -459,6 +521,7 @@ async function main() {
     const plan = await prepareNativeScreenPlan({
       checkpoint,
       packageManifestPath,
+      semanticCollectionPath,
       runRoot,
       planPath,
       isolationMode,

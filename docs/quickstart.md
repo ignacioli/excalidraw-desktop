@@ -126,12 +126,13 @@ Prepare a native validation run only from an existing empty absolute directory a
 pnpm native:screen:prepare -- \
   --checkpoint VSL \
   --package-manifest <absolute-sealed-package-manifest.json> \
+  --semantic-collection <absolute-T031-collector-report.json> \
   --run-root <absolute-empty-run-root> \
   --plan <absolute-new-capture-plan.json> \
   --isolation-mode backend-app-data-home-redirect
 ```
 
-Use `FINAL` for the six-screen final plan. `backend-app-data-home-redirect` provisions only safely representable repository-declared fixture data, records each screen's `fixture|operator-assisted` preparation mode, creates one distinct backend-home root per screen plus a separate T023b root, and writes an immutable schema-v2 plan bound to harness v3. Capture must observe Application Support and `excalidraw-desktop.sqlite3` inside that root or return `BLOCKED`. It does not write private WebKit storage or add a production diagnostic/state channel; `isolation.json` records `webkitFilesystemIsolationClaimed: false`, and the harness never reads, prints, backs up, cleans, or directly modifies operator WebKit data.
+For VSL, `--semantic-collection` is required and must name the immutable T031 `collector-report.json`; prepare validates its PASS/gate/manifest binding and records both the report-file SHA and collection digest. Capture revalidates those bytes before launch and before sealing its output. Use `FINAL` for the six-screen final plan. `backend-app-data-home-redirect` provisions only safely representable repository-declared fixture data, records each screen's `fixture|operator-assisted` preparation mode, creates one distinct backend-home root per screen plus a separate T023b root, and writes an immutable schema-v2 plan bound to harness v4. Capture must observe Application Support and `excalidraw-desktop.sqlite3` inside that root or return `BLOCKED`. It does not write private WebKit storage or add a production diagnostic/state channel; `isolation.json` records `webkitFilesystemIsolationClaimed: false`, and the harness never reads, prints, backs up, cleans, or directly modifies operator WebKit data.
 
 Run capture and, when it prints `OPERATOR_SETUP_REQUIRED`, use normal application UI to establish the exact printed target within 600 seconds. Those actions are setup only and create no interaction PASS; focused tests and the semantic Playwright collection own that evidence. The collector then prints an exact one-time `CAPTURE <gate-id> <challenge>` line. In Codex/non-interactive use, the agent keeps the collector PTY, shows that line to the operator, waits for an explicit `ready`, and forwards it to the same PTY; do not execute it in another shell. The collector revalidates the same PID/window/bounds/scale and captures once.
 

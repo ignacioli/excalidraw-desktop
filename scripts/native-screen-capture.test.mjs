@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import fsp from "node:fs/promises";
 import os from "node:os";
@@ -18,6 +19,7 @@ import {
   readPngDimensions,
   recordValidationAttempt,
   validateRawDimensions,
+  validateSemanticEvidenceBytes,
 } from "./native-screen-capture.mjs";
 
 const roots = [];
@@ -65,7 +67,7 @@ const screen = {
   ],
 };
 
-describe("native screen capture v3", () => {
+describe("native screen capture v4", () => {
   it("reads PNG dimensions and derives only an exact backing scale", () => {
     assert.deepEqual(readPngDimensions(png(2560, 1520)), {
       width: 2560,
@@ -143,12 +145,12 @@ describe("native screen capture v3", () => {
 
   it("stops the same validation direction after three consecutive failures", () => {
     const budget = createFailureBudget();
-    recordValidationAttempt(budget, "native-screen-capture-v3", "FAIL");
-    recordValidationAttempt(budget, "native-screen-capture-v3", "FAIL");
+    recordValidationAttempt(budget, "native-screen-capture-v4", "FAIL");
+    recordValidationAttempt(budget, "native-screen-capture-v4", "FAIL");
     assert.equal(budget.stopped, false);
-    recordValidationAttempt(budget, "native-screen-capture-v3", "FAIL");
+    recordValidationAttempt(budget, "native-screen-capture-v4", "FAIL");
     assert.equal(budget.stopped, true);
-    recordValidationAttempt(budget, "native-screen-capture-v3", "PASS");
+    recordValidationAttempt(budget, "native-screen-capture-v4", "PASS");
     assert.equal(budget.stopped, true);
   });
 
@@ -196,6 +198,39 @@ describe("native screen capture v3", () => {
     assert.equal("observedWebKitDataRoot" in record, false);
     assert.equal("actualPathsObservedByCollector" in record, false);
     assert.equal(JSON.stringify(record).includes("Library/WebKit"), false);
+  });
+
+  it("binds semantic evidence by report bytes and collection digest", () => {
+    const report = {
+      schemaVersion: 1,
+      collectionId: "VSL-001-light-pinned-browser",
+      gateId: "VSL-001",
+      binding: {
+        productCommit: "ef".repeat(20),
+        hf2ManifestSha256: "12".repeat(32),
+        harnessVersion: "003-shell-v2",
+      },
+      collectionDigest: "34".repeat(32),
+      result: "PASS",
+    };
+    const bytes = Buffer.from(`${JSON.stringify(report)}\n`);
+    const reference = {
+      collectorReportSha256: crypto
+        .createHash("sha256")
+        .update(bytes)
+        .digest("hex"),
+      collectorReportPath: "/tmp/semantic-collector-report.json",
+      collectionId: report.collectionId,
+      collectionDigest: report.collectionDigest,
+      productCommit: report.binding.productCommit,
+      harnessVersion: report.binding.harnessVersion,
+      hf2ManifestSha256: report.binding.hf2ManifestSha256,
+    };
+    assert.deepEqual(validateSemanticEvidenceBytes(reference, bytes), report);
+    assert.throws(
+      () => validateSemanticEvidenceBytes(reference, Buffer.from("{}\n")),
+      /digest changed/u,
+    );
   });
 
   it("exposes fixed help and invalid-invocation exit semantics", () => {

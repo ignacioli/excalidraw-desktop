@@ -126,12 +126,13 @@ APP_E2E=1 pnpm e2e           # Playwright 桌面 E2E（测试专用构建，暴�
 pnpm native:screen:prepare -- \
   --checkpoint VSL \
   --package-manifest <absolute-sealed-package-manifest.json> \
+  --semantic-collection <absolute-T031-collector-report.json> \
   --run-root <absolute-empty-run-root> \
   --plan <absolute-new-capture-plan.json> \
   --isolation-mode backend-app-data-home-redirect
 ```
 
-六屏 final plan 使用 `FINAL`。`backend-app-data-home-redirect` 只 provision 能通过当前安全格式表达的仓库已声明 fixture data，记录每张屏的 `fixture|operator-assisted` preparation mode，为每张屏创建独立 backend-home root，并另建 T023b root，然后写绑定 harness v3 的 immutable schema-v2 plan。Capture 必须实际观察 Application Support 与 `excalidraw-desktop.sqlite3` 位于该 root 内，否则返回 `BLOCKED`。它不写 WebKit 私有存储，也不增加 production diagnostic/state channel；`isolation.json` 记录 `webkitFilesystemIsolationClaimed: false`，harness 不得读取、打印、备份、清理或直接修改 operator WebKit data。
+VSL 的 `--semantic-collection` 是必需参数，必须指向 immutable T031 `collector-report.json`；prepare 会验证其 PASS/gate/manifest binding，并记录 report file SHA 与 collection digest。Capture 会在 launch 前与封存输出前重新验证这些 bytes。六屏 final plan 使用 `FINAL`。`backend-app-data-home-redirect` 只 provision 能通过当前安全格式表达的仓库已声明 fixture data，记录每张屏的 `fixture|operator-assisted` preparation mode，为每张屏创建独立 backend-home root，并另建 T023b root，然后写绑定 harness v4 的 immutable schema-v2 plan。Capture 必须实际观察 Application Support 与 `excalidraw-desktop.sqlite3` 位于该 root 内，否则返回 `BLOCKED`。它不写 WebKit 私有存储，也不增加 production diagnostic/state channel；`isolation.json` 记录 `webkitFilesystemIsolationClaimed: false`，harness 不得读取、打印、备份、清理或直接修改 operator WebKit data。
 
 运行 capture 后，若终端打印 `OPERATOR_SETUP_REQUIRED`，请在 600 秒内使用正常应用 UI 建立打印出的 exact target。Operator action 只用于状态准备，不构成交互 PASS；对应 evidence 仍由 focused tests 与 semantic Playwright collection 持有。随后 collector 打印一次性的精确 `CAPTURE <gate-id> <challenge>`。Codex/非交互场景由 Agent 保持 collector PTY、向 operator 展示该行、等待明确回复 `ready`，再转发到同一 PTY；不得在另一个 shell 执行。Collector 随后重新校验同一 PID/window/bounds/scale，并只 capture 一次。
 
