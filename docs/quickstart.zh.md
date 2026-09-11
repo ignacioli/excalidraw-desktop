@@ -135,6 +135,8 @@ pnpm native:screen:prepare -- \
 
 运行 capture 后，若终端打印 `OPERATOR_SETUP_REQUIRED`，请在 600 秒内使用正常应用 UI 建立打印出的 exact target。Operator action 只用于状态准备，不构成交互 PASS；对应 evidence 仍由 focused tests 与 semantic Playwright collection 持有。只有 observation-only ready probe 独立确认状态后，capture 才会继续：
 
+VSL-001 必须先把 Sidebar 调整为准确 360px、打开 Library panel、选中 `flows`，最后通过 disclosure control 保持 `flows` 展开并显示三条 drawing row。Sidebar width 与 expanded directories 属于 `shell-state-v2`；Library 是 SDK-owned visual state，仍由 reviewer 验证。Plan 同时为 native `mask.json` 声明固定 canvas/Library rectangles，shell perimeter 不得被 mask。
+
 ```bash
 pnpm native:screen:capture -- \
   --plan <absolute-capture-plan.json> \

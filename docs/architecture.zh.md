@@ -259,10 +259,11 @@ flowchart TB
   Plan --> Launcher["Owned child launcher"]
   Launcher --> App["Production Tauri application"]
   subgraph Frontend["React observation layer"]
-    Shell["Rendered shell/session/theme state"] --> Probe["nativeCaptureReady.ts"]
+    Shell["Rendered shell/session/theme/width/expansion state"] --> Probe["nativeCaptureReady.ts"]
   end
   subgraph Boundary["Typed Tauri IPC boundary"]
     Bootstrap["native_capture_bootstrap"]
+    Diagnostic["native_capture_publish_diagnostic"]
     Publish["native_capture_publish_ready"]
   end
   subgraph Backend["Rust validation layer"]
@@ -270,6 +271,7 @@ flowchart TB
   end
   App --> Shell
   Probe --> Bootstrap --> State
+  Probe --> Diagnostic --> State
   Probe --> Publish --> State
   Candidate --> Driver["Native capture driver：PID/window/scale"]
   Driver --> Ready["Final ready.json + immutable collection"]
@@ -289,13 +291,14 @@ sequenceDiagram
   L->>R: 携带 plan + gate + nonce 启动
   R->>R: 解析实际 app-data/WebKit path
   R-->>W: Bootstrap immutable expected binding
-  W->>W: 观察 shell state；等待 document.fonts.ready
+  W->>W: 观察 shell state、Sidebar width 与 expanded directories；等待 document.fonts.ready
   W->>W: 确认 remote font=0、pending=0、连续两帧稳定
+  W->>R: Atomic replace bounded mismatch diagnostic（非 evidence）
   W->>R: 发布 typed ready observation
-  R->>R: 校验 nonce/fingerprint/window size/path containment
+  R->>R: 校验 nonce/fingerprint/WebView validity/path containment
   R-->>D: Atomic publish ready-candidate.json
   D->>D: 把 owned PID 绑定到唯一 native window/backing scale
-  D->>D: 校验尺寸并完成 ready.json
+  D->>D: 校验 exact native 1280x760 尺寸并完成 ready.json
   D->>D: 单次 capture；只做无 crop/repair 的 normalization
 ```
 

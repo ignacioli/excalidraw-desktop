@@ -194,7 +194,8 @@ type SceneData = unknown; // 官方 .excalidraw JSON；后端只做结构校验
 | 命令 | 请求 | 响应 | 说明 |
 |------|------|------|------|
 | `native_capture_bootstrap` | `{}` | `NativeCaptureBootstrap \| null` | 未启用时返回 `null`；启用时只返回 immutable binding（不可变绑定），不设置 UI 状态 |
-| `native_capture_publish_ready` | `{ ready: NativeCaptureReadyInput }` | `{}` | 仅接受 nonce、commit、package、state fingerprint、字体、pending operation、稳定帧与 1280×760 window observation 全部匹配的报告 |
+| `native_capture_publish_diagnostic` | `{ diagnostic: NativeCaptureDiagnosticInput }` | `{}` | capture 激活时以原子替换写入最新的白名单 shell projection；只用于定位 mismatch，不构成 PASS，且不序列化 run nonce |
+| `native_capture_publish_ready` | `{ ready: NativeCaptureReadyInput }` | `{}` | 仅接受 nonce、commit、package、state fingerprint、字体、pending operation、稳定帧与有效 WebView observation 全部匹配的报告；native outer window 1280×760 由 collector 独立验证 |
 
 ```typescript
 interface NativeCaptureBootstrap {
@@ -206,7 +207,7 @@ interface NativeCaptureBootstrap {
   packageArtifactSha256: string;
   fixtureDigest: string;
   expectedStateFingerprint: string;
-  stateFingerprintVersion: "shell-state-v1";
+  stateFingerprintVersion: "shell-state-v2";
 }
 
 interface NativeCaptureReadyInput {
@@ -217,17 +218,17 @@ interface NativeCaptureReadyInput {
   productCommit: string;
   packageArtifactSha256: string;
   stateFingerprint: string;
-  stateFingerprintVersion: "shell-state-v1";
+  stateFingerprintVersion: "shell-state-v2";
   fontReady: true;
   remoteFontRequests: 0;
   stableFrames: number;       // >= 2
   pendingOperations: 0;
-  logicalWindow: { width: 1280; height: 760 };
+  logicalWindow: { width: number; height: number }; // positive WebView content size
   frontmost: true;
 }
 ```
 
-Frontend 只能提交 observation，不能提交 fixture path、任意 filesystem path、theme/sidebar setter 或 privileged command。Rust 从 launcher-owned plan 获取 expected binding，重新验证实际 storage path 位于当前 gate 的 disposable profile 后，以 atomic create + rename 写 `<gate>.ready-candidate.json`。该 candidate 仍不包含 native window ID（identifier）或 backing scale；capture driver 必须通过 owned PID（process identifier，进程标识）确定这些原生事实并生成最终 `ready.json`。缺失、重复、stale、path escape 或不匹配均为 `BLOCKED`，不得由截图猜测。
+`shell-state-v2` 的白名单 projection 包含 session/theme/sidebar mode、实际 Sidebar width、Current Workspace、selected directory、expanded directories、tabs、active document、unsaved 与 fixture digest。Frontend 只能提交 observation，不能提交 fixture path、任意 filesystem path、theme/sidebar setter 或 privileged command。Rust 从 launcher-owned plan 获取 expected binding，重新验证实际 storage path 位于当前 gate 的 disposable profile 后，以 atomic create + rename 写 `<gate>.ready-candidate.json`。Mismatch diagnostic 只原子替换 `<gate>.observation-diagnostic.json`，不进入 collection，也不改变 verdict。Candidate 仍不包含 native window ID（identifier）或 backing scale；capture driver 必须通过 owned PID（process identifier，进程标识）确定这些原生事实并生成最终 `ready.json`。缺失、重复、stale、path escape 或不匹配均为 `BLOCKED`，不得由截图猜测。
 
 ## 2. 事件契约（后端 → 前端）
 

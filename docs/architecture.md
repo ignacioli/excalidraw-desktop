@@ -259,10 +259,11 @@ flowchart TB
   Plan --> Launcher["Owned child launcher"]
   Launcher --> App["Production Tauri application"]
   subgraph Frontend["React observation layer"]
-    Shell["Rendered shell/session/theme state"] --> Probe["nativeCaptureReady.ts"]
+    Shell["Rendered shell/session/theme/width/expansion state"] --> Probe["nativeCaptureReady.ts"]
   end
   subgraph Boundary["Typed Tauri IPC boundary"]
     Bootstrap["native_capture_bootstrap"]
+    Diagnostic["native_capture_publish_diagnostic"]
     Publish["native_capture_publish_ready"]
   end
   subgraph Backend["Rust validation layer"]
@@ -270,6 +271,7 @@ flowchart TB
   end
   App --> Shell
   Probe --> Bootstrap --> State
+  Probe --> Diagnostic --> State
   Probe --> Publish --> State
   Candidate --> Driver["Native capture driver: PID/window/scale"]
   Driver --> Ready["Final ready.json + immutable collection"]
@@ -289,13 +291,14 @@ sequenceDiagram
   L->>R: Launch with plan + gate + nonce
   R->>R: Resolve actual app-data/WebKit paths
   R-->>W: Bootstrap immutable expected binding
-  W->>W: Observe shell state; await document.fonts.ready
+  W->>W: Observe shell state, Sidebar width and expanded directories; await document.fonts.ready
   W->>W: Confirm zero remote fonts, zero pending work, two stable frames
+  W->>R: Atomically replace bounded mismatch diagnostic (not evidence)
   W->>R: Publish typed ready observation
-  R->>R: Validate nonce/fingerprint/window size/path containment
+  R->>R: Validate nonce/fingerprint/WebView validity/path containment
   R-->>D: Atomically publish ready-candidate.json
   D->>D: Bind owned PID to one native window and backing scale
-  D->>D: Validate dimensions and finalize ready.json
+  D->>D: Validate exact native 1280x760 dimensions and finalize ready.json
   D->>D: Capture once; normalize without crop or repair
 ```
 

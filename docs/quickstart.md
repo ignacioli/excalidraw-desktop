@@ -135,6 +135,8 @@ Use `FINAL` for the six-screen final plan. Allowed isolation modes are `disposab
 
 Run capture and, when it prints `OPERATOR_SETUP_REQUIRED`, use normal application UI to establish the exact printed target within 600 seconds. Those actions are setup only and create no interaction PASS; focused tests and the semantic Playwright collection own that evidence. The observation-only ready probe must independently attest the state before capture proceeds:
 
+For VSL-001, first set the Sidebar to exactly 360 px, open the Library panel, select `flows`, and only then use the disclosure control to leave `flows` expanded with all three drawing rows visible. Sidebar width and expanded directories are part of `shell-state-v2`; Library is SDK-owned visual state and remains reviewer-verified. The plan also declares fixed canvas and Library rectangles for native `mask.json`, with the shell perimeter unmasked.
+
 ```bash
 pnpm native:screen:capture -- \
   --plan <absolute-capture-plan.json> \
