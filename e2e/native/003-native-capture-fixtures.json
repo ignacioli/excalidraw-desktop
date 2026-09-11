@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "fixtureVersion": "003-native-capture-v2",
+  "fixtureVersion": "003-native-capture-v3",
   "screens": [
     {
       "gateId": "VSL-001",
@@ -14,14 +14,15 @@
       "sidebarWidth": 360,
       "workspaceName": "Design Workspace",
       "selectedDirectory": "flows",
+      "selectedEntry": "flows/Architecture.excalidraw",
       "expandedDirectories": ["flows"],
       "sdkPanelState": "library-open",
       "nativeMasks": [
         {
           "maskId": "sdk-canvas",
-          "selectorOrRect": "rect(360,74,626,686)",
+          "selectorOrRect": "rect(480,74,506,686)",
           "surface": "canvas",
-          "reason": "official SDK-owned editor interior below the native titlebar",
+          "reason": "conservative official SDK-owned editor interior beginning after the maximum allowed Sidebar width",
           "perimeterChecked": true,
           "approved": true
         },
@@ -71,6 +72,7 @@
       "sidebarWidth": 360,
       "workspaceName": "Design Workspace",
       "selectedDirectory": "flows",
+      "selectedEntry": "flows/Architecture.excalidraw",
       "expandedDirectories": ["flows"],
       "tabs": ["Overview.excalidraw", "Checkout Flow.excalidraw"],
       "activeDocument": "Checkout Flow.excalidraw",
@@ -93,9 +95,9 @@
       "nativeMasks": [
         {
           "maskId": "sdk-canvas",
-          "selectorOrRect": "rect(360,74,626,686)",
+          "selectorOrRect": "rect(480,74,506,686)",
           "surface": "canvas",
-          "reason": "official SDK-owned editor interior below the native titlebar",
+          "reason": "conservative official SDK-owned editor interior beginning after the maximum allowed Sidebar width",
           "perimeterChecked": true,
           "approved": true
         },

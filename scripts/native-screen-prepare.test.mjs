@@ -21,7 +21,9 @@ afterEach(async () => {
 });
 
 async function setup(buildCommand = ["pnpm", "tauri", "build"]) {
-  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "native-screen-prepare-"));
+  const root = await fsp.mkdtemp(
+    path.join(os.tmpdir(), "native-screen-prepare-"),
+  );
   roots.push(root);
   const runRoot = path.join(root, "run");
   await fsp.mkdir(runRoot);
@@ -57,17 +59,30 @@ describe("native screen prepare", () => {
       packageManifestPath: fixture.packageManifestPath,
       runRoot: fixture.runRoot,
       planPath: fixture.planPath,
-      isolationMode: "ephemeral-vm",
+      isolationMode: "backend-app-data-home-redirect",
     });
     assert.equal(plan.schemaVersion, 2);
     assert.equal(plan.screens.length, 1);
     assert.equal(plan.screens[0].gateId, "VSL-001");
     assert.equal(plan.screens[0].preparationMode, "operator-assisted");
     assert.equal(plan.screens[0].operatorConfirmation.timeoutSeconds, 600);
-    assert.equal(plan.screens[0].visualTarget.summary, "03 · Workspace · Pinned · Light");
+    assert.equal(
+      plan.screens[0].visualTarget.summary,
+      "03 · Workspace · Pinned · Light",
+    );
     assert.equal(plan.screens[0].nativeMasks.length, 2);
-    assert.equal(plan.isolation.mode, "ephemeral-vm");
-    assert.equal(plan.harnessVersion, "003-native-capture-v2");
+    assert.equal(
+      plan.screens[0].nativeMasks.find((mask) => mask.surface === "canvas")
+        .selectorOrRect,
+      "rect(480,74,506,686)",
+    );
+    assert.match(
+      plan.screens[0].visualTarget.operatorChecklist.join("\n"),
+      /Architecture active and selected/u,
+    );
+    assert.equal(plan.isolation.mode, "backend-app-data-home-redirect");
+    assert.equal(plan.isolation.webkitFilesystemIsolationClaimed, false);
+    assert.equal(plan.harnessVersion, "003-native-capture-v3");
     assert.equal(plan.fixture.schemaVersion, undefined);
     assert.equal("stateFingerprintVersion" in plan, false);
     assert.equal("nativeEntrypointRequest" in plan, false);
@@ -81,9 +96,10 @@ describe("native screen prepare", () => {
         packageManifestPath: fixture.packageManifestPath,
         runRoot: fixture.runRoot,
         planPath: fixture.planPath,
-        isolationMode: "ephemeral-vm",
+        isolationMode: "backend-app-data-home-redirect",
       }),
-      (error) => error instanceof NativeScreenPrepareError && error.exitCode === 2,
+      (error) =>
+        error instanceof NativeScreenPrepareError && error.exitCode === 2,
     );
   });
 
@@ -94,7 +110,7 @@ describe("native screen prepare", () => {
       packageManifestPath: fixture.packageManifestPath,
       runRoot: fixture.runRoot,
       planPath: fixture.planPath,
-      isolationMode: "disposable-macos-user",
+      isolationMode: "backend-app-data-home-redirect",
     });
     assert.deepEqual(plan.screens.map((screen) => screen.gateId).sort(), [
       "HF2-01",
@@ -109,9 +125,9 @@ describe("native screen prepare", () => {
       6,
     );
     assert.equal(
-      await fsp.stat(path.join(fixture.runRoot, "profiles", "T023b")).then(
-        (stat) => stat.isDirectory(),
-      ),
+      await fsp
+        .stat(path.join(fixture.runRoot, "profiles", "T023b"))
+        .then((stat) => stat.isDirectory()),
       true,
     );
   });
@@ -135,10 +151,49 @@ describe("native screen prepare", () => {
       packageManifestPath: valid.packageManifestPath,
       runRoot: valid.runRoot,
       planPath: valid.planPath,
-      isolationMode: "ephemeral-vm",
+      isolationMode: "backend-app-data-home-redirect",
     });
     assert.throws(
       () => validateCapturePlan({ ...plan, schemaVersion: 1 }),
+      /capture plan schema is invalid/u,
+    );
+    assert.throws(
+      () =>
+        validateCapturePlan({
+          ...plan,
+          isolation: {
+            ...plan.isolation,
+            mode: "verified-os-home-redirect",
+          },
+        }),
+      /capture plan schema is invalid/u,
+    );
+    assert.throws(
+      () =>
+        validateCapturePlan({
+          ...plan,
+          screens: [
+            {
+              ...plan.screens[0],
+              nativeMasks: plan.screens[0].nativeMasks.map((mask) =>
+                mask.surface === "canvas"
+                  ? { ...mask, selectorOrRect: "rect(360,74,626,686)" }
+                  : mask,
+              ),
+            },
+          ],
+        }),
+      /480px Sidebar maximum/u,
+    );
+    assert.throws(
+      () =>
+        validateCapturePlan({
+          ...plan,
+          isolation: {
+            ...plan.isolation,
+            webkitFilesystemIsolationClaimed: true,
+          },
+        }),
       /capture plan schema is invalid/u,
     );
     assert.throws(

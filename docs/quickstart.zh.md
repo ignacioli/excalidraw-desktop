@@ -120,7 +120,7 @@ APP_E2E=1 pnpm e2e           # Playwright 桌面 E2E（测试专用构建，暴�
 
 第 3 步的系统着色标题栏与窗口管理是物理 macOS 证据。静态读取 `tauri.conf.json` 只能核对标题字符串，不能代替目视标题栏。
 
-原生验收 run 只能从已存在且为空的 absolute directory 与 exact production package manifest 创建。`--isolation-mode` 必须选择 operator 实际提供的隔离边界；prepare 不会宣称 OS 已经落实该隔离：
+原生验收 run 只能从已存在且为空的 absolute directory 与 exact production package manifest 创建。当前支持的 mode 把 backend app data 重定向到 run root；它不声称独立的 WKWebView filesystem root：
 
 ```bash
 pnpm native:screen:prepare -- \
@@ -128,14 +128,14 @@ pnpm native:screen:prepare -- \
   --package-manifest <absolute-sealed-package-manifest.json> \
   --run-root <absolute-empty-run-root> \
   --plan <absolute-new-capture-plan.json> \
-  --isolation-mode ephemeral-vm
+  --isolation-mode backend-app-data-home-redirect
 ```
 
-六屏 final plan 使用 `FINAL`。允许的 isolation mode 为 `disposable-macos-user`、`ephemeral-vm`、`verified-os-home-redirect`。命令只 provision 能通过当前安全格式表达的仓库已声明 fixture data，记录每张屏的 `fixture|operator-assisted` preparation mode，为每张屏创建独立 profile，并另建 T023b profile，然后写 immutable schema-v2 plan；它不写 WebKit 私有存储，也不增加 production diagnostic/state channel。runtime app-data path 仍必须实际落在所选 profile 内，否则后续 collector 返回 `BLOCKED`。
+六屏 final plan 使用 `FINAL`。`backend-app-data-home-redirect` 只 provision 能通过当前安全格式表达的仓库已声明 fixture data，记录每张屏的 `fixture|operator-assisted` preparation mode，为每张屏创建独立 backend-home root，并另建 T023b root，然后写绑定 harness v3 的 immutable schema-v2 plan。Capture 必须实际观察 Application Support 与 `excalidraw-desktop.sqlite3` 位于该 root 内，否则返回 `BLOCKED`。它不写 WebKit 私有存储，也不增加 production diagnostic/state channel；`isolation.json` 记录 `webkitFilesystemIsolationClaimed: false`，harness 不得读取、打印、备份、清理或直接修改 operator WebKit data。
 
-运行 capture 后，若终端打印 `OPERATOR_SETUP_REQUIRED`，请在 600 秒内使用正常应用 UI 建立打印出的 exact target。Operator action 只用于状态准备，不构成交互 PASS；对应 evidence 仍由 focused tests 与 semantic Playwright collection 持有。随后 collector 打印一次性的精确 `CAPTURE <gate-id> <challenge>`，在同一终端输入整行以确认 capture 时机；collector 会重新校验同一 PID/window/bounds/scale，并只 capture 一次：
+运行 capture 后，若终端打印 `OPERATOR_SETUP_REQUIRED`，请在 600 秒内使用正常应用 UI 建立打印出的 exact target。Operator action 只用于状态准备，不构成交互 PASS；对应 evidence 仍由 focused tests 与 semantic Playwright collection 持有。随后 collector 打印一次性的精确 `CAPTURE <gate-id> <challenge>`。Codex/非交互场景由 Agent 保持 collector PTY、向 operator 展示该行、等待明确回复 `ready`，再转发到同一 PTY；不得在另一个 shell 执行。Collector 随后重新校验同一 PID/window/bounds/scale，并只 capture 一次。
 
-VSL-001 的打印 checklist 会要求 Sidebar 准确 360px、Library panel 打开、`flows` 选中并展开、三条 drawing row 可见。Sidebar width、expanded directories 与 Library visibility 仍由 semantic/reviewer evidence 负责；terminal confirmation 不是 evidence。Plan 同时为 native `mask.json` 声明固定 canvas/Library rectangles，shell perimeter 不得被 mask。
+VSL-001 的打印 checklist 会要求 Sidebar 准确 360px、`flows` 展开、Architecture/Migration/Research 可见、Architecture active 且 selected、Library panel 打开。Sidebar width、expanded directories、selection 与 Library visibility 仍由 semantic/reviewer evidence 负责；terminal confirmation 不是 evidence。Plan 的保守 canvas mask 从 x=480（Sidebar 最大宽度之后）开始，Library mask 独立保留，因此无法遮蔽 Sidebar width/perimeter mismatch。
 
 ```bash
 pnpm native:screen:capture -- \

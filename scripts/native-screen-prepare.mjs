@@ -23,11 +23,7 @@ const FINAL_GATES = [
   "HF2-05",
   "HF2-06",
 ];
-const ISOLATION_MODES = new Set([
-  "disposable-macos-user",
-  "ephemeral-vm",
-  "verified-os-home-redirect",
-]);
+const ISOLATION_MODES = new Set(["backend-app-data-home-redirect"]);
 const NATIVE_MASK_SURFACES = new Set([
   "canvas",
   "editor-toolbar",
@@ -153,6 +149,19 @@ function validateScreenRequest(
     blocked(`${label} is invalid`);
   }
   for (const mask of screen.nativeMasks) validateMask(mask, `${label} mask`);
+  if (["VSL-001", "HF2-03"].includes(screen.gateId)) {
+    const canvasMask = screen.nativeMasks.find(
+      (mask) => mask.surface === "canvas",
+    );
+    const match = /^rect\((\d+),(\d+),(\d+),(\d+)\)$/u.exec(
+      canvasMask?.selectorOrRect ?? "",
+    );
+    if (!match || Number(match[1]) < 480) {
+      blocked(
+        `${label} canvas mask must begin after the 480px Sidebar maximum`,
+      );
+    }
+  }
   return screen;
 }
 
@@ -181,6 +190,7 @@ export function validateCapturePlan(value) {
     typeof plan.isolation.evidence !== "string" ||
     !path.isAbsolute(plan.isolation.evidence) ||
     !pathInside(plan.isolation.root, plan.isolation.evidence) ||
+    plan.isolation.webkitFilesystemIsolationClaimed !== false ||
     !assertObject(plan.fixture, "capture plan fixture").id ||
     !path.isAbsolute(plan.fixture.manifestPath ?? "") ||
     !HEX.digest.test(plan.fixture.digest ?? "") ||
@@ -199,7 +209,9 @@ export function validateCapturePlan(value) {
   }
   const expectedGates = plan.checkpoint === "VSL" ? ["VSL-001"] : FINAL_GATES;
   const observedGates = plan.screens.map((screen) => screen.gateId).sort();
-  if (JSON.stringify(observedGates) !== JSON.stringify([...expectedGates].sort()))
+  if (
+    JSON.stringify(observedGates) !== JSON.stringify([...expectedGates].sort())
+  )
     blocked("capture plan has missing or duplicate screen gates");
   const profiles = new Set();
   for (const screen of plan.screens) {
@@ -226,8 +238,9 @@ function visualTargetForScreen(screen) {
   if (screen.gateId === "VSL-001") {
     checklist.push(
       "Sidebar visually at the 360px reference",
-      "flows selected and expanded",
+      "flows expanded",
       "Architecture/Migration/Research visible",
+      "Architecture active and selected",
       "Library panel visible",
     );
   }
@@ -273,8 +286,8 @@ async function provisionFixture(runRoot, screens) {
   }
   const manifest = {
     schemaVersion: 2,
-    fixtureVersion: "003-native-capture-v2",
-    fixtureId: "003-native-capture-v2",
+    fixtureVersion: "003-native-capture-v3",
+    fixtureId: "003-native-capture-v3",
     workspaceRoot,
     screens: screens.map(({ gateId, preparationMode }) => ({
       gateId,
@@ -311,8 +324,10 @@ export async function prepareNativeScreenPlan({
   const runStats = await fsp.lstat(runRoot).catch(() => null);
   if (runStats === null || !runStats.isDirectory() || runStats.isSymbolicLink())
     blocked("run root must be an existing real directory");
-  if ((await fsp.readdir(runRoot)).length !== 0) blocked("run root must be empty");
-  if (!pathInside(runRoot, planPath)) blocked("plan path must be inside the run root");
+  if ((await fsp.readdir(runRoot)).length !== 0)
+    blocked("run root must be empty");
+  if (!pathInside(runRoot, planPath))
+    blocked("plan path must be inside the run root");
 
   const packageBytes = await fsp.readFile(packageManifestPath);
   const packageManifest = validatePackageManifest(
@@ -324,7 +339,7 @@ export async function prepareNativeScreenPlan({
   );
   if (
     fixtureRegistry.schemaVersion !== 2 ||
-    fixtureRegistry.fixtureVersion !== "003-native-capture-v2" ||
+    fixtureRegistry.fixtureVersion !== "003-native-capture-v3" ||
     !Array.isArray(fixtureRegistry.screens)
   ) {
     blocked("fixture registry schema is invalid");
@@ -387,19 +402,24 @@ export async function prepareNativeScreenPlan({
         packageManifest.artifactSha256 ?? packageManifest.packageSha256,
     },
     hf2Manifest: { path: HF2_MANIFEST_PATH, sha256: sha256Bytes(hf2Bytes) },
-    harnessVersion: "003-native-capture-v2",
+    harnessVersion: "003-native-capture-v3",
     normalizationAlgorithm: "lanczos3-srgb-v1",
     isolation: {
       mode: isolationMode,
       root: runRoot,
       expectedAppDataRoot: profilesRoot,
       evidence: path.join(runRoot, "isolation.json"),
+      webkitFilesystemIsolationClaimed: false,
     },
     fixture,
     screens,
   };
   validateCapturePlan(plan);
-  await assertRealPathInside(runRoot, fixture.workspaceRoot, "fixture workspace");
+  await assertRealPathInside(
+    runRoot,
+    fixture.workspaceRoot,
+    "fixture workspace",
+  );
   await assertRealPathInside(runRoot, profilesRoot, "profile root");
   await writeJsonExclusive(planPath, plan);
   return plan;
@@ -407,7 +427,7 @@ export async function prepareNativeScreenPlan({
 
 function usage() {
   console.log(
-    "Usage: pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute.json> --run-root <absolute-empty-dir> --plan <absolute-new.json> --isolation-mode disposable-macos-user|ephemeral-vm|verified-os-home-redirect\nPlan schema: v2. Exit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation.",
+    "Usage: pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute.json> --run-root <absolute-empty-dir> --plan <absolute-new.json> --isolation-mode backend-app-data-home-redirect\nPlan schema: v2. Backend app-data only; WebKit filesystem isolation is not claimed. Exit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation.",
   );
 }
 

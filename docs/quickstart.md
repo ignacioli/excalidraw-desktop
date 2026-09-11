@@ -120,7 +120,7 @@ The browser can cover dialogs, the tree, and the keyboard. Process-level proof o
 
 Step 3's system-tinted title bar and window management are physical macOS evidence. Statically reading `tauri.conf.json` can only check the title string; it does not replace looking at the title bar.
 
-Prepare a native validation run only from an existing empty absolute directory and an exact production-package manifest. Select the real isolation boundary supplied by the operator; preparation does not claim that the OS honored it:
+Prepare a native validation run only from an existing empty absolute directory and an exact production-package manifest. The supported mode redirects backend app data into the run root; it does not claim a separate WKWebView filesystem root:
 
 ```bash
 pnpm native:screen:prepare -- \
@@ -128,14 +128,14 @@ pnpm native:screen:prepare -- \
   --package-manifest <absolute-sealed-package-manifest.json> \
   --run-root <absolute-empty-run-root> \
   --plan <absolute-new-capture-plan.json> \
-  --isolation-mode ephemeral-vm
+  --isolation-mode backend-app-data-home-redirect
 ```
 
-Use `FINAL` for the six-screen final plan. Allowed isolation modes are `disposable-macos-user`, `ephemeral-vm`, and `verified-os-home-redirect`. The command provisions only safely representable repository-declared fixture data, records each screen's `fixture|operator-assisted` preparation mode, creates one distinct profile per screen plus a separate T023b profile, and writes an immutable schema-v2 plan. It does not write private WebKit storage or add a production diagnostic/state channel. Runtime app-data paths must still resolve inside the selected profile or the later collector returns `BLOCKED`.
+Use `FINAL` for the six-screen final plan. `backend-app-data-home-redirect` provisions only safely representable repository-declared fixture data, records each screen's `fixture|operator-assisted` preparation mode, creates one distinct backend-home root per screen plus a separate T023b root, and writes an immutable schema-v2 plan bound to harness v3. Capture must observe Application Support and `excalidraw-desktop.sqlite3` inside that root or return `BLOCKED`. It does not write private WebKit storage or add a production diagnostic/state channel; `isolation.json` records `webkitFilesystemIsolationClaimed: false`, and the harness never reads, prints, backs up, cleans, or directly modifies operator WebKit data.
 
-Run capture and, when it prints `OPERATOR_SETUP_REQUIRED`, use normal application UI to establish the exact printed target within 600 seconds. Those actions are setup only and create no interaction PASS; focused tests and the semantic Playwright collection own that evidence. The collector then prints an exact one-time `CAPTURE <gate-id> <challenge>` line; enter that line in the same terminal to authorize capture timing. It revalidates the same PID/window/bounds/scale and captures once:
+Run capture and, when it prints `OPERATOR_SETUP_REQUIRED`, use normal application UI to establish the exact printed target within 600 seconds. Those actions are setup only and create no interaction PASS; focused tests and the semantic Playwright collection own that evidence. The collector then prints an exact one-time `CAPTURE <gate-id> <challenge>` line. In Codex/non-interactive use, the agent keeps the collector PTY, shows that line to the operator, waits for an explicit `ready`, and forwards it to the same PTY; do not execute it in another shell. The collector revalidates the same PID/window/bounds/scale and captures once.
 
-For VSL-001, the printed checklist asks for the Sidebar at exactly 360 px, the Library panel open, `flows` selected and expanded, and all three drawing rows visible. Sidebar width, expanded directories and Library visibility remain semantic/reviewer facts; the terminal confirmation is not evidence. The plan declares fixed canvas and Library rectangles for native `mask.json`, with the shell perimeter unmasked.
+For VSL-001, the printed checklist asks for the Sidebar at exactly 360 px, `flows` expanded, Architecture/Migration/Research visible, Architecture active and selected, and the Library panel open. Sidebar width, expanded directories, selection and Library visibility remain semantic/reviewer facts; terminal confirmation is not evidence. The plan's conservative canvas mask begins at x=480, after the maximum Sidebar width, and the Library mask remains separate, so a shell-width/perimeter mismatch cannot be concealed.
 
 ```bash
 pnpm native:screen:capture -- \

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { describe, it } from "node:test";
+import fsp from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, it } from "node:test";
 import {
   NativeScreenCaptureError,
   confirmationDigest,
@@ -9,12 +12,23 @@ import {
   createFailureBudget,
   nativeMasksForScreen,
   normalizationArgs,
+  observeBackendIsolation,
   operatorPreparationMessage,
   parseAxWindowObservation,
   readPngDimensions,
   recordValidationAttempt,
   validateRawDimensions,
 } from "./native-screen-capture.mjs";
+
+const roots = [];
+
+afterEach(async () => {
+  await Promise.all(
+    roots
+      .splice(0)
+      .map((root) => fsp.rm(root, { recursive: true, force: true })),
+  );
+});
 
 function png(width, height) {
   const bytes = Buffer.alloc(24);
@@ -33,23 +47,25 @@ const screen = {
     summary: "03 · Workspace · Pinned · Light",
     operatorChecklist: [
       "Sidebar visually at the 360px reference",
-      "flows selected and expanded",
+      "flows expanded",
+      "Architecture active and selected",
       "Library panel visible",
     ],
   },
   nativeMasks: [
     {
       maskId: "sdk-canvas",
-      selectorOrRect: "rect(360,74,626,686)",
+      selectorOrRect: "rect(480,74,506,686)",
       surface: "canvas",
-      reason: "official SDK-owned editor interior below the native titlebar",
+      reason:
+        "conservative official SDK-owned editor interior beginning after the maximum allowed Sidebar width",
       perimeterChecked: true,
       approved: true,
     },
   ],
 };
 
-describe("native screen capture v2", () => {
+describe("native screen capture v3", () => {
   it("reads PNG dimensions and derives only an exact backing scale", () => {
     assert.deepEqual(readPngDimensions(png(2560, 1520)), {
       width: 2560,
@@ -107,11 +123,19 @@ describe("native screen capture v2", () => {
       `CAPTURE VSL-001 ${challenge}`,
     );
     assert.equal(
-      confirmationMatches(`CAPTURE VSL-001 ${challenge}\n`, "VSL-001", challenge),
+      confirmationMatches(
+        `CAPTURE VSL-001 ${challenge}\n`,
+        "VSL-001",
+        challenge,
+      ),
       true,
     );
     assert.equal(
-      confirmationMatches(`CAPTURE VSL-001 ${challenge} extra`, "VSL-001", challenge),
+      confirmationMatches(
+        `CAPTURE VSL-001 ${challenge} extra`,
+        "VSL-001",
+        challenge,
+      ),
       false,
     );
     assert.match(confirmationDigest(challenge), /^[0-9a-f]{64}$/u);
@@ -119,23 +143,59 @@ describe("native screen capture v2", () => {
 
   it("stops the same validation direction after three consecutive failures", () => {
     const budget = createFailureBudget();
-    recordValidationAttempt(budget, "native-screen-capture-v2", "FAIL");
-    recordValidationAttempt(budget, "native-screen-capture-v2", "FAIL");
+    recordValidationAttempt(budget, "native-screen-capture-v3", "FAIL");
+    recordValidationAttempt(budget, "native-screen-capture-v3", "FAIL");
     assert.equal(budget.stopped, false);
-    recordValidationAttempt(budget, "native-screen-capture-v2", "FAIL");
+    recordValidationAttempt(budget, "native-screen-capture-v3", "FAIL");
     assert.equal(budget.stopped, true);
-    recordValidationAttempt(budget, "native-screen-capture-v2", "PASS");
+    recordValidationAttempt(budget, "native-screen-capture-v3", "PASS");
     assert.equal(budget.stopped, true);
   });
 
   it("prints only the visual target and does not project application state", () => {
     const message = operatorPreparationMessage(screen);
     assert.match(message, /VSL-001/u);
-    assert.match(message, /flows selected and expanded/u);
+    assert.match(message, /flows expanded/u);
+    assert.match(message, /Architecture active and selected/u);
     assert.match(message, /Operator actions establish state only/u);
     assert.equal(message.includes("shell-state-v2"), false);
     assert.equal(message.includes("sidebarWidth"), false);
     assert.deepEqual(nativeMasksForScreen(screen), screen.nativeMasks);
+  });
+
+  it("observes backend SQLite without claiming or reporting a WebKit path", async () => {
+    const root = await fsp.mkdtemp(
+      path.join(os.tmpdir(), "capture-isolation-"),
+    );
+    roots.push(root);
+    const profileRoot = path.join(root, "profiles", "VSL-001");
+    const backendRoot = path.join(
+      profileRoot,
+      "Library",
+      "Application Support",
+      "excalidraw-desktop",
+    );
+    await fsp.mkdir(backendRoot, { recursive: true });
+    await fsp.writeFile(
+      path.join(backendRoot, "excalidraw-desktop.sqlite3"),
+      "db",
+    );
+    const record = await observeBackendIsolation({
+      mode: "backend-app-data-home-redirect",
+      declaredRoot: root,
+      expectedAppDataRoot: path.join(root, "profiles"),
+      profileRoot,
+      bundleIdentifier: "excalidraw-desktop",
+    });
+    assert.equal(record.scope, "backend-app-data-only");
+    assert.equal(record.actualBackendPathsObservedByCollector, true);
+    assert.equal(record.webkitFilesystemIsolationClaimed, false);
+    assert.deepEqual(record.observedBackendPersistence, [
+      "excalidraw-desktop.sqlite3",
+    ]);
+    assert.equal("observedWebKitDataRoot" in record, false);
+    assert.equal("actualPathsObservedByCollector" in record, false);
+    assert.equal(JSON.stringify(record).includes("Library/WebKit"), false);
   });
 
   it("exposes fixed help and invalid-invocation exit semantics", () => {
@@ -147,7 +207,11 @@ describe("native screen capture v2", () => {
     assert.equal(help.status, 0);
     assert.match(help.stdout, /CAPTURE <gate-id> <challenge>/u);
     assert.match(help.stdout, /confirmation controls timing only/u);
-    assert.match(help.stdout, /0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation/u);
+    assert.match(help.stdout, /WebKit filesystem isolation is not claimed/u);
+    assert.match(
+      help.stdout,
+      /0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation/u,
+    );
     const invalidRun = spawnSync(
       process.execPath,
       ["scripts/native-screen-capture.mjs"],

@@ -197,6 +197,56 @@ export function nativeMasksForScreen(screen) {
   return screen.nativeMasks;
 }
 
+export async function observeBackendIsolation({
+  mode,
+  declaredRoot,
+  expectedAppDataRoot,
+  profileRoot,
+  bundleIdentifier,
+}) {
+  if (mode !== "backend-app-data-home-redirect")
+    blocked("capture plan does not use the supported backend isolation mode");
+  const resolvedProfileRoot = await fsp.realpath(profileRoot);
+  const declaredBackendAppDataRoot = path.join(
+    resolvedProfileRoot,
+    "Library",
+    "Application Support",
+    bundleIdentifier,
+  );
+  const observedBackendAppDataRoot = await fsp.realpath(
+    declaredBackendAppDataRoot,
+  );
+  const observedDatabasePath = await fsp.realpath(
+    path.join(observedBackendAppDataRoot, "excalidraw-desktop.sqlite3"),
+  );
+  if (
+    !inside(resolvedProfileRoot, observedBackendAppDataRoot) ||
+    !inside(observedBackendAppDataRoot, observedDatabasePath)
+  ) {
+    blocked("observed backend persistence escapes the fresh run-root profile");
+  }
+  return {
+    schemaVersion: 1,
+    mode,
+    scope: "backend-app-data-only",
+    declaredRoot,
+    expectedAppDataRoot,
+    profileRoot: resolvedProfileRoot,
+    resolvedHome: resolvedProfileRoot,
+    observedBackendAppDataRoot,
+    observedBackendPersistence: [path.basename(observedDatabasePath)],
+    actualBackendPathsObservedByCollector: true,
+    webkitFilesystemIsolationClaimed: false,
+    webkitStorageBoundary: {
+      owner: "operator-session-os-managed",
+      collectorAccess: "prohibited",
+      collectorMutation: "prohibited",
+      ordinaryUiPreferencePersistenceIsOperatorControlled: true,
+    },
+    operatorApplicationStateIsNotEvidence: true,
+  };
+}
+
 function run(command, args, label, options = {}) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
@@ -306,7 +356,9 @@ async function waitForExactConfirmation(gateId, challenge, timeoutMs) {
       if (settled) return;
       settled = true;
       reader.close();
-      reject(new NativeScreenCaptureError("terminal confirmation timed out", 2));
+      reject(
+        new NativeScreenCaptureError("terminal confirmation timed out", 2),
+      );
     }, timeoutMs);
     reader.once("line", (line) => {
       if (settled) return;
@@ -314,7 +366,9 @@ async function waitForExactConfirmation(gateId, challenge, timeoutMs) {
       clearTimeout(timeout);
       reader.close();
       if (!confirmationMatches(line, gateId, challenge)) {
-        reject(new NativeScreenCaptureError("terminal confirmation mismatch", 2));
+        reject(
+          new NativeScreenCaptureError("terminal confirmation mismatch", 2),
+        );
         return;
       }
       resolve({
@@ -327,7 +381,9 @@ async function waitForExactConfirmation(gateId, challenge, timeoutMs) {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      reject(new NativeScreenCaptureError("terminal confirmation unavailable", 2));
+      reject(
+        new NativeScreenCaptureError("terminal confirmation unavailable", 2),
+      );
     });
   });
 }
@@ -343,17 +399,24 @@ async function loadInputs(planPath) {
   const ownedPaths = [
     ["fixture manifest", plan.fixture.manifestPath],
     ["fixture workspace", plan.fixture.workspaceRoot],
-    ...plan.screens.map((screen) => [`${screen.gateId} profile`, screen.profileRoot]),
+    ...plan.screens.map((screen) => [
+      `${screen.gateId} profile`,
+      screen.profileRoot,
+    ]),
   ];
   for (const [label, candidate] of ownedPaths) {
     const resolved = await fsp.realpath(candidate);
-    if (!inside(runRoot, resolved)) blocked(`${label} escapes the immutable run root`);
+    if (!inside(runRoot, resolved))
+      blocked(`${label} escapes the immutable run root`);
   }
   if (path.resolve(plan.hf2Manifest.path) !== HF2_MANIFEST_PATH)
     blocked("capture plan does not bind the repository HF-2 manifest");
   const packageBytes = await fsp.readFile(plan.packageManifest.path);
   const packageManifest = JSON.parse(packageBytes.toString("utf8"));
-  if ((await sha256File(plan.packageManifest.path)) !== plan.packageManifest.sha256)
+  if (
+    (await sha256File(plan.packageManifest.path)) !==
+    plan.packageManifest.sha256
+  )
     blocked("sealed package manifest digest changed");
   if ((await sha256File(plan.hf2Manifest.path)) !== plan.hf2Manifest.sha256)
     blocked("HF-2 manifest digest changed");
@@ -378,8 +441,10 @@ async function writeJson(filePath, value) {
 }
 
 async function captureGate({ planPath, inputs, screen, collectionDir }) {
-  if (process.platform !== "darwin") blocked("native screen capture requires macOS");
-  if (!path.isAbsolute(collectionDir)) invalid("collection output must be absolute");
+  if (process.platform !== "darwin")
+    blocked("native screen capture requires macOS");
+  if (!path.isAbsolute(collectionDir))
+    invalid("collection output must be absolute");
   if (!inside(inputs.runRoot, collectionDir))
     blocked("collection output must stay inside the immutable run root");
   await fsp.mkdir(path.dirname(collectionDir), { recursive: true });
@@ -394,6 +459,13 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
     await resizeOwnedWindow(child.pid, windowHelper);
     const before = await waitForStableOwnedWindow(child.pid, windowHelper);
     const backingScaleBefore = readBackingScale();
+    const isolation = await observeBackendIsolation({
+      mode: inputs.plan.isolation.mode,
+      declaredRoot: inputs.plan.isolation.root,
+      expectedAppDataRoot: inputs.plan.isolation.expectedAppDataRoot,
+      profileRoot: screen.profileRoot,
+      bundleIdentifier: inputs.packageManifest.bundleIdentifier,
+    });
     const challenge = crypto.randomBytes(32).toString("hex");
     console.log(operatorPreparationMessage(screen));
     console.log(`Enter exactly: ${confirmationLine(screen.gateId, challenge)}`);
@@ -408,7 +480,9 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
       after.logicalWidth !== 1280 ||
       after.logicalHeight !== 760
     ) {
-      blocked("owned window changed before capture confirmation could be validated");
+      blocked(
+        "owned window changed before capture confirmation could be validated",
+      );
     }
     const backingScaleAfter = readBackingScale();
     if (backingScaleAfter !== backingScaleBefore)
@@ -425,7 +499,8 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
     );
     const rawDimensions = readPngDimensions(await fsp.readFile(rawPath));
     const backingScale = validateRawDimensions(rawDimensions);
-    if (backingScale !== backingScaleAfter) blocked("captured scale does not match display scale");
+    if (backingScale !== backingScaleAfter)
+      blocked("captured scale does not match display scale");
     const actualPath = path.join(collectionDir, "actual.png");
     run(
       "magick",
@@ -436,34 +511,10 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
     if (actualDimensions.width !== 1280 || actualDimensions.height !== 760)
       failed("normalized image is not 1280x760");
 
-    const observedAppDataRoot = path.join(
-      screen.profileRoot,
-      "Library",
-      "Application Support",
-      inputs.packageManifest.bundleIdentifier,
-    );
-    const observedWebKitDataRoot = observedAppDataRoot;
-    if (
-      !inside(screen.profileRoot, observedAppDataRoot) ||
-      !inside(screen.profileRoot, observedWebKitDataRoot)
-    ) {
-      blocked("resolved application data path escapes the isolated profile");
-    }
-    await fsp.access(observedAppDataRoot);
-    const isolation = {
-      schemaVersion: 1,
-      mode: inputs.plan.isolation.mode,
-      declaredRoot: inputs.plan.isolation.root,
-      expectedAppDataRoot: inputs.plan.isolation.expectedAppDataRoot,
-      profileRoot: screen.profileRoot,
-      resolvedHome: screen.profileRoot,
-      observedAppDataRoot,
-      observedWebKitDataRoot,
-      actualPathsObservedByCollector: true,
-      operatorApplicationStateIsNotEvidence: true,
-    };
     await writeJson(path.join(collectionDir, "isolation.json"), isolation);
-    const isolationSha256 = await sha256File(path.join(collectionDir, "isolation.json"));
+    const isolationSha256 = await sha256File(
+      path.join(collectionDir, "isolation.json"),
+    );
     const capturedAt = new Date().toISOString();
     const readiness = {
       schemaVersion: 1,
@@ -486,8 +537,15 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
       rawDimensions,
       capturedAt,
     };
-    await writeJson(path.join(collectionDir, "capture-readiness.json"), readiness);
-    await fsp.writeFile(path.join(collectionDir, "capture-plan.json"), inputs.planBytes, { flag: "wx" });
+    await writeJson(
+      path.join(collectionDir, "capture-readiness.json"),
+      readiness,
+    );
+    await fsp.writeFile(
+      path.join(collectionDir, "capture-plan.json"),
+      inputs.planBytes,
+      { flag: "wx" },
+    );
     await fsp.writeFile(
       path.join(collectionDir, "sealed-package-manifest.json"),
       inputs.packageBytes,
@@ -517,7 +575,7 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
       operatorActionsAreEvidence: false,
       collector: {
         tool: "native-screen-capture",
-        version: "2",
+        version: "3",
         runIdentity: `${inputs.plan.runId}:${screen.gateId}`,
       },
       pid: child.pid,
@@ -575,7 +633,7 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
       },
       collector: {
         tool: "native-screen-capture",
-        version: "2",
+        version: "3",
         runIdentity: `${inputs.plan.runId}:${screen.gateId}`,
       },
       preparationMode: screen.preparationMode,
@@ -602,7 +660,7 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
     await writeJson(path.join(collectionDir, "collector-report.json"), report);
     await fsp.writeFile(
       path.join(collectionDir, "collector-report.md"),
-      `# ${screen.gateId} native capture collection\n\n- Result: **PASS**\n- Schema: \`v2\`\n- Operator confirmation: \`terminal-exact-line\`\n- Operator actions are evidence: \`false\`\n- Owned PID: \`${child.pid}\`\n- Window ID: \`${after.windowId}\`\n- Backing scale: \`${backingScale}\`\n- Capture count: \`${captureCount}\`\n- Normalization: \`lanczos3-srgb-v1\`\n- Application-state claims: none\n- Reviewer verdict: not authored by this collector\n`,
+      `# ${screen.gateId} native capture collection\n\n- Result: **PASS**\n- Schema: \`v2\`\n- Harness: \`003-native-capture-v3\`\n- Backend app-data isolation: \`PASS\`\n- WebKit filesystem isolation claimed: \`false\`\n- Operator confirmation: \`terminal-exact-line\`\n- Operator actions are evidence: \`false\`\n- Owned PID: \`${child.pid}\`\n- Window ID: \`${after.windowId}\`\n- Backing scale: \`${backingScale}\`\n- Capture count: \`${captureCount}\`\n- Normalization: \`lanczos3-srgb-v1\`\n- Application-state claims: none\n- Reviewer verdict: not authored by this collector\n`,
       { encoding: "utf8", flag: "wx" },
     );
     return report;
@@ -638,14 +696,18 @@ export async function captureNativeScreens({
       !path.isAbsolute(collectionRoot ?? "") ||
       (await fsp.lstat(collectionRoot).catch(() => null)) !== null
     ) {
-      invalid("--all-final requires a FINAL plan and a new absolute --collection-root");
+      invalid(
+        "--all-final requires a FINAL plan and a new absolute --collection-root",
+      );
     }
     if (!inside(inputs.runRoot, collectionRoot))
       blocked("collection root must stay inside the immutable run root");
     await fsp.mkdir(collectionRoot);
     const reports = [];
     for (const gateId of FINAL_GATES) {
-      const screen = inputs.plan.screens.find((entry) => entry.gateId === gateId);
+      const screen = inputs.plan.screens.find(
+        (entry) => entry.gateId === gateId,
+      );
       if (!screen) blocked(`FINAL plan is missing ${gateId}`);
       try {
         const report = await captureGate({
@@ -659,12 +721,18 @@ export async function captureNativeScreens({
             `${gateId}-native-capture`,
           ),
         });
-        recordValidationAttempt(budget, "native-screen-capture-v2", report.result);
+        recordValidationAttempt(
+          budget,
+          "native-screen-capture-v3",
+          report.result,
+        );
         reports.push(report);
       } catch (error) {
-        recordValidationAttempt(budget, "native-screen-capture-v2", "FAIL");
+        recordValidationAttempt(budget, "native-screen-capture-v3", "FAIL");
         if (budget.stopped)
-          blocked("three consecutive native capture failures; stop for direction review");
+          blocked(
+            "three consecutive native capture failures; stop for direction review",
+          );
         throw error;
       }
     }
@@ -679,7 +747,7 @@ export async function captureNativeScreens({
 
 function usage() {
   console.log(
-    "Usage:\n  pnpm native:screen:capture -- --plan <absolute-plan> --gate VSL-001 --collection-dir <absolute-new-dir>\n  pnpm native:screen:capture -- --plan <absolute-final-plan> --all-final --collection-root <absolute-new-root>\nEach gate prints the declared visual checklist and one exact CAPTURE <gate-id> <challenge> line; confirmation controls timing only and is not evidence.\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. Capture is owned-window-only; content-GUI automation, full-screen capture, coordinate search and visual repair are prohibited.",
+    "Usage:\n  pnpm native:screen:capture -- --plan <absolute-plan> --gate VSL-001 --collection-dir <absolute-new-dir>\n  pnpm native:screen:capture -- --plan <absolute-final-plan> --all-final --collection-root <absolute-new-root>\nEach gate prints the declared visual checklist and one exact CAPTURE <gate-id> <challenge> line; confirmation controls timing only and is not evidence. In Codex, forward the line to the agent-held collector PTY only after the operator replies ready. Backend app-data is checked inside the run root; WebKit filesystem isolation is not claimed.\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. Capture is owned-window-only; content-GUI automation, full-screen capture, coordinate search and visual repair are prohibited.",
   );
 }
 
@@ -701,7 +769,10 @@ async function main() {
     });
     console.log(
       JSON.stringify(
-        { result: "PASS", collections: reports.map((report) => report.collectionId) },
+        {
+          result: "PASS",
+          collections: reports.map((report) => report.collectionId),
+        },
         null,
         2,
       ),
