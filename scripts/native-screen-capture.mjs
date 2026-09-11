@@ -301,11 +301,16 @@ async function waitForExactConfirmation(gateId, challenge, timeoutMs) {
   const input = process.stdin;
   const reader = readline.createInterface({ input, terminal: false });
   return new Promise((resolve, reject) => {
+    let settled = false;
     const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
       reader.close();
       reject(new NativeScreenCaptureError("terminal confirmation timed out", 2));
     }, timeoutMs);
     reader.once("line", (line) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
       reader.close();
       if (!confirmationMatches(line, gateId, challenge)) {
@@ -319,6 +324,8 @@ async function waitForExactConfirmation(gateId, challenge, timeoutMs) {
       });
     });
     reader.once("close", () => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
       reject(new NativeScreenCaptureError("terminal confirmation unavailable", 2));
     });
