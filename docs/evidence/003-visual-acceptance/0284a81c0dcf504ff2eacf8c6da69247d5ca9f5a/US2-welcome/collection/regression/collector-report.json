@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "US2-welcome-regression",
+  "gateId": "US2-welcome",
+  "route": "deterministic-runtime",
+  "binding": {
+    "productCommit": "0284a81c0dcf504ff2eacf8c6da69247d5ca9f5a",
+    "testSourceDigest": "ad590b897399bb9cbd4f89d30f0ea65fcdca4bd51c3891496855612f0de80acd",
+    "harnessVersion": "vitest@4.1.10"
+  },
+  "collector": {
+    "tool": "phase5-us2-welcome-regression",
+    "version": "1",
+    "runIdentity": "0284a81c0dcf504ff2eacf8c6da69247d5ca9f5a:US2-welcome"
+  },
+  "environment": {
+    "os": "macOS 26.6.2",
+    "architecture": "arm64",
+    "node": "26.7.0",
+    "pnpm": "11.25.0",
+    "vitest": "4.1.10"
+  },
+  "claims": [
+    {
+      "claimId": "US2-welcome-behavior",
+      "factClass": "application-route-outcome",
+      "primaryRoute": "deterministic-runtime",
+      "result": "PASS",
+      "summary": "Welcome is non-persisted; New Drawing stays memory-only; Open Workspace cancellation is a no-op; inaccessible Recent records remain visible with a readable error; every Recent record is retained and only approved fields are rendered with a five-row scroll boundary."
+    },
+    {
+      "claimId": "US2-appearance-startup-parity",
+      "factClass": "webview-semantic",
+      "primaryRoute": "deterministic-runtime",
+      "result": "PASS",
+      "summary": "Appearance persists, System tracks runtime changes, corrupt preferences repair to the safe default, the initial Dark Welcome frame has no observed Light mutation, and all declared HF-2 component geometry variables remain identical across Light and Dark."
+    }
+  ],
+  "commands": [
+    {
+      "command": "pnpm test -- src/app/WelcomeScreen.test.tsx src/app/startupRoute.test.ts src/app/theme/themeController.test.ts src/app/AppShell.test.tsx",
+      "result": "PASS",
+      "summary": "Exact task command exited 0; project run completed 36 files and 276 tests."
+    },
+    {
+      "command": "pnpm exec vitest run src/app/WelcomeScreen.test.tsx src/app/startupRoute.test.ts src/app/theme/themeController.test.ts src/app/AppShell.test.tsx",
+      "result": "PASS",
+      "summary": "Explicit focused run completed the four named files and 50 tests."
+    }
+  ],
+  "sourceDigests": [
+    {
+      "path": "src/app/WelcomeScreen.test.tsx",
+      "sha256": "e772ce1dc559ff5b3398937a812d52ce4098fca53b35ad51c9ff7281ff8ab2c7"
+    },
+    {
+      "path": "src/app/startupRoute.test.ts",
+      "sha256": "21ac41d766cc1d3f6101c94930ccbb210bb594a92fecde52749509eb9d32a15b"
+    },
+    {
+      "path": "src/app/theme/themeController.test.ts",
+      "sha256": "796fb80dbb3f9aa59cfa38278001a33fe026aec1642066506c34128df8dbb41a"
+    },
+    {
+      "path": "src/app/AppShell.test.tsx",
+      "sha256": "0ed5e6231f4ca2923454ac866714a96c7e9c34f2f1c1b4eb09b81620f5e533dd"
+    }
+  ],
+  "scopeExclusions": {
+    "reviewerVerdictsAggregated": false,
+    "visualFidelityClaimed": false,
+    "productionPackageBuiltOrLaunched": false,
+    "nativeEntrypointAcceptanceRun": false,
+    "productOwnerDecisionAuthored": false
+  },
+  "ownerRequirement": "NOT_REQUIRED",
+  "result": "PASS"
+}
