@@ -200,6 +200,7 @@ test.describe("003 shell visual harness", () => {
       page.getByRole("button", { name: /Open workspace/ }),
     ).toHaveCount(3);
     await assertShellContract(page, { session: "empty", sidebar: "hidden" });
+    await assertWelcomeVisualStyles(page, "light");
     const geometryAssertions = await assertWelcomeGeometry(page);
     await captureAndCollect(page, testInfo, {
       captureKey: "welcomeLight",
@@ -316,6 +317,7 @@ test.describe("003 shell visual harness", () => {
       "dark",
     );
     await assertShellContract(page, { session: "empty", sidebar: "hidden" });
+    await assertWelcomeVisualStyles(page, "dark");
     const geometryAssertions = await assertWelcomeGeometry(page);
     await captureAndCollect(page, testInfo, {
       captureKey: "welcomeDark",
@@ -728,6 +730,48 @@ async function assertWelcomeGeometry(
   ];
   expect(assertions.every(({ result }) => result === "PASS")).toBe(true);
   return assertions;
+}
+
+async function assertWelcomeVisualStyles(
+  page: Page,
+  theme: "light" | "dark",
+): Promise<void> {
+  const styles = await page.evaluate(() => {
+    const primaryIcon = document.querySelector<HTMLElement>(
+      ".welcome-action.primary-action img",
+    );
+    const recentRow = document.querySelector<HTMLElement>(
+      ".recent-workspace",
+    );
+    if (primaryIcon === null || recentRow === null) {
+      throw new Error("Welcome visual-style targets are missing");
+    }
+    const iconStyle = getComputedStyle(primaryIcon);
+    const rowStyle = getComputedStyle(recentRow);
+    return {
+      iconFilter: iconStyle.filter,
+      rowBorderStyles: [
+        rowStyle.borderTopStyle,
+        rowStyle.borderRightStyle,
+        rowStyle.borderBottomStyle,
+        rowStyle.borderLeftStyle,
+      ],
+      rowBoxShadow: rowStyle.boxShadow,
+    };
+  });
+  expect(styles.iconFilter).toBe(
+    theme === "light" ? "brightness(0) invert(1)" : "none",
+  );
+  expect(styles.rowBorderStyles).toEqual(["solid", "solid", "solid", "solid"]);
+  expect(styles.rowBoxShadow).toBe("none");
+  const leadingRecent = page.getByRole("button", {
+    name: "Open workspace Architecture",
+  });
+  await leadingRecent.hover();
+  await expect(leadingRecent).toHaveCSS(
+    "background-color",
+    theme === "light" ? "rgb(241, 240, 255)" : "rgb(49, 48, 59)",
+  );
 }
 
 async function assertPinnedWorkspaceHeader(page: Page): Promise<void> {
