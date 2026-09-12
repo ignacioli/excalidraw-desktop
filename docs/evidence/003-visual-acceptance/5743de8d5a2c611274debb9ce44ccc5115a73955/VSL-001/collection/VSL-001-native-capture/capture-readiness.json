@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "runId": "7926d7ef-4d1e-46d9-8a2c-9e9df8c1192e",
+  "pid": 39214,
+  "windowId": 18056,
+  "gateId": "VSL-001",
+  "productCommit": "5743de8d5a2c611274debb9ce44ccc5115a73955",
+  "packageArtifactSha256": "e98afb4c55f2ea373adc2441a30596a2d0e553d1fbd8d9ba11e07d74acfc7e59",
+  "isolationEvidenceRef": "isolation.json",
+  "isolationEvidenceSha256": "7d79979e6d79ee4378760d868d0c302822889a9d4a66bc51811fcfde4b22a16b",
+  "operatorConfirmation": {
+    "mode": "terminal-exact-line",
+    "challengeSha256": "8651ad1de714d9850aecababc66a3ab2f12b2d3c9afc7cf393165c8d933ac6e0",
+    "confirmedAt": "2026-09-12T01:20:58.039Z"
+  },
+  "logicalWindow": {
+    "width": 1280,
+    "height": 760,
+    "frontmost": true,
+    "stableSamples": 2
+  },
+  "backingScale": 2,
+  "rawDimensions": {
+    "width": 2560,
+    "height": 1520
+  },
+  "capturedAt": "2026-09-12T01:20:59.492Z"
+}

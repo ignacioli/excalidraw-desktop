@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "gateId": "VSL-001",
+  "source": "/private/tmp/excalidraw-vsl-native-v6-PjtcZq/VSL-001",
+  "destination": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/5743de8d5a2c611274debb9ce44ccc5115a73955/VSL-001",
+  "sourceTreeSha256": "209a4f6c7649d0af2f9d093dcc53e6a0db3734261c15eb33c3a46afc26d3f5d1",
+  "destinationTreeSha256": "209a4f6c7649d0af2f9d093dcc53e6a0db3734261c15eb33c3a46afc26d3f5d1",
+  "fileCount": 16,
+  "result": "PASS"
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "VSL-001-native-capture",
+  "gateId": "VSL-001",
+  "binding": {
+    "productCommit": "5743de8d5a2c611274debb9ce44ccc5115a73955",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "940c189275e84902aab4eeb786e402d62b22c078ecbb473a582f3d8ab147a765",
+    "harnessVersion": "003-native-capture-v4",
+    "packageArtifactSha256": "e98afb4c55f2ea373adc2441a30596a2d0e553d1fbd8d9ba11e07d74acfc7e59"
+  },
+  "masks": [
+    {
+      "maskId": "sdk-canvas",
+      "selectorOrRect": "rect(480,74,506,686)",
+      "surface": "canvas",
+      "reason": "conservative official SDK-owned editor interior beginning after the maximum allowed Sidebar width",
+      "perimeterChecked": true,
+      "approved": true
+    },
+    {
+      "maskId": "sdk-library",
+      "selectorOrRect": "rect(986,74,294,686)",
+      "surface": "library",
+      "reason": "official SDK-owned Library interior below the native titlebar",
+      "perimeterChecked": true,
+      "approved": true
+    }
+  ]
+}

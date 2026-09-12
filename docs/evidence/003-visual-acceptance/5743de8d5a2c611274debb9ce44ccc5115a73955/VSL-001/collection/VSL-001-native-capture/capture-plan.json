@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 2,
+  "checkpoint": "VSL",
+  "runId": "7926d7ef-4d1e-46d9-8a2c-9e9df8c1192e",
+  "productCommit": "5743de8d5a2c611274debb9ce44ccc5115a73955",
+  "packageManifest": {
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/src-tauri/target/native-validation/5743de8d5a2c611274debb9ce44ccc5115a73955/manifest.json",
+    "sha256": "000307bdcb3df831bbb2a56bbe97d14caede321c2fdb6339fc29d441cb9a2820",
+    "artifactSha256": "e98afb4c55f2ea373adc2441a30596a2d0e553d1fbd8d9ba11e07d74acfc7e59"
+  },
+  "hf2Manifest": {
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/design/desktop-shell/hf-2/manifest.json",
+    "sha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1"
+  },
+  "semanticEvidence": {
+    "collectorReportPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/e2e/test-results/tests-ui-desktop-shell-vis-976ec-t-with-exact-shell-geometry-browser-ui/immutable/VSL-001/collection/VSL-001-light-pinned-browser/collector-report.json",
+    "collectorReportSha256": "bd2b2f2da801cfb8e9ac57dbb2ea8c5bbbe6e79d5453ff265dfeeaf7aafbb8a0",
+    "collectionId": "VSL-001-light-pinned-browser",
+    "collectionDigest": "beb9ea5a4f33d357031e8e8c300af1fb043bd2bb056cef9ebca51ab89b356b59",
+    "productCommit": "5743de8d5a2c611274debb9ce44ccc5115a73955",
+    "harnessVersion": "003-shell-v2",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1"
+  },
+  "harnessVersion": "003-native-capture-v4",
+  "normalizationAlgorithm": "lanczos3-srgb-v1",
+  "isolation": {
+    "mode": "backend-app-data-home-redirect",
+    "root": "/private/tmp/excalidraw-vsl-native-v6-PjtcZq",
+    "expectedAppDataRoot": "/private/tmp/excalidraw-vsl-native-v6-PjtcZq/profiles",
+    "evidence": "/private/tmp/excalidraw-vsl-native-v6-PjtcZq/isolation.json",
+    "webkitFilesystemIsolationClaimed": false
+  },
+  "fixture": {
+    "id": "003-native-capture-v4",
+    "manifestPath": "/private/tmp/excalidraw-vsl-native-v6-PjtcZq/fixture/fixture-manifest.json",
+    "digest": "940c189275e84902aab4eeb786e402d62b22c078ecbb473a582f3d8ab147a765",
+    "workspaceRoot": "/private/tmp/excalidraw-vsl-native-v6-PjtcZq/fixture/Design Workspace"
+  },
+  "screens": [
+    {
+      "gateId": "VSL-001",
+      "profileRoot": "/private/tmp/excalidraw-vsl-native-v6-PjtcZq/profiles/VSL-001",
+      "preparationMode": "operator-assisted",
+      "manifestName": "03 · Workspace · Pinned · Light",
+      "baselinePath": "screens/workspace-pinned-light.png",
+      "baselineSha256": "5bfbd5dba0363271192309594304a2291166a65bf91df5c2effb5550e961829a",
+      "visualTarget": {
+        "summary": "03 · Workspace · Pinned · Light",
+        "operatorChecklist": [
+          "Establish the declared 03 · Workspace · Pinned · Light composition through ordinary UI",
+          "Sidebar visually at the 360px reference",
+          "flows expanded",
+          "Architecture/Migration/Research visible",
+          "Architecture active and selected",
+          "Library panel visible"
+        ]
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [
+        {
+          "maskId": "sdk-canvas",
+          "selectorOrRect": "rect(480,74,506,686)",
+          "surface": "canvas",
+          "reason": "conservative official SDK-owned editor interior beginning after the maximum allowed Sidebar width",
+          "perimeterChecked": true,
+          "approved": true
+        },
+        {
+          "maskId": "sdk-library",
+          "selectorOrRect": "rect(986,74,294,686)",
+          "surface": "library",
+          "reason": "official SDK-owned Library interior below the native titlebar",
+          "perimeterChecked": true,
+          "approved": true
+        }
+      ],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    }
+  ]
+}
