@@ -996,6 +996,11 @@ export function WorkspacePanel({
               <img
                 alt=""
                 aria-hidden="true"
+                className={
+                  allCurrentDirectoriesExpanded
+                    ? "workspace-panel-collapse-all-icon"
+                    : undefined
+                }
                 src={
                   allCurrentDirectoriesExpanded
                     ? collapseAllIcon

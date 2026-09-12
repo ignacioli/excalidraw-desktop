@@ -247,10 +247,13 @@ describe("WorkspacePanel", () => {
     );
 
     const expandAll = await screen.findByRole("button", { name: "Expand all" });
+    expect(expandAll.querySelector("img")).not.toHaveClass(
+      "workspace-panel-collapse-all-icon",
+    );
     await user.click(expandAll);
     expect(
-      screen.getByRole("button", { name: "Collapse all" }),
-    ).toBeInTheDocument();
+      screen.getByRole("button", { name: "Collapse all" }).querySelector("img"),
+    ).toHaveClass("workspace-panel-collapse-all-icon");
     await user.click(screen.getByRole("button", { name: "Refresh" }));
     expect(invoker.invoke).toHaveBeenCalledWith("workspace_entry_list", {
       workspaceId: "workspace-1",

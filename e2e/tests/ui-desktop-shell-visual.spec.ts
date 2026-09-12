@@ -718,6 +718,23 @@ async function assertPinnedWorkspaceHeader(page: Page): Promise<void> {
 async function assertDefaultWorkspaceRowState(page: Page): Promise<void> {
   await expect(page.locator(".workspace-tree")).not.toBeFocused();
   await expect(page.locator(".workspace-tree-action").first()).toBeHidden();
+
+  const activeRow = page.locator('.workspace-tree-row[aria-selected="true"]');
+  const inactiveRow = page.locator(
+    '.workspace-tree-row:not([aria-selected="true"])[data-kind="drawing"]',
+  );
+  await expect(activeRow).toHaveCount(1);
+  await expect(inactiveRow.first()).toBeVisible();
+  const [activeIconX, inactiveIconX] = await Promise.all([
+    activeRow
+      .locator('[data-slot="workspace-tree-icon"]')
+      .evaluate((icon) => icon.getBoundingClientRect().x),
+    inactiveRow
+      .first()
+      .locator('[data-slot="workspace-tree-icon"]')
+      .evaluate((icon) => icon.getBoundingClientRect().x),
+  ]);
+  expect(activeIconX).toBe(inactiveIconX);
 }
 
 async function assertUnicodeFallback(
