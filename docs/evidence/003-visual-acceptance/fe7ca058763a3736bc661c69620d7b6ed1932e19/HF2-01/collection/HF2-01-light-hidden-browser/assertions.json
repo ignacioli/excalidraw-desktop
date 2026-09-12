@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "legacyCounts": {
+    "globalNewDrawing": 0,
+    "textSidebar": 0,
+    "largePinUnpin": 0,
+    "topLevelSaveExportAppearance": 0,
+    "autosaveStrip": 0,
+    "tabScrollbar": 0,
+    "sidebarScrollbar": 0,
+    "placeholderIcons": 0,
+    "horizontalEllipsis": 0,
+    "duplicateWorkspaceRoots": 0,
+    "headerActionOverflow": 0
+  },
+  "legacyAssertions": [
+    {
+      "name": "legacy.globalNewDrawing",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.textSidebar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.largePinUnpin",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.topLevelSaveExportAppearance",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.autosaveStrip",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.tabScrollbar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.sidebarScrollbar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.placeholderIcons",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.horizontalEllipsis",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.duplicateWorkspaceRoots",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.headerActionOverflow",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    }
+  ],
+  "geometryAssertions": [
+    {
+      "name": "geometry.welcome.screen-width",
+      "expected": "960",
+      "actual": "960",
+      "tolerance": "2px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.welcome.content-left",
+      "expected": "160",
+      "actual": "160",
+      "tolerance": "2px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.welcome.action-width",
+      "expected": "220",
+      "actual": "220",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.welcome.action-height",
+      "expected": "40",
+      "actual": "40",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.welcome.recent-width",
+      "expected": "760",
+      "actual": "760",
+      "tolerance": "2px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.welcome.recent-row-height",
+      "expected": "52",
+      "actual": "52",
+      "tolerance": "0px",
+      "result": "PASS"
+    }
+  ],
+  "tokenAssertions": [
+    {
+      "name": "token.--app-background",
+      "expected": "#F8F9FA",
+      "actual": "#F8F9FA",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--panel-background",
+      "expected": "#FFFFFF",
+      "actual": "#FFFFFF",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--surface-hover",
+      "expected": "#F1F0FF",
+      "actual": "#F1F0FF",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--text-primary",
+      "expected": "#1B1B1F",
+      "actual": "#1B1B1F",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--text-secondary",
+      "expected": "#5C5C5C",
+      "actual": "#5C5C5C",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--focus-ring",
+      "expected": "#1C7ED6",
+      "actual": "#1C7ED6",
+      "tolerance": "exact",
+      "result": "PASS"
+    }
+  ],
+  "cropComparisons": [
+    {
+      "componentId": "welcome-screen",
+      "baselineComponentId": "welcome-screen",
+      "baselineSha256": "22215093ff160294380fab60280b92dbd8949d092c5a2baff690812f0c81b301",
+      "actualSha256": "22215093ff160294380fab60280b92dbd8949d092c5a2baff690812f0c81b301",
+      "fontReady": true,
+      "maxDiffPixelRatio": 0
+    }
+  ],
+  "cropAssertions": [
+    {
+      "name": "component-crop-binding.welcome-screen",
+      "expected": "same semantic component; fonts ready; valid digests; diff <=0.01",
+      "actual": "baseline=welcome-screen; fontReady=true; diff=0",
+      "tolerance": "auxiliary; component crop only",
+      "result": "PASS"
+    }
+  ]
+}

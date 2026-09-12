@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "HF2-01-light-hidden-browser",
+  "gateId": "HF2-01",
+  "binding": {
+    "productCommit": "fe7ca058763a3736bc661c69620d7b6ed1932e19",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "95f174c296ab15badb8fab680f251b6ce6973c407f8937bcfe6fc56e6bc9c689",
+    "harnessVersion": "003-shell-v2"
+  },
+  "masks": []
+}
