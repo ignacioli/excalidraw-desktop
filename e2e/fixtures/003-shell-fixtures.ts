@@ -9,6 +9,7 @@ export type ShellMode = "empty" | "restored";
 export type SidebarMode = "hidden" | "overlay" | "pinned";
 export type FixtureId =
   | "empty"
+  | "welcome"
   | "restored"
   | "pinned"
   | "overlay"
@@ -65,6 +66,27 @@ const WORKSPACE: ShellFixtureWorkspace = {
   rootPath: "/fixtures/design-workspace",
   createdAt: 1_700_000_000,
 };
+
+const WELCOME_WORKSPACES: readonly ShellFixtureWorkspace[] = [
+  {
+    id: "fixture-recent-architecture",
+    name: "Architecture",
+    rootPath: "/fixtures/Documents/Architecture",
+    createdAt: 1_700_000_032,
+  },
+  {
+    id: "fixture-recent-product-flows",
+    name: "Product flows",
+    rootPath: "/fixtures/Work/Product/Flows",
+    createdAt: 1_700_000_031,
+  },
+  {
+    id: "fixture-recent-research",
+    name: "Research",
+    rootPath: "/fixtures/Documents/Research",
+    createdAt: 1_700_000_030,
+  },
+];
 
 /** Stable Unicode fallback probe used by browser-visible visual checks. */
 export const UNICODE_WORKSPACE: ShellFixtureWorkspace = {
@@ -237,6 +259,12 @@ export const EMPTY_SHELL_FIXTURE: ShellFixture = {
   tabs: [],
 };
 
+export const WELCOME_SHELL_FIXTURE: ShellFixture = {
+  ...EMPTY_SHELL_FIXTURE,
+  id: "welcome",
+  workspaces: WELCOME_WORKSPACES,
+};
+
 export const RESTORED_SHELL_FIXTURE: ShellFixture = {
   id: "restored",
   shell: "restored",
@@ -311,6 +339,7 @@ export const UNICODE_PINNED_SHELL_FIXTURE: ShellFixture = {
 
 export const SHELL_FIXTURES: readonly ShellFixture[] = [
   EMPTY_SHELL_FIXTURE,
+  WELCOME_SHELL_FIXTURE,
   RESTORED_SHELL_FIXTURE,
   PINNED_SHELL_FIXTURE,
   OVERLAY_SHELL_FIXTURE,

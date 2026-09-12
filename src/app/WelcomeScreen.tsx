@@ -1,5 +1,5 @@
 import newDrawingIcon from "../../docs/design/desktop-shell/hf-2/icons/new-drawing.svg";
-import sidebarIcon from "../../docs/design/desktop-shell/hf-2/icons/sidebar.svg";
+import folderIcon from "../assets/folder.svg";
 import type { Workspace } from "../ipc/contracts";
 
 export interface WelcomeScreenProps {
@@ -32,9 +32,10 @@ export function WelcomeScreen({
     >
       <div className="welcome-content">
         <p className="welcome-eyebrow">Excalidraw Desktop</p>
-        <h1 id="welcome-title">Welcome</h1>
+        <h1 id="welcome-title">Draw locally. Keep every workspace close.</h1>
         <p className="welcome-description">
-          Start a drawing or open a workspace to continue.
+          Open an existing workspace or start a drawing. Your files stay local,
+          recoverable, and ready across sessions.
         </p>
         <div aria-busy={busy || undefined} className="welcome-actions">
           <button
@@ -52,7 +53,7 @@ export function WelcomeScreen({
             onClick={() => void onOpenWorkspace()}
             type="button"
           >
-            <img alt="" aria-hidden="true" src={sidebarIcon} />
+            <img alt="" aria-hidden="true" src={folderIcon} />
             Open Workspace
           </button>
         </div>
@@ -68,7 +69,13 @@ export function WelcomeScreen({
           className="recent-workspaces"
         >
           <h2 id="recent-workspaces-title">Recent Workspaces</h2>
-          <ul>
+          <p className="recent-workspaces-description">
+            Continue where you left off
+          </p>
+          <ul
+            aria-label="Recent Workspaces"
+            className="recent-workspace-list"
+          >
             {recentWorkspaces.map((workspace) => (
               <li key={workspace.id}>
                 <button
@@ -78,6 +85,7 @@ export function WelcomeScreen({
                   onClick={() => void onOpenRecentWorkspace(workspace)}
                   type="button"
                 >
+                  <img alt="" aria-hidden="true" src={folderIcon} />
                   <span className="recent-workspace-name">
                     {workspace.name}
                   </span>
@@ -90,6 +98,10 @@ export function WelcomeScreen({
           </ul>
         </section>
       ) : null}
+      <p className="welcome-session-note">
+        No recoverable session · Welcome is a document state, not an extra
+        permanent tab.
+      </p>
     </section>
   );
 }

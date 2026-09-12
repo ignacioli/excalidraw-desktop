@@ -379,7 +379,7 @@ export function AppShell({
         const validIds = new Set(items.map((workspace) => workspace.id));
         const nextCurrentWorkspaceId = preferences.resolveCurrentWorkspaceId(
           validIds,
-          items[0]?.id ?? null,
+          null,
         );
         const nextWorkspace = items.find(
           (workspace) => workspace.id === nextCurrentWorkspaceId,
@@ -815,7 +815,14 @@ export function AppShell({
           ) : null}
         </aside>
 
-        <main className="canvas-region" aria-label="Drawing canvas">
+        <main
+          aria-label="Drawing canvas"
+          className={
+            showWelcome
+              ? "canvas-region canvas-region--welcome"
+              : "canvas-region"
+          }
+        >
           {showWelcome ? (
             <WelcomeScreen
               busy={welcomeBusy}

@@ -3,20 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { WelcomeScreen } from "./WelcomeScreen";
 
-const workspaces = [
-  {
-    id: "old",
-    name: "Older",
-    rootPath: "/workspace/older",
-    createdAt: 1,
-  },
-  {
-    id: "new",
-    name: "Newer",
-    rootPath: "/workspace/newer",
-    createdAt: 2,
-  },
-];
+const workspaces = Array.from({ length: 6 }, (_, index) => ({
+  id: `workspace-${index + 1}`,
+  name: `Workspace ${index + 1}`,
+  rootPath: `/workspace/${index + 1}`,
+  createdAt: index + 1,
+}));
 
 describe("WelcomeScreen", () => {
   it("shows Welcome actions and no fabricated Recent Workspace", () => {
@@ -30,7 +22,9 @@ describe("WelcomeScreen", () => {
     );
 
     expect(
-      screen.getByRole("heading", { name: "Welcome" }),
+      screen.getByRole("heading", {
+        name: "Draw locally. Keep every workspace close.",
+      }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "New Drawing" }),
@@ -41,7 +35,7 @@ describe("WelcomeScreen", () => {
     expect(screen.queryByText("Recent Workspaces")).not.toBeInTheDocument();
   });
 
-  it("invokes actions without making cancellation a mutation", async () => {
+  it("delegates New Drawing without opening a workspace or persistence UI", async () => {
     const user = userEvent.setup();
     const onNewDrawing = vi.fn();
     const onOpenWorkspace = vi.fn();
@@ -54,12 +48,34 @@ describe("WelcomeScreen", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Open Workspace" }));
-    expect(onOpenWorkspace).toHaveBeenCalledOnce();
-    expect(onNewDrawing).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "New Drawing" }));
+    expect(onNewDrawing).toHaveBeenCalledOnce();
+    expect(onOpenWorkspace).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("sorts Recent Workspaces by createdAt and exposes only name and path", async () => {
+  it("keeps Welcome unchanged when Open Workspace is cancelled", async () => {
+    const user = userEvent.setup();
+    const onOpenWorkspace = vi.fn(async () => undefined);
+    render(
+      <WelcomeScreen
+        workspaces={workspaces}
+        onNewDrawing={vi.fn()}
+        onOpenRecentWorkspace={vi.fn()}
+        onOpenWorkspace={onOpenWorkspace}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open Workspace" }));
+
+    expect(onOpenWorkspace).toHaveBeenCalledOnce();
+    expect(screen.getAllByRole("button", { name: /Open workspace/ })).toHaveLength(
+      6,
+    );
+    expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
+  });
+
+  it("sorts and retains every Recent Workspace while exposing approved fields only", async () => {
     const user = userEvent.setup();
     const onOpenRecentWorkspace = vi.fn();
     render(
@@ -72,11 +88,41 @@ describe("WelcomeScreen", () => {
     );
 
     const rows = screen.getAllByRole("button", { name: /Open workspace/ });
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toHaveTextContent("Newer");
-    expect(rows[0]).toHaveTextContent("/workspace/newer");
+    expect(rows).toHaveLength(6);
+    expect(rows[0]).toHaveTextContent("Workspace 6");
+    expect(rows[0]).toHaveTextContent("/workspace/6");
     expect(rows[0]).not.toHaveTextContent("drawings");
+    expect(rows[0]).not.toHaveTextContent("opened");
+    expect(screen.getByRole("list", { name: "Recent Workspaces" })).toHaveClass(
+      "recent-workspace-list",
+    );
     await user.click(rows[0]);
-    expect(onOpenRecentWorkspace).toHaveBeenCalledWith(workspaces[1]);
+    expect(onOpenRecentWorkspace).toHaveBeenCalledWith(workspaces[5]);
+  });
+
+  it("preserves an inaccessible Recent row while presenting its readable error", async () => {
+    const user = userEvent.setup();
+    const onOpenRecentWorkspace = vi.fn();
+    render(
+      <WelcomeScreen
+        error="Workspace is no longer accessible."
+        workspaces={[workspaces[0]]}
+        onNewDrawing={vi.fn()}
+        onOpenRecentWorkspace={onOpenRecentWorkspace}
+        onOpenWorkspace={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Open workspace Workspace 1" }),
+    );
+
+    expect(onOpenRecentWorkspace).toHaveBeenCalledWith(workspaces[0]);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Workspace is no longer accessible.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Open workspace Workspace 1" }),
+    ).toBeInTheDocument();
   });
 });

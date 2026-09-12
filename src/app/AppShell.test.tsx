@@ -244,6 +244,93 @@ describe("AppShell", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps New Drawing memory-only and avoids workspace persistence", async () => {
+    const user = userEvent.setup();
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("workspace_list", {}),
+    );
+    await user.click(screen.getByRole("button", { name: "New Drawing" }));
+
+    const activeDocumentId = documentManager.store.getState().activeDocumentId;
+    expect(activeDocumentId).not.toBeNull();
+    expect(
+      documentManager.store.getState().sessionsById[activeDocumentId ?? ""],
+    ).toMatchObject({ path: "", title: "Untitled", saveState: "dirty" });
+    expect(invoke).not.toHaveBeenCalledWith("workspace_add", expect.anything());
+  });
+
+  it("keeps Welcome and workspace records unchanged when Open Workspace is cancelled", async () => {
+    const user = userEvent.setup();
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(
+      <AppShell
+        selectWorkspaceDirectory={async () => null}
+        workspaceInvoker={{ invoke }}
+      />,
+    );
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("workspace_list", {}),
+    );
+    await user.click(screen.getByRole("button", { name: "Open Workspace" }));
+
+    expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith("workspace_add", expect.anything());
+    expect(documentManager.store.getState().sessionsById).toEqual({});
+  });
+
+  it("keeps an inaccessible Recent Workspace and exposes a readable error", async () => {
+    const user = userEvent.setup();
+    const workspace = {
+      id: "workspace-missing",
+      name: "Missing workspace",
+      rootPath: "/workspace/missing",
+      createdAt: 1,
+    };
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [workspace];
+      if (command === "workspace_entry_list") {
+        throw new Error("Workspace is no longer accessible.");
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("workspace_list", {}),
+    );
+    const recent = await screen.findByRole("button", {
+      name: "Open workspace Missing workspace",
+    });
+    await user.click(recent);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Workspace is no longer accessible.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Open workspace Missing workspace" }),
+    ).toBeInTheDocument();
+    expect(documentManager.store.getState().sessionsById).toEqual({});
+  });
+
   it("exposes active and dirty tab state without relying on color", async () => {
     const user = userEvent.setup();
     setDocumentSessions([

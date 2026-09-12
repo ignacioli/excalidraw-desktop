@@ -968,35 +968,38 @@ body {
 }
 
 .welcome-screen {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem);
-  gap: clamp(var(--space-6), 8vw, 7rem);
-  width: min(70rem, 100%);
-  margin: auto;
-  padding: clamp(var(--space-6), 8vw, 7rem);
+  display: flex;
+  width: min(60rem, 100%);
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  margin: 0 auto;
+  padding: clamp(4.375rem, 14vh, 6.875rem) 0 3.5rem;
 }
 
 .welcome-content {
-  align-self: center;
-  max-width: 34rem;
+  width: min(47.5rem, 100%);
 }
 
 .welcome-eyebrow {
-  margin: 0 0 var(--space-2);
-  color: var(--text-secondary);
+  margin: 0 0 var(--space-3);
+  color: var(--accent);
   font-size: var(--font-size-label, 12px);
+  font-weight: var(--font-weight-semibold, 600);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .welcome-content h1 {
   margin: 0;
-  font-size: var(--font-size-title, 28px);
+  font-size: 2.125rem;
   font-weight: var(--font-weight-semibold, 600);
+  letter-spacing: -0.035em;
+  line-height: 1.18;
 }
 
 .welcome-description {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-4) 0 0;
   color: var(--text-secondary);
   font-size: var(--font-size-body, 14px);
 }
@@ -1004,24 +1007,32 @@ body {
 .welcome-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-6);
+  gap: var(--space-4);
+  margin-top: 3.25rem;
 }
 
 .welcome-action {
+  appearance: none;
   display: inline-flex;
   width: min(var(--welcome-action-reference-width, 220px), 100%);
   min-height: var(--welcome-action-height, 40px);
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--space-2);
   border-width: var(--welcome-action-border-width, var(--border-default));
   border-radius: var(--welcome-action-radius, var(--radius-control));
+  padding-inline: var(--space-4);
+  font-weight: var(--font-weight-medium, 500);
 }
 
 .welcome-action img {
   width: var(--welcome-action-icon-size, var(--icon-size));
   height: var(--welcome-action-icon-size, var(--icon-size));
+}
+
+[data-color-scheme="dark"] .welcome-action img,
+[data-color-scheme="dark"] .recent-workspace img {
+  filter: invert(1);
 }
 
 .welcome-error {
@@ -1030,37 +1041,58 @@ body {
 }
 
 .recent-workspaces {
-  align-self: center;
+  width: min(47.5rem, 100%);
   min-width: 0;
+  margin-top: 3.25rem;
 }
 
 .recent-workspaces h2 {
-  margin: 0 0 var(--space-2);
-  font-size: var(--font-size-label, 12px);
+  margin: 0;
+  font-size: var(--font-size-section, 20px);
   font-weight: var(--font-weight-semibold, 600);
 }
 
-.recent-workspaces ul {
+.recent-workspaces-description {
+  margin: var(--space-1) 0 var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--font-size-label, 12px);
+}
+
+.recent-workspace-list {
   display: grid;
-  gap: var(--space-2);
+  max-height: 19rem;
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
+  overflow-y: auto;
   list-style: none;
 }
 
 .recent-workspace {
+  appearance: none;
   display: grid;
+  grid-template-columns: var(--icon-size) minmax(10rem, 16rem) minmax(0, 1fr);
   width: 100%;
-  min-height: 3.5rem;
-  gap: var(--space-1);
-  justify-items: start;
+  min-height: 3.25rem;
+  align-items: center;
+  gap: var(--space-4);
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-panel);
+  padding: 0 var(--space-4);
+  background: var(--panel-background);
   text-align: start;
+}
+
+.recent-workspace img {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  opacity: 0.72;
 }
 
 .recent-workspace-name {
   overflow: hidden;
   max-width: 100%;
-  font-weight: var(--font-weight-semibold, 600);
+  font-weight: var(--font-weight-medium, 500);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1069,10 +1101,15 @@ body {
   overflow: hidden;
   max-width: 100%;
   color: var(--text-secondary);
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: var(--font-size-label, 12px);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.welcome-session-note {
+  margin: auto 0 0;
+  color: var(--text-disabled);
+  font-size: var(--font-size-micro, 11px);
 }
 
 .canvas-region {
@@ -1081,6 +1118,10 @@ body {
   min-height: 0;
   overflow: hidden;
   background: var(--canvas-background);
+}
+
+.canvas-region--welcome {
+  background: var(--app-background);
 }
 
 .canvas-document,
@@ -1144,8 +1185,14 @@ body {
   }
 
   .welcome-screen {
-    grid-template-columns: 1fr;
-    gap: var(--space-6);
     padding: var(--space-6);
+  }
+
+  .recent-workspace {
+    grid-template-columns: var(--icon-size) minmax(0, 1fr);
+  }
+
+  .recent-workspace-path {
+    grid-column: 2;
   }
 }

@@ -37,7 +37,20 @@ const abnormalExitFixture: StartupRouteInput = {
 
 describe("deriveStartupRoute", () => {
   it("routes an empty startup to Welcome", () => {
-    expect(deriveStartupRoute(emptyFixture)).toEqual({ kind: "welcome" });
+    const input = structuredClone(emptyFixture);
+
+    expect(deriveStartupRoute(input)).toEqual({ kind: "welcome" });
+    expect(input).toEqual(emptyFixture);
+    expect(Object.keys(deriveStartupRoute(input))).toEqual(["kind"]);
+  });
+
+  it("does not restore Welcome as a persisted document or tab", () => {
+    expect(
+      deriveStartupRoute({
+        ...emptyFixture,
+        workspaces: [{ id: "recent-only" }],
+      }),
+    ).toEqual({ kind: "welcome" });
   });
 
   it("routes a clean session to Restored", () => {

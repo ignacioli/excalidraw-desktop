@@ -193,17 +193,23 @@ test.describe("003 shell visual harness", () => {
   test("captures Welcome / Light at the fixed 1280x760 viewport", async ({
     page,
   }, testInfo) => {
-    await prepare(page, getShellFixture("empty"), "light");
+    const fixture = getShellFixture("welcome");
+    await prepare(page, fixture, "light");
     await expect(page.getByTestId("welcome-screen")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Open workspace/ }),
+    ).toHaveCount(3);
     await assertShellContract(page, { session: "empty", sidebar: "hidden" });
+    const geometryAssertions = await assertWelcomeGeometry(page);
     await captureAndCollect(page, testInfo, {
       captureKey: "welcomeLight",
-      fixture: getShellFixture("empty"),
+      fixture,
       theme: "light",
       sidebar: "hidden",
       session: "empty",
       cropLocator: page.locator(".welcome-screen"),
       componentId: "welcome-screen",
+      geometryAssertions,
     });
   });
 
@@ -302,21 +308,24 @@ test.describe("003 shell visual harness", () => {
   test("captures Welcome / Dark with the same shell geometry", async ({
     page,
   }, testInfo) => {
-    await prepare(page, getShellFixture("empty"), "dark");
+    const fixture = getShellFixture("welcome");
+    await prepare(page, fixture, "dark");
     await expect(page.getByTestId("welcome-screen")).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute(
       "data-color-scheme",
       "dark",
     );
     await assertShellContract(page, { session: "empty", sidebar: "hidden" });
+    const geometryAssertions = await assertWelcomeGeometry(page);
     await captureAndCollect(page, testInfo, {
       captureKey: "welcomeDark",
-      fixture: getShellFixture("empty"),
+      fixture,
       theme: "dark",
       sidebar: "hidden",
       session: "empty",
       cropLocator: page.locator(".welcome-screen"),
       componentId: "welcome-screen",
+      geometryAssertions,
     });
   });
 
@@ -669,6 +678,55 @@ async function assertGeometrySet(
   });
   expect(canvasShare).toBeGreaterThanOrEqual(0.7);
   assertions.push(canvasShareAssertion);
+  return assertions;
+}
+
+async function assertWelcomeGeometry(
+  page: Page,
+): Promise<ReturnType<typeof assertGeometry>[]> {
+  const screenBox = await readBox(page.getByTestId("welcome-screen"));
+  const actionBox = await readBox(page.locator(".welcome-action").first());
+  const recentBox = await readBox(page.locator(".recent-workspaces"));
+  const rowBox = await readBox(page.locator(".recent-workspace").first());
+  const assertions = [
+    assertGeometry({
+      name: "welcome.screen-width",
+      expected: 960,
+      actual: screenBox.width,
+      tolerance: GEOMETRY_TOLERANCE_PX,
+    }),
+    assertGeometry({
+      name: "welcome.content-left",
+      expected: 160,
+      actual: screenBox.x,
+      tolerance: GEOMETRY_TOLERANCE_PX,
+    }),
+    assertGeometry({
+      name: "welcome.action-width",
+      expected: 220,
+      actual: actionBox.width,
+      tolerance: 0,
+    }),
+    assertGeometry({
+      name: "welcome.action-height",
+      expected: 40,
+      actual: actionBox.height,
+      tolerance: 0,
+    }),
+    assertGeometry({
+      name: "welcome.recent-width",
+      expected: 760,
+      actual: recentBox.width,
+      tolerance: GEOMETRY_TOLERANCE_PX,
+    }),
+    assertGeometry({
+      name: "welcome.recent-row-height",
+      expected: 52,
+      actual: rowBox.height,
+      tolerance: 0,
+    }),
+  ];
+  expect(assertions.every(({ result }) => result === "PASS")).toBe(true);
   return assertions;
 }
 
