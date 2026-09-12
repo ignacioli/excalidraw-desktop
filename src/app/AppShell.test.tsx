@@ -396,6 +396,29 @@ describe("AppShell", () => {
     expect(save).toHaveBeenCalledWith("manualSave");
   });
 
+  it("renders the first Welcome frame in the restored Dark scheme without a Light mutation", () => {
+    const controller = initializeBrowserThemeController();
+    controller.setModePreference("dark");
+    const observedSchemes: Array<string | undefined> = [];
+    const observer = new MutationObserver(() => {
+      observedSchemes.push(document.documentElement.dataset.colorScheme);
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-color-scheme"],
+    });
+
+    render(<AppShell themeController={controller} />);
+    observer.takeRecords().forEach(() => {
+      observedSchemes.push(document.documentElement.dataset.colorScheme);
+    });
+    observer.disconnect();
+
+    expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
+    expect(document.documentElement.dataset.colorScheme).toBe("dark");
+    expect(observedSchemes).not.toContain("light");
+  });
+
   it("routes native Save through DocumentManager and exposes rejected saves", async () => {
     nativeRuntimeHarness.enabled = true;
     setDocumentSessions([

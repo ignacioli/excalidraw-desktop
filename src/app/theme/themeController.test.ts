@@ -56,8 +56,12 @@ function preference(modePreference: "light" | "dark" | "system") {
   });
 }
 
-function createController(options?: { stored?: string; systemDark?: boolean }) {
-  const storage = new MemoryStorage();
+function createController(options?: {
+  stored?: string;
+  systemDark?: boolean;
+  storage?: MemoryStorage;
+}) {
+  const storage = options?.storage ?? new MemoryStorage();
   const media = new ColorSchemeMedia(options?.systemDark ?? false);
   const root = document.createElement("html");
 
@@ -128,6 +132,61 @@ describe("ThemeController", () => {
     const { controller } = createController({ stored: preference("dark") });
 
     expect(controller.getSnapshot().preference.modePreference).toBe("dark");
+  });
+
+  it("persists Appearance and restores the exact manual mode", () => {
+    const storage = new MemoryStorage();
+    const first = createController({ storage, systemDark: false });
+
+    first.controller.setModePreference("dark");
+    expect(storage.getItem(THEME_PREFERENCE_STORAGE_KEY)).toBe(
+      preference("dark"),
+    );
+    first.controller.dispose();
+
+    const restored = createController({ storage, systemDark: false });
+    expect(restored.controller.getSnapshot()).toEqual({
+      preference: {
+        version: THEME_PREFERENCE_VERSION,
+        themeId: "excalidraw",
+        modePreference: "dark",
+      },
+      resolvedColorScheme: "dark",
+    });
+  });
+
+  it("keeps every HF-2 component geometry token identical across Light and Dark", () => {
+    const { controller, root } = createController({
+      stored: preference("light"),
+    });
+    const geometryVariables = [
+      "--icon-button-size",
+      "--icon-button-icon-size",
+      "--icon-button-radius",
+      "--tab-reference-width",
+      "--tab-component-height",
+      "--tab-radius",
+      "--workspace-row-reference-width",
+      "--workspace-row-height",
+      "--workspace-row-radius",
+      "--welcome-action-height",
+      "--welcome-action-reference-width",
+      "--welcome-action-radius",
+      "--welcome-action-border-width",
+      "--welcome-action-icon-size",
+    ] as const;
+    const lightGeometry = geometryVariables.map((name) => [
+      name,
+      root.style.getPropertyValue(name),
+    ]);
+
+    controller.setModePreference("dark");
+
+    expect(
+      geometryVariables.map((name) => [name, root.style.getPropertyValue(name)]),
+    ).toEqual(lightGeometry);
+    expect(root.style.getPropertyValue("--app-background")).toBe("#121212");
+    expect(root.style.getPropertyValue("--accent")).toBe("#BBB8FF");
   });
 
   it("maps HF-2 semantic and geometry tokens onto the shell root", () => {

@@ -1030,6 +1030,18 @@ body {
   filter: brightness(0) invert(1);
 }
 
+.welcome-action:not(.primary-action) {
+  background: var(--panel-background);
+}
+
+.welcome-action:not(.primary-action):hover {
+  background: var(--surface-hover);
+}
+
+.welcome-action:not(.primary-action):active {
+  background: var(--surface-active);
+}
+
 [data-color-scheme="dark"] .primary-action img {
   filter: none;
 }

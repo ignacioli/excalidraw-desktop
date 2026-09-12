@@ -740,16 +740,20 @@ async function assertWelcomeVisualStyles(
     const primaryIcon = document.querySelector<HTMLElement>(
       ".welcome-action.primary-action img",
     );
+    const secondaryAction = document.querySelector<HTMLElement>(
+      ".welcome-action:not(.primary-action)",
+    );
     const recentRow = document.querySelector<HTMLElement>(
       ".recent-workspace",
     );
-    if (primaryIcon === null || recentRow === null) {
+    if (primaryIcon === null || secondaryAction === null || recentRow === null) {
       throw new Error("Welcome visual-style targets are missing");
     }
     const iconStyle = getComputedStyle(primaryIcon);
     const rowStyle = getComputedStyle(recentRow);
     return {
       iconFilter: iconStyle.filter,
+      secondaryBackground: getComputedStyle(secondaryAction).backgroundColor,
       rowBorderStyles: [
         rowStyle.borderTopStyle,
         rowStyle.borderRightStyle,
@@ -761,6 +765,9 @@ async function assertWelcomeVisualStyles(
   });
   expect(styles.iconFilter).toBe(
     theme === "light" ? "brightness(0) invert(1)" : "none",
+  );
+  expect(styles.secondaryBackground).toBe(
+    theme === "light" ? "rgb(255, 255, 255)" : "rgb(35, 35, 41)",
   );
   expect(styles.rowBorderStyles).toEqual(["solid", "solid", "solid", "solid"]);
   expect(styles.rowBoxShadow).toBe("none");
