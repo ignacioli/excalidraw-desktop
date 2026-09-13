@@ -298,7 +298,7 @@ describe("evidence aggregation", () => {
       assert.ok(map.claimCommands[claimId], `missing commands for ${claimId}`);
     }
     for (const command of Object.values(map.commandCatalog)) {
-      assert.doesNotMatch(command, /pnpm e2e -- --project=browser-ui$/u);
+      assert.doesNotMatch(command, /pnpm e2e --(?:\s|$)/u);
     }
     for (const commandId of expectedCommandIds.filter((id) =>
       id.startsWith("focused-"),
