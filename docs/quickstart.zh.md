@@ -184,7 +184,48 @@ pnpm evidence:aggregate -- --mode closure --technical-report <report.json> --tas
 pnpm evidence:aggregate -- --mode closure-verify --closure-report <report.json> --tasks <tasks.md> --output <new-json>
 ```
 
-`delta` 要求 clean product HEAD，并通过 versioned ownership map 对每个 changed path 分类；零个或多个 owner 都是 `BLOCKED`。`technical` 要求六个互不重复的 final screen collection 以及 package/regression claim set，并独立校验每个 referenced artifact digest。`task-proof` 要求 tasks 中每个 task 恰有一条 proof record。`closure` 只允许声明的 self task 保持 unchecked；它计算预期 transition 后 hash，但不编辑 task。human/task writer 仅切换该 checkbox 后，再由 `closure-verify` 校验预期 hash。退出码为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
+`delta` 要求 clean product HEAD。其 schema-v1 checkpoint map 将每项 claim 绑定到一个绝对 source report 路径、collection digest 与 source commit：
+
+```json
+{
+  "schemaVersion": 1,
+  "checkpoints": [
+    {
+      "claimId": "shell-semantic",
+      "sourceReportPath": "/absolute/collector-report.json",
+      "sourceCollectionDigest": "<64-hex>",
+      "fromCommit": "<40-hex>"
+    }
+  ]
+}
+```
+
+分类前，aggregator 会重新读取每份 report，校验全部 artifact bytes 与重新计算的 collection digest，并要求 report 的 product-commit binding 等于 `fromCommit`。它为每个 checkpoint 独立计算 `fromCommit..finalCommit`，因此其他 checkpoint 的变更不会把可复用 claim 污染为 `RERUN`。输出 `entries` 仍是去重后的 union，且每条 path 必须恰好命中一个 ownership rule。versioned ownership map 包含 `commandCatalog` 与 `claimCommands`；只有该 checkpoint 自身结果为 `RERUN` 时，其映射命令才会作为已排序、去重的 `{ "id", "command" }` 写入 `rerunCommands`。缺失 report、过期 digest/binding、未知 command mapping，以及未分类或多重分类的 path 均为 `BLOCKED`。
+
+编写 task proof 时推荐 schema v2。共享 metadata 放在 `defaults` 或一个 proof group 中；source group 不复制 checkbox state：
+
+```json
+{
+  "schemaVersion": 2,
+  "defaults": {
+    "required": true,
+    "reviewerRequirement": "NOT_REQUIRED",
+    "ownerRequirement": "NOT_REQUIRED"
+  },
+  "proofGroups": [
+    {
+      "taskIds": ["<task-id-1>", "<task-id-2>"],
+      "completionRefs": [{ "repository": "product", "commit": "<40-hex>" }],
+      "claimIds": ["foundation"],
+      "artifactRefs": [
+        { "path": "/absolute/collector-report.json", "sha256": "<64-hex>" }
+      ]
+    }
+  ]
+}
+```
+
+`task-proof` 直接从 `tasks.md` 派生 `checked` / `unchecked`，要求每个解析出的 task 恰好属于一个 group，校验全部 commit 与 artifact reference，并在不修改任一 input 的前提下展开为 canonical schema-v1 per-task map。schema-v1 record source 保留兼容读取。`technical` 要求六个互不重复的 final screen collection 以及 package/regression claim set，并独立校验每个 referenced artifact digest。`closure` 只允许声明的 self task 保持 unchecked；它计算预期 transition 后 hash，但不编辑 task。human/task writer 仅切换该 checkbox 后，再由 `closure-verify` 校验预期 hash。退出码为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
 
 ### 多工作区与资产去重
 

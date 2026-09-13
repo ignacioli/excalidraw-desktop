@@ -1,6 +1,82 @@
 {
   "schemaVersion": 1,
-  "version": "003-ownership-v1",
+  "version": "003-ownership-v2",
+  "commandCatalog": {
+    "cargo-clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
+    "cargo-fmt": "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
+    "cargo-test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "focused-a11y-welcome-overlay": "PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 APP_E2E=1 pnpm e2e -- e2e/tests/a11y-audit.spec.ts --project=browser-ui --workers=1 --retries=0 --grep \"shell chrome is axe-clean in light theme|sidebar overlay is keyboard operable\"",
+    "focused-routing-browser": "PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 APP_E2E=1 pnpm e2e -- e2e/tests/ui-desktop-shell-routing.spec.ts --project=browser-ui --workers=1 --retries=0",
+    "focused-sidebar-browser": "PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 APP_E2E=1 pnpm e2e -- e2e/tests/ui-sidebar-modes.spec.ts --project=browser-ui --workers=1 --retries=0",
+    "focused-visual-browser": "PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 APP_E2E=1 SHELL_EVIDENCE_RUN_ROOT=$T059_BROWSER_RUN_ROOT pnpm e2e -- e2e/tests/ui-desktop-shell-visual.spec.ts --project=browser-ui --workers=1 --retries=0",
+    "lint": "pnpm lint",
+    "node-validation-harness": "node --test scripts/*.test.mjs",
+    "typecheck": "pnpm typecheck",
+    "vitest": "pnpm test"
+  },
+  "claimCommands": {
+    "document-regression": ["lint", "typecheck", "vitest"],
+    "final-regression": [
+      "cargo-clippy",
+      "cargo-fmt",
+      "cargo-test",
+      "focused-a11y-welcome-overlay",
+      "focused-routing-browser",
+      "focused-sidebar-browser",
+      "focused-visual-browser",
+      "lint",
+      "node-validation-harness",
+      "typecheck",
+      "vitest"
+    ],
+    "native-entrypoint-route": [
+      "cargo-clippy",
+      "cargo-fmt",
+      "cargo-test",
+      "focused-routing-browser",
+      "lint",
+      "node-validation-harness",
+      "typecheck",
+      "vitest"
+    ],
+    "package-identity": [
+      "cargo-clippy",
+      "cargo-fmt",
+      "cargo-test",
+      "lint",
+      "node-validation-harness",
+      "typecheck"
+    ],
+    "persistence-regression": [
+      "cargo-clippy",
+      "cargo-fmt",
+      "cargo-test",
+      "lint",
+      "typecheck",
+      "vitest"
+    ],
+    "shell-geometry": [
+      "focused-sidebar-browser",
+      "focused-visual-browser",
+      "typecheck",
+      "vitest"
+    ],
+    "shell-semantic": [
+      "focused-a11y-welcome-overlay",
+      "focused-routing-browser",
+      "focused-sidebar-browser",
+      "lint",
+      "typecheck",
+      "vitest"
+    ],
+    "technical-aggregate": ["node-validation-harness"],
+    "visual-fidelity": [
+      "focused-a11y-welcome-overlay",
+      "focused-visual-browser",
+      "lint",
+      "typecheck"
+    ]
+  },
   "rules": [
     {
       "id": "shell-runtime",

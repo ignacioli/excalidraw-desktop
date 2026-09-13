@@ -134,15 +134,90 @@ function matchingRules(filePath, ownershipMap) {
   );
 }
 
-export function classifyDeltaPaths(paths, ownershipMap) {
+function nonEmptyStringArray(value, label) {
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.some((entry) => typeof entry !== "string" || entry === "")
+  ) {
+    blocked(`${label} must be a non-empty string array`);
+  }
+  if (new Set(value).size !== value.length)
+    blocked(`${label} must not contain duplicates`);
+  return value;
+}
+
+function validateOwnershipMap(ownershipMap) {
   object(ownershipMap, "ownership map");
   if (
     ownershipMap.schemaVersion !== 1 ||
     typeof ownershipMap.version !== "string" ||
-    !Array.isArray(ownershipMap.rules)
+    ownershipMap.version === "" ||
+    !Array.isArray(ownershipMap.rules) ||
+    ownershipMap.rules.length === 0
   ) {
     blocked("ownership map schema is invalid");
   }
+  const commandCatalog = object(
+    ownershipMap.commandCatalog,
+    "ownership map commandCatalog",
+  );
+  const claimCommands = object(
+    ownershipMap.claimCommands,
+    "ownership map claimCommands",
+  );
+  if (
+    Object.keys(commandCatalog).length === 0 ||
+    Object.keys(claimCommands).length === 0
+  ) {
+    blocked("ownership map command mappings must not be empty");
+  }
+  for (const [commandId, command] of Object.entries(commandCatalog)) {
+    if (
+      !/^[a-z0-9][a-z0-9-]*$/u.test(commandId) ||
+      typeof command !== "string" ||
+      command.trim() === ""
+    ) {
+      blocked(`ownership map commandCatalog entry is invalid: ${commandId}`);
+    }
+  }
+  for (const [claimId, commandIds] of Object.entries(claimCommands)) {
+    nonEmptyStringArray(commandIds, `claimCommands.${claimId}`);
+    for (const commandId of commandIds) {
+      if (!Object.hasOwn(commandCatalog, commandId))
+        blocked(`claim command is not in commandCatalog: ${commandId}`);
+    }
+  }
+  for (const [index, rule] of ownershipMap.rules.entries()) {
+    object(rule, `ownership map rules[${index}]`);
+    if (typeof rule.id !== "string" || rule.id === "")
+      blocked(`ownership map rules[${index}].id is invalid`);
+    nonEmptyStringArray(
+      rule.pathPrefixes,
+      `ownership map rules[${index}].pathPrefixes`,
+    );
+    nonEmptyStringArray(rule.owners, `ownership map rules[${index}].owners`);
+    nonEmptyStringArray(
+      rule.claimIds,
+      `ownership map rules[${index}].claimIds`,
+    );
+  }
+  return ownershipMap;
+}
+
+function commandsForClaim(claimId, ownershipMap) {
+  if (!Object.hasOwn(ownershipMap.claimCommands, claimId))
+    blocked(`claim has no command mapping: ${claimId}`);
+  return ownershipMap.claimCommands[claimId]
+    .map((commandId) => ({
+      id: commandId,
+      command: ownershipMap.commandCatalog[commandId],
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+export function classifyDeltaPaths(paths, ownershipMap) {
+  validateOwnershipMap(ownershipMap);
   return [...new Set(paths)].sort().map((filePath) => {
     if (path.isAbsolute(filePath) || filePath.split(/[\\/]/u).includes(".."))
       blocked(`delta path escapes product root: ${filePath}`);
@@ -196,13 +271,35 @@ export async function aggregateDelta({
   const ownershipMap = await readJson(ownershipMapPath, "ownership map");
   if (
     checkpointMap.schemaVersion !== 1 ||
-    !Array.isArray(checkpointMap.checkpoints)
+    !Array.isArray(checkpointMap.checkpoints) ||
+    checkpointMap.checkpoints.length === 0
   )
     blocked("checkpoint map schema is invalid");
+  validateOwnershipMap(ownershipMap);
   const changedPaths = new Set();
+  const reuse = [];
+  const rerunCommands = new Map();
   for (const checkpoint of checkpointMap.checkpoints) {
-    if (!/^[0-9a-f]{40}$/u.test(checkpoint.fromCommit ?? ""))
-      blocked("checkpoint source commit is invalid");
+    object(checkpoint, "checkpoint");
+    if (
+      typeof checkpoint.claimId !== "string" ||
+      checkpoint.claimId === "" ||
+      typeof checkpoint.sourceReportPath !== "string" ||
+      !path.isAbsolute(checkpoint.sourceReportPath) ||
+      !/^[0-9a-f]{64}$/u.test(checkpoint.sourceCollectionDigest ?? "") ||
+      !/^[0-9a-f]{40}$/u.test(checkpoint.fromCommit ?? "")
+    ) {
+      blocked("checkpoint source schema is invalid");
+    }
+    const claimCommands = commandsForClaim(checkpoint.claimId, ownershipMap);
+    const sourceReport = await validateCollectorReport(
+      checkpoint.sourceReportPath,
+      checkpoint.sourceCollectionDigest,
+    );
+    if (sourceReport.binding?.productCommit !== checkpoint.fromCommit)
+      blocked(
+        `checkpoint source commit binding is stale: ${checkpoint.sourceReportPath}`,
+      );
     git(
       productRoot,
       ["cat-file", "-e", `${checkpoint.fromCommit}^{commit}`],
@@ -213,32 +310,39 @@ export async function aggregateDelta({
       ["diff", "--name-only", checkpoint.fromCommit, finalCommit],
       "compute checkpoint delta",
     );
-    output
-      .split(/\r?\n/u)
-      .filter(Boolean)
-      .forEach((entry) => changedPaths.add(entry));
-  }
-  const entries = classifyDeltaPaths([...changedPaths], ownershipMap);
-  const reuse = checkpointMap.checkpoints.map((checkpoint) => {
-    const changedOwningPaths = entries
+    const checkpointPaths = output.split(/\r?\n/u).filter(Boolean);
+    checkpointPaths.forEach((entry) => changedPaths.add(entry));
+    const checkpointEntries = classifyDeltaPaths(checkpointPaths, ownershipMap);
+    const changedOwningPaths = checkpointEntries
       .filter((entry) => entry.claimIds.includes(checkpoint.claimId))
       .map((entry) => entry.path);
-    return {
+    const result = changedOwningPaths.length === 0 ? "REUSE" : "RERUN";
+    if (result === "RERUN") {
+      for (const command of claimCommands)
+        rerunCommands.set(command.id, command);
+    }
+    reuse.push({
       claimId: checkpoint.claimId,
+      sourceReportPath: checkpoint.sourceReportPath,
+      sourceReportSha256: await sha256File(checkpoint.sourceReportPath),
       sourceCollectionDigest: checkpoint.sourceCollectionDigest,
       fromCommit: checkpoint.fromCommit,
       toCommit: finalCommit,
       ownershipRule: ownershipMap.version,
       changedOwningPaths,
-      result: changedOwningPaths.length === 0 ? "REUSE" : "RERUN",
-    };
-  });
+      result,
+    });
+  }
+  const entries = classifyDeltaPaths([...changedPaths], ownershipMap);
   const report = {
     schemaVersion: 1,
     finalCommit,
     ownershipMapVersion: ownershipMap.version,
     entries,
     reuse,
+    rerunCommands: [...rerunCommands.values()].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
   };
   await assertAbsent(outputPath, "delta output");
   await writeJsonExclusive(outputPath, report);
@@ -400,6 +504,7 @@ export async function aggregateTechnical({ inputPath, outputDir }) {
 }
 
 async function validateProofArtifact(artifact, label) {
+  object(artifact, label);
   if (
     typeof artifact.path !== "string" ||
     !path.isAbsolute(artifact.path) ||
@@ -411,6 +516,101 @@ async function validateProofArtifact(artifact, label) {
     blocked(`${label} is missing or uses a symlink`);
   if ((await sha256File(artifact.path)) !== artifact.sha256)
     blocked(`${label} digest changed`);
+}
+
+function stringArray(value, label) {
+  if (
+    !Array.isArray(value) ||
+    value.some((entry) => typeof entry !== "string" || entry === "") ||
+    new Set(value).size !== value.length
+  ) {
+    blocked(`${label} must be a unique string array`);
+  }
+  return value;
+}
+
+function assertOnlyKeys(value, allowedKeys, label) {
+  for (const key of Object.keys(value)) {
+    if (!allowedKeys.includes(key))
+      blocked(`${label} has unknown field: ${key}`);
+  }
+}
+
+async function validateProofMetadata(proof, taskId) {
+  object(proof, `task proof ${taskId}`);
+  if (typeof proof.required !== "boolean")
+    blocked(`task proof required flag is invalid: ${taskId}`);
+  stringArray(proof.claimIds, `${taskId}.claimIds`);
+  if (!Array.isArray(proof.completionRefs))
+    blocked(`task proof completionRefs are missing: ${taskId}`);
+  if (!Array.isArray(proof.artifactRefs))
+    blocked(`task proof artifactRefs are missing: ${taskId}`);
+  if (
+    ![undefined, "NOT_REQUIRED", "REQUIRED"].includes(
+      proof.reviewerRequirement,
+    ) ||
+    ![undefined, "NOT_REQUIRED", "REQUIRED"].includes(proof.ownerRequirement)
+  ) {
+    blocked(`task proof review requirement is invalid: ${taskId}`);
+  }
+  for (const reference of proof.completionRefs) {
+    object(reference, `${taskId}.completionRefs`);
+    if (
+      !/^[0-9a-f]{40}$/u.test(reference.commit ?? "") ||
+      !["product", "specs"].includes(reference.repository)
+    ) {
+      blocked(`task completion reference is invalid: ${taskId}`);
+    }
+  }
+  for (const [index, artifact] of proof.artifactRefs.entries()) {
+    await validateProofArtifact(artifact, `${taskId}.artifactRefs[${index}]`);
+  }
+}
+
+function expandProofSourceV2(source, tasks) {
+  assertOnlyKeys(
+    source,
+    ["schemaVersion", "defaults", "proofGroups"],
+    "task proof source",
+  );
+  const defaults = object(source.defaults, "task proof source defaults");
+  if (!Array.isArray(source.proofGroups))
+    blocked("task proof source proofGroups must be an array");
+  const sharedKeys = [
+    "required",
+    "completionRefs",
+    "claimIds",
+    "artifactRefs",
+    "reviewerRequirement",
+    "ownerRequirement",
+  ];
+  assertOnlyKeys(defaults, sharedKeys, "task proof source defaults");
+  const taskIds = new Set(tasks.map((task) => task.taskId));
+  const byId = new Map();
+  for (const [index, rawGroup] of source.proofGroups.entries()) {
+    const group = object(rawGroup, `task proof source proofGroups[${index}]`);
+    assertOnlyKeys(
+      group,
+      ["taskIds", ...sharedKeys],
+      `task proof source proofGroups[${index}]`,
+    );
+    nonEmptyStringArray(
+      group.taskIds,
+      `task proof source proofGroups[${index}].taskIds`,
+    );
+    for (const taskId of group.taskIds) {
+      if (!taskIds.has(taskId))
+        blocked(`unknown task proof group task: ${taskId}`);
+      if (byId.has(taskId))
+        blocked(`duplicate task proof group coverage: ${taskId}`);
+      const { taskIds: ignoredTaskIds, ...metadata } = group;
+      void ignoredTaskIds;
+      byId.set(taskId, { ...defaults, ...metadata });
+    }
+  }
+  if (byId.size !== tasks.length)
+    blocked("task proof groups must exactly match tasks.md");
+  return byId;
 }
 
 export async function generateTaskProof({
@@ -430,13 +630,19 @@ export async function generateTaskProof({
     await readJson(proofSourcePath, "task proof source"),
     "task proof source",
   );
-  if (source.schemaVersion !== 1 || !Array.isArray(source.records))
+  let byId;
+  if (source.schemaVersion === 1 && Array.isArray(source.records)) {
+    byId = new Map();
+    for (const record of source.records) {
+      object(record, "task proof record");
+      if (byId.has(record.taskId))
+        blocked(`duplicate task proof record: ${record.taskId}`);
+      byId.set(record.taskId, record);
+    }
+  } else if (source.schemaVersion === 2) {
+    byId = expandProofSourceV2(source, tasks);
+  } else {
     blocked("task proof source schema is invalid");
-  const byId = new Map();
-  for (const record of source.records) {
-    if (byId.has(record.taskId))
-      blocked(`duplicate task proof record: ${record.taskId}`);
-    byId.set(record.taskId, record);
   }
   if (
     byId.size !== tasks.length ||
@@ -447,29 +653,11 @@ export async function generateTaskProof({
   for (const task of tasks) {
     const proof = byId.get(task.taskId);
     if (
-      proof.checkboxState !== task.checkboxState ||
-      typeof proof.required !== "boolean"
+      source.schemaVersion === 1 &&
+      proof.checkboxState !== task.checkboxState
     )
       blocked(`task proof checkbox mismatch: ${task.taskId}`);
-    if (
-      !Array.isArray(proof.completionRefs) ||
-      !Array.isArray(proof.claimIds) ||
-      !Array.isArray(proof.artifactRefs)
-    )
-      blocked(`task proof arrays are missing: ${task.taskId}`);
-    for (const reference of proof.completionRefs) {
-      if (
-        !/^[0-9a-f]{40}$/u.test(reference.commit ?? "") ||
-        !["product", "specs"].includes(reference.repository)
-      )
-        blocked(`task completion reference is invalid: ${task.taskId}`);
-    }
-    for (const [index, artifact] of proof.artifactRefs.entries()) {
-      await validateProofArtifact(
-        artifact,
-        `${task.taskId}.artifactRefs[${index}]`,
-      );
-    }
+    await validateProofMetadata(proof, task.taskId);
     records.push({
       taskId: task.taskId,
       required: proof.required,
@@ -484,7 +672,9 @@ export async function generateTaskProof({
   const output = {
     schemaVersion: 1,
     tasksFileSha256: sha256(tasksBytes),
-    records,
+    records: records.sort((left, right) =>
+      left.taskId.localeCompare(right.taskId),
+    ),
   };
   await assertAbsent(outputPath, "task proof output");
   await writeJsonExclusive(outputPath, output);
@@ -660,7 +850,7 @@ export async function verifyClosure({
 
 function usage() {
   console.log(
-    "Usage: pnpm evidence:aggregate -- --mode delta|technical|task-proof|closure|closure-verify <mode options>\nModes:\n  delta --product-root PATH --checkpoint-map JSON --final-commit SHA --ownership-map JSON --output JSON\n  technical --input JSON --output-dir NEW_DIR\n  task-proof --tasks TASKS --proof-source JSON --output JSON\n  closure --technical-report JSON --task-proof-map JSON --tasks TASKS --self-task ID --output-dir NEW_DIR\n  closure-verify --closure-report JSON --tasks TASKS --output JSON\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. All modes are read-only for source evidence and tasks.md.",
+    "Usage: pnpm evidence:aggregate -- --mode delta|technical|task-proof|closure|closure-verify <mode options>\nModes:\n  delta --product-root PATH --checkpoint-map JSON --final-commit SHA --ownership-map JSON --output JSON\n    checkpoint map schema v1: absolute sourceReportPath plus sourceCollectionDigest, fromCommit, and claimId per checkpoint\n  technical --input JSON --output-dir NEW_DIR\n  task-proof --tasks TASKS --proof-source JSON --output JSON\n    proof source schema v2 is preferred: defaults plus proofGroups; checkbox state is derived from tasks.md\n  closure --technical-report JSON --task-proof-map JSON --tasks TASKS --self-task ID --output-dir NEW_DIR\n  closure-verify --closure-report JSON --tasks TASKS --output JSON\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. All modes are read-only for source evidence and tasks.md.",
   );
 }
 

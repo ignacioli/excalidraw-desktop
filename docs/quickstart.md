@@ -184,7 +184,48 @@ pnpm evidence:aggregate -- --mode closure --technical-report <report.json> --tas
 pnpm evidence:aggregate -- --mode closure-verify --closure-report <report.json> --tasks <tasks.md> --output <new-json>
 ```
 
-`delta` requires a clean product HEAD and classifies every changed path through the versioned ownership map; zero or multiple owners is `BLOCKED`. `technical` requires six distinct final screen collections plus package and regression claim sets, and independently validates every referenced artifact digest. `task-proof` requires exactly one proof record per task. `closure` permits only the declared unchecked self task; it computes the expected post-transition hash but does not edit the task. After the human/task writer changes exactly that checkbox, `closure-verify` validates the expected hash. Exit codes are `0=PASS`, `1=FAIL`, `2=BLOCKED`, and `64=invalid invocation`.
+`delta` requires a clean product HEAD. Its schema-v1 checkpoint map binds every claim to one absolute source report, collection digest, and source commit:
+
+```json
+{
+  "schemaVersion": 1,
+  "checkpoints": [
+    {
+      "claimId": "shell-semantic",
+      "sourceReportPath": "/absolute/collector-report.json",
+      "sourceCollectionDigest": "<64-hex>",
+      "fromCommit": "<40-hex>"
+    }
+  ]
+}
+```
+
+Before classifying changes, the aggregator re-reads each report, verifies all artifact bytes and the computed collection digest, and requires the report's product-commit binding to equal `fromCommit`. It computes `fromCommit..finalCommit` separately for each checkpoint, so another checkpoint's changes cannot turn a reusable claim into `RERUN`. The output `entries` remain the deduplicated union, with exactly one ownership rule per path. The versioned ownership map contains `commandCatalog` and `claimCommands`; only commands mapped to that checkpoint's own `RERUN` result are emitted as sorted, deduplicated `{ "id", "command" }` entries in `rerunCommands`. Missing reports, stale digests or bindings, unknown command mappings, and unclassified or multiply classified paths are `BLOCKED`.
+
+For authoring task proof, schema v2 is preferred. Shared metadata belongs in `defaults` or one proof group, and source groups never copy checkbox state:
+
+```json
+{
+  "schemaVersion": 2,
+  "defaults": {
+    "required": true,
+    "reviewerRequirement": "NOT_REQUIRED",
+    "ownerRequirement": "NOT_REQUIRED"
+  },
+  "proofGroups": [
+    {
+      "taskIds": ["<task-id-1>", "<task-id-2>"],
+      "completionRefs": [{ "repository": "product", "commit": "<40-hex>" }],
+      "claimIds": ["foundation"],
+      "artifactRefs": [
+        { "path": "/absolute/collector-report.json", "sha256": "<64-hex>" }
+      ]
+    }
+  ]
+}
+```
+
+`task-proof` derives `checked` / `unchecked` directly from `tasks.md`, requires every parsed task to appear in exactly one group, validates all commit and artifact references, and expands the source into the canonical schema-v1 per-task map without modifying either input. Schema-v1 record sources remain readable for compatibility. `technical` requires six distinct final screen collections plus package and regression claim sets, and independently validates every referenced artifact digest. `closure` permits only the declared unchecked self task; it computes the expected post-transition hash but does not edit the task. After the human/task writer changes exactly that checkbox, `closure-verify` validates the expected hash. Exit codes are `0=PASS`, `1=FAIL`, `2=BLOCKED`, and `64=invalid invocation`.
 
 ### Multiple workspaces and asset deduplication
 

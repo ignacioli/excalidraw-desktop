@@ -8,6 +8,7 @@ import { afterEach, describe, it } from "node:test";
 import {
   EvidenceAggregateError,
   aggregateClosure,
+  aggregateDelta,
   aggregateTechnical,
   classifyDeltaPaths,
   generateTaskProof,
@@ -46,6 +47,121 @@ async function temporaryRoot() {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "evidence-aggregate-"));
   roots.push(root);
   return root;
+}
+
+function git(root, ...args) {
+  const result = spawnSync("git", ["-C", root, ...args], {
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return result.stdout.trim();
+}
+
+async function commit(root, message) {
+  git(root, "add", ".");
+  git(
+    root,
+    "-c",
+    "user.name=Evidence Test",
+    "-c",
+    "user.email=evidence@example.invalid",
+    "commit",
+    "-m",
+    message,
+  );
+  return git(root, "rev-parse", "HEAD");
+}
+
+async function deltaRepository(root) {
+  const productRoot = path.join(root, "product");
+  await fsp.mkdir(path.join(productRoot, "src"), { recursive: true });
+  await fsp.mkdir(path.join(productRoot, "docs"), { recursive: true });
+  git(productRoot, "init");
+  await fsp.writeFile(path.join(productRoot, "src", "shell.ts"), "base\n");
+  await fsp.writeFile(
+    path.join(productRoot, "docs", "quickstart.md"),
+    "base\n",
+  );
+  const base = await commit(productRoot, "base");
+
+  git(productRoot, "switch", "-c", "source-shell");
+  await fsp.writeFile(
+    path.join(productRoot, "docs", "quickstart.md"),
+    "final\n",
+  );
+  const sourceForShell = await commit(productRoot, "source with final docs");
+
+  git(productRoot, "switch", "-c", "final", base);
+  await fsp.writeFile(path.join(productRoot, "src", "shell.ts"), "final\n");
+  const sourceForDocs = await commit(productRoot, "source with final shell");
+  await fsp.writeFile(
+    path.join(productRoot, "docs", "quickstart.md"),
+    "final\n",
+  );
+  const finalCommit = await commit(productRoot, "final");
+  return { productRoot, sourceForShell, sourceForDocs, finalCommit };
+}
+
+function ownershipMap() {
+  return {
+    schemaVersion: 1,
+    version: "test-v2",
+    commandCatalog: {
+      lint: "pnpm lint",
+      typecheck: "pnpm typecheck",
+      unit: "pnpm test",
+    },
+    claimCommands: {
+      "final-regression": ["unit", "lint"],
+      "shell-semantic": ["typecheck", "unit"],
+    },
+    rules: [
+      {
+        id: "shell",
+        pathPrefixes: ["src/"],
+        owners: ["shell"],
+        claimIds: ["shell-semantic"],
+      },
+      {
+        id: "docs",
+        pathPrefixes: ["docs/"],
+        owners: ["docs"],
+        claimIds: ["final-regression"],
+      },
+    ],
+  };
+}
+
+async function deltaFixture(root, checkpointClaims) {
+  const repository = await deltaRepository(root);
+  const inputRoot = path.join(root, "inputs");
+  const ownershipMapPath = path.join(inputRoot, "ownership.json");
+  await writeJson(ownershipMapPath, ownershipMap());
+  const commits = {
+    sourceForShell: repository.sourceForShell,
+    sourceForDocs: repository.sourceForDocs,
+  };
+  const checkpoints = [];
+  for (const [index, { claimId, from }] of checkpointClaims.entries()) {
+    const fromCommit = commits[from];
+    const source = await collector(inputRoot, `checkpoint-${index}`, {
+      productCommit: fromCommit,
+    });
+    checkpoints.push({
+      claimId,
+      fromCommit,
+      sourceReportPath: source.reportPath,
+      sourceCollectionDigest: source.collectionDigest,
+    });
+  }
+  const checkpointMapPath = path.join(inputRoot, "checkpoints.json");
+  await writeJson(checkpointMapPath, { schemaVersion: 1, checkpoints });
+  return {
+    ...repository,
+    checkpointMapPath,
+    checkpoints,
+    ownershipMapPath,
+  };
 }
 
 async function collector(root, gateId, binding) {
@@ -114,6 +230,8 @@ describe("evidence aggregation", () => {
     const map = {
       schemaVersion: 1,
       version: "v1",
+      commandCatalog: { shell: "pnpm typecheck" },
+      claimCommands: { shell: ["shell"], native: ["shell"] },
       rules: [
         {
           id: "frontend",
@@ -145,6 +263,197 @@ describe("evidence aggregation", () => {
         }),
       /exactly one/u,
     );
+  });
+
+  it("maps every ownership claim to the bounded final regression command set", async () => {
+    const map = JSON.parse(
+      await fsp.readFile(
+        new URL("../e2e/visual/003EvidenceOwnership.json", import.meta.url),
+        "utf8",
+      ),
+    );
+    const expectedCommandIds = [
+      "cargo-clippy",
+      "cargo-fmt",
+      "cargo-test",
+      "focused-a11y-welcome-overlay",
+      "focused-routing-browser",
+      "focused-sidebar-browser",
+      "focused-visual-browser",
+      "lint",
+      "node-validation-harness",
+      "typecheck",
+      "vitest",
+    ];
+    assert.equal(map.version, "003-ownership-v2");
+    assert.deepEqual(
+      Object.keys(map.commandCatalog).sort(),
+      expectedCommandIds,
+    );
+    assert.deepEqual(
+      [...map.claimCommands["final-regression"]].sort(),
+      expectedCommandIds,
+    );
+    for (const claimId of new Set(map.rules.flatMap((rule) => rule.claimIds))) {
+      assert.ok(map.claimCommands[claimId], `missing commands for ${claimId}`);
+    }
+    for (const command of Object.values(map.commandCatalog)) {
+      assert.doesNotMatch(command, /pnpm e2e -- --project=browser-ui$/u);
+    }
+    for (const commandId of expectedCommandIds.filter((id) =>
+      id.startsWith("focused-"),
+    )) {
+      assert.match(map.commandCatalog[commandId], /--workers=1/u);
+      assert.match(map.commandCatalog[commandId], /--retries=0/u);
+    }
+    assert.match(
+      map.commandCatalog["focused-visual-browser"],
+      /SHELL_EVIDENCE_RUN_ROOT=\$T059_BROWSER_RUN_ROOT/u,
+    );
+  });
+
+  it("blocks stale checkpoint report, artifact, and source commit bindings", async () => {
+    const root = await temporaryRoot();
+    const fixture = await deltaFixture(root, [
+      { claimId: "shell-semantic", from: "sourceForShell" },
+    ]);
+    const checkpointMap = JSON.parse(
+      await fsp.readFile(fixture.checkpointMapPath, "utf8"),
+    );
+    checkpointMap.checkpoints[0].sourceCollectionDigest = "00".repeat(32);
+    const staleDigestPath = path.join(root, "stale-digest.json");
+    await writeJson(staleDigestPath, checkpointMap);
+    await assert.rejects(
+      aggregateDelta({
+        productRoot: fixture.productRoot,
+        checkpointMapPath: staleDigestPath,
+        finalCommit: fixture.finalCommit,
+        ownershipMapPath: fixture.ownershipMapPath,
+        outputPath: path.join(root, "stale-digest-output.json"),
+      }),
+      (error) =>
+        error instanceof EvidenceAggregateError &&
+        error.exitCode === 2 &&
+        /collector report binding is invalid/u.test(error.message),
+    );
+
+    checkpointMap.checkpoints[0].sourceCollectionDigest =
+      fixture.checkpoints[0].sourceCollectionDigest;
+    const artifactPath = path.join(
+      path.dirname(checkpointMap.checkpoints[0].sourceReportPath),
+      "evidence.json",
+    );
+    await fsp.appendFile(artifactPath, "stale");
+    const staleArtifactPath = path.join(root, "stale-artifact.json");
+    await writeJson(staleArtifactPath, checkpointMap);
+    await assert.rejects(
+      aggregateDelta({
+        productRoot: fixture.productRoot,
+        checkpointMapPath: staleArtifactPath,
+        finalCommit: fixture.finalCommit,
+        ownershipMapPath: fixture.ownershipMapPath,
+        outputPath: path.join(root, "stale-artifact-output.json"),
+      }),
+      /collector artifact digest changed/u,
+    );
+    await fsp.writeFile(artifactPath, "checkpoint-0\n");
+
+    const report = JSON.parse(
+      await fsp.readFile(checkpointMap.checkpoints[0].sourceReportPath, "utf8"),
+    );
+    report.binding.productCommit = fixture.sourceForDocs;
+    await writeJson(checkpointMap.checkpoints[0].sourceReportPath, report);
+    const wrongBindingPath = path.join(root, "wrong-binding.json");
+    await writeJson(wrongBindingPath, checkpointMap);
+    await assert.rejects(
+      aggregateDelta({
+        productRoot: fixture.productRoot,
+        checkpointMapPath: wrongBindingPath,
+        finalCommit: fixture.finalCommit,
+        ownershipMapPath: fixture.ownershipMapPath,
+        outputPath: path.join(root, "wrong-binding-output.json"),
+      }),
+      (error) =>
+        error instanceof EvidenceAggregateError &&
+        error.exitCode === 2 &&
+        /source commit binding is stale/u.test(error.message),
+    );
+  });
+
+  it("keeps disjoint checkpoint deltas from contaminating each other's rerun result", async () => {
+    const root = await temporaryRoot();
+    const fixture = await deltaFixture(root, [
+      { claimId: "shell-semantic", from: "sourceForDocs" },
+      { claimId: "final-regression", from: "sourceForShell" },
+    ]);
+    const report = await aggregateDelta({
+      productRoot: fixture.productRoot,
+      checkpointMapPath: fixture.checkpointMapPath,
+      finalCommit: fixture.finalCommit,
+      ownershipMapPath: fixture.ownershipMapPath,
+      outputPath: path.join(root, "delta.json"),
+    });
+    assert.deepEqual(
+      report.reuse.map(({ claimId, changedOwningPaths, result }) => ({
+        claimId,
+        changedOwningPaths,
+        result,
+      })),
+      [
+        { claimId: "shell-semantic", changedOwningPaths: [], result: "REUSE" },
+        {
+          claimId: "final-regression",
+          changedOwningPaths: [],
+          result: "REUSE",
+        },
+      ],
+    );
+    assert.deepEqual(report.rerunCommands, []);
+  });
+
+  it("blocks unknown claim command mappings and emits sorted deterministic rerun commands", async () => {
+    const root = await temporaryRoot();
+    const fixture = await deltaFixture(root, [
+      { claimId: "shell-semantic", from: "sourceForShell" },
+      { claimId: "final-regression", from: "sourceForDocs" },
+    ]);
+    const map = JSON.parse(
+      await fsp.readFile(fixture.ownershipMapPath, "utf8"),
+    );
+    delete map.claimCommands["shell-semantic"];
+    const unknownMapPath = path.join(root, "unknown-command-map.json");
+    await writeJson(unknownMapPath, map);
+    await assert.rejects(
+      aggregateDelta({
+        productRoot: fixture.productRoot,
+        checkpointMapPath: fixture.checkpointMapPath,
+        finalCommit: fixture.finalCommit,
+        ownershipMapPath: unknownMapPath,
+        outputPath: path.join(root, "unknown-command-output.json"),
+      }),
+      /command mapping/u,
+    );
+
+    const first = await aggregateDelta({
+      productRoot: fixture.productRoot,
+      checkpointMapPath: fixture.checkpointMapPath,
+      finalCommit: fixture.finalCommit,
+      ownershipMapPath: fixture.ownershipMapPath,
+      outputPath: path.join(root, "delta-first.json"),
+    });
+    const second = await aggregateDelta({
+      productRoot: fixture.productRoot,
+      checkpointMapPath: fixture.checkpointMapPath,
+      finalCommit: fixture.finalCommit,
+      ownershipMapPath: fixture.ownershipMapPath,
+      outputPath: path.join(root, "delta-second.json"),
+    });
+    assert.deepEqual(first.rerunCommands, [
+      { id: "lint", command: "pnpm lint" },
+      { id: "typecheck", command: "pnpm typecheck" },
+      { id: "unit", command: "pnpm test" },
+    ]);
+    assert.deepEqual(second, first);
   });
 
   it("validates six technical collections and every transitive artifact digest", async () => {
@@ -329,6 +638,95 @@ describe("evidence aggregation", () => {
       }),
       /symlink/u,
     );
+  });
+
+  it("expands v2 proof groups with derived checkbox state without mutating inputs", async () => {
+    const root = await temporaryRoot();
+    const tasksPath = path.join(root, "tasks.md");
+    const artifactPath = path.join(root, "proof.json");
+    const proofSourcePath = path.join(root, "proof-source-v2.json");
+    const outputPath = path.join(root, "task-proof-map-v2.json");
+    await fsp.writeFile(tasksPath, "- [x] T001 done\n- [ ] T066 closure\n");
+    await fsp.writeFile(artifactPath, "proof\n");
+    await writeJson(proofSourcePath, {
+      schemaVersion: 2,
+      defaults: {
+        required: true,
+        reviewerRequirement: "NOT_REQUIRED",
+        ownerRequirement: "NOT_REQUIRED",
+      },
+      proofGroups: [
+        {
+          taskIds: ["T001"],
+          completionRefs: [{ repository: "product", commit: "ab".repeat(20) }],
+          claimIds: ["approved"],
+          artifactRefs: [{ path: artifactPath, sha256: sha256("proof\n") }],
+        },
+        {
+          taskIds: ["T066"],
+          completionRefs: [],
+          claimIds: [],
+          artifactRefs: [],
+        },
+      ],
+    });
+    const tasksBefore = await fsp.readFile(tasksPath);
+    const sourceBefore = await fsp.readFile(proofSourcePath);
+    const map = await generateTaskProof({
+      tasksPath,
+      proofSourcePath,
+      outputPath,
+    });
+    assert.deepEqual(
+      map.records.map(({ taskId, checkboxState }) => ({
+        taskId,
+        checkboxState,
+      })),
+      [
+        { taskId: "T001", checkboxState: "checked" },
+        { taskId: "T066", checkboxState: "unchecked" },
+      ],
+    );
+    assert.deepEqual(await fsp.readFile(tasksPath), tasksBefore);
+    assert.deepEqual(await fsp.readFile(proofSourcePath), sourceBefore);
+  });
+
+  it("blocks duplicate and missing task coverage in v2 proof groups", async () => {
+    const root = await temporaryRoot();
+    const tasksPath = path.join(root, "tasks.md");
+    await fsp.writeFile(tasksPath, "- [x] T001 done\n- [ ] T066 closure\n");
+    const defaults = {
+      required: true,
+      completionRefs: [],
+      claimIds: [],
+      artifactRefs: [],
+      reviewerRequirement: "NOT_REQUIRED",
+      ownerRequirement: "NOT_REQUIRED",
+    };
+    for (const [name, proofGroups, pattern] of [
+      [
+        "duplicate",
+        [{ taskIds: ["T001", "T066"] }, { taskIds: ["T001"] }],
+        /duplicate task proof group coverage/u,
+      ],
+      ["missing", [{ taskIds: ["T001"] }], /exactly match tasks\.md/u],
+      [
+        "unknown",
+        [{ taskIds: ["T001", "T066", "T999"] }],
+        /unknown task proof group task/u,
+      ],
+    ]) {
+      const sourcePath = path.join(root, `${name}.json`);
+      await writeJson(sourcePath, { schemaVersion: 2, defaults, proofGroups });
+      await assert.rejects(
+        generateTaskProof({
+          tasksPath,
+          proofSourcePath: sourcePath,
+          outputPath: path.join(root, `${name}-output.json`),
+        }),
+        pattern,
+      );
+    }
   });
 
   it("allows only the declared closure self-task transition", async () => {
