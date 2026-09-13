@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "scenario": "snapshot-corruption",
+  "result": "PASS",
+  "targetWithinIsolatedWorkspace": true,
+  "latestSnapshotWithinIsolatedData": true,
+  "fallbackSnapshotWithinIsolatedData": true,
+  "latestAndFallbackDistinct": true,
+  "latestSnapshotCorrupted": true,
+  "recoveryDialogVisibleBeforeDecision": true,
+  "recoveredSnapshotSavedAt": 1789266255,
+  "expectedFallbackSavedAt": 1789266255,
+  "recoveredFallbackMatches": true,
+  "recoveredScene": {
+    "type": "excalidraw",
+    "version": 2,
+    "elements": [{ "id": "fallback" }]
+  },
+  "targetSceneAfterRestore": {
+    "type": "excalidraw",
+    "version": 2,
+    "elements": [{ "id": "on-disk" }]
+  },
+  "targetOverwriteBeforeDecisionCount": 0,
+  "snapshotsRemaining": 0
+}

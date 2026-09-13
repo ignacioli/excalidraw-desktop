@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "HF2-02-recovery-process",
+  "gateId": "HF2-02",
+  "route": "deterministic-runtime",
+  "binding": {
+    "productCommit": "030f279b21bb603d1545e2920aac5a25ae20d977",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "bd19706a0af0a1c3c86a219b6fe78bbc668c87b89a06cbdd147adf7e035e82f4",
+    "harnessVersion": "003-recovery-process-v1"
+  },
+  "collector": {
+    "tool": "phase6-recovery-process",
+    "version": "1",
+    "runIdentity": "030f279b21bb603d1545e2920aac5a25ae20d977:HF2-02-recovery-process"
+  },
+  "environmentPath": "environment.json",
+  "claims": [
+    {
+      "claimId": "HF2-02-clean-versus-abnormal-startup",
+      "factClass": "application-route-outcome",
+      "primaryRoute": "deterministic-runtime",
+      "result": "PASS",
+      "artifactRefs": ["recovery-window.json"]
+    },
+    {
+      "claimId": "HF2-02-recovery-scene-restoration",
+      "factClass": "application-route-outcome",
+      "primaryRoute": "deterministic-runtime",
+      "result": "PASS",
+      "artifactRefs": ["recovery-window.json"]
+    },
+    {
+      "claimId": "HF2-02-corrupt-snapshot-fallback",
+      "factClass": "application-route-outcome",
+      "primaryRoute": "deterministic-runtime",
+      "result": "PASS",
+      "artifactRefs": ["snapshot-corruption.json"]
+    },
+    {
+      "claimId": "HF2-02-zero-target-overwrite-before-decision",
+      "factClass": "application-route-outcome",
+      "primaryRoute": "deterministic-runtime",
+      "result": "PASS",
+      "artifactRefs": ["snapshot-corruption.json"]
+    }
+  ],
+  "artifactDigests": [
+    {
+      "path": "environment.json",
+      "sha256": "283b06514f2ec1830f6609419544ae03e51f1fadc49eecebd604c554b86d72eb"
+    },
+    {
+      "path": "recovery-window.json",
+      "sha256": "df1ff744c4cfa22cb6d0109f1638b952b75fad95e90f4b908c9023685c36ee72"
+    },
+    {
+      "path": "snapshot-corruption.json",
+      "sha256": "6a579dd7111c617cb4a7a81b4ffba8ecff2d157e0abb110a4cb9b22a1e8c690c"
+    }
+  ],
+  "collectionDigest": "f711ff9d06a5651208f233ea5d7e8216cdf06c5eaf39c6ea41bd47953a4b4af2",
+  "commands": [
+    {
+      "command": "cargo build --manifest-path src-tauri/Cargo.toml --features e2e-harness --bin excalidraw-desktop",
+      "result": "PASS",
+      "summary": "Test-only debug executable built; no .app package was built or launched."
+    },
+    {
+      "command": "APP_E2E=1 EXCALIDRAW_E2E_BINARY=<debug-binary> EXCALIDRAW_E2E_RECOVERY=1 PLAYWRIGHT_SKIP_WEBSERVER=1 pnpm exec playwright test --config e2e/playwright.config.ts --workers=1 e2e/tests/us2-recovery-window.spec.ts e2e/tests/us2-snapshot-corruption.spec.ts",
+      "result": "PASS",
+      "summary": "2 process-level scenarios passed."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml recovery -- --nocapture",
+      "result": "PASS",
+      "summary": "9 recovery-focused Rust tests passed."
+    }
+  ],
+  "scopeExclusions": {
+    "visualFidelityClaimed": false,
+    "browserGeometryClaimed": false,
+    "productionPackageBuiltOrLaunched": false,
+    "independentVisualReviewAuthored": false,
+    "productOwnerDecisionAuthored": false
+  },
+  "result": "PASS"
+}
