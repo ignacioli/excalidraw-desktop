@@ -155,6 +155,14 @@ body {
   padding: var(--space-1) var(--space-2) 0 calc(var(--space-6) * 2);
 }
 
+.app-shell-tabs[data-sidebar-mode="hidden"] .tab-list {
+  padding-left: var(--space-2);
+}
+
+.app-shell-tabs[data-sidebar-mode="hidden"] .shell-left {
+  padding-right: 0;
+}
+
 .tab-list::-webkit-scrollbar {
   display: none;
 }
@@ -859,6 +867,34 @@ body {
   background: var(--panel-background);
   box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 18%);
   transform: translateX(-50%);
+}
+
+.recovery-notice {
+  position: absolute;
+  z-index: 20;
+  top: 5.75rem;
+  left: var(--space-6);
+  display: inline-flex;
+  min-width: 15.5rem;
+  min-height: 2.125rem;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-primary);
+  background: var(--surface-background);
+  font-size: var(--font-size-label, 12px);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.recovery-notice-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: 0 0 0.5rem;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .export-dialog-backdrop {

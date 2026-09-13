@@ -12,6 +12,11 @@ interface RecoveryStartupProps {
   onStateChange?: (state: RecoveryStartupState) => void;
 }
 
+interface RecoveryNoticeProps {
+  count: number;
+  durationMs?: number;
+}
+
 export type RecoveryStartupStatus = "checking" | "dialog" | "ready" | "error";
 
 export interface RecoveryStartupState {
@@ -19,6 +24,30 @@ export interface RecoveryStartupState {
   handshake: AppHandshakeResponse | null;
   candidates: readonly RecoveryCandidate[];
   recoveredCount: number;
+}
+
+export function RecoveryNotice({
+  count,
+  durationMs = 5_000,
+}: RecoveryNoticeProps) {
+  const [dismissedCount, setDismissedCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (count <= 0) return;
+    const timer = window.setTimeout(
+      () => setDismissedCount(count),
+      durationMs,
+    );
+    return () => window.clearTimeout(timer);
+  }, [count, durationMs]);
+
+  if (count <= 0 || dismissedCount === count) return null;
+  return (
+    <p className="recovery-notice" role="status">
+      <span aria-hidden="true" className="recovery-notice-dot" />
+      Recovered · {count} {count === 1 ? "drawing" : "drawings"} restored
+    </p>
+  );
 }
 
 export function RecoveryStartup({

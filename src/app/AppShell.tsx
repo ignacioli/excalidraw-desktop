@@ -18,6 +18,7 @@ import {
 import { conflictDetector } from "../documents/conflictDetector";
 import { ConflictDialog } from "../documents/ConflictDialog";
 import {
+  RecoveryNotice,
   RecoveryStartup,
   type RecoveryStartupState,
 } from "../documents/RecoveryStartup";
@@ -823,6 +824,10 @@ export function AppShell({
               : "canvas-region"
           }
         >
+          {startupState.status === "ready" &&
+          startupState.recoveredCount > 0 ? (
+            <RecoveryNotice count={startupState.recoveredCount} />
+          ) : null}
           {showWelcome ? (
             <WelcomeScreen
               busy={welcomeBusy}

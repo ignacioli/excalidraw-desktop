@@ -11,6 +11,7 @@ export type FixtureId =
   | "empty"
   | "welcome"
   | "restored"
+  | "restored-recovery"
   | "pinned"
   | "overlay"
   | "nested-tree"
@@ -226,6 +227,10 @@ const VSL_TABS: readonly ShellFixtureTab[] = VSL_ENTRIES.filter(
   conflictState: "none",
 }));
 
+const RESTORED_RECOVERY_TABS: readonly ShellFixtureTab[] = VSL_TABS.map(
+  (tab) => ({ ...tab, saveState: "dirty" }),
+);
+
 const UNSAVED_TAB: ShellFixtureTab = {
   documentId: "fixture-document-unsaved",
   title: "Untitled",
@@ -291,6 +296,14 @@ export const PINNED_SHELL_FIXTURE: ShellFixture = {
   tabs: VSL_TABS,
 };
 
+export const RESTORED_RECOVERY_SHELL_FIXTURE: ShellFixture = {
+  ...PINNED_SHELL_FIXTURE,
+  id: "restored-recovery",
+  sidebar: "hidden",
+  activeDocumentId: RESTORED_RECOVERY_TABS[0]?.documentId ?? null,
+  tabs: RESTORED_RECOVERY_TABS,
+};
+
 export const OVERLAY_SHELL_FIXTURE: ShellFixture = {
   ...RESTORED_SHELL_FIXTURE,
   id: "overlay",
@@ -341,6 +354,7 @@ export const SHELL_FIXTURES: readonly ShellFixture[] = [
   EMPTY_SHELL_FIXTURE,
   WELCOME_SHELL_FIXTURE,
   RESTORED_SHELL_FIXTURE,
+  RESTORED_RECOVERY_SHELL_FIXTURE,
   PINNED_SHELL_FIXTURE,
   OVERLAY_SHELL_FIXTURE,
   NESTED_TREE_SHELL_FIXTURE,

@@ -217,11 +217,15 @@ test.describe("003 shell visual harness", () => {
   test("captures Restored / Hidden / Light without old top-level commands", async ({
     page,
   }, testInfo) => {
-    const fixture = getShellFixture("restored");
+    const fixture = getShellFixture("restored-recovery");
     await prepare(page, fixture, "light");
     await assertRestoredFixture(page, fixture);
+    await expect(page.locator(".recovery-notice")).toContainText(
+      "Recovered · 3 drawings restored",
+    );
     await expect(page.locator(".file-sidebar")).not.toBeVisible();
     await assertShellContract(page, { session: "restored", sidebar: "hidden" });
+    const geometryAssertions = await assertRestoredHiddenGeometry(page);
     await captureAndCollect(page, testInfo, {
       captureKey: "restoredHiddenLight",
       fixture,
@@ -230,6 +234,7 @@ test.describe("003 shell visual harness", () => {
       session: "restored",
       cropLocator: page.locator(".app-shell-tabs"),
       componentId: "shell-tabs",
+      geometryAssertions,
     });
   });
 
@@ -433,10 +438,41 @@ async function prepare(
       );
     }
   });
+  const recoveryCandidates =
+    fixture.id === "restored-recovery"
+      ? fixture.tabs.map((tab, index) => ({
+          documentId: `visual-recovery-${index + 1}`,
+          originalPath: tab.path,
+          displayName: tab.path?.split("/").at(-1) ?? tab.title,
+          snapshotSavedAt: 1_720_000_100 + index,
+          coldFileMtime: 1_720_000_000,
+          snapshotNewer: true,
+        }))
+      : [];
   await installUiInteractionHarness(page, {
     workspaces: fixture.workspaces,
     entries: fixture.entries,
-    startup: { nativeWindowRuntime: true },
+    responses:
+      fixture.id === "restored-recovery"
+        ? {
+            recovery_apply: {
+              scene: {
+                type: "excalidraw",
+                version: 2,
+                source: "003-restored-recovery-visual-fixture",
+                elements: [],
+                appState: { viewBackgroundColor: "#ffffff" },
+                files: {},
+              },
+              newPath: null,
+            },
+          }
+        : undefined,
+    startup: {
+      abnormalExit: fixture.id === "restored-recovery",
+      nativeWindowRuntime: true,
+      recoveryCandidates,
+    },
   });
   await page.addInitScript(
     ({ key, version, currentWorkspaceId, sidebarPinned }) => {
@@ -459,10 +495,41 @@ async function prepare(
     },
   );
   await page.goto("/");
-  await openFixtureDocuments(page, fixture);
+  if (fixture.id === "restored-recovery") {
+    await resolveRecoveryFixture(page, fixture);
+  } else {
+    await openFixtureDocuments(page, fixture);
+  }
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
+}
+
+async function resolveRecoveryFixture(
+  page: Page,
+  fixture: ShellFixture,
+): Promise<void> {
+  for (const tab of fixture.tabs) {
+    const displayName = tab.path?.split("/").at(-1) ?? tab.title;
+    await page
+      .getByRole("button", { name: `Restore ${displayName}` })
+      .click();
+  }
+  await expect(
+    page.getByRole("dialog", { name: "Recover unsaved drawings" }),
+  ).not.toBeAttached();
+  await expect(page.locator(".tab-list").getByRole("tab")).toHaveCount(3);
+  const activeTab = fixture.tabs.find(
+    ({ documentId }) => documentId === fixture.activeDocumentId,
+  );
+  if (activeTab !== undefined) {
+    await page
+      .locator(".tab-list")
+      .getByRole("tab", { name: new RegExp(activeTab.title) })
+      .click();
+  }
+  await expect(page.locator(SDK_BOUNDARY_SELECTOR)).toBeVisible();
+  await page.mouse.move(VISUAL_VIEWPORT.width - 8, VISUAL_VIEWPORT.height - 8);
 }
 
 async function openFixtureDocuments(
@@ -728,7 +795,84 @@ async function assertWelcomeGeometry(
       tolerance: 0,
     }),
   ];
-  expect(assertions.every(({ result }) => result === "PASS")).toBe(true);
+  for (const assertion of assertions) {
+    expect(
+      assertion.result,
+      `${assertion.name}: expected ${assertion.expected}, actual ${assertion.actual}, tolerance ${assertion.tolerance}`,
+    ).toBe("PASS");
+  }
+  return assertions;
+}
+
+async function assertRestoredHiddenGeometry(
+  page: Page,
+): Promise<ReturnType<typeof assertGeometry>[]> {
+  const topLayer = await readBox(page.locator(".app-shell-tabs"));
+  const canvas = await readBox(page.locator(".canvas-region"));
+  const firstTab = await readBox(page.locator(".tab-cluster").first());
+  const notice = await readBox(page.locator(".recovery-notice"));
+  const assertions = [
+    assertGeometry({
+      name: "restored-hidden.top-layer-height",
+      expected: 44,
+      actual: topLayer.height,
+      tolerance: 0,
+    }),
+    assertGeometry({
+      name: "restored-hidden.canvas-left",
+      expected: 0,
+      actual: canvas.x,
+      tolerance: 0,
+    }),
+    assertGeometry({
+      name: "restored-hidden.canvas-width",
+      expected: VISUAL_VIEWPORT.width,
+      actual: canvas.width,
+      tolerance: GEOMETRY_TOLERANCE_PX,
+    }),
+    assertGeometry({
+      name: "restored-hidden.tab-width",
+      expected: 196,
+      actual: firstTab.width,
+      tolerance: 0,
+    }),
+    assertGeometry({
+      name: "restored-hidden.first-tab-left",
+      expected: 88,
+      actual: firstTab.x,
+      tolerance: GEOMETRY_TOLERANCE_PX,
+    }),
+    assertGeometry({
+      name: "restored-hidden.tab-height",
+      expected: 36,
+      actual: firstTab.height,
+      tolerance: 0,
+    }),
+    assertGeometry({
+      name: "restored-hidden.notice-left",
+      expected: 24,
+      actual: notice.x,
+      tolerance: 0,
+    }),
+    assertGeometry({
+      name: "restored-hidden.notice-top",
+      expected: 136,
+      actual: notice.y,
+      tolerance: GEOMETRY_TOLERANCE_PX,
+    }),
+    assertGeometry({
+      name: "restored-hidden.notice-height",
+      expected: 34,
+      actual: notice.height,
+      tolerance: GEOMETRY_TOLERANCE_PX,
+    }),
+  ];
+  for (const assertion of assertions) {
+    expect(
+      assertion.result,
+      `${assertion.name}: expected ${assertion.expected}, actual ${assertion.actual}, tolerance ${assertion.tolerance}`,
+    ).toBe("PASS");
+  }
   return assertions;
 }
 

@@ -115,4 +115,41 @@ describe("RecoveryDialog", () => {
     expect(secondRestore).toBeDisabled();
     resolveApply?.();
   });
+
+  it.each([
+    [
+      "Restore drawing.excalidraw",
+      { documentId: "document-1", action: "restore" },
+    ],
+    [
+      "Keep disk version for drawing.excalidraw",
+      { documentId: "document-1", action: "keepDisk" },
+    ],
+    [
+      "Save drawing.excalidraw as new",
+      {
+        documentId: "document-1",
+        action: "saveAsNew",
+        saveAsPath: "/workspace/recovered.excalidraw",
+      },
+    ],
+    [
+      "Discard recovery for drawing.excalidraw",
+      { documentId: "document-1", action: "discard" },
+    ],
+  ] as const)("emits the exact recovery decision for %s", async (label, decision) => {
+    const user = userEvent.setup();
+    const onApply = vi.fn(async () => ({ scene: undefined, newPath: undefined }));
+    render(
+      <RecoveryDialog
+        candidates={[recoveryCandidate]}
+        onApply={onApply}
+        requestSaveAsPath={async () => "/workspace/recovered.excalidraw"}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: label }));
+
+    expect(onApply).toHaveBeenCalledWith(decision);
+  });
 });

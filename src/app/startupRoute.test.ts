@@ -65,6 +65,23 @@ describe("deriveStartupRoute", () => {
     });
   });
 
+  it("keeps an existing session behind Recovery until every candidate resolves", () => {
+    expect(
+      deriveStartupRoute({
+        ...cleanSessionFixture,
+        handshake: { abnormalExit: true, pendingOpenPaths: [] },
+        recoveryCandidates: [recoveryCandidate],
+      }),
+    ).toEqual({ kind: "recovery" });
+    expect(
+      deriveStartupRoute({
+        ...cleanSessionFixture,
+        handshake: { abnormalExit: true, pendingOpenPaths: [] },
+        recoveryCandidates: [],
+      }),
+    ).toEqual({ kind: "restored" });
+  });
+
   it("does not treat a missing current workspace id as a restored session", () => {
     expect(
       deriveStartupRoute({
