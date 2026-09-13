@@ -1209,6 +1209,18 @@ body {
   white-space: nowrap;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .app-shell,
+  .app-shell *,
+  .app-shell *::before,
+  .app-shell *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
 .canvas-empty-state,
 .canvas-placeholder {
   position: absolute;

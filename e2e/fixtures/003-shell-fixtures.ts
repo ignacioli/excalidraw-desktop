@@ -13,6 +13,7 @@ export type FixtureId =
   | "restored"
   | "restored-recovery"
   | "pinned"
+  | "pinned-dark"
   | "overlay"
   | "nested-tree"
   | "selected-directory"
@@ -426,6 +427,12 @@ export const OVERLAY_SHELL_FIXTURE: ShellFixture = {
   tabs: OVERLAY_TABS,
 };
 
+export const PINNED_DARK_SHELL_FIXTURE: ShellFixture = {
+  ...OVERLAY_SHELL_FIXTURE,
+  id: "pinned-dark",
+  sidebar: "pinned",
+};
+
 export const NESTED_TREE_SHELL_FIXTURE: ShellFixture = {
   ...RESTORED_SHELL_FIXTURE,
   id: "nested-tree",
@@ -473,6 +480,7 @@ export const SHELL_FIXTURES: readonly ShellFixture[] = [
   RESTORED_RECOVERY_SHELL_FIXTURE,
   PINNED_SHELL_FIXTURE,
   OVERLAY_SHELL_FIXTURE,
+  PINNED_DARK_SHELL_FIXTURE,
   NESTED_TREE_SHELL_FIXTURE,
   SELECTED_DIRECTORY_SHELL_FIXTURE,
   UNSAVED_TAB_SHELL_FIXTURE,

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   SHELL_PREFERENCES_STORAGE_KEY,
@@ -382,27 +383,177 @@ test.describe("003 shell visual harness", () => {
     });
   });
 
-  test("captures Workspace / Pinned / Dark and Unicode fallback text", async ({
+  test("collects Pinned Dark semantic a11y, keyboard, contrast, non-color, reduced-motion, and geometry parity", async ({
     page,
   }, testInfo) => {
-    await prepare(page, getShellFixture("unicode-pinned"), "dark");
-    await expect(page.locator(".file-sidebar")).toBeVisible();
+    const fixture = getShellFixture("pinned-dark");
+    await prepare(page, fixture, "light");
+    const lightGeometry = await readPhase8Geometry(page);
+
+    await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-color-scheme",
+      "dark",
+    );
+    const darkGeometry = await readPhase8Geometry(page);
+    const geometryAssertions = Object.entries(lightGeometry).flatMap(
+      ([component, lightBox]) =>
+        (["x", "y", "width", "height"] as const).map((dimension) =>
+          assertGeometry({
+            name: `theme-parity.${component}.${dimension}`,
+            expected: lightBox[dimension],
+            actual: darkGeometry[component]?.[dimension] ?? -1,
+            tolerance: 0,
+          }),
+        ),
+    );
+    expect(geometryAssertions.every(({ result }) => result === "PASS")).toBe(
+      true,
+    );
+
+    const axe = await new AxeBuilder({ page })
+      .exclude(SDK_BOUNDARY_SELECTOR)
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+      .analyze();
+    expect(axe.violations).toEqual([]);
+
+    const semanticAssertions = await assertRestoredFixture(page, fixture);
+    const back = page.getByRole("button", { name: "Back" });
+    const sidebarToggle = page.getByRole("button", {
+      name: "Toggle workspace sidebar",
+    });
+    await sidebarToggle.focus();
+    await expect(sidebarToggle).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(back).toBeFocused();
+    await expect(back).toHaveCSS("outline-width", "2px");
+
+    const selectedDrawing = page.locator(
+      '.workspace-tree-row[data-kind="drawing"][aria-selected="true"]',
+    );
+    await expect(selectedDrawing).toHaveCount(1);
     await expect(
-      page.getByRole("treeitem", { name: UNICODE_WORKSPACE.name }),
-    ).toBeVisible();
-    await expect(page.getByRole("treeitem", { name: "流程" })).toBeVisible();
-    await assertRestoredFixture(page, getShellFixture("unicode-pinned"));
-    await assertShellContract(page, { session: "restored", sidebar: "pinned" });
-    const geometryAssertions = await assertGeometrySet(page, "pinned");
-    await assertUnicodeFallback(page, getShellFixture("unicode-pinned"));
+      selectedDrawing.locator(".workspace-tree-active-indicator"),
+    ).toHaveCount(1);
+    const expandedDirectory = page.locator(
+      '.workspace-tree-row[data-kind="directory"][aria-expanded="true"]',
+    );
+    await expect(expandedDirectory).toHaveCount(1);
+
+    const contrast = await readPhase8Contrast(page);
+    expect(contrast.primaryOnPanel).toBeGreaterThanOrEqual(4.5);
+    expect(contrast.secondaryOnPanel).toBeGreaterThanOrEqual(4.5);
+    expect(contrast.primaryOnActive).toBeGreaterThanOrEqual(4.5);
+    const reducedMotion = await page.locator(".app-shell").evaluate((shell) => {
+      const style = getComputedStyle(shell);
+      const durationSeconds = (value: string): number =>
+        value.endsWith("ms")
+          ? Number.parseFloat(value) / 1_000
+          : Number.parseFloat(value);
+      return {
+        mediaMatches: matchMedia("(prefers-reduced-motion: reduce)").matches,
+        scrollBehavior: style.scrollBehavior,
+        transitionSeconds: durationSeconds(style.transitionDuration),
+        animationSeconds: durationSeconds(style.animationDuration),
+      };
+    });
+    expect(reducedMotion.mediaMatches).toBe(true);
+    expect(reducedMotion.scrollBehavior).toBe("auto");
+    expect(reducedMotion.transitionSeconds).toBeLessThanOrEqual(0.000001);
+    expect(reducedMotion.animationSeconds).toBeLessThanOrEqual(0.000001);
+
+    await page.mouse.move(
+      VISUAL_VIEWPORT.width - 8,
+      VISUAL_VIEWPORT.height - 8,
+    );
     await captureAndCollect(page, testInfo, {
       captureKey: "workspacePinnedDark",
-      fixture: getShellFixture("unicode-pinned"),
+      captureName: "workspace-pinned-dark-semantic",
+      collectionId: "HF2-06-dark-pinned-semantic-browser",
+      fixture,
+      theme: "dark",
+      sidebar: "pinned",
+      session: "workspace",
+      cropLocator: page.locator(".app-shell"),
+      componentId: "phase8-shell-semantic",
+      semanticAssertions: [
+        ...semanticAssertions,
+        {
+          name: "semantic.a11y.axe-violation-count",
+          expected: "0",
+          actual: String(axe.violations.length),
+          tolerance: "exact",
+          result: axe.violations.length === 0 ? "PASS" : "FAIL",
+        },
+        {
+          name: "semantic.keyboard.back-focus-ring",
+          expected: "2px",
+          actual: await back.evaluate(
+            (element) => getComputedStyle(element).outlineWidth,
+          ),
+          tolerance: "exact",
+          result: "PASS",
+        },
+        {
+          name: "semantic.non-color.active-row-indicator-count",
+          expected: "1",
+          actual: String(
+            await selectedDrawing
+              .locator(".workspace-tree-active-indicator")
+              .count(),
+          ),
+          tolerance: "exact",
+          result: "PASS",
+        },
+        {
+          name: "semantic.contrast.minimum-ratio",
+          expected: ">=4.5",
+          actual: String(Math.min(...Object.values(contrast))),
+          tolerance: "WCAG AA",
+          result: "PASS",
+        },
+        {
+          name: "semantic.reduced-motion.transition-duration",
+          expected: "<=0.000001s",
+          actual: `${reducedMotion.transitionSeconds}s`,
+          tolerance: "maximum",
+          result: reducedMotion.transitionSeconds <= 0.000001 ? "PASS" : "FAIL",
+        },
+      ],
+      geometryAssertions,
+    });
+  });
+
+  test("captures Workspace / Pinned / Dark with the fixed HF2-06 visual fixture", async ({
+    page,
+  }, testInfo) => {
+    const fixture = getShellFixture("pinned-dark");
+    await prepare(page, fixture, "dark");
+    await expect(page.locator(".file-sidebar")).toBeVisible();
+    await expect(
+      page
+        .getByRole("treeitem", { name: "Architecture" })
+        .and(page.locator('[data-kind="workspace"]')),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("treeitem", { name: "System Map" }),
+    ).toBeVisible();
+    const semanticAssertions = await assertRestoredFixture(page, fixture);
+    await assertShellContract(page, { session: "restored", sidebar: "pinned" });
+    const geometryAssertions = await assertGeometrySet(page, "pinned");
+    await assertPinnedWorkspaceHeader(page);
+    await assertDefaultWorkspaceRowState(page);
+    await captureAndCollect(page, testInfo, {
+      captureKey: "workspacePinnedDark",
+      captureName: "workspace-pinned-dark-visual",
+      collectionId: "HF2-06-dark-pinned-visual-browser",
+      fixture,
       theme: "dark",
       sidebar: "pinned",
       session: "workspace",
       cropLocator: page.locator(".file-sidebar"),
       componentId: "workspace-sidebar",
+      semanticAssertions,
       geometryAssertions,
     });
   });
@@ -924,6 +1075,77 @@ async function assertGeometrySet(
   return assertions;
 }
 
+async function readPhase8Geometry(page: Page): Promise<Record<string, Box>> {
+  const selectors = {
+    topLayer: ".app-shell-tabs",
+    sidebar: ".file-sidebar",
+    canvas: ".canvas-region",
+    back: ".shell-back-button",
+    tab: ".tab-cluster",
+    workspaceRow: ".workspace-tree-row",
+    headerAction: ".workspace-panel-actions .icon-button",
+  } as const;
+  return Object.fromEntries(
+    await Promise.all(
+      Object.entries(selectors).map(async ([name, selector]) => [
+        name,
+        await readBox(page.locator(selector).first()),
+      ]),
+    ),
+  );
+}
+
+async function readPhase8Contrast(page: Page): Promise<{
+  primaryOnPanel: number;
+  secondaryOnPanel: number;
+  primaryOnActive: number;
+}> {
+  const colors = await page.evaluate(() => {
+    const style = getComputedStyle(document.documentElement);
+    return {
+      primary: style.getPropertyValue("--text-primary").trim(),
+      secondary: style.getPropertyValue("--text-secondary").trim(),
+      panel: style.getPropertyValue("--panel-background").trim(),
+      active: style.getPropertyValue("--surface-active").trim(),
+    };
+  });
+  return {
+    primaryOnPanel: contrastRatio(colors.primary, colors.panel),
+    secondaryOnPanel: contrastRatio(colors.secondary, colors.panel),
+    primaryOnActive: contrastRatio(colors.primary, colors.active),
+  };
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const luminance = (color: string): number => {
+    const match = /^#([0-9a-f]{6})$/iu.exec(color);
+    if (match?.[1] === undefined) {
+      throw new Error(`Expected a six-digit hex color, received ${color}`);
+    }
+    const hex = match[1];
+    const channels = [0, 2, 4].map((offset) =>
+      Number.parseInt(hex.slice(offset, offset + 2), 16),
+    );
+    const linear = channels.map((value) => {
+      const normalized = value / 255;
+      return normalized <= 0.04045
+        ? normalized / 12.92
+        : ((normalized + 0.055) / 1.055) ** 2.4;
+    });
+    return (
+      0.2126 * (linear[0] ?? 0) +
+      0.7152 * (linear[1] ?? 0) +
+      0.0722 * (linear[2] ?? 0)
+    );
+  };
+  const foregroundLuminance = luminance(foreground);
+  const backgroundLuminance = luminance(background);
+  return (
+    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+  );
+}
+
 async function assertWelcomeGeometry(
   page: Page,
 ): Promise<ReturnType<typeof assertGeometry>[]> {
@@ -1410,6 +1632,8 @@ async function captureAndCollect(
   },
   input: {
     captureKey: keyof typeof CAPTURE_NAMES;
+    captureName?: string;
+    collectionId?: string;
     fixture: ShellFixture;
     theme: "light" | "dark";
     sidebar: "hidden" | "overlay" | "pinned";
@@ -1430,7 +1654,7 @@ async function captureAndCollect(
   const actualPath = await capture(
     page,
     testInfo,
-    CAPTURE_NAMES[input.captureKey],
+    input.captureName ?? CAPTURE_NAMES[input.captureKey],
   );
   const cropComparison = await compareCropStability(
     input.cropLocator,
@@ -1452,7 +1676,9 @@ async function captureAndCollect(
             approved: true as const,
           },
         ];
-  const collectionId = `${gate.gateId}-${input.theme}-${input.sidebar}-browser`;
+  const collectionId =
+    input.collectionId ??
+    `${gate.gateId}-${input.theme}-${input.sidebar}-browser`;
   const configuredRoot = process.env.SHELL_EVIDENCE_RUN_ROOT;
   const collectionDir =
     configuredRoot === undefined
