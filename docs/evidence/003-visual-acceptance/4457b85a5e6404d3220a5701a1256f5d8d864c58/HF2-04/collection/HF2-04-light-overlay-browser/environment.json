@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "HF2-04-light-overlay-browser",
+  "gateId": "HF2-04",
+  "route": "semantic-browser",
+  "binding": {
+    "productCommit": "4457b85a5e6404d3220a5701a1256f5d8d864c58",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "073c6918ef3de0b911e2745bdac133a51787e731d8ea10fbfab8a57912afeec1",
+    "harnessVersion": "003-shell-v3"
+  },
+  "os": "darwin/arm64",
+  "viewport": {
+    "width": 1280,
+    "height": 760
+  },
+  "browserOrAppBuild": "browser-ui",
+  "fontReady": true,
+  "fontPolicy": {
+    "deviationId": "HF2-FONT-001",
+    "uiStack": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "monoStack": "ui-monospace, SFMono-Regular, Menlo, monospace",
+    "computedUiFamily": "-apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+    "computedMonoFamily": "ui-monospace, SFMono-Regular, Menlo, monospace",
+    "remoteFontRequests": 0,
+    "englishTargetVerified": true,
+    "unicodeFallbackVerified": true
+  },
+  "theme": "light",
+  "sidebar": "overlay",
+  "session": "workspace",
+  "fixture": "overlay",
+  "collector": {
+    "tool": "playwright-003-shell",
+    "version": "3",
+    "runIdentity": "4457b85a5e6404d3220a5701a1256f5d8d864c58:HF2-04-light-overlay-browser"
+  }
+}

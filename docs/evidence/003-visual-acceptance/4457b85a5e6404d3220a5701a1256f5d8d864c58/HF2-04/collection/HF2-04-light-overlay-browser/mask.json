@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "HF2-04-light-overlay-browser",
+  "gateId": "HF2-04",
+  "binding": {
+    "productCommit": "4457b85a5e6404d3220a5701a1256f5d8d864c58",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "073c6918ef3de0b911e2745bdac133a51787e731d8ea10fbfab8a57912afeec1",
+    "harnessVersion": "003-shell-v3"
+  },
+  "masks": [
+    {
+      "maskId": "sdk-editor-interior",
+      "selectorOrRect": ".canvas-document:not([hidden]) .excalidraw-editor",
+      "surface": "canvas",
+      "reason": "Official Excalidraw SDK-owned editor interior",
+      "perimeterChecked": true,
+      "approved": true
+    }
+  ]
+}
