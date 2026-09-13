@@ -1,0 +1,223 @@
+{
+  "schemaVersion": 1,
+  "legacyCounts": {
+    "globalNewDrawing": 0,
+    "textSidebar": 0,
+    "largePinUnpin": 0,
+    "topLevelSaveExportAppearance": 0,
+    "autosaveStrip": 0,
+    "tabScrollbar": 0,
+    "sidebarScrollbar": 0,
+    "placeholderIcons": 0,
+    "horizontalEllipsis": 0,
+    "duplicateWorkspaceRoots": 0,
+    "headerActionOverflow": 0
+  },
+  "legacyAssertions": [
+    {
+      "name": "legacy.globalNewDrawing",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.textSidebar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.largePinUnpin",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.topLevelSaveExportAppearance",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.autosaveStrip",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.tabScrollbar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.sidebarScrollbar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.placeholderIcons",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.horizontalEllipsis",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.duplicateWorkspaceRoots",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.headerActionOverflow",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    }
+  ],
+  "geometryAssertions": [
+    {
+      "name": "geometry.restored-hidden.top-layer-height",
+      "expected": "44",
+      "actual": "44",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.restored-hidden.canvas-left",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.restored-hidden.canvas-width",
+      "expected": "1280",
+      "actual": "1280",
+      "tolerance": "2px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.restored-hidden.tab-width",
+      "expected": "196",
+      "actual": "196",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.restored-hidden.first-tab-left",
+      "expected": "88",
+      "actual": "88",
+      "tolerance": "2px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.restored-hidden.tab-height",
+      "expected": "36",
+      "actual": "36",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.restored-hidden.notice-left",
+      "expected": "24",
+      "actual": "24",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.restored-hidden.notice-top",
+      "expected": "136",
+      "actual": "136",
+      "tolerance": "2px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.restored-hidden.notice-height",
+      "expected": "34",
+      "actual": "34.796875",
+      "tolerance": "2px",
+      "result": "PASS"
+    }
+  ],
+  "tokenAssertions": [
+    {
+      "name": "token.--app-background",
+      "expected": "#F8F9FA",
+      "actual": "#F8F9FA",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--panel-background",
+      "expected": "#FFFFFF",
+      "actual": "#FFFFFF",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--surface-hover",
+      "expected": "#F1F0FF",
+      "actual": "#F1F0FF",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--text-primary",
+      "expected": "#1B1B1F",
+      "actual": "#1B1B1F",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--text-secondary",
+      "expected": "#5C5C5C",
+      "actual": "#5C5C5C",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--focus-ring",
+      "expected": "#1C7ED6",
+      "actual": "#1C7ED6",
+      "tolerance": "exact",
+      "result": "PASS"
+    }
+  ],
+  "cropComparisons": [
+    {
+      "componentId": "shell-tabs",
+      "baselineComponentId": "shell-tabs",
+      "baselineSha256": "ed8c00033b56e41efc9aee60e5f2e340e6b1f3c464f6b71056586194e5b196cb",
+      "actualSha256": "ed8c00033b56e41efc9aee60e5f2e340e6b1f3c464f6b71056586194e5b196cb",
+      "fontReady": true,
+      "maxDiffPixelRatio": 0
+    }
+  ],
+  "cropAssertions": [
+    {
+      "name": "component-crop-binding.shell-tabs",
+      "expected": "same semantic component; fonts ready; valid digests; diff <=0.01",
+      "actual": "baseline=shell-tabs; fontReady=true; diff=0",
+      "tolerance": "auxiliary; component crop only",
+      "result": "PASS"
+    }
+  ]
+}
