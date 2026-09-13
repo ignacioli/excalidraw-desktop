@@ -1,0 +1,285 @@
+{
+  "schemaVersion": 1,
+  "gateId": "HF2-06",
+  "reviewerOutputPaths": {
+    "json": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/59995846cb49dbd192f1bd861694afb5f05059ed/HF2-06/review/reviewer-report.json",
+    "markdown": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/59995846cb49dbd192f1bd861694afb5f05059ed/HF2-06/review/reviewer-report.md"
+  },
+  "reviewerIdentity": {
+    "role": "ui-visual-acceptance-reviewer",
+    "taskIdentity": "/root/hf206_visual_review",
+    "runtimeIdentity": "/root/hf206_visual_review"
+  },
+  "runtimeConfig": {
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "high"
+  },
+  "independenceConfirmed": true,
+  "independenceStatement": "This reviewer did not author or modify the reviewed production UI, validation harness, fixtures, semantic collection, or fixed visual collection. The reviewer wrote only the assigned reviewer-report.json and reviewer-report.md and did not touch production UI, tests, collection inputs, prior evidence, frozen design artifacts, specifications, task checkboxes, owner artifacts, Git staging, or commits.",
+  "implementationTaskIdentity": [
+    "/root",
+    "commit:59995846cb49dbd192f1bd861694afb5f05059ed"
+  ],
+  "reviewedProductCommit": "59995846cb49dbd192f1bd861694afb5f05059ed",
+  "collectionContainingHeadAtDispatch": "fbc2bd761065b1c96783d5200585e46f59cd4f9d",
+  "collectionContainingHeadSubstitutedForReviewedCommit": false,
+  "buildIdentity": {
+    "bundleOrBuildName": "browser-ui",
+    "bundleIdentifier": null,
+    "os": "darwin",
+    "osVersionRecordedByCollection": null,
+    "reviewerHostOsVersion": "macOS 26.6.2 (25G83)",
+    "architecture": "arm64",
+    "displayScale": 1,
+    "displayScaleBasis": "The fixed visual 1280x760 PNG equals the recorded 1280x760 CSS viewport; this is the browser capture scale and is not a claim about a physical macOS display.",
+    "viewport": {
+      "width": 1280,
+      "height": 760,
+      "unit": "CSS px"
+    },
+    "windowSize": null,
+    "theme": "dark",
+    "fixture": "pinned-dark",
+    "fontReady": true,
+    "remoteFontRequests": 0,
+    "route": "semantic-browser",
+    "harnessVersion": "003-shell-v3"
+  },
+  "contractConsistency": {
+    "result": "PASS",
+    "statement": "DESIGN.md, the confirmed UX brief decisions, the approved HF-2 README/components/tokens/manifest package, and the authoritative 003 spec/plan/UI contract agree for the HF2-06 Workspace Pinned Dark checkpoint: shell geometry is shared between Light and Dark, Dark shell controls and row iconography must remain readable, SDK masking is limited to the editor interior, and native package or product-owner evidence is not required at this intermediate gate."
+  },
+  "reviewedHf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+  "reviewedBaseline": {
+    "manifestName": "06 · Workspace · Pinned · Dark",
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/design/desktop-shell/hf-2/screens/workspace-pinned-dark.png",
+    "sha256": "8b06a988270d4a6d8f7ce00fa32fb422c8bf3dea3c6e8346390b2b77ea9b34d0",
+    "width": 1280,
+    "height": 760
+  },
+  "reviewedCollectorReports": {
+    "semantic": {
+      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/59995846cb49dbd192f1bd861694afb5f05059ed/HF2-06/collection/HF2-06-dark-pinned-semantic-browser/collector-report.json",
+      "sha256": "bb7b31c699de7791cfa9d844623630732b7a467743e0ed3df8da38aafff3e11c",
+      "collectionId": "HF2-06-dark-pinned-semantic-browser",
+      "collectionDigest": "d16021a308dac6ba14ce03d57ef98ed1f07c256965d98b6fcbb0aba7cebec7df",
+      "collectionDigestRecomputed": true,
+      "artifactDigestsRecomputed": true,
+      "result": "PASS"
+    },
+    "visual": {
+      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/59995846cb49dbd192f1bd861694afb5f05059ed/HF2-06/collection/HF2-06-dark-pinned-visual-browser/collector-report.json",
+      "sha256": "762b06763888b49bf78ee8bb988eed301679133c5006ae46d60e9893592d6fc6",
+      "collectionId": "HF2-06-dark-pinned-visual-browser",
+      "collectionDigest": "22a39bf6600ffe7d2ef584e82300d5be1384a2434e1de9f400db696ace97fb88",
+      "collectionDigestRecomputed": true,
+      "artifactDigestsRecomputed": true,
+      "result": "PASS"
+    }
+  },
+  "reviewedCollections": [
+    {
+      "collectionId": "HF2-06-dark-pinned-semantic-browser",
+      "collectionDigest": "d16021a308dac6ba14ce03d57ef98ed1f07c256965d98b6fcbb0aba7cebec7df",
+      "collectorReportSha256": "bb7b31c699de7791cfa9d844623630732b7a467743e0ed3df8da38aafff3e11c",
+      "actualSha256": "81d0b12bc0f15c4033754cf0e3e51cf5a247f84c4d4dd79714e4d93dc0a1e8fd",
+      "maskSha256": "699e09b3ee38c25c914c6a0dc44b02b84bd6593e219a01e3a2eeebdbd3452546",
+      "role": "semantic a11y, keyboard, contrast, non-colour cue, reduced-motion, Light/Dark geometry parity and exact Dark token authority"
+    },
+    {
+      "collectionId": "HF2-06-dark-pinned-visual-browser",
+      "collectionDigest": "22a39bf6600ffe7d2ef584e82300d5be1384a2434e1de9f400db696ace97fb88",
+      "collectorReportSha256": "762b06763888b49bf78ee8bb988eed301679133c5006ae46d60e9893592d6fc6",
+      "actualSha256": "706164d159388a803e9250e949fb2764e4c916d13b0bd9735e1c02b049e6ef35",
+      "maskSha256": "146f1f3534da73ac212096a8fb0c6848b7b30e458d64609355733410ef198ae0",
+      "role": "fixed Dark Pinned composition, tabs, Sidebar/header/rows, palette/readability, app-owned perimeter, font/mask/legacy visual authority"
+    }
+  ],
+  "reviewedActualSha256": "706164d159388a803e9250e949fb2764e4c916d13b0bd9735e1c02b049e6ef35",
+  "semanticActualSha256": "81d0b12bc0f15c4033754cf0e3e51cf5a247f84c4d4dd79714e4d93dc0a1e8fd",
+  "maskSha256": "146f1f3534da73ac212096a8fb0c6848b7b30e458d64609355733410ef198ae0",
+  "semanticMaskSha256": "699e09b3ee38c25c914c6a0dc44b02b84bd6593e219a01e3a2eeebdbd3452546",
+  "semanticAssertionsSummary": {
+    "result": "PASS",
+    "assertionCount": 57,
+    "failedAssertionCount": 0,
+    "axeViolationCount": 0,
+    "minimumContrastRatio": 8.925483265455044,
+    "minimumContrastThreshold": 4.5,
+    "backFocusRing": "2px",
+    "dirtyFlowMarkerCount": 1,
+    "cleanTabMarkerCount": 0,
+    "activeRowNonColorIndicatorCount": 1,
+    "reducedMotionTransitionDuration": "0.000001s",
+    "reducedMotionMaximum": "0.000001s",
+    "lightDarkGeometryExact": {
+      "topLayer": true,
+      "sidebar": true,
+      "canvas": true,
+      "back": true,
+      "tab": true,
+      "workspaceRow": true,
+      "headerAction": true
+    },
+    "note": "These facts are accepted from the digest-owned semantic assertions and were not re-proved from the fixed visual screenshot. The recorded minimum contrast assertion does not override the independent visual finding for workspace row icon readability."
+  },
+  "screenMatrix": [
+    {
+      "screen": "06 · Workspace · Pinned · Dark",
+      "status": "FAIL",
+      "evidence": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/59995846cb49dbd192f1bd861694afb5f05059ed/HF2-06/collection/HF2-06-dark-pinned-visual-browser/actual.png",
+      "mismatchCount": 1
+    }
+  ],
+  "visualChecks": [
+    {
+      "check": "Dark Pinned three-region composition and unmasked shell perimeter",
+      "result": "PASS",
+      "expected": "A 360px Pinned Workspace Sidebar, top Tab strip, SDK-owned editor region, and complete app-owned shell perimeter remain visibly separated.",
+      "actual": "The fixed visual capture preserves the Pinned composition, the top-layer/Sidebar boundary, and the app-owned perimeter outside the declared SDK editor mask."
+    },
+    {
+      "check": "Tabs and unsaved state",
+      "result": "PASS",
+      "expected": "Three compact Dark Tabs preserve active/inactive hierarchy, reserved close slots, and one visible non-colour dirty marker.",
+      "actual": "System Map, Flow, and Research Tabs are visible; Flow carries one visible yellow unsaved marker and the close slots remain stable."
+    },
+    {
+      "check": "Workspace header and compact actions",
+      "result": "PASS",
+      "expected": "The Architecture header and four compact actions remain on one row without clipping or overflow.",
+      "actual": "The header and New Drawing, New Folder, Collapse-or-Expand-All, and Refresh icon actions are present, compact, readable, and unclipped."
+    },
+    {
+      "check": "Workspace tree row iconography and Dark readability",
+      "result": "FAIL",
+      "expected": "Disclosure, directory, and drawing icons are recognizable and visibly use the Dark secondary foreground direction represented by #CED4DA on the #232329 panel or an equally readable selected-state treatment.",
+      "actual": "The fixed visual capture renders the Workspace tree disclosure, folder, and drawing glyphs near black. Sampled non-background raster values in those glyph regions are dominated by #000000 and #111114, producing visibly inadequate separation from #232329 rows and the #403E6A selected row."
+    },
+    {
+      "check": "Active row non-colour state",
+      "result": "PASS",
+      "expected": "The selected drawing remains identifiable without relying on row colour alone.",
+      "actual": "The selected System Map row includes the digest-owned left indicator and visible marker; the semantic collection records exactly one active-row non-colour indicator."
+    },
+    {
+      "check": "Font, mask, and visible legacy record",
+      "result": "PASS",
+      "expected": "Fonts are ready with no remote requests, only the SDK editor interior is masked, and prohibited legacy chrome is absent.",
+      "actual": "Both collections record fonts ready and zero remote font requests; each declares only sdk-editor-interior; all deterministic legacy counts are zero and no prohibited legacy shell control is visible."
+    }
+  ],
+  "compositionChecks": [
+    {
+      "check": "Pinned Sidebar participates in layout at 360px and leaves at least 70% canvas share",
+      "result": "PASS",
+      "evidenceSource": "visual collector geometry assertions"
+    },
+    {
+      "check": "Light/Dark top layer, Sidebar, canvas, Back, Tab, Workspace Row, and header-action geometry is exactly equal",
+      "result": "PASS",
+      "evidenceSource": "semantic collector geometry assertions"
+    },
+    {
+      "check": "Workspace header, four actions, nested tree, selected row, Tabs, and shell boundaries remain present",
+      "result": "PASS",
+      "evidenceSource": "fixed visual inspection"
+    },
+    {
+      "check": "Workspace disclosure, folder, and drawing icons remain legible in Dark mode",
+      "result": "FAIL",
+      "evidenceSource": "fixed visual inspection against the manifest-verified baseline and Dark component/token contract"
+    },
+    {
+      "check": "Only the declared SDK editor interior is excluded; no shell mismatch is masked",
+      "result": "PASS",
+      "evidenceSource": "mask.json and fixed visual inspection"
+    },
+    {
+      "check": "No prohibited legacy shell chrome is visible",
+      "result": "PASS",
+      "evidenceSource": "both collector assertions and fixed visual inspection"
+    }
+  ],
+  "legacyRemoval": [
+    { "control": "separate global top-level New Drawing", "observedCount": 0, "evidenceSource": "collector assertions" },
+    { "control": "textual Workspace sidebar control", "observedCount": 0, "evidenceSource": "collector assertions" },
+    { "control": "large textual Pin or Unpin control", "observedCount": 0, "evidenceSource": "collector assertions" },
+    { "control": "legacy top-level Save", "observedCount": 0, "evidenceSource": "collector combined top-level action assertion" },
+    { "control": "persistent normal-state All changes saved strip", "observedCount": 0, "evidenceSource": "collector assertions" },
+    { "control": "standalone top-level Export", "observedCount": 0, "evidenceSource": "collector combined top-level action assertion" },
+    { "control": "legacy top-level Appearance", "observedCount": 0, "evidenceSource": "collector combined top-level action assertion" },
+    { "control": "visible native-looking tab-strip scrollbar", "observedCount": 0, "evidenceSource": "collector assertions" },
+    { "control": "thick or always-visible Sidebar scrollbar", "observedCount": 0, "evidenceSource": "collector assertions" },
+    { "control": "Unicode placeholder tree or file icons", "observedCount": 0, "evidenceSource": "collector assertions and fixed visual inspection" },
+    { "control": "always-visible horizontal ellipsis", "observedCount": 0, "evidenceSource": "collector assertions" },
+    { "control": "duplicate current-workspace heading or workspace navigation state", "observedCount": 0, "evidenceSource": "collector workspace-root assertion and fixed visual inspection" },
+    { "control": "clipped or overflowed workspace-header actions", "observedCount": 0, "evidenceSource": "collector assertions and fixed visual inspection" },
+    { "control": "old 002 shell composition", "observedCount": 0, "evidenceSource": "fixed visual inspection" }
+  ],
+  "masks": [
+    {
+      "maskId": "sdk-editor-interior",
+      "selectorOrRect": ".canvas-document:not([hidden]) .excalidraw-editor",
+      "surface": "canvas",
+      "reason": "Official Excalidraw SDK-owned editor interior",
+      "perimeterChecked": true,
+      "approved": true
+    }
+  ],
+  "maskRationale": "The single declared selector is accepted only for the visible official Excalidraw SDK editor interior. The review did not exclude the Pinned Sidebar, top Tabs, Sidebar/Back controls, Workspace header, tree rows, row icons, divider, or any app-owned shell perimeter. The High mismatch lies in an unmasked Workspace tree region.",
+  "tolerances": {
+    "structureHierarchyAndPerimeter": "0 tolerance",
+    "browserGeometryTolerance": "+/-2 CSS px for shell-owned geometry; the bound collectors own the measurements",
+    "lightDarkGeometryParity": "0px exact",
+    "rasterOnlyTolerance": {
+      "scope": "collector-owned auxiliary same-semantic workspace-sidebar component crop only",
+      "maxDiffPixelRatio": 0.01,
+      "observedDiffPixelRatio": 0,
+      "fontReady": true
+    },
+    "wholeScreenRasterToleranceUsedByReviewer": false,
+    "toleranceOrMaskChangeMadeByReviewer": false,
+    "note": "The auxiliary crop result does not override the visible icon-foreground mismatch because palette/readability and component state are not raster-tolerant."
+  },
+  "findings": [
+    {
+      "id": "HF2-06-VIS-001",
+      "severity": "HIGH",
+      "screenState": "06 · Workspace · Pinned · Dark / Workspace tree disclosure, directory, and drawing glyphs",
+      "expected": "Workspace row iconography remains recognizable and readable in Dark mode. The approved baseline shows light disclosure/folder/drawing glyphs; the component contract requires distinct 16x16 icons and the Dark semantic direction uses #CED4DA secondary foreground on #232329 panels.",
+      "actual": "The fixed visual actual renders the Workspace tree disclosure, folder, and drawing glyphs near black. Pixel inspection of the unmasked glyph regions shows dominant non-background values #000000 and #111114, which visually collapse into the #232329 panel and remain too dark on the #403E6A selected row. The text and selected-row indicator remain readable, but the hierarchy and drawing/directory identity icons do not.",
+      "reproduction": "Open the manifest-verified workspace-pinned-dark.png and the fixed visual actual.png separately at native 1280x760. Inspect the unmasked Workspace tree from approximately x=16..76 and y=140..274, covering the root and nested disclosure chevrons, directory icons, and drawing icons. Compare their foreground separation against the baseline and the #CED4DA Dark secondary foreground contract.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/59995846cb49dbd192f1bd861694afb5f05059ed/HF2-06/collection/HF2-06-dark-pinned-visual-browser/actual.png",
+      "contractRefs": [
+        "DESIGN.md:109-128",
+        "docs/design/desktop-shell/hf-2/components.md:7-12",
+        "docs/design/desktop-shell/hf-2/components.md:42-54",
+        "docs/design/desktop-shell/hf-2/tokens.json:semantics.dark.color.text.secondary"
+      ]
+    }
+  ],
+  "residualLowMediumFindings": [],
+  "severityCounts": {
+    "info": 0,
+    "low": 0,
+    "medium": 0,
+    "high": 1,
+    "critical": 0
+  },
+  "highCount": 1,
+  "criticalCount": 0,
+  "highCriticalCount": 1,
+  "unverified": [
+    "No native macOS package, bundle identifier, native window, physical display scale, native menu, or system dialog was reviewed; those are intentionally outside this intermediate browser checkpoint.",
+    "The collection environment does not record the browser engine/version or exact collection-time macOS version.",
+    "The SDK editor interior, toolbar, and Library implementation are excluded by the declared SDK mask and are not judged by this review.",
+    "The other five HF-2 screens are outside this single-screen review.",
+    "No product-owner decision was created or inferred because ownerRequirement is NOT_REQUIRED."
+  ],
+  "ownerRequirement": "NOT_REQUIRED",
+  "ownerArtifactCreated": false,
+  "ownerBoundary": "This intermediate reviewer must not create, infer, or simulate a product-owner artifact or decision.",
+  "nextGate": "Implementation remediation is required for the Dark Workspace tree icon foreground/readability. Because this reviewer verdict is FAIL, any retry requires a named production fix, a new product commit, new immutable HF2-06 semantic and visual collection paths with new digest bindings, and another independent review. Do not close T058 from this attempt.",
+  "verdict": "FAIL"
+}
