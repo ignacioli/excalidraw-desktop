@@ -12,6 +12,7 @@ import {
   UNICODE_WORKSPACE,
   type ShellFixture,
 } from "../fixtures/003-shell-fixtures";
+import { makeEntryRowKey } from "../../src/workspaces/workspaceTreeModel";
 import {
   COMPONENT_CROP_THRESHOLD,
   SDK_BOUNDARY_SELECTOR,
@@ -636,16 +637,23 @@ async function openFixtureDocuments(
     for (const directory of parentDirectories) {
       const directoryRow = page
         .getByRole("treeitem", { name: directory.displayName })
-        .and(page.locator('[data-kind="directory"]'));
+        .and(
+          page.locator(
+            `[data-row-key="${makeEntryRowKey(directory.workspaceId, directory.relativePath)}"]`,
+          ),
+        );
       await expect(directoryRow).toBeVisible();
       if ((await directoryRow.getAttribute("aria-expanded")) !== "true") {
         await directoryRow.click();
       }
     }
     await page
-      .locator('[role="treeitem"][data-kind="drawing"]', {
-        hasText: entry.displayName,
-      })
+      .getByRole("treeitem", { name: entry.displayName })
+      .and(
+        page.locator(
+          `[data-row-key="${makeEntryRowKey(entry.workspaceId, entry.relativePath)}"]`,
+        ),
+      )
       .click();
     await expect(
       page.getByRole("tab", { name: new RegExp(tab.title) }),
