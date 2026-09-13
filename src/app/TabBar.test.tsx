@@ -131,6 +131,54 @@ describe("TabBar", () => {
     ).toBeInTheDocument();
   });
 
+  it("covers active, inactive, hover, focus, and unsaved Tab variants deterministically", async () => {
+    setDocumentSessions([
+      createSession("active", "Active", "/tmp/active.excalidraw", "clean"),
+      createSession("dirty", "Dirty", "/tmp/dirty.excalidraw", "dirty"),
+      createSession(
+        "inactive",
+        "Inactive",
+        "/tmp/inactive.excalidraw",
+        "clean",
+      ),
+    ]);
+    documentManager.store.setState({ activeDocumentId: "active" });
+    render(<TabBar />);
+
+    const active = screen.getByRole("tab", { name: "Active" });
+    const dirty = screen.getByRole("tab", {
+      name: "Dirty, unsaved changes",
+    });
+    const inactive = screen.getByRole("tab", { name: "Inactive" });
+    const activeCluster = active.closest(".tab-cluster");
+    const dirtyCluster = dirty.closest(".tab-cluster");
+    const inactiveCluster = inactive.closest(".tab-cluster");
+
+    expect(active).toHaveAttribute("aria-selected", "true");
+    expect(activeCluster).toHaveClass("is-selected");
+    expect(dirty).toHaveAttribute("aria-selected", "false");
+    expect(dirtyCluster).toHaveClass("is-unsaved");
+    expect(dirtyCluster?.querySelector(".dirty-indicator")).toHaveAttribute(
+      "title",
+      "Unsaved changes",
+    );
+    expect(inactiveCluster).not.toHaveClass("is-selected", "is-unsaved");
+
+    const dirtyCloseSlot = dirtyCluster?.querySelector(
+      "[data-slot='tab-close']",
+    );
+    expect(dirtyCloseSlot).toHaveAttribute("data-close-visible", "false");
+    fireEvent.mouseEnter(dirtyCluster as HTMLElement);
+    expect(dirtyCloseSlot).toHaveAttribute("data-close-visible", "true");
+    fireEvent.mouseLeave(dirtyCluster as HTMLElement, {
+      relatedTarget: document.body,
+    });
+    fireEvent.focus(dirty);
+    await waitFor(() =>
+      expect(dirtyCloseSlot).toHaveAttribute("data-close-visible", "true"),
+    );
+  });
+
   it("offers Close, Close Others, and Close Tabs to the Right from the tab context menu", async () => {
     const user = userEvent.setup();
     setDocumentSessions([

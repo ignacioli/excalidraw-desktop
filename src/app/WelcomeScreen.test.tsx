@@ -69,9 +69,9 @@ describe("WelcomeScreen", () => {
     await user.click(screen.getByRole("button", { name: "Open Workspace" }));
 
     expect(onOpenWorkspace).toHaveBeenCalledOnce();
-    expect(screen.getAllByRole("button", { name: /Open workspace/ })).toHaveLength(
-      6,
-    );
+    expect(
+      screen.getAllByRole("button", { name: /Open workspace/ }),
+    ).toHaveLength(6);
     expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
   });
 
@@ -124,5 +124,45 @@ describe("WelcomeScreen", () => {
     expect(
       screen.getByRole("button", { name: "Open workspace Workspace 1" }),
     ).toBeInTheDocument();
+  });
+
+  it("covers primary, secondary, loading, and disabled Welcome Action variants", () => {
+    const { rerender } = render(
+      <WelcomeScreen
+        busy
+        workspaces={[]}
+        onNewDrawing={vi.fn()}
+        onOpenRecentWorkspace={vi.fn()}
+        onOpenWorkspace={vi.fn()}
+      />,
+    );
+
+    const actions = screen.getByText("New Drawing").closest(".welcome-actions");
+    const primary = screen.getByRole("button", { name: "New Drawing" });
+    const secondary = screen.getByRole("button", { name: "Open Workspace" });
+    expect(actions).toHaveAttribute("aria-busy", "true");
+    expect(primary).toHaveClass("welcome-action", "primary-action");
+    expect(secondary).toHaveClass("welcome-action");
+    expect(secondary).not.toHaveClass("primary-action");
+    expect(primary).toBeDisabled();
+    expect(secondary).toBeDisabled();
+    expect(primary.querySelector("img")).toHaveAttribute("aria-hidden", "true");
+    expect(secondary.querySelector("img")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+
+    rerender(
+      <WelcomeScreen
+        workspaces={[]}
+        onNewDrawing={vi.fn()}
+        onOpenRecentWorkspace={vi.fn()}
+        onOpenWorkspace={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "New Drawing" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Open Workspace" }),
+    ).toBeEnabled();
   });
 });
