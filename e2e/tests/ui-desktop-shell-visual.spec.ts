@@ -529,7 +529,44 @@ async function resolveRecoveryFixture(
       .click();
   }
   await expect(page.locator(SDK_BOUNDARY_SELECTOR)).toBeVisible();
+  await applyDeclaredTabSaveStates(page, fixture);
   await page.mouse.move(VISUAL_VIEWPORT.width - 8, VISUAL_VIEWPORT.height - 8);
+}
+
+async function applyDeclaredTabSaveStates(
+  page: Page,
+  fixture: ShellFixture,
+): Promise<void> {
+  const expectedStates = fixture.tabs.map(({ path, saveState }) => ({
+    path,
+    saveState,
+  }));
+  await page.evaluate(async (tabs) => {
+    type DocumentStoreModule = typeof import("../../src/documents/documentStore");
+    const modulePath = "/src/documents/documentStore.ts";
+    const { documentManager } = (await import(
+      /* @vite-ignore */ modulePath
+    )) as DocumentStoreModule;
+    const expectedByPath = new Map(
+      tabs.map(({ path, saveState }) => [path, saveState]),
+    );
+    let matched = 0;
+    documentManager.store.setState((state) => ({
+      sessionsById: Object.fromEntries(
+        Object.entries(state.sessionsById).map(([documentId, session]) => {
+          const expected = expectedByPath.get(session.path);
+          if (expected === undefined) return [documentId, session];
+          matched += 1;
+          return [documentId, { ...session, saveState: expected }];
+        }),
+      ),
+    }));
+    if (matched !== tabs.length) {
+      throw new Error(
+        `Visual fixture matched ${matched} of ${tabs.length} declared Tab paths.`,
+      );
+    }
+  }, expectedStates);
 }
 
 async function openFixtureDocuments(
@@ -647,13 +684,17 @@ async function assertRestoredFixture(
       .getByRole("tab", { name: new RegExp(activeTab?.title ?? "") })
       .filter({ has: page.locator(".tab-title") }),
   ).toHaveCount(1);
-  if (activeTab?.saveState === "clean") {
-    await expect(
-      page.getByRole("tab", {
-        name: new RegExp(`${activeTab.title}(?!.*unsaved changes)`, "i"),
-      }),
-    ).toBeVisible();
-    await expect(page.locator(".dirty-indicator")).toHaveCount(0);
+  for (const tab of fixture.tabs) {
+    const tabControl = page.getByRole("tab", {
+      name:
+        tab.saveState === "dirty"
+          ? new RegExp(`${tab.title}.*unsaved changes`, "i")
+          : new RegExp(`${tab.title}(?!.*unsaved changes)`, "i"),
+    });
+    await expect(tabControl).toBeVisible();
+    await expect(tabControl.locator(".dirty-indicator")).toHaveCount(
+      tab.saveState === "dirty" ? 1 : 0,
+    );
   }
   await expect(page.locator(SDK_BOUNDARY_SELECTOR)).toBeVisible();
 }

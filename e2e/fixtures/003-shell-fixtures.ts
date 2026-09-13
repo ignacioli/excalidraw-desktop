@@ -228,7 +228,10 @@ const VSL_TABS: readonly ShellFixtureTab[] = VSL_ENTRIES.filter(
 }));
 
 const RESTORED_RECOVERY_TABS: readonly ShellFixtureTab[] = VSL_TABS.map(
-  (tab) => ({ ...tab, saveState: "dirty" }),
+  (tab, index) => ({
+    ...tab,
+    saveState: index === 1 ? "dirty" : "clean",
+  }),
 );
 
 const UNSAVED_TAB: ShellFixtureTab = {
