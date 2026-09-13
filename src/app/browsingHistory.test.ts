@@ -9,6 +9,15 @@ const notes: BrowsingLocation = {
   workspaceId: "workspace-1",
   directoryRelativePath: "notes",
 };
+const removedDrawing: BrowsingLocation = {
+  workspaceId: "workspace-1",
+  directoryRelativePath: "archive",
+  drawingPath: "archive/removed.excalidraw",
+};
+const removedDirectory: BrowsingLocation = {
+  workspaceId: "workspace-1",
+  directoryRelativePath: "removed",
+};
 
 describe("BrowsingHistory", () => {
   it("pushes locations and pops the previous location in reverse order", () => {
@@ -23,14 +32,28 @@ describe("BrowsingHistory", () => {
     expect(history.pop()).toBeNull();
   });
 
-  it("skips invalid locations and disables Back when none remain", () => {
-    const history = new BrowsingHistory([root, notes]);
+  it("skips removed drawing and directory targets before returning the previous valid location", () => {
+    const history = new BrowsingHistory([
+      root,
+      removedDirectory,
+      removedDrawing,
+    ]);
+    const validPaths = new Set([""]);
     const valid = (location: BrowsingLocation) =>
-      location.directoryRelativePath === "";
+      validPaths.has(location.directoryRelativePath) &&
+      location.drawingPath === undefined;
 
     expect(history.canGoBack(valid)).toBe(true);
     expect(history.pop(valid)).toEqual(root);
     expect(history.canGoBack(valid)).toBe(false);
+    expect(history.getSnapshot()).toEqual([]);
+  });
+
+  it("keeps Back disabled and returns no target when history is empty", () => {
+    const history = new BrowsingHistory();
+
+    expect(history.canGoBack()).toBe(false);
+    expect(history.pop()).toBeNull();
     expect(history.getSnapshot()).toEqual([]);
   });
 

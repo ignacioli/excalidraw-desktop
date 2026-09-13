@@ -27,10 +27,7 @@ import {
   writeShellCollection,
   type ComponentCropComparison,
 } from "../visual/003ShellAssertions";
-import {
-  LEGACY_CHECK_IDS,
-  type AssertionResult,
-} from "../visual/003Evidence";
+import { LEGACY_CHECK_IDS, type AssertionResult } from "../visual/003Evidence";
 import {
   getUiInteractionHarnessState,
   installUiInteractionHarness,
@@ -284,6 +281,9 @@ test.describe("003 shell visual harness", () => {
       session: "restored",
       sidebar: "overlay",
     });
+    const back = page.getByRole("button", { name: "Back" });
+    await expect(back).toBeDisabled();
+    const backBox = await readBox(back);
     const canvas = page.locator(".canvas-region");
     const before = await readBox(canvas);
     await page.keyboard.press("Escape");
@@ -304,12 +304,35 @@ test.describe("003 shell visual harness", () => {
       session: "workspace",
       cropLocator: page.locator(".file-sidebar"),
       componentId: "workspace-sidebar",
+      semanticAssertions: [
+        {
+          name: "semantic.back.no-history-disabled",
+          expected: "true",
+          actual: String(await back.isDisabled()),
+          tolerance: "exact",
+          result: (await back.isDisabled()) ? "PASS" : "FAIL",
+        },
+      ],
       geometryAssertions: [
+        ...(["x", "y", "width", "height"] as const).map((dimension) =>
+          assertGeometry({
+            name: `overlay.canvas-box.${dimension}.before-after`,
+            expected: before[dimension],
+            actual: after[dimension],
+            tolerance: 0,
+          }),
+        ),
         assertGeometry({
-          name: "overlay.canvas-width-delta",
-          expected: 0,
-          actual: Math.abs(after.width - before.width),
-          tolerance: GEOMETRY_TOLERANCE_PX,
+          name: "overlay.back.width",
+          expected: 32,
+          actual: backBox.width,
+          tolerance: 0,
+        }),
+        assertGeometry({
+          name: "overlay.back.height",
+          expected: 32,
+          actual: backBox.height,
+          tolerance: 0,
         }),
       ],
     });
@@ -515,9 +538,7 @@ async function resolveRecoveryFixture(
 ): Promise<void> {
   for (const tab of fixture.tabs) {
     const displayName = tab.path?.split("/").at(-1) ?? tab.title;
-    await page
-      .getByRole("button", { name: `Restore ${displayName}` })
-      .click();
+    await page.getByRole("button", { name: `Restore ${displayName}` }).click();
   }
   await expect(
     page.getByRole("dialog", { name: "Recover unsaved drawings" }),
@@ -546,7 +567,8 @@ async function applyDeclaredTabSaveStates(
     saveState,
   }));
   await page.evaluate(async (tabs) => {
-    type DocumentStoreModule = typeof import("../../src/documents/documentStore");
+    type DocumentStoreModule =
+      typeof import("../../src/documents/documentStore");
     const modulePath = "/src/documents/documentStore.ts";
     const { documentManager } = (await import(
       /* @vite-ignore */ modulePath
@@ -719,9 +741,7 @@ async function assertRestoredFixture(
         actual: String(markerCount),
         tolerance: "exact",
         result:
-          markerCount === (tab.saveState === "dirty" ? 1 : 0)
-            ? "PASS"
-            : "FAIL",
+          markerCount === (tab.saveState === "dirty" ? 1 : 0) ? "PASS" : "FAIL",
       },
     );
   }
@@ -958,10 +978,12 @@ async function assertWelcomeVisualStyles(
     const secondaryAction = document.querySelector<HTMLElement>(
       ".welcome-action:not(.primary-action)",
     );
-    const recentRow = document.querySelector<HTMLElement>(
-      ".recent-workspace",
-    );
-    if (primaryIcon === null || secondaryAction === null || recentRow === null) {
+    const recentRow = document.querySelector<HTMLElement>(".recent-workspace");
+    if (
+      primaryIcon === null ||
+      secondaryAction === null ||
+      recentRow === null
+    ) {
       throw new Error("Welcome visual-style targets are missing");
     }
     const iconStyle = getComputedStyle(primaryIcon);

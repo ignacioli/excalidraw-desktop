@@ -234,6 +234,101 @@ const RESTORED_RECOVERY_TABS: readonly ShellFixtureTab[] = VSL_TABS.map(
   }),
 );
 
+const OVERLAY_WORKSPACE: ShellFixtureWorkspace = {
+  id: "fixture-overlay-workspace",
+  name: "Architecture",
+  rootPath: "/fixtures/architecture",
+  createdAt: 1_700_000_040,
+};
+
+const OVERLAY_ENTRIES: readonly ShellFixtureEntry[] = [
+  {
+    workspaceId: OVERLAY_WORKSPACE.id,
+    kind: "directory",
+    canonicalPath: `${OVERLAY_WORKSPACE.rootPath}/architecture`,
+    relativePath: "architecture",
+    parentRelativePath: "",
+    name: "architecture",
+    displayName: "Architecture",
+    mtime: 1_700_000_041,
+    fileSize: 0,
+  },
+  {
+    workspaceId: OVERLAY_WORKSPACE.id,
+    kind: "drawing",
+    canonicalPath: `${OVERLAY_WORKSPACE.rootPath}/architecture/System Map.excalidraw`,
+    relativePath: "architecture/System Map.excalidraw",
+    parentRelativePath: "architecture",
+    name: "System Map.excalidraw",
+    displayName: "System Map",
+    mtime: 1_700_000_042,
+    fileSize: 512,
+  },
+  {
+    workspaceId: OVERLAY_WORKSPACE.id,
+    kind: "drawing",
+    canonicalPath: `${OVERLAY_WORKSPACE.rootPath}/architecture/Flow.excalidraw`,
+    relativePath: "architecture/Flow.excalidraw",
+    parentRelativePath: "architecture",
+    name: "Flow.excalidraw",
+    displayName: "Flow",
+    mtime: 1_700_000_043,
+    fileSize: 512,
+  },
+  {
+    workspaceId: OVERLAY_WORKSPACE.id,
+    kind: "directory",
+    canonicalPath: `${OVERLAY_WORKSPACE.rootPath}/research`,
+    relativePath: "research",
+    parentRelativePath: "",
+    name: "research",
+    displayName: "Research",
+    mtime: 1_700_000_044,
+    fileSize: 0,
+  },
+  {
+    workspaceId: OVERLAY_WORKSPACE.id,
+    kind: "drawing",
+    canonicalPath: `${OVERLAY_WORKSPACE.rootPath}/Flow.excalidraw`,
+    relativePath: "Flow.excalidraw",
+    parentRelativePath: "",
+    name: "Flow.excalidraw",
+    displayName: "Flow",
+    mtime: 1_700_000_045,
+    fileSize: 512,
+  },
+];
+
+const OVERLAY_TABS: readonly ShellFixtureTab[] = [
+  {
+    documentId: "fixture-overlay-system-map",
+    title: "System Map",
+    workspaceId: OVERLAY_WORKSPACE.id,
+    path: OVERLAY_ENTRIES[1]?.canonicalPath ?? null,
+    saveState: "clean",
+    availability: "available",
+    conflictState: "none",
+  },
+  {
+    documentId: "fixture-overlay-flow",
+    title: "Flow",
+    workspaceId: OVERLAY_WORKSPACE.id,
+    path: OVERLAY_ENTRIES[2]?.canonicalPath ?? null,
+    saveState: "dirty",
+    availability: "available",
+    conflictState: "none",
+  },
+  {
+    documentId: "fixture-overlay-research",
+    title: "Research",
+    workspaceId: OVERLAY_WORKSPACE.id,
+    path: OVERLAY_ENTRIES[4]?.canonicalPath ?? null,
+    saveState: "clean",
+    availability: "available",
+    conflictState: "none",
+  },
+];
+
 const UNSAVED_TAB: ShellFixtureTab = {
   documentId: "fixture-document-unsaved",
   title: "Untitled",
@@ -308,9 +403,16 @@ export const RESTORED_RECOVERY_SHELL_FIXTURE: ShellFixture = {
 };
 
 export const OVERLAY_SHELL_FIXTURE: ShellFixture = {
-  ...RESTORED_SHELL_FIXTURE,
   id: "overlay",
+  shell: "restored",
   sidebar: "overlay",
+  currentWorkspaceId: OVERLAY_WORKSPACE.id,
+  workspaces: [OVERLAY_WORKSPACE],
+  entries: OVERLAY_ENTRIES,
+  expandedDirectoryPaths: ["architecture"],
+  selectedDirectoryRelativePath: "architecture",
+  activeDocumentId: OVERLAY_TABS[0]?.documentId ?? null,
+  tabs: OVERLAY_TABS,
 };
 
 export const NESTED_TREE_SHELL_FIXTURE: ShellFixture = {

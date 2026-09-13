@@ -795,6 +795,64 @@ describe("AppShell", () => {
       ).toBe(368);
     });
 
+    it("resizes a pinned Sidebar with the pointer and persists the width", () => {
+      seedShellPreferences({ sidebarPinned: true });
+      render(<AppShell />);
+      const separator = screen.getByRole("separator", {
+        name: "Resize workspace sidebar",
+      });
+
+      fireEvent.pointerDown(separator, { clientX: 360, pointerId: 7 });
+      fireEvent.pointerMove(separator, { clientX: 376, pointerId: 7 });
+      fireEvent.pointerUp(separator, { clientX: 376, pointerId: 7 });
+
+      expect(separator).toHaveAttribute("aria-valuenow", "376");
+      expect(
+        JSON.parse(
+          globalThis.localStorage.getItem(SHELL_PREFERENCES_STORAGE_KEY) ??
+            "{}",
+        ).sidebarWidth,
+      ).toBe(376);
+    });
+
+    it("caps Sidebar resizing so the canvas retains at least 70 percent at 1280px", async () => {
+      seedShellPreferences({ sidebarPinned: true });
+      const user = userEvent.setup();
+      render(<AppShell />);
+      const separator = screen.getByRole("separator", {
+        name: "Resize workspace sidebar",
+      });
+
+      expect(separator).toHaveAttribute("aria-valuemax", "384");
+      await user.click(separator);
+      await user.keyboard("{End}");
+
+      const cappedWidth = Number(separator.getAttribute("aria-valuenow"));
+      expect(cappedWidth).toBe(384);
+      expect((1280 - cappedWidth) / 1280).toBeGreaterThanOrEqual(0.7);
+    });
+
+    it("restores the pinned mode and chosen width after an AppShell restart", () => {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: 1600,
+      });
+      seedShellPreferences({ sidebarPinned: true, sidebarWidth: 416 });
+      const first = render(<AppShell />);
+      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "pinned");
+      expect(
+        screen.getByRole("separator", { name: "Resize workspace sidebar" }),
+      ).toHaveAttribute("aria-valuenow", "416");
+
+      first.unmount();
+      render(<AppShell />);
+
+      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "pinned");
+      expect(
+        screen.getByRole("separator", { name: "Resize workspace sidebar" }),
+      ).toHaveAttribute("aria-valuenow", "416");
+    });
+
     it("keeps legacy command chrome out of the shell header", () => {
       setDocumentSessions([
         createSession(
@@ -887,12 +945,16 @@ function setDocumentSessions(sessions: readonly DocumentSession[]): void {
   });
 }
 
-function seedShellPreferences(snapshot: { sidebarPinned: boolean }): void {
+function seedShellPreferences(snapshot: {
+  sidebarPinned: boolean;
+  sidebarWidth?: number;
+}): void {
   globalThis.localStorage.setItem(
     SHELL_PREFERENCES_STORAGE_KEY,
     JSON.stringify({
       version: SHELL_PREFERENCES_VERSION,
       sidebarPinned: snapshot.sidebarPinned,
+      sidebarWidth: snapshot.sidebarWidth,
       expandedWorkspaceIds: [],
     }),
   );
