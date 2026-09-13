@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -15,9 +16,11 @@ import {
   compareManifest,
   compareMenuObservation,
   decodeAXModifiers,
+  inspectMenuItemAppleScript,
   makeCheck,
   parseNativeValidationEvents,
   parseNativeValidationLine,
+  resolveMenuItemAppleScript,
   sha256Path,
   validatePreparedNativeProfile,
   validationPair,
@@ -25,6 +28,37 @@ import {
 } from "./native-macos-validation.mjs";
 
 describe("native macOS validation helpers", () => {
+  it(
+    "generates AppleScript that compiles before native menu inspection",
+    { skip: process.platform !== "darwin" },
+    async () => {
+      const root = await fs.mkdtemp(
+        path.join(os.tmpdir(), "excalidraw-native-menu-script-"),
+      );
+      try {
+        const scripts = [
+          resolveMenuItemAppleScript(
+            123,
+            ["File", "Save"],
+            "click targetItem",
+          ),
+          inspectMenuItemAppleScript(123, EXPECTED_MENU_ITEMS[0]),
+        ];
+        for (const [index, script] of scripts.entries()) {
+          const output = path.join(root, `menu-${index}.scpt`);
+          const compiled = spawnSync(
+            "osacompile",
+            ["-e", script, "-o", output],
+            { encoding: "utf8" },
+          );
+          assert.equal(compiled.status, 0, compiled.stderr);
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   it("parses only valid structured probe lines", () => {
     assert.deepEqual(
       parseNativeValidationLine(

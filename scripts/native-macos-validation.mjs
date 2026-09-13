@@ -733,18 +733,20 @@ function runAppleScript(script) {
   return result.stdout.trim();
 }
 
-function resolveMenuItemAppleScript(pid, labels, operation) {
+export function resolveMenuItemAppleScript(pid, labels, operation) {
   const labelsLiteral = appleScriptLabels(labels);
   return `
 on resolveMenuItem(appProcess, menuPath)
-  tell appProcess
-    set currentMenu to menu 1 of menu bar item (item 1 of menuPath) of menu bar 1
-    repeat with index from 2 to count of menuPath
-      set currentItem to menu item (item index of menuPath) of currentMenu
-      if index is (count of menuPath) then return currentItem
-      set currentMenu to menu 1 of currentItem
-    end repeat
-  end tell
+  using terms from application "System Events"
+    tell appProcess
+      set currentMenu to menu 1 of menu bar item (item 1 of menuPath) of menu bar 1
+      repeat with pathIndex from 2 to count of menuPath
+        set currentItem to menu item (item pathIndex of menuPath) of currentMenu
+        if pathIndex is (count of menuPath) then return currentItem
+        set currentMenu to menu 1 of currentItem
+      end repeat
+    end tell
+  end using terms from
 end resolveMenuItem
 
 tell application "System Events"
@@ -758,8 +760,8 @@ end tell
 `;
 }
 
-function inspectMenuItem(pid, expected) {
-  const script = resolveMenuItemAppleScript(
+export function inspectMenuItemAppleScript(pid, expected) {
+  return resolveMenuItemAppleScript(
     pid,
     expected.path,
     `
@@ -778,6 +780,10 @@ function inspectMenuItem(pid, expected) {
     return itemLabel & tab & itemEnabled & tab & itemCharacter & tab & itemModifiers
     `,
   );
+}
+
+function inspectMenuItem(pid, expected) {
+  const script = inspectMenuItemAppleScript(pid, expected);
   const [label, enabled, character, modifiers] =
     runAppleScript(script).split("\t");
   return {
