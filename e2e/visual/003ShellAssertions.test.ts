@@ -214,6 +214,7 @@ describe("003 shell visual contract assertions", () => {
             "headerActionOverflow",
           ].map((id) => [id, 0]),
         ),
+        semanticAssertions: [],
         geometryAssertions: [
           assertGeometry({
             name: "sidebar",

@@ -78,6 +78,7 @@ export interface ShellCollectionInput {
   };
   readonly masks: readonly MaskDeclaration[];
   readonly legacyCounts: Readonly<Partial<Record<LegacyCheckId, number>>>;
+  readonly semanticAssertions: readonly AssertionResult[];
   readonly geometryAssertions: readonly AssertionResult[];
   readonly tokenAssertions: readonly AssertionResult[];
   readonly cropComparisons: readonly ComponentCropComparison[];
@@ -363,7 +364,7 @@ export async function writeShellCollection(
       fixture: input.fixture,
       collector: {
         tool: "playwright-003-shell",
-        version: "2",
+        version: "3",
         runIdentity: `${input.binding.productCommit}:${input.collectionId}`,
       },
     },
@@ -383,6 +384,7 @@ export async function writeShellCollection(
     schemaVersion: 1,
     legacyCounts: input.legacyCounts,
     legacyAssertions,
+    semanticAssertions: input.semanticAssertions,
     geometryAssertions: input.geometryAssertions,
     tokenAssertions: input.tokenAssertions,
     cropComparisons: input.cropComparisons,
@@ -408,6 +410,7 @@ export async function writeShellCollection(
   );
   const allAssertions = [
     ...legacyAssertions,
+    ...input.semanticAssertions,
     ...input.geometryAssertions,
     ...input.tokenAssertions,
     ...cropAssertions,
@@ -423,7 +426,7 @@ export async function writeShellCollection(
     binding: input.binding,
     collector: {
       tool: "playwright-003-shell",
-      version: "2",
+      version: "3",
       runIdentity: `${input.binding.productCommit}:${input.collectionId}`,
     },
     environmentPath: "environment.json",

@@ -27,7 +27,10 @@ import {
   writeShellCollection,
   type ComponentCropComparison,
 } from "../visual/003ShellAssertions";
-import { LEGACY_CHECK_IDS } from "../visual/003Evidence";
+import {
+  LEGACY_CHECK_IDS,
+  type AssertionResult,
+} from "../visual/003Evidence";
 import {
   getUiInteractionHarnessState,
   installUiInteractionHarness,
@@ -219,7 +222,7 @@ test.describe("003 shell visual harness", () => {
   }, testInfo) => {
     const fixture = getShellFixture("restored-recovery");
     await prepare(page, fixture, "light");
-    await assertRestoredFixture(page, fixture);
+    const semanticAssertions = await assertRestoredFixture(page, fixture);
     await expect(page.locator(".recovery-notice")).toContainText(
       "Recovered · 3 drawings restored",
     );
@@ -234,6 +237,7 @@ test.describe("003 shell visual harness", () => {
       session: "restored",
       cropLocator: page.locator(".app-shell-tabs"),
       componentId: "shell-tabs",
+      semanticAssertions,
       geometryAssertions,
     });
   });
@@ -670,7 +674,7 @@ async function openFixtureDocuments(
 async function assertRestoredFixture(
   page: Page,
   fixture: ShellFixture,
-): Promise<void> {
+): Promise<AssertionResult[]> {
   const activeTab = fixture.tabs.find(
     ({ documentId }) => documentId === fixture.activeDocumentId,
   );
@@ -684,6 +688,7 @@ async function assertRestoredFixture(
       .getByRole("tab", { name: new RegExp(activeTab?.title ?? "") })
       .filter({ has: page.locator(".tab-title") }),
   ).toHaveCount(1);
+  const semanticAssertions: AssertionResult[] = [];
   for (const tab of fixture.tabs) {
     const tabControl = page.getByRole("tab", {
       name:
@@ -695,8 +700,33 @@ async function assertRestoredFixture(
     await expect(tabControl.locator(".dirty-indicator")).toHaveCount(
       tab.saveState === "dirty" ? 1 : 0,
     );
+    const ariaLabel = (await tabControl.getAttribute("aria-label")) ?? "";
+    const markerCount = await tabControl.locator(".dirty-indicator").count();
+    const actualSaveState = ariaLabel.includes("unsaved changes")
+      ? "dirty"
+      : "clean";
+    semanticAssertions.push(
+      {
+        name: `semantic.tab.${tab.documentId}.save-state`,
+        expected: tab.saveState,
+        actual: actualSaveState,
+        tolerance: "exact",
+        result: actualSaveState === tab.saveState ? "PASS" : "FAIL",
+      },
+      {
+        name: `semantic.tab.${tab.documentId}.visible-unsaved-marker`,
+        expected: tab.saveState === "dirty" ? "1" : "0",
+        actual: String(markerCount),
+        tolerance: "exact",
+        result:
+          markerCount === (tab.saveState === "dirty" ? 1 : 0)
+            ? "PASS"
+            : "FAIL",
+      },
+    );
   }
   await expect(page.locator(SDK_BOUNDARY_SELECTOR)).toBeVisible();
+  return semanticAssertions;
 }
 
 async function assertShellContract(
@@ -1281,6 +1311,7 @@ async function captureAndCollect(
     session: "empty" | "restored" | "workspace";
     cropLocator: Locator;
     componentId: string;
+    semanticAssertions?: readonly AssertionResult[];
     geometryAssertions?: ReturnType<typeof assertGeometry>[];
   },
 ): Promise<void> {
@@ -1334,7 +1365,7 @@ async function captureAndCollect(
       fixtureDigest: createHash("sha256")
         .update(JSON.stringify(input.fixture))
         .digest("hex"),
-      harnessVersion: "003-shell-v2",
+      harnessVersion: "003-shell-v3",
     },
     actualPath,
     baselinePath: gate.baselinePath,
@@ -1354,6 +1385,7 @@ async function captureAndCollect(
     },
     masks,
     legacyCounts,
+    semanticAssertions: input.semanticAssertions ?? [],
     geometryAssertions: input.geometryAssertions ?? [],
     tokenAssertions,
     cropComparisons: [cropComparison],
