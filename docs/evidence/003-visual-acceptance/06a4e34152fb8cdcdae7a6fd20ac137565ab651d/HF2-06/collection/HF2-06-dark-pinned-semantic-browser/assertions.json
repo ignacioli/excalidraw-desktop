@@ -1,0 +1,442 @@
+{
+  "schemaVersion": 1,
+  "legacyCounts": {
+    "globalNewDrawing": 0,
+    "textSidebar": 0,
+    "largePinUnpin": 0,
+    "topLevelSaveExportAppearance": 0,
+    "autosaveStrip": 0,
+    "tabScrollbar": 0,
+    "sidebarScrollbar": 0,
+    "placeholderIcons": 0,
+    "horizontalEllipsis": 0,
+    "duplicateWorkspaceRoots": 0,
+    "headerActionOverflow": 0
+  },
+  "legacyAssertions": [
+    {
+      "name": "legacy.globalNewDrawing",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.textSidebar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.largePinUnpin",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.topLevelSaveExportAppearance",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.autosaveStrip",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.tabScrollbar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.sidebarScrollbar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.placeholderIcons",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.horizontalEllipsis",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.duplicateWorkspaceRoots",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.headerActionOverflow",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    }
+  ],
+  "semanticAssertions": [
+    {
+      "name": "semantic.tab.fixture-overlay-system-map.save-state",
+      "expected": "clean",
+      "actual": "clean",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-system-map.visible-unsaved-marker",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-flow.save-state",
+      "expected": "dirty",
+      "actual": "dirty",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-flow.visible-unsaved-marker",
+      "expected": "1",
+      "actual": "1",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-research.save-state",
+      "expected": "clean",
+      "actual": "clean",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-research.visible-unsaved-marker",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.a11y.axe-violation-count",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.keyboard.back-focus-ring",
+      "expected": "2px",
+      "actual": "2px",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.non-color.active-row-indicator-count",
+      "expected": "1",
+      "actual": "1",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.dark.workspace-tree-icon-readable-style-count",
+      "expected": "9",
+      "actual": "9",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.contrast.minimum-ratio",
+      "expected": ">=4.5",
+      "actual": "8.925483265455044",
+      "tolerance": "WCAG AA",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.reduced-motion.transition-duration",
+      "expected": "<=0.000001s",
+      "actual": "0.000001s",
+      "tolerance": "maximum",
+      "result": "PASS"
+    }
+  ],
+  "geometryAssertions": [
+    {
+      "name": "geometry.theme-parity.topLayer.x",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.topLayer.y",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.topLayer.width",
+      "expected": "1280",
+      "actual": "1280",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.topLayer.height",
+      "expected": "44",
+      "actual": "44",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.sidebar.x",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.sidebar.y",
+      "expected": "44",
+      "actual": "44",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.sidebar.width",
+      "expected": "360",
+      "actual": "360",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.sidebar.height",
+      "expected": "716",
+      "actual": "716",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.canvas.x",
+      "expected": "360",
+      "actual": "360",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.canvas.y",
+      "expected": "44",
+      "actual": "44",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.canvas.width",
+      "expected": "920",
+      "actual": "920",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.canvas.height",
+      "expected": "716",
+      "actual": "716",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.back.x",
+      "expected": "48",
+      "actual": "48",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.back.y",
+      "expected": "6",
+      "actual": "6",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.back.width",
+      "expected": "32",
+      "actual": "32",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.back.height",
+      "expected": "32",
+      "actual": "32",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.tab.x",
+      "expected": "408",
+      "actual": "408",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.tab.y",
+      "expected": "4",
+      "actual": "4",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.tab.width",
+      "expected": "196",
+      "actual": "196",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.tab.height",
+      "expected": "36",
+      "actual": "36",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.workspaceRow.x",
+      "expected": "16",
+      "actual": "16",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.workspaceRow.y",
+      "expected": "138.1875",
+      "actual": "138.1875",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.workspaceRow.width",
+      "expected": "327",
+      "actual": "327",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.workspaceRow.height",
+      "expected": "28",
+      "actual": "28",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.headerAction.x",
+      "expected": "203",
+      "actual": "203",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.headerAction.y",
+      "expected": "77.1875",
+      "actual": "77.1875",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.headerAction.width",
+      "expected": "32",
+      "actual": "32",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.theme-parity.headerAction.height",
+      "expected": "32",
+      "actual": "32",
+      "tolerance": "0px",
+      "result": "PASS"
+    }
+  ],
+  "tokenAssertions": [
+    {
+      "name": "token.--app-background",
+      "expected": "#121212",
+      "actual": "#121212",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--panel-background",
+      "expected": "#232329",
+      "actual": "#232329",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--surface-hover",
+      "expected": "#31303B",
+      "actual": "#31303B",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--text-primary",
+      "expected": "#F1F3F5",
+      "actual": "#F1F3F5",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--text-secondary",
+      "expected": "#CED4DA",
+      "actual": "#CED4DA",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--focus-ring",
+      "expected": "#74C0FC",
+      "actual": "#74C0FC",
+      "tolerance": "exact",
+      "result": "PASS"
+    }
+  ],
+  "cropComparisons": [
+    {
+      "componentId": "phase8-shell-semantic",
+      "baselineComponentId": "phase8-shell-semantic",
+      "baselineSha256": "239741dc6300f1a173b240aad52ac52cf3b60c58d465864c36a73865f0cb8275",
+      "actualSha256": "239741dc6300f1a173b240aad52ac52cf3b60c58d465864c36a73865f0cb8275",
+      "fontReady": true,
+      "maxDiffPixelRatio": 0
+    }
+  ],
+  "cropAssertions": [
+    {
+      "name": "component-crop-binding.phase8-shell-semantic",
+      "expected": "same semantic component; fonts ready; valid digests; diff <=0.01",
+      "actual": "baseline=phase8-shell-semantic; fontReady=true; diff=0",
+      "tolerance": "auxiliary; component crop only",
+      "result": "PASS"
+    }
+  ]
+}

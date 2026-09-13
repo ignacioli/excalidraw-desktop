@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "HF2-06-dark-pinned-semantic-browser",
+  "gateId": "HF2-06",
+  "route": "semantic-browser",
+  "binding": {
+    "productCommit": "06a4e34152fb8cdcdae7a6fd20ac137565ab651d",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "5bcb375f8a54c93b6efbc26daccf31c439366424e30ce277fa34e5e75d9b786b",
+    "harnessVersion": "003-shell-v3"
+  },
+  "os": "darwin/arm64",
+  "viewport": {
+    "width": 1280,
+    "height": 760
+  },
+  "browserOrAppBuild": "browser-ui",
+  "fontReady": true,
+  "fontPolicy": {
+    "deviationId": "HF2-FONT-001",
+    "uiStack": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "monoStack": "ui-monospace, SFMono-Regular, Menlo, monospace",
+    "computedUiFamily": "-apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+    "computedMonoFamily": "ui-monospace, SFMono-Regular, Menlo, monospace",
+    "remoteFontRequests": 0,
+    "englishTargetVerified": true,
+    "unicodeFallbackVerified": true
+  },
+  "theme": "dark",
+  "sidebar": "pinned",
+  "session": "workspace",
+  "fixture": "pinned-dark",
+  "collector": {
+    "tool": "playwright-003-shell",
+    "version": "3",
+    "runIdentity": "06a4e34152fb8cdcdae7a6fd20ac137565ab651d:HF2-06-dark-pinned-semantic-browser"
+  }
+}
