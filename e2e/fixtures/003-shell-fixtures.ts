@@ -297,6 +297,17 @@ const OVERLAY_ENTRIES: readonly ShellFixtureEntry[] = [
     mtime: 1_700_000_045,
     fileSize: 512,
   },
+  {
+    workspaceId: OVERLAY_WORKSPACE.id,
+    kind: "drawing",
+    canonicalPath: `${OVERLAY_WORKSPACE.rootPath}/research/Research.excalidraw`,
+    relativePath: "research/Research.excalidraw",
+    parentRelativePath: "research",
+    name: "Research.excalidraw",
+    displayName: "Research",
+    mtime: 1_700_000_046,
+    fileSize: 512,
+  },
 ];
 
 const OVERLAY_TABS: readonly ShellFixtureTab[] = [
@@ -322,7 +333,7 @@ const OVERLAY_TABS: readonly ShellFixtureTab[] = [
     documentId: "fixture-overlay-research",
     title: "Research",
     workspaceId: OVERLAY_WORKSPACE.id,
-    path: OVERLAY_ENTRIES[4]?.canonicalPath ?? null,
+    path: OVERLAY_ENTRIES[5]?.canonicalPath ?? null,
     saveState: "clean",
     availability: "available",
     conflictState: "none",
@@ -467,6 +478,87 @@ export const SHELL_FIXTURES: readonly ShellFixture[] = [
   UNSAVED_TAB_SHELL_FIXTURE,
   UNICODE_PINNED_SHELL_FIXTURE,
 ];
+
+export function assertShellFixtureConsistency(fixture: ShellFixture): void {
+  const errors: string[] = [];
+  const workspaceIds = new Set(fixture.workspaces.map(({ id }) => id));
+  const entriesByCanonicalPath = new Map(
+    fixture.entries.map((entry) => [entry.canonicalPath, entry]),
+  );
+  const directoryPaths = new Set(
+    fixture.entries
+      .filter(({ kind }) => kind === "directory")
+      .map(({ relativePath }) => relativePath),
+  );
+  const tabPaths = new Set<string>();
+
+  if (
+    fixture.currentWorkspaceId !== null &&
+    !workspaceIds.has(fixture.currentWorkspaceId)
+  ) {
+    errors.push(
+      `current Workspace ${fixture.currentWorkspaceId} does not resolve`,
+    );
+  }
+
+  for (const tab of fixture.tabs) {
+    if (tab.path === null) continue;
+    if (tabPaths.has(tab.path)) {
+      errors.push(`duplicate tab path ${tab.path}`);
+      continue;
+    }
+    tabPaths.add(tab.path);
+    const entry = entriesByCanonicalPath.get(tab.path);
+    if (entry === undefined || entry.kind !== "drawing") {
+      errors.push(`tab path ${tab.path} does not resolve to a drawing`);
+      continue;
+    }
+    if (tab.title !== entry.displayName) {
+      errors.push(
+        `tab title ${tab.title} does not match drawing ${entry.relativePath} display name ${entry.displayName}`,
+      );
+    }
+  }
+
+  if (
+    fixture.activeDocumentId !== null &&
+    !fixture.tabs.some(
+      ({ documentId }) => documentId === fixture.activeDocumentId,
+    )
+  ) {
+    errors.push(`active document ${fixture.activeDocumentId} does not resolve`);
+  }
+
+  for (const relativePath of fixture.expandedDirectoryPaths) {
+    if (!directoryPaths.has(relativePath)) {
+      errors.push(`expanded directory ${relativePath} does not resolve`);
+    }
+    const segments = relativePath.split("/");
+    for (let index = 1; index < segments.length; index += 1) {
+      const ancestor = segments.slice(0, index).join("/");
+      if (!fixture.expandedDirectoryPaths.includes(ancestor)) {
+        errors.push(
+          `expanded directory ${relativePath} is missing ancestor ${ancestor}`,
+        );
+      }
+    }
+  }
+
+  if (
+    fixture.selectedDirectoryRelativePath !== null &&
+    !directoryPaths.has(fixture.selectedDirectoryRelativePath)
+  ) {
+    errors.push(
+      `selected directory ${fixture.selectedDirectoryRelativePath} does not resolve`,
+    );
+  }
+
+  if (errors.length > 0) {
+    throw new Error(
+      `Fixture ${fixture.id} is inconsistent:\n${errors.map((error) => `- ${error}`).join("\n")}`,
+    );
+  }
+}
 
 export function getShellFixture(id: FixtureId): ShellFixture {
   const fixture = SHELL_FIXTURES.find((candidate) => candidate.id === id);

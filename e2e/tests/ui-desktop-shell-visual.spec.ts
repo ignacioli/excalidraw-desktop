@@ -8,6 +8,7 @@ import {
   SHELL_PREFERENCES_VERSION,
 } from "../../src/app/shellPreferences";
 import {
+  assertShellFixtureConsistency,
   getShellFixture,
   UNICODE_WORKSPACE,
   type ShellFixture,
@@ -128,7 +129,10 @@ test.describe("003 shell visual harness", () => {
       ),
     ).toHaveLength(1);
 
-    await page.getByRole("treeitem", { name: "planning" }).click();
+    const planning = page.getByRole("treeitem", { name: "planning" });
+    if ((await planning.getAttribute("aria-expanded")) !== "true") {
+      await planning.click();
+    }
     await page.getByRole("treeitem", { name: "weekly" }).click();
     const beforeCancel = (await getUiInteractionHarnessState(page)).entryCount;
     const newFolder = page.getByRole("button", { name: "New Folder" });
@@ -453,6 +457,7 @@ async function prepare(
   fixture: ShellFixture,
   colorScheme: "light" | "dark",
 ): Promise<void> {
+  assertShellFixtureConsistency(fixture);
   await page.setViewportSize(VISUAL_VIEWPORT);
   await page.emulateMedia({ colorScheme });
   remoteFontRequestsByPage.set(page, 0);
@@ -670,6 +675,7 @@ async function openFixtureDocuments(
     await expect(activeTabControl).toHaveAttribute("aria-selected", "true");
     await expect(page.locator(SDK_BOUNDARY_SELECTOR)).toBeVisible();
   }
+  await restoreDeclaredDirectoryExpansion(page, fixture);
   if (!startedVisible) {
     await page.evaluate(() => {
       window.dispatchEvent(
@@ -699,6 +705,50 @@ async function openFixtureDocuments(
     }
   });
   await page.mouse.move(VISUAL_VIEWPORT.width - 8, VISUAL_VIEWPORT.height - 8);
+}
+
+async function restoreDeclaredDirectoryExpansion(
+  page: Page,
+  fixture: ShellFixture,
+): Promise<void> {
+  const desired = new Set(fixture.expandedDirectoryPaths);
+  const directories = fixture.entries.filter(
+    (entry) => entry.kind === "directory",
+  );
+  const byDescendingDepth = [...directories].sort(
+    (left, right) =>
+      right.relativePath.split("/").length -
+      left.relativePath.split("/").length,
+  );
+
+  for (const directory of byDescendingDepth) {
+    if (desired.has(directory.relativePath)) continue;
+    const row = page.locator(
+      `[data-row-key="${makeEntryRowKey(directory.workspaceId, directory.relativePath)}"]`,
+    );
+    if (
+      (await row.count()) === 1 &&
+      (await row.getAttribute("aria-expanded")) === "true"
+    ) {
+      await row.click();
+    }
+  }
+
+  const byAscendingDepth = [...directories].sort(
+    (left, right) =>
+      left.relativePath.split("/").length -
+      right.relativePath.split("/").length,
+  );
+  for (const directory of byAscendingDepth) {
+    if (!desired.has(directory.relativePath)) continue;
+    const row = page.locator(
+      `[data-row-key="${makeEntryRowKey(directory.workspaceId, directory.relativePath)}"]`,
+    );
+    await expect(row).toHaveCount(1);
+    if ((await row.getAttribute("aria-expanded")) !== "true") {
+      await row.click();
+    }
+  }
 }
 
 async function assertRestoredFixture(
