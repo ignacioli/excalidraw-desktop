@@ -137,7 +137,12 @@ test.describe("003 shell visual harness", () => {
     if ((await planning.getAttribute("aria-expanded")) !== "true") {
       await planning.click();
     }
-    await page.getByRole("treeitem", { name: "weekly" }).click();
+    const weekly = page.getByRole("treeitem", { name: "weekly" });
+    await weekly.click();
+    if ((await weekly.getAttribute("aria-expanded")) !== "true") {
+      await weekly.click();
+      await expect(weekly).toHaveAttribute("aria-expanded", "true");
+    }
     const beforeCancel = (await getUiInteractionHarnessState(page)).entryCount;
     const newFolder = page.getByRole("button", { name: "New Folder" });
     await newFolder.focus();
