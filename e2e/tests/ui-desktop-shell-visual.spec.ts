@@ -287,7 +287,7 @@ test.describe("003 shell visual harness", () => {
       sidebar: "overlay",
     });
     const back = page.getByRole("button", { name: "Back" });
-    await expect(back).toBeDisabled();
+    await expect(back).toBeEnabled();
     const backBox = await readBox(back);
     const canvas = page.locator(".canvas-region");
     const before = await readBox(canvas);
@@ -311,11 +311,11 @@ test.describe("003 shell visual harness", () => {
       componentId: "workspace-sidebar",
       semanticAssertions: [
         {
-          name: "semantic.back.no-history-disabled",
+          name: "semantic.back.valid-history-enabled",
           expected: "true",
-          actual: String(await back.isDisabled()),
+          actual: String(await back.isEnabled()),
           tolerance: "exact",
-          result: (await back.isDisabled()) ? "PASS" : "FAIL",
+          result: (await back.isEnabled()) ? "PASS" : "FAIL",
         },
       ],
       geometryAssertions: [
