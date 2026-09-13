@@ -806,11 +806,17 @@ test("sidebar overlay is keyboard operable with a visible focus indicator", asyn
     exact: true,
   });
   await expect(toggle).toBeFocused();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(toggle).toHaveCSS("outline-style", "solid");
   await expect(toggle).toHaveCSS("outline-width", "2px");
   await page.keyboard.press("Enter");
   const sidebar = page.getByRole("complementary", { name: "Files" });
   await expect(sidebar).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator(".app-shell-body")).toHaveAttribute(
+    "data-sidebar-mode",
+    "overlay",
+  );
   await expectAxeClean(
     page,
     "overlay sidebar",
@@ -818,11 +824,17 @@ test("sidebar overlay is keyboard operable with a visible focus indicator", asyn
     EDITOR_EXCLUDE,
   );
 
+  await expect(toggle).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Pin workspace sidebar" }),
-  ).toBeVisible();
+    page.getByRole("button", { name: /^(?:Pin|Unpin) workspace sidebar$/ }),
+  ).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(sidebar).not.toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".app-shell-body")).toHaveAttribute(
+    "data-sidebar-mode",
+    "hidden",
+  );
 });
 
 test("folder loading and permission-denied errors are announced without color alone", async ({

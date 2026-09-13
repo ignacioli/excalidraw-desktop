@@ -1,20 +1,26 @@
 import { expect, test, type Page } from "@playwright/test";
-import { installUiInteractionHarness } from "./uiInteractionHarness";
+import {
+  getUiInteractionHarnessState,
+  installUiInteractionHarness,
+} from "./uiInteractionHarness";
 
 /**
- * Accessible names the US4 implementation should match (exact role names):
- * - `Workspace sidebar` — explicit overlay open control (not screen-edge hover)
- * - `Pin workspace sidebar` / `Unpin workspace sidebar` — overlay ↔ pinned
+ * Accessible name and state the sidebar implementation should expose:
+ * - `Toggle workspace sidebar` — Hidden → Overlay → Pinned → Hidden
+ * - `aria-expanded=false` in Hidden; `true` in Overlay and Pinned
+ * - no independent `Pin workspace sidebar` / `Unpin workspace sidebar`
  *
- * Existing chrome strings stay as they are: Save, Export…, Appearance
- * (Light / Dark / System). Native titlebar color/stacking is T057, not this
- * browser spec.
+ * The shell header retains Toggle, Back, and Drawing tabs. Save, Export, and
+ * Appearance stay with their native/application owners and have no duplicate
+ * top-level shell controls.
  *
  * Panel under test is the existing `.file-sidebar` complementary. Preference
  * JSON matches `src/app/shellPreferences.ts`.
  */
 const SHELL_PREFERENCES_STORAGE_KEY = "excalidraw-desktop.shell";
 const SHELL_PREFERENCES_VERSION = 1;
+const THEME_PREFERENCE_STORAGE_KEY = "excalidraw-desktop.appearance";
+const THEME_PREFERENCE_VERSION = 1;
 const POINTER_LEAVE_MS = 500;
 const STILL_OPEN_MS = 350;
 const CLOSED_AFTER_LEAVE_MS = 700;
@@ -30,19 +36,13 @@ const workspace = {
   createdAt: 1,
 };
 
-test("first launch hides the sidebar; an explicit control opens overlay without edge hover", async ({
+test("a selected Workspace starts hidden; the Toggle control opens overlay", async ({
   page,
 }) => {
   await prepareShell(page);
   const canvasBefore = await canvasBox(page);
   await expect(workspaceSidebar(page)).not.toBeVisible({ timeout: 1_000 });
   await expectRetainedChrome(page);
-
-  const viewport = page.viewportSize();
-  if (viewport === null) throw new Error("The viewport was not measurable.");
-  await page.mouse.move(1, Math.round(viewport.height / 2));
-  await page.waitForTimeout(CLOSED_AFTER_LEAVE_MS);
-  await expect(workspaceSidebar(page)).not.toBeVisible();
 
   await openOverlay(page);
   const overlay = await readLayout(page);
@@ -65,11 +65,15 @@ test("first launch hides the sidebar; an explicit control opens overlay without 
   ).toBeLessThanOrEqual(LAYOUT_PX);
 });
 
-test("overlay leaves canvas size unchanged; pin enters layout and unpin restores overlay", async ({
+test("one toggle cycles hidden, overlay, pinned, and hidden while persisting pin state", async ({
   page,
 }) => {
   await prepareShell(page);
   const hiddenCanvas = await canvasBox(page);
+  const toggle = sidebarToggle(page);
+
+  await expectSidebarMode(page, "hidden");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
 
   await openOverlay(page);
   const overlay = await readLayout(page);
@@ -80,35 +84,33 @@ test("overlay leaves canvas size unchanged; pin enters layout and unpin restores
     Math.abs(overlay.canvas.width - hiddenCanvas.width),
   ).toBeLessThanOrEqual(LAYOUT_PX);
 
-  await page
-    .getByRole("button", { name: "Pin workspace sidebar", exact: true })
-    .click({ timeout: 5_000 });
-  await expect(
-    page.getByRole("button", { name: "Unpin workspace sidebar", exact: true }),
-  ).toBeVisible();
+  await toggle.click({ timeout: 5_000 });
+  await expectSidebarMode(page, "pinned");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expectIndependentPinControlsAbsent(page);
+  await expectPersistedSidebarPinned(page, true);
   const pinned = await readLayout(page);
   expectPinnedLayout(pinned, hiddenCanvas);
   expect(pinned.canvas.width / pinned.body.width).toBeGreaterThanOrEqual(0.7);
 
-  await page
-    .getByRole("button", { name: "Unpin workspace sidebar", exact: true })
-    .click();
-  const restored = await readLayout(page);
+  await page.reload();
+  await expectSidebarMode(page, "pinned");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  expectPinnedLayout(await readLayout(page), hiddenCanvas);
+
+  await toggle.click();
+  await expectSidebarMode(page, "hidden");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(workspaceSidebar(page)).not.toBeVisible();
+  await expectPersistedSidebarPinned(page, false);
   expect(
-    horizontalOverlap(restored.sidebar, restored.canvas),
-  ).toBeGreaterThanOrEqual(OVERLAY_OVERLAP_PX);
-  expect(
-    Math.abs(restored.canvas.width - hiddenCanvas.width),
+    Math.abs((await canvasBox(page)).width - hiddenCanvas.width),
   ).toBeLessThanOrEqual(LAYOUT_PX);
 
-  await page
-    .getByRole("button", { name: "Pin workspace sidebar", exact: true })
-    .click();
   await page.reload();
-  await expect(
-    page.getByRole("button", { name: "Unpin workspace sidebar", exact: true }),
-  ).toBeVisible();
-  expectPinnedLayout(await readLayout(page), hiddenCanvas);
+  await expectSidebarMode(page, "hidden");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(workspaceSidebar(page)).not.toBeVisible();
 });
 
 test("overlay closes 500ms after pointer leave and cancels the pending close on re-enter", async ({
@@ -116,6 +118,7 @@ test("overlay closes 500ms after pointer leave and cancels the pending close on 
 }) => {
   await prepareShell(page);
   await openOverlay(page);
+  await releaseSidebarFocus(page);
   await hoverSidebar(page);
 
   await leaveSidebar(page);
@@ -124,13 +127,14 @@ test("overlay closes 500ms after pointer leave and cancels the pending close on 
     await workspaceSidebar(page).isVisible(),
     `sidebar must stay open ${STILL_OPEN_MS}ms after pointer leave`,
   ).toBe(true);
-  await page.waitForTimeout(CLOSED_AFTER_LEAVE_MS - STILL_OPEN_MS);
+  await page.waitForTimeout(POINTER_LEAVE_MS - STILL_OPEN_MS);
   expect(
     await workspaceSidebar(page).isVisible(),
     `sidebar must close within ${POINTER_LEAVE_MS}ms of pointer leave`,
   ).toBe(false);
 
   await openOverlay(page);
+  await releaseSidebarFocus(page);
   await hoverSidebar(page);
   await leaveSidebar(page);
   await page.waitForTimeout(STILL_OPEN_MS);
@@ -142,44 +146,65 @@ test("overlay closes 500ms after pointer leave and cancels the pending close on 
   ).toBe(true);
 });
 
-test("focus, menu, dialog, and drag holds pause overlay auto-close; Escape still dismisses", async ({
-  page,
-}) => {
+test("focus inside the sidebar pauses overlay auto-close", async ({ page }) => {
   await prepareShell(page);
-
   await openOverlay(page);
-  await page.getByRole("button", { name: "Pin workspace sidebar" }).focus();
+  await workspaceSidebar(page)
+    .getByRole("button", { name: "Refresh", exact: true })
+    .focus();
   await leaveSidebar(page);
   await page.waitForTimeout(HOLD_PAUSE_MS);
   expect(
     await workspaceSidebar(page).isVisible(),
     "keyboard/pointer focus inside the sidebar must pause auto-close",
   ).toBe(true);
-  await page.getByRole("toolbar", { name: "Drawing commands" }).click();
+  await releaseSidebarFocus(page);
   await page.waitForTimeout(CLOSED_AFTER_LEAVE_MS);
   expect(await workspaceSidebar(page).isVisible()).toBe(false);
+});
 
+test("an open sidebar menu holds the overlay open while active", async ({
+  page,
+}) => {
+  await prepareShell(page);
   await openOverlay(page);
+  await releaseSidebarFocus(page);
   await hoverSidebar(page);
-  await page.getByRole("button", { name: "Actions for Workspace" }).click();
-  await expect(page.getByRole("menu")).toBeVisible();
+  await page.getByRole("treeitem", { name: "Workspace" }).hover();
+  await page
+    .getByRole("button", { name: "Actions for Workspace", exact: true })
+    .click();
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+  await releaseSidebarFocus(page);
+  await expect(menu).toBeVisible();
   await leaveSidebar(page);
   await page.waitForTimeout(HOLD_PAUSE_MS);
   expect(
     await workspaceSidebar(page).isVisible(),
     "an open sidebar menu must pause auto-close",
   ).toBe(true);
-  await expect(page.getByRole("menu")).toBeVisible();
-  await page.getByRole("toolbar", { name: "Drawing commands" }).click();
-  await expect(page.getByRole("menu")).toHaveCount(0);
-  await page.waitForTimeout(CLOSED_AFTER_LEAVE_MS);
-  expect(await workspaceSidebar(page).isVisible()).toBe(false);
+  await expect(menu).toBeVisible();
+  await menu.getByRole("menuitem").first().press("Tab");
+  await expect(menu).toHaveCount(0);
+});
 
+test("an open sidebar dialog holds the overlay open while active", async ({
+  page,
+}) => {
+  await prepareShell(page);
   await openOverlay(page);
+  await releaseSidebarFocus(page);
   await hoverSidebar(page);
-  await page.getByRole("button", { name: "Actions for Workspace" }).click();
+  await page.getByRole("treeitem", { name: "Workspace" }).hover();
+  await page
+    .getByRole("button", { name: "Actions for Workspace", exact: true })
+    .click();
   await page.getByRole("menuitem", { name: "New Drawing" }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await releaseSidebarFocus(page);
+  await expect(dialog).toBeVisible();
   await leaveSidebar(page);
   await page.waitForTimeout(HOLD_PAUSE_MS);
   expect(
@@ -187,13 +212,21 @@ test("focus, menu, dialog, and drag holds pause overlay auto-close; Escape still
     "a sidebar dialog must pause auto-close",
   ).toBe(true);
   await page.getByRole("button", { name: "Cancel" }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(dialog).toHaveCount(0);
   expect(await workspaceSidebar(page).isVisible()).toBe(true);
+});
 
+test("an in-progress sidebar drag pauses overlay auto-close", async ({
+  page,
+}) => {
+  await prepareShell(page);
+  await openOverlay(page);
+  await releaseSidebarFocus(page);
   await hoverSidebar(page);
   const row = page.getByRole("treeitem", { name: "drawing" });
   await row.hover();
   await page.mouse.down();
+  await releaseSidebarFocus(page);
   await leaveSidebar(page);
   await page.waitForTimeout(HOLD_PAUSE_MS);
   expect(
@@ -203,10 +236,20 @@ test("focus, menu, dialog, and drag holds pause overlay auto-close; Escape still
   await page.mouse.up();
   await page.waitForTimeout(CLOSED_AFTER_LEAVE_MS);
   expect(await workspaceSidebar(page).isVisible()).toBe(false);
+});
 
+test("Escape dismisses an overlay even while sidebar focus is held", async ({
+  page,
+}) => {
+  await prepareShell(page);
   await openOverlay(page);
+  await workspaceSidebar(page)
+    .getByRole("button", { name: "Refresh", exact: true })
+    .focus();
   await page.keyboard.press("Escape");
-  expect(await workspaceSidebar(page).isVisible()).toBe(false);
+  await expect(workspaceSidebar(page)).not.toBeVisible();
+  await expectSidebarMode(page, "hidden");
+  await expect(sidebarToggle(page)).toHaveAttribute("aria-expanded", "false");
 });
 
 test("a pinned sidebar keeps the canvas at least 70% of available content width", async ({
@@ -214,9 +257,9 @@ test("a pinned sidebar keeps the canvas at least 70% of available content width"
 }) => {
   await prepareShell(page, { sidebarPinned: true });
   await expect(workspaceSidebar(page)).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Unpin workspace sidebar", exact: true }),
-  ).toBeVisible();
+  await expectSidebarMode(page, "pinned");
+  await expect(sidebarToggle(page)).toHaveAttribute("aria-expanded", "true");
+  await expectIndependentPinControlsAbsent(page);
 
   const layout = await readLayout(page);
   expectPinnedLayout(layout);
@@ -236,32 +279,46 @@ test("prefers-reduced-motion still opens and closes overlay without relying on a
   await expect(workspaceSidebar(page)).not.toBeVisible({ timeout: 1_000 });
 
   await openOverlay(page);
+  await releaseSidebarFocus(page);
   await hoverSidebar(page);
   await leaveSidebar(page);
-  await page.waitForTimeout(CLOSED_AFTER_LEAVE_MS);
+  await page.waitForTimeout(POINTER_LEAVE_MS);
   expect(await workspaceSidebar(page).isVisible()).toBe(false);
 });
 
-test("Appearance light, dark, and system still resolve while sidebar modes change", async ({
+test("persisted Light, Dark, and System preferences remain independent of sidebar modes", async ({
   page,
 }) => {
+  await page.emulateMedia({ colorScheme: "light" });
   await prepareShell(page);
+  await setPersistedThemePreference(page, "dark");
+  await page.reload();
   await expectRetainedChrome(page);
-  await openOverlay(page);
-
-  await page.getByRole("radio", { name: "Dark" }).click();
   await expect(page.locator("html")).toHaveAttribute(
     "data-color-scheme",
     "dark",
   );
-  await page.getByRole("radio", { name: "Light" }).click();
+  await expectPersistedThemePreference(page, "dark");
+
+  await openOverlay(page);
+  await sidebarToggle(page).click({ timeout: 5_000 });
+  await expectSidebarMode(page, "pinned");
+  await expectPersistedSidebarPinned(page, true);
+  await expectPersistedThemePreference(page, "dark");
+
+  await setPersistedThemePreference(page, "light");
+  await page.reload();
+  await expectSidebarMode(page, "pinned");
   await expect(page.locator("html")).toHaveAttribute(
     "data-color-scheme",
     "light",
   );
+  await expectPersistedThemePreference(page, "light");
 
   await page.emulateMedia({ colorScheme: "dark" });
-  await page.getByRole("radio", { name: "System" }).click();
+  await setPersistedThemePreference(page, "system");
+  await page.reload();
+  await expectSidebarMode(page, "pinned");
   await expect(page.locator("html")).toHaveAttribute(
     "data-color-scheme",
     "dark",
@@ -271,17 +328,13 @@ test("Appearance light, dark, and system still resolve while sidebar modes chang
     "data-color-scheme",
     "light",
   );
+  await expectPersistedThemePreference(page, "system");
 
-  await page
-    .getByRole("button", { name: "Pin workspace sidebar", exact: true })
-    .click({ timeout: 5_000 });
-  await page.getByRole("radio", { name: "Dark" }).click();
-  await expect(page.locator("html")).toHaveAttribute(
-    "data-color-scheme",
-    "dark",
-  );
+  await sidebarToggle(page).click();
+  await expectSidebarMode(page, "hidden");
+  await expectPersistedSidebarPinned(page, false);
+  await expectPersistedThemePreference(page, "system");
   await expectRetainedChrome(page);
-  // Content theme is independent of the ordinary native titlebar (T057).
 });
 
 async function prepareShell(
@@ -292,43 +345,163 @@ async function prepareShell(
   await installUiInteractionHarness(page, {
     workspaces: [workspace],
     entries: [drawing("drawing.excalidraw", "drawing")],
+    startup: { nativeWindowRuntime: true },
   });
-  if (options.sidebarPinned === true) {
-    await page.addInitScript(
-      ({ key, snapshot }) => {
+  await page.addInitScript(
+    ({ key, snapshot }) => {
+      if (localStorage.getItem(key) === null) {
         localStorage.setItem(key, snapshot);
-      },
-      {
-        key: SHELL_PREFERENCES_STORAGE_KEY,
-        snapshot: JSON.stringify({
-          version: SHELL_PREFERENCES_VERSION,
-          sidebarPinned: true,
-          expandedWorkspaceIds: [workspace.id],
-        }),
-      },
-    );
-  }
+      }
+    },
+    {
+      key: SHELL_PREFERENCES_STORAGE_KEY,
+      snapshot: JSON.stringify({
+        version: SHELL_PREFERENCES_VERSION,
+        sidebarPinned: options.sidebarPinned === true,
+        expandedWorkspaceIds: [workspace.id],
+        currentWorkspaceId: workspace.id,
+      }),
+    },
+  );
   await page.goto("/");
+  await expect
+    .poll(async () => {
+      const state = await getUiInteractionHarnessState(page);
+      return {
+        errors: state.errors,
+        commands: state.invocations.map((invocation) => invocation.command),
+      };
+    })
+    .toEqual(
+      expect.objectContaining({
+        errors: [],
+        commands: expect.arrayContaining(["app_handshake", "workspace_list"]),
+      }),
+    );
 }
 
 async function openOverlay(page: Page): Promise<void> {
-  await page
-    .getByRole("button", { name: "Workspace sidebar", exact: true })
-    .click({ timeout: 5_000 });
+  const toggle = sidebarToggle(page);
+  await expectSidebarMode(page, "hidden");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click({ timeout: 5_000 });
   await expect(workspaceSidebar(page)).toBeVisible();
+  await expectSidebarMode(page, "overlay");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expectIndependentPinControlsAbsent(page);
+  await hoverSidebar(page);
 }
 
 function workspaceSidebar(page: Page) {
   return page.locator(".file-sidebar");
 }
 
+function sidebarToggle(page: Page) {
+  return page.getByRole("button", {
+    name: "Toggle workspace sidebar",
+    exact: true,
+  });
+}
+
+async function releaseSidebarFocus(page: Page): Promise<void> {
+  const toggle = sidebarToggle(page);
+  await toggle.focus();
+  await expect(toggle).toBeFocused();
+}
+
+async function expectSidebarMode(
+  page: Page,
+  mode: "hidden" | "overlay" | "pinned",
+): Promise<void> {
+  await expect(page.locator(".app-shell-body")).toHaveAttribute(
+    "data-sidebar-mode",
+    mode,
+  );
+}
+
+async function expectIndependentPinControlsAbsent(page: Page): Promise<void> {
+  await expect(
+    page.getByRole("button", { name: /^(?:Pin|Unpin) workspace sidebar$/ }),
+  ).toHaveCount(0);
+}
+
+async function expectPersistedSidebarPinned(
+  page: Page,
+  expected: boolean,
+): Promise<void> {
+  const stored = await page.evaluate(
+    (key) => localStorage.getItem(key),
+    SHELL_PREFERENCES_STORAGE_KEY,
+  );
+  expect(stored).not.toBeNull();
+  expect(JSON.parse(stored ?? "null")).toMatchObject({
+    version: SHELL_PREFERENCES_VERSION,
+    sidebarPinned: expected,
+  });
+}
+
+async function setPersistedThemePreference(
+  page: Page,
+  modePreference: "light" | "dark" | "system",
+): Promise<void> {
+  await page.evaluate(
+    ({ key, snapshot }) => localStorage.setItem(key, snapshot),
+    {
+      key: THEME_PREFERENCE_STORAGE_KEY,
+      snapshot: serializeThemePreference(modePreference),
+    },
+  );
+}
+
+async function expectPersistedThemePreference(
+  page: Page,
+  expected: "light" | "dark" | "system",
+): Promise<void> {
+  const stored = await page.evaluate(
+    (key) => localStorage.getItem(key),
+    THEME_PREFERENCE_STORAGE_KEY,
+  );
+  expect(stored).toBe(serializeThemePreference(expected));
+}
+
+function serializeThemePreference(
+  modePreference: "light" | "dark" | "system",
+): string {
+  return JSON.stringify({
+    version: THEME_PREFERENCE_VERSION,
+    themeId: "excalidraw",
+    modePreference,
+  });
+}
+
 async function expectRetainedChrome(page: Page): Promise<void> {
-  await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Export…" })).toBeVisible();
-  await expect(page.getByRole("group", { name: "Appearance" })).toBeVisible();
-  await expect(page.getByRole("radio", { name: "Light" })).toBeVisible();
-  await expect(page.getByRole("radio", { name: "Dark" })).toBeVisible();
-  await expect(page.getByRole("radio", { name: "System" })).toBeVisible();
+  const shellNavigation = page.getByRole("group", {
+    name: "Shell navigation",
+    exact: true,
+  });
+  await expect(shellNavigation.getByRole("button")).toHaveCount(2);
+  await expect(sidebarToggle(page)).toBeVisible();
+  await expect(
+    shellNavigation.getByRole("button", { name: "Back", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Open drawings", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("tablist", { name: "Drawing tabs", exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    page.locator(".app-commands button, .app-commands fieldset"),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Save", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Export…", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("group", { name: "Appearance", exact: true }),
+  ).toHaveCount(0);
 }
 
 async function hoverSidebar(page: Page): Promise<void> {

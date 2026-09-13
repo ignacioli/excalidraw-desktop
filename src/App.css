@@ -1027,7 +1027,7 @@ body {
 
 .welcome-eyebrow {
   margin: 0 0 var(--space-3);
-  color: var(--accent);
+  color: var(--accent-hover);
   font-size: var(--font-size-label, 12px);
   font-weight: var(--font-weight-semibold, 600);
   letter-spacing: 0.08em;
@@ -1184,7 +1184,7 @@ body {
 
 .welcome-session-note {
   margin: auto 0 0;
-  color: var(--text-disabled);
+  color: var(--text-secondary);
   font-size: var(--font-size-micro, 11px);
 }
 
