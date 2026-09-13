@@ -439,6 +439,21 @@ test.describe("003 shell visual harness", () => {
       '.workspace-tree-row[data-kind="directory"][aria-expanded="true"]',
     );
     await expect(expandedDirectory).toHaveCount(1);
+    const treeIconStyles = await page
+      .locator(".workspace-tree-disclosure-icon, .workspace-tree-leading-icon")
+      .evaluateAll((icons) =>
+        icons.map((icon) => {
+          const style = getComputedStyle(icon);
+          return { filter: style.filter, opacity: style.opacity };
+        }),
+      );
+    expect(treeIconStyles.length).toBeGreaterThan(0);
+    expect(treeIconStyles.every(({ filter }) => filter === "invert(1)")).toBe(
+      true,
+    );
+    expect(
+      treeIconStyles.every(({ opacity }) => Number.parseFloat(opacity) >= 0.8),
+    ).toBe(true);
 
     const contrast = await readPhase8Contrast(page);
     expect(contrast.primaryOnPanel).toBeGreaterThanOrEqual(4.5);
@@ -504,6 +519,23 @@ test.describe("003 shell visual harness", () => {
           ),
           tolerance: "exact",
           result: "PASS",
+        },
+        {
+          name: "semantic.dark.workspace-tree-icon-readable-style-count",
+          expected: String(treeIconStyles.length),
+          actual: String(
+            treeIconStyles.filter(
+              ({ filter, opacity }) =>
+                filter === "invert(1)" && Number.parseFloat(opacity) >= 0.8,
+            ).length,
+          ),
+          tolerance: "exact",
+          result: treeIconStyles.every(
+            ({ filter, opacity }) =>
+              filter === "invert(1)" && Number.parseFloat(opacity) >= 0.8,
+          )
+            ? "PASS"
+            : "FAIL",
         },
         {
           name: "semantic.contrast.minimum-ratio",

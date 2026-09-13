@@ -688,6 +688,12 @@ body {
   flex: 0 0 var(--workspace-row-icon-size, var(--icon-size, 16px));
 }
 
+[data-color-scheme="dark"] .workspace-tree-disclosure-icon,
+[data-color-scheme="dark"] .workspace-tree-leading-icon {
+  filter: invert(1);
+  opacity: 0.82;
+}
+
 .workspace-tree-icon-slot {
   align-items: center;
   gap: var(--space-1);
