@@ -1,0 +1,343 @@
+{
+  "schemaVersion": 1,
+  "gateId": "HF2-04",
+  "reviewerOutputPaths": {
+    "json": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/a00d82b1f939299687128e697e4aef91cfc98466/HF2-04/review/reviewer-report.json",
+    "markdown": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/a00d82b1f939299687128e697e4aef91cfc98466/HF2-04/review/reviewer-report.md"
+  },
+  "reviewerIdentity": {
+    "role": "ui-visual-acceptance-reviewer",
+    "taskIdentity": "/root/hf204_visual_review_v2",
+    "runtimeIdentity": "/root/hf204_visual_review_v2"
+  },
+  "runtimeConfig": {
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "high"
+  },
+  "independenceConfirmed": true,
+  "independenceStatement": "This reviewer did not author or modify the reviewed production UI, validation harness, fixture, or immutable browser collection. The reviewer wrote only the assigned reviewer-report.json and reviewer-report.md and did not touch production UI, tests, collection inputs, prior evidence, frozen design artifacts, specifications, task checkboxes, owner artifacts, Git staging, or commits.",
+  "implementationTaskIdentity": [
+    "/root",
+    "commit:a00d82b1f939299687128e697e4aef91cfc98466"
+  ],
+  "reviewedProductCommit": "a00d82b1f939299687128e697e4aef91cfc98466",
+  "collectionContainingHeadAtDispatch": "b72404261ad6083e4d0912079eb0ed88322324cd",
+  "collectionContainingHeadSubstitutedForReviewedCommit": false,
+  "buildIdentity": {
+    "bundleOrBuildName": "browser-ui",
+    "bundleIdentifier": null,
+    "os": "darwin",
+    "osVersionRecordedByCollection": null,
+    "reviewerHostOsVersion": "macOS 26.6.2 (25G83)",
+    "architecture": "arm64",
+    "displayScale": 1,
+    "displayScaleBasis": "The 1280x760 PNG equals the recorded 1280x760 CSS viewport; this is the browser capture scale and is not a claim about a physical macOS display.",
+    "viewport": {
+      "width": 1280,
+      "height": 760,
+      "unit": "CSS px"
+    },
+    "windowSize": null,
+    "theme": "light",
+    "fixture": "overlay",
+    "fontReady": true,
+    "remoteFontRequests": 0,
+    "route": "semantic-browser",
+    "harnessVersion": "003-shell-v3"
+  },
+  "contractConsistency": {
+    "result": "PASS",
+    "statement": "DESIGN.md, the confirmed UX brief decisions, the approved HF-2 README/components/tokens/manifest package, and the current 003 spec/plan/UI contract agree for the HF2-04 Overlay Light checkpoint: Overlay leaves the canvas box unchanged, shell boundaries remain unmasked, geometry uses +/-2 CSS px, raster tolerance is auxiliary component-crop only, and owner approval/native package evidence are not required at this intermediate gate."
+  },
+  "reviewedHf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+  "reviewedBaseline": {
+    "manifestName": "04 · Workspace · Overlay · Light",
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/design/desktop-shell/hf-2/screens/workspace-overlay-light.png",
+    "sha256": "ab2c2baf8b7b32e8d78095f29165eb369663389a62aa13e5a672a47d3511a059",
+    "width": 1280,
+    "height": 760
+  },
+  "reviewedCollectorReport": {
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/a00d82b1f939299687128e697e4aef91cfc98466/HF2-04/collection/HF2-04-light-overlay-browser/collector-report.json",
+    "sha256": "5d1fccfc7b5f12015f236098cee0beef2e72560517dbda96fc2fc909f4e73141",
+    "collectionId": "HF2-04-light-overlay-browser",
+    "collectionDigest": "e231780167da85b7710a98fa2c432beac48e5352938ab3ca6810c94a1b35345e",
+    "collectionDigestRecomputed": true,
+    "artifactDigestsRecomputed": true,
+    "result": "PASS"
+  },
+  "reviewedCollections": [
+    {
+      "collectionId": "HF2-04-light-overlay-browser",
+      "collectionDigest": "e231780167da85b7710a98fa2c432beac48e5352938ab3ca6810c94a1b35345e",
+      "collectorReportSha256": "5d1fccfc7b5f12015f236098cee0beef2e72560517dbda96fc2fc909f4e73141",
+      "role": "semantic browser authority and fixed browser screenshot"
+    }
+  ],
+  "reviewedActualSha256": "f7159ce8618bffb3a944a041045db22e247380d149ffcbae77c51aeb7be54eb6",
+  "maskSha256": "e220ad154e27065602b0c60dda4facb259fc97a62b90ded6855f82101bf71562",
+  "screenMatrix": [
+    {
+      "screen": "04 · Workspace · Overlay · Light",
+      "status": "PASS",
+      "evidence": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/a00d82b1f939299687128e697e4aef91cfc98466/HF2-04/collection/HF2-04-light-overlay-browser/actual.png",
+      "mismatchCount": 0
+    }
+  ],
+  "remediationChecks": [
+    {
+      "priorFindingId": "HF2-04-VIS-001",
+      "check": "First Tab placement",
+      "result": "PASS",
+      "expected": "First Tab x=88, corresponding to the frozen baseline underline near x=89, within the declared +/-2 CSS px shell geometry tolerance.",
+      "actual": "The immutable collector records first Tab x=88; visual inspection confirms that the active first Tab begins immediately after the compact Sidebar/Back group.",
+      "remainingMismatch": false
+    },
+    {
+      "priorFindingId": "HF2-04-VIS-002",
+      "check": "Flow dirty Tab visible marker",
+      "result": "PASS",
+      "expected": "Flow is dirty and exposes exactly one visible circular unsaved marker in addition to its accessible dirty state.",
+      "actual": "The immutable collector records save-state=dirty and visible-unsaved-marker=1 for fixture-overlay-flow; the marker is clearly visible in the unmasked Tab strip.",
+      "remainingMismatch": false
+    },
+    {
+      "priorFindingId": "HF2-04-VIS-003",
+      "check": "Sidebar toggle default/rest capture state",
+      "result": "PASS",
+      "expected": "The fixed Overlay key screen captures the compact Sidebar toggle at rest with transparent/default background after the pointer moves away.",
+      "actual": "The remediated actual shows the Sidebar toggle at rest with no retained lavender hover surface; Back is also at rest.",
+      "remainingMismatch": false
+    }
+  ],
+  "visualChecks": [
+    {
+      "check": "Overlay Sidebar layering and perimeter",
+      "result": "PASS",
+      "expected": "The 360px Overlay Sidebar covers the left editor area while its header, tree, divider, shadow, and full perimeter remain visible and reviewable.",
+      "actual": "The Overlay Sidebar is visibly layered above the SDK editor and its shell-owned perimeter is not concealed by the SDK exclusion."
+    },
+    {
+      "check": "Canvas box remains unchanged when Overlay opens and closes",
+      "result": "PASS",
+      "expected": "Canvas x, y, width, and height remain exactly unchanged before and after the Overlay transition.",
+      "actual": "The bound collector reports exact before/after equality at x=0, y=44, width=1280, and height=716. This geometry was accepted from structured assertions and not re-proved from pixels."
+    },
+    {
+      "check": "Compact Back control",
+      "result": "PASS",
+      "expected": "Back is a compact enabled 32x32 icon control beside Sidebar for the valid-history fixture.",
+      "actual": "Back is visibly compact and the collector reports enabled semantics plus exact 32x32 geometry."
+    },
+    {
+      "check": "Top Tab strip alignment",
+      "result": "PASS",
+      "expected": "The first Tab begins immediately after the compact Sidebar/Back group at x=88, aligning with the frozen baseline underline near x=89 within +/-2 CSS px.",
+      "actual": "The collector records x=88 and the remediated capture visibly removes the prior 52px additional gap."
+    },
+    {
+      "check": "Dirty Tab visible non-colour cue",
+      "result": "PASS",
+      "expected": "The dirty Flow Tab has one visible circular unsaved marker in addition to accessible state.",
+      "actual": "Flow.excalidraw visibly contains one circular marker; clean System Map and Research Tabs contain none."
+    },
+    {
+      "check": "Sidebar toggle default capture state",
+      "result": "PASS",
+      "expected": "The Overlay key screen captures the compact Sidebar toggle at rest with transparent/default background.",
+      "actual": "The fixed actual shows the Sidebar toggle at rest after the pointer moved away; no hover background remains."
+    },
+    {
+      "check": "Light shell composition outside SDK interior",
+      "result": "PASS",
+      "expected": "The compact controls, Tabs, Overlay Sidebar, Workspace header/tree, shell boundary, and overlay perimeter preserve the approved restrained Light composition.",
+      "actual": "All app-owned shell regions remain visible, coherent, and unmasked; differences inside the official editor interior are excluded only by the declared SDK mask."
+    }
+  ],
+  "compositionChecks": [
+    {
+      "check": "Overlay Sidebar header, tree rows, divider, shadow, and perimeter remain visible and unmasked",
+      "result": "PASS"
+    },
+    {
+      "check": "Overlay canvas box before/after is exactly equal in all four dimensions",
+      "result": "PASS",
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "check": "Back is enabled and preserves compact 32x32 geometry",
+      "result": "PASS",
+      "evidenceSource": "collector assertions and visual inspection"
+    },
+    {
+      "check": "The first Tab preserves the frozen top-shell placement at x=88 within +/-2 CSS px",
+      "result": "PASS",
+      "evidenceSource": "collector assertions and visual inspection"
+    },
+    {
+      "check": "Flow dirty marker count is exactly one and clean Tab marker counts are zero",
+      "result": "PASS",
+      "evidenceSource": "003-shell-v3 collector semantic assertions and visual inspection"
+    },
+    {
+      "check": "The Sidebar toggle is captured in the baseline default state rather than hover",
+      "result": "PASS",
+      "evidenceSource": "visual inspection"
+    },
+    {
+      "check": "No prohibited legacy shell chrome is visible",
+      "result": "PASS",
+      "evidenceSource": "collector assertions and visual inspection"
+    }
+  ],
+  "legacyRemoval": [
+    {
+      "control": "separate global top-level New Drawing",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "textual Workspace sidebar control",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "large textual Pin or Unpin control",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "legacy top-level Save",
+      "observedCount": 0,
+      "evidenceSource": "collector combined top-level action assertion"
+    },
+    {
+      "control": "persistent normal-state All changes saved strip",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "standalone top-level Export",
+      "observedCount": 0,
+      "evidenceSource": "collector combined top-level action assertion"
+    },
+    {
+      "control": "legacy top-level Appearance",
+      "observedCount": 0,
+      "evidenceSource": "collector combined top-level action assertion"
+    },
+    {
+      "control": "visible native-looking tab-strip scrollbar",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "thick or always-visible Sidebar scrollbar",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "Unicode placeholder tree or file icons",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions and visual inspection"
+    },
+    {
+      "control": "always-visible horizontal ellipsis",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "duplicate current-workspace heading or workspace navigation state",
+      "observedCount": 0,
+      "evidenceSource": "collector workspace-root assertion and visual inspection"
+    },
+    {
+      "control": "clipped or overflowed workspace-header actions",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions and visual inspection"
+    },
+    {
+      "control": "old 002 shell composition",
+      "observedCount": 0,
+      "evidenceSource": "visual inspection"
+    }
+  ],
+  "masks": [
+    {
+      "maskId": "sdk-editor-interior",
+      "selectorOrRect": ".canvas-document:not([hidden]) .excalidraw-editor",
+      "surface": "canvas",
+      "reason": "Official Excalidraw SDK-owned editor interior",
+      "perimeterChecked": true,
+      "approved": true
+    }
+  ],
+  "maskRationale": "The single declared selector is accepted only for the visible official Excalidraw SDK editor interior. The review did not exclude the Overlay Sidebar, its shadow/perimeter, the top Tabs, Sidebar/Back controls, Workspace header, tree rows, or any shell boundary, even where the Overlay is visually stacked above the underlying editor.",
+  "tolerances": {
+    "structureHierarchyAndPerimeter": "0 tolerance",
+    "browserGeometryTolerance": "+/-2 CSS px; the bound collector owns canvas-box, Back, and first-Tab measurements",
+    "rasterOnlyTolerance": {
+      "scope": "collector-owned auxiliary workspace-sidebar same-semantic component crop only",
+      "maxDiffPixelRatio": 0.01,
+      "observedDiffPixelRatio": 0,
+      "fontReady": true
+    },
+    "wholeScreenRasterToleranceUsedByReviewer": false,
+    "toleranceOrMaskChangeMadeByReviewer": false
+  },
+  "findings": [
+    {
+      "id": "HF2-04-REM-001",
+      "severity": "INFO",
+      "screenState": "04 · Workspace · Overlay · Light / top Tab strip placement",
+      "expected": "First Tab x=88, corresponding to the frozen baseline underline near x=89 within +/-2 CSS px.",
+      "actual": "The collector records x=88 and actual.png visibly removes the prior additional gap.",
+      "reproduction": "Open the manifest-verified baseline and immutable actual separately at native 1280x760. Inspect the first active Tab immediately after the compact controls, then confirm geometry.overlay.first-tab.x in assertions.json is 88.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/a00d82b1f939299687128e697e4aef91cfc98466/HF2-04/collection/HF2-04-light-overlay-browser/actual.png",
+      "description": "Prior finding HF2-04-VIS-001 is remediated."
+    },
+    {
+      "id": "HF2-04-REM-002",
+      "severity": "INFO",
+      "screenState": "04 · Workspace · Overlay · Light / Flow.excalidraw dirty Tab",
+      "expected": "The dirty Flow Tab exposes exactly one visible circular unsaved marker in addition to accessible dirty state.",
+      "actual": "The collector records save-state=dirty and visible-unsaved-marker=1; actual.png visibly shows the single marker.",
+      "reproduction": "Open actual.png at native 1280x760 and inspect Flow.excalidraw in the unmasked Tab strip; then confirm the fixture-overlay-flow semantic assertions in assertions.json.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/a00d82b1f939299687128e697e4aef91cfc98466/HF2-04/collection/HF2-04-light-overlay-browser/actual.png",
+      "description": "Prior finding HF2-04-VIS-002 is remediated."
+    },
+    {
+      "id": "HF2-04-REM-003",
+      "severity": "INFO",
+      "screenState": "04 · Workspace · Overlay · Light / Sidebar toggle rest state",
+      "expected": "The fixed Overlay key screen captures the compact Sidebar toggle at rest with transparent/default background.",
+      "actual": "The actual captures the Sidebar toggle at rest; the prior lavender hover surface is absent.",
+      "reproduction": "Open the manifest-verified baseline and actual separately at native 1280x760 and compare the top-left Sidebar control backgrounds after the capture pointer has moved away.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/a00d82b1f939299687128e697e4aef91cfc98466/HF2-04/collection/HF2-04-light-overlay-browser/actual.png",
+      "description": "Prior finding HF2-04-VIS-003 is remediated."
+    }
+  ],
+  "residualLowMediumFindings": [],
+  "severityCounts": {
+    "info": 3,
+    "low": 0,
+    "medium": 0,
+    "high": 0,
+    "critical": 0
+  },
+  "criticalCount": 0,
+  "highCount": 0,
+  "highCriticalCount": 0,
+  "unverified": [
+    "A native macOS package, bundle identifier, native window, physical display scale, native menus, and system dialogs were not reviewed; they are intentionally outside this intermediate browser-only checkpoint.",
+    "The browser engine name and version and exact collection-time macOS version are not present in environment.json.",
+    "The recorded browser capture scale is derived from matching PNG and CSS viewport dimensions and does not establish the physical macOS display scale.",
+    "Back-history behavior, Overlay hold/Escape behavior, persistence, accessibility, keyboard operation, focus-visible, reduced motion, token values, font fallback, mask semantics, and legacy counts were not re-proved from pixels; the immutable collector and focused regressions own those facts.",
+    "HF2-01, HF2-02, VSL-001/HF2-03, HF2-05, and HF2-06 were not reviewed by this single-screen checkpoint.",
+    "No product-owner decision was created or inferred because ownerRequirement is NOT_REQUIRED for HF2-04."
+  ],
+  "verdict": "PASS",
+  "ownerRequirement": "NOT_REQUIRED",
+  "ownerArtifactCreated": false,
+  "nextGate": "Bind this independent reviewer PASS to T053 and close the Phase 7 checkpoint through the task owner. Phase 8 may begin only after the checkpoint evidence and task state are recorded. Do not create an intermediate product-owner artifact or production native package."
+}
