@@ -13,7 +13,10 @@ import {
   UNICODE_WORKSPACE,
   type ShellFixture,
 } from "../fixtures/003-shell-fixtures";
-import { makeEntryRowKey } from "../../src/workspaces/workspaceTreeModel";
+import {
+  makeEntryRowKey,
+  makeWorkspaceRowKey,
+} from "../../src/workspaces/workspaceTreeModel";
 import {
   COMPONENT_CROP_THRESHOLD,
   SDK_BOUNDARY_SELECTOR,
@@ -277,18 +280,18 @@ test.describe("003 shell visual harness", () => {
   test("captures Workspace / Overlay / Light without changing the canvas box", async ({
     page,
   }, testInfo) => {
-    await prepare(page, getShellFixture("overlay"), "light");
-    await page
-      .getByRole("button", { name: "Toggle workspace sidebar" })
-      .click();
+    const fixture = getShellFixture("overlay");
+    await prepare(page, fixture, "light");
     await expect(page.locator(".file-sidebar")).toBeVisible();
     await assertShellContract(page, {
       session: "restored",
       sidebar: "overlay",
     });
+    const semanticAssertions = await assertRestoredFixture(page, fixture);
     const back = page.getByRole("button", { name: "Back" });
     await expect(back).toBeEnabled();
     const backBox = await readBox(back);
+    const firstTabBox = await readBox(page.locator(".tab-cluster").first());
     const canvas = page.locator(".canvas-region");
     const before = await readBox(canvas);
     await page.keyboard.press("Escape");
@@ -301,15 +304,20 @@ test.describe("003 shell visual harness", () => {
       .getByRole("button", { name: "Toggle workspace sidebar" })
       .click();
     await expect(page.locator(".file-sidebar")).toBeVisible();
+    await page.mouse.move(
+      VISUAL_VIEWPORT.width - 8,
+      VISUAL_VIEWPORT.height - 8,
+    );
     await captureAndCollect(page, testInfo, {
       captureKey: "workspaceOverlayLight",
-      fixture: getShellFixture("overlay"),
+      fixture,
       theme: "light",
       sidebar: "overlay",
       session: "workspace",
       cropLocator: page.locator(".file-sidebar"),
       componentId: "workspace-sidebar",
       semanticAssertions: [
+        ...semanticAssertions,
         {
           name: "semantic.back.valid-history-enabled",
           expected: "true",
@@ -338,6 +346,12 @@ test.describe("003 shell visual harness", () => {
           expected: 32,
           actual: backBox.height,
           tolerance: 0,
+        }),
+        assertGeometry({
+          name: "overlay.first-tab.x",
+          expected: 88,
+          actual: firstTabBox.x,
+          tolerance: GEOMETRY_TOLERANCE_PX,
         }),
       ],
     });
@@ -532,6 +546,7 @@ async function prepare(
     await resolveRecoveryFixture(page, fixture);
   } else {
     await openFixtureDocuments(page, fixture);
+    await applyDeclaredTabSaveStates(page, fixture);
   }
   await page.evaluate(async () => {
     await document.fonts.ready;
@@ -614,6 +629,16 @@ async function openFixtureDocuments(
       .click();
     await expect(sidebar).toBeVisible();
   }
+  if (fixture.currentWorkspaceId !== null) {
+    const workspaceRow = page.locator(
+      `[data-row-key="${makeWorkspaceRowKey(fixture.currentWorkspaceId)}"]`,
+    );
+    await expect(workspaceRow).toBeVisible();
+    if ((await workspaceRow.getAttribute("aria-expanded")) !== "true") {
+      await workspaceRow.click();
+      await expect(workspaceRow).toHaveAttribute("aria-expanded", "true");
+    }
+  }
   for (const tab of fixture.tabs) {
     if (tab.path === null) {
       throw new Error(
@@ -676,7 +701,7 @@ async function openFixtureDocuments(
     await expect(page.locator(SDK_BOUNDARY_SELECTOR)).toBeVisible();
   }
   await restoreDeclaredDirectoryExpansion(page, fixture);
-  if (!startedVisible) {
+  if (!startedVisible && fixture.sidebar === "hidden") {
     await page.evaluate(() => {
       window.dispatchEvent(
         new KeyboardEvent("keydown", {
