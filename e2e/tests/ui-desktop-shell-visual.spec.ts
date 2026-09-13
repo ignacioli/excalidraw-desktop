@@ -634,9 +634,9 @@ async function openFixtureDocuments(
           right.relativePath.split("/").length,
       );
     for (const directory of parentDirectories) {
-      const directoryRow = page.getByRole("treeitem", {
-        name: directory.displayName,
-      });
+      const directoryRow = page
+        .getByRole("treeitem", { name: directory.displayName })
+        .and(page.locator('[data-kind="directory"]'));
       await expect(directoryRow).toBeVisible();
       if ((await directoryRow.getAttribute("aria-expanded")) !== "true") {
         await directoryRow.click();
