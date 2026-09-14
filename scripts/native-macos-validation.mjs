@@ -20,6 +20,12 @@ import readline from "node:readline";
 
 export const NATIVE_VALIDATION_PREFIX = "EXCALIDRAW_NATIVE_MENU_VALIDATION ";
 export const EXPECTED_WINDOW_SIZE = Object.freeze({ width: 1280, height: 760 });
+export const PRODUCTION_APP_BUILD_ARGS = Object.freeze([
+  "tauri",
+  "build",
+  "--bundles",
+  "app",
+]);
 export const EXPECTED_MENU_ITEMS = Object.freeze([
   Object.freeze({
     path: Object.freeze(["File", "Save"]),
@@ -1329,7 +1335,7 @@ async function discoverApp(repoRoot) {
 export async function createManifest({
   repoRoot = REPO_ROOT,
   appPath,
-  buildCommand = ["pnpm", "tauri", "build"],
+  buildCommand = ["pnpm", ...PRODUCTION_APP_BUILD_ARGS],
 }) {
   const state = gitState(repoRoot);
   if (!state.commit || !state.clean) {
@@ -1387,13 +1393,13 @@ export async function sealProductionBundle({
     );
     return buildReport({ command: "seal", manifestPath, startedAt, checks });
   }
-  const build = runSync("pnpm", ["tauri", "build"], {
+  const build = runSync("pnpm", PRODUCTION_APP_BUILD_ARGS, {
     cwd: repoRoot,
     inherit: true,
   });
   if (build.status !== 0) {
     checks.push(
-      makeCheck("production-build", "pnpm tauri build", "FAIL", {
+      makeCheck("production-build", "pnpm tauri build --bundles app", "FAIL", {
         exitCode: build.status,
       }),
     );
@@ -1417,7 +1423,9 @@ export async function sealProductionBundle({
         gitCommit: state.commit,
       }),
     );
-    checks.push(makeCheck("production-build", "pnpm tauri build", "PASS"));
+    checks.push(
+      makeCheck("production-build", "pnpm tauri build --bundles app", "PASS"),
+    );
     checks.push(
       makeCheck("manifest", "sealed package manifest", "PASS", {
         path: outputPath,

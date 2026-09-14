@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import {
   EXPECTED_MENU_ITEMS,
   EXPECTED_WINDOW_SIZE,
+  PRODUCTION_APP_BUILD_ARGS,
   NativeValidationBlockedError,
   adaptNativeValidationReport,
   aggregateStatus,
@@ -80,6 +81,15 @@ function nativeBinding(overrides = {}) {
 }
 
 describe("native macOS validation helpers", () => {
+  it("seals only the production app bundle required by native validation", () => {
+    assert.deepEqual(PRODUCTION_APP_BUILD_ARGS, [
+      "tauri",
+      "build",
+      "--bundles",
+      "app",
+    ]);
+  });
+
   it(
     "generates AppleScript that compiles before native menu inspection",
     { skip: process.platform !== "darwin" },
