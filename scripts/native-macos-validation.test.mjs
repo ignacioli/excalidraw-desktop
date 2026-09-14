@@ -22,7 +22,7 @@ import {
   completeExportDialogAppleScript,
   decodeAXModifiers,
   inspectMenuItemAppleScript,
-  keyboardShortcutSwiftSource,
+  keyboardShortcutAppleScript,
   makeCheck,
   parseWindowGeometryOutput,
   parseNativeValidationEvents,
@@ -246,11 +246,12 @@ describe("native macOS validation helpers", () => {
     );
   });
 
-  it("uses the physical Command-S key code for the fresh shortcut probe", () => {
-    const source = keyboardShortcutSwiftSource(123, "s", ["command"]);
-    assert.match(source, /virtualKey: 1/u);
-    assert.match(source, /flags = \[\.maskCommand\]/u);
-    assert.match(source, /postToPid\(pid_t\(123\)\)/u);
+  it("targets the owned process with a logical Command-S keystroke", () => {
+    const source = keyboardShortcutAppleScript(123, "s", ["command"]);
+    assert.match(source, /application process whose unix id is 123/u);
+    assert.match(source, /set frontmost to true/u);
+    assert.match(source, /keystroke "s" using \{command down\}/u);
+    assert.doesNotMatch(source, /click targetItem/u);
   });
 
   it("decodes AX menu modifier bitmasks", () => {

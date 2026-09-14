@@ -162,7 +162,7 @@ pnpm native:macos:validate -- \
   --binding <evidence-binding.json>
 ```
 
-FINAL plan 提供专用 T023b profile。Validator 精确选择一个已声明的有效 `.excalidraw` fixture，记录其 digest 与正常 launch/open binding；因为本 gate 不断言业务 Save outcome，所以 route checks 前后 bytes 必须一致。它要求 5/5 menu facts；geometry 只接受八个 tab-delimited 有限整数且 requested size 必须精确为 1280×760；menu Save probe 后通过 macOS 物理 key code 调用 Command-S，并要求七个 fresh、唯一的 `nativeEntry -> routeAccepted` ids。Save/PNG/SVG filesystem outcomes 由 deterministic persistence/export suites 分别证明。Adapter 写入 collector 自有的 `environment.json`、`route-acknowledgements.json`、`native-report.json`、`collector-report.json` 与 `collection/attempts/<attemptId>/attempt.json`，其中分离 product/validator/attempt identity 和 normalized issue fingerprint；绝不写 reviewer 或 product owner 状态。只有 VSL-001 或 FINAL-003 所需角色各自封存 artifact 后，才能发布完整 gate：
+FINAL plan 提供专用 T023b profile。Validator 精确选择一个已声明的有效 `.excalidraw` fixture，记录其 digest 与正常 launch/open binding；因为本 gate 不断言业务 Save outcome，所以 route checks 前后 bytes 必须一致。它要求 5/5 menu facts；geometry 只接受八个 tab-delimited 有限整数且 requested size 必须精确为 1280×760；先通过 macOS System Events 向唯一 owned PID 发送逻辑 Command-S，再单独调用 menu Save，并要求七个 fresh、唯一的 `nativeEntry -> routeAccepted` ids。Save/PNG/SVG filesystem outcomes 由 deterministic persistence/export suites 分别证明。Adapter 写入 collector 自有的 `environment.json`、`route-acknowledgements.json`、`native-report.json`、`collector-report.json` 与 `collection/attempts/<attemptId>/attempt.json`，其中分离 product/validator/attempt identity 和 normalized issue fingerprint；绝不写 reviewer 或 product owner 状态。只有 VSL-001 或 FINAL-003 所需角色各自封存 artifact 后，才能发布完整 gate：
 
 ```bash
 pnpm evidence:publish -- \
