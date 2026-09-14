@@ -8,21 +8,21 @@
 
 验证证据必须按来源分开报告，**不得互相替代**：
 
-| 证据类 | 能证明什么 | 不能证明什么 |
-|--------|------------|----------------|
-| 浏览器 Playwright | 应用对话框、连续树、overlay/pinned 布局、键盘与 a11y | 废纸篓 Put Back、Finder、系统标题栏颜色、真实指针设备 |
-| `APP_E2E=1` 进程级 | 文件系统变更、关闭队列、恢复、冲突、越界拒绝 | 操作员看到的原生标题栏着色、窗口遮挡/最小化 |
-| 物理 macOS（或记录配置的 macOS VM） | 窗口标题 `Excalidraw Whiteboard`、系统标题栏颜色、正常层级、Trash/Finder、Gatekeeper | 不能用浏览器结果宣称已完成 |
+| 证据类                              | 能证明什么                                                                           | 不能证明什么                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| 浏览器 Playwright                   | 应用对话框、连续树、overlay/pinned 布局、键盘与 a11y                                 | 废纸篓 Put Back、Finder、系统标题栏颜色、真实指针设备 |
+| `APP_E2E=1` 进程级                  | 文件系统变更、关闭队列、恢复、冲突、越界拒绝                                         | 操作员看到的原生标题栏着色、窗口遮挡/最小化           |
+| 物理 macOS（或记录配置的 macOS VM） | 窗口标题 `Excalidraw Whiteboard`、系统标题栏颜色、正常层级、Trash/Finder、Gatekeeper | 不能用浏览器结果宣称已完成                            |
 
 原生窗口矩阵与参考环境性能测量**未在本文件预填 pass/fail**。未执行的检查保持未执行；预算失败仍须如实记录，但不阻断合并或开源发布（ADR-004）。
 
 ## 1. 环境前提
 
-| 平台 | 要求 |
-|------|------|
-| 通用 | Node.js 22.13+（pnpm 11.20.0 要求）、pnpm（锁定为唯一包管理器）、Rust stable 1.80+（rustup）、Python 3.10+ 与 uv（仅构建期字体合并，解释器由 `.python-version` 固定，依赖由 `pyproject.toml` + `uv.lock` 声明，`uv run` 自动安装） |
-| macOS | Xcode Command Line Tools；项目不需要 Developer ID、签名或公证；首次运行未签名产物时按 README 的 Gatekeeper 手动放行步骤验证 |
-| Ubuntu 24.04 Desktop（可选） | `libwebkit2gtk-4.1-dev`、`libgtk-3-dev` 等 Tauri 2 系统依赖；可选单环境 smoke test，Fedora/其他 Linux 不在当前验收要求内 |
+| 平台                         | 要求                                                                                                                                                                                                                               |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 通用                         | Node.js 22.13+（pnpm 11.20.0 要求）、pnpm（锁定为唯一包管理器）、Rust stable 1.80+（rustup）、Python 3.10+ 与 uv（仅构建期字体合并，解释器由 `.python-version` 固定，依赖由 `pyproject.toml` + `uv.lock` 声明，`uv run` 自动安装） |
+| macOS                        | Xcode Command Line Tools；项目不需要 Developer ID、签名或公证；首次运行未签名产物时按 README 的 Gatekeeper 手动放行步骤验证                                                                                                        |
+| Ubuntu 24.04 Desktop（可选） | `libwebkit2gtk-4.1-dev`、`libgtk-3-dev` 等 Tauri 2 系统依赖；可选单环境 smoke test，Fedora/其他 Linux 不在当前验收要求内                                                                                                           |
 
 ## 2. 构建与运行
 
@@ -162,7 +162,7 @@ pnpm native:macos:validate -- \
   --binding <evidence-binding.json>
 ```
 
-FINAL plan 提供专用 T023b profile。Validator 精确选择一个已声明的有效 `.excalidraw` fixture，记录其 digest 与正常 launch/open binding；因为本 gate 不断言业务 Save outcome，所以 route checks 前后 bytes 必须一致。它要求 5/5 menu facts；geometry 只接受八个 tab-delimited 有限整数且 requested size 必须精确为 1280×760；先通过 macOS System Events 向唯一 owned PID 发送逻辑 Command-S，再单独调用 menu Save，并要求七个 fresh、唯一的 `nativeEntry -> routeAccepted` ids。Save/PNG/SVG filesystem outcomes 由 deterministic persistence/export suites 分别证明。Adapter 写入 collector 自有的 `environment.json`、`route-acknowledgements.json`、`native-report.json`、`collector-report.json` 与 `collection/attempts/<attemptId>/attempt.json`，其中分离 product/validator/attempt identity 和 normalized issue fingerprint；绝不写 reviewer 或 product owner 状态。只有 VSL-001 或 FINAL-003 所需角色各自封存 artifact 后，才能发布完整 gate：
+Prepared plan 提供专用 T023b profile。Validator 精确选择一个已声明的有效 `.excalidraw` fixture，记录其 digest 与正常 launch/open binding；因为本 proof 不断言业务 Save outcome，所以 route checks 前后 bytes 必须一致。`qualification` binding 将运行收缩为准确的数值型 1280×760 geometry、一次 File > Save menu 检查及 route、一次独立 physical Command-S route 与 fixture state preparation；`final` binding 复用同一机制并扩展到 5/5 menu facts 和七个 fresh、唯一的 `nativeEntry -> routeAccepted` ids。对于 Command-S，Harness 会输出一个必须在 interactive terminal 中精确输入一次的 nonce line，安装 global physical-key observer，将唯一 owned PID 置为 frontmost，并要求 operator 实际按下一次 Command-S。Key observation、一个 fresh route pair 与前后相同的 frontmost PID 必须一致；menu click、重复或不匹配的 confirmation、重复 key/route 或 non-interactive substitution 都是 `BLOCKED`。Post-stop run 还必须提供 immutable digest-bound `STOP_REOPEN` decision、新 remediation epoch 和实际 validator before/after digest change。Save/PNG/SVG filesystem outcomes 由 deterministic persistence/export suites 分别证明。Adapter 写入 collector 自有的 `environment.json`、`route-acknowledgements.json`、`native-report.json`、`collector-report.json` 与 `collection/attempts/<attemptId>/attempt.json`，其中分离 product/validator/attempt identity 和 normalized issue fingerprint；绝不写 filesystem、visual、reviewer 或 FINAL product-owner 状态。只有 VSL-001 或 FINAL-003 所需角色各自封存 artifact 后，才能发布完整 gate：
 
 ```bash
 pnpm evidence:publish -- \
@@ -172,7 +172,7 @@ pnpm evidence:publish -- \
 
 目标必须是 003 evidence root 内的新目录。发布器验证 digest 与角色边界，逐字节复制全部来源文件，再次计算来源/目标 hash，并在复制树旁写 `<gate-id>.publication.json`。退出码固定为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
 
-对于 FINAL-003，sealed source 顶层精确包含四个角色目录：`collection/`、`aggregate/`、`review/` 与 `owner/`。`aggregate/technical/` 包含 T062 input、dependency graph、派生的 `attempt-issue-index.json`、stale-evidence record 和 JSON/Markdown technical reports；publisher 会复核 technical PASS、所有 identity/attempt/manifest/delta/report 路径与 digest、7 个 browser claim collections 及 6 个 T061 native visual collections。`review/reviewer-report.json` 是 canonical index，只能索引这六个 visual collections 与六份 `review/screens/<gate-id>/reviewer-report.json` PASS 文件，不得把 T059、T060、T023b、T062 或其他 technical collection 声称为已做视觉 review。`owner/product-owner-decision.json` 必须记录 `APPROVED`，并按 digest 同时绑定 `aggregate/technical/technical-report.json` 和 `review/reviewer-report.json`。角色或文件缺失/多余、传递字节 stale、reviewer 越权绑定 technical collection，或 owner 缺少任一绑定，均返回 `BLOCKED`。通过验证后，aggregate 与逐屏 review 的每个字节都和其他 source bytes 一样原样发布。
+对于 FINAL-003，sealed source 顶层精确包含四个角色目录：`collection/`、`aggregate/`、`review/` 与 `owner/`。`aggregate/technical/` 包含 T062 input、dependency graph、派生的 `attempt-issue-index.json`、stale-evidence record 和 JSON/Markdown technical reports；publisher 会复核 technical PASS、所有 identity/attempt/amendment/`STOP_REOPEN`/manifest/delta/report 路径与 digest、每个 remediation-epoch transition、7 个 browser claim collections及 6 个 T061 native visual collections。`review/reviewer-report.json` 是 canonical index，只能索引这六个 visual collections 与六份 `review/screens/<gate-id>/reviewer-report.json` PASS 文件，不得把 T059、T060、T023b、T062 或其他 technical collection 声称为已做视觉 review。`owner/product-owner-decision.json` 必须记录 `APPROVED`，并按 digest 同时绑定 `aggregate/technical/technical-report.json` 和 `review/reviewer-report.json`。角色或文件缺失/多余、传递字节 stale、reviewer 越权绑定 technical collection，或 owner 缺少任一绑定，均返回 `BLOCKED`。通过验证后，aggregate 与逐屏 review 的每个字节都和其他 source bytes 一样原样发布。
 
 ### Read-only evidence aggregation（只读证据聚合）
 
@@ -239,14 +239,14 @@ pnpm evidence:aggregate -- --mode closure-verify --closure-report <report.json> 
 
 ## 4. 性能夹具（回归基线）
 
-| 指标 | 夹具 | 阈值 |
-|------|------|------|
-| 冷启动 | 清空应用测试数据，执行 10 次冷进程启动；单调时钟记录进程启动 → 画布可编辑并计算 P95 | ≤2s |
-| 空载内存 | 启动稳定 30s 后采样 60s，聚合 Tauri 主进程及关联 WebView/GPU 进程树 RSS P95 | ≤500MB（ADR-007） |
-| 空闲 CPU | soak 后崩溃安全刷新完成，再采样 60s 进程树 CPU P95，按单逻辑核归一化 | ≤35% 单逻辑核（ADR-007） |
-| 大场景帧率/内存 | 10k 图元固定 fixture + 恒定缩放平移脚本，采集帧时间与场景稳定后的进程树 RSS | ≥30fps、目标 60fps、无 >100ms 冻结、RSS ≤950MB（ADR-007） |
-| 写盘削峰 | 60s 连续绘制脚本 + 应用管理路径写入计数 | 写次数 ≤事件数 1%，且无持久化掉帧尖峰 |
-| 长时稳定性 | 热身后脚本编辑 15min，对比进程树 RSS；等待 5s 崩溃安全刷新后再静置 60s 观察 CPU 与写入 | RSS 增长同时 ≤50MB 且 ≤15%；空闲 CPU ≤35%；零持续写入（ADR-006/007） |
+| 指标            | 夹具                                                                                   | 阈值                                                                 |
+| --------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 冷启动          | 清空应用测试数据，执行 10 次冷进程启动；单调时钟记录进程启动 → 画布可编辑并计算 P95    | ≤2s                                                                  |
+| 空载内存        | 启动稳定 30s 后采样 60s，聚合 Tauri 主进程及关联 WebView/GPU 进程树 RSS P95            | ≤500MB（ADR-007）                                                    |
+| 空闲 CPU        | soak 后崩溃安全刷新完成，再采样 60s 进程树 CPU P95，按单逻辑核归一化                   | ≤35% 单逻辑核（ADR-007）                                             |
+| 大场景帧率/内存 | 10k 图元固定 fixture + 恒定缩放平移脚本，采集帧时间与场景稳定后的进程树 RSS            | ≥30fps、目标 60fps、无 >100ms 冻结、RSS ≤950MB（ADR-007）            |
+| 写盘削峰        | 60s 连续绘制脚本 + 应用管理路径写入计数                                                | 写次数 ≤事件数 1%，且无持久化掉帧尖峰                                |
+| 长时稳定性      | 热身后脚本编辑 15min，对比进程树 RSS；等待 5s 崩溃安全刷新后再静置 60s 观察 CPU 与写入 | RSS 增长同时 ≤50MB 且 ≤15%；空闲 CPU ≤35%；零持续写入（ADR-006/007） |
 
 参考环境冷启动 / 画布 I/O / soak 测量在声明的 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB 参考 VM 上完整执行；工作流仍使用 `self-hosted`、`macOS`、`ARM64`、`excalidraw-perf` 标签。报告记录宿主硬件、虚拟化软件/版本、客体 OS、WebView、vCPU 与内存并输出真实 `pass`/`fail`；预算失败不阻断合并或开源发布。参考配置变化时必须建立新的独立测量序列并更新 ADR，禁止把不可比结果混合或静默放宽预算。未跑完的测量不得写成已通过。
 

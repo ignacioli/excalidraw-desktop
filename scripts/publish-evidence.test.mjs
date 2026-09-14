@@ -279,6 +279,7 @@ async function finalFixture() {
     delta: { path: deltaPath, sha256: await sha256File(deltaPath) },
     attemptRecords: [],
     attemptAmendments: [],
+    attemptReopenDecisions: [],
   };
   const technicalDir = path.join(source, "aggregate", "technical");
   await writeJson(path.join(technicalDir, "input.json"), technicalInput);
@@ -590,6 +591,30 @@ describe("evidence publisher", () => {
       schemaVersion: 1,
       issues: "invalid",
     });
+    await assert.rejects(
+      publishEvidence({
+        source: test.source,
+        destination: test.destination,
+        allowedDestinationRoot: test.destinationRoot,
+      }),
+      (error) => error instanceof EvidencePublishError && error.exitCode === 2,
+    );
+  });
+
+  it("blocks a stale STOP_REOPEN decision referenced by the technical input", async () => {
+    const test = await finalFixture();
+    const decisionPath = path.join(test.root, "stop-reopen.json");
+    await writeJson(decisionPath, {
+      schemaVersion: 1,
+      decisionType: "STOP_REOPEN",
+    });
+    const inputPath = path.join(test.technicalDir, "input.json");
+    const input = JSON.parse(await fs.readFile(inputPath, "utf8"));
+    input.attemptReopenDecisions = [
+      { path: decisionPath, sha256: await sha256File(decisionPath) },
+    ];
+    await writeJson(inputPath, input);
+    await fs.appendFile(decisionPath, " ");
     await assert.rejects(
       publishEvidence({
         source: test.source,

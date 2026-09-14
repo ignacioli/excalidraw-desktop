@@ -36,20 +36,20 @@
 
 面向用户以及根目录贡献者文档以英文为规范文件名（无后缀），简体中文为同目录下的 `*.zh.md` 姊妹文件。`docs/adr/` 不是双语。公开面向用户的页面（`README.md`、`DESIGN.md`、`CONTEXT.md`、`CHANGELOG.md`、`docs/architecture.md`、`docs/quickstart.md`）只描述产品、架构与如何运行；不得引用私有规格编号，例如特性 `001`/`002`、规格用户故事编号或 `T0xx` 任务号。那些标识属于 `docs/evidence/`，必要时也可出现在 ADR。
 
-| 交付物 | 路径 |
-|-------------|------|
-| 用户 README（英文 / 中文） | `README.md` / `README.zh.md` |
-| 视觉与交互契约（英文 / 中文） | `DESIGN.md` / `DESIGN.zh.md` |
-| 统一语言（英文 / 中文） | `CONTEXT.md` / `CONTEXT.zh.md` |
-| 贡献者与维护者说明（英文 / 中文） | `AGENTS.md` / `AGENTS.zh.md` |
-| 更新日志 | `CHANGELOG.md` |
-| 架构决策记录（ADR） | `docs/adr/` |
-| 架构概述（英文 / 中文） | `docs/architecture.md` / `docs/architecture.zh.md` |
-| IPC 契约 | `docs/contracts/ipc-contracts.md` |
-| 上手与验证指南（英文 / 中文） | `docs/quickstart.md` / `docs/quickstart.zh.md` |
-| 原生验证证据 | `docs/evidence/native-verification.md` |
-| 无障碍审计 | `docs/evidence/a11y-audit.md` |
-| 验证摘要 | `docs/evidence/validation-summary.md` |
+| 交付物                            | 路径                                               |
+| --------------------------------- | -------------------------------------------------- |
+| 用户 README（英文 / 中文）        | `README.md` / `README.zh.md`                       |
+| 视觉与交互契约（英文 / 中文）     | `DESIGN.md` / `DESIGN.zh.md`                       |
+| 统一语言（英文 / 中文）           | `CONTEXT.md` / `CONTEXT.zh.md`                     |
+| 贡献者与维护者说明（英文 / 中文） | `AGENTS.md` / `AGENTS.zh.md`                       |
+| 更新日志                          | `CHANGELOG.md`                                     |
+| 架构决策记录（ADR）               | `docs/adr/`                                        |
+| 架构概述（英文 / 中文）           | `docs/architecture.md` / `docs/architecture.zh.md` |
+| IPC 契约                          | `docs/contracts/ipc-contracts.md`                  |
+| 上手与验证指南（英文 / 中文）     | `docs/quickstart.md` / `docs/quickstart.zh.md`     |
+| 原生验证证据                      | `docs/evidence/native-verification.md`             |
+| 无障碍审计                        | `docs/evidence/a11y-audit.md`                      |
+| 验证摘要                          | `docs/evidence/validation-summary.md`              |
 
 `specs/` 中的 `Phase N`（`tasks.md`、`plan.md`）指 Spec-Driven Development 阶段（Setup、Foundational、US1–US7、Polish）。不要把 ADR 或证据里 2026-08-14 性能测量工作的编号复用成 `Phase 1/2/3/4`；那一套编号不是 SDD。按日期和实际做了什么来命名那些活动（全树重测、物理机归因、ADR-007 预算/工作负载校准）。
 
@@ -92,11 +92,11 @@
 - `VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness`：构建 T090/T108 所需的测试专用原生二进制；生产发布 **必须** 省略该 feature。
 - `pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute-path> [--semantic-collection <absolute-T031-collector-report.json> for VSL] --run-root <absolute-empty-dir> --plan <absolute-new-path> --isolation-mode backend-app-data-home-redirect`：验证 exact production package binding，VSL 必须提供并按 digest 绑定一份 PASS 的 T031 semantic report；只 provision 能通过当前安全格式表达的已声明 fixture，记录每张屏的 `fixture|operator-assisted` preparation mode，为各 gate 创建独立 backend-home root，并额外创建 T023b root，然后写一个绑定 harness v4 的 immutable schema-v2 capture plan。该 mode 只隔离并在 capture 时验证 run root 内的 backend Application Support/SQLite；它明确不声称 WKWebView filesystem isolation。
 - `pnpm native:screen:capture -- --plan <absolute-plan> --gate VSL-001 --collection-dir <absolute-new-dir>`：启动 plan-bound package，解析唯一 owned 1280×760 window 并取得两次稳定 sample；打印 declared visual checklist 与一次精确 `CAPTURE <gate-id> <challenge>`，在 600 秒内只接受一次，重新校验同一 PID/window/bounds/scale，写 backend-only `isolation.json` 与 `capture-readiness.json`，只把保守的 plan-declared SDK rectangles 写入 `mask.json`，并使用 `lanczos3-srgb-v1` normalization。Codex/非交互场景由 Agent 持有 collector PTY、向 operator 展示 challenge、等待明确回复 `ready`，再把 exact line 转发到同一 PTY；不得把它当作独立 shell command 执行。Harness 不得读取、打印、备份、清理或直接修改 operator WebKit data。只有 FINAL plan 可使用 `--all-final --collection-root <absolute-new-root>`。Operator action 与 confirmation 只控制时机；semantic state 仍由 focused tests 与 browser evidence 负责。退出码为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`；禁止 content-GUI automation、full-screen capture、coordinate search、crop、padding 与 visual repair。
-- `pnpm native:macos:validate -- --manifest <path> --capture-plan <final-plan> --collection-dir <new-path> --binding <binding.json>`：使用 plan 中专用 T023b profile 验证最终安装包的原生菜单入口，不依赖 capture-specific production IPC。它要求 5/5 menu hierarchy/label/enabled/AX-equivalent、准确的数值型 1280×760 geometry、七个 fresh 且唯一的 `nativeEntry -> routeAccepted` pair，以及一个通过正常 launch/open path 提供、digest-bound 且 bytes 保持不变的有效 `.excalidraw` fixture。Save/PNG/SVG 业务 filesystem outcomes 仍由 deterministic implementation/process-level tests 主证。Binding 与 output 分离记录 product、validator、attempt identity 和 normalized failure record；owned child 在 collection 定稿前终止，adapter 不得写 reviewer 或 owner artifact。
+- `pnpm native:macos:validate -- --manifest <path> --capture-plan <final-plan> --collection-dir <new-path> --binding <binding.json>`：使用 plan 中专用 T023b profile 验证 exact-package native entrypoint，不依赖 capture-specific production IPC。`qualification` scope 证明准确的数值型 1280×760 geometry、File > Save 检查及 route、一次 nonce-confirmed 且由 operator 实际按下的 physical Command-S 及其 fresh route pair，以及 normal-open fixture bytes 不变；`final` scope 复用该 physical-key mechanism，并扩展到 5/5 menu hierarchy/label/enabled/AX-equivalent 和七个 fresh 且唯一的 `nativeEntry -> routeAccepted` pair。Physical key event 前后 owned PID 必须保持 frontmost；menu-click substitution、重复 confirmation/key/route observation 和 non-interactive run 都会被阻止。Save/PNG/SVG 业务 filesystem outcomes 仍由 deterministic implementation/process-level tests 主证。Post-stop binding 还必须携带 digest-valid、由 product-owner 批准的 `STOP_REOPEN` decision 与 remediation epoch；collector 仍分离 product、validator、attempt identity，在定稿前终止 owned child，且不得写 reviewer、FINAL owner、filesystem-outcome 或 visual claim。
 - `pnpm evidence:publish -- --source <sealed-gate-dir> --destination <new-evidence-dir>`：验证角色边界及全部已声明 digest，要求目标目录不存在，逐字节复制 sealed gate，并在目标旁写 publication receipt。FINAL-003 gate 顶层必须精确包含 `collection/`、`aggregate/technical/`、`review/` 与 `owner/`：publisher 会传递式复核 T062 technical input/report 图，要求 canonical reviewer index 只绑定恰好六个 T061 visual collections 与六份 digest-bound 逐屏 PASS report（不得绑定 technical collections），并要求 owner decision 同时绑定 technical report 与 reviewer index。退出码固定为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
 - `pnpm evidence:publish:test`：运行目标不存在、digest、路径、角色边界、FINAL technical/reviewer/owner 图与 byte-preserving（字节保持）发布测试。
 - `pnpm evidence:aggregate -- --mode <mode> ...`：运行 read-only compositional validator（只读组合验证器）。mode 包含 `delta`、`technical`、`task-proof`、`closure`、`closure-verify`；每次只写指定的新 aggregate output，绝不编辑 source collection、reviewer/owner artifact 或 `tasks.md`。准确参数见 `pnpm evidence:aggregate -- --help`。退出码为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
-- `pnpm evidence:aggregate:test`：运行缺失/重复 browser claim 与 screen、reviewer/owner input rejection、path/symlink/digest、producer-scoped ownership classification、三类 identity、normalized failure-ledger transition、stale binding、task proof、deterministic output 与 closure self-transition 测试。Native-Harness-only 修改只重跑 native Harness/qualification/T023b，不得使未变化的 browser、package 或 capture proof 失效。
+- `pnpm evidence:aggregate:test`：运行缺失/重复 browser claim 与 screen、reviewer/owner input rejection、path/symlink/digest、producer-scoped ownership classification、三类 identity、normalized failure-ledger 与 `STOP_REOPEN` remediation-epoch transition、stale binding、task proof、deterministic output 与 closure self-transition 测试。Native-Harness-only 修改只重跑 native Harness/qualification/T023b，不得使未变化的 browser、package 或 capture proof 失效。
 - `cargo fmt --manifest-path src-tauri/Cargo.toml --check`：检查 Rust 格式。
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`：运行 Rust lint 门禁。
 - `cargo test --manifest-path src-tauri/Cargo.toml`：运行 Rust 单元与集成测试。

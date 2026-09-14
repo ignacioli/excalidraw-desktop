@@ -26,11 +26,17 @@ export const PRODUCTION_APP_BUILD_ARGS = Object.freeze([
   "--bundles",
   "app",
 ]);
+export const PROOF_SCOPES = Object.freeze({
+  QUALIFICATION: "qualification",
+  FINAL: "final",
+});
+export const STOPPED_COMMAND_S_ISSUE_ID =
+  "issue-v1:7cec23a398ea5bc45123e3d0fe2fd415214e13cca31393b6fd94ecc9da1be99e";
 export const NATIVE_ACTION_STEPS = Object.freeze([
   Object.freeze({
     id: "save-keyboard",
     command: "save",
-    kind: "keyboard",
+    kind: "physical-keyboard",
     character: "s",
     modifiers: Object.freeze(["command"]),
   }),
@@ -110,6 +116,46 @@ export const EXPECTED_MENU_ITEMS = Object.freeze([
     keyboard: null,
   }),
 ]);
+
+export function nativeActionsForScope(scope) {
+  if (scope === PROOF_SCOPES.QUALIFICATION) {
+    return NATIVE_ACTION_STEPS.filter((action) =>
+      new Set(["save-keyboard", "save-menu"]).has(action.id),
+    );
+  }
+  if (scope === PROOF_SCOPES.FINAL) return [...NATIVE_ACTION_STEPS];
+  throw new TypeError(`Unsupported native proof scope: ${scope}`);
+}
+
+export function nativeMenuItemsForScope(scope) {
+  if (scope === PROOF_SCOPES.QUALIFICATION) return [EXPECTED_MENU_ITEMS[0]];
+  if (scope === PROOF_SCOPES.FINAL) return [...EXPECTED_MENU_ITEMS];
+  throw new TypeError(`Unsupported native proof scope: ${scope}`);
+}
+
+export function commandSConfirmationLine(challenge) {
+  if (!/^[0-9a-f]{32}$/u.test(challenge ?? "")) {
+    throw new TypeError("Command-S challenge must be 32 lowercase hex digits");
+  }
+  return `COMMAND-S T023b ${challenge}`;
+}
+
+export function parseCommandSConfirmation(input, expectedLine) {
+  const lines = String(input ?? "")
+    .split(/\r?\n/u)
+    .filter((line) => line !== "");
+  if (lines.length !== 1) {
+    throw new NativeValidationBlockedError(
+      "Command-S confirmation must contain exactly one line",
+    );
+  }
+  if (lines[0] !== expectedLine) {
+    throw new NativeValidationBlockedError(
+      "Command-S confirmation must exactly match the nonce prompt",
+    );
+  }
+  return lines[0];
+}
 
 const VALID_STAGES = new Set(["nativeEntry", "applicationRoute"]);
 const VALID_COMMANDS = new Set(EXPECTED_MENU_ITEMS.map((item) => item.command));
@@ -337,8 +383,8 @@ function requireNativeAdapterBinding(value) {
   if (
     !validatorIdentity ||
     validatorIdentity.producer !== "native-macos-validation" ||
-    validatorIdentity.version !== "3" ||
-    validatorIdentity.schemaVersion !== 2 ||
+    validatorIdentity.version !== "4" ||
+    validatorIdentity.schemaVersion !== 3 ||
     !/^[0-9a-f]{64}$/u.test(validatorIdentity.sourceSha256 ?? "")
   )
     throw new NativeValidationBlockedError(
@@ -385,7 +431,125 @@ function requireNativeAdapterBinding(value) {
     throw new NativeValidationBlockedError(
       "native evidence binding.consecutiveFailureCount is invalid",
     );
+  if (!Object.values(PROOF_SCOPES).includes(value.proofScope))
+    throw new NativeValidationBlockedError(
+      "native evidence binding.proofScope is invalid",
+    );
+  if (
+    !Number.isSafeInteger(value.remediationEpoch) ||
+    value.remediationEpoch < 0
+  )
+    throw new NativeValidationBlockedError(
+      "native evidence binding.remediationEpoch is invalid",
+    );
+  if (value.remediationEpoch === 0 && value.reopenDecision !== null)
+    throw new NativeValidationBlockedError(
+      "epoch 0 must not bind a STOP_REOPEN decision",
+    );
+  if (value.remediationEpoch === 0 && value.repairTarget !== null)
+    throw new NativeValidationBlockedError(
+      "epoch 0 must not bind a repair target",
+    );
+  if (value.remediationEpoch > 0) {
+    const reference = value.reopenDecision;
+    if (
+      !reference ||
+      typeof reference !== "object" ||
+      typeof reference.path !== "string" ||
+      !path.isAbsolute(reference.path) ||
+      typeof reference.relativePath !== "string" ||
+      !/^\.\.\/reopen-decisions\/[A-Za-z0-9._-]+\.json$/u.test(
+        reference.relativePath,
+      ) ||
+      !/^[0-9a-f]{64}$/u.test(reference.sha256 ?? "")
+    )
+      throw new NativeValidationBlockedError(
+        "reopened epoch requires a valid STOP_REOPEN reference",
+      );
+    const target = value.repairTarget;
+    if (
+      !target ||
+      typeof target !== "object" ||
+      !/^[0-9a-f]{64}$/u.test(target.observableSignature ?? "") ||
+      target.canonicalIssueId !==
+        `issue-v1:${sha256Canonical({
+          gate: value.attemptIdentity.gate,
+          platform: value.attemptIdentity.platform,
+          factClass: "native-entrypoint-router",
+          observableSignature: target.observableSignature,
+          rootCauseClass: value.rootCauseClass,
+        })}`
+    )
+      throw new NativeValidationBlockedError(
+        "reopened epoch requires a valid repair target",
+      );
+  }
   return value;
+}
+
+export function validateStopReopenDecision(
+  decision,
+  bindingValue,
+  currentSourceSha256,
+) {
+  const binding = requireNativeAdapterBinding(bindingValue);
+  if (binding.remediationEpoch === 0) return null;
+  if (
+    !decision ||
+    typeof decision !== "object" ||
+    decision.schemaVersion !== 1 ||
+    !/^[A-Za-z0-9._-]{1,128}$/u.test(decision.decisionId ?? "") ||
+    decision.decisionType !== "STOP_REOPEN" ||
+    decision.canonicalIssueId !== STOPPED_COMMAND_S_ISSUE_ID ||
+    decision.canonicalIssueId !== binding.repairTarget.canonicalIssueId ||
+    !Number.isSafeInteger(decision.closedRemediationEpoch) ||
+    decision.closedRemediationEpoch < 0 ||
+    decision.reopenedRemediationEpoch !== decision.closedRemediationEpoch + 1 ||
+    decision.reopenedRemediationEpoch !== binding.remediationEpoch ||
+    decision.approvedByRole !== "product-owner" ||
+    !/^[0-9a-f]{40}$/u.test(decision.approvedSpecCommit ?? "") ||
+    decision.rationaleCode !== "PROOF_MECHANISM_REPAIR" ||
+    decision.allowedGate !== binding.attemptIdentity.gate ||
+    decision.allowedFactClass !== "native-entrypoint-router"
+  ) {
+    throw new NativeValidationBlockedError(
+      "STOP_REOPEN decision does not authorize this remediation epoch",
+    );
+  }
+  const change = decision.requiredChange;
+  if (
+    change &&
+    typeof change === "object" &&
+    change.beforeSha256 === change.afterSha256
+  ) {
+    throw new NativeValidationBlockedError(
+      "STOP_REOPEN decision is identity-equivalent",
+    );
+  }
+  if (
+    !change ||
+    typeof change !== "object" ||
+    change.producer !== "native-macos-validation" ||
+    !/^[0-9a-f]{64}$/u.test(change.beforeSha256 ?? "") ||
+    !/^[0-9a-f]{64}$/u.test(change.afterSha256 ?? "") ||
+    change.afterSha256 !== currentSourceSha256 ||
+    change.beforeSha256 !==
+      binding.namedChangeSincePreviousAttempt.beforeSha256 ||
+    change.afterSha256 !== binding.namedChangeSincePreviousAttempt.afterSha256
+  ) {
+    throw new NativeValidationBlockedError(
+      "STOP_REOPEN required change does not match the running validator",
+    );
+  }
+  if (
+    binding.reopenDecision.relativePath !==
+    `../reopen-decisions/${decision.decisionId}.json`
+  ) {
+    throw new NativeValidationBlockedError(
+      "STOP_REOPEN decision path does not match its decision id",
+    );
+  }
+  return decision;
 }
 
 function stableFailureObservation(report) {
@@ -421,15 +585,19 @@ function stableFailureObservation(report) {
 export function buildAttemptRecord(report, bindingValue) {
   const binding = requireNativeAdapterBinding(bindingValue);
   const observation = stableFailureObservation(report);
-  const observableSignature = sha256Canonical(observation);
+  const observedSignature = sha256Canonical(observation);
   const verdict = aggregateStatus(report.checks);
-  const canonicalIssueId = `issue-v1:${sha256Canonical({
-    gate: binding.attemptIdentity.gate,
-    platform: binding.attemptIdentity.platform,
-    factClass: "native-entrypoint-router",
-    observableSignature,
-    rootCauseClass: binding.rootCauseClass,
-  })}`;
+  const observableSignature =
+    binding.repairTarget?.observableSignature ?? observedSignature;
+  const canonicalIssueId =
+    binding.repairTarget?.canonicalIssueId ??
+    `issue-v1:${sha256Canonical({
+      gate: binding.attemptIdentity.gate,
+      platform: binding.attemptIdentity.platform,
+      factClass: "native-entrypoint-router",
+      observableSignature,
+      rootCauseClass: binding.rootCauseClass,
+    })}`;
   const consecutiveFailureCount =
     verdict === "PASS" ? 0 : binding.consecutiveFailureCount + 1;
   const repairActions = {
@@ -451,10 +619,20 @@ export function buildAttemptRecord(report, bindingValue) {
     assertionReached: true,
     observableSignature,
     observation,
+    observedSignature,
+    repairTarget: binding.repairTarget,
     rootCauseClass: binding.rootCauseClass,
     canonicalIssueId,
     productIdentity: binding.productIdentity,
     validatorIdentity: binding.validatorIdentity,
+    remediationEpoch: binding.remediationEpoch,
+    reopenDecision:
+      binding.reopenDecision === null
+        ? null
+        : {
+            path: binding.reopenDecision.relativePath,
+            sha256: binding.reopenDecision.sha256,
+          },
     namedChangeSincePreviousAttempt: binding.namedChangeSincePreviousAttempt,
     verdict,
     consecutiveFailureCount,
@@ -486,15 +664,9 @@ export function adaptNativeValidationReport(report, bindingValue) {
       "native validation report identity does not match its binding",
     );
   }
-  const expectedActionIds = [
-    "save-menu",
-    "save-keyboard",
-    "export-menu",
-    "export-keyboard",
-    "appearance-system",
-    "appearance-light",
-    "appearance-dark",
-  ];
+  const expectedActionIds = nativeActionsForScope(binding.proofScope).map(
+    (action) => action.id,
+  );
   const actions = report.checks
     .filter((check) => expectedActionIds.includes(check.id))
     .map((check) => ({
@@ -535,13 +707,16 @@ export function adaptNativeValidationReport(report, bindingValue) {
     productIdentity: binding.productIdentity,
     validatorIdentity: binding.validatorIdentity,
     attemptIdentity: binding.attemptIdentity,
+    proofScope: binding.proofScope,
+    remediationEpoch: binding.remediationEpoch,
+    reopenDecision: binding.reopenDecision,
     os: report.environment?.productVersion ?? "unknown macOS",
     browserOrAppBuild:
       report.manifest?.appPath ?? report.manifestPath ?? "unknown package",
     fixture: "T023b-disposable-profile",
     collector: {
       tool: "native-macos-validation",
-      version: "3",
+      version: "4",
       runIdentity: binding.attemptIdentity.attemptId,
     },
     statePreparation:
@@ -1170,6 +1345,73 @@ function invokeKeyboard(pid, character, modifiers) {
   runAppleScript(keyboardShortcutAppleScript(pid, character, modifiers));
 }
 
+export function frontmostProcessAppleScript(pid, activate = true) {
+  return `tell application "System Events"
+  set appProcess to first application process whose unix id is ${Number(pid)}
+  ${activate ? "tell appProcess to set frontmost to true\n  delay 0.2" : ""}
+  return unix id of first application process whose frontmost is true
+end tell`;
+}
+
+export function parseFrontmostPid(output, expectedPid) {
+  const observed = Number(String(output ?? "").trim());
+  if (!Number.isSafeInteger(observed) || observed !== expectedPid) {
+    throw new NativeValidationBlockedError(
+      `owned app is not the frontmost PID: expected ${expectedPid}, observed ${String(output).trim()}`,
+    );
+  }
+  return observed;
+}
+
+export function physicalCommandSObserverSwiftSource(challenge, timeoutSeconds) {
+  if (!/^[0-9a-f]{32}$/u.test(challenge ?? "")) {
+    throw new TypeError("Command-S challenge must be 32 lowercase hex digits");
+  }
+  if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+    throw new TypeError("Command-S observer timeout must be positive");
+  }
+  return `import AppKit
+import Foundation
+
+let challenge = ${JSON.stringify(challenge)}
+let deadline = Date().addingTimeInterval(${Number(timeoutSeconds)})
+let disallowed: NSEvent.ModifierFlags = [.option, .control, .shift]
+var observed = false
+
+func emit(_ value: String) {
+  FileHandle.standardOutput.write(Data((value + "\\n").utf8))
+}
+
+guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { event in
+  let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+  if event.keyCode == 1 && flags.contains(.command) && flags.intersection(disallowed).isEmpty && event.isARepeat == false {
+    if observed {
+      emit("EXCALIDRAW_PHYSICAL_COMMAND_S_DUPLICATE " + challenge)
+    } else {
+      observed = true
+      emit("EXCALIDRAW_PHYSICAL_COMMAND_S " + challenge)
+    }
+  }
+}) else {
+  FileHandle.standardError.write(Data("unable to install global key monitor\\n".utf8))
+  exit(2)
+}
+
+emit("EXCALIDRAW_PHYSICAL_COMMAND_S_READY " + challenge)
+while Date() < deadline {
+  RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+  if observed {
+    RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.5))
+    NSEvent.removeMonitor(monitor)
+    exit(0)
+  }
+}
+NSEvent.removeMonitor(monitor)
+FileHandle.standardError.write(Data("physical Command-S was not observed\\n".utf8))
+exit(2)
+`;
+}
+
 export function keyboardShortcutAppleScript(pid, character, modifiers) {
   if (!new Set(["s", "e"]).has(character))
     throw new TypeError(`Unsupported native shortcut character: ${character}`);
@@ -1331,6 +1573,175 @@ function waitForValidationPair(events, command, ignoredIds, timeoutMs) {
     };
     poll();
   });
+}
+
+function waitForCommandSConfirmation(expectedLine, timeoutMs) {
+  if (!process.stdin.isTTY) {
+    throw new NativeValidationBlockedError(
+      "physical Command-S proof requires an interactive terminal",
+    );
+  }
+  process.stdout.write(
+    `Confirm operator presence by entering this exact line once:\n${expectedLine}\n`,
+  );
+  return new Promise((resolve, reject) => {
+    const terminal = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: true,
+    });
+    const timer = setTimeout(() => {
+      terminal.close();
+      reject(
+        new NativeValidationBlockedError(
+          "timed out waiting for Command-S operator confirmation",
+        ),
+      );
+    }, timeoutMs);
+    terminal.once("line", (line) => {
+      clearTimeout(timer);
+      terminal.close();
+      try {
+        resolve(parseCommandSConfirmation(`${line}\n`, expectedLine));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
+
+async function startPhysicalCommandSObserver(challenge, timeoutMs) {
+  const root = await fsp.mkdtemp(
+    path.join(os.tmpdir(), "excalidraw-command-s-observer-"),
+  );
+  const swiftPath = path.join(root, "observer.swift");
+  await fsp.writeFile(
+    swiftPath,
+    physicalCommandSObserverSwiftSource(challenge, timeoutMs / 1000),
+    "utf8",
+  );
+  const moduleCache = path.join(
+    os.tmpdir(),
+    "excalidraw-desktop-native-validation-swift-cache",
+  );
+  const child = spawn("xcrun", ["swift", swiftPath], {
+    env: {
+      ...process.env,
+      CLANG_MODULE_CACHE_PATH: moduleCache,
+      SWIFT_MODULECACHE_PATH: moduleCache,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const stdout = readline.createInterface({ input: child.stdout });
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+  const readyLine = `EXCALIDRAW_PHYSICAL_COMMAND_S_READY ${challenge}`;
+  const observedLine = `EXCALIDRAW_PHYSICAL_COMMAND_S ${challenge}`;
+  const duplicateLine = `EXCALIDRAW_PHYSICAL_COMMAND_S_DUPLICATE ${challenge}`;
+  let readyResolve;
+  let readyReject;
+  let observedResolve;
+  let observedReject;
+  let duplicate = false;
+  const ready = new Promise((resolve, reject) => {
+    readyResolve = resolve;
+    readyReject = reject;
+  });
+  const observed = new Promise((resolve, reject) => {
+    observedResolve = resolve;
+    observedReject = reject;
+  });
+  stdout.on("line", (line) => {
+    if (line === readyLine) readyResolve(line);
+    else if (line === observedLine) observedResolve(line);
+    else if (line === duplicateLine) duplicate = true;
+  });
+  child.once("error", (error) => {
+    readyReject(error);
+    observedReject(error);
+  });
+  child.once("exit", (code) => {
+    if (code !== 0) {
+      const error = new NativeValidationBlockedError(
+        stderr.trim() || `physical Command-S observer exited ${code}`,
+      );
+      readyReject(error);
+      observedReject(error);
+    }
+  });
+  return {
+    ready,
+    observed,
+    duplicate: () => duplicate,
+    async close() {
+      stdout.close();
+      if (child.exitCode === null) child.kill("SIGTERM");
+      await Promise.race([
+        new Promise((resolve) => child.once("exit", resolve)),
+        wait(1000),
+      ]);
+      await fsp.rm(root, { recursive: true, force: true });
+    },
+  };
+}
+
+async function invokePhysicalCommandS(processInfo, ignoredIds, timeoutMs) {
+  const { child, events } = processInfo;
+  const challenge = crypto.randomBytes(16).toString("hex");
+  const confirmation = commandSConfirmationLine(challenge);
+  await waitForCommandSConfirmation(confirmation, 600_000);
+  const observer = await startPhysicalCommandSObserver(challenge, timeoutMs);
+  try {
+    await observer.ready;
+    parseFrontmostPid(
+      runAppleScript(frontmostProcessAppleScript(child.pid)),
+      child.pid,
+    );
+    process.stdout.write(
+      `Press Command-S exactly once in the now-frontmost owned app (PID ${child.pid}). Do not use the menu.\n`,
+    );
+    const [observation, pair] = await Promise.all([
+      observer.observed,
+      waitForValidationPair(events, "save", ignoredIds, timeoutMs),
+    ]);
+    await wait(600);
+    if (observer.duplicate()) {
+      throw new NativeValidationBlockedError(
+        "more than one physical Command-S keydown was observed",
+      );
+    }
+    const duplicatePair = validationPair(
+      events,
+      "save",
+      new Set([...ignoredIds, pair.validationId]),
+    );
+    if (duplicatePair) {
+      throw new NativeValidationBlockedError(
+        "more than one fresh Command-S route pair was observed",
+      );
+    }
+    parseFrontmostPid(
+      runAppleScript(frontmostProcessAppleScript(child.pid, false)),
+      child.pid,
+    );
+    return {
+      pair,
+      physicalKeyEvidence: {
+        challenge,
+        confirmation,
+        observation,
+        keyCode: 1,
+        modifiers: ["command"],
+        repeat: false,
+        ownedPid: child.pid,
+        frontmostBeforeAndAfter: true,
+      },
+    };
+  } finally {
+    await observer.close();
+  }
 }
 
 function spawnBundle(
@@ -1609,8 +2020,11 @@ async function runNativeChecks(
   checks,
   timeoutMs,
   launchDocument,
+  proofScope,
 ) {
   const { child, events } = processInfo;
+  const expectedMenuItems = nativeMenuItemsForScope(proofScope);
+  const actions = nativeActionsForScope(proofScope);
   const launchBefore = await validExcalidrawSnapshot(launchDocument);
   let menuObservations = [];
   try {
@@ -1618,7 +2032,7 @@ async function runNativeChecks(
     for (let attempt = 0; attempt < 20; attempt += 1) {
       try {
         const attemptObservations = [];
-        for (const expected of EXPECTED_MENU_ITEMS) {
+        for (const expected of expectedMenuItems) {
           const observed = inspectMenuItem(child.pid, expected);
           const result = compareMenuObservation(expected, observed);
           attemptObservations.push({ path: expected.path, ...result });
@@ -1633,7 +2047,7 @@ async function runNativeChecks(
     }
     if (lastError) throw lastError;
     const allMenuItemsPass =
-      menuObservations.length === EXPECTED_MENU_ITEMS.length &&
+      menuObservations.length === expectedMenuItems.length &&
       menuObservations.every((item) => item.pass);
     checks.push(
       makeCheck(
@@ -1683,20 +2097,37 @@ async function runNativeChecks(
   }
 
   const consumedIds = new Set();
-  for (const action of NATIVE_ACTION_STEPS) {
+  for (const action of actions) {
     try {
       const before = new Set(events.map((event) => event.validationId));
-      if (action.kind === "menu") invokeMenuItem(child.pid, action.path);
-      else {
+      let pair;
+      let physicalKeyEvidence;
+      if (action.kind === "menu") {
+        invokeMenuItem(child.pid, action.path);
+        pair = await waitForValidationPair(
+          events,
+          action.command,
+          new Set([...consumedIds, ...before]),
+          timeoutMs,
+        );
+      } else if (action.kind === "physical-keyboard") {
+        const physical = await invokePhysicalCommandS(
+          processInfo,
+          new Set([...consumedIds, ...before]),
+          timeoutMs,
+        );
+        pair = physical.pair;
+        physicalKeyEvidence = physical.physicalKeyEvidence;
+      } else {
         await wait(250);
         invokeKeyboard(child.pid, action.character, action.modifiers);
+        pair = await waitForValidationPair(
+          events,
+          action.command,
+          new Set([...consumedIds, ...before]),
+          timeoutMs,
+        );
       }
-      const pair = await waitForValidationPair(
-        events,
-        action.command,
-        new Set([...consumedIds, ...before]),
-        timeoutMs,
-      );
       consumedIds.add(pair.validationId);
       if (action.command === "exportImage") dismissExportDialog(child.pid);
       checks.push(
@@ -1704,7 +2135,11 @@ async function runNativeChecks(
           action.id,
           `${action.kind} invocation: ${action.command}`,
           "PASS",
-          { command: action.command, validationId: pair.validationId },
+          {
+            command: action.command,
+            validationId: pair.validationId,
+            ...(physicalKeyEvidence ? { physicalKeyEvidence } : {}),
+          },
         ),
       );
     } catch (error) {
@@ -1762,6 +2197,33 @@ export async function validateProductionBundle({
     evidenceBinding = requireNativeAdapterBinding(
       JSON.parse(await fsp.readFile(bindingPath, "utf8")),
     );
+    const currentSourceSha256 = await sha256File(SCRIPT_PATH);
+    if (
+      evidenceBinding.validatorIdentity.sourceSha256 !== currentSourceSha256
+    ) {
+      throw new NativeValidationBlockedError(
+        "native validator source digest does not match the running producer",
+      );
+    }
+    if (evidenceBinding.remediationEpoch > 0) {
+      const decisionBytes = await fsp.readFile(
+        evidenceBinding.reopenDecision.path,
+      );
+      const decisionSha256 = crypto
+        .createHash("sha256")
+        .update(decisionBytes)
+        .digest("hex");
+      if (decisionSha256 !== evidenceBinding.reopenDecision.sha256) {
+        throw new NativeValidationBlockedError(
+          "STOP_REOPEN decision digest does not match its binding",
+        );
+      }
+      validateStopReopenDecision(
+        JSON.parse(decisionBytes.toString("utf8")),
+        evidenceBinding,
+        currentSourceSha256,
+      );
+    }
   }
   const resolvedManifestPath =
     manifestPath ??
@@ -2018,6 +2480,7 @@ export async function validateProductionBundle({
         checks,
         timeoutMs,
         nativeProfile?.launchDocument,
+        evidenceBinding?.proofScope ?? PROOF_SCOPES.FINAL,
       );
     } finally {
       await stopOwnedChild(processInfo);
@@ -2050,7 +2513,7 @@ export async function validateProductionBundle({
 
 function printUsage() {
   console.log(
-    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--capture-plan FINAL_PLAN] [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. A schema-v2 FINAL plan supplies a distinct T023b profile and one digest-bound .excalidraw fixture through the normal launch/open path. PASS requires 5/5 menu facts, exact numeric 1280x760 geometry, seven fresh unique nativeEntry -> routeAccepted pairs, owned process/profile evidence, and unchanged fixture bytes. Save/PNG/SVG business filesystem outcomes are owned by deterministic implementation/process-level tests, not this exact-package router probe. Adapter outputs carry separate product, validator, and attempt identities and never contain reviewer or owner decisions.`,
+    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--capture-plan FINAL_PLAN] [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. A schema-v2 FINAL plan supplies a distinct T023b profile and one digest-bound .excalidraw fixture through the normal launch/open path. Qualification scope proves exact 1280x760 geometry, File > Save, physical Command-S, and unchanged prepared state; final scope proves 5/5 menu facts and seven fresh unique nativeEntry -> routeAccepted pairs. The physical Command-S step requires one nonce-confirmed interactive terminal and one operator keypress while the owned PID is frontmost; menu-click substitution and duplicate observations are rejected. Save/PNG/SVG business filesystem outcomes are owned by deterministic implementation/process-level tests, not this exact-package router probe. Adapter outputs carry separate product, validator, attempt, remediation-epoch, and STOP_REOPEN identities and never contain reviewer or owner decisions.`,
   );
 }
 

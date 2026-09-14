@@ -9,6 +9,7 @@ import {
   EXPECTED_MENU_ITEMS,
   EXPECTED_WINDOW_SIZE,
   NATIVE_ACTION_STEPS,
+  PROOF_SCOPES,
   PRODUCTION_APP_BUILD_ARGS,
   NativeValidationBlockedError,
   adaptNativeValidationReport,
@@ -19,17 +20,24 @@ import {
   compareBundleContract,
   compareManifest,
   compareMenuObservation,
+  commandSConfirmationLine,
   completeExportDialogAppleScript,
   decodeAXModifiers,
   inspectMenuItemAppleScript,
-  keyboardShortcutAppleScript,
   makeCheck,
+  nativeActionsForScope,
+  nativeMenuItemsForScope,
+  parseCommandSConfirmation,
+  parseFrontmostPid,
   parseWindowGeometryOutput,
   parseNativeValidationEvents,
   parseNativeValidationLine,
   resolveMenuItemAppleScript,
   runtimeProductIdentitySha256,
   sha256Path,
+  physicalCommandSObserverSwiftSource,
+  frontmostProcessAppleScript,
+  validateStopReopenDecision,
   validatePreparedNativeProfile,
   validationPair,
   windowGeometryAppleScript,
@@ -60,9 +68,9 @@ function nativeBinding(overrides = {}) {
     },
     validatorIdentity: {
       producer: "native-macos-validation",
-      version: "3",
+      version: "4",
       sourceSha256: NATIVE_VALIDATOR_SOURCE_SHA256,
-      schemaVersion: 2,
+      schemaVersion: 3,
     },
     attemptIdentity: {
       attemptId: "T023b-001-native-router",
@@ -78,6 +86,10 @@ function nativeBinding(overrides = {}) {
     },
     rootCauseClass: "HARNESS",
     consecutiveFailureCount: 0,
+    proofScope: PROOF_SCOPES.FINAL,
+    remediationEpoch: 0,
+    reopenDecision: null,
+    repairTarget: null,
     ...overrides,
   };
 }
@@ -92,9 +104,13 @@ describe("native macOS validation helpers", () => {
     ]);
   });
 
-  it("isolates Command-S before the menu Save route and preserves all seven actions", () => {
+  it("keeps qualification minimal while final preserves all seven actions", () => {
     assert.deepEqual(
-      NATIVE_ACTION_STEPS.map(({ id }) => id),
+      nativeActionsForScope(PROOF_SCOPES.QUALIFICATION).map(({ id }) => id),
+      ["save-keyboard", "save-menu"],
+    );
+    assert.deepEqual(
+      nativeActionsForScope(PROOF_SCOPES.FINAL).map(({ id }) => id),
       [
         "save-keyboard",
         "save-menu",
@@ -104,6 +120,143 @@ describe("native macOS validation helpers", () => {
         "appearance-light",
         "appearance-dark",
       ],
+    );
+    assert.equal(nativeMenuItemsForScope(PROOF_SCOPES.QUALIFICATION).length, 1);
+    assert.equal(nativeMenuItemsForScope(PROOF_SCOPES.FINAL).length, 5);
+  });
+
+  it("accepts one exact nonce confirmation and rejects mismatch or duplication", () => {
+    const expected = commandSConfirmationLine("ab".repeat(16));
+    assert.equal(expected, `COMMAND-S T023b ${"ab".repeat(16)}`);
+    assert.equal(
+      parseCommandSConfirmation(`${expected}\n`, expected),
+      expected,
+    );
+    assert.throws(
+      () => parseCommandSConfirmation("ready\n", expected),
+      /exactly match/u,
+    );
+    assert.throws(
+      () => parseCommandSConfirmation(`${expected}\n${expected}\n`, expected),
+      /exactly one line/u,
+    );
+  });
+
+  it("binds frontmost verification and a physical Command-S key observer", async () => {
+    const appleScript = frontmostProcessAppleScript(123);
+    assert.match(appleScript, /application process whose unix id is 123/u);
+    assert.match(appleScript, /set frontmost to true/u);
+    assert.equal(parseFrontmostPid("123", 123), 123);
+    assert.throws(() => parseFrontmostPid("456", 123), /frontmost PID/u);
+
+    const source = physicalCommandSObserverSwiftSource("cd".repeat(16), 10);
+    assert.match(source, /addGlobalMonitorForEvents/u);
+    assert.match(source, /event\.keyCode == 1/u);
+    assert.match(source, /\.command/u);
+    assert.match(source, /event\.isARepeat == false/u);
+    assert.match(source, /EXCALIDRAW_PHYSICAL_COMMAND_S/u);
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "excalidraw-command-s-observer-"),
+    );
+    try {
+      const swiftPath = path.join(root, "observer.swift");
+      const moduleCache = path.join(root, "module-cache");
+      await fs.writeFile(swiftPath, source);
+      const result = spawnSync("xcrun", ["swiftc", "-typecheck", swiftPath], {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          CLANG_MODULE_CACHE_PATH: moduleCache,
+          SWIFT_MODULECACHE_PATH: moduleCache,
+        },
+      });
+      assert.equal(result.status, 0, result.stderr);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("validates one owner-approved STOP_REOPEN epoch and rejects identity reuse", () => {
+    const binding = nativeBinding({
+      proofScope: PROOF_SCOPES.QUALIFICATION,
+      remediationEpoch: 1,
+      repairTarget: {
+        observableSignature:
+          "7d16f21de4867f9d056e7b515296822fa4a5e1b0d9fca9c80e690da63dcc6793",
+        canonicalIssueId:
+          "issue-v1:7cec23a398ea5bc45123e3d0fe2fd415214e13cca31393b6fd94ecc9da1be99e",
+      },
+      namedChangeSincePreviousAttempt: {
+        changeId: "T058g-physical-command-s",
+        producer: "native-macos-validation",
+        beforeSha256:
+          "b70ba803f6ff8b6242b6de1f79e3e5b996fd7a7c70990ee8cfc09668c3e698fc",
+        afterSha256: NATIVE_VALIDATOR_SOURCE_SHA256,
+      },
+      reopenDecision: {
+        path: "/tmp/stop-reopen.json",
+        relativePath: "../reopen-decisions/T058e-command-s-epoch-1.json",
+        sha256: "78".repeat(32),
+      },
+    });
+    const decision = {
+      schemaVersion: 1,
+      decisionId: "T058e-command-s-epoch-1",
+      decisionType: "STOP_REOPEN",
+      canonicalIssueId:
+        "issue-v1:7cec23a398ea5bc45123e3d0fe2fd415214e13cca31393b6fd94ecc9da1be99e",
+      closedRemediationEpoch: 0,
+      reopenedRemediationEpoch: 1,
+      approvedByRole: "product-owner",
+      approvedSpecCommit: "0a1e7573f0a8ce53b169e41a15ca0f7b6904afb0",
+      rationaleCode: "PROOF_MECHANISM_REPAIR",
+      requiredChange: {
+        producer: "native-macos-validation",
+        beforeSha256:
+          "b70ba803f6ff8b6242b6de1f79e3e5b996fd7a7c70990ee8cfc09668c3e698fc",
+        afterSha256: NATIVE_VALIDATOR_SOURCE_SHA256,
+      },
+      allowedGate: "T023b",
+      allowedFactClass: "native-entrypoint-router",
+    };
+    assert.equal(
+      validateStopReopenDecision(
+        decision,
+        binding,
+        NATIVE_VALIDATOR_SOURCE_SHA256,
+      ).decisionId,
+      decision.decisionId,
+    );
+    const repaired = buildAttemptRecord(
+      buildReport({
+        command: "validate",
+        checks: [makeCheck("save-keyboard", "physical Command-S", "PASS")],
+      }),
+      binding,
+    );
+    assert.equal(
+      repaired.observableSignature,
+      binding.repairTarget.observableSignature,
+    );
+    assert.equal(
+      repaired.canonicalIssueId,
+      binding.repairTarget.canonicalIssueId,
+    );
+    assert.notEqual(repaired.observedSignature, repaired.observableSignature);
+    assert.throws(
+      () =>
+        validateStopReopenDecision(
+          {
+            ...decision,
+            requiredChange: {
+              ...decision.requiredChange,
+              beforeSha256: NATIVE_VALIDATOR_SOURCE_SHA256,
+            },
+          },
+          binding,
+          NATIVE_VALIDATOR_SOURCE_SHA256,
+        ),
+      /identity-equivalent/u,
     );
   });
 
@@ -244,14 +397,6 @@ describe("native macOS validation helpers", () => {
         requested: { x: 0, y: 0, width: 1280, height: 760 },
       },
     );
-  });
-
-  it("targets the owned process with a logical Command-S keystroke", () => {
-    const source = keyboardShortcutAppleScript(123, "s", ["command"]);
-    assert.match(source, /application process whose unix id is 123/u);
-    assert.match(source, /set frontmost to true/u);
-    assert.match(source, /keystroke "s" using \{command down\}/u);
-    assert.doesNotMatch(source, /click targetItem/u);
   });
 
   it("decodes AX menu modifier bitmasks", () => {
@@ -466,6 +611,30 @@ describe("native macOS validation helpers", () => {
     );
     assert.equal("reviewerVerdict" in adapted.environment, false);
     assert.equal("productOwnerDecision" in adapted.environment, false);
+
+    const qualificationBinding = nativeBinding({
+      proofScope: PROOF_SCOPES.QUALIFICATION,
+    });
+    const qualification = adaptNativeValidationReport(
+      {
+        ...report,
+        checks: report.checks.filter((check) =>
+          new Set([
+            "native-menu",
+            "window-geometry",
+            "state-preparation",
+            "save-keyboard",
+            "save-menu",
+          ]).has(check.id),
+        ),
+      },
+      qualificationBinding,
+    );
+    assert.equal(qualification.routeAcknowledgements.result, "PASS");
+    assert.deepEqual(
+      qualification.routeAcknowledgements.actions.map(({ checkId }) => checkId),
+      ["save-menu", "save-keyboard"],
+    );
 
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "excalidraw-native-adapter-"),

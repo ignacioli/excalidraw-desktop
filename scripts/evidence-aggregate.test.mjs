@@ -428,6 +428,8 @@ describe("evidence aggregation", () => {
       observableSignature: signature,
       rootCauseClass,
       canonicalIssueId: issue(rootCauseClass),
+      remediationEpoch: 0,
+      reopenDecision: null,
       productIdentity,
       validatorIdentity,
       namedChangeSincePreviousAttempt: change,
@@ -516,6 +518,73 @@ describe("evidence aggregation", () => {
     assert.equal(
       buildAttemptIssueIndex(failures, []).issues[0].nextAction,
       "STOP_REQUIRED",
+    );
+    const reopenSha256 = "88".repeat(32);
+    const reopenDecision = {
+      schemaVersion: 1,
+      decisionId: "T058e-command-s-epoch-1",
+      decisionType: "STOP_REOPEN",
+      canonicalIssueId: issue("HARNESS"),
+      closedRemediationEpoch: 0,
+      reopenedRemediationEpoch: 1,
+      approvedByRole: "product-owner",
+      approvedSpecCommit: "aa".repeat(20),
+      rationaleCode: "PROOF_MECHANISM_REPAIR",
+      requiredChange: {
+        producer: "native-macos-validation",
+        beforeSha256: "4".repeat(64),
+        afterSha256: "77".repeat(32),
+      },
+      allowedGate: "T023b",
+      allowedFactClass: "native-entrypoint-router",
+    };
+    const reopenedPass = {
+      ...attempt("reopen-1", "PASS", "HARNESS", 0, "RUN_TRUE_DEPENDENTS", {
+        changeId: "T058g-physical-command-s",
+        producer: "native-macos-validation",
+        beforeSha256: "4".repeat(64),
+        afterSha256: "77".repeat(32),
+      }),
+      remediationEpoch: 1,
+      reopenDecision: {
+        path: "../reopen-decisions/T058e-command-s-epoch-1.json",
+        sha256: reopenSha256,
+      },
+    };
+    const reopened = buildAttemptIssueIndex(
+      [...failures, reopenedPass],
+      [],
+      [{ decision: reopenDecision, sha256: reopenSha256 }],
+    ).issues[0];
+    assert.equal(reopened.remediationEpoch, 1);
+    assert.equal(reopened.consecutiveFailureCount, 0);
+    assert.deepEqual(reopened.reopenDecisionIds, [reopenDecision.decisionId]);
+    assert.deepEqual(reopened.closedEpochs, [
+      {
+        remediationEpoch: 0,
+        consecutiveFailureCount: 3,
+        nextAction: "STOP_REQUIRED",
+      },
+    ]);
+    assert.throws(
+      () =>
+        buildAttemptIssueIndex(
+          [...failures, reopenedPass],
+          [],
+          [
+            {
+              decision: {
+                ...reopenDecision,
+                requiredChange: {
+                  ...reopenDecision.requiredChange,
+                  beforeSha256: reopenDecision.requiredChange.afterSha256,
+                },
+              },
+              sha256: reopenSha256,
+            },
+          ],
+        ),
+      /reopen decision is invalid/u,
     );
     assert.throws(
       () =>

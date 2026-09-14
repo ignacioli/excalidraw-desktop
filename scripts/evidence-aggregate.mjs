@@ -38,6 +38,7 @@ const TECHNICAL_INPUT_FIELDS = new Set([
   "delta",
   "attemptRecords",
   "attemptAmendments",
+  "attemptReopenDecisions",
 ]);
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
 const ROOT_CAUSE_CLASSES = new Set([
@@ -207,11 +208,83 @@ function validateAttemptRecord(attempt) {
       !/^[0-9a-f]{64}$/u.test(change.beforeSha256 ?? ""))
   )
     blocked(`attempt named change is invalid: ${attempt.attemptId}`);
-  return attempt;
+  const remediationEpoch = attempt.remediationEpoch ?? 0;
+  const reopenDecision = attempt.reopenDecision ?? null;
+  if (!Number.isSafeInteger(remediationEpoch) || remediationEpoch < 0)
+    blocked(`attempt remediation epoch is invalid: ${attempt.attemptId}`);
+  if (remediationEpoch === 0 && reopenDecision !== null)
+    blocked(
+      `epoch 0 attempt must not bind a reopen decision: ${attempt.attemptId}`,
+    );
+  if (remediationEpoch > 0) {
+    object(reopenDecision, "attempt reopen decision");
+    if (
+      typeof reopenDecision.path !== "string" ||
+      !/^\.\.\/reopen-decisions\/[A-Za-z0-9._-]+\.json$/u.test(
+        reopenDecision.path,
+      ) ||
+      !/^[0-9a-f]{64}$/u.test(reopenDecision.sha256 ?? "")
+    )
+      blocked(`attempt reopen decision is invalid: ${attempt.attemptId}`);
+  }
+  return { ...attempt, remediationEpoch, reopenDecision };
 }
 
-export function buildAttemptIssueIndex(attemptValues, amendmentValues = []) {
-  if (!Array.isArray(attemptValues) || !Array.isArray(amendmentValues))
+function validateReopenDecisionEntry(entry) {
+  object(entry, "reopen decision entry");
+  if (!/^[0-9a-f]{64}$/u.test(entry.sha256 ?? ""))
+    blocked("reopen decision source digest is invalid");
+  const decision = object(entry.decision, "reopen decision");
+  const change = object(decision.requiredChange, "reopen required change");
+  if (
+    decision.schemaVersion !== 1 ||
+    !/^[A-Za-z0-9._-]{1,128}$/u.test(decision.decisionId ?? "") ||
+    decision.decisionType !== "STOP_REOPEN" ||
+    !/^issue-v1:[0-9a-f]{64}$/u.test(decision.canonicalIssueId ?? "") ||
+    !Number.isSafeInteger(decision.closedRemediationEpoch) ||
+    decision.closedRemediationEpoch < 0 ||
+    decision.reopenedRemediationEpoch !== decision.closedRemediationEpoch + 1 ||
+    decision.approvedByRole !== "product-owner" ||
+    !/^[0-9a-f]{40}$/u.test(decision.approvedSpecCommit ?? "") ||
+    decision.rationaleCode !== "PROOF_MECHANISM_REPAIR" ||
+    typeof decision.allowedGate !== "string" ||
+    decision.allowedGate === "" ||
+    typeof decision.allowedFactClass !== "string" ||
+    decision.allowedFactClass === "" ||
+    typeof change.producer !== "string" ||
+    change.producer === "" ||
+    !/^[0-9a-f]{64}$/u.test(change.beforeSha256 ?? "") ||
+    !/^[0-9a-f]{64}$/u.test(change.afterSha256 ?? "") ||
+    change.beforeSha256 === change.afterSha256
+  )
+    blocked(`reopen decision is invalid: ${decision.decisionId ?? "unknown"}`);
+  return entry;
+}
+
+function validateAttemptReopenBinding(attempt, entry) {
+  const decision = entry.decision;
+  if (
+    attempt.reopenDecision.path !==
+      `../reopen-decisions/${decision.decisionId}.json` ||
+    attempt.reopenDecision.sha256 !== entry.sha256 ||
+    decision.canonicalIssueId !== attempt.canonicalIssueId ||
+    decision.reopenedRemediationEpoch !== attempt.remediationEpoch ||
+    decision.allowedGate !== attempt.gate ||
+    decision.allowedFactClass !== attempt.factClass
+  )
+    blocked(`reopen decision does not bind attempt: ${attempt.attemptId}`);
+}
+
+export function buildAttemptIssueIndex(
+  attemptValues,
+  amendmentValues = [],
+  reopenDecisionValues = [],
+) {
+  if (
+    !Array.isArray(attemptValues) ||
+    !Array.isArray(amendmentValues) ||
+    !Array.isArray(reopenDecisionValues)
+  )
     blocked("attempt ledger inputs must be arrays");
   const attempts = attemptValues.map(validateAttemptRecord);
   const byAttemptId = new Map();
@@ -243,6 +316,14 @@ export function buildAttemptIssueIndex(attemptValues, amendmentValues = []) {
       amendments.set(attemptId, amendment);
     }
   }
+  const reopenDecisions = new Map();
+  for (const rawEntry of reopenDecisionValues) {
+    const entry = validateReopenDecisionEntry(rawEntry);
+    const id = entry.decision.decisionId;
+    if (reopenDecisions.has(id)) blocked(`duplicate reopen decision id: ${id}`);
+    reopenDecisions.set(id, entry);
+  }
+  const consumedReopenDecisions = new Set();
   const issues = new Map();
   for (const attempt of attempts) {
     const amendment = amendments.get(attempt.attemptId);
@@ -255,8 +336,56 @@ export function buildAttemptIssueIndex(attemptValues, amendmentValues = []) {
       consecutiveFailureCount: 0,
       nextAction: "NONE",
       testFlakeFailures: 0,
+      remediationEpoch: 0,
+      closedEpochs: [],
+      reopenDecisionIds: [],
     };
     const change = attempt.namedChangeSincePreviousAttempt;
+    const decisionId =
+      attempt.remediationEpoch > 0
+        ? path.basename(attempt.reopenDecision.path, ".json")
+        : null;
+    const reopenEntry =
+      decisionId === null ? null : reopenDecisions.get(decisionId);
+    if (attempt.remediationEpoch > 0) {
+      if (!reopenEntry)
+        blocked(`attempt reopen decision is missing: ${attempt.attemptId}`);
+      validateAttemptReopenBinding(attempt, reopenEntry);
+    }
+    if (attempt.remediationEpoch === current.remediationEpoch + 1) {
+      const decision = reopenEntry.decision;
+      if (
+        current.attemptIds.length === 0 ||
+        current.consecutiveFailureCount !== 3 ||
+        current.nextAction !== "STOP_REQUIRED" ||
+        decision.closedRemediationEpoch !== current.remediationEpoch ||
+        change.producer !== decision.requiredChange.producer ||
+        change.beforeSha256 !== decision.requiredChange.beforeSha256 ||
+        change.afterSha256 !== decision.requiredChange.afterSha256
+      )
+        blocked(`invalid remediation epoch transition: ${attempt.attemptId}`);
+      current.closedEpochs.push({
+        remediationEpoch: current.remediationEpoch,
+        consecutiveFailureCount: current.consecutiveFailureCount,
+        nextAction: current.nextAction,
+      });
+      current.remediationEpoch = attempt.remediationEpoch;
+      current.consecutiveFailureCount = 0;
+      current.testFlakeFailures = 0;
+      current.reopenDecisionIds.push(decision.decisionId);
+      consumedReopenDecisions.add(decision.decisionId);
+    } else if (attempt.remediationEpoch !== current.remediationEpoch) {
+      blocked(
+        `attempt remediation epoch is out of sequence: ${attempt.attemptId}`,
+      );
+    } else if (
+      attempt.remediationEpoch > 0 &&
+      current.reopenDecisionIds.at(-1) !== decisionId
+    ) {
+      blocked(
+        `attempt binds the wrong remediation decision: ${attempt.attemptId}`,
+      );
+    }
     if (current.attemptIds.length > 0) {
       const controlledFlake =
         change.changeId === "CONTROLLED_FLAKE_RERUN" &&
@@ -286,6 +415,10 @@ export function buildAttemptIssueIndex(attemptValues, amendmentValues = []) {
     current.attemptIds.push(attempt.attemptId);
     current.nextAction = attempt.nextAction;
     issues.set(issueId, current);
+  }
+  for (const decisionId of reopenDecisions.keys()) {
+    if (!consumedReopenDecisions.has(decisionId))
+      blocked(`reopen decision is not consumed: ${decisionId}`);
   }
   return {
     schemaVersion: 1,
@@ -839,9 +972,30 @@ export async function aggregateTechnical({ inputPath, outputDir }) {
       await readJson(reference.path, `attemptAmendments[${index}]`),
     );
   }
+  const attemptReopenDecisions = [];
+  for (const [index, reference] of (
+    input.attemptReopenDecisions ?? []
+  ).entries()) {
+    object(reference, `attemptReopenDecisions[${index}]`);
+    if (
+      typeof reference.path !== "string" ||
+      !path.isAbsolute(reference.path) ||
+      !/^[0-9a-f]{64}$/u.test(reference.sha256 ?? "") ||
+      (await sha256File(reference.path)) !== reference.sha256
+    )
+      blocked(`attemptReopenDecisions[${index}] is invalid or stale`);
+    attemptReopenDecisions.push({
+      decision: await readJson(
+        reference.path,
+        `attemptReopenDecisions[${index}]`,
+      ),
+      sha256: reference.sha256,
+    });
+  }
   const attemptIssueIndex = buildAttemptIssueIndex(
     attemptRecords,
     attemptAmendments,
+    attemptReopenDecisions,
   );
   const screenCollectionVerdicts = input.finalScreenCollections.map(
     (entry) => ({

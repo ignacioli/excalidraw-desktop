@@ -49,6 +49,7 @@ const TECHNICAL_INPUT_FIELDS = new Set([
   "delta",
   "attemptRecords",
   "attemptAmendments",
+  "attemptReopenDecisions",
 ]);
 const FOREIGN_COLLECTOR_KEYS = new Set([
   "reviewer",
@@ -427,6 +428,7 @@ async function validateTechnicalAggregate(source) {
   for (const [field, label] of [
     ["attemptRecords", "technical attempt record"],
     ["attemptAmendments", "technical attempt amendment"],
+    ["attemptReopenDecisions", "technical attempt reopen decision"],
   ]) {
     if (!Array.isArray(input[field])) blocked(`${field} must be an array`);
     for (const [index, reference] of input[field].entries()) {
