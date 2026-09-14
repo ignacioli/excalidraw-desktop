@@ -238,6 +238,13 @@ async function finalFixture() {
   const technicalInput = {
     schemaVersion: 1,
     finalCommit: COMMIT,
+    productIdentity: {
+      productCommit: COMMIT,
+      runtimeInputsSha256: "ab".repeat(32),
+      packageArtifactSha256: SHA,
+      bundleIdentifier: "com.example.fixture",
+      version: "1.0.0",
+    },
     hf2Manifest: {
       path: hf2ManifestPath,
       sha256: hf2ManifestSha256,
@@ -270,6 +277,8 @@ async function finalFixture() {
       collectionDigest: entry.report.collectionDigest,
     })),
     delta: { path: deltaPath, sha256: await sha256File(deltaPath) },
+    attemptRecords: [],
+    attemptAmendments: [],
   };
   const technicalDir = path.join(source, "aggregate", "technical");
   await writeJson(path.join(technicalDir, "input.json"), technicalInput);
@@ -292,10 +301,15 @@ async function finalFixture() {
     dependencyGraph,
   );
   await writeJson(path.join(technicalDir, "stale-evidence.json"), []);
+  await writeJson(path.join(technicalDir, "attempt-issue-index.json"), {
+    schemaVersion: 1,
+    issues: [],
+  });
   const technicalReport = {
     schemaVersion: 1,
     mode: "technical",
     finalCommit: COMMIT,
+    productIdentity: technicalInput.productIdentity,
     packageArtifactSha256: SHA,
     hf2ManifestSha256: technicalInput.hf2Manifest.sha256,
     dependencyGraphDigest: crypto
@@ -565,6 +579,22 @@ describe("evidence publisher", () => {
         source: staleInput.source,
         destination: staleInput.destination,
         allowedDestinationRoot: staleInput.destinationRoot,
+      }),
+      (error) => error instanceof EvidencePublishError && error.exitCode === 2,
+    );
+  });
+
+  it("blocks a malformed attempt issue index", async () => {
+    const test = await finalFixture();
+    await writeJson(path.join(test.technicalDir, "attempt-issue-index.json"), {
+      schemaVersion: 1,
+      issues: "invalid",
+    });
+    await assert.rejects(
+      publishEvidence({
+        source: test.source,
+        destination: test.destination,
+        allowedDestinationRoot: test.destinationRoot,
       }),
       (error) => error instanceof EvidencePublishError && error.exitCode === 2,
     );

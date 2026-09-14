@@ -162,7 +162,7 @@ pnpm native:macos:validate -- \
   --binding <evidence-binding.json>
 ```
 
-FINAL plan 绑定专用 T023b profile 与 Save/PNG/SVG target paths。Geometry 仅接受八个 tab-delimited 有限整数，requested size 必须精确为 1280×760；menu Save probe 后通过 macOS 物理 key code 调用 Command-S，并要求七个 fresh、唯一的 native-entry/application-route ids。Filesystem outcome 记录绝对 path、format、SHA-256 与 byte length；Save 必须改变声明的既有 drawing，PNG/SVG 必须是具备有效 signature 的新文件。adapter 随后写入 collector 自有的 `environment.json`、`route-acknowledgements.json`、`filesystem-outcomes.json`、`native-report.json` 与 `collector-report.json`，绝不写 reviewer 或 product owner 状态。只有 VSL-001 或 FINAL-003 所需角色各自封存 artifact 后，才能发布完整 gate：
+FINAL plan 提供专用 T023b profile。Validator 精确选择一个已声明的有效 `.excalidraw` fixture，记录其 digest 与正常 launch/open binding；因为本 gate 不断言业务 Save outcome，所以 route checks 前后 bytes 必须一致。它要求 5/5 menu facts；geometry 只接受八个 tab-delimited 有限整数且 requested size 必须精确为 1280×760；menu Save probe 后通过 macOS 物理 key code 调用 Command-S，并要求七个 fresh、唯一的 `nativeEntry -> routeAccepted` ids。Save/PNG/SVG filesystem outcomes 由 deterministic persistence/export suites 分别证明。Adapter 写入 collector 自有的 `environment.json`、`route-acknowledgements.json`、`native-report.json`、`collector-report.json` 与 `collection/attempts/<attemptId>/attempt.json`，其中分离 product/validator/attempt identity 和 normalized issue fingerprint；绝不写 reviewer 或 product owner 状态。只有 VSL-001 或 FINAL-003 所需角色各自封存 artifact 后，才能发布完整 gate：
 
 ```bash
 pnpm evidence:publish -- \
@@ -172,7 +172,7 @@ pnpm evidence:publish -- \
 
 目标必须是 003 evidence root 内的新目录。发布器验证 digest 与角色边界，逐字节复制全部来源文件，再次计算来源/目标 hash，并在复制树旁写 `<gate-id>.publication.json`。退出码固定为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
 
-对于 FINAL-003，sealed source 顶层精确包含四个角色目录：`collection/`、`aggregate/`、`review/` 与 `owner/`。`aggregate/technical/` 只能包含五个 T062 输出（`input.json`、`dependency-graph.json`、`stale-evidence.json`、`technical-report.json`、`technical-report.md`）；publisher 会复核 technical PASS、所有 manifest/delta/report 路径与 digest、7 个 browser claim collections 及 6 个 T061 native visual collections。`review/reviewer-report.json` 是 canonical index，只能索引这六个 visual collections 与六份 `review/screens/<gate-id>/reviewer-report.json` PASS 文件，不得把 T059、T060、T023b、T062 或其他 technical collection 声称为已做视觉 review。`owner/product-owner-decision.json` 必须记录 `APPROVED`，并按 digest 同时绑定 `aggregate/technical/technical-report.json` 和 `review/reviewer-report.json`。角色或文件缺失/多余、传递字节 stale、reviewer 越权绑定 technical collection，或 owner 缺少任一绑定，均返回 `BLOCKED`。通过验证后，aggregate 与逐屏 review 的每个字节都和其他 source bytes 一样原样发布。
+对于 FINAL-003，sealed source 顶层精确包含四个角色目录：`collection/`、`aggregate/`、`review/` 与 `owner/`。`aggregate/technical/` 包含 T062 input、dependency graph、派生的 `attempt-issue-index.json`、stale-evidence record 和 JSON/Markdown technical reports；publisher 会复核 technical PASS、所有 identity/attempt/manifest/delta/report 路径与 digest、7 个 browser claim collections 及 6 个 T061 native visual collections。`review/reviewer-report.json` 是 canonical index，只能索引这六个 visual collections 与六份 `review/screens/<gate-id>/reviewer-report.json` PASS 文件，不得把 T059、T060、T023b、T062 或其他 technical collection 声称为已做视觉 review。`owner/product-owner-decision.json` 必须记录 `APPROVED`，并按 digest 同时绑定 `aggregate/technical/technical-report.json` 和 `review/reviewer-report.json`。角色或文件缺失/多余、传递字节 stale、reviewer 越权绑定 technical collection，或 owner 缺少任一绑定，均返回 `BLOCKED`。通过验证后，aggregate 与逐屏 review 的每个字节都和其他 source bytes 一样原样发布。
 
 ### Read-only evidence aggregation（只读证据聚合）
 

@@ -10,9 +10,11 @@ import {
   aggregateClosure,
   aggregateDelta,
   aggregateTechnical,
+  buildAttemptIssueIndex,
   classifyDeltaPaths,
   generateTaskProof,
   parseTasksMarkdown,
+  validateEvidenceIdentities,
   verifyClosure,
 } from "./evidence-aggregate.mjs";
 
@@ -115,6 +117,7 @@ function ownershipMap() {
   return {
     schemaVersion: 1,
     version: "test-v2",
+    productIdentity: { pathPrefixes: ["src/"] },
     commandCatalog: {
       lint: "pnpm lint",
       typecheck: "pnpm typecheck",
@@ -287,6 +290,30 @@ describe("evidence aggregation", () => {
       "cargo-clippy",
       "cargo-fmt",
       "cargo-test",
+      "documentation-check",
+      "evidence-aggregate-test",
+      "evidence-publish-test",
+      "focused-a11y-welcome-overlay",
+      "focused-routing-browser",
+      "focused-sidebar-browser",
+      "focused-visual-browser",
+      "lint",
+      "native-macos-test",
+      "native-screen-capture-test",
+      "native-screen-prepare-test",
+      "node-validation-harness",
+      "typecheck",
+      "vitest",
+    ];
+    assert.equal(map.version, "003-ownership-v3");
+    assert.deepEqual(
+      Object.keys(map.commandCatalog).sort(),
+      expectedCommandIds,
+    );
+    assert.deepEqual([...map.claimCommands["final-regression"]].sort(), [
+      "cargo-clippy",
+      "cargo-fmt",
+      "cargo-test",
       "focused-a11y-welcome-overlay",
       "focused-routing-browser",
       "focused-sidebar-browser",
@@ -295,16 +322,7 @@ describe("evidence aggregation", () => {
       "node-validation-harness",
       "typecheck",
       "vitest",
-    ];
-    assert.equal(map.version, "003-ownership-v2");
-    assert.deepEqual(
-      Object.keys(map.commandCatalog).sort(),
-      expectedCommandIds,
-    );
-    assert.deepEqual(
-      [...map.claimCommands["final-regression"]].sort(),
-      expectedCommandIds,
-    );
+    ]);
     for (const claimId of new Set(map.rules.flatMap((rule) => rule.claimIds))) {
       assert.ok(map.claimCommands[claimId], `missing commands for ${claimId}`);
     }
@@ -320,6 +338,244 @@ describe("evidence aggregation", () => {
     assert.match(
       map.commandCatalog["focused-visual-browser"],
       /SHELL_EVIDENCE_RUN_ROOT=\$T059_BROWSER_RUN_ROOT/u,
+    );
+    const nativeScript = classifyDeltaPaths(
+      ["scripts/native-macos-validation.mjs"],
+      map,
+    )[0];
+    assert.deepEqual(nativeScript.claimIds, ["native-harness-validation"]);
+    const docs = classifyDeltaPaths(["AGENTS.md"], map)[0];
+    assert.deepEqual(docs.claimIds, ["documentation-check"]);
+  });
+
+  it("keeps native-Harness-only deltas out of browser, package, and capture claims", () => {
+    const map = {
+      schemaVersion: 1,
+      version: "producer-test-v1",
+      commandCatalog: {
+        browser: "pnpm test",
+        native: "pnpm native:macos:test",
+      },
+      claimCommands: {
+        "visual-fidelity": ["browser"],
+        "package-identity": ["browser"],
+        "native-capture": ["browser"],
+        "native-harness-validation": ["native"],
+      },
+      rules: [
+        {
+          id: "native-harness",
+          pathPrefixes: ["scripts/native-macos-validation.mjs"],
+          owners: ["native-harness"],
+          claimIds: ["native-harness-validation"],
+        },
+        {
+          id: "other",
+          pathPrefixes: ["src/"],
+          owners: ["product-runtime"],
+          claimIds: ["visual-fidelity", "package-identity", "native-capture"],
+        },
+      ],
+    };
+    const [entry] = classifyDeltaPaths(
+      ["scripts/native-macos-validation.mjs"],
+      map,
+    );
+    assert.equal(entry.ownershipRule, "native-harness");
+    assert.equal(entry.claimIds.includes("visual-fidelity"), false);
+    assert.equal(entry.claimIds.includes("package-identity"), false);
+    assert.equal(entry.claimIds.includes("native-capture"), false);
+  });
+
+  it("derives UNKNOWN amendments, PASS reset, flake control, and the third-failure stop", () => {
+    const productIdentity = {
+      runtimeInputsSha256: "11".repeat(32),
+      packageArtifactSha256: "22".repeat(32),
+      bundleIdentifier: "excalidraw-desktop",
+      version: "0.2.0",
+    };
+    const validatorIdentity = {
+      producer: "native-macos-validation",
+      version: "3",
+      sourceSha256: "33".repeat(32),
+      schemaVersion: 2,
+    };
+    const signature = "44".repeat(32);
+    const issue = (rootCauseClass) =>
+      `issue-v1:${sha256(
+        JSON.stringify({
+          factClass: "native-entrypoint-router",
+          gate: "T023b",
+          observableSignature: signature,
+          platform: "macos",
+          rootCauseClass,
+        }),
+      )}`;
+    const attempt = (
+      id,
+      verdict,
+      rootCauseClass,
+      count,
+      nextAction,
+      change,
+    ) => ({
+      attemptId: id,
+      gate: "T023b",
+      platform: "macos",
+      factClass: "native-entrypoint-router",
+      mechanism: "native-macos-validation",
+      assertionReached: true,
+      observableSignature: signature,
+      rootCauseClass,
+      canonicalIssueId: issue(rootCauseClass),
+      productIdentity,
+      validatorIdentity,
+      namedChangeSincePreviousAttempt: change,
+      verdict,
+      consecutiveFailureCount: count,
+      nextAction,
+    });
+    const first = attempt("a1", "FAIL", "UNKNOWN", 1, "STOP_REQUIRED", {
+      changeId: "INITIAL",
+      producer: "native-macos-validation",
+      beforeSha256: null,
+      afterSha256: "33".repeat(32),
+    });
+    const second = attempt("a2", "FAIL", "HARNESS", 2, "REPAIR_HARNESS", {
+      changeId: "fix-1",
+      producer: "native-macos-validation",
+      beforeSha256: "33".repeat(32),
+      afterSha256: "55".repeat(32),
+    });
+    const pass = attempt("a3", "PASS", "HARNESS", 0, "RUN_TRUE_DEPENDENTS", {
+      changeId: "fix-2",
+      producer: "native-macos-validation",
+      beforeSha256: "55".repeat(32),
+      afterSha256: "66".repeat(32),
+    });
+    const index = buildAttemptIssueIndex(
+      [first, second, pass],
+      [
+        {
+          amendmentId: "root-cause-1",
+          attemptIds: ["a1"],
+          rootCauseClass: "HARNESS",
+          canonicalIssueId: issue("HARNESS"),
+        },
+      ],
+    );
+    assert.equal(index.issues[0].consecutiveFailureCount, 0);
+    assert.deepEqual(index.issues[0].attemptIds, ["a1", "a2", "a3"]);
+
+    const flake = attempt(
+      "flake-1",
+      "FAIL",
+      "TEST_FLAKE",
+      1,
+      "CONTROLLED_RETRY",
+      {
+        changeId: "INITIAL",
+        producer: "native-macos-validation",
+        beforeSha256: null,
+        afterSha256: "33".repeat(32),
+      },
+    );
+    const reproducedFlake = attempt(
+      "flake-2",
+      "FAIL",
+      "TEST_FLAKE",
+      2,
+      "CONTROLLED_RETRY",
+      {
+        changeId: "CONTROLLED_FLAKE_RERUN",
+        producer: "native-macos-validation",
+        beforeSha256: "33".repeat(32),
+        afterSha256: "33".repeat(32),
+      },
+    );
+    assert.throws(
+      () => buildAttemptIssueIndex([flake, reproducedFlake], []),
+      /reproduced TEST_FLAKE must be reclassified as HARNESS/u,
+    );
+
+    const failures = [1, 2, 3].map((count) =>
+      attempt(
+        `fail-${count}`,
+        "FAIL",
+        "HARNESS",
+        count,
+        count === 3 ? "STOP_REQUIRED" : "REPAIR_HARNESS",
+        {
+          changeId: count === 1 ? "INITIAL" : `fix-${count}`,
+          producer: "native-macos-validation",
+          beforeSha256: count === 1 ? null : `${count}`.repeat(64),
+          afterSha256: `${count + 1}`.repeat(64),
+        },
+      ),
+    );
+    assert.equal(
+      buildAttemptIssueIndex(failures, []).issues[0].nextAction,
+      "STOP_REQUIRED",
+    );
+    assert.throws(
+      () =>
+        buildAttemptIssueIndex(
+          [
+            ...failures,
+            attempt("fail-4", "FAIL", "HARNESS", 4, "STOP_REQUIRED", {
+              changeId: "fix-4",
+              producer: "native-macos-validation",
+              beforeSha256: "44".repeat(32),
+              afterSha256: "55".repeat(32),
+            }),
+          ],
+          [],
+        ),
+      /fourth attempt is prohibited/u,
+    );
+  });
+
+  it("validates product, validator, and attempt identities independently", () => {
+    const productIdentity = {
+      runtimeInputsSha256: "11".repeat(32),
+      packageArtifactSha256: "22".repeat(32),
+      bundleIdentifier: "excalidraw-desktop",
+      version: "0.2.0",
+    };
+    const identities = {
+      productIdentity,
+      validatorIdentity: {
+        producer: "native-macos-validation",
+        version: "3",
+        sourceSha256: "33".repeat(32),
+        schemaVersion: 2,
+      },
+      attemptIdentity: {
+        attemptId: "T023b-001",
+        gate: "T023b",
+        platform: "macos",
+        inputSha256: "44".repeat(32),
+      },
+    };
+    assert.deepEqual(
+      validateEvidenceIdentities(identities, productIdentity),
+      identities,
+    );
+    assert.throws(
+      () =>
+        validateEvidenceIdentities(identities, {
+          ...productIdentity,
+          runtimeInputsSha256: "55".repeat(32),
+        }),
+      /product identity mismatch/u,
+    );
+    assert.throws(
+      () =>
+        validateEvidenceIdentities(
+          { ...identities, attemptIdentity: identities.validatorIdentity },
+          productIdentity,
+        ),
+      /attempt identity is invalid/u,
     );
   });
 
@@ -420,6 +676,7 @@ describe("evidence aggregation", () => {
       ],
     );
     assert.deepEqual(report.rerunCommands, []);
+    assert.match(report.productIdentity.runtimeInputsSha256, /^[0-9a-f]{64}$/u);
   });
 
   it("blocks unknown claim command mappings and emits sorted deterministic rerun commands", async () => {
@@ -504,6 +761,12 @@ describe("evidence aggregation", () => {
     await writeJson(inputPath, {
       schemaVersion: 1,
       finalCommit,
+      productIdentity: {
+        runtimeInputsSha256: "12".repeat(32),
+        packageArtifactSha256: binding.packageArtifactSha256,
+        bundleIdentifier: "excalidraw-desktop",
+        version: "0.2.0",
+      },
       hf2Manifest: { path: hf2Path, sha256: sha256("hf2\n") },
       finalPackageManifest: {
         path: packagePath,
@@ -546,6 +809,15 @@ describe("evidence aggregation", () => {
     assert.equal(report.result, "PASS");
     assert.equal(report.browserClaimVerdicts.length, 7);
     assert.equal(report.screenCollectionVerdicts.length, 6);
+    assert.deepEqual(
+      JSON.parse(
+        await fsp.readFile(
+          path.join(outputDir, "attempt-issue-index.json"),
+          "utf8",
+        ),
+      ),
+      { schemaVersion: 1, issues: [] },
+    );
     const validInput = JSON.parse(await fsp.readFile(inputPath, "utf8"));
     const wrongCommitBrowser = await collector(
       path.join(root, "wrong-commit"),

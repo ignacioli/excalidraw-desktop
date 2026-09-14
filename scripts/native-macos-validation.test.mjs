@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -11,6 +12,7 @@ import {
   adaptNativeValidationReport,
   aggregateStatus,
   ambiguousAppProcesses,
+  buildAttemptRecord,
   buildReport,
   compareBundleContract,
   compareManifest,
@@ -30,6 +32,52 @@ import {
   windowGeometryAppleScript,
   writeNativeValidationCollection,
 } from "./native-macos-validation.mjs";
+
+const NATIVE_VALIDATOR_SOURCE_SHA256 = crypto
+  .createHash("sha256")
+  .update(
+    await fs.readFile(
+      new URL("./native-macos-validation.mjs", import.meta.url),
+    ),
+  )
+  .digest("hex");
+
+function nativeBinding(overrides = {}) {
+  return {
+    productCommit: "ab".repeat(20),
+    hf2ManifestSha256: "cd".repeat(32),
+    fixtureDigest: "ef".repeat(32),
+    packageArtifactSha256: "12".repeat(32),
+    nativeEntrypointProfileSha256: "23".repeat(32),
+    productIdentity: {
+      runtimeInputsSha256: "34".repeat(32),
+      packageArtifactSha256: "12".repeat(32),
+      bundleIdentifier: "excalidraw-desktop",
+      version: "0.2.0",
+    },
+    validatorIdentity: {
+      producer: "native-macos-validation",
+      version: "3",
+      sourceSha256: NATIVE_VALIDATOR_SOURCE_SHA256,
+      schemaVersion: 2,
+    },
+    attemptIdentity: {
+      attemptId: "T023b-001-native-router",
+      gate: "T023b",
+      platform: "macos",
+      inputSha256: "56".repeat(32),
+    },
+    namedChangeSincePreviousAttempt: {
+      changeId: "T058d-native-route-scope",
+      producer: "native-macos-validation",
+      beforeSha256: "67".repeat(32),
+      afterSha256: NATIVE_VALIDATOR_SOURCE_SHA256,
+    },
+    rootCauseClass: "HARNESS",
+    consecutiveFailureCount: 0,
+    ...overrides,
+  };
+}
 
 describe("native macOS validation helpers", () => {
   it(
@@ -267,23 +315,30 @@ describe("native macOS validation helpers", () => {
   });
 
   it("adapts native output without crossing reviewer or owner roles", async () => {
-    const binding = {
-      productCommit: "ab".repeat(20),
-      hf2ManifestSha256: "cd".repeat(32),
-      fixtureDigest: "ef".repeat(32),
-      harnessVersion: "native-v2",
-      packageArtifactSha256: "12".repeat(32),
-    };
+    const binding = nativeBinding();
     const report = buildReport({
       command: "validate",
       environment: { productVersion: "macOS 26.5.2" },
-      manifest: { appPath: "/tmp/Excalidraw.app" },
+      manifest: {
+        appPath: "/tmp/Excalidraw.app",
+        artifactSha256: binding.packageArtifactSha256,
+        bundleIdentifier: binding.productIdentity.bundleIdentifier,
+        version: binding.productIdentity.version,
+      },
+      nativeEntrypointProfileSha256: binding.nativeEntrypointProfileSha256,
       checks: [
         makeCheck("native-menu", "menu", "PASS"),
         makeCheck("window-geometry", "geometry", "PASS", {
           observed: parseWindowGeometryOutput(
             "0\t0\t1280\t760\t0\t0\t1280\t760",
           ),
+        }),
+        makeCheck("state-preparation", "state preparation", "PASS", {
+          launchMode: "normal-open-argument",
+          path: "/tmp/Architecture.excalidraw",
+          sha256Before: "89".repeat(32),
+          sha256After: "89".repeat(32),
+          byteLength: 128,
         }),
         ...[
           ["save-menu", "save", 1],
@@ -296,22 +351,6 @@ describe("native macOS validation helpers", () => {
         ].map(([id, command, validationId]) =>
           makeCheck(id, id, "PASS", { command, validationId }),
         ),
-        ...[
-          [
-            "save-filesystem-outcome",
-            "/tmp/Architecture.excalidraw",
-            "excalidraw",
-          ],
-          ["png-filesystem-outcome", "/tmp/Architecture.png", "png"],
-          ["svg-filesystem-outcome", "/tmp/Architecture.svg", "svg"],
-        ].map(([id, filePath, format]) =>
-          makeCheck(id, id, "PASS", {
-            path: filePath,
-            format,
-            sha256: "34".repeat(32),
-            byteLength: 128,
-          }),
-        ),
       ],
     });
     const adapted = adaptNativeValidationReport(report, binding);
@@ -322,8 +361,20 @@ describe("native macOS validation helpers", () => {
       ),
       [1, 2, 3, 4, 5, 6, 7],
     );
-    assert.equal(adapted.filesystemOutcomes.checks.length, 3);
-    assert.equal(adapted.filesystemOutcomes.result, "PASS");
+    assert.equal("filesystemOutcomes" in adapted, false);
+    assert.equal(adapted.routeAcknowledgements.result, "PASS");
+    assert.equal(
+      adapted.environment.statePreparation.sha256Before,
+      adapted.environment.statePreparation.sha256After,
+    );
+    assert.deepEqual(
+      adapted.environment.productIdentity,
+      binding.productIdentity,
+    );
+    assert.deepEqual(
+      adapted.environment.validatorIdentity,
+      binding.validatorIdentity,
+    );
     assert.equal("reviewerVerdict" in adapted.environment, false);
     assert.equal("productOwnerDecision" in adapted.environment, false);
 
@@ -341,9 +392,23 @@ describe("native macOS validation helpers", () => {
       assert.equal(
         JSON.parse(
           await fs.readFile(path.join(collection, "environment.json"), "utf8"),
-        ).binding.packageArtifactSha256,
-        binding.packageArtifactSha256,
+        ).productIdentity.packageArtifactSha256,
+        binding.productIdentity.packageArtifactSha256,
       );
+      await assert.rejects(
+        fs.access(path.join(collection, "filesystem-outcomes.json")),
+      );
+      const attemptPath = path.join(
+        root,
+        "attempts",
+        binding.attemptIdentity.attemptId,
+        "attempt.json",
+      );
+      const attempt = JSON.parse(await fs.readFile(attemptPath, "utf8"));
+      assert.equal(attempt.gate, "T023b");
+      assert.equal(attempt.factClass, "native-entrypoint-router");
+      assert.equal(attempt.verdict, "PASS");
+      assert.equal(attempt.consecutiveFailureCount, 0);
       await assert.rejects(
         writeNativeValidationCollection(collection, report, binding),
         /already exists/u,
@@ -353,17 +418,17 @@ describe("native macOS validation helpers", () => {
     }
   });
 
-  it("blocks the observed missing Command-S pair and filesystem outcomes", () => {
-    const binding = {
-      productCommit: "ab".repeat(20),
-      hf2ManifestSha256: "cd".repeat(32),
-      fixtureDigest: "ef".repeat(32),
-      harnessVersion: "native-v2",
-      packageArtifactSha256: "12".repeat(32),
-    };
+  it("blocks the observed missing Command-S pair without requiring filesystem outcomes", () => {
+    const binding = nativeBinding();
     const adapted = adaptNativeValidationReport(
       buildReport({
         command: "validate",
+        manifest: {
+          artifactSha256: binding.packageArtifactSha256,
+          bundleIdentifier: binding.productIdentity.bundleIdentifier,
+          version: binding.productIdentity.version,
+        },
+        nativeEntrypointProfileSha256: binding.nativeEntrypointProfileSha256,
         checks: [
           makeCheck("native-menu", "menu", "PASS"),
           makeCheck("window-geometry", "geometry", "FAIL", {
@@ -382,7 +447,39 @@ describe("native macOS validation helpers", () => {
       binding,
     );
     assert.equal(adapted.routeAcknowledgements.result, "BLOCKED");
-    assert.equal(adapted.filesystemOutcomes.result, "BLOCKED");
+    assert.equal("filesystemOutcomes" in adapted, false);
+  });
+
+  it("normalizes failure identity independently of PID, path, timestamp, and wording", () => {
+    const binding = nativeBinding({ consecutiveFailureCount: 1 });
+    const left = buildAttemptRecord(
+      buildReport({
+        command: "validate",
+        checks: [
+          makeCheck("save-keyboard", "save", "FAIL", {
+            pid: 123,
+            error: "Timed out at /tmp/first",
+          }),
+        ],
+      }),
+      binding,
+    );
+    const right = buildAttemptRecord(
+      buildReport({
+        command: "validate",
+        checks: [
+          makeCheck("save-keyboard", "save", "FAIL", {
+            pid: 999,
+            error: "Different text at /private/tmp/second",
+          }),
+        ],
+      }),
+      binding,
+    );
+    assert.equal(left.observableSignature, right.observableSignature);
+    assert.equal(left.canonicalIssueId, right.canonicalIssueId);
+    assert.equal(left.consecutiveFailureCount, 2);
+    assert.equal(left.nextAction, "REPAIR_HARNESS");
   });
 
   it("rejects malformed native collection bindings", () => {
@@ -400,8 +497,13 @@ describe("native macOS validation helpers", () => {
       productCommit: "ab".repeat(20),
       isolation: { root: "/tmp/run" },
       packageManifest: { artifactSha256: "ef".repeat(32) },
+      fixture: {
+        manifestPath: "/tmp/run/fixture/fixture-manifest.json",
+        workspaceRoot: "/tmp/run/fixture/workspace",
+      },
       nativeValidation: {
         profileRoot,
+        launchDocument: "/tmp/run/fixture/Architecture.excalidraw",
         filesystemTargets: {
           save: "/tmp/run/fixture/Architecture.excalidraw",
           png: "/tmp/run/outcomes/Architecture.png",
@@ -416,9 +518,11 @@ describe("native macOS validation helpers", () => {
     });
     assert.equal(result.profileRoot, profileRoot);
     assert.equal(
-      result.filesystemTargets.svg,
-      "/tmp/run/outcomes/Architecture.svg",
+      result.launchDocument,
+      "/tmp/run/fixture/Architecture.excalidraw",
     );
+    assert.match(result.nativeEntrypointProfileSha256, /^[0-9a-f]{64}$/u);
+    assert.equal("filesystemTargets" in result, false);
     assert.equal(result.environment.HOME, profileRoot);
     assert.equal("EXCALIDRAW_NATIVE_CAPTURE_PLAN" in result.environment, false);
     assert.throws(

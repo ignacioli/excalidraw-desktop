@@ -61,6 +61,15 @@ export const EXPECTED_MENU_ITEMS = Object.freeze([
 
 const VALID_STAGES = new Set(["nativeEntry", "applicationRoute"]);
 const VALID_COMMANDS = new Set(EXPECTED_MENU_ITEMS.map((item) => item.command));
+const ROOT_CAUSE_CLASSES = new Set([
+  "PRODUCT",
+  "HARNESS",
+  "ENVIRONMENT",
+  "SPEC_CONTRACT",
+  "TEST_FLAKE",
+  "OPERATOR",
+  "UNKNOWN",
+]);
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
 
@@ -164,7 +173,9 @@ export function validatePreparedNativeProfile(plan, manifest) {
     "profiles",
     "T023b",
   );
-  const filesystemTargets = plan?.nativeValidation?.filesystemTargets;
+  const legacySaveTarget = plan?.nativeValidation?.filesystemTargets?.save;
+  const launchDocument =
+    plan?.nativeValidation?.launchDocument ?? legacySaveTarget;
   if (
     !plan ||
     typeof plan !== "object" ||
@@ -177,29 +188,54 @@ export function validatePreparedNativeProfile(plan, manifest) {
       (manifest.artifactSha256 ?? manifest.packageSha256) ||
     !Array.isArray(plan.screens) ||
     plan.nativeValidation?.profileRoot !== profileRoot ||
-    !filesystemTargets ||
-    ![
-      filesystemTargets.save,
-      filesystemTargets.png,
-      filesystemTargets.svg,
-    ].every(
-      (target) =>
-        typeof target === "string" &&
-        path.isAbsolute(target) &&
-        !path.relative(plan.isolation.root, target).startsWith(".."),
-    )
+    typeof plan.fixture?.manifestPath !== "string" ||
+    !path.isAbsolute(plan.fixture.manifestPath) ||
+    typeof plan.fixture?.workspaceRoot !== "string" ||
+    !path.isAbsolute(plan.fixture.workspaceRoot) ||
+    (launchDocument !== undefined &&
+      (typeof launchDocument !== "string" ||
+        !path.isAbsolute(launchDocument) ||
+        path.relative(plan.isolation.root, launchDocument).startsWith("..")))
   ) {
     throw new NativeValidationBlockedError(
       "capture plan does not provide a matching disposable T023b profile",
     );
   }
+  const profileSlice = {
+    schemaVersion: 1,
+    runId: plan.runId,
+    productCommit: plan.productCommit,
+    packageArtifactSha256: manifest.artifactSha256 ?? manifest.packageSha256,
+    profileRoot,
+    fixtureManifestPath: plan.fixture.manifestPath,
+    workspaceRoot: plan.fixture.workspaceRoot,
+    launchDocument: launchDocument ?? null,
+  };
   return {
     profileRoot,
-    filesystemTargets,
+    launchDocument: launchDocument ?? null,
+    fixtureManifestPath: plan.fixture.manifestPath,
+    workspaceRoot: plan.fixture.workspaceRoot,
+    nativeEntrypointProfileSha256: sha256Canonical(profileSlice),
     environment: {
       HOME: profileRoot,
     },
   };
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function sha256Canonical(value) {
+  return crypto.createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
 
 function nativeCollectionDigest(artifacts) {
@@ -228,12 +264,155 @@ function requireNativeAdapterBinding(value) {
       );
     }
   }
-  if (typeof value.harnessVersion !== "string" || value.harnessVersion === "") {
+  if (!/^[0-9a-f]{64}$/u.test(value.nativeEntrypointProfileSha256 ?? ""))
     throw new NativeValidationBlockedError(
-      "native evidence binding.harnessVersion is invalid",
+      "native evidence binding.nativeEntrypointProfileSha256 is invalid",
     );
-  }
+  const productIdentity = value.productIdentity;
+  if (
+    !productIdentity ||
+    !/^[0-9a-f]{64}$/u.test(productIdentity.runtimeInputsSha256 ?? "") ||
+    productIdentity.packageArtifactSha256 !== value.packageArtifactSha256 ||
+    typeof productIdentity.bundleIdentifier !== "string" ||
+    productIdentity.bundleIdentifier === "" ||
+    typeof productIdentity.version !== "string" ||
+    productIdentity.version === ""
+  )
+    throw new NativeValidationBlockedError(
+      "native evidence binding.productIdentity is invalid",
+    );
+  const validatorIdentity = value.validatorIdentity;
+  if (
+    !validatorIdentity ||
+    validatorIdentity.producer !== "native-macos-validation" ||
+    validatorIdentity.version !== "3" ||
+    validatorIdentity.schemaVersion !== 2 ||
+    !/^[0-9a-f]{64}$/u.test(validatorIdentity.sourceSha256 ?? "")
+  )
+    throw new NativeValidationBlockedError(
+      "native evidence binding.validatorIdentity is invalid",
+    );
+  const attemptIdentity = value.attemptIdentity;
+  if (
+    !attemptIdentity ||
+    !/^[A-Za-z0-9._-]{1,128}$/u.test(attemptIdentity.attemptId ?? "") ||
+    attemptIdentity.gate !== "T023b" ||
+    attemptIdentity.platform !== "macos" ||
+    !/^[0-9a-f]{64}$/u.test(attemptIdentity.inputSha256 ?? "")
+  )
+    throw new NativeValidationBlockedError(
+      "native evidence binding.attemptIdentity is invalid",
+    );
+  if (
+    !value.namedChangeSincePreviousAttempt ||
+    typeof value.namedChangeSincePreviousAttempt.changeId !== "string" ||
+    value.namedChangeSincePreviousAttempt.changeId === "" ||
+    typeof value.namedChangeSincePreviousAttempt.producer !== "string" ||
+    !/^[0-9a-f]{64}$/u.test(
+      value.namedChangeSincePreviousAttempt.afterSha256 ?? "",
+    ) ||
+    (![null, undefined].includes(
+      value.namedChangeSincePreviousAttempt.beforeSha256,
+    ) &&
+      !/^[0-9a-f]{64}$/u.test(
+        value.namedChangeSincePreviousAttempt.beforeSha256,
+      ))
+  )
+    throw new NativeValidationBlockedError(
+      "native evidence binding.namedChangeSincePreviousAttempt is invalid",
+    );
+  if (!ROOT_CAUSE_CLASSES.has(value.rootCauseClass))
+    throw new NativeValidationBlockedError(
+      "native evidence binding.rootCauseClass is invalid",
+    );
+  if (
+    !Number.isSafeInteger(value.consecutiveFailureCount) ||
+    value.consecutiveFailureCount < 0 ||
+    value.consecutiveFailureCount > 2
+  )
+    throw new NativeValidationBlockedError(
+      "native evidence binding.consecutiveFailureCount is invalid",
+    );
   return value;
+}
+
+function stableFailureObservation(report) {
+  const failedCheck = report.checks.find((check) => check.status !== "PASS");
+  if (!failedCheck) {
+    return {
+      assertionId: "T023b",
+      reasonCode: "ALL_ASSERTIONS_SATISFIED",
+      expectedClass: "PASS",
+      observedClass: "PASS",
+    };
+  }
+  const reasonCodes = {
+    "native-menu": "MENU_CONTRACT_MISMATCH",
+    "window-geometry": "GEOMETRY_MISMATCH",
+    "state-preparation": "STATE_PREPARATION_MISMATCH",
+    "save-menu": "ROUTE_ACK_MISSING",
+    "save-keyboard": "ROUTE_ACK_MISSING",
+    "export-menu": "ROUTE_ACK_MISSING",
+    "export-keyboard": "ROUTE_ACK_MISSING",
+    "appearance-system": "ROUTE_ACK_MISSING",
+    "appearance-light": "ROUTE_ACK_MISSING",
+    "appearance-dark": "ROUTE_ACK_MISSING",
+  };
+  return {
+    assertionId: failedCheck.id,
+    reasonCode: reasonCodes[failedCheck.id] ?? "ASSERTION_NOT_SATISFIED",
+    expectedClass: "PASS",
+    observedClass: failedCheck.status,
+  };
+}
+
+export function buildAttemptRecord(report, bindingValue) {
+  const binding = requireNativeAdapterBinding(bindingValue);
+  const observation = stableFailureObservation(report);
+  const observableSignature = sha256Canonical(observation);
+  const verdict = aggregateStatus(report.checks);
+  const canonicalIssueId = `issue-v1:${sha256Canonical({
+    gate: binding.attemptIdentity.gate,
+    platform: binding.attemptIdentity.platform,
+    factClass: "native-entrypoint-router",
+    observableSignature,
+    rootCauseClass: binding.rootCauseClass,
+  })}`;
+  const consecutiveFailureCount =
+    verdict === "PASS" ? 0 : binding.consecutiveFailureCount + 1;
+  const repairActions = {
+    PRODUCT: "REPAIR_PRODUCT",
+    HARNESS: "REPAIR_HARNESS",
+    ENVIRONMENT: "REPAIR_ENVIRONMENT",
+    SPEC_CONTRACT: "REVISE_SPEC",
+    TEST_FLAKE: "CONTROLLED_RETRY",
+    OPERATOR: "REPAIR_ENVIRONMENT",
+    UNKNOWN: "STOP_REQUIRED",
+  };
+  return {
+    attemptId: binding.attemptIdentity.attemptId,
+    attemptIdentity: binding.attemptIdentity,
+    gate: binding.attemptIdentity.gate,
+    platform: binding.attemptIdentity.platform,
+    factClass: "native-entrypoint-router",
+    mechanism: binding.validatorIdentity.producer,
+    assertionReached: true,
+    observableSignature,
+    observation,
+    rootCauseClass: binding.rootCauseClass,
+    canonicalIssueId,
+    productIdentity: binding.productIdentity,
+    validatorIdentity: binding.validatorIdentity,
+    namedChangeSincePreviousAttempt: binding.namedChangeSincePreviousAttempt,
+    verdict,
+    consecutiveFailureCount,
+    nextAction:
+      verdict === "PASS"
+        ? "RUN_TRUE_DEPENDENTS"
+        : consecutiveFailureCount >= 3
+          ? "STOP_REQUIRED"
+          : repairActions[binding.rootCauseClass],
+  };
 }
 
 export function adaptNativeValidationReport(report, bindingValue) {
@@ -241,6 +420,18 @@ export function adaptNativeValidationReport(report, bindingValue) {
   if (!report || typeof report !== "object" || !Array.isArray(report.checks)) {
     throw new NativeValidationBlockedError(
       "native validation report is malformed",
+    );
+  }
+  if (
+    report.nativeEntrypointProfileSha256 !==
+      binding.nativeEntrypointProfileSha256 ||
+    report.manifest?.artifactSha256 !== binding.packageArtifactSha256 ||
+    report.manifest?.bundleIdentifier !==
+      binding.productIdentity.bundleIdentifier ||
+    report.manifest?.version !== binding.productIdentity.version
+  ) {
+    throw new NativeValidationBlockedError(
+      "native validation report identity does not match its binding",
     );
   }
   const expectedActionIds = [
@@ -260,16 +451,6 @@ export function adaptNativeValidationReport(report, bindingValue) {
       validationId: check.validationId,
       result: check.status,
     }));
-  const filesystemChecks = report.checks
-    .filter((check) => /(?:filesystem|outcome|partial-target)/u.test(check.id))
-    .map((check) => ({
-      checkId: check.id,
-      path: check.path,
-      format: check.format,
-      sha256: check.sha256,
-      byteLength: check.byteLength,
-      result: check.status,
-    }));
   const actionIds = actions.map((action) => action.checkId).sort();
   const actionValidationIds = actions.map((action) => action.validationId);
   const actionResult =
@@ -282,24 +463,15 @@ export function adaptNativeValidationReport(report, bindingValue) {
     actions.every((action) => action.result === "PASS")
       ? "PASS"
       : "BLOCKED";
-  const expectedFilesystemIds = [
-    "save-filesystem-outcome",
-    "png-filesystem-outcome",
-    "svg-filesystem-outcome",
-  ];
-  const filesystemResult =
-    JSON.stringify(filesystemChecks.map((check) => check.checkId).sort()) ===
-      JSON.stringify([...expectedFilesystemIds].sort()) &&
-    filesystemChecks.every(
-      (check) =>
-        check.result === "PASS" &&
-        typeof check.path === "string" &&
-        path.isAbsolute(check.path) &&
-        /^[0-9a-f]{64}$/u.test(check.sha256 ?? "") &&
-        Number.isSafeInteger(check.byteLength) &&
-        check.byteLength > 0 &&
-        ["excalidraw", "png", "svg"].includes(check.format),
-    )
+  const statePreparationCheck = report.checks.find(
+    (check) => check.id === "state-preparation",
+  );
+  const requiredChecks = ["native-menu", "window-geometry"]
+    .map((id) => report.checks.find((check) => check.id === id))
+    .concat(statePreparationCheck);
+  const routeResult =
+    actionResult === "PASS" &&
+    requiredChecks.every((check) => check?.status === "PASS")
       ? "PASS"
       : "BLOCKED";
   const environment = {
@@ -308,15 +480,29 @@ export function adaptNativeValidationReport(report, bindingValue) {
     gateId: "T023b",
     route: "macos-accessibility",
     binding,
+    productIdentity: binding.productIdentity,
+    validatorIdentity: binding.validatorIdentity,
+    attemptIdentity: binding.attemptIdentity,
     os: report.environment?.productVersion ?? "unknown macOS",
     browserOrAppBuild:
       report.manifest?.appPath ?? report.manifestPath ?? "unknown package",
     fixture: "T023b-disposable-profile",
     collector: {
       tool: "native-macos-validation",
-      version: "2",
-      runIdentity: `${binding.productCommit}:T023b`,
+      version: "3",
+      runIdentity: binding.attemptIdentity.attemptId,
     },
+    statePreparation:
+      statePreparationCheck === undefined
+        ? null
+        : {
+            launchMode: statePreparationCheck.launchMode,
+            path: statePreparationCheck.path,
+            sha256Before: statePreparationCheck.sha256Before,
+            sha256After: statePreparationCheck.sha256After,
+            byteLength: statePreparationCheck.byteLength,
+            result: statePreparationCheck.status,
+          },
   };
   return {
     environment,
@@ -326,15 +512,7 @@ export function adaptNativeValidationReport(report, bindingValue) {
       gateId: "T023b",
       binding,
       actions,
-      result: actionResult,
-    },
-    filesystemOutcomes: {
-      schemaVersion: 1,
-      collectionId: "native-entrypoints",
-      gateId: "T023b",
-      binding,
-      checks: filesystemChecks,
-      result: filesystemResult,
+      result: routeResult,
     },
   };
 }
@@ -345,6 +523,12 @@ export async function writeNativeValidationCollection(
   bindingValue,
 ) {
   const records = adaptNativeValidationReport(report, bindingValue);
+  const sourceSha256 = await sha256File(SCRIPT_PATH);
+  if (records.environment.validatorIdentity.sourceSha256 !== sourceSha256) {
+    throw new NativeValidationBlockedError(
+      "native validator source digest does not match the running producer",
+    );
+  }
   try {
     await fsp.mkdir(collectionDir);
   } catch (error) {
@@ -363,7 +547,6 @@ export async function writeNativeValidationCollection(
   const payloads = {
     "environment.json": records.environment,
     "route-acknowledgements.json": records.routeAcknowledgements,
-    "filesystem-outcomes.json": records.filesystemOutcomes,
     "native-report.json": report,
   };
   for (const [name, value] of Object.entries(payloads)) {
@@ -382,14 +565,40 @@ export async function writeNativeValidationCollection(
   }
   const result = aggregateStatus([
     report.status,
-    records.filesystemOutcomes.result,
+    records.routeAcknowledgements.result,
   ]);
+  const attemptRecord = buildAttemptRecord(report, records.environment.binding);
+  const attemptRelativePath = path.join(
+    "attempts",
+    attemptRecord.attemptId,
+    "attempt.json",
+  );
+  const attemptPath = path.join(
+    path.dirname(collectionDir),
+    attemptRelativePath,
+  );
+  await fsp.mkdir(path.dirname(attemptPath), { recursive: true });
+  await fsp.writeFile(
+    attemptPath,
+    `${JSON.stringify(attemptRecord, null, 2)}\n`,
+    {
+      encoding: "utf8",
+      flag: "wx",
+    },
+  );
   const collectorReport = {
     schemaVersion: 1,
     collectionId: "native-entrypoints",
     gateId: "T023b",
     route: "macos-accessibility",
     binding: records.environment.binding,
+    productIdentity: records.environment.productIdentity,
+    validatorIdentity: records.environment.validatorIdentity,
+    attemptIdentity: records.environment.attemptIdentity,
+    attemptRecord: {
+      path: `../${attemptRelativePath}`,
+      sha256: await sha256File(attemptPath),
+    },
     collector: records.environment.collector,
     environmentPath: "environment.json",
     claims: [
@@ -397,15 +606,8 @@ export async function writeNativeValidationCollection(
         claimId: "native-menu-entrypoints",
         factClass: "native-menu-action",
         primaryRoute: "macos-accessibility",
-        result: report.status,
+        result: records.routeAcknowledgements.result,
         artifactRefs: ["native-report.json", "route-acknowledgements.json"],
-      },
-      {
-        claimId: "native-filesystem-outcomes",
-        factClass: "application-route-outcome",
-        primaryRoute: "macos-accessibility",
-        result: records.filesystemOutcomes.result,
-        artifactRefs: ["filesystem-outcomes.json"],
       },
     ],
     artifactDigests,
@@ -938,8 +1140,16 @@ end tell
 `;
 }
 
-function completeExportDialog(pid, format, targetPath) {
-  runAppleScript(completeExportDialogAppleScript(pid, format, targetPath));
+function dismissExportDialog(pid) {
+  runAppleScript(`
+tell application "System Events"
+  set appProcess to first application process whose unix id is ${Number(pid)}
+  tell appProcess
+    set frontmost to true
+    key code 53
+  end tell
+end tell
+`);
 }
 
 export function parseWindowGeometryOutput(output) {
@@ -1253,49 +1463,66 @@ async function filesystemSnapshot(filePath) {
   };
 }
 
-async function appendFilesystemOutcomeChecks(checks, targets, before) {
-  for (const [format, filePath] of Object.entries(targets)) {
-    const after = await filesystemSnapshot(filePath);
-    let valid = after !== null && after.byteLength > 0;
-    if (format === "save") {
-      valid =
-        valid &&
-        before.save !== null &&
-        (after.sha256 !== before.save.sha256 ||
-          after.modifiedAtMs > before.save.modifiedAtMs);
-    } else {
-      valid = valid && before[format] === null;
-      if (valid) {
-        const prefix = await fsp
-          .readFile(filePath)
-          .then((bytes) => bytes.subarray(0, 256));
-        valid =
-          format === "png"
-            ? prefix
-                .subarray(0, 8)
-                .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-            : prefix.toString("utf8").includes("<svg");
-      }
-    }
-    checks.push(
-      makeCheck(
-        `${format === "save" ? "save" : format}-filesystem-outcome`,
-        `${format} filesystem outcome`,
-        valid ? "PASS" : "BLOCKED",
-        after === null
-          ? {
-              path: filePath,
-              format: format === "save" ? "excalidraw" : format,
-            }
-          : {
-              path: filePath,
-              format: format === "save" ? "excalidraw" : format,
-              sha256: after.sha256,
-              byteLength: after.byteLength,
-            },
-      ),
-    );
+async function validExcalidrawSnapshot(filePath) {
+  const snapshot = await filesystemSnapshot(filePath);
+  if (snapshot === null || path.extname(filePath) !== ".excalidraw")
+    return null;
+  try {
+    const value = JSON.parse(await fsp.readFile(filePath, "utf8"));
+    return value?.type === "excalidraw" ? snapshot : null;
+  } catch {
+    return null;
   }
+}
+
+async function resolvePreparedLaunchDocument(nativeProfile) {
+  const fixtureManifest = JSON.parse(
+    await fsp.readFile(nativeProfile.fixtureManifestPath, "utf8"),
+  );
+  const files = Array.isArray(fixtureManifest.files)
+    ? fixtureManifest.files
+        .filter(
+          (entry) =>
+            typeof entry?.path === "string" &&
+            entry.path.endsWith(".excalidraw") &&
+            /^[0-9a-f]{64}$/u.test(entry.sha256 ?? ""),
+        )
+        .sort((left, right) => left.path.localeCompare(right.path))
+    : [];
+  const requested = nativeProfile.launchDocument;
+  let selected = files.find(
+    (entry) => path.join(nativeProfile.workspaceRoot, entry.path) === requested,
+  );
+  if (!selected) selected = files[0];
+  if (!selected)
+    throw new NativeValidationBlockedError(
+      "T023b requires one valid declared .excalidraw launch fixture",
+    );
+  const launchDocument = path.join(nativeProfile.workspaceRoot, selected.path);
+  const relative = path.relative(nativeProfile.workspaceRoot, launchDocument);
+  if (relative.startsWith("..") || path.isAbsolute(relative))
+    throw new NativeValidationBlockedError(
+      "T023b launch fixture escapes the declared workspace",
+    );
+  const snapshot = await validExcalidrawSnapshot(launchDocument);
+  if (snapshot === null || snapshot.sha256 !== selected.sha256)
+    throw new NativeValidationBlockedError(
+      "T023b launch fixture is missing, invalid, or digest-stale",
+    );
+  const slice = {
+    schemaVersion: 1,
+    profileRoot: nativeProfile.profileRoot,
+    fixtureManifestPath: nativeProfile.fixtureManifestPath,
+    workspaceRoot: nativeProfile.workspaceRoot,
+    launchDocument,
+    launchDocumentSha256: selected.sha256,
+  };
+  return {
+    ...nativeProfile,
+    launchDocument,
+    launchDocumentSha256: selected.sha256,
+    nativeEntrypointProfileSha256: sha256Canonical(slice),
+  };
 }
 
 async function runNativeChecks(
@@ -1303,17 +1530,10 @@ async function runNativeChecks(
   processInfo,
   checks,
   timeoutMs,
-  filesystemTargets,
+  launchDocument,
 ) {
   const { child, events } = processInfo;
-  const filesystemBefore = Object.fromEntries(
-    await Promise.all(
-      Object.entries(filesystemTargets).map(async ([format, filePath]) => [
-        format,
-        await filesystemSnapshot(filePath),
-      ]),
-    ),
-  );
+  const launchBefore = await validExcalidrawSnapshot(launchDocument);
   let menuObservations = [];
   try {
     let lastError;
@@ -1441,10 +1661,7 @@ async function runNativeChecks(
         timeoutMs,
       );
       consumedIds.add(pair.validationId);
-      if (action.id === "export-menu")
-        completeExportDialog(child.pid, "png", filesystemTargets.png);
-      else if (action.id === "export-keyboard")
-        completeExportDialog(child.pid, "svg", filesystemTargets.svg);
+      if (action.command === "exportImage") dismissExportDialog(child.pid);
       checks.push(
         makeCheck(
           action.id,
@@ -1464,10 +1681,25 @@ async function runNativeChecks(
       );
     }
   }
-  await appendFilesystemOutcomeChecks(
-    checks,
-    filesystemTargets,
-    filesystemBefore,
+  const launchAfter = await validExcalidrawSnapshot(launchDocument);
+  const statePrepared =
+    launchBefore !== null &&
+    launchAfter !== null &&
+    launchBefore.sha256 === launchAfter.sha256 &&
+    launchBefore.byteLength === launchAfter.byteLength;
+  checks.push(
+    makeCheck(
+      "state-preparation",
+      "digest-bound normal-open fixture remains unchanged",
+      statePrepared ? "PASS" : "BLOCKED",
+      {
+        launchMode: "normal-open-argument",
+        path: launchDocument,
+        sha256Before: launchBefore?.sha256,
+        sha256After: launchAfter?.sha256,
+        byteLength: launchAfter?.byteLength ?? launchBefore?.byteLength,
+      },
+    ),
   );
 }
 
@@ -1554,7 +1786,9 @@ export async function validateProductionBundle({
         value: path.resolve(capturePlanPath),
         enumerable: false,
       });
-      nativeProfile = validatePreparedNativeProfile(capturePlan, manifest);
+      nativeProfile = await resolvePreparedLaunchDocument(
+        validatePreparedNativeProfile(capturePlan, manifest),
+      );
       if ((await fsp.readdir(nativeProfile.profileRoot)).length !== 0) {
         throw new NativeValidationBlockedError(
           "T023b disposable profile must be empty before launch",
@@ -1565,7 +1799,12 @@ export async function validateProductionBundle({
           "disposable-profile",
           "nonce-bound prepared T023b profile",
           "PASS",
-          { profileRoot: nativeProfile.profileRoot },
+          {
+            profileRoot: nativeProfile.profileRoot,
+            launchDocument: nativeProfile.launchDocument,
+            nativeEntrypointProfileSha256:
+              nativeProfile.nativeEntrypointProfileSha256,
+          },
         ),
       );
     } catch (error) {
@@ -1686,15 +1925,10 @@ export async function validateProductionBundle({
     checks.push(
       makeCheck("process-safety", "no ambiguous existing app process", "PASS"),
     );
-    if (nativeProfile) {
-      await fsp.mkdir(path.dirname(nativeProfile.filesystemTargets.png), {
-        recursive: true,
-      });
-    }
     const processInfo = spawnBundle(
       observed.executablePath,
       nativeProfile?.environment,
-      nativeProfile ? [nativeProfile.filesystemTargets.save] : [],
+      nativeProfile ? [nativeProfile.launchDocument] : [],
     );
     try {
       await wait(3000);
@@ -1720,7 +1954,7 @@ export async function validateProductionBundle({
         processInfo,
         checks,
         timeoutMs,
-        nativeProfile?.filesystemTargets ?? {},
+        nativeProfile?.launchDocument,
       );
     } finally {
       await stopOwnedChild(processInfo);
@@ -1745,13 +1979,15 @@ export async function validateProductionBundle({
     checks,
     manifest,
     environment,
+    nativeEntrypointProfileSha256:
+      nativeProfile?.nativeEntrypointProfileSha256 ?? null,
   });
   return finish(report);
 }
 
 function printUsage() {
   console.log(
-    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--capture-plan FINAL_PLAN] [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. A schema-v2 FINAL plan supplies the distinct T023b profile and Save/PNG/SVG filesystem targets without capture-specific production IPC. PASS requires exact numeric 1280x760 geometry, seven fresh acknowledgement pairs, and all three filesystem outcomes. Adapter outputs are collector-owned and never contain reviewer or owner decisions.`,
+    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--capture-plan FINAL_PLAN] [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. A schema-v2 FINAL plan supplies a distinct T023b profile and one digest-bound .excalidraw fixture through the normal launch/open path. PASS requires 5/5 menu facts, exact numeric 1280x760 geometry, seven fresh unique nativeEntry -> routeAccepted pairs, owned process/profile evidence, and unchanged fixture bytes. Save/PNG/SVG business filesystem outcomes are owned by deterministic implementation/process-level tests, not this exact-package router probe. Adapter outputs carry separate product, validator, and attempt identities and never contain reviewer or owner decisions.`,
   );
 }
 

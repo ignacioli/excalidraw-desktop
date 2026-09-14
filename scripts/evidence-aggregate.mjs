@@ -27,6 +27,7 @@ const FINAL_BROWSER_CLAIMS = [
 const TECHNICAL_INPUT_FIELDS = new Set([
   "schemaVersion",
   "finalCommit",
+  "productIdentity",
   "hf2Manifest",
   "finalPackageManifest",
   "ownershipMap",
@@ -35,8 +36,20 @@ const TECHNICAL_INPUT_FIELDS = new Set([
   "packageCollections",
   "regressionCollections",
   "delta",
+  "attemptRecords",
+  "attemptAmendments",
 ]);
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
+const ROOT_CAUSE_CLASSES = new Set([
+  "PRODUCT",
+  "HARNESS",
+  "ENVIRONMENT",
+  "SPEC_CONTRACT",
+  "TEST_FLAKE",
+  "OPERATOR",
+  "UNKNOWN",
+]);
+const ATTEMPT_VERDICTS = new Set(["PASS", "FAIL", "BLOCKED"]);
 
 export class EvidenceAggregateError extends Error {
   constructor(message, exitCode = 2) {
@@ -66,6 +79,222 @@ function object(value, label) {
 
 function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function canonicalIssueId(attempt, rootCauseClass = attempt.rootCauseClass) {
+  return `issue-v1:${sha256(
+    canonicalJson({
+      gate: attempt.gate,
+      platform: attempt.platform,
+      factClass: attempt.factClass,
+      observableSignature: attempt.observableSignature,
+      rootCauseClass,
+    }),
+  )}`;
+}
+
+function validProductIdentity(value) {
+  return (
+    value &&
+    typeof value === "object" &&
+    /^[0-9a-f]{64}$/u.test(value.runtimeInputsSha256 ?? "") &&
+    (!Object.hasOwn(value, "packageArtifactSha256") ||
+      /^[0-9a-f]{64}$/u.test(value.packageArtifactSha256 ?? ""))
+  );
+}
+
+function validValidatorIdentity(value) {
+  return (
+    value &&
+    typeof value === "object" &&
+    typeof value.producer === "string" &&
+    value.producer !== "" &&
+    typeof value.version === "string" &&
+    value.version !== "" &&
+    /^[0-9a-f]{64}$/u.test(value.sourceSha256 ?? "") &&
+    Number.isSafeInteger(value.schemaVersion) &&
+    value.schemaVersion > 0
+  );
+}
+
+export function validateEvidenceIdentities(value, expectedProductIdentity) {
+  object(value, "evidence identities");
+  if (!validProductIdentity(value.productIdentity))
+    blocked("product identity is invalid");
+  if (!validValidatorIdentity(value.validatorIdentity))
+    blocked("validator identity is invalid");
+  const attempt = value.attemptIdentity;
+  if (
+    !attempt ||
+    typeof attempt !== "object" ||
+    !/^[A-Za-z0-9._-]{1,128}$/u.test(attempt.attemptId ?? "") ||
+    typeof attempt.gate !== "string" ||
+    attempt.gate === "" ||
+    typeof attempt.platform !== "string" ||
+    attempt.platform === "" ||
+    !/^[0-9a-f]{64}$/u.test(attempt.inputSha256 ?? "")
+  )
+    blocked("attempt identity is invalid");
+  if (expectedProductIdentity !== undefined) {
+    if (
+      value.productIdentity.runtimeInputsSha256 !==
+        expectedProductIdentity.runtimeInputsSha256 ||
+      (value.productIdentity.packageArtifactSha256 !== undefined &&
+        value.productIdentity.packageArtifactSha256 !==
+          expectedProductIdentity.packageArtifactSha256) ||
+      (value.productIdentity.bundleIdentifier !== undefined &&
+        value.productIdentity.bundleIdentifier !==
+          expectedProductIdentity.bundleIdentifier) ||
+      (value.productIdentity.version !== undefined &&
+        value.productIdentity.version !== expectedProductIdentity.version)
+    )
+      blocked("product identity mismatch");
+  }
+  return {
+    productIdentity: value.productIdentity,
+    validatorIdentity: value.validatorIdentity,
+    attemptIdentity: value.attemptIdentity,
+  };
+}
+
+function validateAttemptRecord(attempt) {
+  object(attempt, "attempt record");
+  if (
+    !/^[A-Za-z0-9._-]{1,128}$/u.test(attempt.attemptId ?? "") ||
+    typeof attempt.gate !== "string" ||
+    attempt.gate === "" ||
+    typeof attempt.platform !== "string" ||
+    attempt.platform === "" ||
+    typeof attempt.factClass !== "string" ||
+    attempt.factClass === "" ||
+    typeof attempt.mechanism !== "string" ||
+    attempt.mechanism === "" ||
+    attempt.assertionReached !== true ||
+    !/^[0-9a-f]{64}$/u.test(attempt.observableSignature ?? "") ||
+    !ROOT_CAUSE_CLASSES.has(attempt.rootCauseClass) ||
+    attempt.canonicalIssueId !== canonicalIssueId(attempt) ||
+    !validProductIdentity(attempt.productIdentity) ||
+    !validValidatorIdentity(attempt.validatorIdentity) ||
+    !ATTEMPT_VERDICTS.has(attempt.verdict) ||
+    !Number.isSafeInteger(attempt.consecutiveFailureCount) ||
+    attempt.consecutiveFailureCount < 0 ||
+    typeof attempt.nextAction !== "string" ||
+    attempt.nextAction === ""
+  )
+    blocked(`attempt record is invalid: ${attempt.attemptId ?? "unknown"}`);
+  const change = object(
+    attempt.namedChangeSincePreviousAttempt,
+    "namedChangeSincePreviousAttempt",
+  );
+  if (
+    typeof change.changeId !== "string" ||
+    change.changeId === "" ||
+    typeof change.producer !== "string" ||
+    change.producer === "" ||
+    !/^[0-9a-f]{64}$/u.test(change.afterSha256 ?? "") ||
+    (change.beforeSha256 !== null &&
+      !/^[0-9a-f]{64}$/u.test(change.beforeSha256 ?? ""))
+  )
+    blocked(`attempt named change is invalid: ${attempt.attemptId}`);
+  return attempt;
+}
+
+export function buildAttemptIssueIndex(attemptValues, amendmentValues = []) {
+  if (!Array.isArray(attemptValues) || !Array.isArray(amendmentValues))
+    blocked("attempt ledger inputs must be arrays");
+  const attempts = attemptValues.map(validateAttemptRecord);
+  const byAttemptId = new Map();
+  for (const attempt of attempts) {
+    if (byAttemptId.has(attempt.attemptId))
+      blocked(`duplicate attempt id: ${attempt.attemptId}`);
+    byAttemptId.set(attempt.attemptId, attempt);
+  }
+  const amendments = new Map();
+  for (const amendment of amendmentValues) {
+    object(amendment, "attempt amendment");
+    if (
+      typeof amendment.amendmentId !== "string" ||
+      amendment.amendmentId === "" ||
+      !Array.isArray(amendment.attemptIds) ||
+      amendment.attemptIds.length === 0 ||
+      !ROOT_CAUSE_CLASSES.has(amendment.rootCauseClass)
+    )
+      blocked("attempt amendment is invalid");
+    for (const attemptId of amendment.attemptIds) {
+      const attempt = byAttemptId.get(attemptId);
+      if (!attempt)
+        blocked(`attempt amendment target is missing: ${attemptId}`);
+      if (attempt.rootCauseClass !== "UNKNOWN")
+        blocked(`only UNKNOWN attempts may be amended: ${attemptId}`);
+      const expected = canonicalIssueId(attempt, amendment.rootCauseClass);
+      if (amendment.canonicalIssueId !== expected)
+        blocked(`attempt amendment issue id is invalid: ${attemptId}`);
+      amendments.set(attemptId, amendment);
+    }
+  }
+  const issues = new Map();
+  for (const attempt of attempts) {
+    const amendment = amendments.get(attempt.attemptId);
+    const rootCauseClass = amendment?.rootCauseClass ?? attempt.rootCauseClass;
+    const issueId = amendment?.canonicalIssueId ?? attempt.canonicalIssueId;
+    const current = issues.get(issueId) ?? {
+      canonicalIssueId: issueId,
+      rootCauseClass,
+      attemptIds: [],
+      consecutiveFailureCount: 0,
+      nextAction: "NONE",
+      testFlakeFailures: 0,
+    };
+    const change = attempt.namedChangeSincePreviousAttempt;
+    if (current.attemptIds.length > 0) {
+      const controlledFlake =
+        change.changeId === "CONTROLLED_FLAKE_RERUN" &&
+        rootCauseClass === "TEST_FLAKE";
+      if (change.beforeSha256 === change.afterSha256 && !controlledFlake)
+        blocked(`attempt has no named producer change: ${attempt.attemptId}`);
+    }
+    if (attempt.verdict === "PASS") {
+      if (attempt.consecutiveFailureCount !== 0)
+        blocked(`PASS attempt must reset failure count: ${attempt.attemptId}`);
+      current.consecutiveFailureCount = 0;
+    } else {
+      const expectedCount = current.consecutiveFailureCount + 1;
+      if (expectedCount > 3)
+        blocked(`fourth attempt is prohibited: ${attempt.attemptId}`);
+      if (attempt.consecutiveFailureCount !== expectedCount)
+        blocked(`attempt failure count is invalid: ${attempt.attemptId}`);
+      current.consecutiveFailureCount = expectedCount;
+      if (rootCauseClass === "TEST_FLAKE") {
+        current.testFlakeFailures += 1;
+        if (current.testFlakeFailures > 1)
+          blocked("reproduced TEST_FLAKE must be reclassified as HARNESS");
+      }
+      if (expectedCount === 3 && attempt.nextAction !== "STOP_REQUIRED")
+        blocked(`third failure must stop: ${attempt.attemptId}`);
+    }
+    current.attemptIds.push(attempt.attemptId);
+    current.nextAction = attempt.nextAction;
+    issues.set(issueId, current);
+  }
+  return {
+    schemaVersion: 1,
+    issues: [...issues.values()]
+      .map(({ testFlakeFailures: _ignored, ...issue }) => issue)
+      .sort((left, right) =>
+        left.canonicalIssueId.localeCompare(right.canonicalIssueId),
+      ),
+  };
 }
 
 async function sha256File(filePath) {
@@ -148,10 +377,14 @@ export function parseTasksMarkdown(markdown) {
 }
 
 function matchingRules(filePath, ownershipMap) {
-  return ownershipMap.rules.filter((rule) =>
-    rule.pathPrefixes.some(
-      (prefix) => filePath === prefix || filePath.startsWith(prefix),
-    ),
+  return ownershipMap.rules.filter(
+    (rule) =>
+      rule.pathPrefixes.some(
+        (prefix) => filePath === prefix || filePath.startsWith(prefix),
+      ) &&
+      !(rule.excludePrefixes ?? []).some(
+        (prefix) => filePath === prefix || filePath.startsWith(prefix),
+      ),
   );
 }
 
@@ -217,6 +450,11 @@ function validateOwnershipMap(ownershipMap) {
       rule.pathPrefixes,
       `ownership map rules[${index}].pathPrefixes`,
     );
+    if (rule.excludePrefixes !== undefined)
+      nonEmptyStringArray(
+        rule.excludePrefixes,
+        `ownership map rules[${index}].excludePrefixes`,
+      );
     nonEmptyStringArray(rule.owners, `ownership map rules[${index}].owners`);
     nonEmptyStringArray(
       rule.claimIds,
@@ -224,6 +462,37 @@ function validateOwnershipMap(ownershipMap) {
     );
   }
   return ownershipMap;
+}
+
+function runtimeInputsSha256(productRoot, commit, ownershipMap) {
+  const prefixes = ownershipMap.productIdentity?.pathPrefixes;
+  if (!Array.isArray(prefixes) || prefixes.length === 0)
+    blocked("ownership map productIdentity.pathPrefixes is missing");
+  const entries = git(
+    productRoot,
+    ["ls-tree", "-r", "--full-tree", commit],
+    "read runtime identity tree",
+  )
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .map((line) => {
+      const match = /^(\d+)\s+(\w+)\s+([0-9a-f]{40,64})\t(.+)$/u.exec(line);
+      if (!match) blocked("runtime identity tree entry is malformed");
+      return {
+        mode: match[1],
+        type: match[2],
+        objectId: match[3],
+        path: match[4],
+      };
+    })
+    .filter((entry) =>
+      prefixes.some(
+        (prefix) => entry.path === prefix || entry.path.startsWith(prefix),
+      ),
+    )
+    .sort((left, right) => left.path.localeCompare(right.path));
+  if (entries.length === 0) blocked("runtime identity path set is empty");
+  return sha256(canonicalJson(entries));
 }
 
 function commandsForClaim(claimId, ownershipMap) {
@@ -358,6 +627,13 @@ export async function aggregateDelta({
   const report = {
     schemaVersion: 1,
     finalCommit,
+    productIdentity: {
+      runtimeInputsSha256: runtimeInputsSha256(
+        productRoot,
+        finalCommit,
+        ownershipMap,
+      ),
+    },
     ownershipMapVersion: ownershipMap.version,
     entries,
     reuse,
@@ -426,6 +702,7 @@ export async function aggregateTechnical({ inputPath, outputDir }) {
   if (
     input.schemaVersion !== 1 ||
     !/^[0-9a-f]{40}$/u.test(input.finalCommit ?? "") ||
+    !validProductIdentity(input.productIdentity) ||
     !Array.isArray(input.finalBrowserClaimCollections) ||
     !Array.isArray(input.finalScreenCollections)
   )
@@ -506,8 +783,15 @@ export async function aggregateTechnical({ inputPath, outputDir }) {
         blocked(`browser claim gate binding is stale: ${entry.reportPath}`);
       }
     }
+    const explicitIdentities =
+      report.productIdentity &&
+      report.validatorIdentity &&
+      report.attemptIdentity
+        ? validateEvidenceIdentities(report, input.productIdentity)
+        : null;
     if (
-      report.binding.productCommit !== input.finalCommit ||
+      (explicitIdentities === null &&
+        report.binding.productCommit !== input.finalCommit) ||
       report.binding.hf2ManifestSha256 !== input.hf2Manifest.sha256 ||
       (input.finalPackageManifest?.artifactSha256 &&
         report.binding.packageArtifactSha256 &&
@@ -527,6 +811,38 @@ export async function aggregateTechnical({ inputPath, outputDir }) {
     blocked("technical package manifest digest changed");
   if ((await sha256File(input.delta.path)) !== input.delta.sha256)
     blocked("technical delta digest changed");
+  const attemptRecords = [];
+  for (const [index, reference] of (input.attemptRecords ?? []).entries()) {
+    object(reference, `attemptRecords[${index}]`);
+    if (
+      typeof reference.path !== "string" ||
+      !path.isAbsolute(reference.path) ||
+      !/^[0-9a-f]{64}$/u.test(reference.sha256 ?? "") ||
+      (await sha256File(reference.path)) !== reference.sha256
+    )
+      blocked(`attemptRecords[${index}] is invalid or stale`);
+    attemptRecords.push(
+      await readJson(reference.path, `attemptRecords[${index}]`),
+    );
+  }
+  const attemptAmendments = [];
+  for (const [index, reference] of (input.attemptAmendments ?? []).entries()) {
+    object(reference, `attemptAmendments[${index}]`);
+    if (
+      typeof reference.path !== "string" ||
+      !path.isAbsolute(reference.path) ||
+      !/^[0-9a-f]{64}$/u.test(reference.sha256 ?? "") ||
+      (await sha256File(reference.path)) !== reference.sha256
+    )
+      blocked(`attemptAmendments[${index}] is invalid or stale`);
+    attemptAmendments.push(
+      await readJson(reference.path, `attemptAmendments[${index}]`),
+    );
+  }
+  const attemptIssueIndex = buildAttemptIssueIndex(
+    attemptRecords,
+    attemptAmendments,
+  );
   const screenCollectionVerdicts = input.finalScreenCollections.map(
     (entry) => ({
       gateId: entry.gateId,
@@ -559,6 +875,7 @@ export async function aggregateTechnical({ inputPath, outputDir }) {
     schemaVersion: 1,
     mode: "technical",
     finalCommit: input.finalCommit,
+    productIdentity: input.productIdentity,
     packageArtifactSha256: input.finalPackageManifest.artifactSha256,
     hf2ManifestSha256: input.hf2Manifest.sha256,
     dependencyGraphDigest: sha256(JSON.stringify(dependencyGraph)),
@@ -573,6 +890,10 @@ export async function aggregateTechnical({ inputPath, outputDir }) {
   await writeJsonExclusive(
     path.join(outputDir, "dependency-graph.json"),
     dependencyGraph,
+  );
+  await writeJsonExclusive(
+    path.join(outputDir, "attempt-issue-index.json"),
+    attemptIssueIndex,
   );
   await writeJsonExclusive(path.join(outputDir, "stale-evidence.json"), []);
   await writeJsonExclusive(

@@ -28,6 +28,7 @@ const FINAL_BROWSER_CLAIMS = [
   "HF2-06-visual",
 ];
 const TECHNICAL_FILES = [
+  "attempt-issue-index.json",
   "dependency-graph.json",
   "input.json",
   "stale-evidence.json",
@@ -37,6 +38,7 @@ const TECHNICAL_FILES = [
 const TECHNICAL_INPUT_FIELDS = new Set([
   "schemaVersion",
   "finalCommit",
+  "productIdentity",
   "hf2Manifest",
   "finalPackageManifest",
   "ownershipMap",
@@ -45,6 +47,8 @@ const TECHNICAL_INPUT_FIELDS = new Set([
   "packageCollections",
   "regressionCollections",
   "delta",
+  "attemptRecords",
+  "attemptAmendments",
 ]);
 const FOREIGN_COLLECTOR_KEYS = new Set([
   "reviewer",
@@ -202,6 +206,21 @@ function sameStringSet(actual, expected) {
   );
 }
 
+function validProductIdentity(value) {
+  return (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    COMMIT.test(value.productCommit ?? "") &&
+    SHA256.test(value.runtimeInputsSha256 ?? "") &&
+    (value.packageArtifactSha256 === undefined ||
+      SHA256.test(value.packageArtifactSha256)) &&
+    (value.bundleIdentifier === undefined ||
+      typeof value.bundleIdentifier === "string") &&
+    (value.version === undefined || typeof value.version === "string")
+  );
+}
+
 async function assertExactEntries(directory, expected, label) {
   await existingDirectory(directory, label);
   const entries = await fsp.readdir(directory, { withFileTypes: true });
@@ -355,6 +374,13 @@ async function validateTechnicalAggregate(source) {
     path.join(technicalDir, "stale-evidence.json"),
     "technical stale evidence",
   );
+  const attemptIssueIndex = assertObject(
+    await readJson(
+      path.join(technicalDir, "attempt-issue-index.json"),
+      "technical attempt issue index",
+    ),
+    "technical attempt issue index",
+  );
   const report = assertObject(
     await readJson(
       path.join(technicalDir, "technical-report.json"),
@@ -369,10 +395,18 @@ async function validateTechnicalAggregate(source) {
     unsupportedInputFields.length !== 0 ||
     input.schemaVersion !== 1 ||
     !COMMIT.test(input.finalCommit ?? "") ||
+    !validProductIdentity(input.productIdentity) ||
     report.schemaVersion !== 1 ||
     report.mode !== "technical" ||
     report.result !== "PASS" ||
     report.finalCommit !== input.finalCommit ||
+    !sameJson(report.productIdentity, input.productIdentity) ||
+    input.productIdentity.productCommit !== input.finalCommit ||
+    (input.productIdentity.packageArtifactSha256 !== undefined &&
+      input.productIdentity.packageArtifactSha256 !==
+        report.packageArtifactSha256) ||
+    attemptIssueIndex.schemaVersion !== 1 ||
+    !Array.isArray(attemptIssueIndex.issues) ||
     !Array.isArray(staleEvidence) ||
     staleEvidence.length !== 0 ||
     !Array.isArray(report.staleEvidence) ||
@@ -390,6 +424,15 @@ async function validateTechnicalAggregate(source) {
     "technical package manifest",
   );
   await validateAbsoluteDigest(input.delta, "technical delta");
+  for (const [field, label] of [
+    ["attemptRecords", "technical attempt record"],
+    ["attemptAmendments", "technical attempt amendment"],
+  ]) {
+    if (!Array.isArray(input[field])) blocked(`${field} must be an array`);
+    for (const [index, reference] of input[field].entries()) {
+      await validateAbsoluteDigest(reference, `${label}[${index}]`);
+    }
+  }
   if (
     report.hf2ManifestSha256 !== hf2Manifest.sha256 ||
     !SHA256.test(packageManifest.artifactSha256 ?? "") ||
