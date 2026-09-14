@@ -26,6 +26,52 @@ export const PRODUCTION_APP_BUILD_ARGS = Object.freeze([
   "--bundles",
   "app",
 ]);
+export const NATIVE_ACTION_STEPS = Object.freeze([
+  Object.freeze({
+    id: "save-keyboard",
+    command: "save",
+    kind: "keyboard",
+    character: "s",
+    modifiers: Object.freeze(["command"]),
+  }),
+  Object.freeze({
+    id: "save-menu",
+    command: "save",
+    kind: "menu",
+    path: Object.freeze(["File", "Save"]),
+  }),
+  Object.freeze({
+    id: "export-menu",
+    command: "exportImage",
+    kind: "menu",
+    path: Object.freeze(["File", "Export Image"]),
+  }),
+  Object.freeze({
+    id: "export-keyboard",
+    command: "exportImage",
+    kind: "keyboard",
+    character: "e",
+    modifiers: Object.freeze(["command", "option"]),
+  }),
+  Object.freeze({
+    id: "appearance-system",
+    command: "appearanceSystem",
+    kind: "menu",
+    path: Object.freeze(["View", "Appearance", "System"]),
+  }),
+  Object.freeze({
+    id: "appearance-light",
+    command: "appearanceLight",
+    kind: "menu",
+    path: Object.freeze(["View", "Appearance", "Light"]),
+  }),
+  Object.freeze({
+    id: "appearance-dark",
+    command: "appearanceDark",
+    kind: "menu",
+    path: Object.freeze(["View", "Appearance", "Dark"]),
+  }),
+]);
 export const EXPECTED_MENU_ITEMS = Object.freeze([
   Object.freeze({
     path: Object.freeze(["File", "Save"]),
@@ -802,6 +848,57 @@ function gitState(repoRoot) {
       statusResult.status === 0 &&
       statusResult.stdout.trim() === "",
   };
+}
+
+export function runtimeProductIdentitySha256(repoRoot, commit) {
+  const ownershipMapPath = path.join(
+    repoRoot,
+    "e2e/visual/003EvidenceOwnership.json",
+  );
+  const ownershipMap = JSON.parse(fs.readFileSync(ownershipMapPath, "utf8"));
+  const prefixes = ownershipMap.productIdentity?.pathPrefixes;
+  if (!Array.isArray(prefixes) || prefixes.length === 0) {
+    throw new NativeValidationBlockedError(
+      "product identity path prefixes are missing",
+    );
+  }
+  const tree = runSync("git", ["ls-tree", "-r", "--full-tree", commit], {
+    cwd: repoRoot,
+  });
+  if (tree.status !== 0) {
+    throw new NativeValidationBlockedError(
+      tree.stderr.trim() || "Unable to read product identity tree",
+    );
+  }
+  const entries = tree.stdout
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .map((line) => {
+      const match = /^(\d+)\s+(\w+)\s+([0-9a-f]{40,64})\t(.+)$/u.exec(line);
+      if (!match) {
+        throw new NativeValidationBlockedError(
+          "product identity tree entry is malformed",
+        );
+      }
+      return {
+        mode: match[1],
+        type: match[2],
+        objectId: match[3],
+        path: match[4],
+      };
+    })
+    .filter((entry) =>
+      prefixes.some(
+        (prefix) => entry.path === prefix || entry.path.startsWith(prefix),
+      ),
+    )
+    .sort((left, right) => left.path.localeCompare(right.path));
+  if (entries.length === 0) {
+    throw new NativeValidationBlockedError(
+      "product identity runtime path set is empty",
+    );
+  }
+  return sha256Canonical(entries);
 }
 
 function readPlistValue(plistPath, key) {
@@ -1612,49 +1709,8 @@ async function runNativeChecks(
     );
   }
 
-  const actionSteps = [
-    { id: "save-menu", command: "save", kind: "menu", path: ["File", "Save"] },
-    {
-      id: "save-keyboard",
-      command: "save",
-      kind: "keyboard",
-      character: "s",
-      modifiers: ["command"],
-    },
-    {
-      id: "export-menu",
-      command: "exportImage",
-      kind: "menu",
-      path: ["File", "Export Image"],
-    },
-    {
-      id: "export-keyboard",
-      command: "exportImage",
-      kind: "keyboard",
-      character: "e",
-      modifiers: ["command", "option"],
-    },
-    {
-      id: "appearance-system",
-      command: "appearanceSystem",
-      kind: "menu",
-      path: ["View", "Appearance", "System"],
-    },
-    {
-      id: "appearance-light",
-      command: "appearanceLight",
-      kind: "menu",
-      path: ["View", "Appearance", "Light"],
-    },
-    {
-      id: "appearance-dark",
-      command: "appearanceDark",
-      kind: "menu",
-      path: ["View", "Appearance", "Dark"],
-    },
-  ];
   const consumedIds = new Set();
-  for (const action of actionSteps) {
+  for (const action of NATIVE_ACTION_STEPS) {
     try {
       const before = new Set(events.map((event) => event.validationId));
       if (action.kind === "menu") invokeMenuItem(child.pid, action.path);
@@ -1723,20 +1779,23 @@ export async function validateProductionBundle({
   const startedAt = new Date().toISOString();
   const checks = [];
   let environment = null;
+  let evidenceBinding = null;
+  if (collectionDir || bindingPath) {
+    if (!collectionDir || !bindingPath) {
+      throw new NativeValidationBlockedError(
+        "--collection-dir and --binding must be supplied together",
+      );
+    }
+    evidenceBinding = requireNativeAdapterBinding(
+      JSON.parse(await fsp.readFile(bindingPath, "utf8")),
+    );
+  }
   const resolvedManifestPath =
     manifestPath ??
     defaultManifestPath(repoRoot, gitState(repoRoot).commit ?? "unknown");
   const finish = async (report) => {
     if (reportPath) await writeJson(reportPath, report);
-    if (collectionDir || bindingPath) {
-      if (!collectionDir || !bindingPath) {
-        throw new NativeValidationBlockedError(
-          "--collection-dir and --binding must be supplied together",
-        );
-      }
-      const evidenceBinding = JSON.parse(
-        await fsp.readFile(bindingPath, "utf8"),
-      );
+    if (evidenceBinding) {
       await writeNativeValidationCollection(
         collectionDir,
         report,
@@ -1863,14 +1922,37 @@ export async function validateProductionBundle({
       ),
     );
     const state = gitState(repoRoot);
+    let productIdentityMatches = state.commit === manifest.gitCommit;
+    let sealedRuntimeInputsSha256 = null;
+    let currentRuntimeInputsSha256 = null;
+    if (evidenceBinding) {
+      sealedRuntimeInputsSha256 = runtimeProductIdentitySha256(
+        repoRoot,
+        manifest.gitCommit,
+      );
+      currentRuntimeInputsSha256 = runtimeProductIdentitySha256(
+        repoRoot,
+        state.commit,
+      );
+      productIdentityMatches =
+        sealedRuntimeInputsSha256 ===
+          evidenceBinding.productIdentity.runtimeInputsSha256 &&
+        currentRuntimeInputsSha256 ===
+          evidenceBinding.productIdentity.runtimeInputsSha256;
+    }
     checks.push(
       makeCheck(
-        "git-commit",
-        "exact git commit",
-        state.commit === manifest.gitCommit ? "PASS" : "FAIL",
+        "product-identity",
+        "runtime product identity across package and validator provenance",
+        productIdentityMatches ? "PASS" : "FAIL",
         {
-          expected: manifest.gitCommit,
-          observed: state.commit,
+          packageProvenanceCommit: manifest.gitCommit,
+          validatorProvenanceCommit: state.commit,
+          sameCommit: state.commit === manifest.gitCommit,
+          expectedRuntimeInputsSha256:
+            evidenceBinding?.productIdentity.runtimeInputsSha256 ?? null,
+          sealedRuntimeInputsSha256,
+          currentRuntimeInputsSha256,
         },
       ),
     );
@@ -1894,7 +1976,7 @@ export async function validateProductionBundle({
     if (
       compareManifest(manifest, observed).length > 0 ||
       bundleContractMismatches.length > 0 ||
-      state.commit !== manifest.gitCommit ||
+      !productIdentityMatches ||
       !state.clean
     ) {
       return finish(

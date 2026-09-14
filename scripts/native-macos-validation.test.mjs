@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import {
   EXPECTED_MENU_ITEMS,
   EXPECTED_WINDOW_SIZE,
+  NATIVE_ACTION_STEPS,
   PRODUCTION_APP_BUILD_ARGS,
   NativeValidationBlockedError,
   adaptNativeValidationReport,
@@ -27,6 +28,7 @@ import {
   parseNativeValidationEvents,
   parseNativeValidationLine,
   resolveMenuItemAppleScript,
+  runtimeProductIdentitySha256,
   sha256Path,
   validatePreparedNativeProfile,
   validationPair,
@@ -88,6 +90,82 @@ describe("native macOS validation helpers", () => {
       "--bundles",
       "app",
     ]);
+  });
+
+  it("isolates Command-S before the menu Save route and preserves all seven actions", () => {
+    assert.deepEqual(
+      NATIVE_ACTION_STEPS.map(({ id }) => id),
+      [
+        "save-keyboard",
+        "save-menu",
+        "export-menu",
+        "export-keyboard",
+        "appearance-system",
+        "appearance-light",
+        "appearance-dark",
+      ],
+    );
+  });
+
+  it("keeps product identity stable across Harness-only commits", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "excalidraw-native-product-identity-"),
+    );
+    const git = (...args) =>
+      spawnSync("git", args, { cwd: root, encoding: "utf8" });
+    try {
+      assert.equal(git("init").status, 0);
+      assert.equal(
+        git("config", "user.email", "fixture@example.test").status,
+        0,
+      );
+      assert.equal(git("config", "user.name", "Fixture").status, 0);
+      await fs.mkdir(path.join(root, "src"));
+      await fs.mkdir(path.join(root, "scripts"));
+      await fs.mkdir(path.join(root, "docs"));
+      await fs.mkdir(path.join(root, "e2e", "visual"), { recursive: true });
+      await fs.writeFile(
+        path.join(root, "src", "app.ts"),
+        "export const app = 1;\n",
+      );
+      await fs.writeFile(
+        path.join(root, "scripts", "validator.mjs"),
+        "export {};\n",
+      );
+      await fs.writeFile(path.join(root, "docs", "proof.md"), "initial\n");
+      await fs.writeFile(
+        path.join(root, "e2e", "visual", "003EvidenceOwnership.json"),
+        JSON.stringify({ productIdentity: { pathPrefixes: ["src/"] } }),
+      );
+      assert.equal(git("add", ".").status, 0);
+      assert.equal(git("commit", "-m", "initial").status, 0);
+      const productCommit = git("rev-parse", "HEAD").stdout.trim();
+      const initial = runtimeProductIdentitySha256(root, productCommit);
+
+      await fs.writeFile(
+        path.join(root, "scripts", "validator.mjs"),
+        "export const v = 2;\n",
+      );
+      await fs.writeFile(path.join(root, "docs", "proof.md"), "revised\n");
+      assert.equal(git("add", ".").status, 0);
+      assert.equal(git("commit", "-m", "harness only").status, 0);
+      const harnessCommit = git("rev-parse", "HEAD").stdout.trim();
+      assert.equal(runtimeProductIdentitySha256(root, harnessCommit), initial);
+
+      await fs.writeFile(
+        path.join(root, "src", "app.ts"),
+        "export const app = 2;\n",
+      );
+      assert.equal(git("add", ".").status, 0);
+      assert.equal(git("commit", "-m", "runtime").status, 0);
+      const runtimeCommit = git("rev-parse", "HEAD").stdout.trim();
+      assert.notEqual(
+        runtimeProductIdentitySha256(root, runtimeCommit),
+        initial,
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 
   it(
