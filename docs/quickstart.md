@@ -172,6 +172,8 @@ pnpm evidence:publish -- \
 
 The destination must be new and remain inside the 003 evidence root. Publication validates digests and role boundaries, copies every source byte unchanged, re-hashes source and destination, and writes `<gate-id>.publication.json` adjacent to the copied tree. Exit codes are `0=PASS`, `1=FAIL`, `2=BLOCKED`, and `64=invalid invocation`.
 
+For FINAL-003, the sealed source has exactly four top-level role directories: `collection/`, `aggregate/`, `review/`, and `owner/`. `aggregate/technical/` contains only the five T062 outputs (`input.json`, `dependency-graph.json`, `stale-evidence.json`, `technical-report.json`, and `technical-report.md`); the publisher revalidates the technical PASS, all manifest/delta/report paths and digests, the 7 browser claim collections, and the 6 T061 native visual collections. `review/reviewer-report.json` is the canonical index over exactly those six visual collections and six `review/screens/<gate-id>/reviewer-report.json` PASS files. It must not list T059, T060, T023b, T062, or any other technical collection as visually reviewed. `owner/product-owner-decision.json` must record `APPROVED` and digest-bind both `aggregate/technical/technical-report.json` and `review/reviewer-report.json`. Missing or extra roles/files, stale transitive bytes, cross-role technical review bindings, or either missing owner binding return `BLOCKED`. Publication then preserves every aggregate and per-screen review byte exactly like every other source byte.
+
 ### Read-only evidence aggregation
 
 Every mode reads immutable inputs, validates raw artifact bytes and transitive bindings, and writes only a new requested output. It never edits source evidence, reviewer/owner artifacts, the product repository, or `tasks.md`:

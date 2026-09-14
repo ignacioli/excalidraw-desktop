@@ -172,6 +172,8 @@ pnpm evidence:publish -- \
 
 目标必须是 003 evidence root 内的新目录。发布器验证 digest 与角色边界，逐字节复制全部来源文件，再次计算来源/目标 hash，并在复制树旁写 `<gate-id>.publication.json`。退出码固定为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
 
+对于 FINAL-003，sealed source 顶层精确包含四个角色目录：`collection/`、`aggregate/`、`review/` 与 `owner/`。`aggregate/technical/` 只能包含五个 T062 输出（`input.json`、`dependency-graph.json`、`stale-evidence.json`、`technical-report.json`、`technical-report.md`）；publisher 会复核 technical PASS、所有 manifest/delta/report 路径与 digest、7 个 browser claim collections 及 6 个 T061 native visual collections。`review/reviewer-report.json` 是 canonical index，只能索引这六个 visual collections 与六份 `review/screens/<gate-id>/reviewer-report.json` PASS 文件，不得把 T059、T060、T023b、T062 或其他 technical collection 声称为已做视觉 review。`owner/product-owner-decision.json` 必须记录 `APPROVED`，并按 digest 同时绑定 `aggregate/technical/technical-report.json` 和 `review/reviewer-report.json`。角色或文件缺失/多余、传递字节 stale、reviewer 越权绑定 technical collection，或 owner 缺少任一绑定，均返回 `BLOCKED`。通过验证后，aggregate 与逐屏 review 的每个字节都和其他 source bytes 一样原样发布。
+
 ### Read-only evidence aggregation（只读证据聚合）
 
 所有 mode 都读取 immutable input，校验 raw artifact bytes 与 transitive binding，只写指定的新 output；绝不编辑 source evidence、reviewer/owner artifact、product repository 或 `tasks.md`：

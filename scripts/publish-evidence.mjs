@@ -9,6 +9,43 @@ import { fileURLToPath } from "node:url";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
 const SHA256 = /^[0-9a-f]{64}$/u;
+const COMMIT = /^[0-9a-f]{40}$/u;
+const FINAL_GATES = [
+  "HF2-01",
+  "HF2-02",
+  "HF2-03",
+  "HF2-04",
+  "HF2-05",
+  "HF2-06",
+];
+const FINAL_BROWSER_CLAIMS = [
+  "VSL-001",
+  "HF2-01",
+  "HF2-02",
+  "HF2-04",
+  "HF2-05",
+  "HF2-06-semantic",
+  "HF2-06-visual",
+];
+const TECHNICAL_FILES = [
+  "dependency-graph.json",
+  "input.json",
+  "stale-evidence.json",
+  "technical-report.json",
+  "technical-report.md",
+];
+const TECHNICAL_INPUT_FIELDS = new Set([
+  "schemaVersion",
+  "finalCommit",
+  "hf2Manifest",
+  "finalPackageManifest",
+  "ownershipMap",
+  "finalBrowserClaimCollections",
+  "finalScreenCollections",
+  "packageCollections",
+  "regressionCollections",
+  "delta",
+]);
 const FOREIGN_COLLECTOR_KEYS = new Set([
   "reviewer",
   "reviewerIdentity",
@@ -34,6 +71,16 @@ function blocked(message) {
 
 function failed(message) {
   throw new EvidencePublishError(message, 1);
+}
+
+async function finalBlocked(action, label) {
+  try {
+    return await action();
+  } catch (error) {
+    if (error instanceof EvidencePublishError)
+      blocked(`${label}: ${error.message}`);
+    throw error;
+  }
 }
 
 function assertObject(value, label) {
@@ -108,6 +155,10 @@ export async function digestTree(root) {
 }
 
 async function readJson(filePath, label) {
+  const stats = await fsp.lstat(filePath).catch(() => null);
+  if (stats === null || !stats.isFile() || stats.isSymbolicLink()) {
+    failed(`${label} must be a real file`);
+  }
   try {
     return JSON.parse(await fsp.readFile(filePath, "utf8"));
   } catch (error) {
@@ -142,6 +193,54 @@ function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function sameStringSet(actual, expected) {
+  return (
+    Array.isArray(actual) &&
+    actual.length === expected.length &&
+    new Set(actual).size === actual.length &&
+    sameJson([...actual].sort(), [...expected].sort())
+  );
+}
+
+async function assertExactEntries(directory, expected, label) {
+  await existingDirectory(directory, label);
+  const entries = await fsp.readdir(directory, { withFileTypes: true });
+  if (
+    !sameStringSet(
+      entries.map((entry) => entry.name),
+      expected,
+    )
+  ) {
+    blocked(
+      `${label} must contain exactly: ${[...expected].sort().join(", ")}`,
+    );
+  }
+  for (const entry of entries) {
+    if (entry.isSymbolicLink())
+      blocked(`${label} contains a symlink: ${entry.name}`);
+  }
+  return entries;
+}
+
+async function validateAbsoluteDigest(reference, label) {
+  const value = assertObject(reference, label);
+  if (
+    typeof value.path !== "string" ||
+    !path.isAbsolute(value.path) ||
+    !SHA256.test(value.sha256 ?? "")
+  ) {
+    blocked(`${label} binding is invalid`);
+  }
+  const stats = await fsp.lstat(value.path).catch(() => null);
+  if (stats === null || !stats.isFile() || stats.isSymbolicLink()) {
+    blocked(`${label} is missing or unsafe`);
+  }
+  if ((await sha256File(value.path)) !== value.sha256) {
+    blocked(`${label} digest changed`);
+  }
+  return value;
+}
+
 async function validateCollection(collectionDir) {
   const reportPath = path.join(collectionDir, "collector-report.json");
   const report = assertObject(
@@ -170,7 +269,16 @@ async function validateCollection(collectionDir) {
     seen.add(relative);
     if (!SHA256.test(artifact.sha256))
       failed(`invalid artifact digest: ${relative}`);
-    const actual = await sha256File(path.join(collectionDir, relative));
+    const artifactPath = path.join(collectionDir, relative);
+    const artifactStats = await fsp.lstat(artifactPath).catch(() => null);
+    if (
+      artifactStats === null ||
+      !artifactStats.isFile() ||
+      artifactStats.isSymbolicLink()
+    ) {
+      failed(`artifact must be a real file: ${relative}`);
+    }
+    const actual = await sha256File(artifactPath);
     if (actual !== artifact.sha256)
       failed(`artifact digest mismatch: ${relative}`);
   }
@@ -214,31 +322,463 @@ async function validateCollection(collectionDir) {
   return report;
 }
 
-export async function validateSealedGate(source) {
-  await existingDirectory(source, "source");
-  const topLevel = await fsp.readdir(source, { withFileTypes: true });
-  for (const entry of topLevel) {
+async function validateTechnicalAggregate(source) {
+  const aggregateRoot = path.join(source, "aggregate");
+  const aggregateEntries = await assertExactEntries(
+    aggregateRoot,
+    ["technical"],
+    "aggregate role",
+  );
+  if (!aggregateEntries[0].isDirectory())
+    blocked("aggregate/technical must be a real directory");
+  const technicalDir = path.join(aggregateRoot, "technical");
+  const technicalEntries = await assertExactEntries(
+    technicalDir,
+    TECHNICAL_FILES,
+    "technical aggregate",
+  );
+  if (technicalEntries.some((entry) => !entry.isFile()))
+    blocked("technical aggregate entries must be files");
+
+  const input = assertObject(
+    await readJson(path.join(technicalDir, "input.json"), "technical input"),
+    "technical input",
+  );
+  const dependencyGraph = assertObject(
+    await readJson(
+      path.join(technicalDir, "dependency-graph.json"),
+      "technical dependency graph",
+    ),
+    "technical dependency graph",
+  );
+  const staleEvidence = await readJson(
+    path.join(technicalDir, "stale-evidence.json"),
+    "technical stale evidence",
+  );
+  const report = assertObject(
+    await readJson(
+      path.join(technicalDir, "technical-report.json"),
+      "technical report",
+    ),
+    "technical report",
+  );
+  const unsupportedInputFields = Object.keys(input).filter(
+    (field) => !TECHNICAL_INPUT_FIELDS.has(field),
+  );
+  if (
+    unsupportedInputFields.length !== 0 ||
+    input.schemaVersion !== 1 ||
+    !COMMIT.test(input.finalCommit ?? "") ||
+    report.schemaVersion !== 1 ||
+    report.mode !== "technical" ||
+    report.result !== "PASS" ||
+    report.finalCommit !== input.finalCommit ||
+    !Array.isArray(staleEvidence) ||
+    staleEvidence.length !== 0 ||
+    !Array.isArray(report.staleEvidence) ||
+    report.staleEvidence.length !== 0
+  ) {
+    blocked("technical aggregate is not a current PASS");
+  }
+
+  const hf2Manifest = await validateAbsoluteDigest(
+    input.hf2Manifest,
+    "technical HF-2 manifest",
+  );
+  const packageManifest = await validateAbsoluteDigest(
+    input.finalPackageManifest,
+    "technical package manifest",
+  );
+  await validateAbsoluteDigest(input.delta, "technical delta");
+  if (
+    report.hf2ManifestSha256 !== hf2Manifest.sha256 ||
+    !SHA256.test(packageManifest.artifactSha256 ?? "") ||
+    report.packageArtifactSha256 !== packageManifest.artifactSha256
+  ) {
+    blocked("technical manifest binding is stale");
+  }
+
+  const browserEntries = input.finalBrowserClaimCollections;
+  const screenEntries = input.finalScreenCollections;
+  const packageEntries = input.packageCollections;
+  const regressionEntries = input.regressionCollections;
+  if (
+    !Array.isArray(browserEntries) ||
+    !sameStringSet(
+      browserEntries.map((entry) => entry?.claimSet),
+      FINAL_BROWSER_CLAIMS,
+    ) ||
+    !Array.isArray(screenEntries) ||
+    !sameStringSet(
+      screenEntries.map((entry) => entry?.gateId),
+      FINAL_GATES,
+    ) ||
+    !Array.isArray(packageEntries) ||
+    !sameStringSet(
+      packageEntries.map((entry) => entry?.claimSet),
+      ["T060-identity", "T023b-native-entrypoint"],
+    ) ||
+    !Array.isArray(regressionEntries) ||
+    !sameStringSet(
+      regressionEntries.map((entry) => entry?.claimSet),
+      ["T023a", "T024", "final-regression"],
+    )
+  ) {
+    blocked("technical aggregate collection sets are incomplete or duplicated");
+  }
+
+  const allEntries = [
+    ...browserEntries,
+    ...screenEntries,
+    ...packageEntries,
+    ...regressionEntries,
+  ];
+  const reportPaths = [];
+  const collectionDigests = [];
+  const validated = [];
+  for (const [index, entryValue] of allEntries.entries()) {
+    const entry = assertObject(entryValue, `technical collection[${index}]`);
     if (
-      !entry.isDirectory() ||
-      !["collection", "review", "owner"].includes(entry.name)
+      typeof entry.reportPath !== "string" ||
+      !path.isAbsolute(entry.reportPath) ||
+      !SHA256.test(entry.collectionDigest ?? "")
     ) {
-      blocked(`unexpected top-level evidence role: ${entry.name}`);
+      blocked(`technical collection[${index}] binding is invalid`);
+    }
+    if (
+      browserEntries.includes(entry) &&
+      !["RERUN", "REUSE"].includes(entry.disposition)
+    ) {
+      blocked(`technical collection[${index}] disposition is invalid`);
+    }
+    reportPaths.push(entry.reportPath);
+    collectionDigests.push(entry.collectionDigest);
+    const collectionReport = await validateCollection(
+      path.dirname(entry.reportPath),
+    );
+    if (
+      collectionReport.collectionDigest !== entry.collectionDigest ||
+      collectionReport.binding?.productCommit !== input.finalCommit ||
+      collectionReport.binding?.hf2ManifestSha256 !== hf2Manifest.sha256 ||
+      (collectionReport.binding?.packageArtifactSha256 !== undefined &&
+        collectionReport.binding.packageArtifactSha256 !==
+          packageManifest.artifactSha256)
+    ) {
+      blocked(`technical collection[${index}] immutable binding is stale`);
+    }
+    if (entry.gateId && collectionReport.gateId !== entry.gateId)
+      blocked(`technical collection[${index}] gate binding is stale`);
+    if (
+      screenEntries.includes(entry) &&
+      collectionReport.route !== "native-screen-capture"
+    )
+      blocked(`technical collection[${index}] is not a T061 visual collection`);
+    validated.push({ entry, report: collectionReport });
+  }
+  if (
+    new Set(reportPaths).size !== reportPaths.length ||
+    new Set(collectionDigests).size !== collectionDigests.length
+  ) {
+    blocked("technical aggregate collections must be distinct");
+  }
+
+  const expectedNodes = validated
+    .map(({ entry, report: collectionReport }) => ({
+      id: entry.gateId ?? entry.claimSet,
+      digest: collectionReport.collectionDigest,
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+  if (
+    dependencyGraph.schemaVersion !== 1 ||
+    !sameJson(dependencyGraph.nodes, expectedNodes) ||
+    report.dependencyGraphDigest !==
+      crypto
+        .createHash("sha256")
+        .update(JSON.stringify(dependencyGraph))
+        .digest("hex")
+  ) {
+    blocked("technical dependency graph is stale");
+  }
+
+  const expectedBrowserVerdicts = browserEntries
+    .map((entry) => ({
+      claimSet: entry.claimSet,
+      collectionDigest: entry.collectionDigest,
+      disposition: entry.disposition,
+      result: "PASS",
+    }))
+    .sort((left, right) => left.claimSet.localeCompare(right.claimSet));
+  const actualBrowserVerdicts = Array.isArray(report.browserClaimVerdicts)
+    ? [...report.browserClaimVerdicts].sort((left, right) =>
+        left.claimSet.localeCompare(right.claimSet),
+      )
+    : null;
+  const expectedScreenVerdicts = screenEntries
+    .map((entry) => ({
+      gateId: entry.gateId,
+      collectionDigest: entry.collectionDigest,
+      result: "PASS",
+    }))
+    .sort((left, right) => left.gateId.localeCompare(right.gateId));
+  const actualScreenVerdicts = Array.isArray(report.screenCollectionVerdicts)
+    ? [...report.screenCollectionVerdicts].sort((left, right) =>
+        left.gateId.localeCompare(right.gateId),
+      )
+    : null;
+  if (
+    !sameJson(actualBrowserVerdicts, expectedBrowserVerdicts) ||
+    !sameJson(actualScreenVerdicts, expectedScreenVerdicts)
+  ) {
+    blocked("technical aggregate verdict bindings are stale");
+  }
+
+  return {
+    input,
+    report,
+    reportPath: path.join(technicalDir, "technical-report.json"),
+    screenCollections: validated
+      .filter(({ entry }) => typeof entry.gateId === "string")
+      .map(({ report: collectionReport }) => collectionReport),
+  };
+}
+
+function highCriticalCount(findings) {
+  if (!Array.isArray(findings)) return null;
+  return findings.filter((finding) =>
+    ["High", "Critical"].includes(finding?.severity),
+  ).length;
+}
+
+function validReviewerIdentity(identity) {
+  if (typeof identity === "string") return identity.length > 0;
+  return (
+    identity !== null &&
+    typeof identity === "object" &&
+    !Array.isArray(identity) &&
+    identity.role === "ui-visual-acceptance-reviewer" &&
+    typeof identity.taskIdentity === "string" &&
+    identity.taskIdentity.length > 0 &&
+    typeof identity.runtimeIdentity === "string" &&
+    identity.runtimeIdentity.length > 0
+  );
+}
+
+function exactCollectionBindings(actual, expected) {
+  if (!Array.isArray(actual) || actual.length !== expected.length) return false;
+  const canonical = (entries) =>
+    entries
+      .map((entry) => ({
+        collectionId: entry?.collectionId,
+        collectionDigest: entry?.collectionDigest,
+      }))
+      .sort((left, right) =>
+        String(left.collectionId).localeCompare(String(right.collectionId)),
+      );
+  return sameJson(canonical(actual), canonical(expected));
+}
+
+async function validateFinalReview(source, technical) {
+  const reviewDir = path.join(source, "review");
+  const reviewEntries = await assertExactEntries(
+    reviewDir,
+    ["reviewer-report.json", "reviewer-report.md", "screens"],
+    "FINAL review role",
+  );
+  if (
+    !reviewEntries.find((entry) => entry.name === "screens")?.isDirectory() ||
+    reviewEntries
+      .filter((entry) => entry.name !== "screens")
+      .some((entry) => !entry.isFile())
+  ) {
+    blocked("FINAL review role entry types are invalid");
+  }
+  const screensDir = path.join(reviewDir, "screens");
+  const screenDirectories = await assertExactEntries(
+    screensDir,
+    FINAL_GATES,
+    "FINAL screen reviews",
+  );
+  if (screenDirectories.some((entry) => !entry.isDirectory()))
+    blocked("FINAL screen review entries must be directories");
+
+  const expectedCollections = technical.screenCollections.map((report) => ({
+    collectionId: report.collectionId,
+    collectionDigest: report.collectionDigest,
+  }));
+  const reviewPath = path.join(reviewDir, "reviewer-report.json");
+  const review = assertObject(
+    await readJson(reviewPath, "FINAL reviewer index"),
+    "FINAL reviewer index",
+  );
+  if (
+    review.schemaVersion !== 1 ||
+    review.gateId !== "FINAL-003" ||
+    review.verdict !== "PASS" ||
+    !validReviewerIdentity(review.reviewerIdentity) ||
+    review.independenceConfirmed !== true ||
+    review.reviewedProductCommit !== technical.input.finalCommit ||
+    review.reviewedPackageArtifactSha256 !==
+      technical.input.finalPackageManifest.artifactSha256 ||
+    review.highCriticalCount !== 0 ||
+    !exactCollectionBindings(review.reviewedCollections, expectedCollections) ||
+    !Array.isArray(review.screenReviews) ||
+    review.screenReviews.length !== FINAL_GATES.length
+  ) {
+    blocked("FINAL reviewer index is incomplete or stale");
+  }
+
+  const screenGateIds = review.screenReviews.map((entry) => entry?.gateId);
+  if (!sameStringSet(screenGateIds, FINAL_GATES))
+    blocked("FINAL reviewer index must bind exactly six screens");
+  for (const [index, referenceValue] of review.screenReviews.entries()) {
+    const reference = assertObject(referenceValue, `screenReviews[${index}]`);
+    const expectedPath = `screens/${reference.gateId}/reviewer-report.json`;
+    if (
+      reference.path !== expectedPath ||
+      !SHA256.test(reference.sha256 ?? "") ||
+      reference.verdict !== "PASS" ||
+      reference.highCriticalCount !== 0
+    ) {
+      blocked(`screenReviews[${index}] binding is invalid`);
+    }
+    const screenDir = path.join(screensDir, reference.gateId);
+    const entries = await assertExactEntries(
+      screenDir,
+      ["reviewer-report.json", "reviewer-report.md"],
+      `${reference.gateId} review`,
+    );
+    if (entries.some((entry) => !entry.isFile()))
+      blocked(`${reference.gateId} review entries must be files`);
+    const screenReportPath = path.join(reviewDir, reference.path);
+    if ((await sha256File(screenReportPath)) !== reference.sha256)
+      blocked(`${reference.gateId} reviewer report digest changed`);
+    const screenReport = assertObject(
+      await readJson(screenReportPath, `${reference.gateId} reviewer report`),
+      `${reference.gateId} reviewer report`,
+    );
+    const expectedCollection = technical.screenCollections.find(
+      (collection) => collection.gateId === reference.gateId,
+    );
+    if (
+      !expectedCollection ||
+      screenReport.schemaVersion !== 1 ||
+      screenReport.gateId !== reference.gateId ||
+      screenReport.verdict !== "PASS" ||
+      !validReviewerIdentity(screenReport.reviewerIdentity) ||
+      screenReport.independenceConfirmed !== true ||
+      screenReport.reviewedProductCommit !== technical.input.finalCommit ||
+      screenReport.reviewedPackageArtifactSha256 !==
+        technical.input.finalPackageManifest.artifactSha256 ||
+      highCriticalCount(screenReport.findings) !== 0 ||
+      reference.collectionId !== expectedCollection.collectionId ||
+      reference.collectionDigest !== expectedCollection.collectionDigest ||
+      !exactCollectionBindings(screenReport.reviewedCollections, [
+        expectedCollection,
+      ])
+    ) {
+      blocked(`${reference.gateId} reviewer report is incomplete or stale`);
     }
   }
+  return { review, reviewPath };
+}
+
+async function validateFinalOwner(source, technical, review) {
+  const ownerDir = path.join(source, "owner");
+  const entries = await assertExactEntries(
+    ownerDir,
+    ["product-owner-decision.json", "product-owner-decision.md"],
+    "FINAL owner role",
+  );
+  if (entries.some((entry) => !entry.isFile()))
+    blocked("FINAL owner role entries must be files");
+  const owner = assertObject(
+    await readJson(
+      path.join(ownerDir, "product-owner-decision.json"),
+      "FINAL owner decision",
+    ),
+    "FINAL owner decision",
+  );
+  const technicalReference = assertObject(
+    owner.technicalReport,
+    "owner technicalReport",
+  );
+  const reviewerReference = assertObject(
+    owner.reviewerReport,
+    "owner reviewerReport",
+  );
+  if (
+    owner.schemaVersion !== 1 ||
+    owner.gateId !== "FINAL-003" ||
+    owner.status !== "APPROVED" ||
+    technicalReference.path !== "aggregate/technical/technical-report.json" ||
+    technicalReference.result !== "PASS" ||
+    !SHA256.test(technicalReference.sha256 ?? "") ||
+    technicalReference.sha256 !== (await sha256File(technical.reportPath)) ||
+    reviewerReference.path !== "review/reviewer-report.json" ||
+    reviewerReference.verdict !== "PASS" ||
+    !SHA256.test(reviewerReference.sha256 ?? "") ||
+    reviewerReference.sha256 !== (await sha256File(review.reviewPath))
+  ) {
+    blocked("FINAL owner decision does not bind technical and reviewer inputs");
+  }
+}
+
+export async function validateSealedGate(source) {
+  await existingDirectory(source, "source");
+  const gateId = path.basename(source);
+  const allowedTopLevel =
+    gateId === "FINAL-003"
+      ? ["aggregate", "collection", "owner", "review"]
+      : ["collection", "owner", "review"];
+  const topLevel = await fsp.readdir(source, { withFileTypes: true });
+  if (
+    !sameStringSet(
+      topLevel.map((entry) => entry.name),
+      allowedTopLevel,
+    )
+  )
+    blocked(
+      "sealed gate top-level evidence roles are incomplete or unexpected",
+    );
+  if (topLevel.some((entry) => !entry.isDirectory() || entry.isSymbolicLink()))
+    blocked("sealed gate top-level roles must be real directories");
   const collectionRoot = path.join(source, "collection");
   await existingDirectory(collectionRoot, "collection role");
-  const collectionEntries = (
-    await fsp.readdir(collectionRoot, { withFileTypes: true })
-  ).filter((entry) => entry.isDirectory());
+  const collectionEntries = await fsp.readdir(collectionRoot, {
+    withFileTypes: true,
+  });
   if (collectionEntries.length === 0) blocked("sealed gate has no collection");
+  if (
+    collectionEntries.some(
+      (entry) => !entry.isDirectory() || entry.isSymbolicLink(),
+    )
+  ) {
+    blocked("collection role may contain only real collection directories");
+  }
   const reports = [];
   for (const entry of collectionEntries) {
+    const validate = () =>
+      validateCollection(path.join(collectionRoot, entry.name));
     reports.push(
-      await validateCollection(path.join(collectionRoot, entry.name)),
+      gateId === "FINAL-003"
+        ? await finalBlocked(validate, `FINAL collection ${entry.name}`)
+        : await validate(),
     );
   }
-  const gateId = path.basename(source);
-  if (["VSL-001", "FINAL-003"].includes(gateId)) {
+  if (gateId === "FINAL-003") {
+    const technical = await finalBlocked(
+      () => validateTechnicalAggregate(source),
+      "FINAL technical aggregate",
+    );
+    const review = await finalBlocked(
+      () => validateFinalReview(source, technical),
+      "FINAL reviewer graph",
+    );
+    await finalBlocked(
+      () => validateFinalOwner(source, technical, review),
+      "FINAL owner graph",
+    );
+  } else if (gateId === "VSL-001") {
     const reviewDir = path.join(source, "review");
     const ownerDir = path.join(source, "owner");
     await existingDirectory(reviewDir, "review role");
