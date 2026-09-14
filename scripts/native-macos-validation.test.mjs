@@ -15,6 +15,7 @@ import {
   compareBundleContract,
   compareManifest,
   compareMenuObservation,
+  completeExportDialogAppleScript,
   decodeAXModifiers,
   inspectMenuItemAppleScript,
   keyboardShortcutAppleScript,
@@ -26,6 +27,7 @@ import {
   sha256Path,
   validatePreparedNativeProfile,
   validationPair,
+  windowGeometryAppleScript,
   writeNativeValidationCollection,
 } from "./native-macos-validation.mjs";
 
@@ -41,6 +43,9 @@ describe("native macOS validation helpers", () => {
         const scripts = [
           resolveMenuItemAppleScript(123, ["File", "Save"], "click targetItem"),
           inspectMenuItemAppleScript(123, EXPECTED_MENU_ITEMS[0]),
+          windowGeometryAppleScript(123),
+          completeExportDialogAppleScript(123, "png", "/tmp/out/Test.png"),
+          completeExportDialogAppleScript(123, "svg", "/tmp/out/Test.svg"),
         ];
         for (const [index, script] of scripts.entries()) {
           const output = path.join(root, `menu-${index}.scpt`);
@@ -108,6 +113,7 @@ describe("native macOS validation helpers", () => {
   it("uses the physical Command-S key code for the fresh shortcut probe", () => {
     const script = keyboardShortcutAppleScript(123, "s", ["command"]);
     assert.match(script, /key code 1 using \{command down\}/u);
+    assert.match(script, /set frontmost to true\s+delay 0\.2\s+key code 1/u);
     assert.doesNotMatch(script, /keystroke/u);
   });
 

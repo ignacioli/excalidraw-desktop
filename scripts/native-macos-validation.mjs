@@ -878,22 +878,42 @@ tell application "System Events"
   set appProcess to first application process whose unix id is ${Number(pid)}
   tell appProcess
     set frontmost to true
+    delay 0.2
     key code ${keyCode} using {${modifierNames}}
   end tell
 end tell
 `;
 }
 
-function dismissWebViewDialog(pid) {
-  runAppleScript(`
+export function completeExportDialogAppleScript(pid, format, targetPath) {
+  const directory = path.dirname(targetPath);
+  const filename = path.basename(targetPath);
+  return `
 tell application "System Events"
   set appProcess to first application process whose unix id is ${Number(pid)}
   tell appProcess
     set frontmost to true
+    delay 0.4
+    ${format === "svg" ? "key code 125" : ""}
+    key code 36
+    delay 0.8
+    keystroke "g" using {command down, shift down}
+    delay 0.3
+    keystroke ${appleScriptQuote(directory)}
+    key code 36
+    delay 0.5
+    keystroke "a" using {command down}
+    keystroke ${appleScriptQuote(filename)}
+    key code 36
+    delay 0.8
     key code 53
   end tell
 end tell
-`);
+`;
+}
+
+function completeExportDialog(pid, format, targetPath) {
+  runAppleScript(completeExportDialogAppleScript(pid, format, targetPath));
 }
 
 export function parseWindowGeometryOutput(output) {
@@ -921,8 +941,8 @@ export function parseWindowGeometryOutput(output) {
   };
 }
 
-function measureWindow(pid) {
-  const script = `
+export function windowGeometryAppleScript(pid) {
+  return `
 tell application "System Events"
   set appProcess to first application process whose unix id is ${Number(pid)}
   tell appProcess
@@ -933,12 +953,16 @@ tell application "System Events"
     set size of targetWindow to {${EXPECTED_WINDOW_SIZE.width}, ${EXPECTED_WINDOW_SIZE.height}}
     set measuredPosition to position of targetWindow
     set measuredSize to size of targetWindow
-    set AppleScript's text item delimiters to tab
-    return {item 1 of launchPosition, item 2 of launchPosition, item 1 of launchSize, item 2 of launchSize, item 1 of measuredPosition, item 2 of measuredPosition, item 1 of measuredSize, item 2 of measuredSize} as text
+    return ((item 1 of launchPosition) as text) & tab & ((item 2 of launchPosition) as text) & tab & ((item 1 of launchSize) as text) & tab & ((item 2 of launchSize) as text) & tab & ((item 1 of measuredPosition) as text) & tab & ((item 2 of measuredPosition) as text) & tab & ((item 1 of measuredSize) as text) & tab & ((item 2 of measuredSize) as text)
   end tell
 end tell
 `;
-  return parseWindowGeometryOutput(runAppleScript(script));
+}
+
+function measureWindow(pid) {
+  return parseWindowGeometryOutput(
+    runAppleScript(windowGeometryAppleScript(pid)),
+  );
 }
 
 function processMatchesApp(line, executablePath, executable) {
@@ -997,8 +1021,12 @@ function waitForValidationPair(events, command, ignoredIds, timeoutMs) {
   });
 }
 
-function spawnBundle(executablePath, launchEnvironment = {}) {
-  const child = spawn(executablePath, [], {
+function spawnBundle(
+  executablePath,
+  launchEnvironment = {},
+  launchArguments = [],
+) {
+  const child = spawn(executablePath, launchArguments, {
     cwd: path.dirname(executablePath),
     env: {
       ...process.env,
@@ -1387,7 +1415,10 @@ async function runNativeChecks(
         timeoutMs,
       );
       consumedIds.add(pair.validationId);
-      if (action.command === "exportImage") dismissWebViewDialog(child.pid);
+      if (action.id === "export-menu")
+        completeExportDialog(child.pid, "png", filesystemTargets.png);
+      else if (action.id === "export-keyboard")
+        completeExportDialog(child.pid, "svg", filesystemTargets.svg);
       checks.push(
         makeCheck(
           action.id,
@@ -1629,9 +1660,15 @@ export async function validateProductionBundle({
     checks.push(
       makeCheck("process-safety", "no ambiguous existing app process", "PASS"),
     );
+    if (nativeProfile) {
+      await fsp.mkdir(path.dirname(nativeProfile.filesystemTargets.png), {
+        recursive: true,
+      });
+    }
     const processInfo = spawnBundle(
       observed.executablePath,
       nativeProfile?.environment,
+      nativeProfile ? [nativeProfile.filesystemTargets.save] : [],
     );
     try {
       await wait(1000);
