@@ -189,6 +189,21 @@ describe("native screen prepare", () => {
         .then((stat) => stat.isDirectory()),
       true,
     );
+    assert.equal(
+      plan.nativeValidation.profileRoot,
+      path.join(fixture.runRoot, "profiles", "T023b"),
+    );
+    assert.deepEqual(plan.nativeValidation.filesystemTargets, {
+      save: path.join(
+        fixture.runRoot,
+        "fixture",
+        "workspace",
+        "flows",
+        "Architecture.excalidraw",
+      ),
+      png: path.join(fixture.runRoot, "native-outcomes", "Architecture.png"),
+      svg: path.join(fixture.runRoot, "native-outcomes", "Architecture.svg"),
+    });
   });
 
   it("rejects schema v1, test-only packages, unsafe paths, and duplicate profiles", async () => {

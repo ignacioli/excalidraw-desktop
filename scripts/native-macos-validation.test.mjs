@@ -17,7 +17,9 @@ import {
   compareMenuObservation,
   decodeAXModifiers,
   inspectMenuItemAppleScript,
+  keyboardShortcutAppleScript,
   makeCheck,
+  parseWindowGeometryOutput,
   parseNativeValidationEvents,
   parseNativeValidationLine,
   resolveMenuItemAppleScript,
@@ -37,11 +39,7 @@ describe("native macOS validation helpers", () => {
       );
       try {
         const scripts = [
-          resolveMenuItemAppleScript(
-            123,
-            ["File", "Save"],
-            "click targetItem",
-          ),
+          resolveMenuItemAppleScript(123, ["File", "Save"], "click targetItem"),
           inspectMenuItemAppleScript(123, EXPECTED_MENU_ITEMS[0]),
         ];
         for (const [index, script] of scripts.entries()) {
@@ -91,6 +89,26 @@ describe("native macOS validation helpers", () => {
       stages: ["applicationRoute", "nativeEntry"],
     });
     assert.equal(validationPair(events, "exportImage", new Set([9])), null);
+  });
+
+  it("rejects the observed comma-serialized geometry and parses eight numeric tab fields", () => {
+    assert.throws(
+      () => parseWindowGeometryOutput("0, 0, 1280, 760, 0, 0, 1280, 760"),
+      /eight tab-delimited numeric fields/u,
+    );
+    assert.deepEqual(
+      parseWindowGeometryOutput("12\t34\t900\t700\t0\t0\t1280\t760"),
+      {
+        launch: { x: 12, y: 34, width: 900, height: 700 },
+        requested: { x: 0, y: 0, width: 1280, height: 760 },
+      },
+    );
+  });
+
+  it("uses the physical Command-S key code for the fresh shortcut probe", () => {
+    const script = keyboardShortcutAppleScript(123, "s", ["command"]);
+    assert.match(script, /key code 1 using \{command down\}/u);
+    assert.doesNotMatch(script, /keystroke/u);
   });
 
   it("decodes AX menu modifier bitmasks", () => {
@@ -256,16 +274,49 @@ describe("native macOS validation helpers", () => {
       manifest: { appPath: "/tmp/Excalidraw.app" },
       checks: [
         makeCheck("native-menu", "menu", "PASS"),
-        makeCheck("save-menu", "save", "PASS", {
-          command: "save",
-          validationId: 7,
+        makeCheck("window-geometry", "geometry", "PASS", {
+          observed: parseWindowGeometryOutput(
+            "0\t0\t1280\t760\t0\t0\t1280\t760",
+          ),
         }),
-        makeCheck("save-filesystem-outcome", "saved", "PASS"),
+        ...[
+          ["save-menu", "save", 1],
+          ["save-keyboard", "save", 2],
+          ["export-menu", "exportImage", 3],
+          ["export-keyboard", "exportImage", 4],
+          ["appearance-system", "appearanceSystem", 5],
+          ["appearance-light", "appearanceLight", 6],
+          ["appearance-dark", "appearanceDark", 7],
+        ].map(([id, command, validationId]) =>
+          makeCheck(id, id, "PASS", { command, validationId }),
+        ),
+        ...[
+          [
+            "save-filesystem-outcome",
+            "/tmp/Architecture.excalidraw",
+            "excalidraw",
+          ],
+          ["png-filesystem-outcome", "/tmp/Architecture.png", "png"],
+          ["svg-filesystem-outcome", "/tmp/Architecture.svg", "svg"],
+        ].map(([id, filePath, format]) =>
+          makeCheck(id, id, "PASS", {
+            path: filePath,
+            format,
+            sha256: "34".repeat(32),
+            byteLength: 128,
+          }),
+        ),
       ],
     });
     const adapted = adaptNativeValidationReport(report, binding);
     assert.equal(adapted.environment.route, "macos-accessibility");
-    assert.equal(adapted.routeAcknowledgements.actions[0].validationId, 7);
+    assert.deepEqual(
+      adapted.routeAcknowledgements.actions.map(
+        (action) => action.validationId,
+      ),
+      [1, 2, 3, 4, 5, 6, 7],
+    );
+    assert.equal(adapted.filesystemOutcomes.checks.length, 3);
     assert.equal(adapted.filesystemOutcomes.result, "PASS");
     assert.equal("reviewerVerdict" in adapted.environment, false);
     assert.equal("productOwnerDecision" in adapted.environment, false);
@@ -296,6 +347,38 @@ describe("native macOS validation helpers", () => {
     }
   });
 
+  it("blocks the observed missing Command-S pair and filesystem outcomes", () => {
+    const binding = {
+      productCommit: "ab".repeat(20),
+      hf2ManifestSha256: "cd".repeat(32),
+      fixtureDigest: "ef".repeat(32),
+      harnessVersion: "native-v2",
+      packageArtifactSha256: "12".repeat(32),
+    };
+    const adapted = adaptNativeValidationReport(
+      buildReport({
+        command: "validate",
+        checks: [
+          makeCheck("native-menu", "menu", "PASS"),
+          makeCheck("window-geometry", "geometry", "FAIL", {
+            observed: {
+              launch: { x: null, y: null, width: null, height: null },
+              requested: { x: null, y: null, width: null, height: null },
+            },
+          }),
+          makeCheck("save-menu", "save", "PASS", {
+            command: "save",
+            validationId: 1,
+          }),
+          makeCheck("save-keyboard", "save", "FAIL", { command: "save" }),
+        ],
+      }),
+      binding,
+    );
+    assert.equal(adapted.routeAcknowledgements.result, "BLOCKED");
+    assert.equal(adapted.filesystemOutcomes.result, "BLOCKED");
+  });
+
   it("rejects malformed native collection bindings", () => {
     assert.throws(
       () => adaptNativeValidationReport(buildReport({ checks: [] }), {}),
@@ -311,6 +394,14 @@ describe("native macOS validation helpers", () => {
       productCommit: "ab".repeat(20),
       isolation: { root: "/tmp/run" },
       packageManifest: { artifactSha256: "ef".repeat(32) },
+      nativeValidation: {
+        profileRoot,
+        filesystemTargets: {
+          save: "/tmp/run/fixture/Architecture.excalidraw",
+          png: "/tmp/run/outcomes/Architecture.png",
+          svg: "/tmp/run/outcomes/Architecture.svg",
+        },
+      },
       screens: [{ gateId: "HF2-01" }],
     };
     const result = validatePreparedNativeProfile(plan, {
@@ -318,6 +409,10 @@ describe("native macOS validation helpers", () => {
       artifactSha256: "ef".repeat(32),
     });
     assert.equal(result.profileRoot, profileRoot);
+    assert.equal(
+      result.filesystemTargets.svg,
+      "/tmp/run/outcomes/Architecture.svg",
+    );
     assert.equal(result.environment.HOME, profileRoot);
     assert.equal("EXCALIDRAW_NATIVE_CAPTURE_PLAN" in result.environment, false);
     assert.throws(

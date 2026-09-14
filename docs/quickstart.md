@@ -162,7 +162,7 @@ pnpm native:macos:validate -- \
   --binding <evidence-binding.json>
 ```
 
-The adapter writes collector-owned `environment.json`, `route-acknowledgements.json`, `filesystem-outcomes.json`, `native-report.json`, and `collector-report.json`. It never writes reviewer or product-owner state. Publish a completed VSL-001 or FINAL-003 gate only after all required roles have sealed their own artifacts:
+The FINAL plan binds the dedicated T023b profile and Save/PNG/SVG target paths. Validation accepts geometry only as eight tab-delimited finite integers whose requested size is exactly 1280×760, invokes Command-S through the physical macOS key code after the menu Save probe, and requires seven fresh unique native-entry/application-route ids. Filesystem outcomes record absolute path, format, SHA-256, and byte length; Save must change the declared existing drawing, while PNG/SVG must be newly created with valid signatures. The adapter then writes collector-owned `environment.json`, `route-acknowledgements.json`, `filesystem-outcomes.json`, `native-report.json`, and `collector-report.json`. It never writes reviewer or product-owner state. Publish a completed VSL-001 or FINAL-003 gate only after all required roles have sealed their own artifacts:
 
 ```bash
 pnpm evidence:publish -- \

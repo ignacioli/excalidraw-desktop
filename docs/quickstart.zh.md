@@ -162,7 +162,7 @@ pnpm native:macos:validate -- \
   --binding <evidence-binding.json>
 ```
 
-adapter 写入 collector 自有的 `environment.json`、`route-acknowledgements.json`、`filesystem-outcomes.json`、`native-report.json` 与 `collector-report.json`，绝不写 reviewer 或 product owner 状态。只有 VSL-001 或 FINAL-003 所需角色各自封存 artifact 后，才能发布完整 gate：
+FINAL plan 绑定专用 T023b profile 与 Save/PNG/SVG target paths。Geometry 仅接受八个 tab-delimited 有限整数，requested size 必须精确为 1280×760；menu Save probe 后通过 macOS 物理 key code 调用 Command-S，并要求七个 fresh、唯一的 native-entry/application-route ids。Filesystem outcome 记录绝对 path、format、SHA-256 与 byte length；Save 必须改变声明的既有 drawing，PNG/SVG 必须是具备有效 signature 的新文件。adapter 随后写入 collector 自有的 `environment.json`、`route-acknowledgements.json`、`filesystem-outcomes.json`、`native-report.json` 与 `collector-report.json`，绝不写 reviewer 或 product owner 状态。只有 VSL-001 或 FINAL-003 所需角色各自封存 artifact 后，才能发布完整 gate：
 
 ```bash
 pnpm evidence:publish -- \

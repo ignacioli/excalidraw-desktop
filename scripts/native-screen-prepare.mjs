@@ -259,6 +259,20 @@ export function validateCapturePlan(value) {
       blocked("each screen must have a distinct profileRoot");
     profiles.add(screen.profileRoot);
   }
+  if (plan.checkpoint === "FINAL") {
+    const nativeValidation = assertObject(
+      plan.nativeValidation,
+      "capture plan nativeValidation",
+    );
+    if (
+      !path.isAbsolute(nativeValidation.profileRoot ?? "") ||
+      !path.isAbsolute(nativeValidation.filesystemTargets?.save ?? "") ||
+      !path.isAbsolute(nativeValidation.filesystemTargets?.png ?? "") ||
+      !path.isAbsolute(nativeValidation.filesystemTargets?.svg ?? "")
+    ) {
+      blocked("FINAL capture plan native validation targets are invalid");
+    }
+  }
   return plan;
 }
 
@@ -472,6 +486,22 @@ export async function prepareNativeScreenPlan({
       webkitFilesystemIsolationClaimed: false,
     },
     fixture,
+    ...(checkpoint === "FINAL"
+      ? {
+          nativeValidation: {
+            profileRoot: path.join(profilesRoot, "T023b"),
+            filesystemTargets: {
+              save: path.join(
+                fixture.workspaceRoot,
+                "flows",
+                "Architecture.excalidraw",
+              ),
+              png: path.join(runRoot, "native-outcomes", "Architecture.png"),
+              svg: path.join(runRoot, "native-outcomes", "Architecture.svg"),
+            },
+          },
+        }
+      : {}),
     screens,
   };
   validateCapturePlan(plan);
@@ -487,7 +517,7 @@ export async function prepareNativeScreenPlan({
 
 function usage() {
   console.log(
-    "Usage: pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute.json> [--semantic-collection <absolute-T031-collector-report.json> for VSL] --run-root <absolute-empty-dir> --plan <absolute-new.json> --isolation-mode backend-app-data-home-redirect\nPlan schema: v2. VSL binds one PASS semantic collection by file and collection digest. Backend app-data only; WebKit filesystem isolation is not claimed. Exit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation.",
+    "Usage: pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute.json> [--semantic-collection <absolute-T031-collector-report.json> for VSL] --run-root <absolute-empty-dir> --plan <absolute-new.json> --isolation-mode backend-app-data-home-redirect\nPlan schema: v2. VSL binds one PASS semantic collection by file and collection digest. FINAL also binds one empty T023b profile, six untouched capture profiles, and Save/PNG/SVG filesystem targets. Backend app-data only; WebKit filesystem isolation is not claimed. Exit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation.",
   );
 }
 

@@ -159,7 +159,12 @@ export function buildReport({
 }
 
 export function validatePreparedNativeProfile(plan, manifest) {
-  const profileRoot = path.join(plan?.isolation?.root ?? "", "profiles", "T023b");
+  const profileRoot = path.join(
+    plan?.isolation?.root ?? "",
+    "profiles",
+    "T023b",
+  );
+  const filesystemTargets = plan?.nativeValidation?.filesystemTargets;
   if (
     !plan ||
     typeof plan !== "object" ||
@@ -170,7 +175,19 @@ export function validatePreparedNativeProfile(plan, manifest) {
     plan.productCommit !== manifest.gitCommit ||
     plan.packageManifest?.artifactSha256 !==
       (manifest.artifactSha256 ?? manifest.packageSha256) ||
-    !Array.isArray(plan.screens)
+    !Array.isArray(plan.screens) ||
+    plan.nativeValidation?.profileRoot !== profileRoot ||
+    !filesystemTargets ||
+    ![
+      filesystemTargets.save,
+      filesystemTargets.png,
+      filesystemTargets.svg,
+    ].every(
+      (target) =>
+        typeof target === "string" &&
+        path.isAbsolute(target) &&
+        !path.relative(plan.isolation.root, target).startsWith(".."),
+    )
   ) {
     throw new NativeValidationBlockedError(
       "capture plan does not provide a matching disposable T023b profile",
@@ -178,6 +195,7 @@ export function validatePreparedNativeProfile(plan, manifest) {
   }
   return {
     profileRoot,
+    filesystemTargets,
     environment: {
       HOME: profileRoot,
     },
@@ -225,8 +243,17 @@ export function adaptNativeValidationReport(report, bindingValue) {
       "native validation report is malformed",
     );
   }
+  const expectedActionIds = [
+    "save-menu",
+    "save-keyboard",
+    "export-menu",
+    "export-keyboard",
+    "appearance-system",
+    "appearance-light",
+    "appearance-dark",
+  ];
   const actions = report.checks
-    .filter((check) => /^(?:save|export|appearance)-/u.test(check.id))
+    .filter((check) => expectedActionIds.includes(check.id))
     .map((check) => ({
       checkId: check.id,
       command: check.command,
@@ -235,7 +262,46 @@ export function adaptNativeValidationReport(report, bindingValue) {
     }));
   const filesystemChecks = report.checks
     .filter((check) => /(?:filesystem|outcome|partial-target)/u.test(check.id))
-    .map((check) => ({ checkId: check.id, result: check.status }));
+    .map((check) => ({
+      checkId: check.id,
+      path: check.path,
+      format: check.format,
+      sha256: check.sha256,
+      byteLength: check.byteLength,
+      result: check.status,
+    }));
+  const actionIds = actions.map((action) => action.checkId).sort();
+  const actionValidationIds = actions.map((action) => action.validationId);
+  const actionResult =
+    JSON.stringify(actionIds) ===
+      JSON.stringify([...expectedActionIds].sort()) &&
+    actionValidationIds.every(
+      (validationId) => Number.isSafeInteger(validationId) && validationId > 0,
+    ) &&
+    new Set(actionValidationIds).size === expectedActionIds.length &&
+    actions.every((action) => action.result === "PASS")
+      ? "PASS"
+      : "BLOCKED";
+  const expectedFilesystemIds = [
+    "save-filesystem-outcome",
+    "png-filesystem-outcome",
+    "svg-filesystem-outcome",
+  ];
+  const filesystemResult =
+    JSON.stringify(filesystemChecks.map((check) => check.checkId).sort()) ===
+      JSON.stringify([...expectedFilesystemIds].sort()) &&
+    filesystemChecks.every(
+      (check) =>
+        check.result === "PASS" &&
+        typeof check.path === "string" &&
+        path.isAbsolute(check.path) &&
+        /^[0-9a-f]{64}$/u.test(check.sha256 ?? "") &&
+        Number.isSafeInteger(check.byteLength) &&
+        check.byteLength > 0 &&
+        ["excalidraw", "png", "svg"].includes(check.format),
+    )
+      ? "PASS"
+      : "BLOCKED";
   const environment = {
     schemaVersion: 1,
     collectionId: "native-entrypoints",
@@ -260,6 +326,7 @@ export function adaptNativeValidationReport(report, bindingValue) {
       gateId: "T023b",
       binding,
       actions,
+      result: actionResult,
     },
     filesystemOutcomes: {
       schemaVersion: 1,
@@ -267,10 +334,7 @@ export function adaptNativeValidationReport(report, bindingValue) {
       gateId: "T023b",
       binding,
       checks: filesystemChecks,
-      result:
-        filesystemChecks.length === 0
-          ? "BLOCKED"
-          : aggregateStatus(filesystemChecks),
+      result: filesystemResult,
     },
   };
 }
@@ -798,18 +862,26 @@ function invokeMenuItem(pid, labels) {
 }
 
 function invokeKeyboard(pid, character, modifiers) {
+  runAppleScript(keyboardShortcutAppleScript(pid, character, modifiers));
+}
+
+export function keyboardShortcutAppleScript(pid, character, modifiers) {
   const modifierNames = modifiers
     .map((modifier) => `${modifier} down`)
     .join(", ");
-  runAppleScript(`
+  const keyCodes = { s: 1, e: 14 };
+  const keyCode = keyCodes[character];
+  if (!Number.isInteger(keyCode))
+    throw new TypeError(`Unsupported native shortcut character: ${character}`);
+  return `
 tell application "System Events"
   set appProcess to first application process whose unix id is ${Number(pid)}
   tell appProcess
     set frontmost to true
-    keystroke ${appleScriptQuote(character)} using {${modifierNames}}
+    key code ${keyCode} using {${modifierNames}}
   end tell
 end tell
-`);
+`;
 }
 
 function dismissWebViewDialog(pid) {
@@ -824,6 +896,31 @@ end tell
 `);
 }
 
+export function parseWindowGeometryOutput(output) {
+  const values = String(output)
+    .split("\t")
+    .map((value) => Number(value));
+  if (
+    values.length !== 8 ||
+    values.some((value) => !Number.isFinite(value) || !Number.isInteger(value))
+  ) {
+    throw new NativeValidationBlockedError(
+      "window geometry must contain eight tab-delimited numeric fields",
+    );
+  }
+  const [launchX, launchY, launchWidth, launchHeight, x, y, width, height] =
+    values;
+  return {
+    launch: {
+      x: launchX,
+      y: launchY,
+      width: launchWidth,
+      height: launchHeight,
+    },
+    requested: { x, y, width, height },
+  };
+}
+
 function measureWindow(pid) {
   const script = `
 tell application "System Events"
@@ -836,21 +933,12 @@ tell application "System Events"
     set size of targetWindow to {${EXPECTED_WINDOW_SIZE.width}, ${EXPECTED_WINDOW_SIZE.height}}
     set measuredPosition to position of targetWindow
     set measuredSize to size of targetWindow
-    return (item 1 of launchPosition) & tab & (item 2 of launchPosition) & tab & (item 1 of launchSize) & tab & (item 2 of launchSize) & tab & (item 1 of measuredPosition) & tab & (item 2 of measuredPosition) & tab & (item 1 of measuredSize) & tab & (item 2 of measuredSize)
+    set AppleScript's text item delimiters to tab
+    return {item 1 of launchPosition, item 2 of launchPosition, item 1 of launchSize, item 2 of launchSize, item 1 of measuredPosition, item 2 of measuredPosition, item 1 of measuredSize, item 2 of measuredSize} as text
   end tell
 end tell
 `;
-  const [launchX, launchY, launchWidth, launchHeight, x, y, width, height] =
-    runAppleScript(script).split("\t").map(Number);
-  return {
-    launch: {
-      x: launchX,
-      y: launchY,
-      width: launchWidth,
-      height: launchHeight,
-    },
-    requested: { x, y, width, height },
-  };
+  return parseWindowGeometryOutput(runAppleScript(script));
 }
 
 function processMatchesApp(line, executablePath, executable) {
@@ -1100,8 +1188,78 @@ function manifestCheck(manifest, observed) {
       });
 }
 
-async function runNativeChecks(manifest, processInfo, checks, timeoutMs) {
+async function filesystemSnapshot(filePath) {
+  const stats = await fsp.stat(filePath).catch(() => null);
+  if (stats === null || !stats.isFile()) return null;
+  return {
+    path: filePath,
+    sha256: await sha256File(filePath),
+    byteLength: stats.size,
+    modifiedAtMs: stats.mtimeMs,
+  };
+}
+
+async function appendFilesystemOutcomeChecks(checks, targets, before) {
+  for (const [format, filePath] of Object.entries(targets)) {
+    const after = await filesystemSnapshot(filePath);
+    let valid = after !== null && after.byteLength > 0;
+    if (format === "save") {
+      valid =
+        valid &&
+        before.save !== null &&
+        (after.sha256 !== before.save.sha256 ||
+          after.modifiedAtMs > before.save.modifiedAtMs);
+    } else {
+      valid = valid && before[format] === null;
+      if (valid) {
+        const prefix = await fsp
+          .readFile(filePath)
+          .then((bytes) => bytes.subarray(0, 256));
+        valid =
+          format === "png"
+            ? prefix
+                .subarray(0, 8)
+                .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+            : prefix.toString("utf8").includes("<svg");
+      }
+    }
+    checks.push(
+      makeCheck(
+        `${format === "save" ? "save" : format}-filesystem-outcome`,
+        `${format} filesystem outcome`,
+        valid ? "PASS" : "BLOCKED",
+        after === null
+          ? {
+              path: filePath,
+              format: format === "save" ? "excalidraw" : format,
+            }
+          : {
+              path: filePath,
+              format: format === "save" ? "excalidraw" : format,
+              sha256: after.sha256,
+              byteLength: after.byteLength,
+            },
+      ),
+    );
+  }
+}
+
+async function runNativeChecks(
+  manifest,
+  processInfo,
+  checks,
+  timeoutMs,
+  filesystemTargets,
+) {
   const { child, events } = processInfo;
+  const filesystemBefore = Object.fromEntries(
+    await Promise.all(
+      Object.entries(filesystemTargets).map(async ([format, filePath]) => [
+        format,
+        await filesystemSnapshot(filePath),
+      ]),
+    ),
+  );
   let menuObservations = [];
   try {
     let lastError;
@@ -1218,7 +1376,10 @@ async function runNativeChecks(manifest, processInfo, checks, timeoutMs) {
     try {
       const before = new Set(events.map((event) => event.validationId));
       if (action.kind === "menu") invokeMenuItem(child.pid, action.path);
-      else invokeKeyboard(child.pid, action.character, action.modifiers);
+      else {
+        await wait(250);
+        invokeKeyboard(child.pid, action.character, action.modifiers);
+      }
       const pair = await waitForValidationPair(
         events,
         action.command,
@@ -1246,6 +1407,11 @@ async function runNativeChecks(manifest, processInfo, checks, timeoutMs) {
       );
     }
   }
+  await appendFilesystemOutcomeChecks(
+    checks,
+    filesystemTargets,
+    filesystemBefore,
+  );
 }
 
 export async function validateProductionBundle({
@@ -1486,7 +1652,13 @@ export async function validateProductionBundle({
           ),
         );
       }
-      await runNativeChecks(manifest, processInfo, checks, timeoutMs);
+      await runNativeChecks(
+        manifest,
+        processInfo,
+        checks,
+        timeoutMs,
+        nativeProfile?.filesystemTargets ?? {},
+      );
     } finally {
       await stopOwnedChild(processInfo);
       processInfo.stderr.close();
@@ -1516,7 +1688,7 @@ export async function validateProductionBundle({
 
 function printUsage() {
   console.log(
-    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--capture-plan FINAL_PLAN] [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. A schema-v2 capture plan supplies the distinct T023b profile without capture-specific production IPC. Adapter outputs are collector-owned and never contain reviewer or owner decisions.`,
+    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--capture-plan FINAL_PLAN] [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. A schema-v2 FINAL plan supplies the distinct T023b profile and Save/PNG/SVG filesystem targets without capture-specific production IPC. PASS requires exact numeric 1280x760 geometry, seven fresh acknowledgement pairs, and all three filesystem outcomes. Adapter outputs are collector-owned and never contain reviewer or owner decisions.`,
   );
 }
 
