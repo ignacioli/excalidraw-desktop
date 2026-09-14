@@ -862,27 +862,53 @@ function invokeMenuItem(pid, labels) {
 }
 
 function invokeKeyboard(pid, character, modifiers) {
-  runAppleScript(keyboardShortcutAppleScript(pid, character, modifiers));
+  const moduleCache = path.join(
+    os.tmpdir(),
+    "excalidraw-desktop-native-validation-swift-cache",
+  );
+  const result = runSync(
+    "xcrun",
+    ["swift", "-e", keyboardShortcutSwiftSource(pid, character, modifiers)],
+    {
+      env: {
+        ...process.env,
+        CLANG_MODULE_CACHE_PATH: moduleCache,
+        SWIFT_MODULECACHE_PATH: moduleCache,
+      },
+    },
+  );
+  if (result.status !== 0) {
+    throw new NativeValidationBlockedError(
+      result.stderr.trim() || "Unable to post native shortcut to owned PID",
+    );
+  }
 }
 
-export function keyboardShortcutAppleScript(pid, character, modifiers) {
-  const modifierNames = modifiers
-    .map((modifier) => `${modifier} down`)
-    .join(", ");
+export function keyboardShortcutSwiftSource(pid, character, modifiers) {
   const keyCodes = { s: 1, e: 14 };
   const keyCode = keyCodes[character];
   if (!Number.isInteger(keyCode))
     throw new TypeError(`Unsupported native shortcut character: ${character}`);
-  return `
-tell application "System Events"
-  set appProcess to first application process whose unix id is ${Number(pid)}
-  tell appProcess
-    set frontmost to true
-    delay 0.2
-    key code ${keyCode} using {${modifierNames}}
-  end tell
-end tell
-`;
+  const flagNames = {
+    command: ".maskCommand",
+    option: ".maskAlternate",
+    shift: ".maskShift",
+    control: ".maskControl",
+  };
+  const flags = modifiers.map((modifier) => flagNames[modifier]);
+  if (flags.some((flag) => flag === undefined))
+    throw new TypeError("Unsupported native shortcut modifier");
+  const expression = flags.length === 0 ? "[]" : `[${flags.join(", ")}]`;
+  return `import CoreGraphics
+import Foundation
+let source = CGEventSource(stateID: .hidSystemState)
+let down = CGEvent(keyboardEventSource: source, virtualKey: ${keyCode}, keyDown: true)
+let up = CGEvent(keyboardEventSource: source, virtualKey: ${keyCode}, keyDown: false)
+down?.flags = ${expression}
+up?.flags = ${expression}
+down?.postToPid(pid_t(${Number(pid)}))
+usleep(50000)
+up?.postToPid(pid_t(${Number(pid)}))`;
 }
 
 export function completeExportDialogAppleScript(pid, format, targetPath) {
@@ -1671,7 +1697,7 @@ export async function validateProductionBundle({
       nativeProfile ? [nativeProfile.filesystemTargets.save] : [],
     );
     try {
-      await wait(1000);
+      await wait(3000);
       try {
         environment.displayBackingScale = displayScale();
         checks.push(
