@@ -9,6 +9,7 @@ import {
   EXPECTED_MENU_ITEMS,
   EXPECTED_WINDOW_SIZE,
   NATIVE_ACTION_STEPS,
+  PHYSICAL_COMMAND_S_TIMEOUT_MS,
   PROOF_SCOPES,
   PRODUCTION_APP_BUILD_ARGS,
   NativeValidationBlockedError,
@@ -105,6 +106,7 @@ describe("native macOS validation helpers", () => {
   });
 
   it("keeps qualification minimal while final preserves all seven actions", () => {
+    assert.equal(PHYSICAL_COMMAND_S_TIMEOUT_MS, 600_000);
     assert.deepEqual(
       nativeActionsForScope(PROOF_SCOPES.QUALIFICATION).map(({ id }) => id),
       ["save-keyboard", "save-menu"],
@@ -243,6 +245,26 @@ describe("native macOS validation helpers", () => {
       binding.repairTarget.canonicalIssueId,
     );
     assert.notEqual(repaired.observedSignature, repaired.observableSignature);
+    const laterSourceSha256 = "9a".repeat(32);
+    const laterBinding = {
+      ...binding,
+      validatorIdentity: {
+        ...binding.validatorIdentity,
+        sourceSha256: laterSourceSha256,
+      },
+      consecutiveFailureCount: 1,
+      namedChangeSincePreviousAttempt: {
+        changeId: "operator-window-sequencing",
+        producer: "native-macos-validation",
+        beforeSha256: NATIVE_VALIDATOR_SOURCE_SHA256,
+        afterSha256: laterSourceSha256,
+      },
+    };
+    assert.equal(
+      validateStopReopenDecision(decision, laterBinding, laterSourceSha256)
+        .decisionId,
+      decision.decisionId,
+    );
     assert.throws(
       () =>
         validateStopReopenDecision(

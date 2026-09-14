@@ -32,6 +32,7 @@ export const PROOF_SCOPES = Object.freeze({
 });
 export const STOPPED_COMMAND_S_ISSUE_ID =
   "issue-v1:7cec23a398ea5bc45123e3d0fe2fd415214e13cca31393b6fd94ecc9da1be99e";
+export const PHYSICAL_COMMAND_S_TIMEOUT_MS = 600_000;
 export const NATIVE_ACTION_STEPS = Object.freeze([
   Object.freeze({
     id: "save-keyboard",
@@ -526,16 +527,25 @@ export function validateStopReopenDecision(
       "STOP_REOPEN decision is identity-equivalent",
     );
   }
+  const validOpeningChange =
+    binding.consecutiveFailureCount === 0 &&
+    change?.beforeSha256 ===
+      binding.namedChangeSincePreviousAttempt.beforeSha256 &&
+    change?.afterSha256 === binding.namedChangeSincePreviousAttempt.afterSha256;
+  const validLaterRepair =
+    binding.consecutiveFailureCount > 0 &&
+    change?.producer === binding.namedChangeSincePreviousAttempt.producer &&
+    binding.namedChangeSincePreviousAttempt.beforeSha256 !==
+      binding.namedChangeSincePreviousAttempt.afterSha256;
   if (
     !change ||
     typeof change !== "object" ||
     change.producer !== "native-macos-validation" ||
     !/^[0-9a-f]{64}$/u.test(change.beforeSha256 ?? "") ||
     !/^[0-9a-f]{64}$/u.test(change.afterSha256 ?? "") ||
-    change.afterSha256 !== currentSourceSha256 ||
-    change.beforeSha256 !==
-      binding.namedChangeSincePreviousAttempt.beforeSha256 ||
-    change.afterSha256 !== binding.namedChangeSincePreviousAttempt.afterSha256
+    binding.namedChangeSincePreviousAttempt.afterSha256 !==
+      currentSourceSha256 ||
+    (!validOpeningChange && !validLaterRepair)
   ) {
     throw new NativeValidationBlockedError(
       "STOP_REOPEN required change does not match the running validator",
@@ -1691,8 +1701,14 @@ async function invokePhysicalCommandS(processInfo, ignoredIds, timeoutMs) {
   const { child, events } = processInfo;
   const challenge = crypto.randomBytes(16).toString("hex");
   const confirmation = commandSConfirmationLine(challenge);
-  await waitForCommandSConfirmation(confirmation, 600_000);
-  const observer = await startPhysicalCommandSObserver(challenge, timeoutMs);
+  await waitForCommandSConfirmation(
+    confirmation,
+    PHYSICAL_COMMAND_S_TIMEOUT_MS,
+  );
+  const observer = await startPhysicalCommandSObserver(
+    challenge,
+    PHYSICAL_COMMAND_S_TIMEOUT_MS,
+  );
   try {
     await observer.ready;
     parseFrontmostPid(
@@ -1702,10 +1718,13 @@ async function invokePhysicalCommandS(processInfo, ignoredIds, timeoutMs) {
     process.stdout.write(
       `Press Command-S exactly once in the now-frontmost owned app (PID ${child.pid}). Do not use the menu.\n`,
     );
-    const [observation, pair] = await Promise.all([
-      observer.observed,
-      waitForValidationPair(events, "save", ignoredIds, timeoutMs),
-    ]);
+    const observation = await observer.observed;
+    const pair = await waitForValidationPair(
+      events,
+      "save",
+      ignoredIds,
+      timeoutMs,
+    );
     await wait(600);
     if (observer.duplicate()) {
       throw new NativeValidationBlockedError(
