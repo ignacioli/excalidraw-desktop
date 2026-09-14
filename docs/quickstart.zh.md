@@ -225,7 +225,7 @@ pnpm evidence:aggregate -- --mode closure-verify --closure-report <report.json> 
 }
 ```
 
-`task-proof` 直接从 `tasks.md` 派生 `checked` / `unchecked`，要求每个解析出的 task 恰好属于一个 group，校验全部 commit 与 artifact reference，并在不修改任一 input 的前提下展开为 canonical schema-v1 per-task map。schema-v1 record source 保留兼容读取。`technical` 要求六个互不重复的 final screen collection 以及 package/regression claim set，并独立校验每个 referenced artifact digest。`closure` 只允许声明的 self task 保持 unchecked；它计算预期 transition 后 hash，但不编辑 task。human/task writer 仅切换该 checkbox 后，再由 `closure-verify` 校验预期 hash。退出码为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
+`task-proof` 直接从 `tasks.md` 派生 `checked` / `unchecked`，要求每个解析出的 task 恰好属于一个 group，校验全部 commit 与 artifact reference，并在不修改任一 input 的前提下展开为 canonical schema-v1 per-task map。schema-v1 record source 保留兼容读取。`technical` 要求恰好七个 canonical `RERUN|REUSE` browser claim collections、六个互不重复的 final screen collections，以及 package/regression claim sets。它拒绝 reviewer/owner input fields，并独立校验每个 referenced report、collection digest、artifact bytes、commit 与 HF-2 manifest binding。`closure` 只允许声明的 self task 保持 unchecked；它计算预期 transition 后 hash，但不编辑 task。human/task writer 仅切换该 checkbox 后，再由 `closure-verify` 校验预期 hash。退出码为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
 
 ### 多工作区与资产去重
 

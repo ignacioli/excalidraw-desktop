@@ -96,7 +96,7 @@
 - `pnpm evidence:publish -- --source <sealed-gate-dir> --destination <new-evidence-dir>`：验证角色边界及全部已声明 digest，要求目标目录不存在，逐字节复制 sealed gate，并在目标旁写 publication receipt。退出码固定为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
 - `pnpm evidence:publish:test`：运行目标不存在、digest、路径、角色边界与 byte-preserving（字节保持）发布测试。
 - `pnpm evidence:aggregate -- --mode <mode> ...`：运行 read-only compositional validator（只读组合验证器）。mode 包含 `delta`、`technical`、`task-proof`、`closure`、`closure-verify`；每次只写指定的新 aggregate output，绝不编辑 source collection、reviewer/owner artifact 或 `tasks.md`。准确参数见 `pnpm evidence:aggregate -- --help`。退出码为 `0=PASS`、`1=FAIL`、`2=BLOCKED`、`64=invalid invocation`。
-- `pnpm evidence:aggregate:test`：运行缺失/重复 screen、path/symlink/digest、ownership classification、stale binding、task proof、deterministic output 与 closure self-transition 测试。
+- `pnpm evidence:aggregate:test`：运行缺失/重复 browser claim 与 screen、reviewer/owner input rejection、path/symlink/digest、ownership classification、stale binding、task proof、deterministic output 与 closure self-transition 测试。Technical mode 要求恰好七个 canonical browser claim collections 加六个 final screen collections，并校验每个引用 artifact digest。
 - `cargo fmt --manifest-path src-tauri/Cargo.toml --check`：检查 Rust 格式。
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`：运行 Rust lint 门禁。
 - `cargo test --manifest-path src-tauri/Cargo.toml`：运行 Rust 单元与集成测试。

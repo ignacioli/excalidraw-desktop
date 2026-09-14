@@ -25,6 +25,15 @@ const FINAL_GATES = [
   "HF2-05",
   "HF2-06",
 ];
+const FINAL_BROWSER_CLAIMS = [
+  "VSL-001",
+  "HF2-01",
+  "HF2-02",
+  "HF2-04",
+  "HF2-05",
+  "HF2-06-semantic",
+  "HF2-06-visual",
+];
 
 afterEach(async () => {
   await Promise.all(
@@ -164,12 +173,14 @@ async function deltaFixture(root, checkpointClaims) {
   };
 }
 
-async function collector(root, gateId, binding) {
+async function collector(root, gateId, binding, artifactLabel = gateId) {
   const directory = path.join(root, "collections", gateId);
   await fsp.mkdir(directory, { recursive: true });
   const artifactPath = path.join(directory, "evidence.json");
-  await fsp.writeFile(artifactPath, `${gateId}\n`, "utf8");
-  const artifacts = [{ path: "evidence.json", sha256: sha256(`${gateId}\n`) }];
+  await fsp.writeFile(artifactPath, `${artifactLabel}\n`, "utf8");
+  const artifacts = [
+    { path: "evidence.json", sha256: sha256(`${artifactLabel}\n`) },
+  ];
   const collectionDigest = sha256(`evidence.json\0${artifacts[0].sha256}`);
   const reportPath = path.join(directory, "collector-report.json");
   await writeJson(reportPath, {
@@ -456,7 +467,7 @@ describe("evidence aggregation", () => {
     assert.deepEqual(second, first);
   });
 
-  it("validates six technical collections and every transitive artifact digest", async () => {
+  it("validates seven browser claims, six final screens, and every transitive artifact digest", async () => {
     const root = await temporaryRoot();
     const finalCommit = "ab".repeat(20);
     const hf2Path = path.join(root, "hf2.json");
@@ -475,6 +486,19 @@ describe("evidence aggregation", () => {
     const screens = [];
     for (const gateId of FINAL_GATES)
       screens.push(await collector(root, gateId, binding));
+    const browserBinding = { ...binding };
+    delete browserBinding.packageArtifactSha256;
+    const browserClaims = [];
+    for (const claimSet of FINAL_BROWSER_CLAIMS) {
+      const gateId = claimSet.startsWith("HF2-06-") ? "HF2-06" : claimSet;
+      const collection = await collector(
+        path.join(root, "browser", claimSet),
+        gateId,
+        browserBinding,
+        claimSet,
+      );
+      browserClaims.push({ ...collection, claimSet });
+    }
     const support = await collector(root, "T024", binding);
     const inputPath = path.join(root, "technical-input.json");
     await writeJson(inputPath, {
@@ -486,6 +510,14 @@ describe("evidence aggregation", () => {
         sha256: sha256("package\n"),
         artifactSha256: binding.packageArtifactSha256,
       },
+      finalBrowserClaimCollections: browserClaims.map(
+        ({ claimSet, reportPath, collectionDigest }) => ({
+          claimSet,
+          reportPath,
+          collectionDigest,
+          disposition: "RERUN",
+        }),
+      ),
       finalScreenCollections: screens.map(
         ({ gateId, reportPath, collectionDigest }) => ({
           gateId,
@@ -512,9 +544,67 @@ describe("evidence aggregation", () => {
     const outputDir = path.join(root, "technical");
     const report = await aggregateTechnical({ inputPath, outputDir });
     assert.equal(report.result, "PASS");
+    assert.equal(report.browserClaimVerdicts.length, 7);
     assert.equal(report.screenCollectionVerdicts.length, 6);
     const validInput = JSON.parse(await fsp.readFile(inputPath, "utf8"));
+    const wrongCommitBrowser = await collector(
+      path.join(root, "wrong-commit"),
+      "VSL-001",
+      { ...browserBinding, productCommit: "12".repeat(20) },
+    );
     const invalidInputs = [
+      {
+        name: "missing-browser-claim",
+        value: {
+          ...validInput,
+          finalBrowserClaimCollections:
+            validInput.finalBrowserClaimCollections.slice(1),
+        },
+      },
+      {
+        name: "duplicate-browser-claim",
+        value: {
+          ...validInput,
+          finalBrowserClaimCollections: [
+            ...validInput.finalBrowserClaimCollections.slice(0, -1),
+            validInput.finalBrowserClaimCollections[0],
+          ],
+        },
+      },
+      {
+        name: "invalid-browser-disposition",
+        value: {
+          ...validInput,
+          finalBrowserClaimCollections:
+            validInput.finalBrowserClaimCollections.map((entry, index) =>
+              index === 0 ? { ...entry, disposition: "PENDING" } : entry,
+            ),
+        },
+      },
+      {
+        name: "wrong-browser-commit",
+        value: {
+          ...validInput,
+          finalBrowserClaimCollections:
+            validInput.finalBrowserClaimCollections.map((entry, index) =>
+              index === 0
+                ? {
+                    ...entry,
+                    reportPath: wrongCommitBrowser.reportPath,
+                    collectionDigest: wrongCommitBrowser.collectionDigest,
+                  }
+                : entry,
+            ),
+        },
+      },
+      {
+        name: "reviewer-input-forbidden",
+        value: { ...validInput, reviewerReports: [] },
+      },
+      {
+        name: "owner-input-forbidden",
+        value: { ...validInput, ownerDecision: {} },
+      },
       {
         name: "missing-screen",
         value: {
@@ -561,6 +651,20 @@ describe("evidence aggregation", () => {
         EvidenceAggregateError,
       );
     }
+    const browserArtifact = await fsp.readFile(
+      browserClaims[0].artifactPath,
+      "utf8",
+    );
+    await fsp.appendFile(browserClaims[0].artifactPath, "changed");
+    await assert.rejects(
+      aggregateTechnical({
+        inputPath,
+        outputDir: path.join(root, "stale-browser"),
+      }),
+      (error) =>
+        error instanceof EvidenceAggregateError && error.exitCode === 2,
+    );
+    await fsp.writeFile(browserClaims[0].artifactPath, browserArtifact, "utf8");
     const sourceHash = await fsp.readFile(support.artifactPath, "utf8");
     assert.equal(sourceHash, "T024\n");
     await fsp.appendFile(support.artifactPath, "changed");

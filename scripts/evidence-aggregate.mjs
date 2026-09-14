@@ -15,6 +15,27 @@ const FINAL_GATES = [
   "HF2-05",
   "HF2-06",
 ];
+const FINAL_BROWSER_CLAIMS = [
+  "VSL-001",
+  "HF2-01",
+  "HF2-02",
+  "HF2-04",
+  "HF2-05",
+  "HF2-06-semantic",
+  "HF2-06-visual",
+];
+const TECHNICAL_INPUT_FIELDS = new Set([
+  "schemaVersion",
+  "finalCommit",
+  "hf2Manifest",
+  "finalPackageManifest",
+  "ownershipMap",
+  "finalBrowserClaimCollections",
+  "finalScreenCollections",
+  "packageCollections",
+  "regressionCollections",
+  "delta",
+]);
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
 
 export class EvidenceAggregateError extends Error {
@@ -394,12 +415,56 @@ export async function aggregateTechnical({ inputPath, outputDir }) {
     await readJson(inputPath, "technical input"),
     "technical input",
   );
+  const unsupportedFields = Object.keys(input).filter(
+    (field) => !TECHNICAL_INPUT_FIELDS.has(field),
+  );
+  if (unsupportedFields.length > 0) {
+    blocked(
+      `technical input contains unsupported fields: ${unsupportedFields.sort().join(", ")}`,
+    );
+  }
   if (
     input.schemaVersion !== 1 ||
     !/^[0-9a-f]{40}$/u.test(input.finalCommit ?? "") ||
+    !Array.isArray(input.finalBrowserClaimCollections) ||
     !Array.isArray(input.finalScreenCollections)
   )
     blocked("technical input schema is invalid");
+  const browserClaimSets = input.finalBrowserClaimCollections
+    .map((entry, index) => {
+      object(entry, `finalBrowserClaimCollections[${index}]`);
+      if (
+        typeof entry.claimSet !== "string" ||
+        typeof entry.reportPath !== "string" ||
+        !path.isAbsolute(entry.reportPath) ||
+        !/^[0-9a-f]{64}$/u.test(entry.collectionDigest ?? "") ||
+        !["RERUN", "REUSE"].includes(entry.disposition)
+      ) {
+        blocked(`finalBrowserClaimCollections[${index}] is invalid`);
+      }
+      return entry.claimSet;
+    })
+    .sort();
+  if (
+    JSON.stringify(browserClaimSets) !==
+    JSON.stringify([...FINAL_BROWSER_CLAIMS].sort())
+  ) {
+    blocked(
+      "technical input must contain each final browser claim exactly once",
+    );
+  }
+  const browserReportPaths = input.finalBrowserClaimCollections.map(
+    (entry) => entry.reportPath,
+  );
+  const browserCollectionDigests = input.finalBrowserClaimCollections.map(
+    (entry) => entry.collectionDigest,
+  );
+  if (
+    new Set(browserReportPaths).size !== browserReportPaths.length ||
+    new Set(browserCollectionDigests).size !== browserCollectionDigests.length
+  ) {
+    blocked("technical browser claims must bind distinct collections");
+  }
   const gates = input.finalScreenCollections
     .map((entry) => entry.gateId)
     .sort();
@@ -420,6 +485,7 @@ export async function aggregateTechnical({ inputPath, outputDir }) {
       blocked(`technical input is missing regression claim set ${required}`);
   }
   const allCollections = [
+    ...input.finalBrowserClaimCollections,
     ...input.finalScreenCollections,
     ...(input.packageCollections ?? []),
     ...(input.regressionCollections ?? []),
@@ -432,6 +498,14 @@ export async function aggregateTechnical({ inputPath, outputDir }) {
     );
     if (entry.gateId && report.gateId !== entry.gateId)
       blocked(`collector gate binding is stale: ${entry.reportPath}`);
+    if (entry.claimSet && FINAL_BROWSER_CLAIMS.includes(entry.claimSet)) {
+      const expectedGateId = entry.claimSet.startsWith("HF2-06-")
+        ? "HF2-06"
+        : entry.claimSet;
+      if (report.gateId !== expectedGateId) {
+        blocked(`browser claim gate binding is stale: ${entry.reportPath}`);
+      }
+    }
     if (
       report.binding.productCommit !== input.finalCommit ||
       report.binding.hf2ManifestSha256 !== input.hf2Manifest.sha256 ||
@@ -460,6 +534,14 @@ export async function aggregateTechnical({ inputPath, outputDir }) {
       result: "PASS",
     }),
   );
+  const browserClaimVerdicts = input.finalBrowserClaimCollections
+    .map((entry) => ({
+      claimSet: entry.claimSet,
+      collectionDigest: entry.collectionDigest,
+      disposition: entry.disposition,
+      result: "PASS",
+    }))
+    .sort((left, right) => left.claimSet.localeCompare(right.claimSet));
   const claimVerdicts = validated
     .filter((entry) => !FINAL_GATES.includes(entry.id))
     .map((entry) => ({
@@ -480,6 +562,7 @@ export async function aggregateTechnical({ inputPath, outputDir }) {
     packageArtifactSha256: input.finalPackageManifest.artifactSha256,
     hf2ManifestSha256: input.hf2Manifest.sha256,
     dependencyGraphDigest: sha256(JSON.stringify(dependencyGraph)),
+    browserClaimVerdicts,
     screenCollectionVerdicts,
     claimVerdicts,
     staleEvidence: [],
@@ -498,7 +581,7 @@ export async function aggregateTechnical({ inputPath, outputDir }) {
   );
   await writeMarkdownExclusive(
     path.join(outputDir, "technical-report.md"),
-    `# Technical aggregate\n\n- Result: **PASS**\n- Final commit: \`${report.finalCommit}\`\n- Final screens: **6/6**\n- Stale evidence: **0**\n`,
+    `# Technical aggregate\n\n- Result: **PASS**\n- Final commit: \`${report.finalCommit}\`\n- Browser claims: **7/7**\n- Final screens: **6/6**\n- Stale evidence: **0**\n`,
   );
   return report;
 }
@@ -850,7 +933,7 @@ export async function verifyClosure({
 
 function usage() {
   console.log(
-    "Usage: pnpm evidence:aggregate -- --mode delta|technical|task-proof|closure|closure-verify <mode options>\nModes:\n  delta --product-root PATH --checkpoint-map JSON --final-commit SHA --ownership-map JSON --output JSON\n    checkpoint map schema v1: absolute sourceReportPath plus sourceCollectionDigest, fromCommit, and claimId per checkpoint\n  technical --input JSON --output-dir NEW_DIR\n  task-proof --tasks TASKS --proof-source JSON --output JSON\n    proof source schema v2 is preferred: defaults plus proofGroups; checkbox state is derived from tasks.md\n  closure --technical-report JSON --task-proof-map JSON --tasks TASKS --self-task ID --output-dir NEW_DIR\n  closure-verify --closure-report JSON --tasks TASKS --output JSON\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. All modes are read-only for source evidence and tasks.md.",
+    "Usage: pnpm evidence:aggregate -- --mode delta|technical|task-proof|closure|closure-verify <mode options>\nModes:\n  delta --product-root PATH --checkpoint-map JSON --final-commit SHA --ownership-map JSON --output JSON\n    checkpoint map schema v1: absolute sourceReportPath plus sourceCollectionDigest, fromCommit, and claimId per checkpoint\n  technical --input JSON --output-dir NEW_DIR\n    requires exactly seven browser claim collections plus six final screens and rejects reviewer/owner inputs\n  task-proof --tasks TASKS --proof-source JSON --output JSON\n    proof source schema v2 is preferred: defaults plus proofGroups; checkbox state is derived from tasks.md\n  closure --technical-report JSON --task-proof-map JSON --tasks TASKS --self-task ID --output-dir NEW_DIR\n  closure-verify --closure-report JSON --tasks TASKS --output JSON\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. All modes are read-only for source evidence and tasks.md.",
   );
 }
 
