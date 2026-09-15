@@ -111,11 +111,12 @@ pub fn run() {
             ) {
                 eprintln!("failed to reconcile pending Workspace Entry mutations: {error}");
             }
-            let recovery_service = RecoveryService::with_path_grant(
+            let mut recovery_service = RecoveryService::with_path_grant(
                 Arc::clone(&shared_repository),
                 Arc::clone(&recovery_store),
                 Arc::new(TauriRecoveryPathGrant(app.fs_scope())),
             );
+            recovery_service.attach_watcher(Arc::new(watcher_service.clone()));
             app.manage(repository);
             #[cfg(feature = "e2e-harness")]
             app.manage(performance_state);
