@@ -128,6 +128,8 @@ export function AppShell({
     () => preferences.getSnapshot().currentWorkspaceId,
   );
   const [welcomeWorkspaces, setWelcomeWorkspaces] = useState<Workspace[]>([]);
+  const [mountedWorkspaces, setMountedWorkspaces] = useState<Workspace[]>([]);
+  const workspaceRevisionRef = useRef(0);
   const [welcomeBusy, setWelcomeBusy] = useState(false);
   const [welcomeError, setWelcomeError] = useState<string | null>(null);
   const [browsingHistory] = useState(() => new BrowsingHistory());
@@ -231,7 +233,7 @@ export function AppShell({
       ({ abnormalExit: false, pendingOpenPaths: [] } as const),
     recoveryCandidates: startupState.candidates,
     currentWorkspaceId,
-    workspaces: welcomeWorkspaces,
+    workspaces: mountedWorkspaces,
     openDocumentCount: documentSessions.length,
   });
   const showWelcome =
@@ -270,6 +272,26 @@ export function AppShell({
     [preferences],
   );
 
+  const handleMountedWorkspacesChange = useCallback(
+    (items: Workspace[]): void => {
+      workspaceRevisionRef.current += 1;
+      setMountedWorkspaces(items);
+      void workspaceInvoker
+        .invoke("workspace_recent_list", {})
+        .then(setWelcomeWorkspaces)
+        .catch((error: unknown) => setWelcomeError(getErrorMessage(error)));
+    },
+    [workspaceInvoker],
+  );
+
+  const handleCurrentWorkspaceChange = useCallback(
+    (workspace: Workspace | null): void => {
+      preferences.setCurrentWorkspaceId(workspace?.id ?? null);
+      setCurrentWorkspaceId(workspace?.id ?? null);
+    },
+    [preferences],
+  );
+
   const openWorkspace = async (): Promise<void> => {
     if (onOpenWorkspace !== undefined) {
       await onOpenWorkspace();
@@ -284,8 +306,13 @@ export function AppShell({
       const workspace = await workspaceInvoker.invoke("workspace_add", {
         rootPath,
       });
+      workspaceRevisionRef.current += 1;
       selectCurrentWorkspace(workspace);
       setWelcomeWorkspaces((current) => [
+        ...current.filter((item) => item.id !== workspace.id),
+        workspace,
+      ]);
+      setMountedWorkspaces((current) => [
         ...current.filter((item) => item.id !== workspace.id),
         workspace,
       ]);
@@ -301,11 +328,33 @@ export function AppShell({
     setWelcomeError(null);
     try {
       await closeOpenDocumentsForWorkspaceSwitch();
-      await workspaceInvoker.invoke("workspace_entry_list", {
+      const remounted = await workspaceInvoker.invoke("workspace_remount", {
         workspaceId: workspace.id,
-        parentRelativePath: "",
       });
-      selectCurrentWorkspace(workspace);
+      workspaceRevisionRef.current += 1;
+      selectCurrentWorkspace(remounted);
+      setMountedWorkspaces((current) => [
+        ...current.filter((item) => item.id !== remounted.id),
+        remounted,
+      ]);
+    } catch (error) {
+      setWelcomeError(getErrorMessage(error));
+    } finally {
+      setWelcomeBusy(false);
+    }
+  };
+
+  const removeRecentWorkspace = async (workspace: Workspace): Promise<void> => {
+    setWelcomeBusy(true);
+    setWelcomeError(null);
+    try {
+      await workspaceInvoker.invoke("workspace_recent_remove", {
+        workspaceId: workspace.id,
+      });
+      workspaceRevisionRef.current += 1;
+      setWelcomeWorkspaces((current) =>
+        current.filter((item) => item.id !== workspace.id),
+      );
     } catch (error) {
       setWelcomeError(getErrorMessage(error));
     } finally {
@@ -372,11 +421,15 @@ export function AppShell({
   useEffect(() => {
     if (!hasTauriCommandRuntime()) return;
     let disposed = false;
-    void workspaceInvoker
-      .invoke("workspace_list", {})
-      .then((items) => {
-        if (disposed) return;
-        setWelcomeWorkspaces(items);
+    const requestedRevision = workspaceRevisionRef.current;
+    void Promise.all([
+      workspaceInvoker.invoke("workspace_list", {}),
+      workspaceInvoker.invoke("workspace_recent_list", {}),
+    ])
+      .then(([items, recentItems]) => {
+        if (disposed || workspaceRevisionRef.current !== requestedRevision) return;
+        setMountedWorkspaces(items);
+        setWelcomeWorkspaces(recentItems);
         const validIds = new Set(items.map((workspace) => workspace.id));
         const nextCurrentWorkspaceId = preferences.resolveCurrentWorkspaceId(
           validIds,
@@ -788,11 +841,8 @@ export function AppShell({
                 void runAction(() => documentManager.open(entry.canonicalPath));
               }}
               onWorkspacePresenceChange={setHasMountedWorkspace}
-              onWorkspacesChange={setWelcomeWorkspaces}
-              onCurrentWorkspaceChange={(workspace) => {
-                preferences.setCurrentWorkspaceId(workspace?.id ?? null);
-                setCurrentWorkspaceId(workspace?.id ?? null);
-              }}
+              onWorkspacesChange={handleMountedWorkspacesChange}
+              onCurrentWorkspaceChange={handleCurrentWorkspaceChange}
               onBrowse={handleBrowse}
               backLocation={backLocation}
               onBackLocationApplied={() => setBackLocation(null)}
@@ -836,6 +886,10 @@ export function AppShell({
               onNewDrawing={createWelcomeDrawing}
               onOpenRecentWorkspace={openRecentWorkspace}
               onOpenWorkspace={openWorkspace}
+              onRemoveRecentWorkspace={removeRecentWorkspace}
+              mountedWorkspaceIds={new Set(
+                mountedWorkspaces.map((workspace) => workspace.id),
+              )}
               workspaces={welcomeWorkspaces}
             />
           ) : documentSessions.length > 0 ? (

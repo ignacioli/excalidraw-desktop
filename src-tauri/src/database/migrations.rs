@@ -3,8 +3,9 @@ use std::{path::Path, time::Duration};
 use rusqlite::Connection;
 use thiserror::Error;
 
-const CURRENT_SCHEMA_VERSION: i64 = 1;
+const CURRENT_SCHEMA_VERSION: i64 = 2;
 const MIGRATION_0001: &str = include_str!("../../migrations/0001_init.sql");
+const MIGRATION_0002: &str = include_str!("../../migrations/0002_workspace_mount_state.sql");
 
 #[derive(Debug, Error)]
 pub enum MigrationError {
@@ -41,6 +42,9 @@ pub fn run_migrations(connection: &mut Connection) -> Result<(), MigrationError>
 
     if version < 1 {
         apply_migration(connection, 1, MIGRATION_0001)?;
+    }
+    if version < 2 {
+        apply_migration(connection, 2, MIGRATION_0002)?;
     }
     Ok(())
 }
@@ -122,5 +126,36 @@ mod tests {
             )
             .unwrap_or_else(|error| panic!("query drafts table: {error}"));
         assert!(!drafts_exist);
+    }
+
+    #[test]
+    fn upgrades_existing_workspaces_as_mounted() {
+        let mut connection = Connection::open_in_memory()
+            .unwrap_or_else(|error| panic!("open in-memory database: {error}"));
+        connection
+            .execute_batch(MIGRATION_0001)
+            .unwrap_or_else(|error| panic!("install v1 schema: {error}"));
+        connection
+            .pragma_update(None, "user_version", 1)
+            .unwrap_or_else(|error| panic!("set v1: {error}"));
+        connection
+            .execute(
+                "INSERT INTO workspaces (id, name, root_path, created_at) VALUES ('w', 'W', '/w', 1)",
+                [],
+            )
+            .unwrap_or_else(|error| panic!("insert v1 workspace: {error}"));
+
+        run_migrations(&mut connection).unwrap_or_else(|error| panic!("upgrade: {error}"));
+
+        let mounted: bool = connection
+            .query_row("SELECT mounted FROM workspaces WHERE id='w'", [], |row| {
+                row.get(0)
+            })
+            .unwrap_or_else(|error| panic!("read mounted: {error}"));
+        assert!(mounted);
+        let version: i64 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap_or_else(|error| panic!("read version: {error}"));
+        assert_eq!(version, 2);
     }
 }

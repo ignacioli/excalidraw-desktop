@@ -86,9 +86,12 @@ interface RecoveryCandidate {
 
 | 命令 | 请求 | 响应 | 说明 |
 |------|------|------|------|
-| `workspace_add` | `{ rootPath: string; name?: string }` | `Workspace` | 挂载并触发后台索引 |
-| `workspace_remove` | `{ workspaceId: string }` | `{}` | 仅取消挂载，不删文件 |
-| `workspace_list` | `{}` | `Workspace[]` | |
+| `workspace_add` | `{ rootPath: string; name?: string }` | `Workspace` | 挂载并触发后台索引；匹配未挂载的 canonical root 时复用原记录 |
+| `workspace_remove` | `{ workspaceId: string }` | `{}` | 取消挂载并保留 Recent；不删文件 |
+| `workspace_list` | `{}` | `Workspace[]` | 仅返回已挂载的授权记录 |
+| `workspace_recent_list` | `{}` | `Workspace[]` | 返回全部保留记录；不探测 root 可访问性 |
+| `workspace_remount` | `{ workspaceId: string }` | `Workspace` | 激活时重新校验 root/overlap 并挂载同一记录 |
+| `workspace_recent_remove` | `{ workspaceId: string }` | `{}` | 仅删除未挂载记录的应用历史；不访问或修改磁盘 |
 
 ```typescript
 interface Workspace {

@@ -46,7 +46,7 @@ test("workspace file management closes the mount/create/rename/trash loop", asyn
   await expect(page.getByRole("treeitem", { name: "renamed" })).toHaveCount(0);
 });
 
-test("removing a Workspace saves and closes its open tabs before unmounting", async ({
+test("unmounting retains Recent history, remounts the same record, and forgets history only", async ({
   page,
 }) => {
   await installWorkspaceHarness(page, true);
@@ -71,10 +71,52 @@ test("removing a Workspace saves and closes its open tabs before unmounting", as
   await expect(page.getByText("No workspace mounted.")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Open workspace Workspace" }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await expect(
     page.getByText("Path is outside the mounted workspaces."),
   ).toHaveCount(0);
+
+  await page.reload();
+  const recent = page.getByRole("button", { name: "Open workspace Workspace" });
+  await expect(recent).toBeVisible();
+  await recent.click();
+  await openWorkspaceSidebar(page);
+  await expect(page.getByRole("heading", { name: "Workspace" })).toBeVisible();
+
+  await page.getByRole("treeitem", { name: "Workspace" }).hover();
+  await page.getByRole("button", { name: "Actions for Workspace" }).click();
+  await page.getByRole("menuitem", { name: "Remove Workspace" }).click();
+  await page
+    .getByRole("dialog", { name: "Remove Workspace?" })
+    .getByRole("button", { name: "Remove Workspace" })
+    .click();
+  await page
+    .getByRole("button", { name: "Remove Workspace from Recents" })
+    .click();
+  await expect(recent).toHaveCount(0);
+});
+
+test("an inaccessible Recent Workspace errors only on activation and remains removable", async ({
+  page,
+}) => {
+  await installMissingRecentHarness(page);
+  await page.goto("/");
+
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  const recent = page.getByRole("button", {
+    name: "Open workspace Missing Workspace",
+  });
+  await expect(recent).toBeVisible();
+  await recent.click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Workspace is no longer accessible.",
+  );
+  await expect(recent).toBeVisible();
+
+  await page
+    .getByRole("button", { name: "Remove Missing Workspace from Recents" })
+    .click();
+  await expect(recent).toHaveCount(0);
 });
 
 async function installWorkspaceHarness(
@@ -90,7 +132,14 @@ async function installWorkspaceHarness(
         ): Promise<unknown>;
       };
     };
-    let mounted = initiallyMounted;
+    const mountedKey = "e2e-workspace-mounted";
+    const retainedKey = "e2e-workspace-retained";
+    if (localStorage.getItem(mountedKey) === null) {
+      localStorage.setItem(mountedKey, String(initiallyMounted));
+      localStorage.setItem(retainedKey, String(initiallyMounted));
+    }
+    let mounted = localStorage.getItem(mountedKey) === "true";
+    let retained = localStorage.getItem(retainedKey) === "true";
     let files = ["drawing.excalidraw", "second.excalidraw"];
     browser.__TAURI_INTERNALS__ = {
       async invoke(command, args = {}) {
@@ -106,8 +155,22 @@ async function installWorkspaceHarness(
                 },
               ]
             : [];
+        if (command === "workspace_recent_list")
+          return retained
+            ? [
+                {
+                  id: "workspace-1",
+                  name: "Workspace",
+                  rootPath: "/workspace",
+                  createdAt: 1,
+                },
+              ]
+            : [];
         if (command === "workspace_add") {
           mounted = true;
+          retained = true;
+          localStorage.setItem(mountedKey, "true");
+          localStorage.setItem(retainedKey, "true");
           return {
             id: "workspace-1",
             name: "Workspace",
@@ -117,6 +180,23 @@ async function installWorkspaceHarness(
         }
         if (command === "workspace_remove") {
           mounted = false;
+          localStorage.setItem(mountedKey, "false");
+          return {};
+        }
+        if (command === "workspace_remount") {
+          mounted = true;
+          localStorage.setItem(mountedKey, "true");
+          return {
+            id: "workspace-1",
+            name: "Workspace",
+            rootPath: "/workspace",
+            createdAt: 1,
+          };
+        }
+        if (command === "workspace_recent_remove") {
+          if (mounted) throw new Error("Workspace is still mounted.");
+          retained = false;
+          localStorage.setItem(retainedKey, "false");
           return {};
         }
         if (command === "workspace_entry_list") {
@@ -219,4 +299,35 @@ async function installWorkspaceHarness(
       },
     };
   }, initiallyMounted);
+}
+
+async function installMissingRecentHarness(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const browser = globalThis as typeof globalThis & {
+      __TAURI_INTERNALS__?: {
+        invoke(command: string, args?: Record<string, unknown>): Promise<unknown>;
+      };
+    };
+    const workspace = {
+      id: "workspace-missing",
+      name: "Missing Workspace",
+      rootPath: "/missing/workspace",
+      createdAt: 1,
+    };
+    let retained = true;
+    browser.__TAURI_INTERNALS__ = {
+      async invoke(command) {
+        if (command === "workspace_list") return [];
+        if (command === "workspace_recent_list") return retained ? [workspace] : [];
+        if (command === "workspace_remount") {
+          throw new Error("Workspace is no longer accessible.");
+        }
+        if (command === "workspace_recent_remove") {
+          retained = false;
+          return {};
+        }
+        throw new Error(`Unexpected workspace command ${command}`);
+      },
+    };
+  });
 }

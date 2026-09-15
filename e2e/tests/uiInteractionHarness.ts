@@ -239,6 +239,9 @@ export async function installUiInteractionHarness(
           if (command === "workspace_list") {
             return state.workspaces.map((workspace) => ({ ...workspace }));
           }
+          if (command === "workspace_recent_list") {
+            return state.workspaces.map((workspace) => ({ ...workspace }));
+          }
           if (command === "workspace_add") {
             const rootPath = String(
               args.rootPath ?? "/ui-interactions/mounted",

@@ -22,6 +22,7 @@ use crate::{
 pub enum ErrorCode {
     PathAccessDenied,
     WorkspaceNotFound,
+    WorkspaceMounted,
     WorkspaceOverlap,
     InvalidName,
     NameConflict,
@@ -55,6 +56,8 @@ pub enum AppError {
     PathAccessDenied(PathBuf),
     #[error("workspace not found: {0}")]
     WorkspaceNotFound(String),
+    #[error("workspace is still mounted: {0}")]
+    WorkspaceMounted(String),
     #[error("workspace overlaps an existing mount: {0}")]
     WorkspaceOverlap(String),
     #[error("invalid Workspace Entry name: {0}")]
@@ -109,6 +112,12 @@ impl AppError {
             Self::WorkspaceNotFound(_) => (
                 ErrorCode::WorkspaceNotFound,
                 "Workspace was not found.".to_owned(),
+                false,
+                None,
+            ),
+            Self::WorkspaceMounted(_) => (
+                ErrorCode::WorkspaceMounted,
+                "Remove the Workspace before removing it from Recents.".to_owned(),
                 false,
                 None,
             ),

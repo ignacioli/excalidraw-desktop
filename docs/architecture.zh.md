@@ -8,6 +8,8 @@
 
 当前壳层是画布优先的 overlay/pinned 侧边栏、IPC v2 Workspace Entry 命令，以及统一的应用菜单/对话框。崩溃安全持久化（草稿、原子写、恢复快照、外部变更冲突）仍然有效。下文描述的是现行路径，不是已退休的 FileTree + `thumbnails/` 生产实现。
 
+Workspace 持久化将 mounted authority 与 Recent history 分开。只有已挂载记录进入路径策略、Workspace Entry 命令、索引、监听和 Sidebar。取消挂载会保留记录；重新挂载只在激活时校验保存的 root，而从 Recents 移除未挂载记录只改变应用历史。
+
 ## 1. 总体结构
 
 Tauri 2.x 双端布局：`src/` 为 React 19 + TypeScript strict 前端，`src-tauri/` 为 Rust 后端；两端经 IPC 契约边界通信（`docs/contracts/ipc-contracts.md`）。完整技术选型见 ADR-001（框架）、ADR-002/003（持久化）、ADR-004/006/007/008（参考性能测量与预算）、ADR-005（主题边界，其中「左侧文件管理 / 右侧画布」壳层布局与缩略图契约句已被 ADR-009 取代）、ADR-009（桌面 UI 交互：标题栏选择 A、画布优先侧边栏、缩略图退休、IPC v2 WorkspaceEntry、统一菜单/对话框）。

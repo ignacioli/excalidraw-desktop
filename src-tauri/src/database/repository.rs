@@ -29,6 +29,7 @@ pub struct WorkspaceRecord {
     pub name: String,
     pub root_path: String,
     pub created_at: i64,
+    pub mounted: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,6 +70,8 @@ pub trait WorkspaceRepository: Send + Sync {
     fn workspace_upsert(&self, workspace: WorkspaceRecord) -> RepositoryFuture<'_, ()>;
     fn workspace_get(&self, id: String) -> RepositoryFuture<'_, Option<WorkspaceRecord>>;
     fn workspace_list(&self) -> RepositoryFuture<'_, Vec<WorkspaceRecord>>;
+    fn workspace_recent_list(&self) -> RepositoryFuture<'_, Vec<WorkspaceRecord>>;
+    fn workspace_set_mounted(&self, id: String, mounted: bool) -> RepositoryFuture<'_, ()>;
     fn workspace_delete(&self, id: String) -> RepositoryFuture<'_, ()>;
 }
 
@@ -315,9 +318,9 @@ impl WorkspaceRepository for SqliteRepository {
         Box::pin(async move {
             self.writer.execute(move |connection| {
                 connection.execute(
-                    "INSERT INTO workspaces (id, name, root_path, created_at) VALUES (?1, ?2, ?3, ?4) \
-                     ON CONFLICT(id) DO UPDATE SET name=excluded.name, root_path=excluded.root_path",
-                    params![workspace.id, workspace.name, workspace.root_path, workspace.created_at],
+                    "INSERT INTO workspaces (id, name, root_path, created_at, mounted) VALUES (?1, ?2, ?3, ?4, ?5) \
+                     ON CONFLICT(id) DO UPDATE SET name=excluded.name, root_path=excluded.root_path, mounted=excluded.mounted",
+                    params![workspace.id, workspace.name, workspace.root_path, workspace.created_at, workspace.mounted],
                 )?;
                 Ok(())
             }).await?;
@@ -332,7 +335,7 @@ impl WorkspaceRepository for SqliteRepository {
                 .execute(move |connection| {
                     connection
                         .query_row(
-                            "SELECT id, name, root_path, created_at FROM workspaces WHERE id=?1",
+                            "SELECT id, name, root_path, created_at, mounted FROM workspaces WHERE id=?1",
                             [id],
                             workspace_from_row,
                         )
@@ -348,12 +351,42 @@ impl WorkspaceRepository for SqliteRepository {
                 .writer
                 .execute(|connection| {
                     let mut statement = connection.prepare(
-                    "SELECT id, name, root_path, created_at FROM workspaces ORDER BY created_at, id"
+                    "SELECT id, name, root_path, created_at, mounted FROM workspaces WHERE mounted=1 ORDER BY created_at, id"
                 )?;
                     let records = statement.query_map([], workspace_from_row)?.collect();
                     records
                 })
                 .await?)
+        })
+    }
+
+    fn workspace_recent_list(&self) -> RepositoryFuture<'_, Vec<WorkspaceRecord>> {
+        Box::pin(async move {
+            Ok(self
+                .writer
+                .execute(|connection| {
+                    let mut statement = connection.prepare(
+                        "SELECT id, name, root_path, created_at, mounted FROM workspaces ORDER BY created_at DESC, id DESC",
+                    )?;
+                    let records = statement.query_map([], workspace_from_row)?.collect();
+                    records
+                })
+                .await?)
+        })
+    }
+
+    fn workspace_set_mounted(&self, id: String, mounted: bool) -> RepositoryFuture<'_, ()> {
+        Box::pin(async move {
+            self.writer
+                .execute(move |connection| {
+                    connection.execute(
+                        "UPDATE workspaces SET mounted=?2 WHERE id=?1",
+                        params![id, mounted],
+                    )?;
+                    Ok(())
+                })
+                .await?;
+            Ok(())
         })
     }
 
@@ -590,6 +623,7 @@ fn workspace_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceReco
         name: row.get(1)?,
         root_path: row.get(2)?,
         created_at: row.get(3)?,
+        mounted: row.get(4)?,
     })
 }
 
@@ -646,6 +680,7 @@ mod tests {
             name: "Workspace".to_owned(),
             root_path: "/workspace".to_owned(),
             created_at: 1,
+            mounted: true,
         };
         repository
             .workspace_upsert(workspace.clone())
@@ -724,5 +759,48 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
         let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[tokio::test]
+    async fn workspace_mount_state_separates_authority_from_recent_history() {
+        let path = std::env::temp_dir().join(format!(
+            "excalidraw-workspace-lifecycle-{}-{}.sqlite3",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        let repository = SqliteRepository::open(&path)
+            .await
+            .unwrap_or_else(|error| panic!("open repository: {error}"));
+        let workspace = WorkspaceRecord {
+            id: "workspace-1".to_owned(),
+            name: "Workspace".to_owned(),
+            root_path: "/workspace".to_owned(),
+            created_at: 1,
+            mounted: true,
+        };
+        repository
+            .workspace_upsert(workspace.clone())
+            .await
+            .unwrap_or_else(|error| panic!("upsert: {error}"));
+        repository
+            .workspace_set_mounted(workspace.id.clone(), false)
+            .await
+            .unwrap_or_else(|error| panic!("unmount: {error}"));
+
+        assert!(repository
+            .workspace_list()
+            .await
+            .unwrap_or_else(|error| panic!("list mounted: {error}"))
+            .is_empty());
+        assert_eq!(
+            repository
+                .workspace_recent_list()
+                .await
+                .unwrap_or_else(|error| panic!("list recent: {error}")),
+            vec![WorkspaceRecord {
+                mounted: false,
+                ..workspace
+            }]
+        );
     }
 }

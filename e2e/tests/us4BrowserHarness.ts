@@ -140,6 +140,11 @@ export async function installUs4Harness(
                 ]
               : [];
           }
+          if (command === "workspace_recent_list") {
+            return state.mounted
+              ? [{ id: "workspace-1", name: "Workspace", rootPath: "/workspace", createdAt: 1 }]
+              : [];
+          }
           if (command === "workspace_add") {
             state.mounted = true;
             return {

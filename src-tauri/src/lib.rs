@@ -33,7 +33,10 @@ use commands::{
         recovery_apply, recovery_list, RecoveryService, RecoveryState, TauriRecoveryPathGrant,
     },
     session::{app_handshake, SessionState},
-    workspace::{workspace_add, workspace_list, workspace_remove, WorkspaceState},
+    workspace::{
+        workspace_add, workspace_list, workspace_recent_list, workspace_recent_remove,
+        workspace_remount, workspace_remove, WorkspaceState,
+    },
 };
 use database::repository::SqliteRepository;
 use documents::recovery::RecoveryStore;
@@ -167,6 +170,9 @@ pub fn run() {
         workspace_add,
         workspace_remove,
         workspace_list,
+        workspace_recent_list,
+        workspace_remount,
+        workspace_recent_remove,
         workspace_entry_list,
         workspace_entry_create,
         workspace_entry_rename,
@@ -197,6 +203,9 @@ pub fn run() {
         workspace_add,
         workspace_remove,
         workspace_list,
+        workspace_recent_list,
+        workspace_remount,
+        workspace_recent_remove,
         workspace_entry_list,
         workspace_entry_create,
         workspace_entry_rename,

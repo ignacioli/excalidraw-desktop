@@ -7,6 +7,8 @@ export interface WelcomeScreenProps {
   onNewDrawing: () => void | Promise<void>;
   onOpenWorkspace: () => void | Promise<void>;
   onOpenRecentWorkspace: (workspace: Workspace) => void | Promise<void>;
+  onRemoveRecentWorkspace?: (workspace: Workspace) => void | Promise<void>;
+  mountedWorkspaceIds?: ReadonlySet<string>;
   busy?: boolean;
   error?: string | null;
 }
@@ -16,6 +18,8 @@ export function WelcomeScreen({
   onNewDrawing,
   onOpenWorkspace,
   onOpenRecentWorkspace,
+  onRemoveRecentWorkspace,
+  mountedWorkspaceIds = new Set(),
   busy = false,
   error = null,
 }: WelcomeScreenProps) {
@@ -77,7 +81,7 @@ export function WelcomeScreen({
             className="recent-workspace-list"
           >
             {recentWorkspaces.map((workspace) => (
-              <li key={workspace.id}>
+              <li className="recent-workspace-row" key={workspace.id}>
                 <button
                   aria-label={`Open workspace ${workspace.name}`}
                   className="recent-workspace"
@@ -93,6 +97,18 @@ export function WelcomeScreen({
                     {workspace.rootPath}
                   </span>
                 </button>
+                {!mountedWorkspaceIds.has(workspace.id) &&
+                onRemoveRecentWorkspace !== undefined ? (
+                  <button
+                    aria-label={`Remove ${workspace.name} from Recents`}
+                    className="recent-workspace-remove"
+                    disabled={busy}
+                    onClick={() => void onRemoveRecentWorkspace(workspace)}
+                    type="button"
+                  >
+                    Remove from Recents
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>

@@ -612,6 +612,7 @@ async function installScaleHarness(
           invocations.push({ command, args: { ...args } });
           if (command === "plugin:dialog|open") return "/workspace";
           if (command === "workspace_list") return mounted ? [workspace] : [];
+          if (command === "workspace_recent_list") return mounted ? [workspace] : [];
           if (command === "workspace_add") {
             mounted = true;
             return workspace;

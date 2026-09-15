@@ -98,7 +98,7 @@ export async function installBrowserTauriHarness(
           if (command === "recovery_list") {
             return [];
           }
-          if (command === "workspace_list") {
+          if (command === "workspace_list" || command === "workspace_recent_list") {
             return [];
           }
           if (

@@ -190,6 +190,7 @@ async fn lists_and_restores_a_newer_scene_then_cleans_up_the_ring() {
             name: "Recovery".to_owned(),
             root_path: workspace.display().to_string(),
             created_at: 1,
+            mounted: true,
         })
         .await
         .expect("mount workspace");
@@ -254,6 +255,7 @@ async fn save_as_new_registers_a_clean_draft_and_workspace_index() {
             name: "Recovery".to_owned(),
             root_path: workspace.display().to_string(),
             created_at: 1,
+            mounted: true,
         })
         .await
         .expect("mount workspace");

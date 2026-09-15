@@ -126,6 +126,33 @@ describe("WelcomeScreen", () => {
     ).toBeInTheDocument();
   });
 
+  it("removes only an unmounted Workspace from Recents", async () => {
+    const user = userEvent.setup();
+    const onRemoveRecentWorkspace = vi.fn();
+    render(
+      <WelcomeScreen
+        mountedWorkspaceIds={new Set([workspaces[1].id])}
+        workspaces={workspaces.slice(0, 2)}
+        onNewDrawing={vi.fn()}
+        onOpenRecentWorkspace={vi.fn()}
+        onOpenWorkspace={vi.fn()}
+        onRemoveRecentWorkspace={onRemoveRecentWorkspace}
+      />,
+    );
+
+    const remove = screen.getByRole("button", {
+      name: "Remove Workspace 1 from Recents",
+    });
+    expect(remove).toBeEnabled();
+    expect(
+      screen.queryByRole("button", {
+        name: "Remove Workspace 2 from Recents",
+      }),
+    ).not.toBeInTheDocument();
+    await user.click(remove);
+    expect(onRemoveRecentWorkspace).toHaveBeenCalledWith(workspaces[0]);
+  });
+
   it("covers primary, secondary, loading, and disabled Welcome Action variants", () => {
     const { rerender } = render(
       <WelcomeScreen

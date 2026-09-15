@@ -70,6 +70,7 @@ impl Fixture {
                 name: "Mutation".to_owned(),
                 root_path: workspace.display().to_string(),
                 created_at: 1,
+                mounted: true,
             })
             .await
             .expect("mount workspace");

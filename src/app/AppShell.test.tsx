@@ -206,6 +206,7 @@ describe("AppShell", () => {
     let opened = false;
     const invoke = vi.fn(async (command: string) => {
       if (command === "workspace_list") return opened ? [workspace] : [];
+      if (command === "workspace_recent_list") return opened ? [workspace] : [];
       if (command === "workspace_add") {
         opened = true;
         return workspace;
@@ -248,6 +249,7 @@ describe("AppShell", () => {
     const user = userEvent.setup();
     const invoke = vi.fn(async (command: string) => {
       if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [];
       throw new Error(`Unexpected command ${command}`);
     }) as CommandInvoker["invoke"];
     vi.stubGlobal("__TAURI_INTERNALS__", {
@@ -272,6 +274,7 @@ describe("AppShell", () => {
     const user = userEvent.setup();
     const invoke = vi.fn(async (command: string) => {
       if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [];
       throw new Error(`Unexpected command ${command}`);
     }) as CommandInvoker["invoke"];
     vi.stubGlobal("__TAURI_INTERNALS__", {
@@ -303,8 +306,9 @@ describe("AppShell", () => {
       createdAt: 1,
     };
     const invoke = vi.fn(async (command: string) => {
-      if (command === "workspace_list") return [workspace];
-      if (command === "workspace_entry_list") {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [workspace];
+      if (command === "workspace_remount") {
         throw new Error("Workspace is no longer accessible.");
       }
       throw new Error(`Unexpected command ${command}`);
@@ -322,6 +326,10 @@ describe("AppShell", () => {
     });
     await user.click(recent);
 
+    expect(invoke).toHaveBeenCalledWith("workspace_remount", {
+      workspaceId: workspace.id,
+    });
+
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Workspace is no longer accessible.",
     );
@@ -329,6 +337,45 @@ describe("AppShell", () => {
       screen.getByRole("button", { name: "Open workspace Missing workspace" }),
     ).toBeInTheDocument();
     expect(documentManager.store.getState().sessionsById).toEqual({});
+  });
+
+  it("removes an unmounted Workspace from Recent history only on request", async () => {
+    const user = userEvent.setup();
+    const workspace = {
+      id: "workspace-old",
+      name: "Old workspace",
+      rootPath: "/workspace/old",
+      createdAt: 1,
+    };
+    let removed = false;
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return removed ? [] : [workspace];
+      if (command === "workspace_recent_remove") {
+        removed = true;
+        return {};
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Remove Old workspace from Recents",
+      }),
+    );
+
+    expect(invoke).toHaveBeenCalledWith("workspace_recent_remove", {
+      workspaceId: workspace.id,
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Open workspace Old workspace" }),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   it("exposes active and dirty tab state without relying on color", async () => {

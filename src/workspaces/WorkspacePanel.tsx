@@ -106,6 +106,7 @@ export function WorkspacePanel({
   );
   const preferences = providedPreferences ?? ownedPreferences;
   const knownWorkspaceIdsRef = useRef<Set<string> | null>(null);
+  const workspaceListGenerationRef = useRef(0);
   const expandedWorkspaceIdsRef = useRef<Set<string>>(new Set());
   const entriesRef = useRef<Record<string, Record<string, WorkspaceEntry[]>>>(
     {},
@@ -336,10 +337,11 @@ export function WorkspacePanel({
 
   useEffect(() => {
     let disposed = false;
+    const generation = ++workspaceListGenerationRef.current;
     void invoker
       .invoke("workspace_list", {})
       .then((items) => {
-        if (!disposed) {
+        if (!disposed && workspaceListGenerationRef.current === generation) {
           applyWorkspaceList(items);
           onWorkspacePresenceChange?.(items.length > 0);
           onWorkspacesChange?.(items);
@@ -371,10 +373,11 @@ export function WorkspacePanel({
       return;
     }
     let disposed = false;
+    const generation = ++workspaceListGenerationRef.current;
     void invoker
       .invoke("workspace_list", {})
       .then((items) => {
-        if (!disposed) {
+        if (!disposed && workspaceListGenerationRef.current === generation) {
           applyWorkspaceList(items);
           onWorkspacePresenceChange?.(items.length > 0);
           onWorkspacesChange?.(items);
@@ -500,6 +503,7 @@ export function WorkspacePanel({
     try {
       const rootPath = await selectDirectory();
       if (rootPath) {
+        workspaceListGenerationRef.current += 1;
         const workspace = await invoker.invoke("workspace_add", { rootPath });
         const next = [
           ...workspaces.filter((item) => item.id !== workspace.id),
@@ -546,6 +550,7 @@ export function WorkspacePanel({
         );
       }
       await invoker.invoke("workspace_remove", { workspaceId: workspace.id });
+      workspaceListGenerationRef.current += 1;
       const next = workspaces.filter((item) => item.id !== workspace.id);
       const nextCurrentWorkspaceId =
         workspace.id === currentWorkspaceId

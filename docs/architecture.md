@@ -8,6 +8,8 @@ This document describes the **current** implementation architecture of Excalidra
 
 The current shell is a canvas-first overlay/pinned sidebar, IPC v2 Workspace Entry commands, and unified in-app menus/dialogs. Crash-safe persistence (drafts, atomic writes, recovery snapshots, external-change conflicts) still applies. What follows is the current path, not the retired FileTree + `thumbnails/` production implementation.
 
+Workspace persistence separates mounted authority from Recent history. Only mounted records feed path policy, Workspace Entry commands, indexing, watching, and the Sidebar. Unmounting retains the record; remount validates the stored root on activation, while removing an unmounted record from Recents changes application history only.
+
 ## 1. Overall structure
 
 Tauri 2.x dual-process layout: `src/` is the React 19 + TypeScript strict frontend; `src-tauri/` is the Rust backend. The two sides communicate across an IPC contract boundary (`docs/contracts/ipc-contracts.md`). Full technology choices: ADR-001 (framework), ADR-002/003 (persistence), ADR-004/006/007/008 (reference performance measurement and budgets), ADR-005 (theme boundary; the “file manager on the left / canvas on the right” shell layout and thumbnail-contract sentences are superseded by ADR-009), ADR-009 (desktop UI interactions: title-bar option A, canvas-first sidebar, thumbnail retirement, IPC v2 WorkspaceEntry, unified menus/dialogs).

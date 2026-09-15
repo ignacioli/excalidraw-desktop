@@ -3,6 +3,7 @@ export const IPC_CONTRACT_VERSION = 2 as const;
 export type ErrorCode =
   | "PATH_ACCESS_DENIED"
   | "WORKSPACE_NOT_FOUND"
+  | "WORKSPACE_MOUNTED"
   | "WORKSPACE_OVERLAP"
   | "INVALID_NAME"
   | "NAME_CONFLICT"
@@ -151,6 +152,18 @@ export interface IpcCommands {
   workspace_list: {
     request: Record<string, never>;
     response: Workspace[];
+  };
+  workspace_recent_list: {
+    request: Record<string, never>;
+    response: Workspace[];
+  };
+  workspace_remount: {
+    request: { workspaceId: string };
+    response: Workspace;
+  };
+  workspace_recent_remove: {
+    request: { workspaceId: string };
+    response: Record<string, never>;
   };
   workspace_entry_list: {
     request: { workspaceId: string; parentRelativePath: string };

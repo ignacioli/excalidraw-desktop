@@ -143,6 +143,7 @@ fn workspace_record() -> crate::database::repository::WorkspaceRecord {
         name: "Workspace".to_owned(),
         root_path: "/workspace".to_owned(),
         created_at: 1,
+        mounted: true,
     }
 }
 

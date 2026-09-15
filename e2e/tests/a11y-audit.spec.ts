@@ -148,6 +148,9 @@ async function installShellHarness(page: Page): Promise<void> {
       if (command === "workspace_list") {
         return [];
       }
+      if (command === "workspace_recent_list") {
+        return [];
+      }
       return original(command, args);
     };
   });
@@ -180,6 +183,9 @@ async function installWorkspaceHarness(
                 },
               ]
             : [];
+        }
+        if (command === "workspace_recent_list") {
+          return [];
         }
         if (command === "workspace_add") {
           mounted = true;
@@ -265,6 +271,9 @@ async function installExportHarness(
       }
       browser.__TAURI_INTERNALS__!.invoke = async (command, args) => {
         if (command === "workspace_list") {
+          return [];
+        }
+        if (command === "workspace_recent_list") {
           return [];
         }
         if (command === "doc_export") {

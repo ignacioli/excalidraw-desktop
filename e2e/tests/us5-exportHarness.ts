@@ -131,6 +131,9 @@ export async function installExportHarness(
           if (command === "workspace_list") {
             return [{ ...workspace }];
           }
+          if (command === "workspace_recent_list") {
+            return [{ ...workspace }];
+          }
           if (command === "workspace_entry_list") {
             if (String(args.parentRelativePath ?? "") !== "") {
               return [];

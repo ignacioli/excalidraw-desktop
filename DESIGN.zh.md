@@ -37,7 +37,7 @@
 
 ### 启动与浏览状态
 
-- **Welcome** 是空启动时的非标签文档状态，提供 **New Drawing**、**Open Workspace** 和 Recent Workspaces。Recent Workspaces 只从现有记录投影 `name` 与 `rootPath`，并按既有 `createdAt` 降序；所有记录均保留，默认区域最多显示五行，超出后内部纵向滚动。Recent 行使用与 Sidebar row 相同的语义 hover/focus 表面，不增加 last-opened time 或 drawing count。取消选择工作区后状态不变。不可访问的 Recent Workspace 显示可理解的错误，仍保留 Welcome 与该记录。
+- **Welcome** 是空启动时的非标签文档状态，提供 **New Drawing**、**Open Workspace** 和 Recent Workspaces。Recent Workspaces 只从保留记录投影 `name` 与 `rootPath`，并按既有 `createdAt` 降序。**Remove Workspace** 会安全关闭或保存打开的图纸、取消挂载 root，并把同一记录保留在此处；激活可访问的未挂载行会重新挂载同一记录，不可访问行只在激活时显示错误且仍保留。**Remove from Recents** 只在未挂载行可用，只删除应用历史而不触碰磁盘；通过 **Open Workspace** 选择同一保留 root 也会重新挂载原记录，不创建重复项。默认区域最多显示五行，超出后内部纵向滚动；不增加 last-opened time 或 drawing count，取消目录选择后状态不变。
 - **Restored** 是存在有效 Current Workspace 或可重新打开文档时的正常启动壳层。干净重启不会显示恢复对话框。
 - 异常退出且存在恢复候选时，必须先显示恢复对话框。候选全部处理完成后才显示 Restored；在用户应用恢复决定前不得覆盖磁盘文件。
 - **Current Workspace** 是侧边栏树和标题行操作唯一使用的工作区。保存的 id 缺失或无效时回退到可用工作区，不创建新的工作区记录。

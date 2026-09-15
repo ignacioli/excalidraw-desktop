@@ -10,7 +10,6 @@ use uuid::Uuid;
 
 use crate::{
     database::repository::{SqliteRepository, WorkspaceRecord, WorkspaceRepository},
-    documents::assets::{asset_garbage_error, collect_garbage, scan_referenced_hashes},
     indexing::Indexer,
     security::WorkspacePathPolicy,
     watcher::WatcherState,
@@ -46,17 +45,25 @@ impl WorkspaceService {
         }
 
         let current = self.repository.workspace_list().await?;
-        let mut roots = current
-            .iter()
-            .map(|workspace| Path::new(&workspace.root_path).to_path_buf())
-            .collect::<Vec<_>>();
-        roots.push(canonical.clone());
-        WorkspacePathPolicy::new(roots).map_err(|error| match error {
-            crate::security::PathSecurityError::WorkspaceOverlap { first, second } => {
-                AppError::WorkspaceOverlap(format!("{} and {}", first.display(), second.display()))
+        let retained = self.repository.workspace_recent_list().await?;
+        if let Some(existing) = retained
+            .into_iter()
+            .find(|workspace| Path::new(&workspace.root_path) == canonical)
+        {
+            if existing.mounted {
+                return Err(AppError::WorkspaceOverlap(existing.root_path));
             }
-            other => AppError::from(other),
-        })?;
+            validate_mount(&current, &canonical)?;
+            self.repository
+                .workspace_set_mounted(existing.id.clone(), true)
+                .await?;
+            return Ok(WorkspaceRecord {
+                mounted: true,
+                ..existing
+            }
+            .into());
+        }
+        validate_mount(&current, &canonical)?;
 
         let name = request
             .name
@@ -73,6 +80,7 @@ impl WorkspaceService {
             name,
             root_path: canonical.display().to_string(),
             created_at: unix_timestamp()?,
+            mounted: true,
         };
         self.repository.workspace_upsert(record.clone()).await?;
         Ok(record.into())
@@ -85,19 +93,8 @@ impl WorkspaceService {
             .await
             .map_err(AppError::from)?
             .ok_or(AppError::WorkspaceNotFound(request.workspace_id))?;
-        let root = PathBuf::from(&workspace.root_path);
-        let scan_root = root.clone();
-        let referenced = tokio::task::spawn_blocking(move || scan_referenced_hashes(&scan_root))
-            .await
-            .map_err(|error| AppError::Internal(error.to_string()))?;
-        let garbage_root = root;
-        tokio::task::spawn_blocking(move || {
-            collect_garbage(&garbage_root, &referenced).map_err(asset_garbage_error)
-        })
-        .await
-        .map_err(|error| AppError::Internal(error.to_string()))??;
         self.repository
-            .workspace_delete(workspace.id)
+            .workspace_set_mounted(workspace.id, false)
             .await
             .map_err(AppError::from)?;
         Ok(EmptyResponse {})
@@ -109,6 +106,67 @@ impl WorkspaceService {
             .await
             .map(|items| items.into_iter().map(Into::into).collect())
             .map_err(|error| IpcError::from(AppError::from(error)))
+    }
+
+    pub async fn recent_list(&self) -> Result<Vec<Workspace>, IpcError> {
+        self.repository
+            .workspace_recent_list()
+            .await
+            .map(|items| items.into_iter().map(Into::into).collect())
+            .map_err(|error| IpcError::from(AppError::from(error)))
+    }
+
+    pub async fn remount(&self, workspace_id: String) -> Result<Workspace, IpcError> {
+        let workspace = self
+            .repository
+            .workspace_get(workspace_id.clone())
+            .await
+            .map_err(AppError::from)?
+            .ok_or(AppError::WorkspaceNotFound(workspace_id))?;
+        if workspace.mounted {
+            return Ok(workspace.into());
+        }
+        let requested = PathBuf::from(&workspace.root_path);
+        let canonical = requested.canonicalize().map_err(|source| AppError::Io {
+            path: Some(requested.clone()),
+            source,
+        })?;
+        if !canonical.is_dir() {
+            return Err(AppError::PathAccessDenied(canonical).into());
+        }
+        let current = self
+            .repository
+            .workspace_list()
+            .await
+            .map_err(AppError::from)?;
+        validate_mount(&current, &canonical)?;
+        self.repository
+            .workspace_set_mounted(workspace.id.clone(), true)
+            .await
+            .map_err(AppError::from)?;
+        Ok(WorkspaceRecord {
+            root_path: canonical.display().to_string(),
+            mounted: true,
+            ..workspace
+        }
+        .into())
+    }
+
+    pub async fn recent_remove(&self, workspace_id: String) -> Result<EmptyResponse, IpcError> {
+        let workspace = self
+            .repository
+            .workspace_get(workspace_id.clone())
+            .await
+            .map_err(AppError::from)?
+            .ok_or(AppError::WorkspaceNotFound(workspace_id))?;
+        if workspace.mounted {
+            return Err(AppError::WorkspaceMounted(workspace.id).into());
+        }
+        self.repository
+            .workspace_delete(workspace.id)
+            .await
+            .map_err(AppError::from)?;
+        Ok(EmptyResponse {})
     }
 
     pub async fn start_index(&self, workspace: WorkspaceRecord, app: Option<AppHandle>) {
@@ -146,6 +204,7 @@ pub async fn workspace_add(
         name: workspace.name.clone(),
         root_path: workspace.root_path.clone(),
         created_at: workspace.created_at,
+        mounted: true,
     };
     state
         .service
@@ -180,6 +239,48 @@ pub async fn workspace_list(state: State<'_, WorkspaceState>) -> Result<Vec<Work
     state.service.list().await
 }
 
+#[tauri::command]
+pub async fn workspace_recent_list(
+    state: State<'_, WorkspaceState>,
+) -> Result<Vec<Workspace>, IpcError> {
+    state.service.recent_list().await
+}
+
+#[tauri::command]
+pub async fn workspace_remount(
+    workspace_id: String,
+    app: AppHandle,
+    state: State<'_, WorkspaceState>,
+    watcher: State<'_, WatcherState>,
+) -> Result<Workspace, IpcError> {
+    let workspace = state.service.remount(workspace_id).await?;
+    let record = WorkspaceRecord {
+        id: workspace.id.clone(),
+        name: workspace.name.clone(),
+        root_path: workspace.root_path.clone(),
+        created_at: workspace.created_at,
+        mounted: true,
+    };
+    state
+        .service
+        .start_index(record.clone(), Some(app.clone()))
+        .await;
+    watcher
+        .service
+        .spawn_for_workspace(record, app)
+        .await
+        .map_err(IpcError::from)?;
+    Ok(workspace)
+}
+
+#[tauri::command]
+pub async fn workspace_recent_remove(
+    workspace_id: String,
+    state: State<'_, WorkspaceState>,
+) -> Result<EmptyResponse, IpcError> {
+    state.service.recent_remove(workspace_id).await
+}
+
 pub(crate) async fn policy_for_repository(
     repository: &SqliteRepository,
 ) -> Result<WorkspacePathPolicy, AppError> {
@@ -196,10 +297,29 @@ pub(crate) async fn workspace_by_id(
     repository: &SqliteRepository,
     id: &str,
 ) -> Result<WorkspaceRecord, AppError> {
-    repository
+    let workspace = repository
         .workspace_get(id.to_owned())
         .await?
-        .ok_or_else(|| AppError::WorkspaceNotFound(id.to_owned()))
+        .ok_or_else(|| AppError::WorkspaceNotFound(id.to_owned()))?;
+    if !workspace.mounted {
+        return Err(AppError::WorkspaceNotFound(id.to_owned()));
+    }
+    Ok(workspace)
+}
+
+fn validate_mount(current: &[WorkspaceRecord], canonical: &Path) -> Result<(), AppError> {
+    let mut roots = current
+        .iter()
+        .map(|workspace| Path::new(&workspace.root_path).to_path_buf())
+        .collect::<Vec<_>>();
+    roots.push(canonical.to_path_buf());
+    WorkspacePathPolicy::new(roots).map_err(|error| match error {
+        crate::security::PathSecurityError::WorkspaceOverlap { first, second } => {
+            AppError::WorkspaceOverlap(format!("{} and {}", first.display(), second.display()))
+        }
+        other => AppError::from(other),
+    })?;
+    Ok(())
 }
 
 pub(crate) fn safe_relative_path(value: &str) -> Result<PathBuf, AppError> {

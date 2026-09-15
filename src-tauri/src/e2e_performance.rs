@@ -207,6 +207,7 @@ impl PerformanceHarnessState {
                 name: "E2E Performance".to_owned(),
                 root_path: workspace.display().to_string(),
                 created_at: 1,
+                mounted: true,
             })
             .await
             .map_err(|error| format!("failed to register performance workspace: {error}"))?;
