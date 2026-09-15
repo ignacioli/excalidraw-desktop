@@ -21,6 +21,7 @@ export async function openWorkspaceSidebar(page: Page): Promise<void> {
 export async function persistPinnedWorkspaceSidebar(
   page: Page,
   expandedWorkspaceIds: readonly string[] = [],
+  currentWorkspaceId: string | null = null,
 ): Promise<void> {
   await page.addInitScript(
     ({ key, snapshot }) => {
@@ -31,7 +32,9 @@ export async function persistPinnedWorkspaceSidebar(
       snapshot: JSON.stringify({
         version: 1,
         sidebarPinned: true,
+        sidebarWidth: 360,
         expandedWorkspaceIds: [...expandedWorkspaceIds],
+        currentWorkspaceId,
       }),
     },
   );

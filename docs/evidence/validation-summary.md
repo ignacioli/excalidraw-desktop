@@ -18,6 +18,36 @@
 | T078/T080 原生验收（§7） | **通过**（2026-08-18） | 001 历史：物理 macOS 26.5.2 下载真实 `v0.1.1`；T094 Ubuntu IME 可选已做。002 US1–US4 矩阵见 [native-verification.md](./native-verification.md) §9：2026-08-23/24 **已执行**（T070） |
 | 002 Polish 门禁（§0.1） | T063–T075 已执行 | T067 见 §0.2，T068 见 §0.3，T069 见 §0.4，T070 见 §0.5，T071 见 §0.6，T072 见 §0.7，T073 见 §0.8，T074 见 §0.9，T075 见 §0.10。不得用 §5.2 的 001 T090/T108 代替 |
 
+## Feature 003 final acceptance（进行中，2026-09-14）
+
+### T059 final risk-proportional automated suite
+
+本轮以产品 runtime commit `9bc3fd9b592f8d45cee5b1878474650ff2c8e40b` 为基础执行；为匹配该 runtime 已完成的 003 shell contract，只修改 browser E2E harness、语义定位和两个遗留 appearance 快照，不改生产 runtime。Codex managed macOS 下，Vite 在 sandbox 外以 `pnpm dev --host 127.0.0.1` 监听 `http://127.0.0.1:1420/`，Playwright 设置 `PLAYWRIGHT_SKIP_WEBSERVER=1` 与 `PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420`。首次使用错误的 package-script 参数形式导致多跑非目标集合，以及 sandbox 内 Chromium Mach-port 权限失败，均不计入产品 verdict；下表只记录最终精确命令。
+
+| 命令 | 结果 |
+|------|------|
+| `pnpm lint` | **pass**（exit 0） |
+| `pnpm typecheck` | **pass**（exit 0） |
+| `pnpm test` | **pass**（37 files / 295 tests） |
+| `pnpm build` | **pass**（exit 0；仅保留既有 large-chunk warning） |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | **pass**（exit 0） |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` | **pass**（exit 0） |
+| `cargo test --manifest-path src-tauri/Cargo.toml` | **pass**（96 tests：lib 70、contract 23、untrusted-scene 3） |
+| `APP_E2E=1 PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 pnpm exec playwright test --config e2e/playwright.config.ts e2e/tests/ui-desktop-shell-routing.spec.ts e2e/tests/ui-desktop-shell-visual.spec.ts e2e/tests/ui-sidebar-modes.spec.ts e2e/tests/ui-entry-dialogs.spec.ts e2e/tests/a11y-audit.spec.ts e2e/tests/us1-appearance.spec.ts e2e/tests/us5-export-fidelity.spec.ts --reporter=line` | **pass**（55/55，26.7s） |
+
+本轮 focused Playwright 继续覆盖六个 HF-2 语义状态、legacy chrome absence、a11y/focus/reduced-motion、固定 geometry/tokens/font readiness/fallback、native menu event delegation，以及 deterministic PNG/SVG output。遗留 `us1-appearance` Light/Dark 快照已从含旧 Save/Export/Appearance 顶栏和 harness error 的 002 shell 更新为当前 003 shell；更新后逐张检查，无明显裁切、遮挡或主题错误。该浏览器检查不替代 T060 package identity、T067 native smoke 或 T068 product-owner visual sweep。
+
+未重跑、未改写的 checkpoint evidence 按原 product commit/path 复用：
+
+- VSL-001 / HF2-03: `docs/evidence/003-visual-acceptance/5743de8d5a2c611274debb9ce44ccc5115a73955/VSL-001/`
+- HF2-01: `docs/evidence/003-visual-acceptance/6c78bebc4a922cbaf40bc6c60cf6b0be0e93b8df/HF2-01/`
+- HF2-02: `docs/evidence/003-visual-acceptance/6e308c0859341a1ffcf19e5dabe35b7ad28cafe5/HF2-02/`
+- HF2-04: `docs/evidence/003-visual-acceptance/a00d82b1f939299687128e697e4aef91cfc98466/HF2-04/`
+- HF2-05: `docs/evidence/003-visual-acceptance/63417a0db7650bbdf6f323d98110f2685c10a17b/HF2-05/`
+- HF2-06: `docs/evidence/003-visual-acceptance/06a4e34152fb8cdcdae7a6fd20ac137565ab651d/HF2-06/`
+
+T060、T067、T068 与最终 T069 owner decision 尚未执行，当前不得表述为通过或批准。
+
 ## 0. Feature 002 修改前基线（T001，2026-08-19）
 
 本节只记录 `HEAD 1346d29` 开始实现前的诊断状态，不替换、不重分类 §5.2 的正式物理机/参考 VM T090/T108 证据。浏览器 fixture 不证明原生文件系统或进程树性能；本机 startup/resource 运行未设置 `PERF_REFERENCE_RUN=1`，因此只属于 physical diagnostic。

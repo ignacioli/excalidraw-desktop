@@ -1,13 +1,19 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { installBrowserTauriHarness } from "./browserTauriHarness";
+import {
+  emitBrowserTauriEvent,
+  installBrowserTauriHarness,
+} from "./browserTauriHarness";
 import {
   emitUiInteractionFileChanged,
   installUiInteractionFileEvents,
   installUiInteractionHarness,
 } from "./uiInteractionHarness";
 import { emitFileChanged, installUs4Harness } from "./us4BrowserHarness";
-import { openWorkspaceSidebar } from "./workspaceSidebar";
+import {
+  openWorkspaceSidebar,
+  persistPinnedWorkspaceSidebar,
+} from "./workspaceSidebar";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
 
@@ -229,6 +235,7 @@ async function installRecoveryHarness(page: Page): Promise<void> {
             contractVersion: 2,
             appVersion: "0.1.0",
             abnormalExit: true,
+            pendingOpenPaths: [],
           };
         }
         if (command === "recovery_list") {
@@ -315,12 +322,20 @@ function a11yDrawing(
 }
 
 async function openDrawing(page: Page): Promise<void> {
-  await ensureFilesSidebar(page);
-  await page.getByRole("button", { name: "New drawing" }).click();
+  await page
+    .getByTestId("welcome-screen")
+    .getByRole("button", { name: "New Drawing", exact: true })
+    .click();
   await expect(page.locator(".excalidraw-editor")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Export…" })).toBeEnabled({
-    timeout: 15_000,
+}
+
+async function openExportDialog(page: Page): Promise<Locator> {
+  await emitBrowserTauriEvent(page, "native-menu-command", {
+    command: "exportImage",
   });
+  const dialog = page.getByRole("dialog", { name: "Export drawing" });
+  await expect(dialog).toBeVisible({ timeout: 15_000 });
+  return dialog;
 }
 
 async function drawRectangle(page: Page): Promise<void> {
@@ -544,7 +559,10 @@ test("recovery dialog is axe-clean with Esc/Enter/tab-loop handling", async ({
   await expect(last).toBeFocused();
 
   await first.press("Escape");
-  await expect(dialog).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText(
+    "Resolve recovery candidates before continuing.",
+  );
 
   await page.reload();
   const reopened = page.getByRole("dialog", {
@@ -573,9 +591,7 @@ for (const theme of ["light", "dark"] as const) {
       theme,
     );
 
-    await page.getByRole("button", { name: "Export…" }).click();
-    const dialog = page.getByRole("dialog", { name: "Export drawing" });
-    await expect(dialog).toBeVisible();
+    const dialog = await openExportDialog(page);
     await expect(page.getByRole("radio", { name: "PNG image" })).toBeFocused();
     await expectAxeClean(
       page,
@@ -608,9 +624,7 @@ for (const theme of ["light", "dark"] as const) {
         theme,
       );
 
-      await page.getByRole("button", { name: "Export…" }).click();
-      const dialog = page.getByRole("dialog", { name: "Export drawing" });
-      await expect(dialog).toBeVisible();
+      const dialog = await openExportDialog(page);
       await dialog.getByRole("button", { name: "Export…" }).click();
 
       if (mode === "ok") {
@@ -680,9 +694,6 @@ test("dirty and orphaned tab states are announced beyond color", async ({
   await expect(
     page.getByRole("tab", { name: /unsaved changes/i }),
   ).toBeVisible();
-  await expect(
-    page.locator(".visually-hidden", { hasText: "Unsaved changes" }),
-  ).toHaveCount(1);
 
   await emitFileChanged(page, {
     path: "/workspace/drawing.excalidraw",
@@ -700,20 +711,23 @@ test("entry dialogs are axe-clean, keyboard-trapped, and show inline errors", as
     workspaces: [A11Y_WORKSPACE],
     entries: [a11yDrawing("drawing.excalidraw", "drawing")],
   });
+  await persistPinnedWorkspaceSidebar(
+    page,
+    [A11Y_WORKSPACE.id],
+    A11Y_WORKSPACE.id,
+  );
   await page.goto("/");
   await ensureFilesSidebar(page);
 
-  await page.getByRole("button", { name: "Actions for Workspace" }).click();
-  const menu = page.getByRole("menu");
-  await expect(menu).toBeVisible();
-  await expectAxeClean(page, "workspace actions menu", [
-    ".application-context-menu",
+  const workspaceToolbar = page.getByRole("toolbar", {
+    name: "Workspace actions",
+  });
+  await expect(workspaceToolbar).toBeVisible();
+  await expectAxeClean(page, "workspace actions toolbar", [
+    ".workspace-panel-actions",
   ]);
-  await page.keyboard.press("Escape");
-  await expect(menu).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Actions for Workspace" }).click();
-  await page.getByRole("menuitem", { name: "New Drawing" }).click();
+  await workspaceToolbar.getByRole("button", { name: "New Drawing" }).click();
   const dialog = page.getByRole("dialog", { name: "New drawing" });
   await expect(dialog).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Name" })).toBeFocused();
@@ -746,6 +760,11 @@ test("orphan close dialog is axe-clean and keyboard operable", async ({
       a11yDrawing("gone.excalidraw", "gone"),
     ],
   });
+  await persistPinnedWorkspaceSidebar(
+    page,
+    [A11Y_WORKSPACE.id],
+    A11Y_WORKSPACE.id,
+  );
   await installUiInteractionFileEvents(page);
   await page.goto("/");
   await ensureFilesSidebar(page);
@@ -855,7 +874,9 @@ test("folder loading and permission-denied errors are announced without color al
       snapshot: JSON.stringify({
         version: 1,
         sidebarPinned: true,
+        sidebarWidth: 360,
         expandedWorkspaceIds: [A11Y_WORKSPACE.id],
+        currentWorkspaceId: A11Y_WORKSPACE.id,
       }),
     },
   );
@@ -886,10 +907,14 @@ test("create dialog announces permission-denied as an alert", async ({
     entries: [],
     failures: { workspace_entry_create: ACCESS_DENIED },
   });
+  await persistPinnedWorkspaceSidebar(
+    page,
+    [A11Y_WORKSPACE.id],
+    A11Y_WORKSPACE.id,
+  );
   await page.goto("/");
   await ensureFilesSidebar(page);
-  await page.getByRole("button", { name: "Actions for Workspace" }).click();
-  await page.getByRole("menuitem", { name: "New Drawing" }).click();
+  await page.getByRole("button", { name: "New Drawing" }).click();
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page.getByRole("alert")).toHaveText(
     "This location is outside the Workspace.",

@@ -13,6 +13,13 @@ export interface CapturedExport {
   bytes: number[];
 }
 
+export const EXPORT_WORKSPACE = {
+  id: "export-workspace",
+  name: "Exports",
+  rootPath: "/virtual",
+  createdAt: 1,
+} as const;
+
 interface ExportHarnessOptions {
   exportPaths: readonly string[];
   failReadonlyTarget?: string;
@@ -34,24 +41,84 @@ export async function installExportHarness(
   options: ExportHarnessOptions,
 ): Promise<void> {
   await page.addInitScript(
-    ({ exportPaths, failReadonlyTarget, openScene }) => {
+    ({ exportPaths, failReadonlyTarget, openScene, workspace }) => {
       type InvokeArgs = Record<string, unknown>;
       type BrowserWindow = Window & {
         __TAURI_INTERNALS__?: {
+          transformCallback(callback: (...args: unknown[]) => void): number;
+          unregisterCallback(callbackId: number): void;
+          metadata: { currentWindow: { label: string } };
           invoke(command: string, args?: InvokeArgs): Promise<unknown>;
+        };
+        __TAURI_EVENT_PLUGIN_INTERNALS__?: {
+          unregisterListener(event: string, eventId: number): void;
         };
       };
 
       const browser = globalThis as unknown as BrowserWindow & {
         __exportCalls: CapturedExport[];
         __exportStore: { files: Record<string, number[]>; tmp: string[] };
+        __browserTauriEmit?: (event: string, payload: unknown) => void;
       };
       browser.__exportCalls = [];
       browser.__exportStore = { files: {}, tmp: [] };
       let saveDialogCount = 0;
+      let nextCallbackId = 1;
+      const callbacks = new Map<
+        number,
+        (event: { event: string; id: number; payload: unknown }) => void
+      >();
+      const listeners = new Map<string, Set<number>>();
 
       browser.__TAURI_INTERNALS__ = {
+        transformCallback(callback) {
+          const callbackId = nextCallbackId++;
+          callbacks.set(callbackId, callback);
+          return callbackId;
+        },
+        unregisterCallback(callbackId) {
+          callbacks.delete(callbackId);
+        },
+        metadata: { currentWindow: { label: "main" } },
         async invoke(command, args = {}) {
+          if (command === "plugin:event|listen") {
+            const event = String(args.event ?? "");
+            const callbackId = Number(args.handler);
+            const eventListeners = listeners.get(event) ?? new Set<number>();
+            eventListeners.add(callbackId);
+            listeners.set(event, eventListeners);
+            return callbackId;
+          }
+          if (command === "plugin:event|unlisten") {
+            const event = String(args.event ?? "");
+            const callbackId = Number(args.eventId);
+            listeners.get(event)?.delete(callbackId);
+            callbacks.delete(callbackId);
+            return {};
+          }
+          if (
+            command === "plugin:event|emit" ||
+            command === "plugin:event|emit_to"
+          ) {
+            return {};
+          }
+          if (command === "plugin:window|on_close_requested") {
+            return 1;
+          }
+          if (command === "plugin:window|destroy") {
+            return {};
+          }
+          if (command === "app_handshake") {
+            return {
+              contractVersion: 2,
+              appVersion: "0.2.0-e2e",
+              abnormalExit: false,
+              pendingOpenPaths: [],
+            };
+          }
+          if (command === "recovery_list") {
+            return [];
+          }
           if (command === "plugin:dialog|open") {
             return "/virtual/drawing.excalidraw";
           }
@@ -62,7 +129,25 @@ export async function installExportHarness(
             return selected;
           }
           if (command === "workspace_list") {
-            return [];
+            return [{ ...workspace }];
+          }
+          if (command === "workspace_entry_list") {
+            if (String(args.parentRelativePath ?? "") !== "") {
+              return [];
+            }
+            return [
+              {
+                workspaceId: workspace.id,
+                kind: "drawing",
+                canonicalPath: `${workspace.rootPath}/drawing.excalidraw`,
+                relativePath: "drawing.excalidraw",
+                parentRelativePath: "",
+                name: "drawing.excalidraw",
+                displayName: "drawing",
+                mtime: 1,
+                fileSize: 100,
+              },
+            ];
           }
           if (command === "doc_open") {
             return {
@@ -98,9 +183,10 @@ export async function installExportHarness(
               theme?: unknown;
             };
             browser.__exportCalls.push({
-              path: args.path === null || args.path === undefined
-                ? null
-                : String(args.path),
+              path:
+                args.path === null || args.path === undefined
+                  ? null
+                  : String(args.path),
               sceneJson: String(args.sceneJson ?? ""),
               format: String(args.format) === "svg" ? "svg" : "png",
               targetPath,
@@ -124,11 +210,23 @@ export async function installExportHarness(
           throw new Error(`Unexpected export harness command: ${command}`);
         },
       };
+      browser.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+        unregisterListener(event, eventId) {
+          listeners.get(event)?.delete(eventId);
+          callbacks.delete(eventId);
+        },
+      };
+      browser.__browserTauriEmit = (event, payload) => {
+        for (const callbackId of listeners.get(event) ?? []) {
+          callbacks.get(callbackId)?.({ event, id: callbackId, payload });
+        }
+      };
     },
     {
       exportPaths: [...options.exportPaths],
       failReadonlyTarget: options.failReadonlyTarget ?? null,
       openScene: options.openScene ?? null,
+      workspace: EXPORT_WORKSPACE,
     },
   );
 }
@@ -151,7 +249,10 @@ export async function capturedExport(
   }, targetPath);
 }
 
-export async function exportBytes(page: Page, targetPath: string): Promise<Uint8Array> {
+export async function exportBytes(
+  page: Page,
+  targetPath: string,
+): Promise<Uint8Array> {
   const capture = await capturedExport(page, targetPath);
   return Uint8Array.from(capture.bytes);
 }
