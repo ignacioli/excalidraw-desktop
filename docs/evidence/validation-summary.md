@@ -46,7 +46,24 @@
 - HF2-05: `docs/evidence/003-visual-acceptance/63417a0db7650bbdf6f323d98110f2685c10a17b/HF2-05/`
 - HF2-06: `docs/evidence/003-visual-acceptance/06a4e34152fb8cdcdae7a6fd20ac137565ab651d/HF2-06/`
 
-T060、T067、T068 与最终 T069 owner decision 尚未执行，当前不得表述为通过或批准。
+T067、T068 与最终 T069 owner decision 尚未执行，当前不得表述为通过或批准。
+
+### T060 production package record
+
+紧接 T059 checkpoint 后，`git status --short` 输出为空，`git rev-parse HEAD` 为 `f8125d00ab0e181e2aabf6de2a486ac0eb7b3653`。第一次在 restricted sandbox 中执行 `pnpm tauri build` 时，release compile 与 `Excalidraw.app` bundling 已完成，但 `bundle_dmg.sh` 无法使用所需 macOS 系统服务而 exit 1；该次不计 PASS。随后在获准的 sandbox 外以同一精确命令重跑，明确输出 `Finished 2 bundles` 并 exit 0。
+
+| 事实 | 记录 |
+|------|------|
+| Build command / verdict | `pnpm tauri build` / **pass**（sandbox 外重跑，exit 0） |
+| Clean product commit | `f8125d00ab0e181e2aabf6de2a486ac0eb7b3653` |
+| Production `.app` | `/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/src-tauri/target/release/bundle/macos/Excalidraw.app` |
+| Bundle identifier | `excalidraw-desktop` |
+| Bundle short version / version | `0.2.0` / `0.2.0` |
+| macOS | `26.6.2`（build `25G83`） |
+| Main display | 1352×878 logical points；backing scale `2`；visible frame 1352×848 |
+| Exact package window | Accessibility 记录 position `{4,61}`、size `1280×760` |
+
+T067 与 T068 必须继续使用上表同一路径的 `.app`。该 package 当前启动到主 profile 的已有 recovery dialog；本记录没有读取其内容之外的数据，也没有 restore、discard、覆盖或清理任何 recovery candidate。T067/T068 与 T069 owner decision 仍为 PENDING。
 
 ## 0. Feature 002 修改前基线（T001，2026-08-19）
 
