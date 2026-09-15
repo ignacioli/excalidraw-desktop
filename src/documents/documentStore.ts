@@ -237,6 +237,15 @@ export class DocumentManager {
     return this.continueBatch();
   }
 
+  async closeWorkspaceDocuments(workspaceRoot: string): Promise<CloseOutcome> {
+    const { sessionsById, tabOrder } = this.store.getState();
+    const documentIds = tabOrder.filter((documentId) => {
+      const path = sessionsById[documentId]?.path;
+      return path !== undefined && isPathWithinRoot(path, workspaceRoot);
+    });
+    return this.closeMany(documentIds);
+  }
+
   async confirmOrphanClose(
     documentId: string,
     decision: "saveAs" | "discard" | "cancel",
@@ -732,6 +741,15 @@ function relativeDocumentPath(
     throw new Error("Open Document is outside the coordinated Workspace.");
   }
   return canonicalPath.slice(prefix.length);
+}
+
+function isPathWithinRoot(path: string, root: string): boolean {
+  const normalizedRoot = root.replace(/[\\/]+$/, "");
+  return (
+    path === normalizedRoot ||
+    path.startsWith(`${normalizedRoot}/`) ||
+    path.startsWith(`${normalizedRoot}\\`)
+  );
 }
 
 function getFileName(path: string): string {

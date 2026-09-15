@@ -46,6 +46,34 @@ test("workspace file management closes the mount/create/rename/trash loop", asyn
   await expect(page.getByRole("treeitem", { name: "renamed" })).toHaveCount(0);
 });
 
+test("removing a Workspace saves and closes its open tabs before unmounting", async ({
+  page,
+}) => {
+  await installWorkspaceHarness(page);
+  await page.goto("/");
+  await openWorkspaceSidebar(page);
+  await page.getByRole("button", { name: /Mount folder/i }).click();
+  await page.getByRole("treeitem", { name: "drawing" }).click();
+  await page.getByRole("treeitem", { name: "second" }).click();
+  await expect(page.getByRole("tab")).toHaveCount(2);
+
+  await openWorkspaceSidebar(page);
+  await page.getByRole("treeitem", { name: "Workspace" }).hover();
+  await page.getByRole("button", { name: "Actions for Workspace" }).click();
+  await page.getByRole("menuitem", { name: "Remove Workspace" }).click();
+  const dialog = page.getByRole("dialog", { name: "Remove Workspace?" });
+  await expect(dialog).toContainText(
+    "Open drawings from this Workspace will be saved and closed",
+  );
+  await dialog.getByRole("button", { name: "Remove Workspace" }).click();
+
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  await expect(page.getByText("No workspace mounted.")).toBeVisible();
+  await expect(
+    page.getByText("Path is outside the mounted workspaces."),
+  ).toHaveCount(0);
+});
+
 async function installWorkspaceHarness(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const browser = globalThis as typeof globalThis & {
@@ -175,6 +203,12 @@ async function installWorkspaceHarness(page: Page): Promise<void> {
           return { newBaseHash: "checkpointed", mtime: 2 };
         if (command === "doc_save_draft")
           return { contentHash: "draft", savedAt: 2 };
+        if (command === "doc_close") {
+          if (!mounted) {
+            throw new Error("Path is outside the mounted workspaces.");
+          }
+          return {};
+        }
         throw new Error(`Unexpected workspace command ${command}`);
       },
     };

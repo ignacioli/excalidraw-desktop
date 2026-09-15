@@ -513,6 +513,23 @@ export function WorkspacePanel({
     setBusy(true);
     setError(null);
     try {
+      const closeOutcome = await documentManager.closeWorkspaceDocuments(
+        workspace.rootPath,
+      );
+      if (closeOutcome.status === "orphaned") {
+        await documentManager.activate(closeOutcome.documentId);
+        throw new Error(
+          "Resolve the unavailable open drawing before removing this Workspace.",
+        );
+      }
+      if (closeOutcome.status === "failed") {
+        throw new Error(closeOutcome.message);
+      }
+      if (closeOutcome.status !== "closed") {
+        throw new Error(
+          "Open drawings are still closing. Try removing the Workspace again.",
+        );
+      }
       await invoker.invoke("workspace_remove", { workspaceId: workspace.id });
       const next = workspaces.filter((item) => item.id !== workspace.id);
       const nextCurrentWorkspaceId =
@@ -1160,7 +1177,10 @@ export function WorkspacePanel({
           returnFocusRef={returnFocusRef}
           title={`Remove ${pendingRemoval.name}?`}
         >
-          <p>Files on disk will not be deleted.</p>
+          <p>
+            Open drawings from this Workspace will be saved and closed. Files on
+            disk will not be deleted.
+          </p>
           <div className="application-dialog-actions conflict-dialog-actions">
             <button
               disabled={busy}

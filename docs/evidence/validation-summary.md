@@ -65,6 +65,20 @@ T067、T068 与最终 T069 owner decision 尚未执行，当前不得表述为�
 
 T067 与 T068 必须继续使用上表同一路径的 `.app`。该 package 当前启动到主 profile 的已有 recovery dialog；本记录没有读取其内容之外的数据，也没有 restore、discard、覆盖或清理任何 recovery candidate。T067/T068 与 T069 owner decision 仍为 PENDING。
 
+### 2026-09-15 product-owner acceptance findings（FAIL，待修复/定界）
+
+T060 后发现并修复 Recovery `Save … as new` 的 watcher self-write conflict，产品 runtime 前进到 clean commit `cab26bd4aacd098c187ceb196dd6bead24948b36`。修复后的 production `.app` 以 `pnpm tauri build --bundles app` 构建成功并安装到 `/Applications/Excalidraw.app`；安装副本与 worktree bundle 的可执行文件 SHA-256 均为 `f95ce5f18b28a773d2766de17e1a5ce08e4ab81d8ee481531806eb669d3ddd35`，bundle ID `excalidraw-desktop`，version `0.2.0`。原 `f8125d0` package 不再用于 T067/T068 的最终结果。
+
+产品负责人在上述 `cab26bd` package 上继续人工验收，报告 T067/T068 检查中除下列问题外未观察到其他非预期视觉问题；下列结果不得被 Agent 改写为 PASS：
+
+1. **SVG real export — FAIL**：Export Dialog 支持并可选择 `SVG image`，但实际导出显示 `The SVG export did not embed the drawing fonts. The export was not written.`，目标文件未写出。T067 的 task-scoped dialog-open/cancel 行为与真实 SVG filesystem outcome 是不同事实；即使前者满足，当前真实导出失败仍是 final acceptance 的 blocking product finding。
+2. **Remove Workspace with open tabs — FAIL / scope pending**：当 Workspace 仍有已打开 Tabs 时先执行 Remove Workspace，现有 Tabs 随后显示 `Path is outside the mounted workspaces.`。这可能属于既有 workspace/tab lifecycle 边界而非 003 新视觉范围，但它是在 003 exact-package owner session 中发现的可达产品缺陷；在定界或修复前保留为阻断项。
+3. **First-tab alignment — visual finding / owner decision pending**：Pinned Workspace 状态下，Sidebar controls 与第一个 Tab 之间的水平留白被产品负责人判断过大；建议第一个 Tab 至少与 Sidebar minimum-width boundary 对齐。该事实直接涉及 003 Tabs/shell composition，不能仅以旧 automated geometry PASS 覆盖；是否作为 003 blocking mismatch 需由 owner 明确决定或经设计合同变更/修复后复验。
+
+三个 finding 已按产品负责人授权完成最小 remediation，但本记录仍保留原始 FAIL，不以 automated result 替代 owner 复验：SVG 检查改为以 serialized SVG 中实际存在的 `<text>` 为准，避免 deleted/未渲染 text 误触发缺字体校验；Remove Workspace 在卸载 root 前先保存并关闭该 root 下的 tabs；Pinned Sidebar 的首个 tab inset 收紧为 8 px。针对三项路径的 browser E2E 为 `3 passed`，frontend lint、strict typecheck、299 项 Vitest 与 production build 均通过。
+
+当前没有最终 `APPROVED|REJECTED`。T067/T068 不勾选，T069 保持 **BLOCKED/PENDING**；下一步必须由产品负责人在重新构建并安装的 exact production `.app` 上复验这三个 finding，随后再给出 owner decision。
+
 ## 0. Feature 002 修改前基线（T001，2026-08-19）
 
 本节只记录 `HEAD 1346d29` 开始实现前的诊断状态，不替换、不重分类 §5.2 的正式物理机/参考 VM T090/T108 证据。浏览器 fixture 不证明原生文件系统或进程树性能；本机 startup/resource 运行未设置 `PERF_REFERENCE_RUN=1`，因此只属于 physical diagnostic。

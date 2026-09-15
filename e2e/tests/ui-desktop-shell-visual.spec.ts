@@ -1092,6 +1092,7 @@ async function assertGeometrySet(
   const sidebarBox = await readBox(page.locator(".file-sidebar"));
   const canvasBox = await readBox(page.locator(".canvas-region"));
   const editorBox = await readBox(page.locator(SDK_BOUNDARY_SELECTOR));
+  const firstTabBox = await readBox(page.locator(".tab-cluster").first());
   expect(
     Math.abs(sidebarBox.x + sidebarBox.width - canvasBox.x),
   ).toBeLessThanOrEqual(GEOMETRY_TOLERANCE_PX);
@@ -1099,6 +1100,14 @@ async function assertGeometrySet(
   expect(editorBox.x + editorBox.width).toBeLessThanOrEqual(
     canvasBox.x + canvasBox.width + GEOMETRY_TOLERANCE_PX,
   );
+  const firstTabInsetAssertion = assertGeometry({
+    name: `${state}.first-tab-sidebar-inset`,
+    expected: 8,
+    actual: firstTabBox.x - (sidebarBox.x + sidebarBox.width),
+    tolerance: GEOMETRY_TOLERANCE_PX,
+  });
+  expect(firstTabInsetAssertion.result).toBe("PASS");
+  assertions.push(firstTabInsetAssertion);
   const canvasShare = canvasBox.width / (sidebarBox.width + canvasBox.width);
   const canvasShareAssertion = assertGeometry({
     name: `${state}.canvas-share-percent`,

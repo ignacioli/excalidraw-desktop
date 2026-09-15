@@ -15,6 +15,7 @@ import {
   ShellPreferences,
 } from "../app/shellPreferences";
 import type { Workspace, WorkspaceEntry } from "../ipc/contracts";
+import { documentManager } from "../documents/documentStore";
 import { WorkspacePanel } from "./WorkspacePanel";
 
 vi.mock("@excalidraw/excalidraw", () => ({
@@ -549,6 +550,9 @@ describe("WorkspacePanel", () => {
     const user = userEvent.setup();
     const invoker = createInvoker();
     const onCurrentWorkspaceChange = vi.fn();
+    const closeWorkspaceDocuments = vi
+      .spyOn(documentManager, "closeWorkspaceDocuments")
+      .mockResolvedValue({ status: "closed" });
     render(
       <WorkspacePanel
         invoker={invoker}
@@ -577,7 +581,9 @@ describe("WorkspacePanel", () => {
       screen.getByRole("menuitem", { name: "Remove Workspace" }),
     );
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Files on disk will not be deleted");
+    expect(dialog).toHaveTextContent(
+      "Open drawings from this Workspace will be saved and closed",
+    );
     await user.click(
       within(dialog).getByRole("button", { name: "Remove Workspace" }),
     );
@@ -586,12 +592,54 @@ describe("WorkspacePanel", () => {
         workspaceId: "workspace-1",
       }),
     );
+    expect(closeWorkspaceDocuments).toHaveBeenCalledWith("/workspace/one");
+    expect(closeWorkspaceDocuments.mock.invocationCallOrder[0]).toBeLessThan(
+      vi
+        .mocked(invoker.invoke)
+        .mock.invocationCallOrder.find(
+          (_, index) =>
+            vi.mocked(invoker.invoke).mock.calls[index]?.[0] ===
+            "workspace_remove",
+        ) ?? Number.POSITIVE_INFINITY,
+    );
     await waitFor(() =>
       expect(
         screen.getByRole("treeitem", { name: "Blueprints" }),
       ).toHaveFocus(),
     );
     expect(onCurrentWorkspaceChange).toHaveBeenLastCalledWith(WORKSPACES[1]);
+  });
+
+  it("keeps the Workspace mounted when an open drawing cannot close", async () => {
+    const user = userEvent.setup();
+    const invoker = createInvoker();
+    vi.spyOn(documentManager, "closeWorkspaceDocuments").mockResolvedValue({
+      status: "failed",
+      documentId: "drawing-1",
+      message: "The drawing could not be saved.",
+    });
+    render(
+      <WorkspacePanel invoker={invoker} selectDirectory={async () => null} />,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Sketches" }),
+    );
+    await user.click(
+      screen.getByRole("menuitem", { name: "Remove Workspace" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Remove Sketches?" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Remove Workspace" }),
+    );
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "The drawing could not be saved.",
+    );
+    expect(invoker.invoke).not.toHaveBeenCalledWith(
+      "workspace_remove",
+      expect.anything(),
+    );
   });
 
   it("enforces one global menu, every dismissal path, and trigger focus restoration", async () => {

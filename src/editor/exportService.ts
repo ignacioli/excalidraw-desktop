@@ -44,7 +44,7 @@ export async function exportToSvg(
     files: scene.files,
   });
   const markup = new XMLSerializer().serializeToString(svg);
-  assertEmbeddedFonts(markup, scene.elements);
+  assertEmbeddedFonts(markup);
   return new Blob([markup], { type: "image/svg+xml" });
 }
 
@@ -89,11 +89,8 @@ function visibleElements(
   return elements.filter((element) => element.isDeleted !== true);
 }
 
-function assertEmbeddedFonts(
-  markup: string,
-  elements: readonly ExcalidrawElement[],
-): void {
-  if (!elements.some((element) => element.type === "text")) {
+function assertEmbeddedFonts(markup: string): void {
+  if (!/<text\b/u.test(markup)) {
     return;
   }
   if (!markup.includes("data:font/woff2")) {

@@ -152,12 +152,7 @@ body {
   gap: 1px;
   overflow-x: auto;
   scrollbar-width: none;
-  padding: var(--space-1) var(--space-2) 0 calc(var(--space-6) * 2);
-}
-
-.app-shell-tabs[data-sidebar-mode="hidden"] .tab-list,
-.app-shell-tabs[data-sidebar-mode="overlay"] .tab-list {
-  padding-left: var(--space-2);
+  padding: var(--space-1) var(--space-2) 0;
 }
 
 .app-shell-tabs[data-sidebar-mode="hidden"] .shell-left,
