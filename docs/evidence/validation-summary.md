@@ -83,6 +83,21 @@ T060 后发现并修复 Recovery `Save … as new` 的 watcher self-write confli
 
 当前没有最终 `APPROVED|REJECTED`。T067/T068 不勾选，T069 保持 **BLOCKED/PENDING**；下一步必须重新构建并安装包含 `5eb244d` 的 clean production `.app`，由产品负责人复验 Recent Workspaces 后继续剩余 final checklist。
 
+### 003 T060b–T060d Recent Workspace lifecycle forward-fix（2026-09-15）
+
+产品负责人否决了 `5eb244d`/`7acb5c4` 的“Remove 后直接从 Recent 消失”语义，并 Review 通过 T060b written delta。替代行为在 clean product commit `4541629e90e0e769ee1b46db2889bea738335327` 实现：Remove Workspace 安全保存/关闭其文档后只解除挂载并保留 Recent；可访问 Recent remount 同一 record；不可访问路径不在启动时主动报错，只在激活时报告且保留 row；仅未挂载 row 暴露 Remove from Recents，并且只删除应用历史、绝不删除用户文件。Private-specs approval/task record commit 为 `6f956f2`。
+
+自动化结果：
+
+- `pnpm test -- src/app/WelcomeScreen.test.tsx src/app/AppShell.test.tsx src/ipc/contracts.test.ts`：因 package script 的参数转发规则实际执行全量 Vitest，38 files / 302 tests PASS。
+- `pnpm typecheck`、`pnpm lint`、`pnpm build`：PASS；production build 仅保留既有 Vite chunk-size warning。
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`、`cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`、`cargo test --manifest-path src-tauri/Cargo.toml`：PASS；74 unit tests 与 10/9/3/3/3 integration suites 全部通过。
+- `APP_E2E=1 PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 pnpm exec playwright test --config e2e/playwright.config.ts e2e/tests/us3-workspace-files.spec.ts --reporter=line --workers=1 --timeout=30000`：3/3 PASS，覆盖同 session 与 clean reload Recent retention、same-id remount、inaccessible activation/no-startup-alert、mounted rejection 与 unmounted history-only removal。关闭 browser preflight server 时出现 harness 未模拟 `transformCallback` 的 Tauri event-listener 日志；该日志不来自 production package，也未改变上述 Playwright verdict。
+
+Package/session record：build 前 `git status --short` 为空，HEAD 为 `4541629e90e0e769ee1b46db2889bea738335327`。首次 sandbox 内 `pnpm tauri build` 已完成 release binary 与 `.app`，但在 DMG `bundle_dmg.sh` 退出 1，因此如实记为一次环境受限 FAIL；相同命令在 sandbox 外重跑 exit 0，生成 `/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/src-tauri/target/release/bundle/macos/Excalidraw.app` 与 `Excalidraw_0.2.0_aarch64.dmg`。该 `.app` 已安装到 `/Applications/Excalidraw.app`；安装后 bundle ID `excalidraw-desktop`、version `0.2.0`。环境为 macOS 26.6.2 (25G83)、Apple M5 Pro、3024×1964 built-in Liquid Retina XDR 主显示器。安装 package 已真实启动；初始窗口为 800×600，自动调整后只确认到 1076×760，尚未取得合同要求的 1280×760 owner-session fact。
+
+T060d 当前为 **OWNER_RECHECK_PENDING**：产品负责人仍需在同一 `/Applications/Excalidraw.app` 上将窗口设为 1280×760，并明确复验完整 Remove Workspace → Recent retention → same-id remount、缺失目录激活报错但 row 保留、Remove from Recents 后 row 消失且磁盘内容不变。完成该 recheck 前不得勾选 T060d，也不得把 T067/T068/T069 写成 PASS。
+
 ## 0. Feature 002 修改前基线（T001，2026-08-19）
 
 本节只记录 `HEAD 1346d29` 开始实现前的诊断状态，不替换、不重分类 §5.2 的正式物理机/参考 VM T090/T108 证据。浏览器 fixture 不证明原生文件系统或进程树性能；本机 startup/resource 运行未设置 `PERF_REFERENCE_RUN=1`，因此只属于 physical diagnostic。
