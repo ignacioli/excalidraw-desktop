@@ -788,6 +788,7 @@ export function AppShell({
                 void runAction(() => documentManager.open(entry.canonicalPath));
               }}
               onWorkspacePresenceChange={setHasMountedWorkspace}
+              onWorkspacesChange={setWelcomeWorkspaces}
               onCurrentWorkspaceChange={(workspace) => {
                 preferences.setCurrentWorkspaceId(workspace?.id ?? null);
                 setCurrentWorkspaceId(workspace?.id ?? null);

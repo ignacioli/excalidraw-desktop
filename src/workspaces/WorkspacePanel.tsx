@@ -53,6 +53,7 @@ export interface WorkspacePanelProps {
   backLocation?: BrowsingLocation | null;
   onBackLocationApplied?: () => void;
   onWorkspacePresenceChange?: (hasAny: boolean) => void;
+  onWorkspacesChange?: (workspaces: Workspace[]) => void;
   preferences?: ShellPreferences;
   captureFocus?: boolean;
 }
@@ -92,6 +93,7 @@ export function WorkspacePanel({
   backLocation = null,
   onBackLocationApplied,
   onWorkspacePresenceChange,
+  onWorkspacesChange,
   preferences: providedPreferences,
   captureFocus = true,
 }: WorkspacePanelProps) {
@@ -340,6 +342,7 @@ export function WorkspacePanel({
         if (!disposed) {
           applyWorkspaceList(items);
           onWorkspacePresenceChange?.(items.length > 0);
+          onWorkspacesChange?.(items);
         }
       })
       .catch((nextError: unknown) => {
@@ -353,7 +356,12 @@ export function WorkspacePanel({
     return () => {
       disposed = true;
     };
-  }, [applyWorkspaceList, invoker, onWorkspacePresenceChange]);
+  }, [
+    applyWorkspaceList,
+    invoker,
+    onWorkspacePresenceChange,
+    onWorkspacesChange,
+  ]);
 
   useEffect(() => {
     if (
@@ -369,6 +377,7 @@ export function WorkspacePanel({
         if (!disposed) {
           applyWorkspaceList(items);
           onWorkspacePresenceChange?.(items.length > 0);
+          onWorkspacesChange?.(items);
         }
       })
       .catch((nextError: unknown) => {
@@ -388,6 +397,7 @@ export function WorkspacePanel({
     controlledCurrentWorkspaceId,
     invoker,
     onWorkspacePresenceChange,
+    onWorkspacesChange,
   ]);
 
   useEffect(() => {
@@ -491,7 +501,12 @@ export function WorkspacePanel({
       const rootPath = await selectDirectory();
       if (rootPath) {
         const workspace = await invoker.invoke("workspace_add", { rootPath });
-        setWorkspaces((current) => [...current, workspace]);
+        const next = [
+          ...workspaces.filter((item) => item.id !== workspace.id),
+          workspace,
+        ];
+        setWorkspaces(next);
+        onWorkspacesChange?.(next);
         preferences.setCurrentWorkspaceId(workspace.id);
         setCurrentWorkspaceId(workspace.id);
         onCurrentWorkspaceChange?.(workspace);
@@ -542,6 +557,7 @@ export function WorkspacePanel({
         next.find((item) => item.id === nextCurrentWorkspaceId) ?? null,
       );
       setWorkspaces(next);
+      onWorkspacesChange?.(next);
       setExpandedWorkspaceIds((current) => {
         const withoutRemoved = new Set(current);
         withoutRemoved.delete(workspace.id);

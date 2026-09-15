@@ -356,11 +356,13 @@ describe("WorkspacePanel", () => {
     };
     const { invoke } = createInvoker([], workspace);
     const onWorkspacePresenceChange = vi.fn();
+    const onWorkspacesChange = vi.fn();
 
     render(
       <WorkspacePanel
         invoker={{ invoke }}
         onWorkspacePresenceChange={onWorkspacePresenceChange}
+        onWorkspacesChange={onWorkspacesChange}
         selectDirectory={async () => "/workspace"}
       />,
     );
@@ -375,6 +377,7 @@ describe("WorkspacePanel", () => {
     expect(invoke).toHaveBeenCalledWith("workspace_add", {
       rootPath: "/workspace",
     });
+    expect(onWorkspacesChange).toHaveBeenLastCalledWith([workspace]);
   });
 
   it("announces folder loading then permission-denied list errors", async () => {
@@ -527,11 +530,13 @@ describe("WorkspacePanel", () => {
     };
     const invoker = createInvoker([], workspace);
     const onCurrentWorkspaceChange = vi.fn();
+    const onWorkspacesChange = vi.fn();
 
     render(
       <WorkspacePanel
         invoker={invoker}
         onCurrentWorkspaceChange={onCurrentWorkspaceChange}
+        onWorkspacesChange={onWorkspacesChange}
         selectDirectory={async () => workspace.rootPath}
       />,
     );
@@ -550,6 +555,7 @@ describe("WorkspacePanel", () => {
     const user = userEvent.setup();
     const invoker = createInvoker();
     const onCurrentWorkspaceChange = vi.fn();
+    const onWorkspacesChange = vi.fn();
     const closeWorkspaceDocuments = vi
       .spyOn(documentManager, "closeWorkspaceDocuments")
       .mockResolvedValue({ status: "closed" });
@@ -557,6 +563,7 @@ describe("WorkspacePanel", () => {
       <WorkspacePanel
         invoker={invoker}
         onCurrentWorkspaceChange={onCurrentWorkspaceChange}
+        onWorkspacesChange={onWorkspacesChange}
         selectDirectory={async () => null}
       />,
     );
@@ -608,6 +615,7 @@ describe("WorkspacePanel", () => {
       ).toHaveFocus(),
     );
     expect(onCurrentWorkspaceChange).toHaveBeenLastCalledWith(WORKSPACES[1]);
+    expect(onWorkspacesChange).toHaveBeenLastCalledWith([WORKSPACES[1]]);
   });
 
   it("keeps the Workspace mounted when an open drawing cannot close", async () => {

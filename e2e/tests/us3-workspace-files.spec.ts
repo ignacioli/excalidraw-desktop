@@ -49,10 +49,10 @@ test("workspace file management closes the mount/create/rename/trash loop", asyn
 test("removing a Workspace saves and closes its open tabs before unmounting", async ({
   page,
 }) => {
-  await installWorkspaceHarness(page);
+  await installWorkspaceHarness(page, true);
   await page.goto("/");
   await openWorkspaceSidebar(page);
-  await page.getByRole("button", { name: /Mount folder/i }).click();
+  await page.getByRole("button", { name: "Open workspace Workspace" }).click();
   await page.getByRole("treeitem", { name: "drawing" }).click();
   await page.getByRole("treeitem", { name: "second" }).click();
   await expect(page.getByRole("tab")).toHaveCount(2);
@@ -70,12 +70,18 @@ test("removing a Workspace saves and closes its open tabs before unmounting", as
   await expect(page.getByRole("tab")).toHaveCount(0);
   await expect(page.getByText("No workspace mounted.")).toBeVisible();
   await expect(
+    page.getByRole("button", { name: "Open workspace Workspace" }),
+  ).toHaveCount(0);
+  await expect(
     page.getByText("Path is outside the mounted workspaces."),
   ).toHaveCount(0);
 });
 
-async function installWorkspaceHarness(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+async function installWorkspaceHarness(
+  page: Page,
+  initiallyMounted = false,
+): Promise<void> {
+  await page.addInitScript((initiallyMounted) => {
     const browser = globalThis as typeof globalThis & {
       __TAURI_INTERNALS__?: {
         invoke(
@@ -84,7 +90,7 @@ async function installWorkspaceHarness(page: Page): Promise<void> {
         ): Promise<unknown>;
       };
     };
-    let mounted = false;
+    let mounted = initiallyMounted;
     let files = ["drawing.excalidraw", "second.excalidraw"];
     browser.__TAURI_INTERNALS__ = {
       async invoke(command, args = {}) {
@@ -212,5 +218,5 @@ async function installWorkspaceHarness(page: Page): Promise<void> {
         throw new Error(`Unexpected workspace command ${command}`);
       },
     };
-  });
+  }, initiallyMounted);
 }
