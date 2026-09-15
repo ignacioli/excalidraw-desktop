@@ -77,7 +77,11 @@ T060 后发现并修复 Recovery `Save … as new` 的 watcher self-write confli
 
 三个 finding 已按产品负责人授权完成最小 remediation，但本记录仍保留原始 FAIL，不以 automated result 替代 owner 复验：SVG 检查改为以 serialized SVG 中实际存在的 `<text>` 为准，避免 deleted/未渲染 text 误触发缺字体校验；Remove Workspace 在卸载 root 前先保存并关闭该 root 下的 tabs；Pinned Sidebar 的首个 tab inset 收紧为 8 px。针对三项路径的 browser E2E 为 `3 passed`，frontend lint、strict typecheck、299 项 Vitest 与 production build 均通过。
 
-当前没有最终 `APPROVED|REJECTED`。T067/T068 不勾选，T069 保持 **BLOCKED/PENDING**；下一步必须由产品负责人在重新构建并安装的 exact production `.app` 上复验这三个 finding，随后再给出 owner decision。
+产品负责人随后在安装的 `de9b44f` production `.app` 上复验上述三个 finding，并明确记录 SVG real export、Remove Workspace with open tabs 与 first-tab alignment **3/3 PASS**。该结果关闭这三个 remediation finding，但不自动完成 T067/T068 的其余 checklist，也不构成 T069 owner decision。
+
+同一轮继续验收时发现新的 blocking finding：Remove 最后一个 Workspace 后，Welcome 的 `Recent Workspaces` 仍显示已被 Rust/SQLite 删除的旧记录；点击该 row 会以旧 workspace id 调用 `workspace_entry_list` 并显示 `Workspace was not found.`。根因是 `WorkspacePanel` 只更新自己的 mounted-workspace state，没有同步 `AppShell` 的 Welcome/Recent projection。产品 commit `5eb244d` 增加 mount/remove 完整列表同步，并用“启动时已有 Workspace → 打开 drawings → Remove → Welcome 不存在旧 Recent row”的 semantic E2E 精确覆盖；修复前该断言收到 1 行而 FAIL，修复后 1/1 PASS。Focused AppShell/WorkspacePanel Vitest 44/44、frontend lint、strict typecheck、全量 Vitest 38 files / 299 tests 与 production build 均 PASS。该 finding 仍等待新 production `.app` 上的产品负责人复验。
+
+当前没有最终 `APPROVED|REJECTED`。T067/T068 不勾选，T069 保持 **BLOCKED/PENDING**；下一步必须重新构建并安装包含 `5eb244d` 的 clean production `.app`，由产品负责人复验 Recent Workspaces 后继续剩余 final checklist。
 
 ## 0. Feature 002 修改前基线（T001，2026-08-19）
 
