@@ -97,6 +97,28 @@ test("unmounting retains Recent history, remounts the same record, and forgets h
   await expect(recent).toHaveCount(0);
 });
 
+test("keeps Welcome geometry within the narrow-window gutter and preserves wide composition", async ({
+  page,
+}) => {
+  await installMissingRecentHarness(page);
+
+  await page.setViewportSize({ width: 800, height: 600 });
+  await page.goto("/");
+  await assertWelcomeViewportGeometry(page, {
+    viewportWidth: 800,
+    expectedScreenLeft: 16,
+    expectedScreenWidth: 768,
+  });
+
+  await page.setViewportSize({ width: 1280, height: 760 });
+  await page.reload();
+  await assertWelcomeViewportGeometry(page, {
+    viewportWidth: 1280,
+    expectedScreenLeft: 160,
+    expectedScreenWidth: 960,
+  });
+});
+
 test("an inaccessible Recent Workspace errors only on activation and remains removable", async ({
   page,
 }) => {
@@ -255,6 +277,56 @@ test("an inaccessible Recent Workspace errors only on activation and remains rem
   await expect(remove).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(recent).toHaveCount(0);
+});
+
+test("keeps Welcome actions visually stable while an inaccessible remount is pending", async ({
+  page,
+}) => {
+  await installMissingRecentHarness(page, { deferRemount: true });
+  await page.goto("/");
+
+  const recent = page.getByRole("button", {
+    name: "Open workspace Missing Workspace",
+  });
+  const welcomeActions = page.locator(".welcome-actions");
+  const newDrawing = page.getByRole("button", { name: "New Drawing" });
+  const openWorkspace = page.getByRole("button", {
+    name: "Open Workspace",
+    exact: true,
+  });
+  const before = await readWelcomeActionStyle(page);
+  const recentBefore = await readRecentButtonStyle(recent);
+
+  await recent.click();
+  await page.waitForFunction(
+    () =>
+      (
+        globalThis as typeof globalThis & {
+          __recentRemountStarted?: boolean;
+        }
+      ).__recentRemountStarted === true,
+  );
+  await expect(welcomeActions).toHaveAttribute("aria-busy", "true");
+  await expect(newDrawing).toBeDisabled();
+  await expect(openWorkspace).toBeDisabled();
+  await expect(recent).toBeDisabled();
+  const during = await readWelcomeActionStyle(page);
+  expect(during).toEqual(before);
+  expect(await readRecentButtonStyle(recent)).toEqual(recentBefore);
+
+  await page.evaluate(() => {
+    const browser = globalThis as typeof globalThis & {
+      __releaseRecentRemount?: () => void;
+    };
+    browser.__releaseRecentRemount?.();
+  });
+  await expect(page.getByRole("alert")).toContainText(
+    "Workspace is no longer accessible.",
+  );
+  await expect(welcomeActions).not.toHaveAttribute("aria-busy", "true");
+  const after = await readWelcomeActionStyle(page);
+  expect(after).toEqual(before);
+  expect(await readRecentButtonStyle(recent)).toEqual(recentBefore);
 });
 
 async function installWorkspaceHarness(
@@ -439,8 +511,78 @@ async function installWorkspaceHarness(
   }, initiallyMounted);
 }
 
-async function installMissingRecentHarness(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+async function assertWelcomeViewportGeometry(
+  page: Page,
+  expected: {
+    viewportWidth: number;
+    expectedScreenLeft: number;
+    expectedScreenWidth: number;
+  },
+): Promise<void> {
+  const screenBox = await page.getByTestId("welcome-screen").boundingBox();
+  const contentBox = await page.locator(".welcome-content").boundingBox();
+  const headingBox = await page.locator("#welcome-title").boundingBox();
+  const actionsBox = await page.locator(".welcome-actions").boundingBox();
+  const recentBox = await page.locator(".recent-workspaces").boundingBox();
+  const rowBox = await page
+    .locator(".recent-workspace-row")
+    .first()
+    .boundingBox();
+  for (const [name, box] of [
+    ["screen", screenBox],
+    ["content", contentBox],
+    ["heading", headingBox],
+    ["actions", actionsBox],
+    ["recent", recentBox],
+    ["row", rowBox],
+  ] as const) {
+    expect(box, `${name} geometry missing`).not.toBeNull();
+    expect(box?.x, `${name} left edge`).toBe(expected.expectedScreenLeft);
+    expect(
+      expected.viewportWidth - (box?.x ?? 0) - (box?.width ?? 0),
+      `${name} right gutter`,
+    ).toBeGreaterThanOrEqual(16);
+  }
+  expect(screenBox?.width, "screen width").toBe(expected.expectedScreenWidth);
+}
+
+async function readWelcomeActionStyle(page: Page): Promise<
+  Array<{
+    backgroundColor: string;
+    color: string;
+    opacity: string;
+  }>
+> {
+  return page.locator(".welcome-action").evaluateAll((elements) =>
+    elements.map((element) => {
+      const style = getComputedStyle(element);
+      return {
+        backgroundColor: style.backgroundColor,
+        color: style.color,
+        opacity: style.opacity,
+      };
+    }),
+  );
+}
+
+async function readRecentButtonStyle(
+  recent: ReturnType<Page["getByRole"]>,
+): Promise<{ color: string; opacity: string }> {
+  return recent.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { color: style.color, opacity: style.opacity };
+  });
+}
+
+interface MissingRecentHarnessOptions {
+  deferRemount?: boolean;
+}
+
+async function installMissingRecentHarness(
+  page: Page,
+  options: MissingRecentHarnessOptions = {},
+): Promise<void> {
+  await page.addInitScript((harnessOptions) => {
     const browser = globalThis as typeof globalThis & {
       __TAURI_INTERNALS__?: {
         invoke(
@@ -448,6 +590,7 @@ async function installMissingRecentHarness(page: Page): Promise<void> {
           args?: Record<string, unknown>,
         ): Promise<unknown>;
       };
+      __releaseRecentRemount?: () => void;
     };
     const workspace = {
       id: "workspace-missing",
@@ -462,6 +605,16 @@ async function installMissingRecentHarness(page: Page): Promise<void> {
         if (command === "workspace_recent_list")
           return retained ? [workspace] : [];
         if (command === "workspace_remount") {
+          (
+            globalThis as typeof globalThis & {
+              __recentRemountStarted?: boolean;
+            }
+          ).__recentRemountStarted = true;
+          if (harnessOptions.deferRemount) {
+            await new Promise<void>((resolve) => {
+              browser.__releaseRecentRemount = resolve;
+            });
+          }
           throw new Error("Workspace is no longer accessible.");
         }
         if (command === "workspace_recent_remove") {
@@ -471,5 +624,5 @@ async function installMissingRecentHarness(page: Page): Promise<void> {
         throw new Error(`Unexpected workspace command ${command}`);
       },
     };
-  });
+  }, options);
 }
