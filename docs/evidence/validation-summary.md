@@ -1,24 +1,21 @@
-# 验证证据汇总（Phase 10 / T095；002 T066 指令）
+# 验证证据汇总（003 当前状态；001/002 历史）
 
-**日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17；§6/§7 原生发版与 T078/T080/T094 更新于 2026-08-18；002 修改前基线更新于 2026-08-19；002 Polish 验证指令 T066 更新于 2026-08-23；T067 前端/Rust 门禁更新于 2026-08-23；T068 浏览器 E2E 与 T069 二进制证明更新于 2026-08-23；T071 物理机 10k 树与 T072 可观测性更新于 2026-08-23；T070 原生矩阵更新于 2026-08-24；T073–T075 参考 VM 与 quickstart 收口更新于 2026-08-24）
-**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总，并包含 feature 002 的修改前诊断基线、Polish 门禁指令与 T067/T068/T069 成绩；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。T066 只更新指令与证据边界，不重分类下列 001 历史数字。T070 见 [native-verification.md](./native-verification.md) §9（2026-08-23/24 已执行）；T071/T072 见 §0.6/§0.7；T073 见 §0.8；T074 见 §0.9；T075 见 §0.10。
+## Feature 003 当前状态（已完成，R15 轻量验收，2026-09-16）
 
-先看下表再下钻各节。下表是 **001 Phase 10 / T095 历史成绩单一览**，不因 002 改写。性能当前有效序列是 2026-08-16 ADR-007（同一份 e2e-harness `e8bef9b7…`）；§5.3 的日期流水账不可与之混比。002 剩余门禁顺序与执行边界见 §0.1。
+Feature 003 已在批准的 R15 轻量验收范围内完成。安装的 production `.app` 来自 clean runtime commit `5a5aa59`；产品证据 checkpoint 为 `a84319a`，private-specs closure 为 `ca3201f`。产品负责人已确认：T060d 人工验收 **PASS**，T067 **PASS**（菜单 5/5、原生操作 7/7），T068 **PASS**（指定 HF-2 状态 6/6），T069 最终决定为 **`APPROVED`**。003 在该批准范围内的适用实现、自动化、原生与 UX/UI 人工验收门槛已全部通过，active tasks 与下游 checklist 均已关闭。
 
-| 门禁 | 状态 | 说明 |
-|------|------|------|
-| 浏览器回归（T095，§1） | **36 pass** · 2 已知 fail · 12 skip | 两例失败为断言/定位符脆性，先于本阶段；skip 依赖原生测试二进制。此为 001 历史计数，不是 T068 |
-| SC-012 可靠性（§2） | 前序 **pass**，本会话未复跑 | 合并阻断门禁；未在本会话重建 `e2e-harness` 复跑 |
-| SC-014 外观（§3） | **pass**（4/4） | light/dark/system 与截图基线 |
-| SC-015 无障碍（§4） | **pass**（15/15） | T093 历史：axe serious/critical = 0。002 跨故事审计结果以 [a11y-audit.md](./a11y-audit.md)（T063）为准，本文件不改写 |
-| T090 startup/idle（§5.2） | 物理机 **pass** · 参考 VM **fail** | VM 只败在冷启动 3704 ms；8 vCPU 诊断仍 fail（§5.2），未改 specs；空载 RSS 两边过 500 MB。001 历史；002 不得复用为 T073 |
-| T090 canvas/I/O（§5.2） | 物理机 **pass** · 参考 VM **pass** | 10k 恒定 zoom 平移/编辑约 60 fps。001 历史；002 不得复用为 T073 |
-| T108 15 min soak（§5.2） | 物理机 **fail** · 参考 VM **fail** | 只败在 RSS 增长；idle CPU 与静置 0 写入两边过。001 历史；002 不得复用为 T074 |
-| SC-010 开源分发（§6） | **v0.1.1 已发布** | 未签名/未公证 GitHub Release；macOS universal `.dmg` + Linux amd64 AppImage/deb/rpm |
-| T078/T080 原生验收（§7） | **通过**（2026-08-18） | 001 历史：物理 macOS 26.5.2 下载真实 `v0.1.1`；T094 Ubuntu IME 可选已做。002 US1–US4 矩阵见 [native-verification.md](./native-verification.md) §9：2026-08-23/24 **已执行**（T070） |
-| 002 Polish 门禁（§0.1） | T063–T075 已执行 | T067 见 §0.2，T068 见 §0.3，T069 见 §0.4，T070 见 §0.5，T071 见 §0.6，T072 见 §0.7，T073 见 §0.8，T074 见 §0.9，T075 见 §0.10。不得用 §5.2 的 001 T090/T108 代替 |
+若以“100% PASS”概括，只能指上述 **003/R15 验收项全部通过**，不表示所有平台、所有语言、所有可能设备组合或 100% 测试覆盖率。被停用的自动 proof chain 与历史失败结果仍按原 verdict 保留，不重新归入当前通过项；中文优先的多语言支持是后续独立工作项。
 
-## Feature 003 final acceptance（进行中，2026-09-14）
+当前收尾提交与任务状态：
+
+- 产品 runtime/package commit：`5a5aa59`；产品证据 checkpoint：`a84319a`（最终验收事实）。
+- private-specs checkpoint：`ca3201f`，包含 T060d、T067、T068、T069 勾选及 closure record。
+- T060d/T067/T068/T069：**PASS / PASS / PASS / APPROVED**。
+- 两个 worktree 均已完成 scoped checkpoint，未 push；product `main`、shared specs checkout 未修改。
+
+## Feature 003 详细证据与时间线（已完成；以下保留历史过程）
+
+本节保留 003 从 T059 到 R15 收尾的逐阶段证据。较早的 `PENDING`、`FAIL` 或“尚未完成”句子描述的是当时的时间点；它们不覆盖上方已经确认的最终状态，也不应单独作为当前项目进度判断。
 
 ### T059 final risk-proportional automated suite
 
@@ -46,7 +43,7 @@
 - HF2-05: `docs/evidence/003-visual-acceptance/63417a0db7650bbdf6f323d98110f2685c10a17b/HF2-05/`
 - HF2-06: `docs/evidence/003-visual-acceptance/06a4e34152fb8cdcdae7a6fd20ac137565ab651d/HF2-06/`
 
-T067、T068 与最终 T069 owner decision 尚未执行，当前不得表述为通过或批准。
+在 T059 当时，T067、T068 与最终 T069 owner decision 尚未执行；其后结果见本节最终收尾记录。
 
 ### T060 production package record
 
@@ -63,15 +60,15 @@ T067、T068 与最终 T069 owner decision 尚未执行，当前不得表述为�
 | Main display | 1352×878 logical points；backing scale `2`；visible frame 1352×848 |
 | Exact package window | Accessibility 记录 position `{4,61}`、size `1280×760` |
 
-T067 与 T068 必须继续使用上表同一路径的 `.app`。该 package 当前启动到主 profile 的已有 recovery dialog；本记录没有读取其内容之外的数据，也没有 restore、discard、覆盖或清理任何 recovery candidate。T067/T068 与 T069 owner decision 仍为 PENDING。
+T060 当时要求 T067 与 T068 继续使用上表同一路径的 `.app`；后续产品修复产生了替代 package，最终验收以本节的 `5a5aa59` package 为准。该历史 package 当时启动到主 profile 的已有 recovery dialog；本记录没有读取其内容之外的数据，也没有 restore、discard、覆盖或清理任何 recovery candidate。此处 PENDING 仅为当时状态。
 
-### 2026-09-15 product-owner acceptance findings（FAIL，待修复/定界）
+### 2026-09-15 product-owner acceptance findings（原始 FAIL；后续修复并复验）
 
 T060 后发现并修复 Recovery `Save … as new` 的 watcher self-write conflict，产品 runtime 前进到 clean commit `cab26bd4aacd098c187ceb196dd6bead24948b36`。修复后的 production `.app` 以 `pnpm tauri build --bundles app` 构建成功并安装到 `/Applications/Excalidraw.app`；安装副本与 worktree bundle 的可执行文件 SHA-256 均为 `f95ce5f18b28a773d2766de17e1a5ce08e4ab81d8ee481531806eb669d3ddd35`，bundle ID `excalidraw-desktop`，version `0.2.0`。原 `f8125d0` package 不再用于 T067/T068 的最终结果。
 
 产品负责人在上述 `cab26bd` package 上继续人工验收，报告 T067/T068 检查中除下列问题外未观察到其他非预期视觉问题；下列结果不得被 Agent 改写为 PASS：
 
-1. **SVG real export — FAIL**：Export Dialog 支持并可选择 `SVG image`，但实际导出显示 `The SVG export did not embed the drawing fonts. The export was not written.`，目标文件未写出。T067 的 task-scoped dialog-open/cancel 行为与真实 SVG filesystem outcome 是不同事实；即使前者满足，当前真实导出失败仍是 final acceptance 的 blocking product finding。
+1. **SVG real export — 当时 FAIL**：Export Dialog 支持并可选择 `SVG image`，但当时实际导出显示 `The SVG export did not embed the drawing fonts. The export was not written.`，目标文件未写出。T067 的 task-scoped dialog-open/cancel 行为与真实 SVG filesystem outcome 是不同事实；即使前者满足，这次真实导出失败在修复复验前仍是 final acceptance 的 blocking product finding。
 2. **Remove Workspace with open tabs — FAIL / scope pending**：当 Workspace 仍有已打开 Tabs 时先执行 Remove Workspace，现有 Tabs 随后显示 `Path is outside the mounted workspaces.`。这可能属于既有 workspace/tab lifecycle 边界而非 003 新视觉范围，但它是在 003 exact-package owner session 中发现的可达产品缺陷；在定界或修复前保留为阻断项。
 3. **First-tab alignment — visual finding / owner decision pending**：Pinned Workspace 状态下，Sidebar controls 与第一个 Tab 之间的水平留白被产品负责人判断过大；建议第一个 Tab 至少与 Sidebar minimum-width boundary 对齐。该事实直接涉及 003 Tabs/shell composition，不能仅以旧 automated geometry PASS 覆盖；是否作为 003 blocking mismatch 需由 owner 明确决定或经设计合同变更/修复后复验。
 
@@ -81,7 +78,7 @@ T060 后发现并修复 Recovery `Save … as new` 的 watcher self-write confli
 
 同一轮继续验收时发现新的 blocking finding：Remove 最后一个 Workspace 后，Welcome 的 `Recent Workspaces` 仍显示已被 Rust/SQLite 删除的旧记录；点击该 row 会以旧 workspace id 调用 `workspace_entry_list` 并显示 `Workspace was not found.`。根因是 `WorkspacePanel` 只更新自己的 mounted-workspace state，没有同步 `AppShell` 的 Welcome/Recent projection。产品 commit `5eb244d` 增加 mount/remove 完整列表同步，并用“启动时已有 Workspace → 打开 drawings → Remove → Welcome 不存在旧 Recent row”的 semantic E2E 精确覆盖；修复前该断言收到 1 行而 FAIL，修复后 1/1 PASS。Focused AppShell/WorkspacePanel Vitest 44/44、frontend lint、strict typecheck、全量 Vitest 38 files / 299 tests 与 production build 均 PASS。该 finding 仍等待新 production `.app` 上的产品负责人复验。
 
-当前没有最终 `APPROVED|REJECTED`。T067/T068 不勾选，T069 保持 **BLOCKED/PENDING**；下一步必须重新构建并安装包含 `5eb244d` 的 clean production `.app`，由产品负责人复验 Recent Workspaces 后继续剩余 final checklist。
+在这个被后续否决的尝试中，尚无最终 `APPROVED|REJECTED`，T067/T068 未勾选，T069 为 **BLOCKED/PENDING**。当时计划重新构建并安装包含 `5eb244d` 的 `.app`；owner 随后否决其删除 Recent row 的语义，该包未安装，正确的 forward-fix 与最终验收见下文。
 
 ### 003 T060b–T060d Recent Workspace lifecycle forward-fix（2026-09-15）
 
@@ -96,9 +93,9 @@ T060 后发现并修复 Recovery `Save … as new` 的 watcher self-write confli
 
 Package/session record：build 前 `git status --short` 为空，HEAD 为 `4541629e90e0e769ee1b46db2889bea738335327`。首次 sandbox 内 `pnpm tauri build` 已完成 release binary 与 `.app`，但在 DMG `bundle_dmg.sh` 退出 1，因此如实记为一次环境受限 FAIL；相同命令在 sandbox 外重跑 exit 0，生成 `/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/src-tauri/target/release/bundle/macos/Excalidraw.app` 与 `Excalidraw_0.2.0_aarch64.dmg`。该 `.app` 已安装到 `/Applications/Excalidraw.app`；安装后 bundle ID `excalidraw-desktop`、version `0.2.0`。环境为 macOS 26.6.2 (25G83)、Apple M5 Pro、3024×1964 built-in Liquid Retina XDR 主显示器。安装 package 已真实启动；初始窗口为 800×600，自动调整后只确认到 1076×760，尚未取得合同要求的 1280×760 owner-session fact。
 
-T060d 当前为 **OWNER_RECHECK_PENDING**：产品负责人仍需在同一 `/Applications/Excalidraw.app` 上将窗口设为 1280×760，并明确复验完整 Remove Workspace → Recent retention → same-id remount、缺失目录激活报错但 row 保留、Remove from Recents 后 row 消失且磁盘内容不变。完成该 recheck 前不得勾选 T060d，也不得把 T067/T068/T069 写成 PASS。
+在首次 T060d package 记录时，状态为 **OWNER_RECHECK_PENDING**：产品负责人尚需在同一 `/Applications/Excalidraw.app` 上将窗口设为 1280×760，并明确复验完整 Remove Workspace → Recent retention → same-id remount、缺失目录激活报错但 row 保留、Remove from Recents 后 row 消失且磁盘内容不变。当时不得勾选 T060d，也不得把 T067/T068/T069 写成 PASS；后续替代 package 与 owner 结论见下文。
 
-#### Recent Workspace UX refinement（2026-09-15，owner visual recheck pending）
+#### Recent Workspace UX refinement（2026-09-15 当时待 owner 复验）
 
 产品 checkpoint `366c056deff59738327c1ecc2233343d5c344b7d` 将未挂载 Recent row 的完整文字按钮替换为固定 trailing slot 内的 `×` action。该 action 默认低调，仅在 row hover、`:focus-within` 或 row unavailable 时显示；保留 `title="Remove from Recents"`、`Remove <workspace name> from Recents` accessible name、正常 Tab 顺序和 Enter 激活。mounted row 不渲染 removal action。Recent remount 失败只在对应 workspace id 的 row 显示轻微 unavailable 状态与 `Folder unavailable`，全局 `role="alert"` 继续拥有 live announcement；关闭/保存已有文档失败不会被误分类为 folder unavailable。remount 成功、对应 history removal 成功以及成功打开/选择其他 Workspace 会清除相应 row error。Rust、SQLite schema、IPC major version与磁盘语义均未修改。
 
@@ -122,9 +119,9 @@ package/session record：build 前 `git status --short` 为空，clean product c
 
 新增回归在 pointer-up 前记录 baseline，并连续采样 30 个 `requestAnimationFrame` 的 row/path/section Y 与 list scroll position；row/path 最大 Y delta 必须 ≤2 px。Focused Vitest 43/43、full Vitest 38 files / 309 tests、focused Playwright 3/3、lint、typecheck、web build 均 PASS，独立 reviewer 最终 PASS。clean runtime commit `8a16aa8` 的 `pnpm tauri build` exit 0；source 与 `/Applications/Excalidraw.app` 的 bundle ID/version 均为 `excalidraw-desktop` / `0.2.0`，executable SHA-256 均为 `a409898741e526cf2e177a4babe95e614687352582c28d180e87060509daf4a5`。
 
-当前仍需产品负责人对新安装 package 复验同一 unavailable Recent pointer-up 场景。该人工复验明确 PASS 前，T060d、T067、T068、T069 继续未完成。
+在该 pointer-up 修复 package 安装时，仍待产品负责人复验同一 unavailable Recent 场景；当时 T060d、T067、T068、T069 尚未完成。后续 busy/窄窗口修复和最终 owner PASS 见下文。
 
-#### 最新 Welcome busy/窄窗口修复与下一门槛（2026-09-16）
+#### Welcome busy/窄窗口修复与当时的下一门槛（2026-09-16）
 
 产品 clean commit `5a5aa596a50cdf256861cc77ba4a6aea824f6c2f` 稳定了 Recent activation pending 期间按钮颜色/透明度，并在窄窗口给 Welcome 留出 16px 左右 gutter；focused Playwright 5/5、full Vitest 309/309、lint、typecheck、web build 已在该 commit 的前一轮验证通过。production `pnpm tauri build` 成功并安装到 `/Applications/Excalidraw.app`；source/installed executable SHA-256 同为 `63cc657ffea238d45b743e8b0468f272fb3c0cc11f526b7deda857ca954d0af1`，bundle ID/version 为 `excalidraw-desktop` / `0.2.0`。产品负责人明确反馈最新 UI 验收 PASS：unavailable row 不再上下跳动、页面按钮不再快速闪烁、窄窗口留白符合预期；此前 hover/focus、Light/Dark、keyboard 与 tooltip 检查也已 PASS。
 
@@ -174,7 +171,27 @@ T068 owner-operated HF-2 visual sweep（同一 1280×760 package；owner 确认�
 
 收尾只读复核了上述六个 VSL/intermediate checkpoint 的 `review/reviewer-report.json`：目录 commit 均可解析，报告的 `reviewedProductCommit` 与目录一致，六个 `verdict` 均为 `PASS`；复用既有历史审核而非重跑或生成新审查结论。
 
-T069 final summary 的事实与 owner 决定已写入此处；产品负责人随后明确授权 scoped product/private-specs checkpoint commits、任务勾选和提交所有本次范围内的变更。先提交本产品摘要，再把受支持的 T060d/T067/T068/T069 checkbox 与 private-specs closure record 一并提交。003 的实现、自动化、原生与视觉人工验收及最终决定在上述 R15 轻量范围内完成；被停用的自动 proof chain 仍不是 PASS，也不把后续多语言需求并入 003。
+T069 final summary 的事实与 owner 决定已写入此处；产品负责人已授权并完成 scoped product/private-specs checkpoint commits、任务勾选和本次范围内的变更提交。产品摘要已提交于 `a84319a`，private-specs 的 T060d/T067/T068/T069 checkbox 与 closure record 已提交于 `ca3201f`。003 的实现、自动化、原生与视觉人工验收及最终决定在上述 R15 轻量范围内完成；被停用的自动 proof chain 仍不是 PASS，也不把后续多语言需求并入 003。
+
+## 001/002 历史验证汇总（截至 2026-08-24）
+
+**日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17；§6/§7 原生发版与 T078/T080/T094 更新于 2026-08-18；002 修改前基线更新于 2026-08-19；002 Polish 验证指令 T066 更新于 2026-08-23；T067 前端/Rust 门禁更新于 2026-08-23；T068 浏览器 E2E 与 T069 二进制证明更新于 2026-08-23；T071 物理机 10k 树与 T072 可观测性更新于 2026-08-23；T070 原生矩阵更新于 2026-08-24；T073–T075 参考 VM 与 quickstart 收口更新于 2026-08-24）
+**范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总，并包含 feature 002 的修改前诊断基线、Polish 门禁指令与 T067/T068/T069 成绩；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。T066 只更新指令与证据边界，不重分类下列 001 历史数字。T070 见 [native-verification.md](./native-verification.md) §9（2026-08-23/24 已执行）；T071/T072 见 §0.6/§0.7；T073 见 §0.8；T074 见 §0.9；T075 见 §0.10。
+
+先看下表再下钻各节。下表是 **001 Phase 10 / T095 历史成绩单一览**，不因 002 改写。性能当前有效序列是 2026-08-16 ADR-007（同一份 e2e-harness `e8bef9b7…`）；§5.3 的日期流水账不可与之混比。002 剩余门禁顺序与执行边界见 §0.1。
+
+| 门禁 | 状态 | 说明 |
+|------|------|------|
+| 浏览器回归（T095，§1） | **36 pass** · 2 已知 fail · 12 skip | 两例失败为断言/定位符脆性，先于本阶段；skip 依赖原生测试二进制。此为 001 历史计数，不是 T068 |
+| SC-012 可靠性（§2） | 前序 **pass**，本会话未复跑 | 合并阻断门禁；未在本会话重建 `e2e-harness` 复跑 |
+| SC-014 外观（§3） | **pass**（4/4） | light/dark/system 与截图基线 |
+| SC-015 无障碍（§4） | **pass**（15/15） | T093 历史：axe serious/critical = 0。002 跨故事审计结果以 [a11y-audit.md](./a11y-audit.md)（T063）为准，本文件不改写 |
+| T090 startup/idle（§5.2） | 物理机 **pass** · 参考 VM **fail** | VM 只败在冷启动 3704 ms；8 vCPU 诊断仍 fail（§5.2），未改 specs；空载 RSS 两边过 500 MB。001 历史；002 不得复用为 T073 |
+| T090 canvas/I/O（§5.2） | 物理机 **pass** · 参考 VM **pass** | 10k 恒定 zoom 平移/编辑约 60 fps。001 历史；002 不得复用为 T073 |
+| T108 15 min soak（§5.2） | 物理机 **fail** · 参考 VM **fail** | 只败在 RSS 增长；idle CPU 与静置 0 写入两边过。001 历史；002 不得复用为 T074 |
+| SC-010 开源分发（§6） | **v0.1.1 已发布** | 未签名/未公证 GitHub Release；macOS universal `.dmg` + Linux amd64 AppImage/deb/rpm |
+| T078/T080 原生验收（§7） | **通过**（2026-08-18） | 001 历史：物理 macOS 26.5.2 下载真实 `v0.1.1`；T094 Ubuntu IME 可选已做。002 US1–US4 矩阵见 [native-verification.md](./native-verification.md) §9：2026-08-23/24 **已执行**（T070） |
+| 002 Polish 门禁（§0.1） | T063–T075 已执行 | T067 见 §0.2，T068 见 §0.3，T069 见 §0.4，T070 见 §0.5，T071 见 §0.6，T072 见 §0.7，T073 见 §0.8，T074 见 §0.9，T075 见 §0.10。不得用 §5.2 的 001 T090/T108 代替 |
 
 ## 0. Feature 002 修改前基线（T001，2026-08-19）
 
