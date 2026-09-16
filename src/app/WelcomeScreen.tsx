@@ -10,6 +10,7 @@ export interface WelcomeScreenProps {
   onRemoveRecentWorkspace?: (workspace: Workspace) => void | Promise<void>;
   mountedWorkspaceIds?: ReadonlySet<string>;
   unavailableWorkspaceId?: string | null;
+  errorVisuallyHidden?: boolean;
   busy?: boolean;
   error?: string | null;
 }
@@ -22,6 +23,7 @@ export function WelcomeScreen({
   onRemoveRecentWorkspace,
   mountedWorkspaceIds = new Set(),
   unavailableWorkspaceId = null,
+  errorVisuallyHidden = false,
   busy = false,
   error = null,
 }: WelcomeScreenProps) {
@@ -64,7 +66,13 @@ export function WelcomeScreen({
           </button>
         </div>
         {error !== null ? (
-          <p aria-live="assertive" className="welcome-error" role="alert">
+          <p
+            aria-live="assertive"
+            className={`welcome-error${
+              errorVisuallyHidden ? " visually-hidden" : ""
+            }`}
+            role="alert"
+          >
             {error}
           </p>
         ) : null}

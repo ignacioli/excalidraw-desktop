@@ -139,12 +139,110 @@ test("an inaccessible Recent Workspace errors only on activation and remains rem
   const afterFocusPath = await recentPath.boundingBox();
   expect(afterFocus).toEqual(beforeHover);
   expect(afterFocusPath).toEqual(beforePath);
+  await page.evaluate(() => {
+    const row = document.querySelector<HTMLElement>(".recent-workspace-row");
+    if (row === null) throw new Error("Recent Workspace row not found");
+    const state = {
+      done: false,
+      samples: [] as Array<{
+        frame: number;
+        rowY: number;
+        pathY: number;
+        sectionY: number;
+        listScrollTop: number;
+      }>,
+    };
+    const section = row.closest<HTMLElement>(".recent-workspaces");
+    const list = row.closest<HTMLElement>(".recent-workspace-list");
+    const path = row.querySelector<HTMLElement>(".recent-workspace-path");
+    state.samples.push({
+      frame: -1,
+      rowY: row.getBoundingClientRect().y,
+      pathY: path?.getBoundingClientRect().y ?? Number.NaN,
+      sectionY: section?.getBoundingClientRect().y ?? Number.NaN,
+      listScrollTop: list?.scrollTop ?? Number.NaN,
+    });
+    const browser = globalThis as typeof globalThis & {
+      __recentGeometryCapture?: typeof state;
+    };
+    browser.__recentGeometryCapture = state;
+    row.addEventListener(
+      "pointerup",
+      () => {
+        let frame = 0;
+        const sample = () => {
+          const currentPath = row.querySelector<HTMLElement>(
+            ".recent-workspace-path",
+          );
+          state.samples.push({
+            frame,
+            rowY: row.getBoundingClientRect().y,
+            pathY: currentPath?.getBoundingClientRect().y ?? Number.NaN,
+            sectionY: section?.getBoundingClientRect().y ?? Number.NaN,
+            listScrollTop: list?.scrollTop ?? Number.NaN,
+          });
+          frame += 1;
+          if (frame >= 30) {
+            state.done = true;
+            return;
+          }
+          requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      },
+      { once: true },
+    );
+  });
   await recent.click();
   await expect(page.getByRole("alert")).toContainText(
     "Workspace is no longer accessible.",
   );
   await expect(page.getByText("Folder unavailable")).toBeVisible();
   await expect(recent).toBeVisible();
+  await page.waitForFunction(
+    () =>
+      (
+        globalThis as typeof globalThis & {
+          __recentGeometryCapture?: { done: boolean };
+        }
+      ).__recentGeometryCapture?.done === true,
+  );
+  const geometrySamples = await page.evaluate(
+    () =>
+      (
+        globalThis as typeof globalThis & {
+          __recentGeometryCapture?: {
+            samples: Array<{
+              frame: number;
+              rowY: number;
+              pathY: number;
+              sectionY: number;
+              listScrollTop: number;
+            }>;
+          };
+        }
+      ).__recentGeometryCapture?.samples ?? [],
+  );
+  expect(geometrySamples.length).toBeGreaterThan(0);
+  const firstSample = geometrySamples[0];
+  expect(firstSample).toBeDefined();
+  const maximumRowYDelta = Math.max(
+    ...geometrySamples.map((sample) =>
+      Math.abs(sample.rowY - firstSample.rowY),
+    ),
+  );
+  const maximumPathYDelta = Math.max(
+    ...geometrySamples.map((sample) =>
+      Math.abs(sample.pathY - firstSample.pathY),
+    ),
+  );
+  expect(maximumRowYDelta, JSON.stringify(geometrySamples)).toBeLessThanOrEqual(
+    2,
+  );
+  expect(
+    maximumPathYDelta,
+    JSON.stringify(geometrySamples),
+  ).toBeLessThanOrEqual(2);
 
   await page.mouse.move(0, 0);
   await page

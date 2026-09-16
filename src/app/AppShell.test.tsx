@@ -414,6 +414,49 @@ describe("AppShell", () => {
     ).toHaveLength(2);
   });
 
+  it("keeps unrelated action errors visible after a Recent activation failure", async () => {
+    const user = userEvent.setup();
+    const workspace = {
+      id: "workspace-missing",
+      name: "Missing workspace",
+      rootPath: "/workspace/missing",
+      createdAt: 1,
+    };
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [workspace];
+      if (command === "workspace_remount") {
+        throw new Error("Workspace is no longer accessible.");
+      }
+      if (command === "workspace_recent_remove") {
+        throw new Error("Recent history could not be removed.");
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Open workspace Missing workspace",
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveClass("visually-hidden");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Remove Missing workspace from Recents",
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Recent history could not be removed.",
+    );
+    expect(screen.getByRole("alert")).toBeVisible();
+    expect(screen.getByText("Folder unavailable")).toBeVisible();
+  });
+
   it("clears the unavailable row state after opening another Workspace", async () => {
     const user = userEvent.setup();
     const onOpenWorkspace = vi.fn(async () => undefined);

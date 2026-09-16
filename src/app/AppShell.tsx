@@ -132,6 +132,8 @@ export function AppShell({
   const workspaceRevisionRef = useRef(0);
   const [welcomeBusy, setWelcomeBusy] = useState(false);
   const [welcomeError, setWelcomeError] = useState<string | null>(null);
+  const [welcomeErrorVisuallyHidden, setWelcomeErrorVisuallyHidden] =
+    useState(false);
   const [unavailableWorkspaceId, setUnavailableWorkspaceId] = useState<
     string | null
   >(null);
@@ -246,6 +248,17 @@ export function AppShell({
     themeController.getSnapshot,
     themeController.getSnapshot,
   );
+  const clearWelcomeError = useCallback((): void => {
+    setWelcomeError(null);
+    setWelcomeErrorVisuallyHidden(false);
+  }, []);
+  const reportWelcomeError = useCallback(
+    (error: unknown, visuallyHidden = false): void => {
+      setWelcomeError(getErrorMessage(error));
+      setWelcomeErrorVisuallyHidden(visuallyHidden);
+    },
+    [],
+  );
   const runAction = async (action: () => void | Promise<unknown>) => {
     setInteractionError(null);
     try {
@@ -272,9 +285,9 @@ export function AppShell({
       preferences.setCurrentWorkspaceId(workspace.id);
       setCurrentWorkspaceId(workspace.id);
       setUnavailableWorkspaceId(null);
-      setWelcomeError(null);
+      clearWelcomeError();
     },
-    [preferences],
+    [clearWelcomeError, preferences],
   );
 
   const handleMountedWorkspacesChange = useCallback(
@@ -287,9 +300,9 @@ export function AppShell({
       void workspaceInvoker
         .invoke("workspace_recent_list", {})
         .then(setWelcomeWorkspaces)
-        .catch((error: unknown) => setWelcomeError(getErrorMessage(error)));
+        .catch((error: unknown) => reportWelcomeError(error));
     },
-    [workspaceInvoker],
+    [reportWelcomeError, workspaceInvoker],
   );
 
   const handleCurrentWorkspaceChange = useCallback(
@@ -297,20 +310,20 @@ export function AppShell({
       preferences.setCurrentWorkspaceId(workspace?.id ?? null);
       setCurrentWorkspaceId(workspace?.id ?? null);
       setUnavailableWorkspaceId(null);
-      setWelcomeError(null);
+      clearWelcomeError();
     },
-    [preferences],
+    [clearWelcomeError, preferences],
   );
 
   const openWorkspace = async (): Promise<void> => {
     if (onOpenWorkspace !== undefined) {
       await onOpenWorkspace();
       setUnavailableWorkspaceId(null);
-      setWelcomeError(null);
+      clearWelcomeError();
       return;
     }
     setWelcomeBusy(true);
-    setWelcomeError(null);
+    clearWelcomeError();
     try {
       const rootPath = await selectWorkspaceDirectory();
       if (rootPath === null) return;
@@ -329,7 +342,7 @@ export function AppShell({
         workspace,
       ]);
     } catch (error) {
-      setWelcomeError(getErrorMessage(error));
+      reportWelcomeError(error);
     } finally {
       setWelcomeBusy(false);
     }
@@ -337,11 +350,11 @@ export function AppShell({
 
   const openRecentWorkspace = async (workspace: Workspace): Promise<void> => {
     setWelcomeBusy(true);
-    setWelcomeError(null);
+    clearWelcomeError();
     try {
       await closeOpenDocumentsForWorkspaceSwitch();
     } catch (error) {
-      setWelcomeError(getErrorMessage(error));
+      reportWelcomeError(error);
       setWelcomeBusy(false);
       return;
     }
@@ -356,7 +369,7 @@ export function AppShell({
         remounted,
       ]);
     } catch (error) {
-      setWelcomeError(getErrorMessage(error));
+      reportWelcomeError(error, true);
       setUnavailableWorkspaceId(workspace.id);
     } finally {
       setWelcomeBusy(false);
@@ -365,7 +378,7 @@ export function AppShell({
 
   const removeRecentWorkspace = async (workspace: Workspace): Promise<void> => {
     setWelcomeBusy(true);
-    setWelcomeError(null);
+    clearWelcomeError();
     try {
       await workspaceInvoker.invoke("workspace_recent_remove", {
         workspaceId: workspace.id,
@@ -378,7 +391,7 @@ export function AppShell({
         current.filter((item) => item.id !== workspace.id),
       );
     } catch (error) {
-      setWelcomeError(getErrorMessage(error));
+      reportWelcomeError(error);
     } finally {
       setWelcomeBusy(false);
     }
@@ -386,13 +399,13 @@ export function AppShell({
 
   const createWelcomeDrawing = async (): Promise<void> => {
     setWelcomeBusy(true);
-    setWelcomeError(null);
+    clearWelcomeError();
     try {
       await (onCreateDocument === undefined
         ? documentManager.createUntitled()
         : onCreateDocument());
     } catch (error) {
-      setWelcomeError(getErrorMessage(error));
+      reportWelcomeError(error);
     } finally {
       setWelcomeBusy(false);
     }
@@ -469,12 +482,17 @@ export function AppShell({
         }
       })
       .catch((error: unknown) => {
-        if (!disposed) setWelcomeError(getErrorMessage(error));
+        if (!disposed) reportWelcomeError(error);
       });
     return () => {
       disposed = true;
     };
-  }, [preferences, selectCurrentWorkspace, workspaceInvoker]);
+  }, [
+    preferences,
+    reportWelcomeError,
+    selectCurrentWorkspace,
+    workspaceInvoker,
+  ]);
 
   const saveDocument = () =>
     runAction(() => documentManager.checkpointActive("manualSave"));
@@ -906,6 +924,7 @@ export function AppShell({
             <WelcomeScreen
               busy={welcomeBusy}
               error={welcomeError}
+              errorVisuallyHidden={welcomeErrorVisuallyHidden}
               unavailableWorkspaceId={unavailableWorkspaceId}
               onNewDrawing={createWelcomeDrawing}
               onOpenRecentWorkspace={openRecentWorkspace}

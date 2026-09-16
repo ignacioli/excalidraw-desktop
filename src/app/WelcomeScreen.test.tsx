@@ -121,9 +121,30 @@ describe("WelcomeScreen", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Workspace is no longer accessible.",
     );
+    expect(screen.getByRole("alert")).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Open workspace Workspace 1" }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps row activation errors announced without changing content layout", () => {
+    render(
+      <WelcomeScreen
+        error="Workspace is no longer accessible."
+        errorVisuallyHidden
+        unavailableWorkspaceId={workspaces[0].id}
+        workspaces={[workspaces[0]]}
+        onNewDrawing={vi.fn()}
+        onOpenRecentWorkspace={vi.fn()}
+        onOpenWorkspace={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Workspace is no longer accessible.",
+    );
+    expect(screen.getByRole("alert")).toHaveClass("visually-hidden");
+    expect(screen.getByText("Folder unavailable")).toBeVisible();
   });
 
   it("removes only an unmounted Workspace from Recents", async () => {
