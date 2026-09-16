@@ -114,6 +114,16 @@ package/session record：build 前 `git status --short` 为空，clean product c
 
 该记录只证明实现、自动化、package identity 和安装完成。**T060d、T067、T068、T069 仍未完成**；下一步停在 product-owner visual recheck，不推断 `APPROVED|REJECTED`，也不把此前 10/10 functional PASS 扩大解释为本 refinement 的视觉验收。
 
+#### Owner visual recheck finding 与 pointer-up jitter remediation（2026-09-15）
+
+产品负责人在安装的 refinement package 上确认：hover 与 keyboard focus 显示 `×`、Light/Dark、Recent Tab/focus/Enter、tooltip/`Remove from Recents` 措辞均 PASS；Workspace tree 采用 roving focus，Tab 进入 tree 后方向键可到达 Drawing/file 且 Enter 可打开，因此 file-level keyboard navigation PASS。与此同时，产品负责人观察到不可访问 Recent row 在 mouse-up 后短时间内多次高频垂直跳动，肉眼位移约 20 px，因此该轮视觉复验整体保持 FAIL/PENDING。
+
+根因位于 frontend error presentation：Recent remount 失败时，顶部可见 global alert 与 row 内 `Folder unavailable` 同时加入 flex/grid/overflow 布局，触发多帧 reflow 与 scroll anchoring；未发现 Rust、IPC、transform 或 native-window 根因。产品 checkpoint `8a16aa8c0e10bd489cdcae5035c25aa8ebcb41b6` 将仅属于 Recent activation 的详细 global `role="alert"` 保持 assertive 但视觉隐藏，inline `Folder unavailable` 继续可见；普通 Welcome/action error 继续可见。独立 presentation state 防止 unavailable row 存在时误隐藏后续不相关错误。
+
+新增回归在 pointer-up 前记录 baseline，并连续采样 30 个 `requestAnimationFrame` 的 row/path/section Y 与 list scroll position；row/path 最大 Y delta 必须 ≤2 px。Focused Vitest 43/43、full Vitest 38 files / 309 tests、focused Playwright 3/3、lint、typecheck、web build 均 PASS，独立 reviewer 最终 PASS。clean runtime commit `8a16aa8` 的 `pnpm tauri build` exit 0；source 与 `/Applications/Excalidraw.app` 的 bundle ID/version 均为 `excalidraw-desktop` / `0.2.0`，executable SHA-256 均为 `a409898741e526cf2e177a4babe95e614687352582c28d180e87060509daf4a5`。
+
+当前仍需产品负责人对新安装 package 复验同一 unavailable Recent pointer-up 场景。该人工复验明确 PASS 前，T060d、T067、T068、T069 继续未完成。
+
 ## 0. Feature 002 修改前基线（T001，2026-08-19）
 
 本节只记录 `HEAD 1346d29` 开始实现前的诊断状态，不替换、不重分类 §5.2 的正式物理机/参考 VM T090/T108 证据。浏览器 fixture 不证明原生文件系统或进程树性能；本机 startup/resource 运行未设置 `PERF_REFERENCE_RUN=1`，因此只属于 physical diagnostic。
