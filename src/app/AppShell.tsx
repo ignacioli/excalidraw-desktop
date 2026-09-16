@@ -132,6 +132,9 @@ export function AppShell({
   const workspaceRevisionRef = useRef(0);
   const [welcomeBusy, setWelcomeBusy] = useState(false);
   const [welcomeError, setWelcomeError] = useState<string | null>(null);
+  const [unavailableWorkspaceId, setUnavailableWorkspaceId] = useState<
+    string | null
+  >(null);
   const [browsingHistory] = useState(() => new BrowsingHistory());
   const currentBrowsingLocationRef = useRef<BrowsingLocation | null>(null);
   const [backLocation, setBackLocation] = useState<BrowsingLocation | null>(
@@ -268,6 +271,8 @@ export function AppShell({
     (workspace: Workspace): void => {
       preferences.setCurrentWorkspaceId(workspace.id);
       setCurrentWorkspaceId(workspace.id);
+      setUnavailableWorkspaceId(null);
+      setWelcomeError(null);
     },
     [preferences],
   );
@@ -276,6 +281,9 @@ export function AppShell({
     (items: Workspace[]): void => {
       workspaceRevisionRef.current += 1;
       setMountedWorkspaces(items);
+      setUnavailableWorkspaceId((current) =>
+        items.some((workspace) => workspace.id === current) ? null : current,
+      );
       void workspaceInvoker
         .invoke("workspace_recent_list", {})
         .then(setWelcomeWorkspaces)
@@ -288,6 +296,8 @@ export function AppShell({
     (workspace: Workspace | null): void => {
       preferences.setCurrentWorkspaceId(workspace?.id ?? null);
       setCurrentWorkspaceId(workspace?.id ?? null);
+      setUnavailableWorkspaceId(null);
+      setWelcomeError(null);
     },
     [preferences],
   );
@@ -295,6 +305,8 @@ export function AppShell({
   const openWorkspace = async (): Promise<void> => {
     if (onOpenWorkspace !== undefined) {
       await onOpenWorkspace();
+      setUnavailableWorkspaceId(null);
+      setWelcomeError(null);
       return;
     }
     setWelcomeBusy(true);
@@ -328,6 +340,12 @@ export function AppShell({
     setWelcomeError(null);
     try {
       await closeOpenDocumentsForWorkspaceSwitch();
+    } catch (error) {
+      setWelcomeError(getErrorMessage(error));
+      setWelcomeBusy(false);
+      return;
+    }
+    try {
       const remounted = await workspaceInvoker.invoke("workspace_remount", {
         workspaceId: workspace.id,
       });
@@ -339,6 +357,7 @@ export function AppShell({
       ]);
     } catch (error) {
       setWelcomeError(getErrorMessage(error));
+      setUnavailableWorkspaceId(workspace.id);
     } finally {
       setWelcomeBusy(false);
     }
@@ -352,6 +371,9 @@ export function AppShell({
         workspaceId: workspace.id,
       });
       workspaceRevisionRef.current += 1;
+      setUnavailableWorkspaceId((current) =>
+        current === workspace.id ? null : current,
+      );
       setWelcomeWorkspaces((current) =>
         current.filter((item) => item.id !== workspace.id),
       );
@@ -427,7 +449,8 @@ export function AppShell({
       workspaceInvoker.invoke("workspace_recent_list", {}),
     ])
       .then(([items, recentItems]) => {
-        if (disposed || workspaceRevisionRef.current !== requestedRevision) return;
+        if (disposed || workspaceRevisionRef.current !== requestedRevision)
+          return;
         setMountedWorkspaces(items);
         setWelcomeWorkspaces(recentItems);
         const validIds = new Set(items.map((workspace) => workspace.id));
@@ -883,13 +906,14 @@ export function AppShell({
             <WelcomeScreen
               busy={welcomeBusy}
               error={welcomeError}
+              unavailableWorkspaceId={unavailableWorkspaceId}
               onNewDrawing={createWelcomeDrawing}
               onOpenRecentWorkspace={openRecentWorkspace}
               onOpenWorkspace={openWorkspace}
               onRemoveRecentWorkspace={removeRecentWorkspace}
-              mountedWorkspaceIds={new Set(
-                mountedWorkspaces.map((workspace) => workspace.id),
-              )}
+              mountedWorkspaceIds={
+                new Set(mountedWorkspaces.map((workspace) => workspace.id))
+              }
               workspaces={welcomeWorkspaces}
             />
           ) : documentSessions.length > 0 ? (

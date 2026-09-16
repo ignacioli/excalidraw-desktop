@@ -153,6 +153,69 @@ describe("WelcomeScreen", () => {
     expect(onRemoveRecentWorkspace).toHaveBeenCalledWith(workspaces[0]);
   });
 
+  it("keeps a fixed trailing action slot and exposes the remove action to keyboard users", async () => {
+    const user = userEvent.setup();
+    render(
+      <WelcomeScreen
+        mountedWorkspaceIds={new Set([workspaces[1].id])}
+        workspaces={workspaces.slice(0, 2)}
+        onNewDrawing={vi.fn()}
+        onOpenRecentWorkspace={vi.fn()}
+        onOpenWorkspace={vi.fn()}
+        onRemoveRecentWorkspace={vi.fn()}
+      />,
+    );
+
+    const unmountedRow = screen
+      .getByRole("button", { name: "Open workspace Workspace 1" })
+      .closest("li");
+    const mountedRow = screen
+      .getByRole("button", { name: "Open workspace Workspace 2" })
+      .closest("li");
+    expect(unmountedRow).toHaveClass("recent-workspace-row");
+    expect(unmountedRow).toHaveAttribute("data-mounted", "false");
+    expect(mountedRow).toHaveAttribute("data-mounted", "true");
+    expect(
+      screen.getByRole("button", {
+        name: "Remove Workspace 1 from Recents",
+      }),
+    ).toHaveAttribute("title", "Remove from Recents");
+
+    const remove = screen.getByRole("button", {
+      name: "Remove Workspace 1 from Recents",
+    });
+    const open = screen.getByRole("button", {
+      name: "Open workspace Workspace 1",
+    });
+    open.focus();
+    await user.tab();
+    expect(remove).toHaveFocus();
+  });
+
+  it("shows Folder unavailable and a persistent action for the unavailable row", () => {
+    render(
+      <WelcomeScreen
+        unavailableWorkspaceId={workspaces[0].id}
+        workspaces={[workspaces[0]]}
+        onNewDrawing={vi.fn()}
+        onOpenRecentWorkspace={vi.fn()}
+        onOpenWorkspace={vi.fn()}
+        onRemoveRecentWorkspace={vi.fn()}
+      />,
+    );
+
+    const row = screen
+      .getByRole("button", { name: "Open workspace Workspace 1" })
+      .closest("li");
+    expect(row).toHaveClass("is-unavailable");
+    expect(row).toHaveTextContent("Folder unavailable");
+    expect(
+      screen.getByRole("button", {
+        name: "Remove Workspace 1 from Recents",
+      }),
+    ).toBeVisible();
+  });
+
   it("covers primary, secondary, loading, and disabled Welcome Action variants", () => {
     const { rerender } = render(
       <WelcomeScreen

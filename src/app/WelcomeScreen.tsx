@@ -9,6 +9,7 @@ export interface WelcomeScreenProps {
   onOpenRecentWorkspace: (workspace: Workspace) => void | Promise<void>;
   onRemoveRecentWorkspace?: (workspace: Workspace) => void | Promise<void>;
   mountedWorkspaceIds?: ReadonlySet<string>;
+  unavailableWorkspaceId?: string | null;
   busy?: boolean;
   error?: string | null;
 }
@@ -20,6 +21,7 @@ export function WelcomeScreen({
   onOpenRecentWorkspace,
   onRemoveRecentWorkspace,
   mountedWorkspaceIds = new Set(),
+  unavailableWorkspaceId = null,
   busy = false,
   error = null,
 }: WelcomeScreenProps) {
@@ -76,14 +78,24 @@ export function WelcomeScreen({
           <p className="recent-workspaces-description">
             Continue where you left off
           </p>
-          <ul
-            aria-label="Recent Workspaces"
-            className="recent-workspace-list"
-          >
+          <ul aria-label="Recent Workspaces" className="recent-workspace-list">
             {recentWorkspaces.map((workspace) => (
-              <li className="recent-workspace-row" key={workspace.id}>
+              <li
+                className={`recent-workspace-row${
+                  unavailableWorkspaceId === workspace.id
+                    ? " is-unavailable"
+                    : ""
+                }`}
+                data-mounted={mountedWorkspaceIds.has(workspace.id)}
+                key={workspace.id}
+              >
                 <button
                   aria-label={`Open workspace ${workspace.name}`}
+                  aria-describedby={
+                    unavailableWorkspaceId === workspace.id
+                      ? `recent-workspace-error-${workspace.id}`
+                      : undefined
+                  }
                   className="recent-workspace"
                   disabled={busy}
                   onClick={() => void onOpenRecentWorkspace(workspace)}
@@ -97,17 +109,28 @@ export function WelcomeScreen({
                     {workspace.rootPath}
                   </span>
                 </button>
-                {!mountedWorkspaceIds.has(workspace.id) &&
-                onRemoveRecentWorkspace !== undefined ? (
-                  <button
-                    aria-label={`Remove ${workspace.name} from Recents`}
-                    className="recent-workspace-remove"
-                    disabled={busy}
-                    onClick={() => void onRemoveRecentWorkspace(workspace)}
-                    type="button"
+                <span className="recent-workspace-action-slot">
+                  {!mountedWorkspaceIds.has(workspace.id) &&
+                  onRemoveRecentWorkspace !== undefined ? (
+                    <button
+                      aria-label={`Remove ${workspace.name} from Recents`}
+                      className="recent-workspace-remove"
+                      disabled={busy}
+                      onClick={() => void onRemoveRecentWorkspace(workspace)}
+                      title="Remove from Recents"
+                      type="button"
+                    >
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  ) : null}
+                </span>
+                {unavailableWorkspaceId === workspace.id ? (
+                  <span
+                    className="recent-workspace-error"
+                    id={`recent-workspace-error-${workspace.id}`}
                   >
-                    Remove from Recents
-                  </button>
+                    Folder unavailable
+                  </span>
                 ) : null}
               </li>
             ))}

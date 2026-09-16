@@ -305,12 +305,20 @@ describe("AppShell", () => {
       rootPath: "/workspace/missing",
       createdAt: 1,
     };
+    const otherWorkspace = {
+      id: "workspace-other",
+      name: "Other workspace",
+      rootPath: "/workspace/other",
+      createdAt: 2,
+    };
     const invoke = vi.fn(async (command: string) => {
       if (command === "workspace_list") return [];
-      if (command === "workspace_recent_list") return [workspace];
+      if (command === "workspace_recent_list")
+        return [workspace, otherWorkspace];
       if (command === "workspace_remount") {
         throw new Error("Workspace is no longer accessible.");
       }
+      if (command === "workspace_recent_remove") return {};
       throw new Error(`Unexpected command ${command}`);
     }) as CommandInvoker["invoke"];
     vi.stubGlobal("__TAURI_INTERNALS__", {
@@ -324,6 +332,8 @@ describe("AppShell", () => {
     const recent = await screen.findByRole("button", {
       name: "Open workspace Missing workspace",
     });
+    expect(screen.queryByText("Folder unavailable")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     await user.click(recent);
 
     expect(invoke).toHaveBeenCalledWith("workspace_remount", {
@@ -336,7 +346,149 @@ describe("AppShell", () => {
     expect(
       screen.getByRole("button", { name: "Open workspace Missing workspace" }),
     ).toBeInTheDocument();
+    expect(recent).toHaveAttribute(
+      "aria-describedby",
+      `recent-workspace-error-${workspace.id}`,
+    );
+    expect(
+      screen.getByRole("button", { name: "Open workspace Other workspace" }),
+    ).not.toHaveAttribute("aria-describedby");
+    expect(screen.getByText("Folder unavailable")).toBeInTheDocument();
+    const remove = screen.getByRole("button", {
+      name: "Remove Missing workspace from Recents",
+    });
+    expect(remove).toHaveAttribute("title", "Remove from Recents");
+    await user.click(remove);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", {
+          name: "Open workspace Missing workspace",
+        }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(documentManager.store.getState().sessionsById).toEqual({});
+  });
+
+  it("clears the unavailable row state after a successful remount retry", async () => {
+    const user = userEvent.setup();
+    const workspace = {
+      id: "workspace-retry",
+      name: "Retry workspace",
+      rootPath: "/workspace/retry",
+      createdAt: 1,
+    };
+    let attempts = 0;
+    const invokeMock = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [workspace];
+      if (command === "workspace_remount") {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error("Workspace is no longer accessible.");
+        }
+        return workspace;
+      }
+      throw new Error(`Unexpected command ${command}`);
+    });
+    const invoke = invokeMock as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    const recent = await screen.findByRole("button", {
+      name: "Open workspace Retry workspace",
+    });
+    await user.click(recent);
+    expect(await screen.findByText("Folder unavailable")).toBeInTheDocument();
+
+    await user.click(recent);
+    await waitFor(() =>
+      expect(screen.queryByText("Folder unavailable")).not.toBeInTheDocument(),
+    );
+    expect(
+      invokeMock.mock.calls.filter(
+        ([command]) => command === "workspace_remount",
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("clears the unavailable row state after opening another Workspace", async () => {
+    const user = userEvent.setup();
+    const onOpenWorkspace = vi.fn(async () => undefined);
+    const workspace = {
+      id: "workspace-missing",
+      name: "Missing workspace",
+      rootPath: "/workspace/missing",
+      createdAt: 1,
+    };
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [workspace];
+      if (command === "workspace_remount") {
+        throw new Error("Workspace is no longer accessible.");
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(
+      <AppShell
+        onOpenWorkspace={onOpenWorkspace}
+        workspaceInvoker={{ invoke }}
+      />,
+    );
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Open workspace Missing workspace",
+      }),
+    );
+    expect(await screen.findByText("Folder unavailable")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open Workspace" }));
+    expect(onOpenWorkspace).toHaveBeenCalledOnce();
+    expect(screen.queryByText("Folder unavailable")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("does not mark a Recent row unavailable when document closing blocks activation", async () => {
+    const user = userEvent.setup();
+    const workspace = {
+      id: "workspace-blocked",
+      name: "Blocked workspace",
+      rootPath: "/workspace/blocked",
+      createdAt: 1,
+    };
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [workspace];
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.spyOn(documentManager, "closeMany").mockResolvedValue({
+      status: "cancelled",
+    });
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Open workspace Blocked workspace",
+      }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Close or save the open drawings before switching workspaces.",
+    );
+    expect(screen.queryByText("Folder unavailable")).not.toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith(
+      "workspace_remount",
+      expect.anything(),
+    );
   });
 
   it("removes an unmounted Workspace from Recent history only on request", async () => {
@@ -350,7 +502,8 @@ describe("AppShell", () => {
     let removed = false;
     const invoke = vi.fn(async (command: string) => {
       if (command === "workspace_list") return [];
-      if (command === "workspace_recent_list") return removed ? [] : [workspace];
+      if (command === "workspace_recent_list")
+        return removed ? [] : [workspace];
       if (command === "workspace_recent_remove") {
         removed = true;
         return {};

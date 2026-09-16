@@ -90,6 +90,7 @@ test("unmounting retains Recent history, remounts the same record, and forgets h
     .getByRole("dialog", { name: "Remove Workspace?" })
     .getByRole("button", { name: "Remove Workspace" })
     .click();
+  await recent.hover();
   await page
     .getByRole("button", { name: "Remove Workspace from Recents" })
     .click();
@@ -107,15 +108,54 @@ test("an inaccessible Recent Workspace errors only on activation and remains rem
     name: "Open workspace Missing Workspace",
   });
   await expect(recent).toBeVisible();
+  const recentRow = recent.locator("..");
+  const remove = page.getByRole("button", {
+    name: "Remove Missing Workspace from Recents",
+  });
+  const recentPath = page.getByText("/missing/workspace");
+  await expect(remove).toHaveCSS("opacity", "0");
+  const beforeHover = await recentRow.boundingBox();
+  const beforePath = await recentPath.boundingBox();
+  await recent.hover();
+  await expect(remove).toHaveCSS("opacity", "1");
+  const afterHover = await recentRow.boundingBox();
+  const afterPath = await recentPath.boundingBox();
+  expect(afterHover).not.toBeNull();
+  expect(beforeHover).not.toBeNull();
+  expect(afterPath).not.toBeNull();
+  expect(beforePath).not.toBeNull();
+  expect(afterHover?.x).toBe(beforeHover?.x);
+  expect(afterHover?.y).toBe(beforeHover?.y);
+  expect(afterHover?.width).toBe(beforeHover?.width);
+  expect(afterHover?.height).toBe(beforeHover?.height);
+  expect(afterPath?.x).toBe(beforePath?.x);
+  expect(afterPath?.y).toBe(beforePath?.y);
+  expect(afterPath?.width).toBe(beforePath?.width);
+  expect(afterPath?.height).toBe(beforePath?.height);
+  await page.mouse.move(0, 0);
+  await recent.focus();
+  await expect(remove).toHaveCSS("opacity", "1");
+  const afterFocus = await recentRow.boundingBox();
+  const afterFocusPath = await recentPath.boundingBox();
+  expect(afterFocus).toEqual(beforeHover);
+  expect(afterFocusPath).toEqual(beforePath);
   await recent.click();
   await expect(page.getByRole("alert")).toContainText(
     "Workspace is no longer accessible.",
   );
+  await expect(page.getByText("Folder unavailable")).toBeVisible();
   await expect(recent).toBeVisible();
 
+  await page.mouse.move(0, 0);
   await page
-    .getByRole("button", { name: "Remove Missing Workspace from Recents" })
-    .click();
+    .getByRole("button", { name: "Open Workspace", exact: true })
+    .focus();
+  await expect(remove).toHaveCSS("opacity", "1");
+  await expect(remove).toHaveAttribute("title", "Remove from Recents");
+  await recent.focus();
+  await page.keyboard.press("Tab");
+  await expect(remove).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(recent).toHaveCount(0);
 });
 
@@ -305,7 +345,10 @@ async function installMissingRecentHarness(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const browser = globalThis as typeof globalThis & {
       __TAURI_INTERNALS__?: {
-        invoke(command: string, args?: Record<string, unknown>): Promise<unknown>;
+        invoke(
+          command: string,
+          args?: Record<string, unknown>,
+        ): Promise<unknown>;
       };
     };
     const workspace = {
@@ -318,7 +361,8 @@ async function installMissingRecentHarness(page: Page): Promise<void> {
     browser.__TAURI_INTERNALS__ = {
       async invoke(command) {
         if (command === "workspace_list") return [];
-        if (command === "workspace_recent_list") return retained ? [workspace] : [];
+        if (command === "workspace_recent_list")
+          return retained ? [workspace] : [];
         if (command === "workspace_remount") {
           throw new Error("Workspace is no longer accessible.");
         }
