@@ -124,6 +124,58 @@ package/session record：build 前 `git status --short` 为空，clean product c
 
 当前仍需产品负责人对新安装 package 复验同一 unavailable Recent pointer-up 场景。该人工复验明确 PASS 前，T060d、T067、T068、T069 继续未完成。
 
+#### 最新 Welcome busy/窄窗口修复与下一门槛（2026-09-16）
+
+产品 clean commit `5a5aa596a50cdf256861cc77ba4a6aea824f6c2f` 稳定了 Recent activation pending 期间按钮颜色/透明度，并在窄窗口给 Welcome 留出 16px 左右 gutter；focused Playwright 5/5、full Vitest 309/309、lint、typecheck、web build 已在该 commit 的前一轮验证通过。production `pnpm tauri build` 成功并安装到 `/Applications/Excalidraw.app`；source/installed executable SHA-256 同为 `63cc657ffea238d45b743e8b0468f272fb3c0cc11f526b7deda857ca954d0af1`，bundle ID/version 为 `excalidraw-desktop` / `0.2.0`。产品负责人明确反馈最新 UI 验收 PASS：unavailable row 不再上下跳动、页面按钮不再快速闪烁、窄窗口留白符合预期；此前 hover/focus、Light/Dark、keyboard 与 tooltip 检查也已 PASS。
+
+在不修改产品 runtime 的 2026-09-16 后续门槛核验中，`cargo fmt --manifest-path src-tauri/Cargo.toml --check`、`cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` 与 `cargo test --manifest-path src-tauri/Cargo.toml` 均 exit 0；cargo tests 包含 74 unit 和 integration suites 10/9/3/3/3。产品和 isolated private-specs worktree 均为 clean，HEAD 分别为 `5a5aa59`、`6f956f2`。
+
+该 owner PASS 只关闭最新 UI 问题的人工复验。T060d 仍需同一安装包上的完整 Remove Workspace → Recent retained → same-id remount（Recent 与 Open Workspace）→ unavailable activation row retained → unmounted Remove from Recents 只清 app history 且磁盘内容不变的 owner recheck，以及当前 package 的 1280×760 session fact；前次 10/10 functional PASS 属于较早包，不能代替。T060d/T067/T068/T069 尚未勾选；后续 T067 是同一包的 5/5 菜单元数据与 7/7 原生操作，T068 是同一 1280×760 窗口的六个指定 HF-2 状态，T069 需要 owner 明确 `APPROVED|REJECTED`。
+
+2026-09-16 owner 后续明确反馈：**“T060d 人工验收PASS。”** 该结论针对上述最新 `/Applications/Excalidraw.app` 的完整 Remove/Recent/Remove-from-Recents 人工复验；记录为产品负责人的结论，而非 AI 代为操作或推断的逐项结果。自动化、clean product commit 与 source/installed package identity 见本节前两段。T067 5/5 菜单元数据、7/7 原生操作与 T068 6/6 指定 HF-2 状态尚无本轮 owner 结果；1280×760 最新 owner-session fact 仍待记录，T069 最终批准也未给出。此条补记覆盖上段的 T060d owner-recheck-pending 描述；原始待验收记录保留为历史，不改写为事前 PASS。
+
+随后产品负责人明确反馈：**“T067，T068 人工验收PASS。”** 这是一条针对同一 T060d package 的任务级 owner 结论，不是 AI 执行原生菜单/视觉操作的声称。T067 的七项独立结果与 5/5 菜单检查、T068 六个命名状态和 1280×760 owner-session 数值尚未由 owner 在本记录中逐项列出；因此保留该证据粒度缺口，不自行补写 7/7、5/5、6/6 或窗口事实。T069 所需的最终 `APPROVED|REJECTED` 决定也尚未收到；private-specs checkbox 和 product closure commit 均未执行。本段覆盖上一段的 T067/T068 “尚无 owner 结果”，不覆盖其逐项记录要求。
+
+产品负责人随后对 T069 最终决定明确回复 **`APPROVED`**。这是 owner 的最终意向，现按原文记录，不将其反推为缺失的 T067/T068 逐项事实或 1280×760 数值。此前追问同时包含逐项/窗口确认与最终决定，回复只回答后者；故 T069 的 lightweight closure artifact、任务 checkbox 与跨仓 checkpoint commits 仍待证据粒度补齐及明确提交授权。当前 product runtime/package 不变，既有历史 FAIL 和被否决实现不重分类。
+
+### 003 FINAL owner scope confirmation（2026-09-16；覆盖上方待确认描述）
+
+产品负责人随后明确确认：此前 T067/T068 的 PASS 覆盖**同一安装包、1280×760 窗口、T067 菜单 5/5 与操作 7/7，以及 T068 六个指定状态全部 PASS**。这是 owner 对先前任务级 PASS 的范围确认，不是 AI 重新操作或原生自动收集。T060d 完整 Remove/Recent/Remove-from-Recents 人工复验亦已由 owner 报告 PASS；T069 最终决定为明确的 **`APPROVED`**。因此上方随时间记录的 pending 语句均为旧状态，不能用来覆盖此处最终人工结论。
+
+最新同包 T060d/T067/T068 身份：clean runtime commit `5a5aa596a50cdf256861cc77ba4a6aea824f6c2f`；`pnpm tauri build` 成功，source `.app` 为 `src-tauri/target/release/bundle/macos/Excalidraw.app`，installed `.app` 为 `/Applications/Excalidraw.app`；两处 executable SHA-256 均为 `63cc657ffea238d45b743e8b0468f272fb3c0cc11f526b7deda857ca954d0af1`，bundle ID/version `excalidraw-desktop` / `0.2.0`。本机 macOS `26.6.2`；T067/T068 窗口尺寸 `1280×760` 为 owner 确认。最终收尾时在同一本机以 AppKit `NSScreen.main` 只读复测主显示器 `1352×878` logical points、backing scale `2.0`；这是本次环境测量，并非声称在 owner 操作当刻自动抓取窗口/显示器状态。原始 T060 包的 display/session 事实另见上方 T060 节。
+
+T067 owner-operated native checklist（owner 确认 5/5 + 7/7；以下各行均归于其范围确认，不冒充逐条口述或机器观察）：
+
+| 检查类别 | 项目 | Owner 结果 |
+|---|---|---|
+| 菜单元数据 | File > Save；File > Export Image；Appearance > System；Appearance > Light；Appearance > Dark 的标签、可用/选中状态与适用快捷键 | **5/5 PASS** |
+| 原生实际操作 1 | 独立轻微编辑后 File > Save：无错误、可见未保存标记消失 | **PASS** |
+| 原生实际操作 2 | 另一次轻微编辑后实体 Command-S：无错误、可见未保存标记消失 | **PASS** |
+| 原生实际操作 3 | File > Export Image：同一 Export Dialog 打开并可取消 | **PASS** |
+| 原生实际操作 4 | 实体 Command-Option-E：同一 Export Dialog 打开并可取消 | **PASS** |
+| 原生实际操作 5 | Appearance System：菜单选择/check state 与渲染主题一致 | **PASS** |
+| 原生实际操作 6 | Appearance Light：菜单选择/check state 与渲染主题一致 | **PASS** |
+| 原生实际操作 7 | Appearance Dark：菜单选择/check state 与渲染主题一致 | **PASS** |
+
+T068 owner-operated HF-2 visual sweep（同一 1280×760 package；owner 确认六个指定状态全部 PASS）：
+
+| 指定状态 | Owner 结果 |
+|---|---|
+| Welcome Light | **PASS** |
+| Restored Hidden Light | **PASS** |
+| Workspace Pinned Light | **PASS** |
+| Workspace Overlay Light | **PASS** |
+| Welcome Dark | **PASS** |
+| Workspace Pinned Dark | **PASS** |
+
+合计 **6/6 PASS**。验收范围为 composition、clipping/overflow、occlusion/layering、selected/active states、theme rendering 和 visible legacy chrome；此处没有新增 screenshots、像素比对或 AI reviewer verdict。
+
+自动化与历史证据仍按各自身份保留：T059 精确命令/55/55 browser verdict 与六个 checkpoint 路径见本文件前面的 T059 节；T060 原始 clean package `f8125d0` 及 macOS/display/window metadata 见 T060 节。Recent lifecycle `4541629` 与其首次 T060d tests/package、被否决且未安装的 `5eb244d`/`7acb5c4`、后来 UX/pointer-up/busy/gutter 修复及最新 Rust/frontend/Playwright verdict 见本文件连续补记；不将曾经的 FAIL 消去或重分类。T058e 第三次自动 qualification 已按 owner 决定停用，T023b/T061–T066 旧 proof chain 已由 R15 轻量路径取代；它们不是本次人工 PASS 的替身。无已报告的当前阻断性 owner finding；原生检查与视觉检查是产品负责人结论，不能据此宣称未执行的机器级物理按键来源证明。
+
+收尾只读复核了上述六个 VSL/intermediate checkpoint 的 `review/reviewer-report.json`：目录 commit 均可解析，报告的 `reviewedProductCommit` 与目录一致，六个 `verdict` 均为 `PASS`；复用既有历史审核而非重跑或生成新审查结论。
+
+T069 final summary 的事实与 owner 决定已写入此处；产品负责人随后明确授权 scoped product/private-specs checkpoint commits、任务勾选和提交所有本次范围内的变更。先提交本产品摘要，再把受支持的 T060d/T067/T068/T069 checkbox 与 private-specs closure record 一并提交。003 的实现、自动化、原生与视觉人工验收及最终决定在上述 R15 轻量范围内完成；被停用的自动 proof chain 仍不是 PASS，也不把后续多语言需求并入 003。
+
 ## 0. Feature 002 修改前基线（T001，2026-08-19）
 
 本节只记录 `HEAD 1346d29` 开始实现前的诊断状态，不替换、不重分类 §5.2 的正式物理机/参考 VM T090/T108 证据。浏览器 fixture 不证明原生文件系统或进程树性能；本机 startup/resource 运行未设置 `PERF_REFERENCE_RUN=1`，因此只属于 physical diagnostic。
