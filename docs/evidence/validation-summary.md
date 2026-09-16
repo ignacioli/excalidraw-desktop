@@ -98,6 +98,22 @@ Package/session record：build 前 `git status --short` 为空，HEAD 为 `45416
 
 T060d 当前为 **OWNER_RECHECK_PENDING**：产品负责人仍需在同一 `/Applications/Excalidraw.app` 上将窗口设为 1280×760，并明确复验完整 Remove Workspace → Recent retention → same-id remount、缺失目录激活报错但 row 保留、Remove from Recents 后 row 消失且磁盘内容不变。完成该 recheck 前不得勾选 T060d，也不得把 T067/T068/T069 写成 PASS。
 
+#### Recent Workspace UX refinement（2026-09-15，owner visual recheck pending）
+
+产品 checkpoint `366c056deff59738327c1ecc2233343d5c344b7d` 将未挂载 Recent row 的完整文字按钮替换为固定 trailing slot 内的 `×` action。该 action 默认低调，仅在 row hover、`:focus-within` 或 row unavailable 时显示；保留 `title="Remove from Recents"`、`Remove <workspace name> from Recents` accessible name、正常 Tab 顺序和 Enter 激活。mounted row 不渲染 removal action。Recent remount 失败只在对应 workspace id 的 row 显示轻微 unavailable 状态与 `Folder unavailable`，全局 `role="alert"` 继续拥有 live announcement；关闭/保存已有文档失败不会被误分类为 folder unavailable。remount 成功、对应 history removal 成功以及成功打开/选择其他 Workspace 会清除相应 row error。Rust、SQLite schema、IPC major version与磁盘语义均未修改。
+
+自动化结果：
+
+- `pnpm vitest run src/app/WelcomeScreen.test.tsx src/app/AppShell.test.tsx`：2 files / 41 tests **PASS**。
+- `pnpm test`：38 files / 307 tests **PASS**。
+- `pnpm lint`、`pnpm typecheck`、`pnpm build` 与 `git diff --check`：**PASS**；build 仅保留既有 Vite large-chunk warning。
+- `APP_E2E=1 PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 pnpm e2e e2e/tests/us3-workspace-files.spec.ts --project=browser-ui --workers=1 --retries=0`：sandbox 内 Chromium 启动被 macOS Mach-port 权限拒绝，随后同一命令在 sandbox 外 **3/3 PASS**。语义断言覆盖 unavailable row retained、inline helper、默认/hover/focus/unavailable action visibility、Tab + Enter removal、removal 后 row 消失，以及 hover/focus 前后 row/path geometry 完全不变；没有以截图替代这些事实。
+- 独立 validation/review subagent 完成三轮只读审查；最终 verdict **PASS**，无 remaining blocking findings。
+
+package/session record：build 前 `git status --short` 为空，clean product commit 为 `366c056deff59738327c1ecc2233343d5c344b7d`。sandbox 外 `pnpm tauri build` exit 0，生成 production `.app` 与 DMG。source bundle 与 `/Applications/Excalidraw.app` 的 bundle ID 均为 `excalidraw-desktop`、version 均为 `0.2.0`，两处 executable SHA-256 均为 `0901f8aeff939dfb4867f9424d74f0af9bdb950145314b95991c578ddad78e60`。
+
+该记录只证明实现、自动化、package identity 和安装完成。**T060d、T067、T068、T069 仍未完成**；下一步停在 product-owner visual recheck，不推断 `APPROVED|REJECTED`，也不把此前 10/10 functional PASS 扩大解释为本 refinement 的视觉验收。
+
 ## 0. Feature 002 修改前基线（T001，2026-08-19）
 
 本节只记录 `HEAD 1346d29` 开始实现前的诊断状态，不替换、不重分类 §5.2 的正式物理机/参考 VM T090/T108 证据。浏览器 fixture 不证明原生文件系统或进程树性能；本机 startup/resource 运行未设置 `PERF_REFERENCE_RUN=1`，因此只属于 physical diagnostic。
