@@ -29,6 +29,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Node.js for release workflow checks
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Verify release workflow routing
+        run: node --test scripts/release-workflow.test.mjs
+
       - name: Decide whether this push needs a tag
         id: decide
         env:

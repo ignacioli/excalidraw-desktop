@@ -2,6 +2,11 @@ name: Release bundles
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vX.Y.Z tag (required when dispatched from a branch)
+        required: false
+        type: string
   workflow_call:
     inputs:
       tag:
@@ -16,18 +21,43 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.event_name == 'workflow_call' && inputs.tag || github.ref }}
+  group: release-${{ inputs.tag || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  validate-release-tag:
+    name: Validate existing release tag
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Require a matching existing version tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected an existing vX.Y.Z tag, got: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/* && "${GITHUB_REF#refs/tags/}" != "$RELEASE_TAG" ]]; then
+            echo "Tag input does not match the triggering tag ref." >&2
+            exit 1
+          fi
+          git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" > /dev/null
+
   macos-universal:
     name: macOS Universal Binary
     # The project permanently distributes unsigned, unnotarized open-source
     # bundles through GitHub Releases (SC-010).
     runs-on: macos-14
+    needs: validate-release-tag
     steps:
       - name: Check out the tagged source
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -62,6 +92,7 @@ jobs:
   linux-bundles:
     name: Linux AppImage / deb / rpm
     runs-on: ubuntu-22.04
+    needs: validate-release-tag
     steps:
       - name: Install Tauri system dependencies
         run: |
@@ -75,6 +106,8 @@ jobs:
 
       - name: Check out the tagged source
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -106,15 +139,17 @@ jobs:
 
   publish-github-release:
     name: Publish unsigned open-source release
-    if: github.event_name == 'workflow_call' || startsWith(github.ref, 'refs/tags/v')
-    needs: [macos-universal, linux-bundles]
+    if: inputs.tag != '' || startsWith(github.ref, 'refs/tags/v')
+    needs: [validate-release-tag, macos-universal, linux-bundles]
     runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: ${{ github.event_name == 'workflow_call' && inputs.tag || github.ref_name }}
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - name: Check out the tagged source
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Download built bundles
         uses: actions/download-artifact@v8
@@ -130,6 +165,7 @@ jobs:
           gh release create "$RELEASE_TAG"
           --repo "$GITHUB_REPOSITORY"
           --title "$RELEASE_TAG"
+          --verify-tag
           --notes-file /tmp/release-notes.md
 
       - name: Upload all release assets
