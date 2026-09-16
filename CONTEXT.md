@@ -13,8 +13,12 @@ A user-authorized local directory whose drawings and ordinary directories are av
 _Avoid_: Project, repository, vault, FileTree
 
 **Workspace Root**:
-The top-level directory of a Workspace. It can be mounted or removed from the application, but it is not an ordinary entry that can be renamed or deleted there.
+The top-level directory of a Workspace. It can be mounted or unmounted, but it is not an ordinary entry that can be renamed or deleted there. Unmounting never deletes its files.
 _Avoid_: Root entry, top folder
+
+**Recent Workspace**:
+A retained application-history record for a Workspace root, whether mounted or unmounted. Activating an unmounted record revalidates and remounts the same identity; removing it from Recents deletes history only.
+_Avoid_: Deleted Workspace, missing file
 
 **Workspace Entry**:
 A Drawing or Directory directly represented within a Workspace.

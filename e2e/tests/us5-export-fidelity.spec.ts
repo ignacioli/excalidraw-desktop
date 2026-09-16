@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { emitBrowserTauriEvent } from "./browserTauriHarness";
 import {
+  EXPORT_WORKSPACE,
   exportBytes,
   installExportHarness,
   pngDimensions,
@@ -30,9 +32,7 @@ test("exports deterministic PNGs across scales and backgrounds against fixed bas
     openScene: FIXED_EXPORT_SCENE,
   });
   await openFixedDrawing(page);
-  const dialog = page.getByRole("dialog", { name: "Export drawing" });
-  await page.getByRole("button", { name: "Export…" }).click();
-  await expect(dialog).toBeVisible();
+  const dialog = await openExportDialog(page);
 
   await submitPngExport(dialog, 1, "Transparent");
   await submitPngExport(dialog, 2, "Transparent");
@@ -90,9 +90,7 @@ test("exports an SVG with embedded WOFF2 fonts and matches its baseline", async 
     openScene: FIXED_EXPORT_SCENE,
   });
   await openFixedDrawing(page);
-  const dialog = page.getByRole("dialog", { name: "Export drawing" });
-  await page.getByRole("button", { name: "Export…" }).click();
-  await expect(dialog).toBeVisible();
+  const dialog = await openExportDialog(page);
 
   await dialog.getByRole("radio", { name: "SVG image" }).check();
   await dialog.getByRole("radio", { name: "Transparent" }).check();
@@ -122,9 +120,10 @@ test("exports an SVG with embedded WOFF2 fonts and matches its baseline", async 
   );
   expect(declaredFamilies.size).toBeGreaterThan(0);
   for (const family of usedFamilies) {
-    expect(declaredFamilies.has(family), `missing @font-face for ${family}`).toBe(
-      true,
-    );
+    expect(
+      declaredFamilies.has(family),
+      `missing @font-face for ${family}`,
+    ).toBe(true);
   }
 
   const fontSrcs = [...svgMarkup.matchAll(/url\(([^)]+)\)/g)].map(
@@ -152,12 +151,24 @@ test("exports an SVG with embedded WOFF2 fonts and matches its baseline", async 
 });
 
 async function openFixedDrawing(page: Page): Promise<void> {
-  await persistPinnedWorkspaceSidebar(page);
+  await persistPinnedWorkspaceSidebar(
+    page,
+    [EXPORT_WORKSPACE.id],
+    EXPORT_WORKSPACE.id,
+  );
   await page.goto("/");
   await waitForDrawingFonts(page);
-  await page.getByRole("button", { name: "Open drawing…" }).click();
+  await page.getByRole("treeitem", { name: "drawing", exact: true }).click();
   await expect(page.locator(".excalidraw-editor")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Export…" })).toBeEnabled();
+}
+
+async function openExportDialog(page: Page): Promise<Locator> {
+  await emitBrowserTauriEvent(page, "native-menu-command", {
+    command: "exportImage",
+  });
+  const dialog = page.getByRole("dialog", { name: "Export drawing" });
+  await expect(dialog).toBeVisible({ timeout: 15_000 });
+  return dialog;
 }
 
 async function submitPngExport(

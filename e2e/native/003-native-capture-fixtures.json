@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 2,
+  "fixtureVersion": "003-native-capture-v4",
+  "screens": [
+    {
+      "gateId": "VSL-001",
+      "checkpoint": "VSL",
+      "preparationMode": "operator-assisted",
+      "manifestName": "03 · Workspace · Pinned · Light",
+      "baselinePath": "screens/workspace-pinned-light.png",
+      "theme": "light",
+      "sessionState": "workspace",
+      "sidebarState": "pinned",
+      "sidebarWidth": 360,
+      "workspaceName": "Design Workspace",
+      "selectedDirectory": "flows",
+      "selectedEntry": "flows/Architecture.excalidraw",
+      "expandedDirectories": ["flows"],
+      "sdkPanelState": "library-open",
+      "nativeMasks": [
+        {
+          "maskId": "sdk-canvas",
+          "selectorOrRect": "rect(480,74,506,686)",
+          "surface": "canvas",
+          "reason": "conservative official SDK-owned editor interior beginning after the maximum allowed Sidebar width",
+          "perimeterChecked": true,
+          "approved": true
+        },
+        {
+          "maskId": "sdk-library",
+          "selectorOrRect": "rect(986,74,294,686)",
+          "surface": "library",
+          "reason": "official SDK-owned Library interior below the native titlebar",
+          "perimeterChecked": true,
+          "approved": true
+        }
+      ],
+      "tabs": [
+        "Architecture.excalidraw",
+        "Migration.excalidraw",
+        "Research.excalidraw"
+      ],
+      "activeDocument": "Architecture.excalidraw",
+      "unsaved": false
+    },
+    {
+      "gateId": "HF2-01",
+      "checkpoint": "FINAL",
+      "preparationMode": "operator-assisted",
+      "manifestName": "01 · Welcome · Light",
+      "baselinePath": "screens/welcome-light.png",
+      "theme": "light",
+      "sessionState": "empty",
+      "sidebarState": "hidden",
+      "sidebarWidth": 360,
+      "workspaceName": null,
+      "selectedDirectory": null,
+      "expandedDirectories": [],
+      "tabs": [],
+      "activeDocument": null,
+      "unsaved": false
+    },
+    {
+      "gateId": "HF2-02",
+      "checkpoint": "FINAL",
+      "preparationMode": "operator-assisted",
+      "manifestName": "02 · Restored · Hidden · Light",
+      "baselinePath": "screens/restored-hidden-light.png",
+      "theme": "light",
+      "sessionState": "restored",
+      "sidebarState": "hidden",
+      "sidebarWidth": 360,
+      "workspaceName": "Design Workspace",
+      "selectedDirectory": "flows",
+      "selectedEntry": "flows/Architecture.excalidraw",
+      "expandedDirectories": ["flows"],
+      "tabs": ["Overview.excalidraw", "Checkout Flow.excalidraw"],
+      "activeDocument": "Checkout Flow.excalidraw",
+      "unsaved": false
+    },
+    {
+      "gateId": "HF2-03",
+      "checkpoint": "FINAL",
+      "preparationMode": "operator-assisted",
+      "manifestName": "03 · Workspace · Pinned · Light",
+      "baselinePath": "screens/workspace-pinned-light.png",
+      "theme": "light",
+      "sessionState": "workspace",
+      "sidebarState": "pinned",
+      "sidebarWidth": 360,
+      "workspaceName": "Design Workspace",
+      "selectedDirectory": "flows",
+      "expandedDirectories": ["flows"],
+      "sdkPanelState": "library-open",
+      "nativeMasks": [
+        {
+          "maskId": "sdk-canvas",
+          "selectorOrRect": "rect(480,74,506,686)",
+          "surface": "canvas",
+          "reason": "conservative official SDK-owned editor interior beginning after the maximum allowed Sidebar width",
+          "perimeterChecked": true,
+          "approved": true
+        },
+        {
+          "maskId": "sdk-library",
+          "selectorOrRect": "rect(986,74,294,686)",
+          "surface": "library",
+          "reason": "official SDK-owned Library interior below the native titlebar",
+          "perimeterChecked": true,
+          "approved": true
+        }
+      ],
+      "tabs": ["Overview.excalidraw", "Checkout Flow.excalidraw"],
+      "activeDocument": "Checkout Flow.excalidraw",
+      "unsaved": false
+    },
+    {
+      "gateId": "HF2-04",
+      "checkpoint": "FINAL",
+      "preparationMode": "operator-assisted",
+      "manifestName": "04 · Workspace · Overlay · Light",
+      "baselinePath": "screens/workspace-overlay-light.png",
+      "theme": "light",
+      "sessionState": "workspace",
+      "sidebarState": "overlay",
+      "sidebarWidth": 360,
+      "workspaceName": "Design Workspace",
+      "selectedDirectory": "flows",
+      "expandedDirectories": ["flows"],
+      "tabs": ["Overview.excalidraw", "Checkout Flow.excalidraw"],
+      "activeDocument": "Checkout Flow.excalidraw",
+      "unsaved": false
+    },
+    {
+      "gateId": "HF2-05",
+      "checkpoint": "FINAL",
+      "preparationMode": "operator-assisted",
+      "manifestName": "05 · Welcome · Dark",
+      "baselinePath": "screens/welcome-dark.png",
+      "theme": "dark",
+      "sessionState": "empty",
+      "sidebarState": "hidden",
+      "sidebarWidth": 360,
+      "workspaceName": null,
+      "selectedDirectory": null,
+      "expandedDirectories": [],
+      "tabs": [],
+      "activeDocument": null,
+      "unsaved": false
+    },
+    {
+      "gateId": "HF2-06",
+      "checkpoint": "FINAL",
+      "preparationMode": "operator-assisted",
+      "manifestName": "06 · Workspace · Pinned · Dark",
+      "baselinePath": "screens/workspace-pinned-dark.png",
+      "theme": "dark",
+      "sessionState": "workspace",
+      "sidebarState": "pinned",
+      "sidebarWidth": 360,
+      "workspaceName": "设计 Workspace",
+      "selectedDirectory": "流程",
+      "expandedDirectories": ["流程"],
+      "tabs": ["总览.excalidraw", "Checkout 流程.excalidraw"],
+      "activeDocument": "Checkout 流程.excalidraw",
+      "unsaved": true
+    }
+  ]
+}

@@ -13,8 +13,12 @@
 _避免使用_：项目、仓库、资料库、FileTree
 
 **Workspace Root（工作区根目录）**：
-Workspace 的顶层目录。它可以被挂载到应用或从应用移除，但不是可在应用内重命名或删除的普通条目。
+Workspace 的顶层目录。它可以被挂载或取消挂载，但不是可在应用内重命名或删除的普通条目。取消挂载绝不删除其中的文件。
 _避免使用_：根条目、顶层文件夹
+
+**Recent Workspace（最近工作区）**：
+应用为 Workspace root 保留的历史记录，可处于已挂载或未挂载状态。激活未挂载记录会重新校验并挂载同一 identity；从 Recents 移除只删除应用历史。
+_避免使用_：已删除工作区、缺失文件
 
 **Workspace Entry（工作区条目）**：
 Workspace 内直接呈现的 Drawing 或 Directory。

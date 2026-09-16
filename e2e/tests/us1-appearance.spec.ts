@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { installBrowserTauriHarness } from "./browserTauriHarness";
+import {
+  emitBrowserTauriEvent,
+  installBrowserTauriHarness,
+} from "./browserTauriHarness";
 import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
 
 const APPEARANCE_KEY = "excalidraw-desktop.appearance";
@@ -13,16 +16,18 @@ test.beforeEach(async ({ page }) => {
     APPEARANCE_KEY,
   );
   await page.reload();
-  await page.getByRole("button", { name: "New drawing" }).click();
-  await expect(page.locator(".excalidraw-editor")).toBeVisible();
+  await openWelcomeDrawing(page);
 });
 
 test("keeps shell appearance synchronized and restores the preference", async ({
   page,
 }) => {
-  await expect(page.getByRole("radio", { name: "System" })).toBeChecked();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-theme",
+    "excalidraw",
+  );
 
-  await page.getByRole("radio", { name: "Dark" }).click();
+  await setNativeAppearance(page, "appearanceDark");
   await expect(page.locator("html")).toHaveAttribute(
     "data-color-scheme",
     "dark",
@@ -31,16 +36,15 @@ test("keeps shell appearance synchronized and restores the preference", async ({
   await expect(page.locator(".excalidraw")).toHaveClass(/theme--dark/);
 
   await page.reload();
-  await expect(page.getByRole("radio", { name: "Dark" })).toBeChecked();
   await expect(page.locator("html")).toHaveAttribute(
     "data-color-scheme",
     "dark",
   );
-  await page.getByRole("button", { name: "Open drawing…" }).click();
-  await expect(page.locator(".excalidraw-editor")).toBeVisible();
+  await expectPersistedAppearance(page, "dark");
+  await openWelcomeDrawing(page);
 
   await page.emulateMedia({ colorScheme: "light" });
-  await page.getByRole("radio", { name: "System" }).click();
+  await setNativeAppearance(page, "appearanceSystem");
   await expect(page.locator("html")).toHaveAttribute(
     "data-color-scheme",
     "light",
@@ -53,6 +57,40 @@ test("keeps shell appearance synchronized and restores the preference", async ({
   );
   await expect(page.locator(".excalidraw")).toHaveClass(/theme--dark/);
 });
+
+async function openWelcomeDrawing(
+  page: import("@playwright/test").Page,
+): Promise<void> {
+  await page
+    .getByTestId("welcome-screen")
+    .getByRole("button", { name: "New Drawing", exact: true })
+    .click();
+  await expect(page.locator(".excalidraw-editor")).toBeVisible();
+}
+
+async function setNativeAppearance(
+  page: import("@playwright/test").Page,
+  command: "appearanceSystem" | "appearanceLight" | "appearanceDark",
+): Promise<void> {
+  await emitBrowserTauriEvent(page, "native-menu-command", { command });
+}
+
+async function expectPersistedAppearance(
+  page: import("@playwright/test").Page,
+  modePreference: "system" | "light" | "dark",
+): Promise<void> {
+  await expect
+    .poll(() =>
+      page.evaluate((key) => localStorage.getItem(key), APPEARANCE_KEY),
+    )
+    .toBe(
+      JSON.stringify({
+        version: 1,
+        themeId: "excalidraw",
+        modePreference,
+      }),
+    );
+}
 
 test("restores a dark preference before the application module runs", async ({
   page,
@@ -96,11 +134,11 @@ test("falls back safely from a corrupt preference before the shell is interactiv
   );
   await page.reload();
 
-  await expect(page.getByRole("radio", { name: "System" })).toBeChecked();
   await expect(page.locator("html")).toHaveAttribute(
     "data-theme",
     "excalidraw",
   );
+  await expectPersistedAppearance(page, "system");
   await expect(page.locator(".app-shell")).toBeVisible();
 });
 
@@ -108,7 +146,7 @@ test("matches the approved light and dark shell baselines", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole("radio", { name: "Light" }).click();
+  await setNativeAppearance(page, "appearanceLight");
   await expect(page.locator(".app-shell")).toHaveScreenshot(
     "us1-shell-light.png",
     {
@@ -117,7 +155,7 @@ test("matches the approved light and dark shell baselines", async ({
     },
   );
 
-  await page.getByRole("radio", { name: "Dark" }).click();
+  await setNativeAppearance(page, "appearanceDark");
   await expect(page.locator(".app-shell")).toHaveScreenshot(
     "us1-shell-dark.png",
     {

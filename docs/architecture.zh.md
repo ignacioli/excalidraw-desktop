@@ -2,11 +2,13 @@
 
 # Excalidraw Desktop 架构文档
 
-**最后更新**：2026-08-24
+**最后更新**：2026-09-16
 
 本文档描述 Excalidraw Desktop 的**当前**实现架构：分层视图、可靠性数据流、工作区条目变更、模块职责、依赖方向与信任边界、原生窗口边界与存储层。决策记录见 `docs/adr/`；视觉与交互契约见根目录 `DESIGN.md`（英文正文；中文见 `DESIGN.zh.md`）。公开 IPC 契约见 `docs/contracts/ipc-contracts.md`（v2）。
 
 当前壳层是画布优先的 overlay/pinned 侧边栏、IPC v2 Workspace Entry 命令，以及统一的应用菜单/对话框。崩溃安全持久化（草稿、原子写、恢复快照、外部变更冲突）仍然有效。下文描述的是现行路径，不是已退休的 FileTree + `thumbnails/` 生产实现。
+
+Workspace 持久化将 mounted authority 与 Recent history 分开。已挂载记录进入路径策略、Workspace Entry 命令、索引与监听；只有唯一的 Current Workspace 进入 Sidebar 树。取消挂载会保留记录；重新挂载只在激活时校验保存的 root，而从 Recents 移除未挂载记录只改变应用历史。
 
 ## 1. 总体结构
 
@@ -19,7 +21,7 @@ flowchart TB
     subgraph frontend [前端 React 19 + TypeScript strict]
         AppShell["app/AppShell：画布优先 · overlay/pinned 侧边栏"]
         Interaction["interaction store：全局唯一菜单与对话框"]
-        Tree["workspaces/WorkspaceTree：连续虚拟化树"]
+        Tree["workspaces/WorkspaceTree：Current Workspace 虚拟化树"]
         Docs["documents/ DocumentManager：会话 · 关闭/激活队列 · 路径迁移"]
         Editor["editor/ 官方 Excalidraw 公共集成"]
         Theme["app/theme/ 主题注册 · 偏好解析"]
@@ -200,7 +202,7 @@ sequenceDiagram
 | `app/theme/` | 主题类型、registry、偏好解析、语义 token 与启动前应用（DESIGN.md）；与系统标题栏颜色解耦 |
 | `editor/` | ExcalidrawAdapter + 画布组件、场景序列化、导出、离线字体、IME 桥接；只走锁定包的公开 API |
 | `documents/` | DocumentManager：会话身份、标签顺序、dirty/orphan/conflict、关闭/激活队列、路径迁移、恢复 UI |
-| `workspaces/WorkspaceTree.tsx` | 单一连续虚拟化工作区树（多工作区一个滚动面）；无缩略图行 |
+| `workspaces/WorkspaceTree.tsx` | Current Workspace 及其后代的一棵连续虚拟化树；其他 workspace record 通过 Welcome/Recent 进入；无缩略图行 |
 | `ipc/` | 强类型 v2 命令绑定与事件订阅（`IPC_CONTRACT_VERSION = 2`） |
 
 ### 后端（src-tauri/）
@@ -249,7 +251,58 @@ sequenceDiagram
 
 存储层设计细节见 ADR-002（双层持久化）与 ADR-003（SQLite-first 与 redb 触发条件）。热层保持 WAL 草稿，不改回就地覆盖冷文件，也不拆除恢复快照。
 
-## 11. 相关文档
+## 11. 原生视觉验收分层
+
+本节描述原生工具的 collector 边界与证据归属。具体的历史验证记录见 [`docs/evidence/validation-summary.md`](evidence/validation-summary.md)；不能仅凭 collector 架构推断当前发布门槛。
+
+Native visual capture 是 collector 侧验证路径，不是 production IPC 路径。Collector 负责安全 fixture、schema v2 immutable plan、隔离 profile、owned PID/window、一次性 terminal confirmation、normalization 与 digest；应用状态和交互事实仍由 semantic browser evidence 负责。
+
+```mermaid
+flowchart TB
+  Prepare["Prepare CLI：schema-v2 plan + safe fixture + profiles"] --> Plan["Immutable capture plan"]
+  Plan --> Launcher["Owned child launcher"]
+  Launcher --> App["Normal production Tauri package"]
+  subgraph Collector["Collector-owned native facts"]
+    Isolation["Isolation/path evidence"]
+    Window["Owned PID/window + 1280x760 + scale"]
+    Confirm["One exact terminal confirmation"]
+    Capture["One capture + normalization + digests"]
+  end
+  subgraph AppEvidence["Application-owned semantic facts"]
+    Browser["Semantic browser collection"]
+    Reviewer["Independent visual reviewer"]
+  end
+  App --> Browser
+  Plan --> Isolation --> Window --> Confirm --> Capture
+  Capture --> Reviewer
+  Browser --> Reviewer
+```
+
+## 12. 原生 capture request-to-ready 数据流
+
+```mermaid
+sequenceDiagram
+  participant P as Prepare CLI
+  participant L as Owned launcher
+  participant A as Production package
+  participant D as Native collector
+  participant W as Semantic browser collector
+  P->>P: 校验 package、manifest、fixture 与 isolation path
+  P->>P: 创建独立 empty profiles 与 schema-v2 plan
+  L->>A: 携带 isolated HOME 启动普通 production package
+  D->>D: 校验 child PID、唯一 owned window 与两次稳定 1280x760 sample
+  D-->>L: 打印 visual checklist 与 CAPTURE gate challenge
+  L->>D: 在 timeout 内只接受一次精确 confirmation
+  D->>D: 重新校验同一 PID/window/bounds/scale
+  D->>D: 写 capture-readiness/isolation 并 capture 一次
+  D->>D: 无 crop/repair normalization，并 hash immutable outputs
+  W->>W: 独立证明 semantic state、geometry、fonts 与 interaction
+  D-->>W: 以 package/capture binding 供后续 independent review
+```
+
+Collector 只拥有自己启动的 child process 与声明的 profile。缺少 isolation、process/window 歧义、confirmation mismatch/timeout、path escape、package/plan 改变、dimension mismatch 或同一方向第四次 retry 时，输出结构化 `BLOCKED`/`FAIL`；collector 不声称目标 UI 状态可见。
+
+## 13. 相关文档
 
 - ADR：ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 声明参考环境性能测量、ADR-005 主题边界（壳层布局/缩略图句见 ADR-009）、ADR-006/007/008 参考性能预算与测量序列、ADR-009 桌面 UI 交互
 - `DESIGN.md` / `DESIGN.zh.md`（视觉与交互契约）

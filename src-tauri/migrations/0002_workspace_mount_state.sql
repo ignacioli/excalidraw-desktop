@@ -1,0 +1,1 @@
+ALTER TABLE workspaces ADD COLUMN mounted INTEGER NOT NULL DEFAULT 1 CHECK (mounted IN (0, 1));

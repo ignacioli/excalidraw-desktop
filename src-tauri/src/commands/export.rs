@@ -496,6 +496,7 @@ mod tests {
                     name: "Workspace".to_owned(),
                     root_path: canonical_workspace.display().to_string(),
                     created_at: 1,
+                    mounted: true,
                 })
                 .await
                 .unwrap_or_else(|error| panic!("register workspace fixture: {error}"));

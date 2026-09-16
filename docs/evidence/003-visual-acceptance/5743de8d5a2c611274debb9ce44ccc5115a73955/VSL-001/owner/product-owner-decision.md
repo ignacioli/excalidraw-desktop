@@ -1,0 +1,19 @@
+# VSL-001 product-owner decision
+
+**Status:** APPROVED
+**Decision time:** 2026-09-12T01:38:20Z
+
+The product owner explicitly replied `APPROVED` after reviewing the exact native
+VSL-001 capture and the independent reviewer PASS.
+
+## Binding
+
+- Product commit: `5743de8d5a2c611274debb9ce44ccc5115a73955`
+- Package artifact SHA-256: `e98afb4c55f2ea373adc2441a30596a2d0e553d1fbd8d9ba11e07d74acfc7e59`
+- Reviewer report SHA-256: `b782ffe2b8daad142dd9a51e1ab529c3d4b214a6e7b95f4888fc504c010e314c`
+- Reviewer verdict: `PASS`; High/Critical findings: `0`
+- Semantic browser collection digest: `beb9ea5a4f33d357031e8e8c300af1fb043bd2bb056cef9ebca51ab89b356b59`
+- Native capture collection digest: `ecc7a598f613efbae37ece92cb9afd0b0bf3c03323a01d7bd028cfc3a8189b92`
+
+This approval closes only the representative `03 · Workspace · Pinned · Light`
+slice. It does not approve the remaining five screens or `FINAL-003`.

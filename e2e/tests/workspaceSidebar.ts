@@ -12,7 +12,7 @@ export async function openWorkspaceSidebar(page: Page): Promise<void> {
     return;
   }
   await page
-    .getByRole("button", { name: "Workspace sidebar", exact: true })
+    .getByRole("button", { name: "Toggle workspace sidebar", exact: true })
     .click();
   await expect(sidebar).toBeVisible();
 }
@@ -21,6 +21,7 @@ export async function openWorkspaceSidebar(page: Page): Promise<void> {
 export async function persistPinnedWorkspaceSidebar(
   page: Page,
   expandedWorkspaceIds: readonly string[] = [],
+  currentWorkspaceId: string | null = null,
 ): Promise<void> {
   await page.addInitScript(
     ({ key, snapshot }) => {
@@ -31,9 +32,10 @@ export async function persistPinnedWorkspaceSidebar(
       snapshot: JSON.stringify({
         version: 1,
         sidebarPinned: true,
+        sidebarWidth: 360,
         expandedWorkspaceIds: [...expandedWorkspaceIds],
+        currentWorkspaceId,
       }),
     },
   );
 }
-

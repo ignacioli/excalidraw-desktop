@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "VSL-001-native-capture",
+  "gateId": "VSL-001",
+  "route": "fixed-capture-review",
+  "binding": {
+    "productCommit": "5743de8d5a2c611274debb9ce44ccc5115a73955",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "940c189275e84902aab4eeb786e402d62b22c078ecbb473a582f3d8ab147a765",
+    "harnessVersion": "003-native-capture-v4",
+    "packageArtifactSha256": "e98afb4c55f2ea373adc2441a30596a2d0e553d1fbd8d9ba11e07d74acfc7e59"
+  },
+  "os": "darwin",
+  "viewport": {
+    "width": 1280,
+    "height": 760
+  },
+  "browserOrAppBuild": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/src-tauri/target/release/bundle/macos/Excalidraw.app",
+  "fixture": "003-native-capture-v4",
+  "semanticEvidence": {
+    "collectorReportPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/e2e/test-results/tests-ui-desktop-shell-vis-976ec-t-with-exact-shell-geometry-browser-ui/immutable/VSL-001/collection/VSL-001-light-pinned-browser/collector-report.json",
+    "collectorReportSha256": "bd2b2f2da801cfb8e9ac57dbb2ea8c5bbbe6e79d5453ff265dfeeaf7aafbb8a0",
+    "collectionId": "VSL-001-light-pinned-browser",
+    "collectionDigest": "beb9ea5a4f33d357031e8e8c300af1fb043bd2bb056cef9ebca51ab89b356b59",
+    "productCommit": "5743de8d5a2c611274debb9ce44ccc5115a73955",
+    "harnessVersion": "003-shell-v2",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1"
+  },
+  "preparationMode": "operator-assisted",
+  "operatorActionsAreEvidence": false,
+  "collector": {
+    "tool": "native-screen-capture",
+    "version": "4",
+    "runIdentity": "7926d7ef-4d1e-46d9-8a2c-9e9df8c1192e:VSL-001"
+  },
+  "pid": 39214,
+  "windowId": 18056,
+  "backingScale": 2,
+  "normalizationAlgorithm": "lanczos3-srgb-v1"
+}

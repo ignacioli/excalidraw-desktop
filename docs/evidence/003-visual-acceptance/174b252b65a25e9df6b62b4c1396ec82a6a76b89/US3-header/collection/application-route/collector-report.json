@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "US3-header-application-route",
+  "gateId": "US3-header",
+  "route": "deterministic-runtime",
+  "binding": {
+    "productCommit": "174b252b65a25e9df6b62b4c1396ec82a6a76b89",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "3352188fa598c9fa3e657ea0c0dc0169f833f70e842b1eee6ab88cd65656be9a",
+    "harnessVersion": "ui-interaction-harness@afdec054e8b5764efd8cdecb2ce144688940e5120ffcd4a70893d098ca99d980"
+  },
+  "collector": {
+    "tool": "phase3-header-application-route",
+    "version": "1",
+    "runIdentity": "174b252b65a25e9df6b62b4c1396ec82a6a76b89:US3-header"
+  },
+  "environment": {
+    "os": "macOS 26.6.2 (25G83) arm64",
+    "node": "26.7.0",
+    "pnpm": "11.25.0",
+    "playwright": "1.62.1",
+    "browserBaseUrl": "http://127.0.0.1:1421"
+  },
+  "claims": [
+    {
+      "claimId": "US3-header-targeting",
+      "factClass": "application-route-outcome",
+      "primaryRoute": "deterministic-runtime",
+      "result": "PASS",
+      "summary": "New Drawing targets the workspace root and New Folder targets the selected ordinary directory."
+    },
+    {
+      "claimId": "US3-header-zero-write",
+      "factClass": "application-route-outcome",
+      "primaryRoute": "deterministic-runtime",
+      "result": "PASS",
+      "summary": "Cancellation performs no create mutation; name conflict preserves entry count, does not reload the tree, does not open a document, and keeps the naming dialog retryable."
+    },
+    {
+      "claimId": "US3-header-recursive-toggle",
+      "factClass": "webview-semantic",
+      "primaryRoute": "deterministic-runtime",
+      "result": "PASS",
+      "summary": "One Expand all activation loads not-yet-loaded descendants; Collapse all removes the expanded subtree and exposes the next-action label and tooltip."
+    },
+    {
+      "claimId": "US3-header-refresh-accessibility",
+      "factClass": "webview-semantic",
+      "primaryRoute": "deterministic-runtime",
+      "result": "PASS",
+      "summary": "Refresh requests a fresh current-workspace listing and all four header actions are exercised by accessible name through keyboard and pointer routes."
+    }
+  ],
+  "commands": [
+    {
+      "command": "pnpm exec vitest run src/workspaces/WorkspacePanel.test.tsx",
+      "result": "PASS",
+      "summary": "1 file, 15 tests"
+    },
+    {
+      "command": "PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1421 APP_E2E=1 pnpm exec playwright test --config=e2e/playwright.config.ts --project=browser-ui --retries=0 --workers=1 e2e/tests/ui-desktop-shell-visual.spec.ts --grep \"Current Workspace header actions\"",
+      "result": "PASS",
+      "summary": "1 semantic desktop E2E scenario"
+    },
+    {
+      "command": "pnpm typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "pnpm lint",
+      "result": "PASS"
+    }
+  ],
+  "sourceDigests": [
+    {
+      "path": "e2e/fixtures/003-shell-fixtures.ts",
+      "sha256": "3352188fa598c9fa3e657ea0c0dc0169f833f70e842b1eee6ab88cd65656be9a"
+    },
+    {
+      "path": "e2e/tests/uiInteractionHarness.ts",
+      "sha256": "afdec054e8b5764efd8cdecb2ce144688940e5120ffcd4a70893d098ca99d980"
+    }
+  ],
+  "scopeExclusions": {
+    "visualFidelityClaimed": false,
+    "productionPackageBuiltOrLaunched": false,
+    "independentVisualReviewAuthored": false,
+    "productOwnerDecisionAuthored": false
+  },
+  "result": "PASS"
+}

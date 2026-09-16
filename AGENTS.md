@@ -36,20 +36,20 @@ Spec-driven deliverables are recorded at these canonical paths. The private spec
 
 User-facing and root contributor docs use English as the canonical filename (no suffix) and Simplified Chinese as a `*.zh.md` sibling next to it. `docs/adr/` is not bilingual. Public user-facing pages (`README.md`, `DESIGN.md`, `CONTEXT.md`, `CHANGELOG.md`, `docs/architecture.md`, `docs/quickstart.md`) describe the product, architecture, and how to run it; they must not cite private-spec numbering such as feature `001`/`002`, spec user-story IDs, or `T0xx` task IDs. Those identifiers belong in `docs/evidence/` and, when needed, ADRs.
 
-| Deliverable | Path |
-|-------------|------|
-| User README (English / Chinese) | `README.md` / `README.zh.md` |
-| Visual and interaction contract (English / Chinese) | `DESIGN.md` / `DESIGN.zh.md` |
-| Ubiquitous language (English / Chinese) | `CONTEXT.md` / `CONTEXT.zh.md` |
-| Contributor and maintainer instructions (English / Chinese) | `AGENTS.md` / `AGENTS.zh.md` |
-| Changelog | `CHANGELOG.md` |
-| Architecture decision records (ADR) | `docs/adr/` |
-| Architecture overview (English / Chinese) | `docs/architecture.md` / `docs/architecture.zh.md` |
-| IPC contract | `docs/contracts/ipc-contracts.md` |
-| Getting started and verification (English / Chinese) | `docs/quickstart.md` / `docs/quickstart.zh.md` |
-| Native verification evidence | `docs/evidence/native-verification.md` |
-| Accessibility audit | `docs/evidence/a11y-audit.md` |
-| Validation summaries | `docs/evidence/validation-summary.md` |
+| Deliverable                                                 | Path                                               |
+| ----------------------------------------------------------- | -------------------------------------------------- |
+| User README (English / Chinese)                             | `README.md` / `README.zh.md`                       |
+| Visual and interaction contract (English / Chinese)         | `DESIGN.md` / `DESIGN.zh.md`                       |
+| Ubiquitous language (English / Chinese)                     | `CONTEXT.md` / `CONTEXT.zh.md`                     |
+| Contributor and maintainer instructions (English / Chinese) | `AGENTS.md` / `AGENTS.zh.md`                       |
+| Changelog                                                   | `CHANGELOG.md`                                     |
+| Architecture decision records (ADR)                         | `docs/adr/`                                        |
+| Architecture overview (English / Chinese)                   | `docs/architecture.md` / `docs/architecture.zh.md` |
+| IPC contract                                                | `docs/contracts/ipc-contracts.md`                  |
+| Getting started and verification (English / Chinese)        | `docs/quickstart.md` / `docs/quickstart.zh.md`     |
+| Native verification evidence                                | `docs/evidence/native-verification.md`             |
+| Accessibility audit                                         | `docs/evidence/a11y-audit.md`                      |
+| Validation summaries                                        | `docs/evidence/validation-summary.md`              |
 
 `Phase N` in `specs/` (`tasks.md`, `plan.md`) means the Spec-Driven Development stages (Setup, Foundational, US1–US7, Polish). Do not reuse `Phase 1/2/3/4` in ADRs or evidence for the 2026-08-14 performance measurement work; that numbering is not SDD. Name those activities by date and what they did (full-tree remeasure, physical attribution, ADR-007 budget/workload calibration).
 
@@ -90,6 +90,13 @@ The manifests establish the following workflows:
 - `pnpm tauri dev`: run the Tauri development application through the package script.
 - `pnpm tauri build`: build the current Tauri bundle through the package script.
 - `VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness`: build the test-only native binary required by T090/T108; production releases MUST omit this feature.
+- `pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute-path> [--semantic-collection <absolute-T031-collector-report.json> for VSL] --run-root <absolute-empty-dir> --plan <absolute-new-path> --isolation-mode backend-app-data-home-redirect`: validate the exact production-package binding, require and digest-bind one PASS T031 semantic report for VSL, provision only safely representable declared fixtures, record each screen's `fixture|operator-assisted` preparation mode, create distinct backend-home roots plus a T023b root, and write one immutable schema-v2 capture plan bound to harness v4. The mode isolates and later verifies backend Application Support/SQLite under the run root; it explicitly does not claim WKWebView filesystem isolation.
+- `pnpm native:screen:capture -- --plan <absolute-plan> --gate VSL-001 --collection-dir <absolute-new-dir>`: launch the plan-bound package, resolve exactly one owned 1280×760 window with two stable samples, print the declared visual checklist and one exact `CAPTURE <gate-id> <challenge>` line, accept that line once within 600 seconds, revalidate the same PID/window/bounds/scale, capture once, write backend-only `isolation.json` plus `capture-readiness.json`, copy only conservative plan-declared SDK rectangles to `mask.json`, and normalize with `lanczos3-srgb-v1`. In Codex/non-interactive use, keep capture in an agent-held PTY, show the challenge to the operator, wait for an explicit `ready`, then forward the exact line to that PTY; never run it as a separate shell command. The harness never reads, prints, backs up, cleans, or directly modifies operator WebKit data. Use `--all-final --collection-root <absolute-new-root>` only with a FINAL plan. Operator actions and confirmation control timing only; semantic state remains owned by focused tests and browser evidence. Exit codes are `0=PASS`, `1=FAIL`, `2=BLOCKED`, and `64=invalid invocation`; content-GUI automation, full-screen capture, coordinate search, crop, padding, and visual repair are prohibited.
+- `pnpm native:macos:validate -- --manifest <path> --capture-plan <final-plan> --collection-dir <new-path> --binding <binding.json>`: validate exact-package native entrypoints in the prepared plan's dedicated T023b profile without capture-specific product IPC. `qualification` scope proves exact numeric 1280×760 geometry, File > Save inspection and route, one nonce-confirmed operator-performed physical Command-S plus one fresh route pair, and unchanged normal-open fixture bytes; `final` scope reuses that physical-key mechanism and expands to 5/5 menu hierarchy/label/enabled/AX-equivalent facts and seven fresh unique `nativeEntry -> routeAccepted` pairs. The owned PID must be frontmost immediately before and after the physical key event; menu-click substitution, duplicate confirmation/key/route observations, and non-interactive runs are blocked. Save/PNG/SVG business filesystem outcomes stay owned by deterministic implementation/process-level tests. Post-stop bindings additionally carry a digest-valid product-owner `STOP_REOPEN` decision and remediation epoch; the collector still separates product, validator, and attempt identities, terminates the owned child before finalization, and never writes reviewer, FINAL-owner, filesystem-outcome, or visual claims.
+- `pnpm evidence:publish -- --source <sealed-gate-dir> --destination <new-evidence-dir>`: validate role boundaries and every declared digest, require an absent destination, copy the sealed gate byte-for-byte, and write an adjacent publication receipt. A FINAL-003 gate must contain exactly `collection/`, `aggregate/technical/`, `review/`, and `owner/`: the publisher transitively revalidates the T062 technical input/report graph, requires the canonical reviewer index to bind exactly six T061 visual collections and six digest-bound per-screen PASS reports without technical collections, and requires the owner decision to bind both the technical report and reviewer index. Exit codes are `0=PASS`, `1=FAIL`, `2=BLOCKED`, and `64=invalid invocation`.
+- `pnpm evidence:publish:test`: run destination-absence, digest, path, role-boundary, FINAL technical/reviewer/owner graph, and byte-preservation tests for the publisher.
+- `pnpm evidence:aggregate -- --mode <mode> ...`: run the read-only compositional validator. Modes are `delta`, `technical`, `task-proof`, `closure`, and `closure-verify`; each writes only its requested new aggregate output and never edits source collections, reviewer/owner artifacts, or `tasks.md`. Use `pnpm evidence:aggregate -- --help` for exact mode arguments. Exit codes are `0=PASS`, `1=FAIL`, `2=BLOCKED`, and `64=invalid invocation`.
+- `pnpm evidence:aggregate:test`: run missing/duplicate browser-claim and screen, reviewer/owner input rejection, path/symlink/digest, producer-scoped ownership classification, three-identity validation, normalized failure-ledger and `STOP_REOPEN` remediation-epoch transitions, stale binding, task-proof, deterministic output, and closure self-transition tests. Native-Harness-only changes rerun the native Harness/qualification/T023b path without invalidating unchanged browser, package, or capture proofs.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: check Rust formatting.
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`: run the Rust lint gate.
 - `cargo test --manifest-path src-tauri/Cargo.toml`: run the Rust unit and integration tests.
@@ -105,6 +112,24 @@ Validation must be proportional to risk and should eventually include, as applic
 - Contract or IPC integration tests for changed frontend/backend boundaries.
 - Playwright CLI flows for browser-visible UI behavior.
 - Manual macOS/Tauri checks for windows, menus, dialogs, permissions, filesystem behavior, Gatekeeper user override, and packaging that browser tests cannot prove. A recorded target-OS VM or physical machine is acceptable evidence; never claim unexecuted physical-device coverage.
+
+### UI debugging and visual-evidence efficiency
+
+- Native evidence does not imply visual evidence. Use this evidence precedence, in order:
+  1. shell, filesystem, package metadata, and other artifact inspection;
+  2. semantic browser automation for WebView-owned UI;
+  3. macOS Accessibility/System Events (including `osascript`) for native menus and native UI actions;
+  4. deterministic application state, logs, events, and filesystem outcomes;
+  5. existing regression tests for implementation-level delegation;
+  6. Computer Use or screenshots only for a remaining fact that is inherently visual and cannot be established structurally.
+- Route each acceptance fact to the least visual evidence source that can prove it. Validate app-owned shell UI through source inspection, focused unit/integration tests, semantic DOM/accessibility locators, and deterministic Playwright fixtures before using screenshots. Prefer roles, names, and labels; add `data-testid` only for stable app-owned gaps, and never depend on private Excalidraw SDK DOM or test IDs.
+- Use the viewport, theme, fixture, font state, and tolerances defined by the active feature contract. Do not replace them with a generic viewport or ad-hoc desktop state.
+- A native evidence gate is not by itself authorization for screenshot-driven exploration.
+- Screenshots must not be the primary proof for the git commit; bundle identifier; application version; package identity or hash; macOS or environment metadata; menu existence, labels, or enabled/disabled state; keyboard equivalents; command delegation; save/export filesystem outcomes; `saveToActiveFile`; direct-write or SDK-default bypasses; or error routing when it is structurally observable.
+- If repeated screenshots are needed to understand whether a native behavior occurred, stop the visual loop and add or improve a deterministic probe instead. When an existing probe is insufficient, create or extend a maintainable project-local deterministic harness before using Computer Use.
+- Capture or inspect images only for an explicit inherently-visual gate or the narrowly scoped last-mile fact that structured checks cannot establish. Work one required screen or failing region at a time; do not impose an arbitrary screenshot cap when the gate genuinely requires multiple captures.
+- Treat browser rendering as preflight. Use the exact packaged Tauri build for native menus, windows, dialogs, filesystem error paths, system appearance, packaging, and other behavior that browser automation cannot prove; record native menu inspection and invocation through Accessibility/System Events where possible.
+- Bind evidence to the exact product commit, package identity, and recorded environment. Keep automated results, independent visual-review verdicts, and product-owner decisions distinct; none substitutes for another.
 
 Never claim a check passed unless it actually ran successfully. If validation requires unavailable services, target operating systems, or declared VM configuration details, report the exact gap without weakening code or tests.
 

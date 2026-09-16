@@ -1,4 +1,179 @@
-# 验证证据汇总（Phase 10 / T095；002 T066 指令）
+# 验证证据汇总（003 当前状态；001/002 历史）
+
+## Feature 003 当前状态（已完成，R15 轻量验收，2026-09-16）
+
+Feature 003 已在批准的 R15 轻量验收范围内完成。安装的 production `.app` 来自 clean runtime commit `5a5aa59`；产品证据 checkpoint 为 `a84319a`，private-specs closure 为 `ca3201f`。产品负责人已确认：T060d 人工验收 **PASS**，T067 **PASS**（菜单 5/5、原生操作 7/7），T068 **PASS**（指定 HF-2 状态 6/6），T069 最终决定为 **`APPROVED`**。003 在该批准范围内的适用实现、自动化、原生与 UX/UI 人工验收门槛已全部通过，active tasks 与下游 checklist 均已关闭。
+
+若以“100% PASS”概括，只能指上述 **003/R15 验收项全部通过**，不表示所有平台、所有语言、所有可能设备组合或 100% 测试覆盖率。被停用的自动 proof chain 与历史失败结果仍按原 verdict 保留，不重新归入当前通过项；中文优先的多语言支持是后续独立工作项。
+
+当前收尾提交与任务状态：
+
+- 产品 runtime/package commit：`5a5aa59`；产品证据 checkpoint：`a84319a`（最终验收事实）。
+- private-specs checkpoint：`ca3201f`，包含 T060d、T067、T068、T069 勾选及 closure record。
+- T060d/T067/T068/T069：**PASS / PASS / PASS / APPROVED**。
+- 两个 worktree 均已完成 scoped checkpoint，未 push；product `main`、shared specs checkout 未修改。
+
+## Feature 003 详细证据与时间线（已完成；以下保留历史过程）
+
+本节保留 003 从 T059 到 R15 收尾的逐阶段证据。较早的 `PENDING`、`FAIL` 或“尚未完成”句子描述的是当时的时间点；它们不覆盖上方已经确认的最终状态，也不应单独作为当前项目进度判断。
+
+### T059 final risk-proportional automated suite
+
+本轮以产品 runtime commit `9bc3fd9b592f8d45cee5b1878474650ff2c8e40b` 为基础执行；为匹配该 runtime 已完成的 003 shell contract，只修改 browser E2E harness、语义定位和两个遗留 appearance 快照，不改生产 runtime。Codex managed macOS 下，Vite 在 sandbox 外以 `pnpm dev --host 127.0.0.1` 监听 `http://127.0.0.1:1420/`，Playwright 设置 `PLAYWRIGHT_SKIP_WEBSERVER=1` 与 `PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420`。首次使用错误的 package-script 参数形式导致多跑非目标集合，以及 sandbox 内 Chromium Mach-port 权限失败，均不计入产品 verdict；下表只记录最终精确命令。
+
+| 命令 | 结果 |
+|------|------|
+| `pnpm lint` | **pass**（exit 0） |
+| `pnpm typecheck` | **pass**（exit 0） |
+| `pnpm test` | **pass**（37 files / 295 tests） |
+| `pnpm build` | **pass**（exit 0；仅保留既有 large-chunk warning） |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | **pass**（exit 0） |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` | **pass**（exit 0） |
+| `cargo test --manifest-path src-tauri/Cargo.toml` | **pass**（96 tests：lib 70、contract 23、untrusted-scene 3） |
+| `APP_E2E=1 PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 pnpm exec playwright test --config e2e/playwright.config.ts e2e/tests/ui-desktop-shell-routing.spec.ts e2e/tests/ui-desktop-shell-visual.spec.ts e2e/tests/ui-sidebar-modes.spec.ts e2e/tests/ui-entry-dialogs.spec.ts e2e/tests/a11y-audit.spec.ts e2e/tests/us1-appearance.spec.ts e2e/tests/us5-export-fidelity.spec.ts --reporter=line` | **pass**（55/55，26.7s） |
+
+本轮 focused Playwright 继续覆盖六个 HF-2 语义状态、legacy chrome absence、a11y/focus/reduced-motion、固定 geometry/tokens/font readiness/fallback、native menu event delegation，以及 deterministic PNG/SVG output。遗留 `us1-appearance` Light/Dark 快照已从含旧 Save/Export/Appearance 顶栏和 harness error 的 002 shell 更新为当前 003 shell；更新后逐张检查，无明显裁切、遮挡或主题错误。该浏览器检查不替代 T060 package identity、T067 native smoke 或 T068 product-owner visual sweep。
+
+未重跑、未改写的 checkpoint evidence 按原 product commit/path 复用：
+
+- VSL-001 / HF2-03: `docs/evidence/003-visual-acceptance/5743de8d5a2c611274debb9ce44ccc5115a73955/VSL-001/`
+- HF2-01: `docs/evidence/003-visual-acceptance/6c78bebc4a922cbaf40bc6c60cf6b0be0e93b8df/HF2-01/`
+- HF2-02: `docs/evidence/003-visual-acceptance/6e308c0859341a1ffcf19e5dabe35b7ad28cafe5/HF2-02/`
+- HF2-04: `docs/evidence/003-visual-acceptance/a00d82b1f939299687128e697e4aef91cfc98466/HF2-04/`
+- HF2-05: `docs/evidence/003-visual-acceptance/63417a0db7650bbdf6f323d98110f2685c10a17b/HF2-05/`
+- HF2-06: `docs/evidence/003-visual-acceptance/06a4e34152fb8cdcdae7a6fd20ac137565ab651d/HF2-06/`
+
+在 T059 当时，T067、T068 与最终 T069 owner decision 尚未执行；其后结果见本节最终收尾记录。
+
+### T060 production package record
+
+紧接 T059 checkpoint 后，`git status --short` 输出为空，`git rev-parse HEAD` 为 `f8125d00ab0e181e2aabf6de2a486ac0eb7b3653`。第一次在 restricted sandbox 中执行 `pnpm tauri build` 时，release compile 与 `Excalidraw.app` bundling 已完成，但 `bundle_dmg.sh` 无法使用所需 macOS 系统服务而 exit 1；该次不计 PASS。随后在获准的 sandbox 外以同一精确命令重跑，明确输出 `Finished 2 bundles` 并 exit 0。
+
+| 事实 | 记录 |
+|------|------|
+| Build command / verdict | `pnpm tauri build` / **pass**（sandbox 外重跑，exit 0） |
+| Clean product commit | `f8125d00ab0e181e2aabf6de2a486ac0eb7b3653` |
+| Production `.app` | `/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/src-tauri/target/release/bundle/macos/Excalidraw.app` |
+| Bundle identifier | `excalidraw-desktop` |
+| Bundle short version / version | `0.2.0` / `0.2.0` |
+| macOS | `26.6.2`（build `25G83`） |
+| Main display | 1352×878 logical points；backing scale `2`；visible frame 1352×848 |
+| Exact package window | Accessibility 记录 position `{4,61}`、size `1280×760` |
+
+T060 当时要求 T067 与 T068 继续使用上表同一路径的 `.app`；后续产品修复产生了替代 package，最终验收以本节的 `5a5aa59` package 为准。该历史 package 当时启动到主 profile 的已有 recovery dialog；本记录没有读取其内容之外的数据，也没有 restore、discard、覆盖或清理任何 recovery candidate。此处 PENDING 仅为当时状态。
+
+### 2026-09-15 product-owner acceptance findings（原始 FAIL；后续修复并复验）
+
+T060 后发现并修复 Recovery `Save … as new` 的 watcher self-write conflict，产品 runtime 前进到 clean commit `cab26bd4aacd098c187ceb196dd6bead24948b36`。修复后的 production `.app` 以 `pnpm tauri build --bundles app` 构建成功并安装到 `/Applications/Excalidraw.app`；安装副本与 worktree bundle 的可执行文件 SHA-256 均为 `f95ce5f18b28a773d2766de17e1a5ce08e4ab81d8ee481531806eb669d3ddd35`，bundle ID `excalidraw-desktop`，version `0.2.0`。原 `f8125d0` package 不再用于 T067/T068 的最终结果。
+
+产品负责人在上述 `cab26bd` package 上继续人工验收，报告 T067/T068 检查中除下列问题外未观察到其他非预期视觉问题；下列结果不得被 Agent 改写为 PASS：
+
+1. **SVG real export — 当时 FAIL**：Export Dialog 支持并可选择 `SVG image`，但当时实际导出显示 `The SVG export did not embed the drawing fonts. The export was not written.`，目标文件未写出。T067 的 task-scoped dialog-open/cancel 行为与真实 SVG filesystem outcome 是不同事实；即使前者满足，这次真实导出失败在修复复验前仍是 final acceptance 的 blocking product finding。
+2. **Remove Workspace with open tabs — FAIL / scope pending**：当 Workspace 仍有已打开 Tabs 时先执行 Remove Workspace，现有 Tabs 随后显示 `Path is outside the mounted workspaces.`。这可能属于既有 workspace/tab lifecycle 边界而非 003 新视觉范围，但它是在 003 exact-package owner session 中发现的可达产品缺陷；在定界或修复前保留为阻断项。
+3. **First-tab alignment — visual finding / owner decision pending**：Pinned Workspace 状态下，Sidebar controls 与第一个 Tab 之间的水平留白被产品负责人判断过大；建议第一个 Tab 至少与 Sidebar minimum-width boundary 对齐。该事实直接涉及 003 Tabs/shell composition，不能仅以旧 automated geometry PASS 覆盖；是否作为 003 blocking mismatch 需由 owner 明确决定或经设计合同变更/修复后复验。
+
+三个 finding 已按产品负责人授权完成最小 remediation，但本记录仍保留原始 FAIL，不以 automated result 替代 owner 复验：SVG 检查改为以 serialized SVG 中实际存在的 `<text>` 为准，避免 deleted/未渲染 text 误触发缺字体校验；Remove Workspace 在卸载 root 前先保存并关闭该 root 下的 tabs；Pinned Sidebar 的首个 tab inset 收紧为 8 px。针对三项路径的 browser E2E 为 `3 passed`，frontend lint、strict typecheck、299 项 Vitest 与 production build 均通过。
+
+产品负责人随后在安装的 `de9b44f` production `.app` 上复验上述三个 finding，并明确记录 SVG real export、Remove Workspace with open tabs 与 first-tab alignment **3/3 PASS**。该结果关闭这三个 remediation finding，但不自动完成 T067/T068 的其余 checklist，也不构成 T069 owner decision。
+
+同一轮继续验收时发现新的 blocking finding：Remove 最后一个 Workspace 后，Welcome 的 `Recent Workspaces` 仍显示已被 Rust/SQLite 删除的旧记录；点击该 row 会以旧 workspace id 调用 `workspace_entry_list` 并显示 `Workspace was not found.`。根因是 `WorkspacePanel` 只更新自己的 mounted-workspace state，没有同步 `AppShell` 的 Welcome/Recent projection。产品 commit `5eb244d` 增加 mount/remove 完整列表同步，并用“启动时已有 Workspace → 打开 drawings → Remove → Welcome 不存在旧 Recent row”的 semantic E2E 精确覆盖；修复前该断言收到 1 行而 FAIL，修复后 1/1 PASS。Focused AppShell/WorkspacePanel Vitest 44/44、frontend lint、strict typecheck、全量 Vitest 38 files / 299 tests 与 production build 均 PASS。该 finding 仍等待新 production `.app` 上的产品负责人复验。
+
+在这个被后续否决的尝试中，尚无最终 `APPROVED|REJECTED`，T067/T068 未勾选，T069 为 **BLOCKED/PENDING**。当时计划重新构建并安装包含 `5eb244d` 的 `.app`；owner 随后否决其删除 Recent row 的语义，该包未安装，正确的 forward-fix 与最终验收见下文。
+
+### 003 T060b–T060d Recent Workspace lifecycle forward-fix（2026-09-15）
+
+产品负责人否决了 `5eb244d`/`7acb5c4` 的“Remove 后直接从 Recent 消失”语义，并 Review 通过 T060b written delta。替代行为在 clean product commit `4541629e90e0e769ee1b46db2889bea738335327` 实现：Remove Workspace 安全保存/关闭其文档后只解除挂载并保留 Recent；可访问 Recent remount 同一 record；不可访问路径不在启动时主动报错，只在激活时报告且保留 row；仅未挂载 row 暴露 Remove from Recents，并且只删除应用历史、绝不删除用户文件。Private-specs approval/task record commit 为 `6f956f2`。
+
+自动化结果：
+
+- `pnpm test -- src/app/WelcomeScreen.test.tsx src/app/AppShell.test.tsx src/ipc/contracts.test.ts`：因 package script 的参数转发规则实际执行全量 Vitest，38 files / 302 tests PASS。
+- `pnpm typecheck`、`pnpm lint`、`pnpm build`：PASS；production build 仅保留既有 Vite chunk-size warning。
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`、`cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`、`cargo test --manifest-path src-tauri/Cargo.toml`：PASS；74 unit tests 与 10/9/3/3/3 integration suites 全部通过。
+- `APP_E2E=1 PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 pnpm exec playwright test --config e2e/playwright.config.ts e2e/tests/us3-workspace-files.spec.ts --reporter=line --workers=1 --timeout=30000`：3/3 PASS，覆盖同 session 与 clean reload Recent retention、same-id remount、inaccessible activation/no-startup-alert、mounted rejection 与 unmounted history-only removal。关闭 browser preflight server 时出现 harness 未模拟 `transformCallback` 的 Tauri event-listener 日志；该日志不来自 production package，也未改变上述 Playwright verdict。
+
+Package/session record：build 前 `git status --short` 为空，HEAD 为 `4541629e90e0e769ee1b46db2889bea738335327`。首次 sandbox 内 `pnpm tauri build` 已完成 release binary 与 `.app`，但在 DMG `bundle_dmg.sh` 退出 1，因此如实记为一次环境受限 FAIL；相同命令在 sandbox 外重跑 exit 0，生成 `/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/src-tauri/target/release/bundle/macos/Excalidraw.app` 与 `Excalidraw_0.2.0_aarch64.dmg`。该 `.app` 已安装到 `/Applications/Excalidraw.app`；安装后 bundle ID `excalidraw-desktop`、version `0.2.0`。环境为 macOS 26.6.2 (25G83)、Apple M5 Pro、3024×1964 built-in Liquid Retina XDR 主显示器。安装 package 已真实启动；初始窗口为 800×600，自动调整后只确认到 1076×760，尚未取得合同要求的 1280×760 owner-session fact。
+
+在首次 T060d package 记录时，状态为 **OWNER_RECHECK_PENDING**：产品负责人尚需在同一 `/Applications/Excalidraw.app` 上将窗口设为 1280×760，并明确复验完整 Remove Workspace → Recent retention → same-id remount、缺失目录激活报错但 row 保留、Remove from Recents 后 row 消失且磁盘内容不变。当时不得勾选 T060d，也不得把 T067/T068/T069 写成 PASS；后续替代 package 与 owner 结论见下文。
+
+#### Recent Workspace UX refinement（2026-09-15 当时待 owner 复验）
+
+产品 checkpoint `366c056deff59738327c1ecc2233343d5c344b7d` 将未挂载 Recent row 的完整文字按钮替换为固定 trailing slot 内的 `×` action。该 action 默认低调，仅在 row hover、`:focus-within` 或 row unavailable 时显示；保留 `title="Remove from Recents"`、`Remove <workspace name> from Recents` accessible name、正常 Tab 顺序和 Enter 激活。mounted row 不渲染 removal action。Recent remount 失败只在对应 workspace id 的 row 显示轻微 unavailable 状态与 `Folder unavailable`，全局 `role="alert"` 继续拥有 live announcement；关闭/保存已有文档失败不会被误分类为 folder unavailable。remount 成功、对应 history removal 成功以及成功打开/选择其他 Workspace 会清除相应 row error。Rust、SQLite schema、IPC major version与磁盘语义均未修改。
+
+自动化结果：
+
+- `pnpm vitest run src/app/WelcomeScreen.test.tsx src/app/AppShell.test.tsx`：2 files / 41 tests **PASS**。
+- `pnpm test`：38 files / 307 tests **PASS**。
+- `pnpm lint`、`pnpm typecheck`、`pnpm build` 与 `git diff --check`：**PASS**；build 仅保留既有 Vite large-chunk warning。
+- `APP_E2E=1 PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 pnpm e2e e2e/tests/us3-workspace-files.spec.ts --project=browser-ui --workers=1 --retries=0`：sandbox 内 Chromium 启动被 macOS Mach-port 权限拒绝，随后同一命令在 sandbox 外 **3/3 PASS**。语义断言覆盖 unavailable row retained、inline helper、默认/hover/focus/unavailable action visibility、Tab + Enter removal、removal 后 row 消失，以及 hover/focus 前后 row/path geometry 完全不变；没有以截图替代这些事实。
+- 独立 validation/review subagent 完成三轮只读审查；最终 verdict **PASS**，无 remaining blocking findings。
+
+package/session record：build 前 `git status --short` 为空，clean product commit 为 `366c056deff59738327c1ecc2233343d5c344b7d`。sandbox 外 `pnpm tauri build` exit 0，生成 production `.app` 与 DMG。source bundle 与 `/Applications/Excalidraw.app` 的 bundle ID 均为 `excalidraw-desktop`、version 均为 `0.2.0`，两处 executable SHA-256 均为 `0901f8aeff939dfb4867f9424d74f0af9bdb950145314b95991c578ddad78e60`。
+
+该记录只证明实现、自动化、package identity 和安装完成。**T060d、T067、T068、T069 仍未完成**；下一步停在 product-owner visual recheck，不推断 `APPROVED|REJECTED`，也不把此前 10/10 functional PASS 扩大解释为本 refinement 的视觉验收。
+
+#### Owner visual recheck finding 与 pointer-up jitter remediation（2026-09-15）
+
+产品负责人在安装的 refinement package 上确认：hover 与 keyboard focus 显示 `×`、Light/Dark、Recent Tab/focus/Enter、tooltip/`Remove from Recents` 措辞均 PASS；Workspace tree 采用 roving focus，Tab 进入 tree 后方向键可到达 Drawing/file 且 Enter 可打开，因此 file-level keyboard navigation PASS。与此同时，产品负责人观察到不可访问 Recent row 在 mouse-up 后短时间内多次高频垂直跳动，肉眼位移约 20 px，因此该轮视觉复验整体保持 FAIL/PENDING。
+
+根因位于 frontend error presentation：Recent remount 失败时，顶部可见 global alert 与 row 内 `Folder unavailable` 同时加入 flex/grid/overflow 布局，触发多帧 reflow 与 scroll anchoring；未发现 Rust、IPC、transform 或 native-window 根因。产品 checkpoint `8a16aa8c0e10bd489cdcae5035c25aa8ebcb41b6` 将仅属于 Recent activation 的详细 global `role="alert"` 保持 assertive 但视觉隐藏，inline `Folder unavailable` 继续可见；普通 Welcome/action error 继续可见。独立 presentation state 防止 unavailable row 存在时误隐藏后续不相关错误。
+
+新增回归在 pointer-up 前记录 baseline，并连续采样 30 个 `requestAnimationFrame` 的 row/path/section Y 与 list scroll position；row/path 最大 Y delta 必须 ≤2 px。Focused Vitest 43/43、full Vitest 38 files / 309 tests、focused Playwright 3/3、lint、typecheck、web build 均 PASS，独立 reviewer 最终 PASS。clean runtime commit `8a16aa8` 的 `pnpm tauri build` exit 0；source 与 `/Applications/Excalidraw.app` 的 bundle ID/version 均为 `excalidraw-desktop` / `0.2.0`，executable SHA-256 均为 `a409898741e526cf2e177a4babe95e614687352582c28d180e87060509daf4a5`。
+
+在该 pointer-up 修复 package 安装时，仍待产品负责人复验同一 unavailable Recent 场景；当时 T060d、T067、T068、T069 尚未完成。后续 busy/窄窗口修复和最终 owner PASS 见下文。
+
+#### Welcome busy/窄窗口修复与当时的下一门槛（2026-09-16）
+
+产品 clean commit `5a5aa596a50cdf256861cc77ba4a6aea824f6c2f` 稳定了 Recent activation pending 期间按钮颜色/透明度，并在窄窗口给 Welcome 留出 16px 左右 gutter；focused Playwright 5/5、full Vitest 309/309、lint、typecheck、web build 已在该 commit 的前一轮验证通过。production `pnpm tauri build` 成功并安装到 `/Applications/Excalidraw.app`；source/installed executable SHA-256 同为 `63cc657ffea238d45b743e8b0468f272fb3c0cc11f526b7deda857ca954d0af1`，bundle ID/version 为 `excalidraw-desktop` / `0.2.0`。产品负责人明确反馈最新 UI 验收 PASS：unavailable row 不再上下跳动、页面按钮不再快速闪烁、窄窗口留白符合预期；此前 hover/focus、Light/Dark、keyboard 与 tooltip 检查也已 PASS。
+
+在不修改产品 runtime 的 2026-09-16 后续门槛核验中，`cargo fmt --manifest-path src-tauri/Cargo.toml --check`、`cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` 与 `cargo test --manifest-path src-tauri/Cargo.toml` 均 exit 0；cargo tests 包含 74 unit 和 integration suites 10/9/3/3/3。产品和 isolated private-specs worktree 均为 clean，HEAD 分别为 `5a5aa59`、`6f956f2`。
+
+该 owner PASS 只关闭最新 UI 问题的人工复验。T060d 仍需同一安装包上的完整 Remove Workspace → Recent retained → same-id remount（Recent 与 Open Workspace）→ unavailable activation row retained → unmounted Remove from Recents 只清 app history 且磁盘内容不变的 owner recheck，以及当前 package 的 1280×760 session fact；前次 10/10 functional PASS 属于较早包，不能代替。T060d/T067/T068/T069 尚未勾选；后续 T067 是同一包的 5/5 菜单元数据与 7/7 原生操作，T068 是同一 1280×760 窗口的六个指定 HF-2 状态，T069 需要 owner 明确 `APPROVED|REJECTED`。
+
+2026-09-16 owner 后续明确反馈：**“T060d 人工验收PASS。”** 该结论针对上述最新 `/Applications/Excalidraw.app` 的完整 Remove/Recent/Remove-from-Recents 人工复验；记录为产品负责人的结论，而非 AI 代为操作或推断的逐项结果。自动化、clean product commit 与 source/installed package identity 见本节前两段。T067 5/5 菜单元数据、7/7 原生操作与 T068 6/6 指定 HF-2 状态尚无本轮 owner 结果；1280×760 最新 owner-session fact 仍待记录，T069 最终批准也未给出。此条补记覆盖上段的 T060d owner-recheck-pending 描述；原始待验收记录保留为历史，不改写为事前 PASS。
+
+随后产品负责人明确反馈：**“T067，T068 人工验收PASS。”** 这是一条针对同一 T060d package 的任务级 owner 结论，不是 AI 执行原生菜单/视觉操作的声称。T067 的七项独立结果与 5/5 菜单检查、T068 六个命名状态和 1280×760 owner-session 数值尚未由 owner 在本记录中逐项列出；因此保留该证据粒度缺口，不自行补写 7/7、5/5、6/6 或窗口事实。T069 所需的最终 `APPROVED|REJECTED` 决定也尚未收到；private-specs checkbox 和 product closure commit 均未执行。本段覆盖上一段的 T067/T068 “尚无 owner 结果”，不覆盖其逐项记录要求。
+
+产品负责人随后对 T069 最终决定明确回复 **`APPROVED`**。这是 owner 的最终意向，现按原文记录，不将其反推为缺失的 T067/T068 逐项事实或 1280×760 数值。此前追问同时包含逐项/窗口确认与最终决定，回复只回答后者；故 T069 的 lightweight closure artifact、任务 checkbox 与跨仓 checkpoint commits 仍待证据粒度补齐及明确提交授权。当前 product runtime/package 不变，既有历史 FAIL 和被否决实现不重分类。
+
+### 003 FINAL owner scope confirmation（2026-09-16；覆盖上方待确认描述）
+
+产品负责人随后明确确认：此前 T067/T068 的 PASS 覆盖**同一安装包、1280×760 窗口、T067 菜单 5/5 与操作 7/7，以及 T068 六个指定状态全部 PASS**。这是 owner 对先前任务级 PASS 的范围确认，不是 AI 重新操作或原生自动收集。T060d 完整 Remove/Recent/Remove-from-Recents 人工复验亦已由 owner 报告 PASS；T069 最终决定为明确的 **`APPROVED`**。因此上方随时间记录的 pending 语句均为旧状态，不能用来覆盖此处最终人工结论。
+
+最新同包 T060d/T067/T068 身份：clean runtime commit `5a5aa596a50cdf256861cc77ba4a6aea824f6c2f`；`pnpm tauri build` 成功，source `.app` 为 `src-tauri/target/release/bundle/macos/Excalidraw.app`，installed `.app` 为 `/Applications/Excalidraw.app`；两处 executable SHA-256 均为 `63cc657ffea238d45b743e8b0468f272fb3c0cc11f526b7deda857ca954d0af1`，bundle ID/version `excalidraw-desktop` / `0.2.0`。本机 macOS `26.6.2`；T067/T068 窗口尺寸 `1280×760` 为 owner 确认。最终收尾时在同一本机以 AppKit `NSScreen.main` 只读复测主显示器 `1352×878` logical points、backing scale `2.0`；这是本次环境测量，并非声称在 owner 操作当刻自动抓取窗口/显示器状态。原始 T060 包的 display/session 事实另见上方 T060 节。
+
+T067 owner-operated native checklist（owner 确认 5/5 + 7/7；以下各行均归于其范围确认，不冒充逐条口述或机器观察）：
+
+| 检查类别 | 项目 | Owner 结果 |
+|---|---|---|
+| 菜单元数据 | File > Save；File > Export Image；Appearance > System；Appearance > Light；Appearance > Dark 的标签、可用/选中状态与适用快捷键 | **5/5 PASS** |
+| 原生实际操作 1 | 独立轻微编辑后 File > Save：无错误、可见未保存标记消失 | **PASS** |
+| 原生实际操作 2 | 另一次轻微编辑后实体 Command-S：无错误、可见未保存标记消失 | **PASS** |
+| 原生实际操作 3 | File > Export Image：同一 Export Dialog 打开并可取消 | **PASS** |
+| 原生实际操作 4 | 实体 Command-Option-E：同一 Export Dialog 打开并可取消 | **PASS** |
+| 原生实际操作 5 | Appearance System：菜单选择/check state 与渲染主题一致 | **PASS** |
+| 原生实际操作 6 | Appearance Light：菜单选择/check state 与渲染主题一致 | **PASS** |
+| 原生实际操作 7 | Appearance Dark：菜单选择/check state 与渲染主题一致 | **PASS** |
+
+T068 owner-operated HF-2 visual sweep（同一 1280×760 package；owner 确认六个指定状态全部 PASS）：
+
+| 指定状态 | Owner 结果 |
+|---|---|
+| Welcome Light | **PASS** |
+| Restored Hidden Light | **PASS** |
+| Workspace Pinned Light | **PASS** |
+| Workspace Overlay Light | **PASS** |
+| Welcome Dark | **PASS** |
+| Workspace Pinned Dark | **PASS** |
+
+合计 **6/6 PASS**。验收范围为 composition、clipping/overflow、occlusion/layering、selected/active states、theme rendering 和 visible legacy chrome；此处没有新增 screenshots、像素比对或 AI reviewer verdict。
+
+自动化与历史证据仍按各自身份保留：T059 精确命令/55/55 browser verdict 与六个 checkpoint 路径见本文件前面的 T059 节；T060 原始 clean package `f8125d0` 及 macOS/display/window metadata 见 T060 节。Recent lifecycle `4541629` 与其首次 T060d tests/package、被否决且未安装的 `5eb244d`/`7acb5c4`、后来 UX/pointer-up/busy/gutter 修复及最新 Rust/frontend/Playwright verdict 见本文件连续补记；不将曾经的 FAIL 消去或重分类。T058e 第三次自动 qualification 已按 owner 决定停用，T023b/T061–T066 旧 proof chain 已由 R15 轻量路径取代；它们不是本次人工 PASS 的替身。无已报告的当前阻断性 owner finding；原生检查与视觉检查是产品负责人结论，不能据此宣称未执行的机器级物理按键来源证明。
+
+收尾只读复核了上述六个 VSL/intermediate checkpoint 的 `review/reviewer-report.json`：目录 commit 均可解析，报告的 `reviewedProductCommit` 与目录一致，六个 `verdict` 均为 `PASS`；复用既有历史审核而非重跑或生成新审查结论。
+
+T069 final summary 的事实与 owner 决定已写入此处；产品负责人已授权并完成 scoped product/private-specs checkpoint commits、任务勾选和本次范围内的变更提交。产品摘要已提交于 `a84319a`，private-specs 的 T060d/T067/T068/T069 checkbox 与 closure record 已提交于 `ca3201f`。003 的实现、自动化、原生与视觉人工验收及最终决定在上述 R15 轻量范围内完成；被停用的自动 proof chain 仍不是 PASS，也不把后续多语言需求并入 003。
+
+## 001/002 历史验证汇总（截至 2026-08-24）
 
 **日期**：2026-08-10（文首一览与 §5 成绩单更新于 2026-08-17；§6/§7 原生发版与 T078/T080/T094 更新于 2026-08-18；002 修改前基线更新于 2026-08-19；002 Polish 验证指令 T066 更新于 2026-08-23；T067 前端/Rust 门禁更新于 2026-08-23；T068 浏览器 E2E 与 T069 二进制证明更新于 2026-08-23；T071 物理机 10k 树与 T072 可观测性更新于 2026-08-23；T070 原生矩阵更新于 2026-08-24；T073–T075 参考 VM 与 quickstart 收口更新于 2026-08-24）
 **范围**：Phase 10 全量回归执行结果与三类验证证据（Playwright 浏览器 UI、`APP_E2E=1` Tauri 进程级可靠性、macOS 原生 OS 环境验收）的汇总，并包含 feature 002 的修改前诊断基线、Polish 门禁指令与 T067/T068/T069 成绩；2026-08-12 已按宪法 v3.0.0 同步 macOS 必选、Ubuntu 24.04 可选、性能参考测量与未签名开源分发政策。T066 只更新指令与证据边界，不重分类下列 001 历史数字。T070 见 [native-verification.md](./native-verification.md) §9（2026-08-23/24 已执行）；T071/T072 见 §0.6/§0.7；T073 见 §0.8；T074 见 §0.9；T075 见 §0.10。

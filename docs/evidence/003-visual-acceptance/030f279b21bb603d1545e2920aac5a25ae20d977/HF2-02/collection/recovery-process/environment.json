@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "HF2-02-recovery-process",
+  "gateId": "HF2-02",
+  "route": "deterministic-runtime",
+  "binding": {
+    "productCommit": "030f279b21bb603d1545e2920aac5a25ae20d977",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "bd19706a0af0a1c3c86a219b6fe78bbc668c87b89a06cbdd147adf7e035e82f4",
+    "harnessVersion": "003-recovery-process-v1"
+  },
+  "os": "macOS 26.6.2",
+  "architecture": "arm64",
+  "filesystemType": "26",
+  "browserOrAppBuild": "test-only Rust executable with e2e-harness",
+  "binaryPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/src-tauri/target/debug/excalidraw-desktop",
+  "observedRunBinarySha256": "c211167d57afaf8d8d300ce5e266bfee67e17a20aeadfbc346be62b98c1a4c12",
+  "seed": "deterministic",
+  "cargo": "1.96.1",
+  "node": "26.7.0",
+  "pnpm": "11.25.0",
+  "productionPackageBuiltOrLaunched": false
+}

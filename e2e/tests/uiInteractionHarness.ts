@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import type { RecoveryCandidate } from "../../src/ipc/contracts";
 
 export interface UiHarnessWorkspace {
   id: string;
@@ -28,6 +29,12 @@ export interface UiHarnessFailure {
   context?: Record<string, string>;
 }
 
+export interface UiHarnessStartupOptions {
+  abnormalExit?: boolean;
+  recoveryCandidates?: readonly RecoveryCandidate[];
+  nativeWindowRuntime?: boolean;
+}
+
 export interface UiHarnessInvocation {
   command: string;
   args: Record<string, unknown>;
@@ -40,6 +47,7 @@ export interface UiInteractionHarnessOptions {
   latenciesMs?: Readonly<Record<string, number>>;
   responses?: Readonly<Record<string, unknown>>;
   dialogPaths?: readonly (string | null)[];
+  startup?: UiHarnessStartupOptions;
   tenThousandRows?: {
     workspaceId?: string;
     parentRelativePath?: string;
@@ -54,6 +62,7 @@ export interface UiInteractionHarnessState {
   entryCount: number;
   entryCountByParent: Record<string, number>;
   failures: Record<string, UiHarnessFailure>;
+  errors: string[];
 }
 
 const DEFAULT_WORKSPACE: UiHarnessWorkspace = {
@@ -68,7 +77,12 @@ const EMPTY_SCENE = {
   version: 2,
   source: "excalidraw-desktop-ui-interaction-e2e",
   elements: [],
-  appState: {},
+  appState: {
+    gridModeEnabled: false,
+    gridSize: 20,
+    gridStep: 5,
+    viewBackgroundColor: "#ffffff",
+  },
   files: {},
 };
 
@@ -124,6 +138,7 @@ export async function installUiInteractionHarness(
       responseSeeds,
       pathSeeds,
       emptyScene,
+      startup,
     }) => {
       type HarnessState = {
         invocations: UiHarnessInvocation[];
@@ -134,6 +149,7 @@ export async function installUiInteractionHarness(
         responses: Record<string, unknown>;
         dialogPaths: (string | null)[];
         nextDialogPath: number;
+        errors: string[];
       };
       type HarnessWindow = typeof globalThis & {
         __TAURI_INTERNALS__?: {
@@ -141,6 +157,12 @@ export async function installUiInteractionHarness(
             command: string,
             args?: Record<string, unknown>,
           ): Promise<unknown>;
+          transformCallback?: (...args: unknown[]) => number;
+          unregisterCallback?: (id: number) => void;
+          metadata?: { currentWindow: { label: string } };
+        };
+        __TAURI_EVENT_PLUGIN_INTERNALS__?: {
+          unregisterListener: (event: string, id: number) => void;
         };
         __uiInteractionHarness?: { state: HarnessState };
       };
@@ -154,10 +176,11 @@ export async function installUiInteractionHarness(
         responses: { ...responseSeeds },
         dialogPaths: [...pathSeeds],
         nextDialogPath: 0,
+        errors: [],
       };
       const browser = globalThis as HarnessWindow;
 
-      browser.__TAURI_INTERNALS__ = {
+      const internals: NonNullable<HarnessWindow["__TAURI_INTERNALS__"]> = {
         async invoke(command, args = {}) {
           state.invocations.push({ command, args: { ...args } });
           const latencyMs = state.latenciesMs[command];
@@ -179,6 +202,16 @@ export async function installUiInteractionHarness(
           if (Object.hasOwn(state.responses, command)) {
             return state.responses[command];
           }
+          if (command === "plugin:event|listen") {
+            return state.invocations.length;
+          }
+          if (
+            command === "plugin:event|unlisten" ||
+            command === "plugin:event|emit" ||
+            command === "plugin:event|emit_to"
+          ) {
+            return {};
+          }
           if (
             command === "plugin:dialog|open" ||
             command === "plugin:dialog|save"
@@ -194,11 +227,19 @@ export async function installUiInteractionHarness(
             return {
               contractVersion: 2,
               appVersion: "0.2.0-e2e",
-              abnormalExit: false,
+              abnormalExit: startup.abnormalExit,
               pendingOpenPaths: [],
             };
           }
+          if (command === "recovery_list") {
+            return startup.recoveryCandidates.map((candidate) => ({
+              ...candidate,
+            }));
+          }
           if (command === "workspace_list") {
+            return state.workspaces.map((workspace) => ({ ...workspace }));
+          }
+          if (command === "workspace_recent_list") {
             return state.workspaces.map((workspace) => ({ ...workspace }));
           }
           if (command === "workspace_add") {
@@ -398,11 +439,23 @@ export async function installUiInteractionHarness(
             };
           }
           if (command === "doc_close") return {};
-          throw new Error(
-            `Unexpected UI interaction harness command: ${command}`,
-          );
+          const message = `Unexpected UI interaction harness command: ${command}`;
+          state.errors.push(message);
+          throw new Error(message);
         },
       };
+      if (startup.nativeWindowRuntime) {
+        let nextCallbackId = 0;
+        internals.transformCallback = () => nextCallbackId++;
+        internals.unregisterCallback = () => undefined;
+        internals.metadata = { currentWindow: { label: "main" } };
+      }
+      browser.__TAURI_INTERNALS__ = internals;
+      if (startup.nativeWindowRuntime) {
+        browser.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+          unregisterListener: () => undefined,
+        };
+      }
       browser.__uiInteractionHarness = { state };
     },
     {
@@ -413,6 +466,11 @@ export async function installUiInteractionHarness(
       responseSeeds: { ...(options.responses ?? {}) },
       pathSeeds: [...(options.dialogPaths ?? [])],
       emptyScene: EMPTY_SCENE,
+      startup: {
+        abnormalExit: options.startup?.abnormalExit ?? false,
+        recoveryCandidates: [...(options.startup?.recoveryCandidates ?? [])],
+        nativeWindowRuntime: options.startup?.nativeWindowRuntime ?? false,
+      },
     },
   );
 }
@@ -429,6 +487,7 @@ export async function getUiInteractionHarnessState(
             workspaces: UiHarnessWorkspace[];
             entries: UiHarnessWorkspaceEntry[];
             failures: Record<string, UiHarnessFailure>;
+            errors: string[];
           };
         };
       }
@@ -449,6 +508,7 @@ export async function getUiInteractionHarnessState(
       entryCount: state?.entries.length ?? 0,
       entryCountByParent,
       failures: { ...(state?.failures ?? {}) },
+      errors: [...(state?.errors ?? [])],
     };
   });
 }
@@ -487,7 +547,9 @@ export async function setUiInteractionHarnessFailure(
  * `installUiInteractionHarness` and before `page.goto`. Default harness
  * behavior is unchanged.
  */
-export async function installUiInteractionFileEvents(page: Page): Promise<void> {
+export async function installUiInteractionFileEvents(
+  page: Page,
+): Promise<void> {
   await page.addInitScript(() => {
     type EventCallback = (event: {
       event: string;

@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "VSL-001-native-capture",
+  "gateId": "VSL-001",
+  "route": "fixed-capture-review",
+  "binding": {
+    "productCommit": "5743de8d5a2c611274debb9ce44ccc5115a73955",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "940c189275e84902aab4eeb786e402d62b22c078ecbb473a582f3d8ab147a765",
+    "harnessVersion": "003-native-capture-v4",
+    "packageArtifactSha256": "e98afb4c55f2ea373adc2441a30596a2d0e553d1fbd8d9ba11e07d74acfc7e59"
+  },
+  "collector": {
+    "tool": "native-screen-capture",
+    "version": "4",
+    "runIdentity": "7926d7ef-4d1e-46d9-8a2c-9e9df8c1192e:VSL-001"
+  },
+  "preparationMode": "operator-assisted",
+  "operatorActionsAreEvidence": false,
+  "applicationStateClaims": [],
+  "composedSemanticEvidence": {
+    "collectorReportPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/e2e/test-results/tests-ui-desktop-shell-vis-976ec-t-with-exact-shell-geometry-browser-ui/immutable/VSL-001/collection/VSL-001-light-pinned-browser/collector-report.json",
+    "collectorReportSha256": "bd2b2f2da801cfb8e9ac57dbb2ea8c5bbbe6e79d5453ff265dfeeaf7aafbb8a0",
+    "collectionId": "VSL-001-light-pinned-browser",
+    "collectionDigest": "beb9ea5a4f33d357031e8e8c300af1fb043bd2bb056cef9ebca51ab89b356b59",
+    "productCommit": "5743de8d5a2c611274debb9ce44ccc5115a73955",
+    "harnessVersion": "003-shell-v2",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1"
+  },
+  "environmentPath": "environment.json",
+  "readinessPath": "capture-readiness.json",
+  "isolationPath": "isolation.json",
+  "maskPath": "mask.json",
+  "captureCount": 1,
+  "claims": [
+    {
+      "claimId": "VSL-001-capture-integrity",
+      "factClass": "repository-package-identity",
+      "primaryRoute": "shell-filesystem",
+      "result": "PASS",
+      "artifactRefs": [
+        "actual.png",
+        "baseline.sha256",
+        "capture-plan.json",
+        "capture-readiness.json",
+        "environment.json",
+        "fixture-manifest.json",
+        "isolation.json",
+        "mask.json",
+        "raw-window.png",
+        "sealed-package-manifest.json"
+      ]
+    }
+  ],
+  "artifactDigests": [
+    {
+      "path": "actual.png",
+      "sha256": "dd554bc699585e6919bccb22a96311dc785626f8c6498061c81a0ba15fc0117b"
+    },
+    {
+      "path": "baseline.sha256",
+      "sha256": "31f57712bf6929e52ea1ddb1ca5fc6c1e6889dc7422b0c67665583d582170f20"
+    },
+    {
+      "path": "capture-plan.json",
+      "sha256": "776429225ca7cbc7b69f10a797c2d443be1e7a34ec8067d44a6c68de55fb8c50"
+    },
+    {
+      "path": "capture-readiness.json",
+      "sha256": "59fad1aaf19a3143718562002a937368bef59c01ea05e6295f627af66b75ce4d"
+    },
+    {
+      "path": "environment.json",
+      "sha256": "11d21017215dce21a3489db13a21ae04697b97f7e78155e1fb185598f961967d"
+    },
+    {
+      "path": "fixture-manifest.json",
+      "sha256": "940c189275e84902aab4eeb786e402d62b22c078ecbb473a582f3d8ab147a765"
+    },
+    {
+      "path": "isolation.json",
+      "sha256": "7d79979e6d79ee4378760d868d0c302822889a9d4a66bc51811fcfde4b22a16b"
+    },
+    {
+      "path": "mask.json",
+      "sha256": "94ffa491f715acf0b7ec69c1d519b2add60c1e5edc496f69cb8a8a996705c226"
+    },
+    {
+      "path": "raw-window.png",
+      "sha256": "eb92b233faa6a7113a49617688058499862043b75611ba2d91463cacef863716"
+    },
+    {
+      "path": "sealed-package-manifest.json",
+      "sha256": "000307bdcb3df831bbb2a56bbe97d14caede321c2fdb6339fc29d441cb9a2820"
+    }
+  ],
+  "collectionDigest": "ecc7a598f613efbae37ece92cb9afd0b0bf3c03323a01d7bd028cfc3a8189b92",
+  "result": "PASS"
+}

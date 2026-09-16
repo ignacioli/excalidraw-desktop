@@ -115,6 +115,15 @@ export class DocumentManager {
     });
   }
 
+  async createUntitled(): Promise<string> {
+    return this.registerSession({
+      path: "",
+      scene: createEmptyScene(),
+      baseHash: "",
+      saveState: "dirty",
+    });
+  }
+
   async restore(path: string, sceneData: SceneData): Promise<string> {
     const scene = deserializeSceneData(sceneData);
     const existing = this.findByPath(path);
@@ -228,6 +237,15 @@ export class DocumentManager {
     return this.continueBatch();
   }
 
+  async closeWorkspaceDocuments(workspaceRoot: string): Promise<CloseOutcome> {
+    const { sessionsById, tabOrder } = this.store.getState();
+    const documentIds = tabOrder.filter((documentId) => {
+      const path = sessionsById[documentId]?.path;
+      return path !== undefined && isPathWithinRoot(path, workspaceRoot);
+    });
+    return this.closeMany(documentIds);
+  }
+
   async confirmOrphanClose(
     documentId: string,
     decision: "saveAs" | "discard" | "cancel",
@@ -294,13 +312,15 @@ export class DocumentManager {
     }
 
     try {
-      if (!discardDraft) {
-        await this.checkpoint(documentId, "tabClose");
+      if (session.path.length > 0) {
+        if (!discardDraft) {
+          await this.checkpoint(documentId, "tabClose");
+        }
+        await this.gateway.close(
+          session.path,
+          discardDraft ? "discardOrphan" : "checkpointed",
+        );
       }
-      await this.gateway.close(
-        session.path,
-        discardDraft ? "discardOrphan" : "checkpointed",
-      );
     } catch (error) {
       return {
         status: "failed",
@@ -548,7 +568,9 @@ export class DocumentManager {
       serializeScene(session.scene),
       "manualSave",
     );
-    await this.gateway.close(session.path, "discardOrphan");
+    if (session.path.length > 0) {
+      await this.gateway.close(session.path, "discardOrphan");
+    }
     this.schedulers.get(documentId)?.setConflicted(false);
     const title = getFileName(newPath);
     this.patchSession(documentId, {
@@ -595,6 +617,9 @@ export class DocumentManager {
 
     const scheduler = new DraftScheduler<SceneSnapshot>({
       persistDraft: async (nextScene) => {
+        if (path.length === 0) {
+          return;
+        }
         this.patchSession(id, { saveState: "savingDraft" });
         const currentPath =
           this.store.getState().sessionsById[id]?.path ?? path;
@@ -604,6 +629,9 @@ export class DocumentManager {
         }
       },
       checkpoint: async (nextScene, reason) => {
+        if (path.length === 0) {
+          return;
+        }
         this.patchSession(id, { saveState: "checkpointing" });
         const currentPath =
           this.store.getState().sessionsById[id]?.path ?? path;
@@ -713,6 +741,15 @@ function relativeDocumentPath(
     throw new Error("Open Document is outside the coordinated Workspace.");
   }
   return canonicalPath.slice(prefix.length);
+}
+
+function isPathWithinRoot(path: string, root: string): boolean {
+  const normalizedRoot = root.replace(/[\\/]+$/, "");
+  return (
+    path === normalizedRoot ||
+    path.startsWith(`${normalizedRoot}/`) ||
+    path.startsWith(`${normalizedRoot}\\`)
+  );
 }
 
 function getFileName(path: string): string {

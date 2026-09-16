@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "HF2-01-light-hidden-browser",
+  "gateId": "HF2-01",
+  "route": "semantic-browser",
+  "binding": {
+    "productCommit": "6c78bebc4a922cbaf40bc6c60cf6b0be0e93b8df",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "95f174c296ab15badb8fab680f251b6ce6973c407f8937bcfe6fc56e6bc9c689",
+    "harnessVersion": "003-shell-v2"
+  },
+  "os": "darwin/arm64",
+  "viewport": {
+    "width": 1280,
+    "height": 760
+  },
+  "browserOrAppBuild": "browser-ui",
+  "fontReady": true,
+  "fontPolicy": {
+    "deviationId": "HF2-FONT-001",
+    "uiStack": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "monoStack": "ui-monospace, SFMono-Regular, Menlo, monospace",
+    "computedUiFamily": "-apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+    "computedMonoFamily": "ui-monospace, SFMono-Regular, Menlo, monospace",
+    "remoteFontRequests": 0,
+    "englishTargetVerified": true,
+    "unicodeFallbackVerified": true
+  },
+  "theme": "light",
+  "sidebar": "hidden",
+  "session": "empty",
+  "fixture": "welcome",
+  "collector": {
+    "tool": "playwright-003-shell",
+    "version": "2",
+    "runIdentity": "6c78bebc4a922cbaf40bc6c60cf6b0be0e93b8df:HF2-01-light-hidden-browser"
+  }
+}

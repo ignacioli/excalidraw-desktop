@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "HF2-04-light-overlay-browser",
+  "gateId": "HF2-04",
+  "route": "semantic-browser",
+  "binding": {
+    "productCommit": "a00d82b1f939299687128e697e4aef91cfc98466",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "073c6918ef3de0b911e2745bdac133a51787e731d8ea10fbfab8a57912afeec1",
+    "harnessVersion": "003-shell-v3"
+  },
+  "collector": {
+    "tool": "playwright-003-shell",
+    "version": "3",
+    "runIdentity": "a00d82b1f939299687128e697e4aef91cfc98466:HF2-04-light-overlay-browser"
+  },
+  "environmentPath": "environment.json",
+  "maskPath": "mask.json",
+  "claims": [
+    {
+      "claimId": "HF2-04-shell-semantic",
+      "factClass": "webview-semantic",
+      "primaryRoute": "semantic-browser",
+      "result": "PASS",
+      "artifactRefs": [
+        "actual.png",
+        "assertions.json",
+        "baseline.sha256",
+        "environment.json",
+        "mask.json"
+      ]
+    }
+  ],
+  "artifactDigests": [
+    {
+      "path": "actual.png",
+      "sha256": "f7159ce8618bffb3a944a041045db22e247380d149ffcbae77c51aeb7be54eb6"
+    },
+    {
+      "path": "assertions.json",
+      "sha256": "ea36744445a609665cbf3a5308da744f8461f3fa2bcd406397a3947a8c27ebb2"
+    },
+    {
+      "path": "baseline.sha256",
+      "sha256": "8a3d3868e45b67b689da4b533a23da8aabd056d2e5ae12a2e63f72182368be87"
+    },
+    {
+      "path": "environment.json",
+      "sha256": "87016b3e90097d32a9e0f89bec6d2d2f46acafc4ed8df6963946a6213806741b"
+    },
+    {
+      "path": "mask.json",
+      "sha256": "e220ad154e27065602b0c60dda4facb259fc97a62b90ded6855f82101bf71562"
+    }
+  ],
+  "collectionDigest": "e231780167da85b7710a98fa2c432beac48e5352938ab3ca6810c94a1b35345e",
+  "result": "PASS"
+}

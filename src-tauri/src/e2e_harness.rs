@@ -500,6 +500,7 @@ async fn open_scenario_service(
             name: "E2E Reliability".to_owned(),
             root_path: workspace.display().to_string(),
             created_at: 1,
+            mounted: true,
         })
         .await
         .map_err(|error| format!("failed to mount scenario workspace: {error}"))?;

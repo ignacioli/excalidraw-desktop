@@ -1,0 +1,590 @@
+/**
+ * Deterministic, browser-safe state for the corrective 003 shell checks.
+ *
+ * The fixtures describe shell state only. They do not create files, touch the
+ * filesystem, or stand in for Rust authorization and persistence behavior.
+ */
+
+export type ShellMode = "empty" | "restored";
+export type SidebarMode = "hidden" | "overlay" | "pinned";
+export type FixtureId =
+  | "empty"
+  | "welcome"
+  | "restored"
+  | "restored-recovery"
+  | "pinned"
+  | "pinned-dark"
+  | "overlay"
+  | "nested-tree"
+  | "selected-directory"
+  | "unsaved-tab"
+  | "unicode-pinned";
+
+export interface ShellFixtureWorkspace {
+  readonly id: string;
+  readonly name: string;
+  readonly rootPath: string;
+  readonly createdAt: number;
+}
+
+export interface ShellFixtureEntry {
+  readonly workspaceId: string;
+  readonly kind: "drawing" | "directory";
+  readonly canonicalPath: string;
+  readonly relativePath: string;
+  readonly parentRelativePath: string;
+  readonly name: string;
+  readonly displayName: string;
+  readonly mtime: number;
+  readonly fileSize: number;
+}
+
+export interface ShellFixtureTab {
+  readonly documentId: string;
+  readonly title: string;
+  readonly workspaceId: string | null;
+  readonly path: string | null;
+  readonly saveState: "clean" | "dirty";
+  readonly availability: "available" | "orphaned";
+  readonly conflictState: "none" | "pending";
+}
+
+export interface ShellFixture {
+  readonly id: FixtureId;
+  readonly shell: ShellMode;
+  readonly sidebar: SidebarMode;
+  readonly currentWorkspaceId: string | null;
+  readonly workspaces: readonly ShellFixtureWorkspace[];
+  readonly entries: readonly ShellFixtureEntry[];
+  readonly expandedDirectoryPaths: readonly string[];
+  readonly selectedDirectoryRelativePath: string | null;
+  readonly activeDocumentId: string | null;
+  readonly tabs: readonly ShellFixtureTab[];
+}
+
+const WORKSPACE: ShellFixtureWorkspace = {
+  id: "fixture-workspace",
+  name: "Design Workspace",
+  rootPath: "/fixtures/design-workspace",
+  createdAt: 1_700_000_000,
+};
+
+const WELCOME_WORKSPACES: readonly ShellFixtureWorkspace[] = [
+  {
+    id: "fixture-recent-architecture",
+    name: "Architecture",
+    rootPath: "/fixtures/Documents/Architecture",
+    createdAt: 1_700_000_032,
+  },
+  {
+    id: "fixture-recent-product-flows",
+    name: "Product flows",
+    rootPath: "/fixtures/Work/Product/Flows",
+    createdAt: 1_700_000_031,
+  },
+  {
+    id: "fixture-recent-research",
+    name: "Research",
+    rootPath: "/fixtures/Documents/Research",
+    createdAt: 1_700_000_030,
+  },
+];
+
+/** Stable Unicode fallback probe used by browser-visible visual checks. */
+export const UNICODE_WORKSPACE: ShellFixtureWorkspace = {
+  id: "fixture-unicode-workspace",
+  name: "设计 Workspace ✦",
+  rootPath: "/fixtures/设计-workspace/图纸",
+  createdAt: 1_700_000_010,
+};
+
+const ROOT_DRAWING: ShellFixtureEntry = {
+  workspaceId: WORKSPACE.id,
+  kind: "drawing",
+  canonicalPath: `${WORKSPACE.rootPath}/overview.excalidraw`,
+  relativePath: "overview.excalidraw",
+  parentRelativePath: "",
+  name: "overview.excalidraw",
+  displayName: "overview",
+  mtime: 1_700_000_100,
+  fileSize: 256,
+};
+
+const NESTED_ENTRIES: readonly ShellFixtureEntry[] = [
+  {
+    workspaceId: WORKSPACE.id,
+    kind: "directory",
+    canonicalPath: `${WORKSPACE.rootPath}/planning`,
+    relativePath: "planning",
+    parentRelativePath: "",
+    name: "planning",
+    displayName: "planning",
+    mtime: 1_700_000_101,
+    fileSize: 0,
+  },
+  {
+    workspaceId: WORKSPACE.id,
+    kind: "directory",
+    canonicalPath: `${WORKSPACE.rootPath}/planning/weekly`,
+    relativePath: "planning/weekly",
+    parentRelativePath: "planning",
+    name: "weekly",
+    displayName: "weekly",
+    mtime: 1_700_000_102,
+    fileSize: 0,
+  },
+  {
+    workspaceId: WORKSPACE.id,
+    kind: "drawing",
+    canonicalPath: `${WORKSPACE.rootPath}/planning/weekly/notes.excalidraw`,
+    relativePath: "planning/weekly/notes.excalidraw",
+    parentRelativePath: "planning/weekly",
+    name: "notes.excalidraw",
+    displayName: "notes",
+    mtime: 1_700_000_103,
+    fileSize: 512,
+  },
+  ROOT_DRAWING,
+];
+
+export const UNICODE_ENTRIES: readonly ShellFixtureEntry[] = [
+  {
+    workspaceId: UNICODE_WORKSPACE.id,
+    kind: "directory",
+    canonicalPath: `${UNICODE_WORKSPACE.rootPath}/流程`,
+    relativePath: "流程",
+    parentRelativePath: "",
+    name: "流程",
+    displayName: "流程",
+    mtime: 1_700_000_011,
+    fileSize: 0,
+  },
+  {
+    workspaceId: UNICODE_WORKSPACE.id,
+    kind: "drawing",
+    canonicalPath: `${UNICODE_WORKSPACE.rootPath}/流程/会议 ✦.excalidraw`,
+    relativePath: "流程/会议 ✦.excalidraw",
+    parentRelativePath: "流程",
+    name: "会议 ✦.excalidraw",
+    displayName: "会议 ✦",
+    mtime: 1_700_000_012,
+    fileSize: 512,
+  },
+];
+
+const CLEAN_TAB: ShellFixtureTab = {
+  documentId: "fixture-document-clean",
+  title: "overview",
+  workspaceId: WORKSPACE.id,
+  path: ROOT_DRAWING.canonicalPath,
+  saveState: "clean",
+  availability: "available",
+  conflictState: "none",
+};
+
+const VSL_WORKSPACE: ShellFixtureWorkspace = {
+  id: "fixture-vsl-workspace",
+  name: "Design Workspace",
+  rootPath: "/fixtures/design-workspace",
+  createdAt: 1_700_000_020,
+};
+
+const VSL_ENTRIES: readonly ShellFixtureEntry[] = [
+  {
+    workspaceId: VSL_WORKSPACE.id,
+    kind: "directory",
+    canonicalPath: `${VSL_WORKSPACE.rootPath}/flows`,
+    relativePath: "flows",
+    parentRelativePath: "",
+    name: "flows",
+    displayName: "Flows",
+    mtime: 1_700_000_021,
+    fileSize: 0,
+  },
+  ...["Architecture", "Migration", "Research"].map(
+    (title, index): ShellFixtureEntry => ({
+      workspaceId: VSL_WORKSPACE.id,
+      kind: "drawing",
+      canonicalPath: `${VSL_WORKSPACE.rootPath}/flows/${title}.excalidraw`,
+      relativePath: `flows/${title}.excalidraw`,
+      parentRelativePath: "flows",
+      name: `${title}.excalidraw`,
+      displayName: title,
+      mtime: 1_700_000_022 + index,
+      fileSize: 512,
+    }),
+  ),
+];
+
+const VSL_TABS: readonly ShellFixtureTab[] = VSL_ENTRIES.filter(
+  (entry) => entry.kind === "drawing",
+).map((entry, index) => ({
+  documentId: `fixture-vsl-document-${index + 1}`,
+  title: entry.displayName,
+  workspaceId: VSL_WORKSPACE.id,
+  path: entry.canonicalPath,
+  saveState: "clean",
+  availability: "available",
+  conflictState: "none",
+}));
+
+const RESTORED_RECOVERY_TABS: readonly ShellFixtureTab[] = VSL_TABS.map(
+  (tab, index) => ({
+    ...tab,
+    saveState: index === 1 ? "dirty" : "clean",
+  }),
+);
+
+const OVERLAY_WORKSPACE: ShellFixtureWorkspace = {
+  id: "fixture-overlay-workspace",
+  name: "Architecture",
+  rootPath: "/fixtures/architecture",
+  createdAt: 1_700_000_040,
+};
+
+const OVERLAY_ENTRIES: readonly ShellFixtureEntry[] = [
+  {
+    workspaceId: OVERLAY_WORKSPACE.id,
+    kind: "directory",
+    canonicalPath: `${OVERLAY_WORKSPACE.rootPath}/architecture`,
+    relativePath: "architecture",
+    parentRelativePath: "",
+    name: "architecture",
+    displayName: "Architecture",
+    mtime: 1_700_000_041,
+    fileSize: 0,
+  },
+  {
+    workspaceId: OVERLAY_WORKSPACE.id,
+    kind: "drawing",
+    canonicalPath: `${OVERLAY_WORKSPACE.rootPath}/architecture/System Map.excalidraw`,
+    relativePath: "architecture/System Map.excalidraw",
+    parentRelativePath: "architecture",
+    name: "System Map.excalidraw",
+    displayName: "System Map",
+    mtime: 1_700_000_042,
+    fileSize: 512,
+  },
+  {
+    workspaceId: OVERLAY_WORKSPACE.id,
+    kind: "drawing",
+    canonicalPath: `${OVERLAY_WORKSPACE.rootPath}/architecture/Flow.excalidraw`,
+    relativePath: "architecture/Flow.excalidraw",
+    parentRelativePath: "architecture",
+    name: "Flow.excalidraw",
+    displayName: "Flow",
+    mtime: 1_700_000_043,
+    fileSize: 512,
+  },
+  {
+    workspaceId: OVERLAY_WORKSPACE.id,
+    kind: "directory",
+    canonicalPath: `${OVERLAY_WORKSPACE.rootPath}/research`,
+    relativePath: "research",
+    parentRelativePath: "",
+    name: "research",
+    displayName: "Research",
+    mtime: 1_700_000_044,
+    fileSize: 0,
+  },
+  {
+    workspaceId: OVERLAY_WORKSPACE.id,
+    kind: "drawing",
+    canonicalPath: `${OVERLAY_WORKSPACE.rootPath}/Flow.excalidraw`,
+    relativePath: "Flow.excalidraw",
+    parentRelativePath: "",
+    name: "Flow.excalidraw",
+    displayName: "Flow",
+    mtime: 1_700_000_045,
+    fileSize: 512,
+  },
+  {
+    workspaceId: OVERLAY_WORKSPACE.id,
+    kind: "drawing",
+    canonicalPath: `${OVERLAY_WORKSPACE.rootPath}/research/Research.excalidraw`,
+    relativePath: "research/Research.excalidraw",
+    parentRelativePath: "research",
+    name: "Research.excalidraw",
+    displayName: "Research",
+    mtime: 1_700_000_046,
+    fileSize: 512,
+  },
+];
+
+const OVERLAY_TABS: readonly ShellFixtureTab[] = [
+  {
+    documentId: "fixture-overlay-system-map",
+    title: "System Map",
+    workspaceId: OVERLAY_WORKSPACE.id,
+    path: OVERLAY_ENTRIES[1]?.canonicalPath ?? null,
+    saveState: "clean",
+    availability: "available",
+    conflictState: "none",
+  },
+  {
+    documentId: "fixture-overlay-flow",
+    title: "Flow",
+    workspaceId: OVERLAY_WORKSPACE.id,
+    path: OVERLAY_ENTRIES[2]?.canonicalPath ?? null,
+    saveState: "dirty",
+    availability: "available",
+    conflictState: "none",
+  },
+  {
+    documentId: "fixture-overlay-research",
+    title: "Research",
+    workspaceId: OVERLAY_WORKSPACE.id,
+    path: OVERLAY_ENTRIES[5]?.canonicalPath ?? null,
+    saveState: "clean",
+    availability: "available",
+    conflictState: "none",
+  },
+];
+
+const UNSAVED_TAB: ShellFixtureTab = {
+  documentId: "fixture-document-unsaved",
+  title: "Untitled",
+  workspaceId: null,
+  path: null,
+  saveState: "dirty",
+  availability: "available",
+  conflictState: "none",
+};
+
+const UNICODE_TAB: ShellFixtureTab = {
+  documentId: "fixture-document-unicode",
+  title: "会议 ✦",
+  workspaceId: UNICODE_WORKSPACE.id,
+  path: UNICODE_ENTRIES[1].canonicalPath,
+  saveState: "clean",
+  availability: "available",
+  conflictState: "none",
+};
+
+export const EMPTY_SHELL_FIXTURE: ShellFixture = {
+  id: "empty",
+  shell: "empty",
+  sidebar: "hidden",
+  currentWorkspaceId: null,
+  workspaces: [],
+  entries: [],
+  expandedDirectoryPaths: [],
+  selectedDirectoryRelativePath: null,
+  activeDocumentId: null,
+  tabs: [],
+};
+
+export const WELCOME_SHELL_FIXTURE: ShellFixture = {
+  ...EMPTY_SHELL_FIXTURE,
+  id: "welcome",
+  workspaces: WELCOME_WORKSPACES,
+};
+
+export const RESTORED_SHELL_FIXTURE: ShellFixture = {
+  id: "restored",
+  shell: "restored",
+  sidebar: "hidden",
+  currentWorkspaceId: WORKSPACE.id,
+  workspaces: [WORKSPACE],
+  entries: [ROOT_DRAWING],
+  expandedDirectoryPaths: [],
+  selectedDirectoryRelativePath: null,
+  activeDocumentId: CLEAN_TAB.documentId,
+  tabs: [CLEAN_TAB],
+};
+
+export const PINNED_SHELL_FIXTURE: ShellFixture = {
+  id: "pinned",
+  shell: "restored",
+  sidebar: "pinned",
+  currentWorkspaceId: VSL_WORKSPACE.id,
+  workspaces: [VSL_WORKSPACE],
+  entries: VSL_ENTRIES,
+  expandedDirectoryPaths: ["flows"],
+  selectedDirectoryRelativePath: "flows",
+  activeDocumentId: VSL_TABS[0]?.documentId ?? null,
+  tabs: VSL_TABS,
+};
+
+export const RESTORED_RECOVERY_SHELL_FIXTURE: ShellFixture = {
+  ...PINNED_SHELL_FIXTURE,
+  id: "restored-recovery",
+  sidebar: "hidden",
+  activeDocumentId: RESTORED_RECOVERY_TABS[0]?.documentId ?? null,
+  tabs: RESTORED_RECOVERY_TABS,
+};
+
+export const OVERLAY_SHELL_FIXTURE: ShellFixture = {
+  id: "overlay",
+  shell: "restored",
+  sidebar: "overlay",
+  currentWorkspaceId: OVERLAY_WORKSPACE.id,
+  workspaces: [OVERLAY_WORKSPACE],
+  entries: OVERLAY_ENTRIES,
+  expandedDirectoryPaths: ["architecture"],
+  selectedDirectoryRelativePath: "architecture",
+  activeDocumentId: OVERLAY_TABS[0]?.documentId ?? null,
+  tabs: OVERLAY_TABS,
+};
+
+export const PINNED_DARK_SHELL_FIXTURE: ShellFixture = {
+  ...OVERLAY_SHELL_FIXTURE,
+  id: "pinned-dark",
+  sidebar: "pinned",
+};
+
+export const NESTED_TREE_SHELL_FIXTURE: ShellFixture = {
+  ...RESTORED_SHELL_FIXTURE,
+  id: "nested-tree",
+  sidebar: "pinned",
+  entries: NESTED_ENTRIES,
+  expandedDirectoryPaths: ["planning", "planning/weekly"],
+};
+
+export const SELECTED_DIRECTORY_SHELL_FIXTURE: ShellFixture = {
+  ...NESTED_TREE_SHELL_FIXTURE,
+  id: "selected-directory",
+  selectedDirectoryRelativePath: "planning/weekly",
+};
+
+export const UNSAVED_TAB_SHELL_FIXTURE: ShellFixture = {
+  id: "unsaved-tab",
+  shell: "restored",
+  sidebar: "hidden",
+  currentWorkspaceId: null,
+  workspaces: [],
+  entries: [],
+  expandedDirectoryPaths: [],
+  selectedDirectoryRelativePath: null,
+  activeDocumentId: UNSAVED_TAB.documentId,
+  tabs: [UNSAVED_TAB],
+};
+
+export const UNICODE_PINNED_SHELL_FIXTURE: ShellFixture = {
+  ...RESTORED_SHELL_FIXTURE,
+  id: "unicode-pinned",
+  sidebar: "pinned",
+  currentWorkspaceId: UNICODE_WORKSPACE.id,
+  workspaces: [UNICODE_WORKSPACE],
+  entries: UNICODE_ENTRIES,
+  expandedDirectoryPaths: ["流程"],
+  selectedDirectoryRelativePath: "流程",
+  activeDocumentId: UNICODE_TAB.documentId,
+  tabs: [UNICODE_TAB],
+};
+
+export const SHELL_FIXTURES: readonly ShellFixture[] = [
+  EMPTY_SHELL_FIXTURE,
+  WELCOME_SHELL_FIXTURE,
+  RESTORED_SHELL_FIXTURE,
+  RESTORED_RECOVERY_SHELL_FIXTURE,
+  PINNED_SHELL_FIXTURE,
+  OVERLAY_SHELL_FIXTURE,
+  PINNED_DARK_SHELL_FIXTURE,
+  NESTED_TREE_SHELL_FIXTURE,
+  SELECTED_DIRECTORY_SHELL_FIXTURE,
+  UNSAVED_TAB_SHELL_FIXTURE,
+  UNICODE_PINNED_SHELL_FIXTURE,
+];
+
+export function assertShellFixtureConsistency(fixture: ShellFixture): void {
+  const errors: string[] = [];
+  const workspaceIds = new Set(fixture.workspaces.map(({ id }) => id));
+  const entriesByCanonicalPath = new Map(
+    fixture.entries.map((entry) => [entry.canonicalPath, entry]),
+  );
+  const directoryPaths = new Set(
+    fixture.entries
+      .filter(({ kind }) => kind === "directory")
+      .map(({ relativePath }) => relativePath),
+  );
+  const tabPaths = new Set<string>();
+
+  if (
+    fixture.currentWorkspaceId !== null &&
+    !workspaceIds.has(fixture.currentWorkspaceId)
+  ) {
+    errors.push(
+      `current Workspace ${fixture.currentWorkspaceId} does not resolve`,
+    );
+  }
+
+  for (const tab of fixture.tabs) {
+    if (tab.path === null) continue;
+    if (tabPaths.has(tab.path)) {
+      errors.push(`duplicate tab path ${tab.path}`);
+      continue;
+    }
+    tabPaths.add(tab.path);
+    const entry = entriesByCanonicalPath.get(tab.path);
+    if (entry === undefined || entry.kind !== "drawing") {
+      errors.push(`tab path ${tab.path} does not resolve to a drawing`);
+      continue;
+    }
+    if (tab.title !== entry.displayName) {
+      errors.push(
+        `tab title ${tab.title} does not match drawing ${entry.relativePath} display name ${entry.displayName}`,
+      );
+    }
+  }
+
+  if (
+    fixture.activeDocumentId !== null &&
+    !fixture.tabs.some(
+      ({ documentId }) => documentId === fixture.activeDocumentId,
+    )
+  ) {
+    errors.push(`active document ${fixture.activeDocumentId} does not resolve`);
+  }
+
+  for (const relativePath of fixture.expandedDirectoryPaths) {
+    if (!directoryPaths.has(relativePath)) {
+      errors.push(`expanded directory ${relativePath} does not resolve`);
+    }
+    const segments = relativePath.split("/");
+    for (let index = 1; index < segments.length; index += 1) {
+      const ancestor = segments.slice(0, index).join("/");
+      if (!fixture.expandedDirectoryPaths.includes(ancestor)) {
+        errors.push(
+          `expanded directory ${relativePath} is missing ancestor ${ancestor}`,
+        );
+      }
+    }
+  }
+
+  if (
+    fixture.selectedDirectoryRelativePath !== null &&
+    !directoryPaths.has(fixture.selectedDirectoryRelativePath)
+  ) {
+    errors.push(
+      `selected directory ${fixture.selectedDirectoryRelativePath} does not resolve`,
+    );
+  }
+
+  if (errors.length > 0) {
+    throw new Error(
+      `Fixture ${fixture.id} is inconsistent:\n${errors.map((error) => `- ${error}`).join("\n")}`,
+    );
+  }
+}
+
+export function getShellFixture(id: FixtureId): ShellFixture {
+  const fixture = SHELL_FIXTURES.find((candidate) => candidate.id === id);
+  if (fixture === undefined) {
+    throw new Error(`Unknown 003 shell fixture: ${id}`);
+  }
+  return cloneShellFixture(fixture);
+}
+
+export function cloneShellFixture(fixture: ShellFixture): ShellFixture {
+  return structuredClone(fixture);
+}
+
+export function entriesForParent(
+  fixture: ShellFixture,
+  parentRelativePath = "",
+): ShellFixtureEntry[] {
+  return fixture.entries
+    .filter((entry) => entry.parentRelativePath === parentRelativePath)
+    .map((entry) => ({ ...entry }));
+}

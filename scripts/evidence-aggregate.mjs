@@ -1,0 +1,1470 @@
+#!/usr/bin/env node
+
+import crypto from "node:crypto";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const SCRIPT_PATH = fileURLToPath(import.meta.url);
+const FINAL_GATES = [
+  "HF2-01",
+  "HF2-02",
+  "HF2-03",
+  "HF2-04",
+  "HF2-05",
+  "HF2-06",
+];
+const FINAL_BROWSER_CLAIMS = [
+  "VSL-001",
+  "HF2-01",
+  "HF2-02",
+  "HF2-04",
+  "HF2-05",
+  "HF2-06-semantic",
+  "HF2-06-visual",
+];
+const TECHNICAL_INPUT_FIELDS = new Set([
+  "schemaVersion",
+  "finalCommit",
+  "productIdentity",
+  "hf2Manifest",
+  "finalPackageManifest",
+  "ownershipMap",
+  "finalBrowserClaimCollections",
+  "finalScreenCollections",
+  "packageCollections",
+  "regressionCollections",
+  "delta",
+  "attemptRecords",
+  "attemptAmendments",
+  "attemptReopenDecisions",
+]);
+const MAX_JSON_BYTES = 8 * 1024 * 1024;
+const ROOT_CAUSE_CLASSES = new Set([
+  "PRODUCT",
+  "HARNESS",
+  "ENVIRONMENT",
+  "SPEC_CONTRACT",
+  "TEST_FLAKE",
+  "OPERATOR",
+  "UNKNOWN",
+]);
+const ATTEMPT_VERDICTS = new Set(["PASS", "FAIL", "BLOCKED"]);
+
+export class EvidenceAggregateError extends Error {
+  constructor(message, exitCode = 2) {
+    super(message);
+    this.name = "EvidenceAggregateError";
+    this.exitCode = exitCode;
+  }
+}
+
+function blocked(message) {
+  throw new EvidenceAggregateError(message, 2);
+}
+
+function failed(message) {
+  throw new EvidenceAggregateError(message, 1);
+}
+
+function invalid(message) {
+  throw new EvidenceAggregateError(message, 64);
+}
+
+function object(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    blocked(`${label} must be an object`);
+  return value;
+}
+
+function sha256(bytes) {
+  return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function canonicalIssueId(attempt, rootCauseClass = attempt.rootCauseClass) {
+  return `issue-v1:${sha256(
+    canonicalJson({
+      gate: attempt.gate,
+      platform: attempt.platform,
+      factClass: attempt.factClass,
+      observableSignature: attempt.observableSignature,
+      rootCauseClass,
+    }),
+  )}`;
+}
+
+function validProductIdentity(value) {
+  return (
+    value &&
+    typeof value === "object" &&
+    /^[0-9a-f]{64}$/u.test(value.runtimeInputsSha256 ?? "") &&
+    (!Object.hasOwn(value, "packageArtifactSha256") ||
+      /^[0-9a-f]{64}$/u.test(value.packageArtifactSha256 ?? ""))
+  );
+}
+
+function validValidatorIdentity(value) {
+  return (
+    value &&
+    typeof value === "object" &&
+    typeof value.producer === "string" &&
+    value.producer !== "" &&
+    typeof value.version === "string" &&
+    value.version !== "" &&
+    /^[0-9a-f]{64}$/u.test(value.sourceSha256 ?? "") &&
+    Number.isSafeInteger(value.schemaVersion) &&
+    value.schemaVersion > 0
+  );
+}
+
+export function validateEvidenceIdentities(value, expectedProductIdentity) {
+  object(value, "evidence identities");
+  if (!validProductIdentity(value.productIdentity))
+    blocked("product identity is invalid");
+  if (!validValidatorIdentity(value.validatorIdentity))
+    blocked("validator identity is invalid");
+  const attempt = value.attemptIdentity;
+  if (
+    !attempt ||
+    typeof attempt !== "object" ||
+    !/^[A-Za-z0-9._-]{1,128}$/u.test(attempt.attemptId ?? "") ||
+    typeof attempt.gate !== "string" ||
+    attempt.gate === "" ||
+    typeof attempt.platform !== "string" ||
+    attempt.platform === "" ||
+    !/^[0-9a-f]{64}$/u.test(attempt.inputSha256 ?? "")
+  )
+    blocked("attempt identity is invalid");
+  if (expectedProductIdentity !== undefined) {
+    if (
+      value.productIdentity.runtimeInputsSha256 !==
+        expectedProductIdentity.runtimeInputsSha256 ||
+      (value.productIdentity.packageArtifactSha256 !== undefined &&
+        value.productIdentity.packageArtifactSha256 !==
+          expectedProductIdentity.packageArtifactSha256) ||
+      (value.productIdentity.bundleIdentifier !== undefined &&
+        value.productIdentity.bundleIdentifier !==
+          expectedProductIdentity.bundleIdentifier) ||
+      (value.productIdentity.version !== undefined &&
+        value.productIdentity.version !== expectedProductIdentity.version)
+    )
+      blocked("product identity mismatch");
+  }
+  return {
+    productIdentity: value.productIdentity,
+    validatorIdentity: value.validatorIdentity,
+    attemptIdentity: value.attemptIdentity,
+  };
+}
+
+function validateAttemptRecord(attempt) {
+  object(attempt, "attempt record");
+  if (
+    !/^[A-Za-z0-9._-]{1,128}$/u.test(attempt.attemptId ?? "") ||
+    typeof attempt.gate !== "string" ||
+    attempt.gate === "" ||
+    typeof attempt.platform !== "string" ||
+    attempt.platform === "" ||
+    typeof attempt.factClass !== "string" ||
+    attempt.factClass === "" ||
+    typeof attempt.mechanism !== "string" ||
+    attempt.mechanism === "" ||
+    attempt.assertionReached !== true ||
+    !/^[0-9a-f]{64}$/u.test(attempt.observableSignature ?? "") ||
+    !ROOT_CAUSE_CLASSES.has(attempt.rootCauseClass) ||
+    attempt.canonicalIssueId !== canonicalIssueId(attempt) ||
+    !validProductIdentity(attempt.productIdentity) ||
+    !validValidatorIdentity(attempt.validatorIdentity) ||
+    !ATTEMPT_VERDICTS.has(attempt.verdict) ||
+    !Number.isSafeInteger(attempt.consecutiveFailureCount) ||
+    attempt.consecutiveFailureCount < 0 ||
+    typeof attempt.nextAction !== "string" ||
+    attempt.nextAction === ""
+  )
+    blocked(`attempt record is invalid: ${attempt.attemptId ?? "unknown"}`);
+  const change = object(
+    attempt.namedChangeSincePreviousAttempt,
+    "namedChangeSincePreviousAttempt",
+  );
+  if (
+    typeof change.changeId !== "string" ||
+    change.changeId === "" ||
+    typeof change.producer !== "string" ||
+    change.producer === "" ||
+    !/^[0-9a-f]{64}$/u.test(change.afterSha256 ?? "") ||
+    (change.beforeSha256 !== null &&
+      !/^[0-9a-f]{64}$/u.test(change.beforeSha256 ?? ""))
+  )
+    blocked(`attempt named change is invalid: ${attempt.attemptId}`);
+  const remediationEpoch = attempt.remediationEpoch ?? 0;
+  const reopenDecision = attempt.reopenDecision ?? null;
+  if (!Number.isSafeInteger(remediationEpoch) || remediationEpoch < 0)
+    blocked(`attempt remediation epoch is invalid: ${attempt.attemptId}`);
+  if (remediationEpoch === 0 && reopenDecision !== null)
+    blocked(
+      `epoch 0 attempt must not bind a reopen decision: ${attempt.attemptId}`,
+    );
+  if (remediationEpoch > 0) {
+    object(reopenDecision, "attempt reopen decision");
+    if (
+      typeof reopenDecision.path !== "string" ||
+      !/^\.\.\/reopen-decisions\/[A-Za-z0-9._-]+\.json$/u.test(
+        reopenDecision.path,
+      ) ||
+      !/^[0-9a-f]{64}$/u.test(reopenDecision.sha256 ?? "")
+    )
+      blocked(`attempt reopen decision is invalid: ${attempt.attemptId}`);
+  }
+  return { ...attempt, remediationEpoch, reopenDecision };
+}
+
+function validateReopenDecisionEntry(entry) {
+  object(entry, "reopen decision entry");
+  if (!/^[0-9a-f]{64}$/u.test(entry.sha256 ?? ""))
+    blocked("reopen decision source digest is invalid");
+  const decision = object(entry.decision, "reopen decision");
+  const change = object(decision.requiredChange, "reopen required change");
+  if (
+    decision.schemaVersion !== 1 ||
+    !/^[A-Za-z0-9._-]{1,128}$/u.test(decision.decisionId ?? "") ||
+    decision.decisionType !== "STOP_REOPEN" ||
+    !/^issue-v1:[0-9a-f]{64}$/u.test(decision.canonicalIssueId ?? "") ||
+    !Number.isSafeInteger(decision.closedRemediationEpoch) ||
+    decision.closedRemediationEpoch < 0 ||
+    decision.reopenedRemediationEpoch !== decision.closedRemediationEpoch + 1 ||
+    decision.approvedByRole !== "product-owner" ||
+    !/^[0-9a-f]{40}$/u.test(decision.approvedSpecCommit ?? "") ||
+    decision.rationaleCode !== "PROOF_MECHANISM_REPAIR" ||
+    typeof decision.allowedGate !== "string" ||
+    decision.allowedGate === "" ||
+    typeof decision.allowedFactClass !== "string" ||
+    decision.allowedFactClass === "" ||
+    typeof change.producer !== "string" ||
+    change.producer === "" ||
+    !/^[0-9a-f]{64}$/u.test(change.beforeSha256 ?? "") ||
+    !/^[0-9a-f]{64}$/u.test(change.afterSha256 ?? "") ||
+    change.beforeSha256 === change.afterSha256
+  )
+    blocked(`reopen decision is invalid: ${decision.decisionId ?? "unknown"}`);
+  return entry;
+}
+
+function validateAttemptReopenBinding(attempt, entry) {
+  const decision = entry.decision;
+  if (
+    attempt.reopenDecision.path !==
+      `../reopen-decisions/${decision.decisionId}.json` ||
+    attempt.reopenDecision.sha256 !== entry.sha256 ||
+    decision.canonicalIssueId !== attempt.canonicalIssueId ||
+    decision.reopenedRemediationEpoch !== attempt.remediationEpoch ||
+    decision.allowedGate !== attempt.gate ||
+    decision.allowedFactClass !== attempt.factClass
+  )
+    blocked(`reopen decision does not bind attempt: ${attempt.attemptId}`);
+}
+
+export function buildAttemptIssueIndex(
+  attemptValues,
+  amendmentValues = [],
+  reopenDecisionValues = [],
+) {
+  if (
+    !Array.isArray(attemptValues) ||
+    !Array.isArray(amendmentValues) ||
+    !Array.isArray(reopenDecisionValues)
+  )
+    blocked("attempt ledger inputs must be arrays");
+  const attempts = attemptValues.map(validateAttemptRecord);
+  const byAttemptId = new Map();
+  for (const attempt of attempts) {
+    if (byAttemptId.has(attempt.attemptId))
+      blocked(`duplicate attempt id: ${attempt.attemptId}`);
+    byAttemptId.set(attempt.attemptId, attempt);
+  }
+  const amendments = new Map();
+  for (const amendment of amendmentValues) {
+    object(amendment, "attempt amendment");
+    if (
+      typeof amendment.amendmentId !== "string" ||
+      amendment.amendmentId === "" ||
+      !Array.isArray(amendment.attemptIds) ||
+      amendment.attemptIds.length === 0 ||
+      !ROOT_CAUSE_CLASSES.has(amendment.rootCauseClass)
+    )
+      blocked("attempt amendment is invalid");
+    for (const attemptId of amendment.attemptIds) {
+      const attempt = byAttemptId.get(attemptId);
+      if (!attempt)
+        blocked(`attempt amendment target is missing: ${attemptId}`);
+      if (attempt.rootCauseClass !== "UNKNOWN")
+        blocked(`only UNKNOWN attempts may be amended: ${attemptId}`);
+      const expected = canonicalIssueId(attempt, amendment.rootCauseClass);
+      if (amendment.canonicalIssueId !== expected)
+        blocked(`attempt amendment issue id is invalid: ${attemptId}`);
+      amendments.set(attemptId, amendment);
+    }
+  }
+  const reopenDecisions = new Map();
+  for (const rawEntry of reopenDecisionValues) {
+    const entry = validateReopenDecisionEntry(rawEntry);
+    const id = entry.decision.decisionId;
+    if (reopenDecisions.has(id)) blocked(`duplicate reopen decision id: ${id}`);
+    reopenDecisions.set(id, entry);
+  }
+  const consumedReopenDecisions = new Set();
+  const issues = new Map();
+  for (const attempt of attempts) {
+    const amendment = amendments.get(attempt.attemptId);
+    const rootCauseClass = amendment?.rootCauseClass ?? attempt.rootCauseClass;
+    const issueId = amendment?.canonicalIssueId ?? attempt.canonicalIssueId;
+    const current = issues.get(issueId) ?? {
+      canonicalIssueId: issueId,
+      rootCauseClass,
+      attemptIds: [],
+      consecutiveFailureCount: 0,
+      nextAction: "NONE",
+      testFlakeFailures: 0,
+      remediationEpoch: 0,
+      closedEpochs: [],
+      reopenDecisionIds: [],
+    };
+    const change = attempt.namedChangeSincePreviousAttempt;
+    const decisionId =
+      attempt.remediationEpoch > 0
+        ? path.basename(attempt.reopenDecision.path, ".json")
+        : null;
+    const reopenEntry =
+      decisionId === null ? null : reopenDecisions.get(decisionId);
+    if (attempt.remediationEpoch > 0) {
+      if (!reopenEntry)
+        blocked(`attempt reopen decision is missing: ${attempt.attemptId}`);
+      validateAttemptReopenBinding(attempt, reopenEntry);
+    }
+    if (attempt.remediationEpoch === current.remediationEpoch + 1) {
+      const decision = reopenEntry.decision;
+      if (
+        current.attemptIds.length === 0 ||
+        current.consecutiveFailureCount !== 3 ||
+        current.nextAction !== "STOP_REQUIRED" ||
+        decision.closedRemediationEpoch !== current.remediationEpoch ||
+        change.producer !== decision.requiredChange.producer ||
+        change.beforeSha256 !== decision.requiredChange.beforeSha256 ||
+        change.afterSha256 !== decision.requiredChange.afterSha256
+      )
+        blocked(`invalid remediation epoch transition: ${attempt.attemptId}`);
+      current.closedEpochs.push({
+        remediationEpoch: current.remediationEpoch,
+        consecutiveFailureCount: current.consecutiveFailureCount,
+        nextAction: current.nextAction,
+      });
+      current.remediationEpoch = attempt.remediationEpoch;
+      current.consecutiveFailureCount = 0;
+      current.testFlakeFailures = 0;
+      current.reopenDecisionIds.push(decision.decisionId);
+      consumedReopenDecisions.add(decision.decisionId);
+    } else if (attempt.remediationEpoch !== current.remediationEpoch) {
+      blocked(
+        `attempt remediation epoch is out of sequence: ${attempt.attemptId}`,
+      );
+    } else if (
+      attempt.remediationEpoch > 0 &&
+      current.reopenDecisionIds.at(-1) !== decisionId
+    ) {
+      blocked(
+        `attempt binds the wrong remediation decision: ${attempt.attemptId}`,
+      );
+    }
+    if (current.attemptIds.length > 0) {
+      const controlledFlake =
+        change.changeId === "CONTROLLED_FLAKE_RERUN" &&
+        rootCauseClass === "TEST_FLAKE";
+      if (change.beforeSha256 === change.afterSha256 && !controlledFlake)
+        blocked(`attempt has no named producer change: ${attempt.attemptId}`);
+    }
+    if (attempt.verdict === "PASS") {
+      if (attempt.consecutiveFailureCount !== 0)
+        blocked(`PASS attempt must reset failure count: ${attempt.attemptId}`);
+      current.consecutiveFailureCount = 0;
+    } else {
+      const expectedCount = current.consecutiveFailureCount + 1;
+      if (expectedCount > 3)
+        blocked(`fourth attempt is prohibited: ${attempt.attemptId}`);
+      if (attempt.consecutiveFailureCount !== expectedCount)
+        blocked(`attempt failure count is invalid: ${attempt.attemptId}`);
+      current.consecutiveFailureCount = expectedCount;
+      if (rootCauseClass === "TEST_FLAKE") {
+        current.testFlakeFailures += 1;
+        if (current.testFlakeFailures > 1)
+          blocked("reproduced TEST_FLAKE must be reclassified as HARNESS");
+      }
+      if (expectedCount === 3 && attempt.nextAction !== "STOP_REQUIRED")
+        blocked(`third failure must stop: ${attempt.attemptId}`);
+    }
+    current.attemptIds.push(attempt.attemptId);
+    current.nextAction = attempt.nextAction;
+    issues.set(issueId, current);
+  }
+  for (const decisionId of reopenDecisions.keys()) {
+    if (!consumedReopenDecisions.has(decisionId))
+      blocked(`reopen decision is not consumed: ${decisionId}`);
+  }
+  return {
+    schemaVersion: 1,
+    issues: [...issues.values()]
+      .map(({ testFlakeFailures: _ignored, ...issue }) => issue)
+      .sort((left, right) =>
+        left.canonicalIssueId.localeCompare(right.canonicalIssueId),
+      ),
+  };
+}
+
+async function sha256File(filePath) {
+  return sha256(await fsp.readFile(filePath));
+}
+
+function artifactDigest(artifacts) {
+  return sha256(
+    [...artifacts]
+      .sort((left, right) => left.path.localeCompare(right.path))
+      .map((entry) => `${entry.path}\0${entry.sha256}`)
+      .join("\n"),
+  );
+}
+
+function relativeArtifactPath(value, label) {
+  if (
+    typeof value !== "string" ||
+    value === "" ||
+    path.isAbsolute(value) ||
+    value.split(/[\\/]/u).includes("..")
+  ) {
+    blocked(`${label} escapes its collection`);
+  }
+  return value;
+}
+
+async function readJson(filePath, label) {
+  if (typeof filePath !== "string" || !path.isAbsolute(filePath))
+    blocked(`${label} path must be absolute`);
+  const stats = await fsp.lstat(filePath).catch(() => null);
+  if (stats === null || !stats.isFile() || stats.isSymbolicLink())
+    blocked(`${label} must be a real file`);
+  if (stats.size > MAX_JSON_BYTES)
+    blocked(`${label} exceeds the JSON size limit`);
+  try {
+    return JSON.parse(await fsp.readFile(filePath, "utf8"));
+  } catch (error) {
+    blocked(`${label} is invalid JSON: ${String(error.message ?? error)}`);
+  }
+}
+
+async function writeJsonExclusive(filePath, value) {
+  await fsp.mkdir(path.dirname(filePath), { recursive: true });
+  await fsp.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+  });
+}
+
+async function writeMarkdownExclusive(filePath, value) {
+  await fsp.writeFile(filePath, value, { encoding: "utf8", flag: "wx" });
+}
+
+function assertAbsent(filePath, label) {
+  return fsp
+    .lstat(filePath)
+    .then(() => blocked(`${label} already exists`))
+    .catch((error) => {
+      if (error instanceof EvidenceAggregateError) throw error;
+      if (error?.code !== "ENOENT") throw error;
+    });
+}
+
+export function parseTasksMarkdown(markdown) {
+  const records = [];
+  const seen = new Set();
+  const pattern = /^- \[([ xX])\] (T\d+[a-z]?)(?:\s|$)/gmu;
+  for (const match of markdown.matchAll(pattern)) {
+    const taskId = match[2];
+    if (seen.has(taskId)) blocked(`duplicate task id: ${taskId}`);
+    seen.add(taskId);
+    records.push({
+      taskId,
+      checkboxState: match[1].toLowerCase() === "x" ? "checked" : "unchecked",
+    });
+  }
+  if (records.length === 0) blocked("tasks file has no checklist task ids");
+  return records;
+}
+
+function matchingRules(filePath, ownershipMap) {
+  return ownershipMap.rules.filter(
+    (rule) =>
+      rule.pathPrefixes.some(
+        (prefix) => filePath === prefix || filePath.startsWith(prefix),
+      ) &&
+      !(rule.excludePrefixes ?? []).some(
+        (prefix) => filePath === prefix || filePath.startsWith(prefix),
+      ),
+  );
+}
+
+function nonEmptyStringArray(value, label) {
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.some((entry) => typeof entry !== "string" || entry === "")
+  ) {
+    blocked(`${label} must be a non-empty string array`);
+  }
+  if (new Set(value).size !== value.length)
+    blocked(`${label} must not contain duplicates`);
+  return value;
+}
+
+function validateOwnershipMap(ownershipMap) {
+  object(ownershipMap, "ownership map");
+  if (
+    ownershipMap.schemaVersion !== 1 ||
+    typeof ownershipMap.version !== "string" ||
+    ownershipMap.version === "" ||
+    !Array.isArray(ownershipMap.rules) ||
+    ownershipMap.rules.length === 0
+  ) {
+    blocked("ownership map schema is invalid");
+  }
+  const commandCatalog = object(
+    ownershipMap.commandCatalog,
+    "ownership map commandCatalog",
+  );
+  const claimCommands = object(
+    ownershipMap.claimCommands,
+    "ownership map claimCommands",
+  );
+  if (
+    Object.keys(commandCatalog).length === 0 ||
+    Object.keys(claimCommands).length === 0
+  ) {
+    blocked("ownership map command mappings must not be empty");
+  }
+  for (const [commandId, command] of Object.entries(commandCatalog)) {
+    if (
+      !/^[a-z0-9][a-z0-9-]*$/u.test(commandId) ||
+      typeof command !== "string" ||
+      command.trim() === ""
+    ) {
+      blocked(`ownership map commandCatalog entry is invalid: ${commandId}`);
+    }
+  }
+  for (const [claimId, commandIds] of Object.entries(claimCommands)) {
+    nonEmptyStringArray(commandIds, `claimCommands.${claimId}`);
+    for (const commandId of commandIds) {
+      if (!Object.hasOwn(commandCatalog, commandId))
+        blocked(`claim command is not in commandCatalog: ${commandId}`);
+    }
+  }
+  for (const [index, rule] of ownershipMap.rules.entries()) {
+    object(rule, `ownership map rules[${index}]`);
+    if (typeof rule.id !== "string" || rule.id === "")
+      blocked(`ownership map rules[${index}].id is invalid`);
+    nonEmptyStringArray(
+      rule.pathPrefixes,
+      `ownership map rules[${index}].pathPrefixes`,
+    );
+    if (rule.excludePrefixes !== undefined)
+      nonEmptyStringArray(
+        rule.excludePrefixes,
+        `ownership map rules[${index}].excludePrefixes`,
+      );
+    nonEmptyStringArray(rule.owners, `ownership map rules[${index}].owners`);
+    nonEmptyStringArray(
+      rule.claimIds,
+      `ownership map rules[${index}].claimIds`,
+    );
+  }
+  return ownershipMap;
+}
+
+function runtimeInputsSha256(productRoot, commit, ownershipMap) {
+  const prefixes = ownershipMap.productIdentity?.pathPrefixes;
+  if (!Array.isArray(prefixes) || prefixes.length === 0)
+    blocked("ownership map productIdentity.pathPrefixes is missing");
+  const entries = git(
+    productRoot,
+    ["ls-tree", "-r", "--full-tree", commit],
+    "read runtime identity tree",
+  )
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .map((line) => {
+      const match = /^(\d+)\s+(\w+)\s+([0-9a-f]{40,64})\t(.+)$/u.exec(line);
+      if (!match) blocked("runtime identity tree entry is malformed");
+      return {
+        mode: match[1],
+        type: match[2],
+        objectId: match[3],
+        path: match[4],
+      };
+    })
+    .filter((entry) =>
+      prefixes.some(
+        (prefix) => entry.path === prefix || entry.path.startsWith(prefix),
+      ),
+    )
+    .sort((left, right) => left.path.localeCompare(right.path));
+  if (entries.length === 0) blocked("runtime identity path set is empty");
+  return sha256(canonicalJson(entries));
+}
+
+function commandsForClaim(claimId, ownershipMap) {
+  if (!Object.hasOwn(ownershipMap.claimCommands, claimId))
+    blocked(`claim has no command mapping: ${claimId}`);
+  return ownershipMap.claimCommands[claimId]
+    .map((commandId) => ({
+      id: commandId,
+      command: ownershipMap.commandCatalog[commandId],
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+export function classifyDeltaPaths(paths, ownershipMap) {
+  validateOwnershipMap(ownershipMap);
+  return [...new Set(paths)].sort().map((filePath) => {
+    if (path.isAbsolute(filePath) || filePath.split(/[\\/]/u).includes(".."))
+      blocked(`delta path escapes product root: ${filePath}`);
+    const rules = matchingRules(filePath, ownershipMap);
+    if (rules.length !== 1)
+      blocked(`delta path must have exactly one owner rule: ${filePath}`);
+    return {
+      path: filePath,
+      ownershipRule: rules[0].id,
+      owners: [...rules[0].owners].sort(),
+      claimIds: [...rules[0].claimIds].sort(),
+      action: "RERUN",
+    };
+  });
+}
+
+function git(productRoot, args, label) {
+  const result = spawnSync("git", ["-C", productRoot, ...args], {
+    encoding: "utf8",
+  });
+  if (result.status !== 0)
+    blocked(`${label}: ${(result.stderr || result.stdout).trim()}`);
+  return result.stdout.trim();
+}
+
+export async function aggregateDelta({
+  productRoot,
+  checkpointMapPath,
+  finalCommit,
+  ownershipMapPath,
+  outputPath,
+}) {
+  if (
+    ![productRoot, checkpointMapPath, ownershipMapPath, outputPath].every(
+      (value) => typeof value === "string" && path.isAbsolute(value),
+    )
+  )
+    invalid("delta mode requires absolute paths");
+  if (!/^[0-9a-f]{40}$/u.test(finalCommit ?? ""))
+    invalid("delta mode requires a 40-hex final commit");
+  if (git(productRoot, ["rev-parse", "HEAD"], "read HEAD") !== finalCommit)
+    blocked("final commit is not the product HEAD");
+  if (
+    git(productRoot, ["status", "--porcelain"], "read worktree status") !== ""
+  )
+    blocked("delta mode requires a clean product worktree");
+  const checkpointMap = object(
+    await readJson(checkpointMapPath, "checkpoint map"),
+    "checkpoint map",
+  );
+  const ownershipMap = await readJson(ownershipMapPath, "ownership map");
+  if (
+    checkpointMap.schemaVersion !== 1 ||
+    !Array.isArray(checkpointMap.checkpoints) ||
+    checkpointMap.checkpoints.length === 0
+  )
+    blocked("checkpoint map schema is invalid");
+  validateOwnershipMap(ownershipMap);
+  const changedPaths = new Set();
+  const reuse = [];
+  const rerunCommands = new Map();
+  for (const checkpoint of checkpointMap.checkpoints) {
+    object(checkpoint, "checkpoint");
+    if (
+      typeof checkpoint.claimId !== "string" ||
+      checkpoint.claimId === "" ||
+      typeof checkpoint.sourceReportPath !== "string" ||
+      !path.isAbsolute(checkpoint.sourceReportPath) ||
+      !/^[0-9a-f]{64}$/u.test(checkpoint.sourceCollectionDigest ?? "") ||
+      !/^[0-9a-f]{40}$/u.test(checkpoint.fromCommit ?? "")
+    ) {
+      blocked("checkpoint source schema is invalid");
+    }
+    const claimCommands = commandsForClaim(checkpoint.claimId, ownershipMap);
+    const sourceReport = await validateCollectorReport(
+      checkpoint.sourceReportPath,
+      checkpoint.sourceCollectionDigest,
+    );
+    if (sourceReport.binding?.productCommit !== checkpoint.fromCommit)
+      blocked(
+        `checkpoint source commit binding is stale: ${checkpoint.sourceReportPath}`,
+      );
+    git(
+      productRoot,
+      ["cat-file", "-e", `${checkpoint.fromCommit}^{commit}`],
+      "resolve checkpoint commit",
+    );
+    const output = git(
+      productRoot,
+      ["diff", "--name-only", checkpoint.fromCommit, finalCommit],
+      "compute checkpoint delta",
+    );
+    const checkpointPaths = output.split(/\r?\n/u).filter(Boolean);
+    checkpointPaths.forEach((entry) => changedPaths.add(entry));
+    const checkpointEntries = classifyDeltaPaths(checkpointPaths, ownershipMap);
+    const changedOwningPaths = checkpointEntries
+      .filter((entry) => entry.claimIds.includes(checkpoint.claimId))
+      .map((entry) => entry.path);
+    const result = changedOwningPaths.length === 0 ? "REUSE" : "RERUN";
+    if (result === "RERUN") {
+      for (const command of claimCommands)
+        rerunCommands.set(command.id, command);
+    }
+    reuse.push({
+      claimId: checkpoint.claimId,
+      sourceReportPath: checkpoint.sourceReportPath,
+      sourceReportSha256: await sha256File(checkpoint.sourceReportPath),
+      sourceCollectionDigest: checkpoint.sourceCollectionDigest,
+      fromCommit: checkpoint.fromCommit,
+      toCommit: finalCommit,
+      ownershipRule: ownershipMap.version,
+      changedOwningPaths,
+      result,
+    });
+  }
+  const entries = classifyDeltaPaths([...changedPaths], ownershipMap);
+  const report = {
+    schemaVersion: 1,
+    finalCommit,
+    productIdentity: {
+      runtimeInputsSha256: runtimeInputsSha256(
+        productRoot,
+        finalCommit,
+        ownershipMap,
+      ),
+    },
+    ownershipMapVersion: ownershipMap.version,
+    entries,
+    reuse,
+    rerunCommands: [...rerunCommands.values()].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
+  };
+  await assertAbsent(outputPath, "delta output");
+  await writeJsonExclusive(outputPath, report);
+  return report;
+}
+
+async function validateCollectorReport(reportPath, expectedDigest) {
+  const report = object(
+    await readJson(reportPath, "collector report"),
+    "collector report",
+  );
+  if (
+    report.schemaVersion !== 1 ||
+    report.result !== "PASS" ||
+    report.collectionDigest !== expectedDigest ||
+    !Array.isArray(report.artifactDigests)
+  ) {
+    blocked(`collector report binding is invalid: ${reportPath}`);
+  }
+  const root = path.dirname(reportPath);
+  for (const [index, artifact] of report.artifactDigests.entries()) {
+    const relative = relativeArtifactPath(
+      artifact.path,
+      `artifactDigests[${index}]`,
+    );
+    if (!/^[0-9a-f]{64}$/u.test(artifact.sha256 ?? ""))
+      blocked("collector artifact digest is invalid");
+    const artifactPath = path.join(root, relative);
+    const stats = await fsp.lstat(artifactPath).catch(() => null);
+    if (stats === null || !stats.isFile() || stats.isSymbolicLink())
+      blocked(`collector artifact is missing or unsafe: ${relative}`);
+    if ((await sha256File(artifactPath)) !== artifact.sha256)
+      blocked(`collector artifact digest changed: ${relative}`);
+  }
+  if (artifactDigest(report.artifactDigests) !== report.collectionDigest)
+    blocked("collector collectionDigest is stale");
+  return report;
+}
+
+export async function aggregateTechnical({ inputPath, outputDir }) {
+  if (
+    ![inputPath, outputDir].every(
+      (value) => typeof value === "string" && path.isAbsolute(value),
+    )
+  )
+    invalid("technical mode requires absolute paths");
+  await assertAbsent(outputDir, "technical output directory");
+  const input = object(
+    await readJson(inputPath, "technical input"),
+    "technical input",
+  );
+  const unsupportedFields = Object.keys(input).filter(
+    (field) => !TECHNICAL_INPUT_FIELDS.has(field),
+  );
+  if (unsupportedFields.length > 0) {
+    blocked(
+      `technical input contains unsupported fields: ${unsupportedFields.sort().join(", ")}`,
+    );
+  }
+  if (
+    input.schemaVersion !== 1 ||
+    !/^[0-9a-f]{40}$/u.test(input.finalCommit ?? "") ||
+    !validProductIdentity(input.productIdentity) ||
+    !Array.isArray(input.finalBrowserClaimCollections) ||
+    !Array.isArray(input.finalScreenCollections)
+  )
+    blocked("technical input schema is invalid");
+  const browserClaimSets = input.finalBrowserClaimCollections
+    .map((entry, index) => {
+      object(entry, `finalBrowserClaimCollections[${index}]`);
+      if (
+        typeof entry.claimSet !== "string" ||
+        typeof entry.reportPath !== "string" ||
+        !path.isAbsolute(entry.reportPath) ||
+        !/^[0-9a-f]{64}$/u.test(entry.collectionDigest ?? "") ||
+        !["RERUN", "REUSE"].includes(entry.disposition)
+      ) {
+        blocked(`finalBrowserClaimCollections[${index}] is invalid`);
+      }
+      return entry.claimSet;
+    })
+    .sort();
+  if (
+    JSON.stringify(browserClaimSets) !==
+    JSON.stringify([...FINAL_BROWSER_CLAIMS].sort())
+  ) {
+    blocked(
+      "technical input must contain each final browser claim exactly once",
+    );
+  }
+  const browserReportPaths = input.finalBrowserClaimCollections.map(
+    (entry) => entry.reportPath,
+  );
+  const browserCollectionDigests = input.finalBrowserClaimCollections.map(
+    (entry) => entry.collectionDigest,
+  );
+  if (
+    new Set(browserReportPaths).size !== browserReportPaths.length ||
+    new Set(browserCollectionDigests).size !== browserCollectionDigests.length
+  ) {
+    blocked("technical browser claims must bind distinct collections");
+  }
+  const gates = input.finalScreenCollections
+    .map((entry) => entry.gateId)
+    .sort();
+  if (JSON.stringify(gates) !== JSON.stringify([...FINAL_GATES].sort()))
+    blocked("technical input must contain each final screen exactly once");
+  const packageClaimSets = new Set(
+    (input.packageCollections ?? []).map((entry) => entry.claimSet),
+  );
+  const regressionClaimSets = new Set(
+    (input.regressionCollections ?? []).map((entry) => entry.claimSet),
+  );
+  for (const required of ["T060-identity", "T023b-native-entrypoint"]) {
+    if (!packageClaimSets.has(required))
+      blocked(`technical input is missing package claim set ${required}`);
+  }
+  for (const required of ["T023a", "T024", "final-regression"]) {
+    if (!regressionClaimSets.has(required))
+      blocked(`technical input is missing regression claim set ${required}`);
+  }
+  const allCollections = [
+    ...input.finalBrowserClaimCollections,
+    ...input.finalScreenCollections,
+    ...(input.packageCollections ?? []),
+    ...(input.regressionCollections ?? []),
+  ];
+  const validated = [];
+  for (const entry of allCollections) {
+    const report = await validateCollectorReport(
+      entry.reportPath,
+      entry.collectionDigest,
+    );
+    if (entry.gateId && report.gateId !== entry.gateId)
+      blocked(`collector gate binding is stale: ${entry.reportPath}`);
+    if (entry.claimSet && FINAL_BROWSER_CLAIMS.includes(entry.claimSet)) {
+      const expectedGateId = entry.claimSet.startsWith("HF2-06-")
+        ? "HF2-06"
+        : entry.claimSet;
+      if (report.gateId !== expectedGateId) {
+        blocked(`browser claim gate binding is stale: ${entry.reportPath}`);
+      }
+    }
+    const explicitIdentities =
+      report.productIdentity &&
+      report.validatorIdentity &&
+      report.attemptIdentity
+        ? validateEvidenceIdentities(report, input.productIdentity)
+        : null;
+    if (
+      (explicitIdentities === null &&
+        report.binding.productCommit !== input.finalCommit) ||
+      report.binding.hf2ManifestSha256 !== input.hf2Manifest.sha256 ||
+      (input.finalPackageManifest?.artifactSha256 &&
+        report.binding.packageArtifactSha256 &&
+        report.binding.packageArtifactSha256 !==
+          input.finalPackageManifest.artifactSha256)
+    ) {
+      blocked(`collection binding is stale: ${entry.reportPath}`);
+    }
+    validated.push({ id: entry.gateId ?? entry.claimSet, report });
+  }
+  if ((await sha256File(input.hf2Manifest.path)) !== input.hf2Manifest.sha256)
+    blocked("technical HF-2 manifest digest changed");
+  if (
+    (await sha256File(input.finalPackageManifest.path)) !==
+    input.finalPackageManifest.sha256
+  )
+    blocked("technical package manifest digest changed");
+  if ((await sha256File(input.delta.path)) !== input.delta.sha256)
+    blocked("technical delta digest changed");
+  const attemptRecords = [];
+  for (const [index, reference] of (input.attemptRecords ?? []).entries()) {
+    object(reference, `attemptRecords[${index}]`);
+    if (
+      typeof reference.path !== "string" ||
+      !path.isAbsolute(reference.path) ||
+      !/^[0-9a-f]{64}$/u.test(reference.sha256 ?? "") ||
+      (await sha256File(reference.path)) !== reference.sha256
+    )
+      blocked(`attemptRecords[${index}] is invalid or stale`);
+    attemptRecords.push(
+      await readJson(reference.path, `attemptRecords[${index}]`),
+    );
+  }
+  const attemptAmendments = [];
+  for (const [index, reference] of (input.attemptAmendments ?? []).entries()) {
+    object(reference, `attemptAmendments[${index}]`);
+    if (
+      typeof reference.path !== "string" ||
+      !path.isAbsolute(reference.path) ||
+      !/^[0-9a-f]{64}$/u.test(reference.sha256 ?? "") ||
+      (await sha256File(reference.path)) !== reference.sha256
+    )
+      blocked(`attemptAmendments[${index}] is invalid or stale`);
+    attemptAmendments.push(
+      await readJson(reference.path, `attemptAmendments[${index}]`),
+    );
+  }
+  const attemptReopenDecisions = [];
+  for (const [index, reference] of (
+    input.attemptReopenDecisions ?? []
+  ).entries()) {
+    object(reference, `attemptReopenDecisions[${index}]`);
+    if (
+      typeof reference.path !== "string" ||
+      !path.isAbsolute(reference.path) ||
+      !/^[0-9a-f]{64}$/u.test(reference.sha256 ?? "") ||
+      (await sha256File(reference.path)) !== reference.sha256
+    )
+      blocked(`attemptReopenDecisions[${index}] is invalid or stale`);
+    attemptReopenDecisions.push({
+      decision: await readJson(
+        reference.path,
+        `attemptReopenDecisions[${index}]`,
+      ),
+      sha256: reference.sha256,
+    });
+  }
+  const attemptIssueIndex = buildAttemptIssueIndex(
+    attemptRecords,
+    attemptAmendments,
+    attemptReopenDecisions,
+  );
+  const screenCollectionVerdicts = input.finalScreenCollections.map(
+    (entry) => ({
+      gateId: entry.gateId,
+      collectionDigest: entry.collectionDigest,
+      result: "PASS",
+    }),
+  );
+  const browserClaimVerdicts = input.finalBrowserClaimCollections
+    .map((entry) => ({
+      claimSet: entry.claimSet,
+      collectionDigest: entry.collectionDigest,
+      disposition: entry.disposition,
+      result: "PASS",
+    }))
+    .sort((left, right) => left.claimSet.localeCompare(right.claimSet));
+  const claimVerdicts = validated
+    .filter((entry) => !FINAL_GATES.includes(entry.id))
+    .map((entry) => ({
+      claimId: entry.id,
+      sourceDigest: entry.report.collectionDigest,
+      result: "PASS",
+    }));
+  const dependencyGraph = {
+    schemaVersion: 1,
+    nodes: validated
+      .map((entry) => ({ id: entry.id, digest: entry.report.collectionDigest }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  };
+  const report = {
+    schemaVersion: 1,
+    mode: "technical",
+    finalCommit: input.finalCommit,
+    productIdentity: input.productIdentity,
+    packageArtifactSha256: input.finalPackageManifest.artifactSha256,
+    hf2ManifestSha256: input.hf2Manifest.sha256,
+    dependencyGraphDigest: sha256(JSON.stringify(dependencyGraph)),
+    browserClaimVerdicts,
+    screenCollectionVerdicts,
+    claimVerdicts,
+    staleEvidence: [],
+    result: "PASS",
+  };
+  await fsp.mkdir(outputDir);
+  await writeJsonExclusive(path.join(outputDir, "input.json"), input);
+  await writeJsonExclusive(
+    path.join(outputDir, "dependency-graph.json"),
+    dependencyGraph,
+  );
+  await writeJsonExclusive(
+    path.join(outputDir, "attempt-issue-index.json"),
+    attemptIssueIndex,
+  );
+  await writeJsonExclusive(path.join(outputDir, "stale-evidence.json"), []);
+  await writeJsonExclusive(
+    path.join(outputDir, "technical-report.json"),
+    report,
+  );
+  await writeMarkdownExclusive(
+    path.join(outputDir, "technical-report.md"),
+    `# Technical aggregate\n\n- Result: **PASS**\n- Final commit: \`${report.finalCommit}\`\n- Browser claims: **7/7**\n- Final screens: **6/6**\n- Stale evidence: **0**\n`,
+  );
+  return report;
+}
+
+async function validateProofArtifact(artifact, label) {
+  object(artifact, label);
+  if (
+    typeof artifact.path !== "string" ||
+    !path.isAbsolute(artifact.path) ||
+    !/^[0-9a-f]{64}$/u.test(artifact.sha256 ?? "")
+  )
+    blocked(`${label} is invalid`);
+  const stats = await fsp.lstat(artifact.path).catch(() => null);
+  if (stats === null || !stats.isFile() || stats.isSymbolicLink())
+    blocked(`${label} is missing or uses a symlink`);
+  if ((await sha256File(artifact.path)) !== artifact.sha256)
+    blocked(`${label} digest changed`);
+}
+
+function stringArray(value, label) {
+  if (
+    !Array.isArray(value) ||
+    value.some((entry) => typeof entry !== "string" || entry === "") ||
+    new Set(value).size !== value.length
+  ) {
+    blocked(`${label} must be a unique string array`);
+  }
+  return value;
+}
+
+function assertOnlyKeys(value, allowedKeys, label) {
+  for (const key of Object.keys(value)) {
+    if (!allowedKeys.includes(key))
+      blocked(`${label} has unknown field: ${key}`);
+  }
+}
+
+async function validateProofMetadata(proof, taskId) {
+  object(proof, `task proof ${taskId}`);
+  if (typeof proof.required !== "boolean")
+    blocked(`task proof required flag is invalid: ${taskId}`);
+  stringArray(proof.claimIds, `${taskId}.claimIds`);
+  if (!Array.isArray(proof.completionRefs))
+    blocked(`task proof completionRefs are missing: ${taskId}`);
+  if (!Array.isArray(proof.artifactRefs))
+    blocked(`task proof artifactRefs are missing: ${taskId}`);
+  if (
+    ![undefined, "NOT_REQUIRED", "REQUIRED"].includes(
+      proof.reviewerRequirement,
+    ) ||
+    ![undefined, "NOT_REQUIRED", "REQUIRED"].includes(proof.ownerRequirement)
+  ) {
+    blocked(`task proof review requirement is invalid: ${taskId}`);
+  }
+  for (const reference of proof.completionRefs) {
+    object(reference, `${taskId}.completionRefs`);
+    if (
+      !/^[0-9a-f]{40}$/u.test(reference.commit ?? "") ||
+      !["product", "specs"].includes(reference.repository)
+    ) {
+      blocked(`task completion reference is invalid: ${taskId}`);
+    }
+  }
+  for (const [index, artifact] of proof.artifactRefs.entries()) {
+    await validateProofArtifact(artifact, `${taskId}.artifactRefs[${index}]`);
+  }
+}
+
+function expandProofSourceV2(source, tasks) {
+  assertOnlyKeys(
+    source,
+    ["schemaVersion", "defaults", "proofGroups"],
+    "task proof source",
+  );
+  const defaults = object(source.defaults, "task proof source defaults");
+  if (!Array.isArray(source.proofGroups))
+    blocked("task proof source proofGroups must be an array");
+  const sharedKeys = [
+    "required",
+    "completionRefs",
+    "claimIds",
+    "artifactRefs",
+    "reviewerRequirement",
+    "ownerRequirement",
+  ];
+  assertOnlyKeys(defaults, sharedKeys, "task proof source defaults");
+  const taskIds = new Set(tasks.map((task) => task.taskId));
+  const byId = new Map();
+  for (const [index, rawGroup] of source.proofGroups.entries()) {
+    const group = object(rawGroup, `task proof source proofGroups[${index}]`);
+    assertOnlyKeys(
+      group,
+      ["taskIds", ...sharedKeys],
+      `task proof source proofGroups[${index}]`,
+    );
+    nonEmptyStringArray(
+      group.taskIds,
+      `task proof source proofGroups[${index}].taskIds`,
+    );
+    for (const taskId of group.taskIds) {
+      if (!taskIds.has(taskId))
+        blocked(`unknown task proof group task: ${taskId}`);
+      if (byId.has(taskId))
+        blocked(`duplicate task proof group coverage: ${taskId}`);
+      const { taskIds: ignoredTaskIds, ...metadata } = group;
+      void ignoredTaskIds;
+      byId.set(taskId, { ...defaults, ...metadata });
+    }
+  }
+  if (byId.size !== tasks.length)
+    blocked("task proof groups must exactly match tasks.md");
+  return byId;
+}
+
+export async function generateTaskProof({
+  tasksPath,
+  proofSourcePath,
+  outputPath,
+}) {
+  if (
+    ![tasksPath, proofSourcePath, outputPath].every(
+      (value) => typeof value === "string" && path.isAbsolute(value),
+    )
+  )
+    invalid("task-proof mode requires absolute paths");
+  const tasksBytes = await fsp.readFile(tasksPath);
+  const tasks = parseTasksMarkdown(tasksBytes.toString("utf8"));
+  const source = object(
+    await readJson(proofSourcePath, "task proof source"),
+    "task proof source",
+  );
+  let byId;
+  if (source.schemaVersion === 1 && Array.isArray(source.records)) {
+    byId = new Map();
+    for (const record of source.records) {
+      object(record, "task proof record");
+      if (byId.has(record.taskId))
+        blocked(`duplicate task proof record: ${record.taskId}`);
+      byId.set(record.taskId, record);
+    }
+  } else if (source.schemaVersion === 2) {
+    byId = expandProofSourceV2(source, tasks);
+  } else {
+    blocked("task proof source schema is invalid");
+  }
+  if (
+    byId.size !== tasks.length ||
+    tasks.some((task) => !byId.has(task.taskId))
+  )
+    blocked("task proof records must exactly match tasks.md");
+  const records = [];
+  for (const task of tasks) {
+    const proof = byId.get(task.taskId);
+    if (
+      source.schemaVersion === 1 &&
+      proof.checkboxState !== task.checkboxState
+    )
+      blocked(`task proof checkbox mismatch: ${task.taskId}`);
+    await validateProofMetadata(proof, task.taskId);
+    records.push({
+      taskId: task.taskId,
+      required: proof.required,
+      checkboxState: task.checkboxState,
+      completionRefs: proof.completionRefs,
+      claimIds: proof.claimIds,
+      artifactRefs: proof.artifactRefs,
+      reviewerRequirement: proof.reviewerRequirement,
+      ownerRequirement: proof.ownerRequirement,
+    });
+  }
+  const output = {
+    schemaVersion: 1,
+    tasksFileSha256: sha256(tasksBytes),
+    records: records.sort((left, right) =>
+      left.taskId.localeCompare(right.taskId),
+    ),
+  };
+  await assertAbsent(outputPath, "task proof output");
+  await writeJsonExclusive(outputPath, output);
+  return output;
+}
+
+function taskLineTransition(markdown, taskId) {
+  const pattern = new RegExp(
+    `^- \\[ \\] (${taskId.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")})(?=\\s|$)`,
+    "mu",
+  );
+  if (!pattern.test(markdown))
+    blocked(`closure self task ${taskId} is not the one unchecked task`);
+  return markdown.replace(pattern, `- [x] $1`);
+}
+
+async function validateFinalReviewAndOwner(records) {
+  const reviewerPaths = records
+    .flatMap((record) => record.artifactRefs.map((artifact) => artifact.path))
+    .filter((filePath) => filePath.endsWith("reviewer-report.json"));
+  const ownerPaths = records
+    .flatMap((record) => record.artifactRefs.map((artifact) => artifact.path))
+    .filter((filePath) => filePath.endsWith("product-owner-decision.json"));
+  const finalReviews = [];
+  for (const reviewerPath of reviewerPaths) {
+    const review = await readJson(reviewerPath, "reviewer report");
+    if (
+      FINAL_GATES.includes(review.gateId) &&
+      review.verdict === "PASS" &&
+      review.independenceConfirmed === true &&
+      !review.findings?.some((finding) =>
+        ["HIGH", "CRITICAL"].includes(finding.severity),
+      )
+    ) {
+      finalReviews.push(review.gateId);
+    }
+  }
+  if (
+    JSON.stringify([...new Set(finalReviews)].sort()) !==
+    JSON.stringify([...FINAL_GATES].sort())
+  )
+    failed("closure requires six independent final reviewer PASS reports");
+  let ownerApproved = false;
+  for (const ownerPath of ownerPaths) {
+    const owner = await readJson(ownerPath, "product owner decision");
+    if (owner.gateId === "FINAL-003" && owner.status === "APPROVED")
+      ownerApproved = true;
+  }
+  if (!ownerApproved)
+    failed("closure requires explicit FINAL-003 product-owner APPROVED");
+}
+
+export async function aggregateClosure({
+  technicalReportPath,
+  taskProofMapPath,
+  tasksPath,
+  selfTask,
+  outputDir,
+}) {
+  if (
+    ![technicalReportPath, taskProofMapPath, tasksPath, outputDir].every(
+      (value) => typeof value === "string" && path.isAbsolute(value),
+    ) ||
+    typeof selfTask !== "string"
+  )
+    invalid("closure mode requires absolute paths and --self-task");
+  await assertAbsent(outputDir, "closure output directory");
+  const technical = await readJson(technicalReportPath, "technical report");
+  if (technical.result !== "PASS" || technical.staleEvidence?.length !== 0)
+    blocked("technical aggregate is not a clean PASS");
+  const taskProof = await readJson(taskProofMapPath, "task proof map");
+  const tasksBytes = await fsp.readFile(tasksPath);
+  const tasksText = tasksBytes.toString("utf8");
+  if (taskProof.tasksFileSha256 !== sha256(tasksBytes))
+    blocked("task proof map is stale for tasks.md");
+  for (const record of taskProof.records) {
+    for (const [index, artifact] of record.artifactRefs.entries()) {
+      await validateProofArtifact(
+        artifact,
+        `${record.taskId}.artifactRefs[${index}]`,
+      );
+    }
+  }
+  const unsupportedCheckedTasks = taskProof.records
+    .filter(
+      (record) =>
+        record.checkboxState === "checked" &&
+        (record.completionRefs.length === 0 ||
+          record.claimIds.length === 0 ||
+          record.artifactRefs.length === 0),
+    )
+    .map((record) => record.taskId);
+  const uncheckedRequiredTasks = taskProof.records
+    .filter(
+      (record) =>
+        record.required &&
+        record.checkboxState === "unchecked" &&
+        record.taskId !== selfTask,
+    )
+    .map((record) => record.taskId);
+  const self = taskProof.records.find((record) => record.taskId === selfTask);
+  if (!self || self.checkboxState !== "unchecked")
+    blocked("closure self task must exist and be unchecked");
+  if (unsupportedCheckedTasks.length > 0 || uncheckedRequiredTasks.length > 0)
+    failed("task proof map does not support closure");
+  await validateFinalReviewAndOwner(taskProof.records);
+  const transitioned = taskLineTransition(tasksText, selfTask);
+  const report = {
+    schemaVersion: 1,
+    mode: "closure",
+    technicalAggregateDigest: await sha256File(technicalReportPath),
+    taskProofMapSha256: await sha256File(taskProofMapPath),
+    tasksFileSha256Before: sha256(tasksBytes),
+    selfTaskId: selfTask,
+    tasksFileSha256AfterExpected: sha256(transitioned),
+    unsupportedCheckedTasks,
+    uncheckedRequiredTasks,
+    staleEvidence: [],
+    result: "PASS",
+    state: "READY_TO_CLOSE",
+  };
+  await fsp.mkdir(outputDir);
+  await writeJsonExclusive(path.join(outputDir, "task-audit.json"), {
+    unsupportedCheckedTasks,
+    uncheckedRequiredTasks,
+  });
+  await writeMarkdownExclusive(
+    path.join(outputDir, "task-audit.md"),
+    "# Task audit\n\nAll required tasks except the declared self task are proven.\n",
+  );
+  await writeJsonExclusive(path.join(outputDir, "closure-report.json"), report);
+  await writeMarkdownExclusive(
+    path.join(outputDir, "closure-report.md"),
+    `# Closure report\n\n- Result: **PASS / READY_TO_CLOSE**\n- Self task: \`${selfTask}\`\n`,
+  );
+  return report;
+}
+
+export async function verifyClosure({
+  closureReportPath,
+  tasksPath,
+  outputPath,
+}) {
+  if (
+    ![closureReportPath, tasksPath, outputPath].every(
+      (value) => typeof value === "string" && path.isAbsolute(value),
+    )
+  )
+    invalid("closure-verify mode requires absolute paths");
+  const closure = await readJson(closureReportPath, "closure report");
+  if (closure.result !== "PASS" || closure.state !== "READY_TO_CLOSE")
+    blocked("closure report is not ready to verify");
+  const observedTasksFileSha256 = await sha256File(tasksPath);
+  const result =
+    observedTasksFileSha256 === closure.tasksFileSha256AfterExpected
+      ? "PASS"
+      : "FAIL";
+  const verification = {
+    schemaVersion: 1,
+    closureReportSha256: await sha256File(closureReportPath),
+    selfTaskId: closure.selfTaskId,
+    observedTasksFileSha256,
+    expectedTasksFileSha256: closure.tasksFileSha256AfterExpected,
+    onlyPermittedSelfTransition: result === "PASS",
+    result,
+  };
+  await assertAbsent(outputPath, "closure verification output");
+  await writeJsonExclusive(outputPath, verification);
+  if (result !== "PASS")
+    failed("tasks.md does not match the permitted self transition");
+  return verification;
+}
+
+function usage() {
+  console.log(
+    "Usage: pnpm evidence:aggregate -- --mode delta|technical|task-proof|closure|closure-verify <mode options>\nModes:\n  delta --product-root PATH --checkpoint-map JSON --final-commit SHA --ownership-map JSON --output JSON\n    checkpoint map schema v1: absolute sourceReportPath plus sourceCollectionDigest, fromCommit, and claimId per checkpoint\n  technical --input JSON --output-dir NEW_DIR\n    requires exactly seven browser claim collections plus six final screens and rejects reviewer/owner inputs\n  task-proof --tasks TASKS --proof-source JSON --output JSON\n    proof source schema v2 is preferred: defaults plus proofGroups; checkbox state is derived from tasks.md\n  closure --technical-report JSON --task-proof-map JSON --tasks TASKS --self-task ID --output-dir NEW_DIR\n  closure-verify --closure-report JSON --tasks TASKS --output JSON\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. All modes are read-only for source evidence and tasks.md.",
+  );
+}
+
+function option(args, name) {
+  const index = args.indexOf(name);
+  return index === -1 ? undefined : args[index + 1];
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  if (args.includes("--help") || args.includes("help")) return usage();
+  const mode = option(args, "--mode");
+  try {
+    if (mode === "delta") {
+      await aggregateDelta({
+        productRoot: option(args, "--product-root"),
+        checkpointMapPath: option(args, "--checkpoint-map"),
+        finalCommit: option(args, "--final-commit"),
+        ownershipMapPath: option(args, "--ownership-map"),
+        outputPath: option(args, "--output"),
+      });
+    } else if (mode === "technical") {
+      await aggregateTechnical({
+        inputPath: option(args, "--input"),
+        outputDir: option(args, "--output-dir"),
+      });
+    } else if (mode === "task-proof") {
+      await generateTaskProof({
+        tasksPath: option(args, "--tasks"),
+        proofSourcePath: option(args, "--proof-source"),
+        outputPath: option(args, "--output"),
+      });
+    } else if (mode === "closure") {
+      await aggregateClosure({
+        technicalReportPath: option(args, "--technical-report"),
+        taskProofMapPath: option(args, "--task-proof-map"),
+        tasksPath: option(args, "--tasks"),
+        selfTask: option(args, "--self-task"),
+        outputDir: option(args, "--output-dir"),
+      });
+    } else if (mode === "closure-verify") {
+      await verifyClosure({
+        closureReportPath: option(args, "--closure-report"),
+        tasksPath: option(args, "--tasks"),
+        outputPath: option(args, "--output"),
+      });
+    } else {
+      invalid("--mode is required");
+    }
+    console.log(JSON.stringify({ mode, result: "PASS" }));
+  } catch (error) {
+    console.error(String(error.message ?? error));
+    process.exitCode =
+      error instanceof EvidenceAggregateError ? error.exitCode : 2;
+  }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === SCRIPT_PATH)
+  await main();

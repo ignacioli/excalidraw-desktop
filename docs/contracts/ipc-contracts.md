@@ -86,9 +86,12 @@ interface RecoveryCandidate {
 
 | 命令 | 请求 | 响应 | 说明 |
 |------|------|------|------|
-| `workspace_add` | `{ rootPath: string; name?: string }` | `Workspace` | 挂载并触发后台索引 |
-| `workspace_remove` | `{ workspaceId: string }` | `{}` | 仅取消挂载，不删文件 |
-| `workspace_list` | `{}` | `Workspace[]` | |
+| `workspace_add` | `{ rootPath: string; name?: string }` | `Workspace` | 挂载并触发后台索引；匹配未挂载的 canonical root 时复用原记录 |
+| `workspace_remove` | `{ workspaceId: string }` | `{}` | 取消挂载并保留 Recent；不删文件 |
+| `workspace_list` | `{}` | `Workspace[]` | 仅返回已挂载的授权记录 |
+| `workspace_recent_list` | `{}` | `Workspace[]` | 返回全部保留记录；不探测 root 可访问性 |
+| `workspace_remount` | `{ workspaceId: string }` | `Workspace` | 激活时重新校验 root/overlap 并挂载同一记录 |
+| `workspace_recent_remove` | `{ workspaceId: string }` | `{}` | 仅删除未挂载记录的应用历史；不访问或修改磁盘 |
 
 ```typescript
 interface Workspace {
@@ -186,6 +189,12 @@ interface ExportOptions {
 }
 type SceneData = unknown; // 官方 .excalidraw JSON；后端只做结构校验
 ```
+
+### 1.5 原生视觉验收边界
+
+原生视觉 capture 不属于 production IPC contract。`native:screen:prepare` 生成 schema v2 的 immutable plan 和安全 fixture；`native:screen:capture` 在 collector 侧验证 isolation、owned PID/window、1280×760 bounds、backing scale、一次性 terminal confirmation、单次 capture、normalization 与 artifact digests。它不得通过 React、Rust command、隐藏 state channel 或 production diagnostic projection 读取或写入 app-owned UI state。
+
+React/WebView 的 session、theme、Sidebar、workspace、selection、expanded rows、fonts、tokens、geometry 与 interaction facts 由 semantic browser evidence 证明；native collector 只记录 package/isolation/window/capture integrity。`CAPTURE <gate-id> <challenge>` 只控制 capture 时机，不构成交互或 UI 状态证据。详见 `contracts/native-screen-capture-contract.md` 与 `docs/quickstart.md`。
 
 ## 2. 事件契约（后端 → 前端）
 

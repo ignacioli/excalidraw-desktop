@@ -8,6 +8,7 @@ import {
   type ExpectedOpenDocument,
   type IpcCommands,
   type IpcEvents,
+  type NativeMenuCommandEvent,
   type PathMigration,
   type WorkspaceEntriesChangedEvent,
   type WorkspaceEntry,
@@ -108,6 +109,24 @@ describe("IPC v2 migration contract", () => {
     >().toEqualTypeOf<never>();
   });
 
+  it("types the retained Recent Workspace lifecycle commands", () => {
+    expectTypeOf<CommandRequest<"workspace_recent_list">>().toEqualTypeOf<
+      Record<string, never>
+    >();
+    expectTypeOf<CommandResponse<"workspace_recent_list">>().toEqualTypeOf<
+      import("./contracts").Workspace[]
+    >();
+    expectTypeOf<CommandRequest<"workspace_remount">>().toEqualTypeOf<{
+      workspaceId: string;
+    }>();
+    expectTypeOf<CommandResponse<"workspace_remount">>().toEqualTypeOf<
+      import("./contracts").Workspace
+    >();
+    expectTypeOf<CommandRequest<"workspace_recent_remove">>().toEqualTypeOf<{
+      workspaceId: string;
+    }>();
+  });
+
   it("defines the Workspace Entry event shape and operation echo", () => {
     expectTypeOf<WorkspaceEntriesChangedEvent>().toEqualTypeOf<{
       workspaceId: string;
@@ -119,5 +138,20 @@ describe("IPC v2 migration contract", () => {
     expectTypeOf<
       IpcEvents["workspace-entries-changed"]
     >().toEqualTypeOf<WorkspaceEntriesChangedEvent>();
+  });
+
+  it("defines the narrow native menu event payload", () => {
+    expectTypeOf<NativeMenuCommandEvent>().toEqualTypeOf<{
+      command:
+        | "save"
+        | "exportImage"
+        | "appearanceSystem"
+        | "appearanceLight"
+        | "appearanceDark";
+      validationId?: number;
+    }>();
+    expectTypeOf<
+      IpcEvents["native-menu-command"]
+    >().toEqualTypeOf<NativeMenuCommandEvent>();
   });
 });

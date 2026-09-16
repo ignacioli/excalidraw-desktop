@@ -52,7 +52,7 @@ describe("WorkspaceTree", () => {
     expect(container.querySelectorAll('[role="treeitem"]').length).toBeLessThan(
       100,
     );
-    expect(container.querySelectorAll("img")).toHaveLength(0);
+    expect(container.querySelectorAll('img[src*="thumb"]').length).toBe(0);
     expect(
       container.querySelectorAll('[data-slot="workspace-tree-icon"]').length,
     ).toBeGreaterThan(0);
@@ -134,8 +134,8 @@ describe("WorkspaceTree", () => {
     const notes = screen.getByRole("treeitem", { name: "Notes" });
     expect(notes).toHaveAttribute("aria-expanded", "false");
     expect(
-      notes.querySelector('[data-slot="workspace-tree-icon"]'),
-    ).toHaveTextContent("▸");
+      notes.querySelector('[data-slot="workspace-tree-icon"] img'),
+    ).not.toBeNull();
     fireEvent.click(notes);
     expect(onToggleDirectory).toHaveBeenCalledWith(
       expect.objectContaining({ relativePath: "notes" }),
@@ -146,6 +146,49 @@ describe("WorkspaceTree", () => {
     ).not.toBeInTheDocument();
     expect(makeWorkspaceRowKey(workspace.id)).toContain("workspace");
     expect(makeEntryRowKey(workspace.id, "notes")).toContain("entry");
+  });
+
+  it("covers Directory expanded and Drawing selected row variants with non-color cues", () => {
+    const notes = entry("notes", "directory", "Notes");
+    const child = entry("notes/child.excalidraw", "drawing", "Child", "notes");
+    render(
+      <WorkspaceTree
+        workspaces={[workspace]}
+        entriesByWorkspace={{
+          [workspace.id]: { "": [notes], notes: [child] },
+        }}
+        expandedWorkspaceIds={new Set([workspace.id])}
+        expandedDirectoryKeys={
+          new Set([makeEntryRowKey(workspace.id, notes.relativePath)])
+        }
+        activeDrawing={{
+          workspaceId: workspace.id,
+          relativePath: child.relativePath,
+        }}
+      />,
+    );
+
+    const directoryRow = screen.getByRole("treeitem", { name: "Notes" });
+    const drawingRow = screen.getByRole("treeitem", { name: "Child" });
+    expect(directoryRow).toHaveAttribute("data-kind", "directory");
+    expect(directoryRow).toHaveAttribute("aria-expanded", "true");
+    expect(
+      directoryRow.querySelector('[data-slot="workspace-tree-icon"] img'),
+    ).toBeInTheDocument();
+    expect(drawingRow).toHaveAttribute("data-kind", "drawing");
+    expect(drawingRow).toHaveAttribute("aria-selected", "true");
+    expect(drawingRow).toHaveClass("is-active");
+    expect(
+      drawingRow.querySelector(".workspace-tree-active-indicator"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Actions for Child" }),
+    ).toHaveAttribute("title", "Actions for Child");
+
+    fireEvent.pointerEnter(drawingRow);
+    expect(drawingRow).toHaveAttribute("data-pointer-focus", "true");
+    fireEvent.pointerLeave(drawingRow);
+    expect(drawingRow).toHaveAttribute("data-pointer-focus", "false");
   });
 
   it("keeps a collapsed Workspace collapsed when the list refreshes", async () => {

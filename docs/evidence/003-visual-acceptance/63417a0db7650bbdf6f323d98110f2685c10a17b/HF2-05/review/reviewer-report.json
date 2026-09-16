@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "gateId": "HF2-05",
+  "reviewerIdentity": {
+    "role": "ui-visual-acceptance-reviewer",
+    "taskIdentity": "/root/hf205_visual_review",
+    "runtimeIdentity": "/root/hf205_visual_review"
+  },
+  "runtimeConfig": {
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "high"
+  },
+  "independenceConfirmed": true,
+  "independenceStatement": "This reviewer did not author or modify the reviewed production UI or immutable browser collection. The reviewer wrote only the assigned reviewer-report.json and reviewer-report.md and did not touch production UI, collection inputs, frozen design artifacts, specifications, task checkboxes, owner artifacts, Git staging, or commits.",
+  "implementationTaskIdentity": [
+    "/root",
+    "commit:63417a0db7650bbdf6f323d98110f2685c10a17b"
+  ],
+  "reviewedProductCommit": "63417a0db7650bbdf6f323d98110f2685c10a17b",
+  "buildIdentity": {
+    "bundleOrBuildName": "browser-ui",
+    "bundleIdentifier": null,
+    "os": "darwin",
+    "architecture": "arm64",
+    "displayScale": 1,
+    "displayScaleBasis": "The 1280x760 PNG equals the recorded 1280x760 CSS viewport; this is the browser capture scale and is not a claim about a physical macOS display.",
+    "viewport": {
+      "width": 1280,
+      "height": 760,
+      "unit": "CSS px"
+    },
+    "windowSize": null,
+    "theme": "dark",
+    "fixture": "welcome",
+    "fontReady": true,
+    "remoteFontRequests": 0,
+    "route": "semantic-browser"
+  },
+  "reviewedHf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+  "reviewedBaseline": {
+    "manifestName": "05 · Welcome · Dark",
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/design/desktop-shell/hf-2/screens/welcome-dark.png",
+    "sha256": "6801579936067a6905ff7cd0896d6604861b176e5b9d7e56d141cc64434fd567"
+  },
+  "reviewedCollectorReport": {
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/63417a0db7650bbdf6f323d98110f2685c10a17b/HF2-05/collection/HF2-05-dark-hidden-browser/collector-report.json",
+    "sha256": "381cb17e6443724b637102d2180d9286a6549bd2f621ffdf0e8b1bd65707c9c6",
+    "collectionId": "HF2-05-dark-hidden-browser",
+    "collectionDigest": "69ff5321687f9af735e7c6caad347389fdcee20b31c6ed84c35d9f911a7e0893",
+    "result": "PASS"
+  },
+  "reviewedCollections": [
+    {
+      "collectionId": "HF2-05-dark-hidden-browser",
+      "collectionDigest": "69ff5321687f9af735e7c6caad347389fdcee20b31c6ed84c35d9f911a7e0893",
+      "collectorReportSha256": "381cb17e6443724b637102d2180d9286a6549bd2f621ffdf0e8b1bd65707c9c6",
+      "role": "semantic browser authority and fixed browser screenshot"
+    }
+  ],
+  "reviewedActualSha256": "cb49e0eac4a039bbe1dcc2a908b009cbefe05efe9a8e881ff7db78d7fdf2e237",
+  "maskSha256": "33b625f1b9bd0ea12f9be264d4e1c81a4ee968ab81c855949f7e91d5fdaf1697",
+  "screenMatrix": [
+    {
+      "screen": "05 · Welcome · Dark",
+      "status": "PASS",
+      "evidence": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/63417a0db7650bbdf6f323d98110f2685c10a17b/HF2-05/collection/HF2-05-dark-hidden-browser/actual.png",
+      "mismatchCount": 0
+    }
+  ],
+  "visualChecks": [
+    {
+      "check": "Dark Welcome foreground and action emphasis",
+      "result": "PASS",
+      "expected": "The Welcome hero remains legible on the approved Dark surfaces, with New Drawing primary and Open Workspace secondary emphasis.",
+      "actual": "The hero, supporting copy, primary action, secondary action, and Recent content remain clearly legible and preserve the approved emphasis hierarchy."
+    },
+    {
+      "check": "Approved Recent semantic deviation",
+      "result": "PASS",
+      "expected": "Recent rows show only name and rootPath; drawing-count and last-opened metadata from the screenshot are omitted.",
+      "actual": "Only name and rootPath are visible. The approved HF2-RECENT-COUNT-TIME omission is not treated as a mismatch."
+    },
+    {
+      "check": "Dark surface hierarchy",
+      "result": "PASS",
+      "expected": "Top shell, Welcome body, action surfaces, Recent rows, and quiet footer remain visually distinct without adding legacy chrome.",
+      "actual": "The fixed actual capture preserves the restrained Dark hierarchy and does not show a visible compositional regression."
+    }
+  ],
+  "compositionChecks": [
+    {
+      "check": "Compact Sidebar and Back controls remain at the far-left top shell layer",
+      "result": "PASS"
+    },
+    {
+      "check": "Welcome hero, two actions, Recent section, and non-persistent-state note are all present",
+      "result": "PASS"
+    },
+    {
+      "check": "Primary and secondary action emphasis is visually distinct and faithful",
+      "result": "PASS"
+    },
+    {
+      "check": "Recent section grouping and three-row stack preserve the frozen screen composition",
+      "result": "PASS"
+    },
+    {
+      "check": "The full Welcome shell is visible and no shell region is hidden by an SDK mask",
+      "result": "PASS"
+    }
+  ],
+  "legacyRemoval": [
+    {"control": "separate global top-level New Drawing", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "textual Workspace sidebar control", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "large textual Pin or Unpin control", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "legacy top-level Save", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "persistent normal-state All changes saved strip", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "standalone top-level Export", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "legacy top-level Appearance", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "visible native-looking tab-strip scrollbar", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "thick or always-visible Sidebar scrollbar", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "Unicode placeholder tree or file icons", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "always-visible horizontal ellipsis", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "duplicate workspace navigation state", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "clipped or overflowed workspace-header actions", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "old 002 shell composition", "observedCount": 0, "evidenceSource": "collector assertions"}
+  ],
+  "masks": [],
+  "maskRationale": "The immutable mask declaration contains no masks. HF2-05 Welcome exposes no SDK-owned editor, Library, or Presentation interior that requires masking, so the full shell capture was reviewed.",
+  "tolerances": {
+    "structureHierarchyAndPerimeter": "0 tolerance",
+    "browserGeometryTolerance": "±2 CSS px; owned by the bound collector and not re-proved from the screenshot",
+    "rasterOnlyTolerance": {
+      "scope": "collector-owned auxiliary welcome-screen component crop only",
+      "maxDiffPixelRatio": 0.01,
+      "observedDiffPixelRatio": 0,
+      "fontReady": true
+    },
+    "wholeScreenRasterToleranceUsedByReviewer": false,
+    "toleranceOrMaskChangeMadeByReviewer": false
+  },
+  "findings": [
+    {
+      "severity": "INFO",
+      "screenState": "05 · Welcome · Dark / overall composition",
+      "expected": "The frozen Welcome Dark hierarchy remains intact: compact shell controls, hero, primary and secondary actions, Recent section, three rows, and quiet footer.",
+      "actual": "The fixed actual capture preserves the hierarchy and grouping with no visible High or Critical mismatch.",
+      "reproduction": "Open the immutable actual.png at 1280x760 and compare it to the manifest-verified welcome-dark.png baseline, one image at a time.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/63417a0db7650bbdf6f323d98110f2685c10a17b/HF2-05/collection/HF2-05-dark-hidden-browser/actual.png"
+    },
+    {
+      "severity": "INFO",
+      "screenState": "05 · Welcome · Dark / Dark visual hierarchy",
+      "expected": "Primary text, secondary text, action emphasis, row surfaces, and footer remain readable and visually ordered on the approved Dark palette.",
+      "actual": "The hierarchy is visually clear; New Drawing remains primary, Open Workspace remains secondary, and Recent rows remain distinct from the page background.",
+      "reproduction": "Inspect the fixed actual.png at native 1280x760 output size after confirming the collection theme is dark and fonts are ready.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/63417a0db7650bbdf6f323d98110f2685c10a17b/HF2-05/collection/HF2-05-dark-hidden-browser/actual.png"
+    },
+    {
+      "severity": "INFO",
+      "screenState": "05 · Welcome · Dark / Recent fields",
+      "expected": "Per approved deviation HF2-RECENT-COUNT-TIME, rows omit baseline drawing-count and last-opened metadata and show only name and rootPath.",
+      "actual": "Each Recent row shows only its workspace name and deterministic rootPath; the approved omission is accepted and is not masked.",
+      "reproduction": "Inspect the three Recent rows in the fixed actual.png and compare their visible field set to the approved deviation contract.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/63417a0db7650bbdf6f323d98110f2685c10a17b/HF2-05/collection/HF2-05-dark-hidden-browser/actual.png"
+    }
+  ],
+  "residualLowMediumFindings": [],
+  "criticalCount": 0,
+  "highCount": 0,
+  "highCriticalCount": 0,
+  "unverified": [
+    "A native macOS package, bundle identifier, native window, physical display scale, native menus, and system dialogs were not reviewed; they are intentionally outside this intermediate browser-only checkpoint.",
+    "The recorded capture scale is derived from matching PNG and CSS viewport dimensions and does not establish the physical macOS display scale.",
+    "Behavior, persistence, keyboard operation, accessible names, focus-visible, reduced motion, loading, disabled, error, five-row overflow, Light/Dark geometry parity, token values, fonts, masks, and legacy counts were not re-proved from pixels; the immutable semantic collector owns those facts.",
+    "HF2-01 and the other four HF-2 screens were not reviewed by this single-screen checkpoint.",
+    "No product-owner decision was created or inferred because ownerRequirement is NOT_REQUIRED for HF2-05."
+  ],
+  "verdict": "PASS",
+  "ownerRequirement": "NOT_REQUIRED",
+  "ownerArtifactCreated": false,
+  "nextGate": "Proceed to T043 US2 Welcome regression evidence and then stop at the Phase 5 checkpoint; do not create an intermediate product-owner artifact or enter Phase 6."
+}

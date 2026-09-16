@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 2,
+  "task": "T008",
+  "generatedAt": "2026-09-08T08:51:55.523Z",
+  "result": "PASS",
+  "authority": {
+    "handoffReadme": "docs/design/desktop-shell/hf-2/README.md",
+    "manifestPath": "docs/design/desktop-shell/hf-2/manifest.json",
+    "manifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "status": "approved",
+    "approvedAt": "2026-09-06",
+    "penpotFileId": "40e06342-8830-80d6-8008-98d2d723d49b",
+    "penpotRevision": 59,
+    "designBaselineCommit": "404175840e9096effb4a286dc75ba053c31400b0"
+  },
+  "expectedScreenDimensions": {
+    "width": 1280,
+    "height": 760
+  },
+  "results": [
+    {
+      "name": "01 · Welcome · Light",
+      "boardId": "18570eb3-fcf2-80e5-8008-923710fb918c",
+      "path": "docs/design/desktop-shell/hf-2/screens/welcome-light.png",
+      "expected": {
+        "width": 1280,
+        "height": 760,
+        "bitDepth": 8,
+        "colorModel": "RGBA",
+        "interlaceMethod": 0,
+        "sha256": "301e553d0ce94659233eb4683eb6bc018c26757397ecccf42bb162d6e7463cfa"
+      },
+      "actual": {
+        "width": 1280,
+        "height": 760,
+        "bitDepth": 8,
+        "colorType": 6,
+        "colorModel": "RGBA",
+        "interlaceMethod": 0,
+        "sha256": "301e553d0ce94659233eb4683eb6bc018c26757397ecccf42bb162d6e7463cfa"
+      },
+      "checks": {
+        "width": true,
+        "height": true,
+        "bitDepth": true,
+        "rgba": true,
+        "nonInterlaced": true,
+        "sha256": true
+      },
+      "result": "PASS"
+    },
+    {
+      "name": "02 · Restored · Hidden · Light",
+      "boardId": "18570eb3-fcf2-80e5-8008-92371bddb989",
+      "path": "docs/design/desktop-shell/hf-2/screens/restored-hidden-light.png",
+      "expected": {
+        "width": 1280,
+        "height": 760,
+        "bitDepth": 8,
+        "colorModel": "RGBA",
+        "interlaceMethod": 0,
+        "sha256": "0a8bc3c5ad8052a53225a98f2820b34c1969a936d2fe940b77593d4c135f3a79"
+      },
+      "actual": {
+        "width": 1280,
+        "height": 760,
+        "bitDepth": 8,
+        "colorType": 6,
+        "colorModel": "RGBA",
+        "interlaceMethod": 0,
+        "sha256": "0a8bc3c5ad8052a53225a98f2820b34c1969a936d2fe940b77593d4c135f3a79"
+      },
+      "checks": {
+        "width": true,
+        "height": true,
+        "bitDepth": true,
+        "rgba": true,
+        "nonInterlaced": true,
+        "sha256": true
+      },
+      "result": "PASS"
+    },
+    {
+      "name": "03 · Workspace · Pinned · Light",
+      "boardId": "18570eb3-fcf2-80e5-8008-923725e10c90",
+      "path": "docs/design/desktop-shell/hf-2/screens/workspace-pinned-light.png",
+      "expected": {
+        "width": 1280,
+        "height": 760,
+        "bitDepth": 8,
+        "colorModel": "RGBA",
+        "interlaceMethod": 0,
+        "sha256": "5bfbd5dba0363271192309594304a2291166a65bf91df5c2effb5550e961829a"
+      },
+      "actual": {
+        "width": 1280,
+        "height": 760,
+        "bitDepth": 8,
+        "colorType": 6,
+        "colorModel": "RGBA",
+        "interlaceMethod": 0,
+        "sha256": "5bfbd5dba0363271192309594304a2291166a65bf91df5c2effb5550e961829a"
+      },
+      "checks": {
+        "width": true,
+        "height": true,
+        "bitDepth": true,
+        "rgba": true,
+        "nonInterlaced": true,
+        "sha256": true
+      },
+      "result": "PASS"
+    },
+    {
+      "name": "04 · Workspace · Overlay · Light",
+      "boardId": "18570eb3-fcf2-80e5-8008-92372fb4b2ef",
+      "path": "docs/design/desktop-shell/hf-2/screens/workspace-overlay-light.png",
+      "expected": {
+        "width": 1280,
+        "height": 760,
+        "bitDepth": 8,
+        "colorModel": "RGBA",
+        "interlaceMethod": 0,
+        "sha256": "ab2c2baf8b7b32e8d78095f29165eb369663389a62aa13e5a672a47d3511a059"
+      },
+      "actual": {
+        "width": 1280,
+        "height": 760,
+        "bitDepth": 8,
+        "colorType": 6,
+        "colorModel": "RGBA",
+        "interlaceMethod": 0,
+        "sha256": "ab2c2baf8b7b32e8d78095f29165eb369663389a62aa13e5a672a47d3511a059"
+      },
+      "checks": {
+        "width": true,
+        "height": true,
+        "bitDepth": true,
+        "rgba": true,
+        "nonInterlaced": true,
+        "sha256": true
+      },
+      "result": "PASS"
+    },
+    {
+      "name": "05 · Welcome · Dark",
+      "boardId": "18570eb3-fcf2-80e5-8008-92373ab1703d",
+      "path": "docs/design/desktop-shell/hf-2/screens/welcome-dark.png",
+      "expected": {
+        "width": 1280,
+        "height": 760,
+        "bitDepth": 8,
+        "colorModel": "RGBA",
+        "interlaceMethod": 0,
+        "sha256": "6801579936067a6905ff7cd0896d6604861b176e5b9d7e56d141cc64434fd567"
+      },
+      "actual": {
+        "width": 1280,
+        "height": 760,
+        "bitDepth": 8,
+        "colorType": 6,
+        "colorModel": "RGBA",
+        "interlaceMethod": 0,
+        "sha256": "6801579936067a6905ff7cd0896d6604861b176e5b9d7e56d141cc64434fd567"
+      },
+      "checks": {
+        "width": true,
+        "height": true,
+        "bitDepth": true,
+        "rgba": true,
+        "nonInterlaced": true,
+        "sha256": true
+      },
+      "result": "PASS"
+    },
+    {
+      "name": "06 · Workspace · Pinned · Dark",
+      "boardId": "18570eb3-fcf2-80e5-8008-9237954802b8",
+      "path": "docs/design/desktop-shell/hf-2/screens/workspace-pinned-dark.png",
+      "expected": {
+        "width": 1280,
+        "height": 760,
+        "bitDepth": 8,
+        "colorModel": "RGBA",
+        "interlaceMethod": 0,
+        "sha256": "8b06a988270d4a6d8f7ce00fa32fb422c8bf3dea3c6e8346390b2b77ea9b34d0"
+      },
+      "actual": {
+        "width": 1280,
+        "height": 760,
+        "bitDepth": 8,
+        "colorType": 6,
+        "colorModel": "RGBA",
+        "interlaceMethod": 0,
+        "sha256": "8b06a988270d4a6d8f7ce00fa32fb422c8bf3dea3c6e8346390b2b77ea9b34d0"
+      },
+      "checks": {
+        "width": true,
+        "height": true,
+        "bitDepth": true,
+        "rgba": true,
+        "nonInterlaced": true,
+        "sha256": true
+      },
+      "result": "PASS"
+    }
+  ],
+  "summary": {
+    "screenCount": 6,
+    "passCount": 6,
+    "failCount": 0,
+    "result": "PASS"
+  }
+}

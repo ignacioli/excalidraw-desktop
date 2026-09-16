@@ -13,10 +13,17 @@ import {
   type WorkspaceTreeEntriesByWorkspace,
   type WorkspaceTreeRow,
 } from "./workspaceTreeModel";
+import drawingIcon from "../../docs/design/desktop-shell/hf-2/icons/new-drawing.svg";
+import directoryIcon from "../../docs/design/desktop-shell/hf-2/icons/new-folder.svg";
+import workspaceIcon from "../../docs/design/desktop-shell/hf-2/icons/sidebar.svg";
+import collapseIcon from "../../docs/design/desktop-shell/hf-2/icons/collapse-all.svg";
+import expandIcon from "../../docs/design/desktop-shell/hf-2/icons/expand-all.svg";
+import moreVerticalIcon from "../../docs/design/desktop-shell/hf-2/icons/more-vertical.svg";
 
 export interface WorkspaceTreeProps {
   workspaces: readonly Workspace[];
   entriesByWorkspace: WorkspaceTreeEntriesByWorkspace;
+  currentWorkspaceId?: string | null;
   expandedWorkspaceIds?: ReadonlySet<string>;
   expandedDirectoryKeys?: ReadonlySet<string>;
   activeDrawing?: ActiveDrawingReference | null;
@@ -24,6 +31,7 @@ export interface WorkspaceTreeProps {
   onToggleWorkspace?: (workspaceId: string, expanded: boolean) => void;
   onToggleDirectory?: (entry: WorkspaceEntry, expanded: boolean) => void;
   onOpenDrawing?: (entry: WorkspaceEntry) => void;
+  onSelectRow?: (row: WorkspaceTreeRow) => void;
   onRowAction?: (
     row: WorkspaceTreeRow,
     trigger: HTMLButtonElement,
@@ -39,13 +47,14 @@ export interface WorkspaceTreeProps {
   captureFocus?: boolean;
 }
 
-const DEFAULT_ROW_HEIGHT = 32;
+const DEFAULT_ROW_HEIGHT = 28;
 const DEFAULT_OVERSCAN = 8;
 const FALLBACK_VISIBLE_ROWS = 40;
 
 export function WorkspaceTree({
   workspaces,
   entriesByWorkspace,
+  currentWorkspaceId,
   expandedWorkspaceIds: controlledWorkspaceIds,
   expandedDirectoryKeys: controlledDirectoryKeys,
   activeDrawing = null,
@@ -53,6 +62,7 @@ export function WorkspaceTree({
   onToggleWorkspace,
   onToggleDirectory,
   onOpenDrawing,
+  onSelectRow,
   onRowAction,
   onScroll,
   focusRequestKey = null,
@@ -101,6 +111,7 @@ export function WorkspaceTree({
       buildWorkspaceTreeRows({
         workspaces,
         entriesByWorkspace,
+        currentWorkspaceId,
         expandedWorkspaceIds,
         expandedDirectoryKeys,
         activeDrawing,
@@ -112,6 +123,7 @@ export function WorkspaceTree({
       entriesByWorkspace,
       expandedDirectoryKeys,
       expandedWorkspaceIds,
+      currentWorkspaceId,
       workspaces,
     ],
   );
@@ -276,6 +288,7 @@ export function WorkspaceTree({
 
   const activateRow = (row: WorkspaceTreeRow): void => {
     setFocusedRowKey(row.key);
+    onSelectRow?.(row);
     if (row.kind === "workspace") {
       toggleWorkspace(row);
     } else if (row.kind === "directory") {
@@ -437,14 +450,14 @@ function WorkspaceTreeRowView({
   registerRef,
 }: WorkspaceTreeRowViewProps) {
   const isExpandable = row.kind === "workspace" || row.kind === "directory";
-  const icon =
+  const iconSrc =
     row.kind === "workspace"
-      ? "▣"
+      ? workspaceIcon
       : row.kind === "directory"
-        ? expanded
-          ? "▾"
-          : "▸"
-        : "▧";
+        ? directoryIcon
+        : drawingIcon;
+  const disclosureSrc = expanded ? collapseIcon : expandIcon;
+  const [pointerFocused, setPointerFocused] = useState(false);
 
   return (
     <div
@@ -457,10 +470,13 @@ function WorkspaceTreeRowView({
       aria-expanded={isExpandable ? expanded : undefined}
       aria-selected={row.isActive || undefined}
       className={`workspace-tree-row${row.isActive ? " is-active" : ""}`}
+      data-pointer-focus={pointerFocused ? "true" : "false"}
       data-row-key={row.key}
       data-kind={row.kind}
       tabIndex={focused ? 0 : -1}
       title={row.displayName}
+      onPointerEnter={() => setPointerFocused(true)}
+      onPointerLeave={() => setPointerFocused(false)}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         interactionStore.getState().dispatch({
@@ -524,12 +540,25 @@ function WorkspaceTreeRowView({
         className="workspace-tree-icon-slot"
         style={{
           display: "inline-flex",
-          flex: "0 0 1.25rem",
+          flex: "0 0 2.25rem",
           justifyContent: "center",
-          width: "1.25rem",
+          width: "2.25rem",
         }}
       >
-        {icon}
+        {isExpandable ? (
+          <img
+            alt=""
+            aria-hidden="true"
+            className="workspace-tree-disclosure-icon"
+            src={disclosureSrc}
+          />
+        ) : null}
+        <img
+          alt=""
+          aria-hidden="true"
+          className="workspace-tree-leading-icon"
+          src={iconSrc}
+        />
       </span>
       <span
         className="workspace-tree-label"
@@ -544,6 +573,14 @@ function WorkspaceTreeRowView({
       >
         {row.displayName}
       </span>
+      {row.isActive ? (
+        <span
+          aria-hidden="true"
+          className="workspace-tree-active-indicator"
+          data-slot="workspace-tree-active-indicator"
+          title="Active drawing"
+        />
+      ) : null}
       <span
         data-slot="workspace-tree-action"
         className="workspace-tree-action-slot"
@@ -569,12 +606,10 @@ function WorkspaceTreeRowView({
             onAction(event.currentTarget);
           }}
           tabIndex={-1}
-          style={{
-            minWidth: "2rem",
-            visibility: focused ? "visible" : undefined,
-          }}
+          title={`Actions for ${row.displayName}`}
+          style={{ minWidth: "2rem" }}
         >
-          ⋯
+          <img alt="" aria-hidden="true" src={moreVerticalIcon} />
         </button>
       </span>
     </div>

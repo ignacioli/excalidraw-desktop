@@ -1,0 +1,280 @@
+{
+  "schemaVersion": 1,
+  "gateId": "HF2-02",
+  "reviewerIdentity": {
+    "role": "ui-visual-acceptance-reviewer",
+    "taskIdentity": "/root/hf202_visual_review",
+    "runtimeIdentity": "/root/hf202_visual_review"
+  },
+  "runtimeConfig": {
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "high"
+  },
+  "independenceConfirmed": true,
+  "independenceStatement": "This reviewer did not author or modify the reviewed production UI, validation harness, remediation, or immutable browser collection. The reviewer wrote only the assigned remediation reviewer-report.json and reviewer-report.md and did not touch the prior FAIL review, production UI, tests, collection inputs, frozen design artifacts, specifications, task checkboxes, owner artifacts, Git staging, or commits.",
+  "implementationTaskIdentity": [
+    "/root",
+    "commit:6e308c0859341a1ffcf19e5dabe35b7ad28cafe5"
+  ],
+  "reviewedProductCommit": "6e308c0859341a1ffcf19e5dabe35b7ad28cafe5",
+  "buildIdentity": {
+    "bundleOrBuildName": "browser-ui",
+    "bundleIdentifier": null,
+    "os": "darwin",
+    "architecture": "arm64",
+    "displayScale": 1,
+    "displayScaleBasis": "The 1280x760 PNG equals the recorded 1280x760 CSS viewport; this is the browser capture scale and is not a claim about a physical macOS display.",
+    "viewport": {
+      "width": 1280,
+      "height": 760,
+      "unit": "CSS px"
+    },
+    "windowSize": null,
+    "theme": "light",
+    "fixture": "restored-recovery",
+    "fontReady": true,
+    "remoteFontRequests": 0,
+    "route": "semantic-browser"
+  },
+  "reviewedHf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+  "reviewedBaseline": {
+    "manifestName": "02 · Restored · Hidden · Light",
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/design/desktop-shell/hf-2/screens/restored-hidden-light.png",
+    "sha256": "0a8bc3c5ad8052a53225a98f2820b34c1969a936d2fe940b77593d4c135f3a79"
+  },
+  "reviewedCollectorReport": {
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/6e308c0859341a1ffcf19e5dabe35b7ad28cafe5/HF2-02/collection/HF2-02-light-hidden-browser/collector-report.json",
+    "sha256": "6c0c66e987585ce21c166c0a83809ee51c2c97f71fb41db8f658fe10df082ac3",
+    "collectionId": "HF2-02-light-hidden-browser",
+    "collectionDigest": "9dab347f2b02e7d4f73c3e5b20a018bebd8767c2efffccf40d1828901683a2bc",
+    "result": "PASS"
+  },
+  "reviewedCollections": [
+    {
+      "collectionId": "HF2-02-light-hidden-browser",
+      "collectionDigest": "9dab347f2b02e7d4f73c3e5b20a018bebd8767c2efffccf40d1828901683a2bc",
+      "collectorReportSha256": "6c0c66e987585ce21c166c0a83809ee51c2c97f71fb41db8f658fe10df082ac3",
+      "role": "semantic browser authority and fixed browser screenshot"
+    }
+  ],
+  "reviewedActualSha256": "3086d098dfc43f0c7e9e0bf455b0117051b01867f87ca9a3d0f0b8bead9d76fa",
+  "maskSha256": "3248de26d00597c9f07c81b4d51c51ec905fff318e2af09a48635ac65df1ce31",
+  "screenMatrix": [
+    {
+      "screen": "02 · Restored · Hidden · Light",
+      "status": "PASS",
+      "evidence": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/6e308c0859341a1ffcf19e5dabe35b7ad28cafe5/HF2-02/collection/HF2-02-light-hidden-browser/actual.png",
+      "mismatchCount": 0
+    }
+  ],
+  "remediationChecks": [
+    {
+      "check": "Migration.excalidraw displays the required visible unsaved marker",
+      "result": "PASS",
+      "expected": "One visible circular unsaved marker appears for Migration.excalidraw, matching the frozen baseline's non-colour state cue.",
+      "actual": "The fixed actual capture visibly shows one circular marker after the Migration.excalidraw title, and the v3 collector records dirty state with marker count 1."
+    },
+    {
+      "check": "Clean Tabs do not receive false unsaved markers",
+      "result": "PASS",
+      "expected": "Architecture.excalidraw and Research.excalidraw remain clean with zero visible unsaved markers.",
+      "actual": "The fixed actual capture shows no marker on the two clean Tabs, and the v3 collector records marker count 0 for each."
+    },
+    {
+      "check": "Warning-token marker color remains contract-compliant",
+      "result": "PASS",
+      "expected": "The unsaved state uses a visible marker plus accessible text; the component contract does not prescribe an exact marker color.",
+      "actual": "The marker is clearly visible in the warning-token brown-orange color. Its shape provides the required non-colour cue, while the collector records the matching semantic state."
+    }
+  ],
+  "visualChecks": [
+    {
+      "check": "Hidden Sidebar releases its shell space",
+      "result": "PASS",
+      "expected": "No visible Sidebar remains, and the Tabs and canvas reclaim the released horizontal space.",
+      "actual": "The Sidebar is absent; the compact controls and first Tab begin at the far-left shell region while the canvas spans the window below."
+    },
+    {
+      "check": "Compact far-left controls",
+      "result": "PASS",
+      "expected": "Compact Sidebar and Back icon controls remain at the far-left of the top shell layer.",
+      "actual": "Both compact icon controls are visible at the far-left without a textual Sidebar or large Pin/Unpin control."
+    },
+    {
+      "check": "Restored Tabs preserve the approved visible state cues",
+      "result": "PASS",
+      "expected": "Architecture is active, Migration has one visible circular unsaved marker, and Research remains clean.",
+      "actual": "The remediated capture visibly preserves the active Tab hierarchy and the single Migration unsaved marker without false markers on the clean Tabs."
+    },
+    {
+      "check": "Recovery notice hierarchy",
+      "result": "PASS",
+      "expected": "The app-owned recovery status is present below the top shell with restrained emphasis and an accurate three-drawing count.",
+      "actual": "Recovered · 3 drawings restored appears at the approved left/top position with the expected quiet panel treatment and clear text hierarchy."
+    },
+    {
+      "check": "Light shell palette and tab/canvas composition",
+      "result": "PASS",
+      "expected": "Light semantic surfaces remain restrained, the top shell is distinct from the canvas, and app-owned chrome does not compete with the SDK editor.",
+      "actual": "The Light shell surfaces, dividers, Tabs, and recovery notice preserve the approved restrained hierarchy outside the SDK-owned interior."
+    }
+  ],
+  "compositionChecks": [
+    {
+      "check": "Sidebar Hidden releases all visible Sidebar width",
+      "result": "PASS"
+    },
+    {
+      "check": "Sidebar and Back controls remain compact at the far-left",
+      "result": "PASS"
+    },
+    {
+      "check": "The first Tab begins near x=88 and the 196x36 Tab geometry is preserved",
+      "result": "PASS",
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "check": "Architecture clean marker 0, Migration dirty marker 1, Research clean marker 0",
+      "result": "PASS",
+      "evidenceSource": "v3 collector semantic assertions"
+    },
+    {
+      "check": "The recovered-count notice is present and visually subordinate to the canvas",
+      "result": "PASS"
+    },
+    {
+      "check": "The app-owned notice, Tabs, top shell, and shell perimeter remain outside the accepted SDK review exclusion",
+      "result": "PASS"
+    }
+  ],
+  "legacyRemoval": [
+    {
+      "control": "separate global top-level New Drawing",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "textual Workspace sidebar control",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "large textual Pin or Unpin control",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "legacy top-level Save",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "persistent normal-state All changes saved strip",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "standalone top-level Export",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "legacy top-level Appearance",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "visible native-looking tab-strip scrollbar",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "thick or always-visible Sidebar scrollbar",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "Unicode placeholder tree or file icons",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "always-visible horizontal ellipsis",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "duplicate workspace navigation state",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "clipped or overflowed workspace-header actions",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    },
+    {
+      "control": "old 002 shell composition",
+      "observedCount": 0,
+      "evidenceSource": "collector assertions"
+    }
+  ],
+  "masks": [
+    {
+      "maskId": "sdk-editor-interior",
+      "selectorOrRect": ".canvas-document:not([hidden]) .excalidraw-editor",
+      "surface": "canvas",
+      "justification": "Approved official Excalidraw SDK-owned editor interior. The selector does not include the Tabs, top shell, canvas boundary, or the sibling app-owned recovery notice; those regions were reviewed.",
+      "perimeterChecked": true
+    }
+  ],
+  "maskRationale": "Only the official Excalidraw editor interior is excluded. Its boundary remains visible, and the mask does not excuse or conceal the app-owned Tabs, compact controls, recovery notice, or shell perimeter.",
+  "tolerances": {
+    "structureHierarchyAndPerimeter": "0 tolerance",
+    "browserGeometryTolerance": "±2 CSS px; owned by the bound collector and not re-proved from the screenshot",
+    "rasterOnlyTolerance": {
+      "scope": "collector-owned auxiliary shell-tabs repeated-capture stability check only",
+      "maxDiffPixelRatio": 0.01,
+      "observedDiffPixelRatio": 0,
+      "fontReady": true
+    },
+    "wholeScreenRasterToleranceUsedByReviewer": false,
+    "toleranceOrMaskChangeMadeByReviewer": false
+  },
+  "findings": [
+    {
+      "severity": "INFO",
+      "screenState": "02 · Restored · Hidden · Light / Migration.excalidraw unsaved Tab state",
+      "description": "The prior HF2-02-VIS-001 High mismatch is remediated: Migration now has one clearly visible circular unsaved marker, while Architecture and Research have none.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/6e308c0859341a1ffcf19e5dabe35b7ad28cafe5/HF2-02/collection/HF2-02-light-hidden-browser/actual.png"
+    },
+    {
+      "severity": "INFO",
+      "screenState": "02 · Restored · Hidden · Light / warning-token marker color",
+      "description": "The marker uses a visible brown-orange warning token rather than the baseline's purple accent. This is accepted because the contract requires a visible marker plus accessible text and specifies no exact marker color.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/6e308c0859341a1ffcf19e5dabe35b7ad28cafe5/HF2-02/collection/HF2-02-light-hidden-browser/actual.png"
+    },
+    {
+      "severity": "INFO",
+      "screenState": "02 · Restored · Hidden · Light / overall composition",
+      "description": "Hidden reflow, compact far-left controls, Tab strip, recovery notice, and Light shell hierarchy show no visible High or Critical mismatch outside the approved SDK editor exclusion.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/6e308c0859341a1ffcf19e5dabe35b7ad28cafe5/HF2-02/collection/HF2-02-light-hidden-browser/actual.png"
+    }
+  ],
+  "residualLowMediumFindings": [],
+  "criticalCount": 0,
+  "highCount": 0,
+  "highCriticalCount": 0,
+  "unverified": [
+    "A native macOS package, bundle identifier, native window, physical display scale, native menus, and system dialogs were not reviewed; they are intentionally outside this intermediate browser-only checkpoint.",
+    "The recorded capture scale is derived from matching PNG and CSS viewport dimensions and does not establish the physical macOS display scale.",
+    "Recovery behavior, persistence, and filesystem outcomes were not re-proved from pixels. The separate T046 deterministic process/filesystem collection owns recovery safety, and this visual review does not prove it.",
+    "Exact geometry, tokens, fonts, accessibility, keyboard operation, focus-visible, and reduced motion were not re-proved from pixels; the immutable v3 semantic collector owns those facts.",
+    "HF2-01, VSL-001, HF2-04, HF2-05, and HF2-06 were not reviewed by this single-screen remediation checkpoint.",
+    "No product-owner decision was created or inferred because ownerRequirement is NOT_REQUIRED for HF2-02."
+  ],
+  "verdict": "PASS",
+  "ownerRequirement": "NOT_REQUIRED",
+  "ownerArtifactCreated": false,
+  "nextGate": "Close only the Phase 6 HF2-02 checkpoint after binding this reviewer PASS to the task evidence, then stop for user review. Do not enter Phase 7 and do not create an intermediate product-owner artifact."
+}

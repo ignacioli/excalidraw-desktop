@@ -18,17 +18,30 @@ export async function installBrowserTauriHarness(
       type HarnessWindow = {
         localStorage: BrowserStorage;
         __TAURI_INTERNALS__?: {
+          transformCallback(callback: (...args: unknown[]) => void): number;
+          unregisterCallback(callbackId: number): void;
+          metadata: { currentWindow: { label: string } };
           invoke(
             command: string,
             args?: Record<string, unknown>,
           ): Promise<unknown>;
         };
+        __TAURI_EVENT_PLUGIN_INTERNALS__?: {
+          unregisterListener(event: string, eventId: number): void;
+        };
+        __browserTauriEmit?: (event: string, payload: unknown) => void;
       };
 
       const browser = globalThis as unknown as HarnessWindow;
       const fileKey = `excalidraw-e2e:file:${path}`;
       let nextDialogPath = 0;
       let checkpointCount = 0;
+      let nextCallbackId = 1;
+      const callbacks = new Map<
+        number,
+        (event: { event: string; id: number; payload: unknown }) => void
+      >();
+      const listeners = new Map<string, Set<number>>();
       if (
         initialScene !== undefined &&
         browser.localStorage.getItem(fileKey) === null
@@ -37,7 +50,57 @@ export async function installBrowserTauriHarness(
       }
 
       browser.__TAURI_INTERNALS__ = {
+        transformCallback(callback) {
+          const callbackId = nextCallbackId++;
+          callbacks.set(callbackId, callback);
+          return callbackId;
+        },
+        unregisterCallback(callbackId) {
+          callbacks.delete(callbackId);
+        },
+        metadata: { currentWindow: { label: "main" } },
         async invoke(command, args = {}) {
+          if (command === "plugin:event|listen") {
+            const event = String(args.event ?? "");
+            const callbackId = Number(args.handler);
+            const eventListeners = listeners.get(event) ?? new Set<number>();
+            eventListeners.add(callbackId);
+            listeners.set(event, eventListeners);
+            return callbackId;
+          }
+          if (command === "plugin:event|unlisten") {
+            const event = String(args.event ?? "");
+            const callbackId = Number(args.eventId);
+            listeners.get(event)?.delete(callbackId);
+            callbacks.delete(callbackId);
+            return {};
+          }
+          if (
+            command === "plugin:event|emit" ||
+            command === "plugin:event|emit_to"
+          ) {
+            return {};
+          }
+          if (command === "plugin:window|on_close_requested") {
+            return 1;
+          }
+          if (command === "plugin:window|destroy") {
+            return {};
+          }
+          if (command === "app_handshake") {
+            return {
+              contractVersion: 2,
+              appVersion: "0.2.0-e2e",
+              abnormalExit: false,
+              pendingOpenPaths: [],
+            };
+          }
+          if (command === "recovery_list") {
+            return [];
+          }
+          if (command === "workspace_list" || command === "workspace_recent_list") {
+            return [];
+          }
           if (
             command === "plugin:dialog|open" ||
             command === "plugin:dialog|save"
@@ -92,6 +155,17 @@ export async function installBrowserTauriHarness(
           throw new Error(`Unexpected browser harness command: ${command}`);
         },
       };
+      browser.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+        unregisterListener(event, eventId) {
+          listeners.get(event)?.delete(eventId);
+          callbacks.delete(eventId);
+        },
+      };
+      browser.__browserTauriEmit = (event, payload) => {
+        for (const callbackId of listeners.get(event) ?? []) {
+          callbacks.get(callbackId)?.({ event, id: callbackId, payload });
+        }
+      };
     },
     {
       path: documentPath,
@@ -107,6 +181,27 @@ export async function installBrowserTauriHarness(
         files: {},
       }),
     },
+  );
+}
+
+export async function emitBrowserTauriEvent(
+  page: Page,
+  event: string,
+  payload: unknown,
+): Promise<void> {
+  await page.evaluate(
+    ({ eventName, eventPayload }) => {
+      const emit = (
+        globalThis as typeof globalThis & {
+          __browserTauriEmit?: (name: string, value: unknown) => void;
+        }
+      ).__browserTauriEmit;
+      if (emit === undefined) {
+        throw new Error("Browser Tauri events are not installed.");
+      }
+      emit(eventName, eventPayload);
+    },
+    { eventName: event, eventPayload: payload },
   );
 }
 

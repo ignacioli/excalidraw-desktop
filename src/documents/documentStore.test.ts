@@ -83,6 +83,63 @@ describe("DocumentManager", () => {
     manager.dispose();
   });
 
+  it("creates a Welcome untitled session without any disk gateway writes", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.createUntitled();
+    const initial = manager.store.getState().sessionsById[documentId]?.scene;
+    expect(manager.store.getState().sessionsById[documentId]).toMatchObject({
+      path: "",
+      title: "Untitled",
+      saveState: "dirty",
+    });
+
+    manager.updateScene(documentId, {
+      ...initial!,
+      elements: [{ version: 1 } as SceneSnapshot["elements"][number]],
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    await manager.checkpoint(documentId);
+    await manager.close(documentId);
+
+    expect(gateway.saveDraft).not.toHaveBeenCalled();
+    expect(gateway.checkpoint).not.toHaveBeenCalled();
+    expect(gateway.close).not.toHaveBeenCalled();
+    expect(manager.store.getState().sessionsById[documentId]).toBeUndefined();
+    manager.dispose();
+  });
+
+  it("checkpoints and closes only documents inside a removed Workspace", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const firstId = await manager.open("/workspace/one/first.excalidraw");
+    const secondId = await manager.open(
+      "/workspace/one/nested/second.excalidraw",
+    );
+    const outsideId = await manager.open("/workspace/other/drawing.excalidraw");
+
+    await expect(
+      manager.closeWorkspaceDocuments("/workspace/one/"),
+    ).resolves.toEqual({ status: "closed" });
+
+    expect(manager.store.getState().sessionsById[firstId]).toBeUndefined();
+    expect(manager.store.getState().sessionsById[secondId]).toBeUndefined();
+    expect(manager.store.getState().sessionsById[outsideId]).toBeDefined();
+    expect(gateway.close).toHaveBeenCalledWith(
+      "/workspace/one/first.excalidraw",
+      "checkpointed",
+    );
+    expect(gateway.close).toHaveBeenCalledWith(
+      "/workspace/one/nested/second.excalidraw",
+      "checkpointed",
+    );
+    expect(gateway.close).not.toHaveBeenCalledWith(
+      "/workspace/other/drawing.excalidraw",
+      expect.anything(),
+    );
+    manager.dispose();
+  });
+
   it("checkpoints the active dirty document before opening another tab", async () => {
     const gateway = createGateway();
     const manager = new DocumentManager(gateway);

@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
   "status": "approved",
-  "approvedAt": "2026-09-01",
+  "approvedAt": "2026-09-06",
   "penpot": {
-    "fileId": "40e06342-8830-80d6-8008-91fb17f61254",
+    "fileId": "40e06342-8830-80d6-8008-98d2d723d49b",
     "fileName": "excalidraw-desktop-uxui-redesign",
-    "revisionAtHandoff": 48,
-    "versionLabel": "HF-2 final review package · restored tab correction",
+    "revisionAtHandoff": 59,
+    "versionLabel": "HF-2 product-approved · icon and interaction refinement",
     "screensPageId": "18570eb3-fcf2-80e5-8008-921038f9d49b",
     "componentsPageId": "18570eb3-fcf2-80e5-8008-921038f8b605",
-    "iconsPageId": "18570eb3-fcf2-80e5-8008-920464774936"
+    "iconsPageId": "18570eb3-fcf2-80e5-8008-9203a44b2be3"
   },
   "source": {
     "path": "source/excalidraw-desktop-uxui-redesign.penpot",
-    "sha256": "1b80b65879defcc3c291b6c7486405a9338f02b597536a78df7913b4145e2f53",
-    "bytes": 1370470,
+    "sha256": "61a3978070a5154788ac11818317e0b8c4b1fe24f5f3b9169f5621310daa48a9",
+    "bytes": 1383880,
     "exportMethod": "Penpot Web native file download"
   },
   "screens": [
@@ -24,7 +24,7 @@
       "path": "screens/welcome-light.png",
       "width": 1280,
       "height": 760,
-      "sha256": "ecf7dd4d4b3681bae5ce29a080ff77061e57318ea581f9c8bccc00f0fd9ce2f6"
+      "sha256": "301e553d0ce94659233eb4683eb6bc018c26757397ecccf42bb162d6e7463cfa"
     },
     {
       "name": "02 · Restored · Hidden · Light",
@@ -32,7 +32,7 @@
       "path": "screens/restored-hidden-light.png",
       "width": 1280,
       "height": 760,
-      "sha256": "9d945cb2993b8b639921b35c1ab9d611dcce79ee35d542a1fe92a485d7c8e02f"
+      "sha256": "0a8bc3c5ad8052a53225a98f2820b34c1969a936d2fe940b77593d4c135f3a79"
     },
     {
       "name": "03 · Workspace · Pinned · Light",
@@ -40,7 +40,7 @@
       "path": "screens/workspace-pinned-light.png",
       "width": 1280,
       "height": 760,
-      "sha256": "040f6dfaf02fe94b665a6d1c34e38b983b0edbb96a871789bac65966c17e528f"
+      "sha256": "5bfbd5dba0363271192309594304a2291166a65bf91df5c2effb5550e961829a"
     },
     {
       "name": "04 · Workspace · Overlay · Light",
@@ -48,7 +48,7 @@
       "path": "screens/workspace-overlay-light.png",
       "width": 1280,
       "height": 760,
-      "sha256": "5fd991ee7b797617db35355cebbaf8faf0336a486dae43eb91fb513bf9182f8e"
+      "sha256": "ab2c2baf8b7b32e8d78095f29165eb369663389a62aa13e5a672a47d3511a059"
     },
     {
       "name": "05 · Welcome · Dark",
@@ -56,7 +56,7 @@
       "path": "screens/welcome-dark.png",
       "width": 1280,
       "height": 760,
-      "sha256": "662b630727fc50f4b99fd4e5da5a19e3b3d8c50585fb39ac14d0b26655f21c6d"
+      "sha256": "6801579936067a6905ff7cd0896d6604861b176e5b9d7e56d141cc64434fd567"
     },
     {
       "name": "06 · Workspace · Pinned · Dark",
@@ -64,32 +64,34 @@
       "path": "screens/workspace-pinned-dark.png",
       "width": 1280,
       "height": 760,
-      "sha256": "47e9f3af6ab2a11fd44625f42e353dabd35a49d122cbd22932873e8fa9cea3a1"
+      "sha256": "8b06a988270d4a6d8f7ce00fa32fb422c8bf3dea3c6e8346390b2b77ea9b34d0"
     }
   ],
   "icons": [
-    {"name": "Back", "shapeId": "18570eb3-fcf2-80e5-8008-9205ee6d3e59", "path": "icons/back.svg", "sha256": "be7bf3ee7d194e03a8dd044ff8dc808e5e1fd2318b97f94a04b288a0c4b8160c"},
-    {"name": "Sidebar", "shapeId": "18570eb3-fcf2-80e5-8008-9205ee79ab3c", "path": "icons/sidebar.svg", "sha256": "3b75bcd7128d7a8396c2f108f5c0b1fdb13ffd4814fc05ebc65d960bedbf1b24"},
-    {"name": "Pin", "shapeId": "18570eb3-fcf2-80e5-8008-9205ee869477", "path": "icons/pin.svg", "sha256": "d042bc9068d103fb4d5642c4964595fd7f3e91c7b44b747dfaa1ef852253c46d"},
-    {"name": "New Drawing", "shapeId": "18570eb3-fcf2-80e5-8008-9205ee9357c3", "path": "icons/new-drawing.svg", "sha256": "62aa5970a415140177471a86acb8da57184666da04be52546dbe0b924ae7ea72"},
-    {"name": "New Folder", "shapeId": "18570eb3-fcf2-80e5-8008-9205ee9fe779", "path": "icons/new-folder.svg", "sha256": "c630d34a4f9dde398ff55ef51ec8f13c34e606e4cfbfe2f15420a910c7fe568f"},
-    {"name": "Collapse All", "shapeId": "18570eb3-fcf2-80e5-8008-9205eeac8588", "path": "icons/collapse-all.svg", "sha256": "e60717e6e5207bc095f560045410533af3f9b14392a90cce442764eca88e052e"},
-    {"name": "Expand All", "shapeId": "18570eb3-fcf2-80e5-8008-9205eeb9c9bf", "path": "icons/expand-all.svg", "sha256": "cdeeaf8cadba44890243099e1c130dbac2de36cb8de544a454874d9d5636d9f0"},
-    {"name": "Refresh", "shapeId": "18570eb3-fcf2-80e5-8008-9205eec73722", "path": "icons/refresh.svg", "sha256": "7821b23fbe2fc5e624b578290cac47bf5d999dfc0af36ef67f498198bad5b7ba"},
+    {"name": "Back", "shapeId": "18570eb3-fcf2-80e5-8008-9205ee6d3e59", "path": "icons/back.svg", "sha256": "ff810bcd34c09d327b9c9cfe962317699228e7775bdddfb24ea43c1c919a4d60"},
+    {"name": "Sidebar", "shapeId": "18570eb3-fcf2-80e5-8008-9205ee79ab3c", "path": "icons/sidebar.svg", "sha256": "55c96d9c37b7ab206e5c525cfa4917d8e8ef1f65bed0d936a2936f1825d4f665"},
+    {"name": "Pin (deprecated)", "shapeId": "18570eb3-fcf2-80e5-8008-9205ee869477", "path": "icons/pin.svg", "sha256": "cb6a5f6c7df63185e31c308e9984d88b10b8ffc94138818855f059d105076586"},
+    {"name": "New Drawing", "shapeId": "18570eb3-fcf2-80e5-8008-9205ee9357c3", "path": "icons/new-drawing.svg", "sha256": "4b859e665b7055303013a6136e647be919a7086545446b1372c2f16ec4b023f9"},
+    {"name": "New Folder", "shapeId": "18570eb3-fcf2-80e5-8008-9205ee9fe779", "path": "icons/new-folder.svg", "sha256": "4f11febd1c2750676e3fd4b79cabf73f09e1c2ccd624aacb1c415e422a62c010"},
+    {"name": "Collapse All", "shapeId": "18570eb3-fcf2-80e5-8008-9205eeac8588", "path": "icons/collapse-all.svg", "sha256": "0ee8f8732aa984c4b77d30876c0bf4864d52364a0d0b3d39e0fa6a8b98740cae"},
+    {"name": "Expand All", "shapeId": "18570eb3-fcf2-80e5-8008-9205eeb9c9bf", "path": "icons/expand-all.svg", "sha256": "1ac2eea56c87cc3b77f5db3a27382cdad2cef0d55fb52ceca4e36e8412ec749a"},
+    {"name": "Refresh", "shapeId": "18570eb3-fcf2-80e5-8008-9205eec73722", "path": "icons/refresh.svg", "sha256": "9af72f9e2857de9611de2002c3d6db200223e6c66cdc7edb174d48317a5b283e"},
     {"name": "More Vertical", "shapeId": "18570eb3-fcf2-80e5-8008-9205eed48ce2", "path": "icons/more-vertical.svg", "sha256": "e5a80194eaafea9c2550e9a28f6be0ef5129e7d5ad09e9507b00eda903cbe7c2"},
-    {"name": "Close", "shapeId": "18570eb3-fcf2-80e5-8008-9205eeea0cbe", "path": "icons/close.svg", "sha256": "4899cafce23ad4d94601cca7fdd4b14d5a78a27912ba4358b328a9c04f4bdce0"}
+    {"name": "Close", "shapeId": "18570eb3-fcf2-80e5-8008-9205eeea0cbe", "path": "icons/close.svg", "sha256": "d4ea64a904faa45831746c18315d476dfbc9292a6ea60f50783d0529cb563fed"}
   ],
   "validation": {
     "penpotFileErrors": 0,
     "containmentTolerancePx": 0.01,
     "containmentViolations": 0,
-    "pinnedCanvasShare": 0.761
+    "pinnedCanvasShare": 0.761,
+    "penpotIconAuditCount": 124,
+    "penpotIconStrokeMismatches": 0
   },
   "knownIssues": [
     {
       "id": "HF2-SVG-001",
       "artifact": "icons/*.svg",
-      "summary": "SVGs were reconstructed from exact Penpot API geometry after Remote MCP SVG export returned invalid NUL content; XML validation passed but rendered contact-sheet comparison remains pending."
+      "summary": "Remote MCP direct SVG export returned invalid NUL content. Repository-normalized currentColor SVGs use the approved Penpot revision-59 geometry and 1px/1.25px strokes; XML validation passed."
     }
   ]
 }

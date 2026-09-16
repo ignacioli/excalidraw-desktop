@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "fixtureVersion": "003-native-capture-v4",
+  "fixtureId": "003-native-capture-v4",
+  "workspaceRoot": "/private/tmp/excalidraw-vsl-native-v6-PjtcZq/fixture/Design Workspace",
+  "screens": [
+    {
+      "gateId": "VSL-001",
+      "preparationMode": "operator-assisted"
+    }
+  ],
+  "files": [
+    {
+      "path": "flows/Architecture.excalidraw",
+      "sha256": "efdd6af0d0bf5cdb2e365fe53f67dca69d705d3e90c9bc1a22cc346fcbce8cd5"
+    },
+    {
+      "path": "flows/Migration.excalidraw",
+      "sha256": "efdd6af0d0bf5cdb2e365fe53f67dca69d705d3e90c9bc1a22cc346fcbce8cd5"
+    },
+    {
+      "path": "flows/Research.excalidraw",
+      "sha256": "efdd6af0d0bf5cdb2e365fe53f67dca69d705d3e90c9bc1a22cc346fcbce8cd5"
+    }
+  ]
+}

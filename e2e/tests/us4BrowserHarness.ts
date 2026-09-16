@@ -33,6 +33,8 @@ export async function installUs4Harness(
             args?: Record<string, unknown>,
           ): Promise<unknown>;
           transformCallback?: (callback: EventHandler) => number;
+          unregisterCallback?: (callbackId: number) => void;
+          metadata?: { currentWindow: { label: string } };
         };
         __TAURI_EVENT_PLUGIN_INTERNALS__?: {
           unregisterListener(event: string, eventId: number): void;
@@ -86,6 +88,10 @@ export async function installUs4Harness(
           callbacks.set(nextCallbackId, callback);
           return nextCallbackId++;
         },
+        unregisterCallback(callbackId) {
+          callbacks.delete(callbackId);
+        },
+        metadata: { currentWindow: { label: "main" } },
         async invoke(command, args = {}) {
           if (command === "plugin:event|listen") {
             const event = String(args.event ?? "");
@@ -93,7 +99,8 @@ export async function installUs4Harness(
             if (handler === undefined) {
               throw new Error(`Unknown event callback ${args.handler}`);
             }
-            const byEvent = listeners.get(event) ?? new Map<number, EventHandler>();
+            const byEvent =
+              listeners.get(event) ?? new Map<number, EventHandler>();
             byEvent.set(Number(args.handler), handler);
             listeners.set(event, byEvent);
             return args.handler;
@@ -118,6 +125,7 @@ export async function installUs4Harness(
               contractVersion: 2,
               appVersion: "0.1.0",
               abnormalExit: false,
+              pendingOpenPaths: [],
             };
           }
           if (command === "workspace_list") {
@@ -130,6 +138,11 @@ export async function installUs4Harness(
                     createdAt: 1,
                   },
                 ]
+              : [];
+          }
+          if (command === "workspace_recent_list") {
+            return state.mounted
+              ? [{ id: "workspace-1", name: "Workspace", rootPath: "/workspace", createdAt: 1 }]
               : [];
           }
           if (command === "workspace_add") {
@@ -228,8 +241,9 @@ export async function emitFileChanged(
 ): Promise<void> {
   await page.evaluate(
     ({ event, payload: eventPayload }) => {
-      (globalThis as { __us4?: { emit(e: string, p: unknown): void } })
-        .__us4?.emit(event, eventPayload);
+      (
+        globalThis as { __us4?: { emit(e: string, p: unknown): void } }
+      ).__us4?.emit(event, eventPayload);
     },
     { event: "file-changed", payload },
   );
@@ -242,9 +256,11 @@ export async function setExternalFile(
 ): Promise<void> {
   await page.evaluate(
     ({ path: filePath, scene }) => {
-      (globalThis as {
-        __us4?: { state: { files: Map<string, string> } };
-      }).__us4?.state.files.set(filePath, scene);
+      (
+        globalThis as {
+          __us4?: { state: { files: Map<string, string> } };
+        }
+      ).__us4?.state.files.set(filePath, scene);
     },
     { path, scene: sceneJson },
   );
@@ -255,9 +271,11 @@ export async function setSaveAsPath(
   path: string | null,
 ): Promise<void> {
   await page.evaluate((saveAsPath) => {
-    (globalThis as {
-      __us4?: { state: { saveAsPath: string | null } };
-    }).__us4!.state.saveAsPath = saveAsPath;
+    (
+      globalThis as {
+        __us4?: { state: { saveAsPath: string | null } };
+      }
+    ).__us4!.state.saveAsPath = saveAsPath;
   }, path);
 }
 
@@ -265,9 +283,14 @@ export async function getHarnessState(
   page: Page,
 ): Promise<{ checkpointCount: number; openCount: number }> {
   return page.evaluate(() => {
-    const state = (globalThis as {
-      __us4?: { state: { checkpointCount: number; openCount: number } };
-    }).__us4?.state;
-    return { checkpointCount: state?.checkpointCount ?? 0, openCount: state?.openCount ?? 0 };
+    const state = (
+      globalThis as {
+        __us4?: { state: { checkpointCount: number; openCount: number } };
+      }
+    ).__us4?.state;
+    return {
+      checkpointCount: state?.checkpointCount ?? 0,
+      openCount: state?.openCount ?? 0,
+    };
   });
 }

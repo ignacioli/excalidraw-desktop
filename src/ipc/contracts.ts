@@ -3,6 +3,7 @@ export const IPC_CONTRACT_VERSION = 2 as const;
 export type ErrorCode =
   | "PATH_ACCESS_DENIED"
   | "WORKSPACE_NOT_FOUND"
+  | "WORKSPACE_MOUNTED"
   | "WORKSPACE_OVERLAP"
   | "INVALID_NAME"
   | "NAME_CONFLICT"
@@ -152,6 +153,18 @@ export interface IpcCommands {
     request: Record<string, never>;
     response: Workspace[];
   };
+  workspace_recent_list: {
+    request: Record<string, never>;
+    response: Workspace[];
+  };
+  workspace_remount: {
+    request: { workspaceId: string };
+    response: Workspace;
+  };
+  workspace_recent_remove: {
+    request: { workspaceId: string };
+    response: Record<string, never>;
+  };
   workspace_entry_list: {
     request: { workspaceId: string; parentRelativePath: string };
     response: WorkspaceEntry[];
@@ -234,6 +247,7 @@ export type CommandResponse<Name extends CommandName> =
   IpcCommands[Name]["response"];
 
 export interface IpcEvents {
+  "native-menu-command": NativeMenuCommandEvent;
   "workspace-entries-changed": WorkspaceEntriesChangedEvent;
   "file-changed": {
     path: string;
@@ -263,6 +277,24 @@ export interface WorkspaceEntriesChangedEvent {
   change: "created" | "renamed" | "removed" | "invalidated";
   relativePath: string;
   newRelativePath?: string;
+}
+
+export type NativeMenuCommand =
+  | "save"
+  | "exportImage"
+  | "appearanceSystem"
+  | "appearanceLight"
+  | "appearanceDark";
+
+export interface NativeMenuCommandEvent {
+  command: NativeMenuCommand;
+  /**
+   * Present only when the packaged app is launched by the native macOS
+   * validation harness. It lets the harness correlate the native menu event
+   * with the already-tested frontend command router without relying on a
+   * screenshot or exposing a production IPC command.
+   */
+  validationId?: number;
 }
 
 export type EventName = keyof IpcEvents;

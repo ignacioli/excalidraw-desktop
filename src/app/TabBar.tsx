@@ -10,6 +10,7 @@ import { documentManager, useDocumentStore } from "../documents/documentStore";
 import { ingestWheel } from "../documents/tabActivationQueue";
 import { ContextMenu } from "./interaction/ContextMenu";
 import type { CloseOutcome } from "../documents/documentStore";
+import closeIcon from "../../docs/design/desktop-shell/hf-2/icons/close.svg";
 
 interface TabBarProps {
   onCloseOutcome?: (documentId: string, outcome: CloseOutcome) => void;
@@ -227,9 +228,16 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
           const isOrphaned = session.saveState === "orphaned";
           const closeVisible =
             isActive || hoveredId === session.id || focusedId === session.id;
+          const clusterClassName = [
+            "tab-cluster",
+            isActive ? "is-selected" : null,
+            isDirty ? "is-unsaved" : null,
+          ]
+            .filter((value): value is string => value !== null)
+            .join(" ");
           return (
             <div
-              className="tab-cluster"
+              className={clusterClassName}
               data-tab-id={session.id}
               key={session.id}
               onBlur={(event) => {
@@ -278,7 +286,6 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
                 <span className="tab-title">{session.title}</span>
                 {isDirty ? (
                   <span className="dirty-indicator" title="Unsaved changes">
-                    <span aria-hidden="true">●</span>
                     <span className="visually-hidden">Unsaved changes</span>
                   </span>
                 ) : null}
@@ -304,7 +311,7 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
                     }}
                     type="button"
                   >
-                    <span aria-hidden="true">×</span>
+                    <img alt="" aria-hidden="true" src={closeIcon} />
                   </button>
                 ) : null}
               </span>

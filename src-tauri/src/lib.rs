@@ -8,6 +8,7 @@ mod e2e_performance;
 #[cfg(all(test, feature = "e2e-harness"))]
 mod e2e_performance_test;
 pub mod indexing;
+mod native_menu;
 pub mod security;
 mod watcher;
 pub mod workspace_entries;
@@ -32,7 +33,10 @@ use commands::{
         recovery_apply, recovery_list, RecoveryService, RecoveryState, TauriRecoveryPathGrant,
     },
     session::{app_handshake, SessionState},
-    workspace::{workspace_add, workspace_list, workspace_remove, WorkspaceState},
+    workspace::{
+        workspace_add, workspace_list, workspace_recent_list, workspace_recent_remove,
+        workspace_remount, workspace_remove, WorkspaceState,
+    },
 };
 use database::repository::SqliteRepository;
 use documents::recovery::RecoveryStore;
@@ -74,7 +78,8 @@ pub fn run() {
         .setup(|app| {
             let app_data_directory = resolve_app_data_directory(app)?;
             std::fs::create_dir_all(&app_data_directory)?;
-
+            let web_kit_data_directory = app.path().app_local_data_dir()?;
+            std::fs::create_dir_all(&web_kit_data_directory)?;
             let pending_open_paths = drawing_paths_from_env_args();
             let repository = tauri::async_runtime::block_on(SqliteRepository::open(
                 &app_data_directory.join("excalidraw-desktop.sqlite3"),
@@ -109,11 +114,12 @@ pub fn run() {
             ) {
                 eprintln!("failed to reconcile pending Workspace Entry mutations: {error}");
             }
-            let recovery_service = RecoveryService::with_path_grant(
+            let mut recovery_service = RecoveryService::with_path_grant(
                 Arc::clone(&shared_repository),
                 Arc::clone(&recovery_store),
                 Arc::new(TauriRecoveryPathGrant(app.fs_scope())),
             );
+            recovery_service.attach_watcher(Arc::new(watcher_service.clone()));
             app.manage(repository);
             #[cfg(feature = "e2e-harness")]
             app.manage(performance_state);
@@ -135,6 +141,10 @@ pub fn run() {
             app.manage(session);
             app.manage(WatcherState::new(watcher_service.clone()));
             tauri::async_runtime::block_on(watcher_service.start_existing(app.handle().clone()))?;
+            app.on_menu_event(crate::native_menu::handle_menu_event);
+            crate::native_menu::register_validation_listener(app.handle());
+            let menu = crate::native_menu::build_menu(app.handle())?;
+            app.set_menu(menu)?;
             // rAF-driven performance workloads stall when the window is
             // occluded (WebKit throttles occluded views); keep the test-only
             // measurement window unoccluded on busy diagnostic hosts.
@@ -160,6 +170,9 @@ pub fn run() {
         workspace_add,
         workspace_remove,
         workspace_list,
+        workspace_recent_list,
+        workspace_remount,
+        workspace_recent_remove,
         workspace_entry_list,
         workspace_entry_create,
         workspace_entry_rename,
@@ -190,13 +203,16 @@ pub fn run() {
         workspace_add,
         workspace_remove,
         workspace_list,
+        workspace_recent_list,
+        workspace_remount,
+        workspace_recent_remove,
         workspace_entry_list,
         workspace_entry_create,
         workspace_entry_rename,
         workspace_entry_delete_preflight,
         workspace_entry_delete,
         workspace_entry_reveal,
-        doc_export
+        doc_export,
     ]);
 
     let app = match builder.build(tauri::generate_context!()) {

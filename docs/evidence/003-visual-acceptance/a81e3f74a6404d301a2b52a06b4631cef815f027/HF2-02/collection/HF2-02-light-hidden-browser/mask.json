@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "HF2-02-light-hidden-browser",
+  "gateId": "HF2-02",
+  "binding": {
+    "productCommit": "a81e3f74a6404d301a2b52a06b4631cef815f027",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "6c9f448a5f35c55812e997d6c64c74790acd544227f75bbb4ae8e5d1dc89921d",
+    "harnessVersion": "003-shell-v2"
+  },
+  "masks": [
+    {
+      "maskId": "sdk-editor-interior",
+      "selectorOrRect": ".canvas-document:not([hidden]) .excalidraw-editor",
+      "surface": "canvas",
+      "reason": "Official Excalidraw SDK-owned editor interior",
+      "perimeterChecked": true,
+      "approved": true
+    }
+  ]
+}

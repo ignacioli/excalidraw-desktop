@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 1,
+  "gateId": "HF2-01",
+  "reviewerIdentity": {
+    "role": "ui-visual-acceptance-reviewer",
+    "taskIdentity": "/root/hf201_visual_review",
+    "runtimeIdentity": "/root/hf201_visual_review"
+  },
+  "runtimeConfig": {
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "high"
+  },
+  "independenceConfirmed": true,
+  "independenceStatement": "This reviewer did not author or modify the reviewed remediation, production UI, or immutable browser collection. The reviewer wrote only the assigned reviewer-report.json and reviewer-report.md and did not touch the prior review attempt, production UI, collection inputs, frozen design artifacts, specifications, task checkboxes, owner artifacts, Git staging, or commits.",
+  "implementationTaskIdentity": [
+    "/root",
+    "commit:6c78bebc4a922cbaf40bc6c60cf6b0be0e93b8df"
+  ],
+  "reviewedProductCommit": "6c78bebc4a922cbaf40bc6c60cf6b0be0e93b8df",
+  "buildIdentity": {
+    "bundleOrBuildName": "browser-ui",
+    "bundleIdentifier": null,
+    "os": "darwin",
+    "architecture": "arm64",
+    "displayScale": 1,
+    "displayScaleBasis": "The 1280x760 PNG equals the recorded 1280x760 CSS viewport; this is the browser capture scale and is not a claim about a physical macOS display.",
+    "viewport": {
+      "width": 1280,
+      "height": 760,
+      "unit": "CSS px"
+    },
+    "windowSize": null,
+    "theme": "light",
+    "fixture": "welcome",
+    "fontReady": true,
+    "remoteFontRequests": 0,
+    "route": "semantic-browser"
+  },
+  "reviewedHf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+  "reviewedBaseline": {
+    "manifestName": "01 · Welcome · Light",
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/design/desktop-shell/hf-2/screens/welcome-light.png",
+    "sha256": "301e553d0ce94659233eb4683eb6bc018c26757397ecccf42bb162d6e7463cfa"
+  },
+  "reviewedCollectorReport": {
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/6c78bebc4a922cbaf40bc6c60cf6b0be0e93b8df/HF2-01/collection/HF2-01-light-hidden-browser/collector-report.json",
+    "sha256": "0b7b63001b2579daa1d106c6ed1fcccb2d06c7a0ce463a5fc58c46d142084343",
+    "collectionId": "HF2-01-light-hidden-browser",
+    "collectionDigest": "02464b117368ea6bc54e7f8274677e7f2f1d4ca6892cbc08b28ac7633954fad8",
+    "result": "PASS"
+  },
+  "reviewedCollections": [
+    {
+      "collectionId": "HF2-01-light-hidden-browser",
+      "collectionDigest": "02464b117368ea6bc54e7f8274677e7f2f1d4ca6892cbc08b28ac7633954fad8",
+      "collectorReportSha256": "0b7b63001b2579daa1d106c6ed1fcccb2d06c7a0ce463a5fc58c46d142084343",
+      "role": "semantic browser authority and fixed browser screenshot"
+    }
+  ],
+  "reviewedActualSha256": "92def1d02af814146da02f2736c3e3bd9deccdece56fa473e9e6af8e7e948f95",
+  "maskSha256": "c57baf25842154541f06cd4599d989ee0847ff9687e113d1488ac29f5bf386df",
+  "screenMatrix": [
+    {
+      "screen": "01 · Welcome · Light",
+      "status": "PASS",
+      "evidence": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/6c78bebc4a922cbaf40bc6c60cf6b0be0e93b8df/HF2-01/collection/HF2-01-light-hidden-browser/actual.png",
+      "mismatchCount": 0
+    }
+  ],
+  "remediationChecks": [
+    {
+      "check": "New Drawing primary glyph uses the approved contrast treatment",
+      "result": "PASS",
+      "expected": "White 16x16 New Drawing glyph on the #6965DB primary surface.",
+      "actual": "The leading glyph is visibly white and matches the adjacent white label on the purple primary surface.",
+      "evidence": [
+        "collection/HF2-01-light-hidden-browser/actual.png"
+      ]
+    },
+    {
+      "check": "Recent rows use flat semantic borders and the deterministic Architecture hover surface",
+      "result": "PASS",
+      "expected": "Flat subtle row borders without browser beveling; Architecture uses the approved Light hover surface.",
+      "actual": "The dark right/bottom bevel is absent. Row borders are flat and subtle, and Architecture uses the #F1F0FF hover surface.",
+      "evidence": [
+        "collection/HF2-01-light-hidden-browser/actual.png"
+      ]
+    },
+    {
+      "check": "Welcome and Recent vertical rhythm matches the approved composition",
+      "result": "PASS",
+      "expected": "The action group, Recent heading/subtitle, row stack, and footer preserve the frozen screen's visual hierarchy and grouping.",
+      "actual": "The Recent heading and row stack align with the frozen composition, with the heading grouped to the rows and separated appropriately from the actions.",
+      "evidence": [
+        "collection/HF2-01-light-hidden-browser/actual.png"
+      ]
+    }
+  ],
+  "visualChecks": [
+    {
+      "check": "Primary action icon contrast",
+      "result": "PASS"
+    },
+    {
+      "check": "Recent row surface fidelity",
+      "result": "PASS"
+    },
+    {
+      "check": "Welcome vertical composition",
+      "result": "PASS"
+    },
+    {
+      "check": "Approved Recent semantic deviation",
+      "result": "PASS",
+      "expected": "Recent rows show only name and rootPath; drawing-count and last-opened metadata from the screenshot are omitted.",
+      "actual": "Only name and rootPath are visible. The approved omission is not treated as a mismatch."
+    }
+  ],
+  "compositionChecks": [
+    {
+      "check": "Compact Sidebar and Back controls remain at the far-left top shell layer",
+      "result": "PASS"
+    },
+    {
+      "check": "Welcome hero, two actions, Recent section, and non-persistent-state note are all present",
+      "result": "PASS"
+    },
+    {
+      "check": "Primary and secondary action emphasis is visually distinct and faithful",
+      "result": "PASS"
+    },
+    {
+      "check": "Recent section grouping and row surfaces are visually faithful",
+      "result": "PASS"
+    },
+    {
+      "check": "No shell region is hidden by an SDK mask",
+      "result": "PASS"
+    }
+  ],
+  "legacyRemoval": [
+    {"control": "separate global top-level New Drawing", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "textual Workspace sidebar control", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "large textual Pin or Unpin control", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "legacy top-level Save", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "persistent normal-state All changes saved strip", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "standalone top-level Export", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "legacy top-level Appearance", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "visible native-looking tab-strip scrollbar", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "thick or always-visible Sidebar scrollbar", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "Unicode placeholder tree or file icons", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "always-visible horizontal ellipsis", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "duplicate workspace navigation state", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "clipped or overflowed workspace-header actions", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "old 002 shell composition", "observedCount": 0, "evidenceSource": "collector assertions"}
+  ],
+  "masks": [],
+  "maskRationale": "The immutable mask declaration contains no masks. HF2-01 Welcome exposes no SDK-owned editor, Library, or Presentation interior that requires masking, so the full shell capture was reviewed.",
+  "tolerances": {
+    "structureHierarchyAndPerimeter": "0 tolerance",
+    "browserGeometryTolerance": "±2 CSS px; owned by the bound collector and not re-proved from the screenshot",
+    "rasterOnlyTolerance": {
+      "scope": "collector-owned auxiliary welcome-screen component crop only",
+      "maxDiffPixelRatio": 0.01,
+      "observedDiffPixelRatio": 0,
+      "fontReady": true
+    },
+    "wholeScreenRasterToleranceUsedByReviewer": false,
+    "toleranceOrMaskChangeMadeByReviewer": false
+  },
+  "findings": [
+    {
+      "severity": "INFO",
+      "screenState": "01 · Welcome · Light / default primary action",
+      "description": "The remediated New Drawing glyph is white on the purple primary surface and no longer has the prior contrast mismatch.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/6c78bebc4a922cbaf40bc6c60cf6b0be0e93b8df/HF2-01/collection/HF2-01-light-hidden-browser/actual.png"
+    },
+    {
+      "severity": "INFO",
+      "screenState": "01 · Welcome · Light / Recent Workspaces rows",
+      "description": "Recent rows use flat subtle borders, and the deterministic Architecture row displays the approved Light hover surface without the prior browser-style bevel.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/6c78bebc4a922cbaf40bc6c60cf6b0be0e93b8df/HF2-01/collection/HF2-01-light-hidden-browser/actual.png"
+    },
+    {
+      "severity": "INFO",
+      "screenState": "01 · Welcome · Light / overall composition",
+      "description": "The action group, Recent heading/subtitle, row stack, and footer preserve the intended vertical hierarchy with no visible High or Critical mismatch.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/6c78bebc4a922cbaf40bc6c60cf6b0be0e93b8df/HF2-01/collection/HF2-01-light-hidden-browser/actual.png"
+    },
+    {
+      "severity": "INFO",
+      "screenState": "01 · Welcome · Light / Recent fields",
+      "description": "The registered omission of drawing-count and last-opened metadata is accepted; only name and rootPath are visible.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/6c78bebc4a922cbaf40bc6c60cf6b0be0e93b8df/HF2-01/collection/HF2-01-light-hidden-browser/actual.png"
+    }
+  ],
+  "residualLowMediumFindings": [],
+  "criticalCount": 0,
+  "highCount": 0,
+  "highCriticalCount": 0,
+  "unverified": [
+    "A native macOS package, bundle identifier, native window, physical display scale, native menus, and system dialogs were not reviewed; they are intentionally outside this intermediate browser-only checkpoint.",
+    "The recorded capture scale is derived from matching PNG and CSS viewport dimensions and does not establish the physical macOS display scale.",
+    "Behavior, persistence, keyboard operation, accessible names, focus-visible, loading, disabled, error, five-row overflow, and legacy counts were not re-proved from pixels; the immutable semantic collector owns those facts.",
+    "HF2-05 and the other four HF-2 screens were not reviewed by this single-screen checkpoint.",
+    "No product-owner decision was created or inferred because ownerRequirement is NOT_REQUIRED for HF2-01."
+  ],
+  "verdict": "PASS",
+  "ownerRequirement": "NOT_REQUIRED",
+  "ownerArtifactCreated": false,
+  "nextGate": "Proceed with the remaining Phase 5 implementation and HF2-05 checkpoint; HF2-01 requires no intermediate product-owner artifact."
+}

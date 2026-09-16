@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../App.css";
@@ -7,6 +8,7 @@ import {
   type DocumentSaveState,
   type DocumentSession,
 } from "../documents/documentStore";
+import type { CommandInvoker } from "../ipc/client";
 import { AppShell } from "./AppShell";
 import {
   SHELL_PREFERENCES_STORAGE_KEY,
@@ -15,9 +17,32 @@ import {
 import { useAppStore } from "./store";
 import { initializeBrowserThemeController } from "./theme/themeController";
 
+const nativeMenuHarness = vi.hoisted(() => ({
+  handler: undefined as
+    | ((
+        command:
+          | "save"
+          | "exportImage"
+          | "appearanceSystem"
+          | "appearanceLight"
+          | "appearanceDark",
+      ) => void)
+    | undefined,
+  cleanup: vi.fn(),
+}));
+const nativeRuntimeHarness = vi.hoisted(() => ({ enabled: false }));
+
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   save: vi.fn(async () => "/tmp/rescued.excalidraw"),
   open: vi.fn(async () => null),
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(async () => []),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async () => () => undefined),
 }));
 
 vi.mock("../editor/ExcalidrawEditor", () => ({
@@ -54,9 +79,46 @@ vi.mock("@excalidraw/excalidraw", () => ({
     }),
 }));
 
+vi.mock("../ipc/events", () => ({
+  defaultEventListener: vi.fn(async () => () => undefined),
+}));
+
+vi.mock("../documents/RecoveryStartup", () => ({
+  RecoveryStartup: () => null,
+}));
+
+vi.mock("./openFileHandler", () => ({
+  registerOpenFileHandler: vi.fn(async () => () => undefined),
+}));
+
+vi.mock("./exitCheckpoint", async () => {
+  const actual =
+    await vi.importActual<typeof import("./exitCheckpoint")>(
+      "./exitCheckpoint",
+    );
+  return {
+    ...actual,
+    hasNativeWindowRuntime: () => nativeRuntimeHarness.enabled,
+    registerExitCheckpoint: vi.fn(async () => () => undefined),
+  };
+});
+
+vi.mock("./nativeMenu", async () => {
+  const actual =
+    await vi.importActual<typeof import("./nativeMenu")>("./nativeMenu");
+  return {
+    ...actual,
+    registerNativeMenuCommand: vi.fn(async (handler) => {
+      nativeMenuHarness.handler = handler;
+      return nativeMenuHarness.cleanup;
+    }),
+  };
+});
+
 describe("AppShell", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.mocked(invoke).mockResolvedValue([]);
     documentManager.store.setState({
       sessionsById: {},
       tabOrder: [],
@@ -64,18 +126,15 @@ describe("AppShell", () => {
     });
     useAppStore.setState({ hasMountedWorkspace: false });
     initializeBrowserThemeController().setModePreference("system");
+    nativeRuntimeHarness.enabled = false;
+    nativeMenuHarness.handler = undefined;
+    nativeMenuHarness.cleanup.mockReset();
   });
 
   it("renders the desktop shell and actionable workspace empty state", async () => {
     const user = userEvent.setup();
     const onCreateDocument = vi.fn();
-    const onOpenDocument = vi.fn();
-    render(
-      <AppShell
-        onCreateDocument={onCreateDocument}
-        onOpenDocument={onOpenDocument}
-      />,
-    );
+    render(<AppShell onCreateDocument={onCreateDocument} />);
 
     expect(
       screen.getByRole("navigation", { name: "Open drawings" }),
@@ -84,8 +143,18 @@ describe("AppShell", () => {
       screen.getByRole("main", { name: "Drawing canvas" }),
     ).toBeInTheDocument();
     expect(
+      [
+        ...screen
+          .getByRole("group", { name: "Shell navigation" })
+          .querySelectorAll("button"),
+      ].map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["Toggle workspace sidebar", "Back"]);
+    expect(
       screen.queryByRole("complementary", { name: "Files" }),
     ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "New Drawing" }));
+    expect(onCreateDocument).toHaveBeenCalledOnce();
 
     await user.click(
       screen.getByRole("button", { name: /workspace sidebar/i }),
@@ -93,11 +162,416 @@ describe("AppShell", () => {
     expect(
       screen.getByRole("complementary", { name: "Files" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "New drawing" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open drawing…" }),
+    ).not.toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole("button", { name: "New drawing" }));
-    await user.click(screen.getByRole("button", { name: "Open drawing…" }));
+  it("renders Welcome as a non-tab document state when the session is empty", async () => {
+    const user = userEvent.setup();
+    const onCreateDocument = vi.fn();
+    render(<AppShell onCreateDocument={onCreateDocument} />);
+
+    expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: /Welcome/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "New Drawing" }));
     expect(onCreateDocument).toHaveBeenCalledOnce();
-    expect(onOpenDocument).toHaveBeenCalledOnce();
+  });
+
+  it("synchronizes an Open Workspace selection into the visible sidebar", async () => {
+    const user = userEvent.setup();
+    const values = new Map<string, string>();
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key),
+        clear: () => values.clear(),
+      },
+    });
+    const workspace = {
+      id: "workspace-opened",
+      name: "Opened workspace",
+      rootPath: "/workspace/opened",
+      createdAt: 1,
+    };
+    let opened = false;
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return opened ? [workspace] : [];
+      if (command === "workspace_recent_list") return opened ? [workspace] : [];
+      if (command === "workspace_add") {
+        opened = true;
+        return workspace;
+      }
+      if (command === "workspace_entry_list") return [];
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(
+      <AppShell
+        workspaceInvoker={{ invoke }}
+        selectWorkspaceDirectory={async () => workspace.rootPath}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("workspace_list", {});
+    });
+    await user.click(
+      await screen.findByRole("button", { name: "Open Workspace" }),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /workspace sidebar/i }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: workspace.name }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      await screen.findByRole("treeitem", { name: workspace.name }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps New Drawing memory-only and avoids workspace persistence", async () => {
+    const user = userEvent.setup();
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [];
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("workspace_list", {}),
+    );
+    await user.click(screen.getByRole("button", { name: "New Drawing" }));
+
+    const activeDocumentId = documentManager.store.getState().activeDocumentId;
+    expect(activeDocumentId).not.toBeNull();
+    expect(
+      documentManager.store.getState().sessionsById[activeDocumentId ?? ""],
+    ).toMatchObject({ path: "", title: "Untitled", saveState: "dirty" });
+    expect(invoke).not.toHaveBeenCalledWith("workspace_add", expect.anything());
+  });
+
+  it("keeps Welcome and workspace records unchanged when Open Workspace is cancelled", async () => {
+    const user = userEvent.setup();
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [];
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(
+      <AppShell
+        selectWorkspaceDirectory={async () => null}
+        workspaceInvoker={{ invoke }}
+      />,
+    );
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("workspace_list", {}),
+    );
+    await user.click(screen.getByRole("button", { name: "Open Workspace" }));
+
+    expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith("workspace_add", expect.anything());
+    expect(documentManager.store.getState().sessionsById).toEqual({});
+  });
+
+  it("keeps an inaccessible Recent Workspace and exposes a readable error", async () => {
+    const user = userEvent.setup();
+    const workspace = {
+      id: "workspace-missing",
+      name: "Missing workspace",
+      rootPath: "/workspace/missing",
+      createdAt: 1,
+    };
+    const otherWorkspace = {
+      id: "workspace-other",
+      name: "Other workspace",
+      rootPath: "/workspace/other",
+      createdAt: 2,
+    };
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list")
+        return [workspace, otherWorkspace];
+      if (command === "workspace_remount") {
+        throw new Error("Workspace is no longer accessible.");
+      }
+      if (command === "workspace_recent_remove") return {};
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("workspace_list", {}),
+    );
+    const recent = await screen.findByRole("button", {
+      name: "Open workspace Missing workspace",
+    });
+    expect(screen.queryByText("Folder unavailable")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await user.click(recent);
+
+    expect(invoke).toHaveBeenCalledWith("workspace_remount", {
+      workspaceId: workspace.id,
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Workspace is no longer accessible.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Open workspace Missing workspace" }),
+    ).toBeInTheDocument();
+    expect(recent).toHaveAttribute(
+      "aria-describedby",
+      `recent-workspace-error-${workspace.id}`,
+    );
+    expect(
+      screen.getByRole("button", { name: "Open workspace Other workspace" }),
+    ).not.toHaveAttribute("aria-describedby");
+    expect(screen.getByText("Folder unavailable")).toBeInTheDocument();
+    const remove = screen.getByRole("button", {
+      name: "Remove Missing workspace from Recents",
+    });
+    expect(remove).toHaveAttribute("title", "Remove from Recents");
+    await user.click(remove);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", {
+          name: "Open workspace Missing workspace",
+        }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(documentManager.store.getState().sessionsById).toEqual({});
+  });
+
+  it("clears the unavailable row state after a successful remount retry", async () => {
+    const user = userEvent.setup();
+    const workspace = {
+      id: "workspace-retry",
+      name: "Retry workspace",
+      rootPath: "/workspace/retry",
+      createdAt: 1,
+    };
+    let attempts = 0;
+    const invokeMock = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [workspace];
+      if (command === "workspace_remount") {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error("Workspace is no longer accessible.");
+        }
+        return workspace;
+      }
+      throw new Error(`Unexpected command ${command}`);
+    });
+    const invoke = invokeMock as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    const recent = await screen.findByRole("button", {
+      name: "Open workspace Retry workspace",
+    });
+    await user.click(recent);
+    expect(await screen.findByText("Folder unavailable")).toBeInTheDocument();
+
+    await user.click(recent);
+    await waitFor(() =>
+      expect(screen.queryByText("Folder unavailable")).not.toBeInTheDocument(),
+    );
+    expect(
+      invokeMock.mock.calls.filter(
+        ([command]) => command === "workspace_remount",
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("keeps unrelated action errors visible after a Recent activation failure", async () => {
+    const user = userEvent.setup();
+    const workspace = {
+      id: "workspace-missing",
+      name: "Missing workspace",
+      rootPath: "/workspace/missing",
+      createdAt: 1,
+    };
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [workspace];
+      if (command === "workspace_remount") {
+        throw new Error("Workspace is no longer accessible.");
+      }
+      if (command === "workspace_recent_remove") {
+        throw new Error("Recent history could not be removed.");
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Open workspace Missing workspace",
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveClass("visually-hidden");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Remove Missing workspace from Recents",
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Recent history could not be removed.",
+    );
+    expect(screen.getByRole("alert")).toBeVisible();
+    expect(screen.getByText("Folder unavailable")).toBeVisible();
+  });
+
+  it("clears the unavailable row state after opening another Workspace", async () => {
+    const user = userEvent.setup();
+    const onOpenWorkspace = vi.fn(async () => undefined);
+    const workspace = {
+      id: "workspace-missing",
+      name: "Missing workspace",
+      rootPath: "/workspace/missing",
+      createdAt: 1,
+    };
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [workspace];
+      if (command === "workspace_remount") {
+        throw new Error("Workspace is no longer accessible.");
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(
+      <AppShell
+        onOpenWorkspace={onOpenWorkspace}
+        workspaceInvoker={{ invoke }}
+      />,
+    );
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Open workspace Missing workspace",
+      }),
+    );
+    expect(await screen.findByText("Folder unavailable")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open Workspace" }));
+    expect(onOpenWorkspace).toHaveBeenCalledOnce();
+    expect(screen.queryByText("Folder unavailable")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("does not mark a Recent row unavailable when document closing blocks activation", async () => {
+    const user = userEvent.setup();
+    const workspace = {
+      id: "workspace-blocked",
+      name: "Blocked workspace",
+      rootPath: "/workspace/blocked",
+      createdAt: 1,
+    };
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [workspace];
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.spyOn(documentManager, "closeMany").mockResolvedValue({
+      status: "cancelled",
+    });
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Open workspace Blocked workspace",
+      }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Close or save the open drawings before switching workspaces.",
+    );
+    expect(screen.queryByText("Folder unavailable")).not.toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith(
+      "workspace_remount",
+      expect.anything(),
+    );
+  });
+
+  it("removes an unmounted Workspace from Recent history only on request", async () => {
+    const user = userEvent.setup();
+    const workspace = {
+      id: "workspace-old",
+      name: "Old workspace",
+      rootPath: "/workspace/old",
+      createdAt: 1,
+    };
+    let removed = false;
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list")
+        return removed ? [] : [workspace];
+      if (command === "workspace_recent_remove") {
+        removed = true;
+        return {};
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Remove Old workspace from Recents",
+      }),
+    );
+
+    expect(invoke).toHaveBeenCalledWith("workspace_recent_remove", {
+      workspaceId: workspace.id,
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Open workspace Old workspace" }),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   it("exposes active and dirty tab state without relying on color", async () => {
@@ -153,14 +627,108 @@ describe("AppShell", () => {
       "data-theme",
       "dark",
     );
-    await user.click(screen.getByRole("radio", { name: "Light" }));
-    expect(screen.getByTestId("excalidraw-editor")).toHaveAttribute(
-      "data-theme",
-      "light",
+    controller.setModePreference("light");
+    await waitFor(() =>
+      expect(screen.getByTestId("excalidraw-editor")).toHaveAttribute(
+        "data-theme",
+        "light",
+      ),
     );
 
     await user.keyboard("{Meta>}s{/Meta}");
     expect(save).toHaveBeenCalledWith("manualSave");
+  });
+
+  it("renders the first Welcome frame in the restored Dark scheme without a Light mutation", () => {
+    const controller = initializeBrowserThemeController();
+    controller.setModePreference("dark");
+    const observedSchemes: Array<string | undefined> = [];
+    const observer = new MutationObserver(() => {
+      observedSchemes.push(document.documentElement.dataset.colorScheme);
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-color-scheme"],
+    });
+
+    render(<AppShell themeController={controller} />);
+    observer.takeRecords().forEach(() => {
+      observedSchemes.push(document.documentElement.dataset.colorScheme);
+    });
+    observer.disconnect();
+
+    expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
+    expect(document.documentElement.dataset.colorScheme).toBe("dark");
+    expect(observedSchemes).not.toContain("light");
+  });
+
+  it("routes native Save through DocumentManager and exposes rejected saves", async () => {
+    nativeRuntimeHarness.enabled = true;
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "dirty"),
+    ]);
+    const checkpoint = vi
+      .spyOn(documentManager, "checkpointActive")
+      .mockRejectedValue(new Error("native save failed"));
+
+    const view = render(<AppShell />);
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+    nativeMenuHarness.handler?.("save");
+
+    expect(checkpoint).toHaveBeenCalledWith("manualSave");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "native save failed",
+    );
+    expect(
+      screen.queryByRole("button", { name: /^Save/ }),
+    ).not.toBeInTheDocument();
+    view.unmount();
+    expect(nativeMenuHarness.cleanup).toHaveBeenCalledOnce();
+  });
+
+  it("reports native export as unavailable until an active editor is ready", async () => {
+    nativeRuntimeHarness.enabled = true;
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "clean"),
+    ]);
+    const invoke = vi.fn(async () => []);
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+    nativeMenuHarness.handler?.("exportImage");
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Export is unavailable until the active drawing is ready.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith("doc_export", expect.anything());
+  });
+
+  it("routes native appearance commands through the injected theme controller", async () => {
+    nativeRuntimeHarness.enabled = true;
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "clean"),
+    ]);
+    const controller = initializeBrowserThemeController();
+    render(<AppShell themeController={controller} />);
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+
+    for (const [command, mode] of [
+      ["appearanceSystem", "system"],
+      ["appearanceLight", "light"],
+      ["appearanceDark", "dark"],
+    ] as const) {
+      nativeMenuHarness.handler?.(command);
+      await waitFor(() =>
+        expect(controller.getSnapshot().preference.modePreference).toBe(mode),
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("excalidraw-editor")).toHaveAttribute(
+          "data-theme",
+          mode === "system" ? "light" : mode,
+        ),
+      );
+    }
   });
 
   it("keeps each document editor mounted when switching tabs", async () => {
@@ -242,7 +810,7 @@ describe("AppShell", () => {
     });
 
     render(<AppShell />);
-    await user.click(screen.getByRole("button", { name: /^Save/ }));
+    await user.keyboard("{Meta>}s{/Meta}");
 
     expect(screen.getByRole("status")).toHaveTextContent(
       "The disk is full. Your recovery draft is still available.",
@@ -324,6 +892,10 @@ describe("AppShell", () => {
 
     beforeEach(() => {
       testLocalStorage.clear();
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: 1280,
+      });
       Object.defineProperty(globalThis, "localStorage", {
         configurable: true,
         value: {
@@ -420,8 +992,111 @@ describe("AppShell", () => {
       assertRetainedChrome();
     });
 
-    it("keeps Save, Export…, Save as…, save status, and Appearance operable", async () => {
+    it("uses one Sidebar button for overlay, pinned, and hidden transitions", async () => {
       const user = userEvent.setup();
+      render(<AppShell />);
+      const toggle = getWorkspaceSidebarOpenControl();
+
+      await user.click(toggle);
+      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "overlay");
+      expect(
+        screen.queryByRole("button", { name: /pin workspace sidebar/i }),
+      ).not.toBeInTheDocument();
+
+      await user.click(toggle);
+      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "pinned");
+
+      await user.click(toggle);
+      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "hidden");
+    });
+
+    it("reveals the hidden Sidebar from the left edge", () => {
+      render(<AppShell />);
+
+      fireEvent.pointerEnter(screen.getByTestId("sidebar-reveal-zone"));
+
+      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "overlay");
+    });
+
+    it("resizes a pinned Sidebar with the keyboard and persists the width", async () => {
+      seedShellPreferences({ sidebarPinned: true });
+      const user = userEvent.setup();
+      render(<AppShell />);
+      const separator = screen.getByRole("separator", {
+        name: "Resize workspace sidebar",
+      });
+
+      expect(separator).toHaveAttribute("aria-valuenow", "360");
+      await user.click(separator);
+      await user.keyboard("{ArrowRight}");
+      expect(separator).toHaveAttribute("aria-valuenow", "368");
+      expect(
+        JSON.parse(
+          globalThis.localStorage.getItem(SHELL_PREFERENCES_STORAGE_KEY) ??
+            "{}",
+        ).sidebarWidth,
+      ).toBe(368);
+    });
+
+    it("resizes a pinned Sidebar with the pointer and persists the width", () => {
+      seedShellPreferences({ sidebarPinned: true });
+      render(<AppShell />);
+      const separator = screen.getByRole("separator", {
+        name: "Resize workspace sidebar",
+      });
+
+      fireEvent.pointerDown(separator, { clientX: 360, pointerId: 7 });
+      fireEvent.pointerMove(separator, { clientX: 376, pointerId: 7 });
+      fireEvent.pointerUp(separator, { clientX: 376, pointerId: 7 });
+
+      expect(separator).toHaveAttribute("aria-valuenow", "376");
+      expect(
+        JSON.parse(
+          globalThis.localStorage.getItem(SHELL_PREFERENCES_STORAGE_KEY) ??
+            "{}",
+        ).sidebarWidth,
+      ).toBe(376);
+    });
+
+    it("caps Sidebar resizing so the canvas retains at least 70 percent at 1280px", async () => {
+      seedShellPreferences({ sidebarPinned: true });
+      const user = userEvent.setup();
+      render(<AppShell />);
+      const separator = screen.getByRole("separator", {
+        name: "Resize workspace sidebar",
+      });
+
+      expect(separator).toHaveAttribute("aria-valuemax", "384");
+      await user.click(separator);
+      await user.keyboard("{End}");
+
+      const cappedWidth = Number(separator.getAttribute("aria-valuenow"));
+      expect(cappedWidth).toBe(384);
+      expect((1280 - cappedWidth) / 1280).toBeGreaterThanOrEqual(0.7);
+    });
+
+    it("restores the pinned mode and chosen width after an AppShell restart", () => {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: 1600,
+      });
+      seedShellPreferences({ sidebarPinned: true, sidebarWidth: 416 });
+      const first = render(<AppShell />);
+      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "pinned");
+      expect(
+        screen.getByRole("separator", { name: "Resize workspace sidebar" }),
+      ).toHaveAttribute("aria-valuenow", "416");
+
+      first.unmount();
+      render(<AppShell />);
+
+      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "pinned");
+      expect(
+        screen.getByRole("separator", { name: "Resize workspace sidebar" }),
+      ).toHaveAttribute("aria-valuenow", "416");
+    });
+
+    it("keeps legacy command chrome out of the shell header", () => {
       setDocumentSessions([
         createSession(
           "drawing",
@@ -432,19 +1107,17 @@ describe("AppShell", () => {
       ]);
       const first = render(<AppShell />);
       expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "hidden");
-      assertRetainedChrome({ includeSaveAs: true });
-      await user.click(screen.getByRole("radio", { name: "Dark" }));
-      expect(screen.getByRole("radio", { name: "Dark" })).toBeChecked();
+      assertRetainedChrome();
 
-      await user.click(getWorkspaceSidebarOpenControl());
+      fireEvent.click(getWorkspaceSidebarOpenControl());
       expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "overlay");
-      assertRetainedChrome({ includeSaveAs: true });
+      assertRetainedChrome();
 
       first.unmount();
       seedShellPreferences({ sidebarPinned: true });
       render(<AppShell />);
       expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "pinned");
-      assertRetainedChrome({ includeSaveAs: true });
+      assertRetainedChrome();
     });
 
     it("does not hide overlay when Escape was already handled", async () => {
@@ -515,12 +1188,16 @@ function setDocumentSessions(sessions: readonly DocumentSession[]): void {
   });
 }
 
-function seedShellPreferences(snapshot: { sidebarPinned: boolean }): void {
+function seedShellPreferences(snapshot: {
+  sidebarPinned: boolean;
+  sidebarWidth?: number;
+}): void {
   globalThis.localStorage.setItem(
     SHELL_PREFERENCES_STORAGE_KEY,
     JSON.stringify({
       version: SHELL_PREFERENCES_VERSION,
       sidebarPinned: snapshot.sidebarPinned,
+      sidebarWidth: snapshot.sidebarWidth,
       expandedWorkspaceIds: [],
     }),
   );
@@ -536,16 +1213,17 @@ function getWorkspaceSidebarOpenControl(): HTMLElement {
   return screen.getByRole("button", { name: /workspace sidebar/i });
 }
 
-function assertRetainedChrome(options?: { includeSaveAs?: boolean }): void {
-  expect(screen.getByRole("button", { name: /^Save$/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Export…" })).toBeInTheDocument();
+function assertRetainedChrome(): void {
+  expect(
+    screen.queryByRole("button", { name: /^Save$/ }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Export…" }),
+  ).not.toBeInTheDocument();
   expect(screen.getByRole("status")).toBeInTheDocument();
-  expect(screen.getByRole("group", { name: "Appearance" })).toBeInTheDocument();
-  if (options?.includeSaveAs === true) {
-    expect(
-      screen.getByRole("button", { name: "Save as…" }),
-    ).toBeInTheDocument();
-  }
+  expect(
+    screen.queryByRole("group", { name: "Appearance" }),
+  ).not.toBeInTheDocument();
 }
 
 function assertNoRightSidebar(): void {

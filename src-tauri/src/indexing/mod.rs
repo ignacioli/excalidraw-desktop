@@ -12,6 +12,7 @@ use crate::{
     },
     database::repository::{
         FileIndexRecord, FileIndexRepository, SqliteRepository, WorkspaceRecord,
+        WorkspaceRepository,
     },
 };
 
@@ -52,12 +53,24 @@ fn index_workspace_blocking(
     let root = PathBuf::from(&workspace.root_path);
     let mut stack = vec![root.clone()];
     let mut scanned = 0_u64;
+    let mut observed = 0_u64;
     while let Some(directory) = stack.pop() {
+        if !workspace_is_mounted(repository.as_ref(), &workspace.id)? {
+            emit_progress(app.as_ref(), &workspace.id, scanned, true);
+            return Ok(scanned);
+        }
         let entries = std::fs::read_dir(&directory).map_err(|source| AppError::Io {
             path: Some(directory.clone()),
             source,
         })?;
         for entry in entries {
+            if observed.is_multiple_of(64)
+                && !workspace_is_mounted(repository.as_ref(), &workspace.id)?
+            {
+                emit_progress(app.as_ref(), &workspace.id, scanned, true);
+                return Ok(scanned);
+            }
+            observed += 1;
             let entry = entry.map_err(|source| AppError::Io {
                 path: Some(directory.clone()),
                 source,
@@ -111,6 +124,15 @@ fn index_workspace_blocking(
     Ok(scanned)
 }
 
+fn workspace_is_mounted(
+    repository: &SqliteRepository,
+    workspace_id: &str,
+) -> Result<bool, AppError> {
+    tauri::async_runtime::block_on(repository.workspace_get(workspace_id.to_owned()))
+        .map(|workspace| workspace.is_some_and(|record| record.mounted))
+        .map_err(AppError::from)
+}
+
 fn emit_progress(app: Option<&AppHandle>, workspace_id: &str, scanned: u64, done: bool) {
     if let Some(app) = app {
         let _ = app.emit(
@@ -153,6 +175,7 @@ mod tests {
             name: "Workspace".into(),
             root_path: root.display().to_string(),
             created_at: 1,
+            mounted: true,
         };
         repository
             .workspace_upsert(workspace.clone())
@@ -171,6 +194,46 @@ mod tests {
                 .len(),
             2
         );
+        drop(repository);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn stops_before_indexing_an_unmounted_workspace() {
+        let root = std::env::temp_dir().join(format!(
+            "excalidraw-index-unmounted-{}-{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("drawing.excalidraw"), b"{}").unwrap();
+        let repository = Arc::new(
+            SqliteRepository::open(&root.join("state.sqlite3"))
+                .await
+                .unwrap(),
+        );
+        let workspace = WorkspaceRecord {
+            id: "workspace".into(),
+            name: "Workspace".into(),
+            root_path: root.display().to_string(),
+            created_at: 1,
+            mounted: false,
+        };
+        repository
+            .workspace_upsert(workspace.clone())
+            .await
+            .unwrap();
+
+        let count = Indexer::new(Arc::clone(&repository))
+            .index_workspace(workspace, None)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+        assert!(repository
+            .file_index_list("workspace".into())
+            .await
+            .unwrap()
+            .is_empty());
         drop(repository);
         let _ = fs::remove_dir_all(root);
     }

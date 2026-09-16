@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 1,
+  "gateId": "HF2-01",
+  "reviewerIdentity": {
+    "role": "ui-visual-acceptance-reviewer",
+    "taskIdentity": "/root/hf201_visual_review",
+    "runtimeIdentity": "/root/hf201_visual_review"
+  },
+  "runtimeConfig": {
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "high"
+  },
+  "independenceConfirmed": true,
+  "independenceStatement": "This reviewer did not author or modify the reviewed production UI or immutable browser collection. The reviewer wrote only the assigned reviewer-report.json and reviewer-report.md and did not touch production UI, collection inputs, frozen design artifacts, specifications, task checkboxes, owner artifacts, Git staging, or commits.",
+  "implementationTaskIdentity": [
+    "/root",
+    "commit:fe7ca058763a3736bc661c69620d7b6ed1932e19"
+  ],
+  "reviewedProductCommit": "fe7ca058763a3736bc661c69620d7b6ed1932e19",
+  "buildIdentity": {
+    "bundleOrBuildName": "browser-ui",
+    "bundleIdentifier": null,
+    "os": "darwin",
+    "architecture": "arm64",
+    "displayScale": 1,
+    "displayScaleBasis": "The 1280x760 PNG equals the recorded 1280x760 CSS viewport; this is the browser capture scale and is not a claim about a physical macOS display.",
+    "viewport": {
+      "width": 1280,
+      "height": 760,
+      "unit": "CSS px"
+    },
+    "windowSize": null,
+    "theme": "light",
+    "fixture": "welcome",
+    "fontReady": true,
+    "remoteFontRequests": 0,
+    "route": "semantic-browser"
+  },
+  "reviewedHf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+  "reviewedBaseline": {
+    "manifestName": "01 · Welcome · Light",
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/design/desktop-shell/hf-2/screens/welcome-light.png",
+    "sha256": "301e553d0ce94659233eb4683eb6bc018c26757397ecccf42bb162d6e7463cfa"
+  },
+  "reviewedCollectorReport": {
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/fe7ca058763a3736bc661c69620d7b6ed1932e19/HF2-01/collection/HF2-01-light-hidden-browser/collector-report.json",
+    "sha256": "6204addcfe45f3f4ec2b7601f4ae3a2ca0ac27b2b75e055e3a67ee235ee88c8a",
+    "collectionId": "HF2-01-light-hidden-browser",
+    "collectionDigest": "cdbd5da231c15e812b7ed390b816d4075356215a5a4f645d1f8575608fe818d5",
+    "result": "PASS"
+  },
+  "reviewedCollections": [
+    {
+      "collectionId": "HF2-01-light-hidden-browser",
+      "collectionDigest": "cdbd5da231c15e812b7ed390b816d4075356215a5a4f645d1f8575608fe818d5",
+      "collectorReportSha256": "6204addcfe45f3f4ec2b7601f4ae3a2ca0ac27b2b75e055e3a67ee235ee88c8a",
+      "role": "semantic browser authority and fixed browser screenshot"
+    }
+  ],
+  "reviewedActualSha256": "c3a14892f1357f1730e6e822597da6e9f8d8607aef6e68750424dee633cb773a",
+  "maskSha256": "313ab82bce1ae666d5ad3efe450acd9595dc40e08ed03d691b99454600f661ac",
+  "screenMatrix": [
+    {
+      "screen": "01 · Welcome · Light",
+      "status": "FAIL",
+      "evidence": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/fe7ca058763a3736bc661c69620d7b6ed1932e19/HF2-01/collection/HF2-01-light-hidden-browser/actual.png",
+      "mismatchCount": 3
+    }
+  ],
+  "visualChecks": [
+    {
+      "check": "The primary New Drawing action uses the frozen high-contrast leading-icon treatment",
+      "result": "FAIL",
+      "expected": "White 16x16 New Drawing glyph on the #6965DB primary surface, matching the frozen baseline and accent-contrast role.",
+      "actual": "The glyph is rendered black/dark on the purple primary surface while the adjacent text remains white."
+    },
+    {
+      "check": "Recent Workspaces rows use the restrained flat semantic surface shown in the frozen baseline",
+      "result": "FAIL",
+      "expected": "Flat row surfaces with subtle semantic border treatment; the reference Architecture row carries the light hover/active surface without native button beveling.",
+      "actual": "All three rows show a pronounced dark right/bottom bevel, and Architecture lacks the reference filled surface."
+    },
+    {
+      "check": "Welcome content preserves the approved vertical hierarchy and rhythm",
+      "result": "FAIL",
+      "expected": "The Recent heading is separated from the action row by the larger reference interval and remains visually grouped with its rows.",
+      "actual": "The Recent heading is pulled materially closer to the action row while the gap before the rows is enlarged, changing the reference grouping and hierarchy."
+    },
+    {
+      "check": "Approved Recent semantic deviation is respected",
+      "result": "PASS",
+      "expected": "Recent rows show only name and rootPath; drawing-count and last-opened metadata from the screenshot are omitted.",
+      "actual": "Only name and rootPath are visible. The approved omission is not treated as a mismatch."
+    }
+  ],
+  "compositionChecks": [
+    {
+      "check": "Compact Sidebar and Back controls remain at the far-left top shell layer",
+      "result": "PASS"
+    },
+    {
+      "check": "Welcome hero, two actions, Recent section, and non-persistent-state note are all present",
+      "result": "PASS"
+    },
+    {
+      "check": "Primary action visual emphasis and icon contrast match the baseline",
+      "result": "FAIL"
+    },
+    {
+      "check": "Recent section grouping and row surfaces match the baseline composition",
+      "result": "FAIL"
+    },
+    {
+      "check": "No shell region is hidden by an SDK mask",
+      "result": "PASS"
+    }
+  ],
+  "legacyRemoval": [
+    {"control": "separate global top-level New Drawing", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "textual Workspace sidebar control", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "large textual Pin or Unpin control", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "legacy top-level Save", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "persistent normal-state All changes saved strip", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "standalone top-level Export", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "legacy top-level Appearance", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "visible native-looking tab-strip scrollbar", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "thick or always-visible Sidebar scrollbar", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "Unicode placeholder tree or file icons", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "always-visible horizontal ellipsis", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "duplicate workspace navigation state", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "clipped or overflowed workspace-header actions", "observedCount": 0, "evidenceSource": "collector assertions"},
+    {"control": "old 002 shell composition", "observedCount": 0, "evidenceSource": "collector assertions"}
+  ],
+  "masks": [],
+  "maskRationale": "The immutable mask declaration contains no masks. HF2-01 Welcome exposes no SDK-owned editor, Library, or Presentation interior that requires masking, so the full shell capture was reviewed.",
+  "tolerances": {
+    "structureHierarchyAndPerimeter": "0 tolerance",
+    "browserGeometryTolerance": "±2 CSS px; owned by the bound collector and not re-proved from the screenshot",
+    "rasterOnlyTolerance": {
+      "scope": "collector-owned auxiliary welcome-screen component crop only",
+      "maxDiffPixelRatio": 0.01,
+      "observedDiffPixelRatio": 0,
+      "fontReady": true
+    },
+    "wholeScreenRasterToleranceUsedByReviewer": false,
+    "toleranceOrMaskChangeMadeByReviewer": false
+  },
+  "findings": [
+    {
+      "id": "HF2-01-VIS-001",
+      "severity": "HIGH",
+      "screenState": "01 · Welcome · Light / default primary action",
+      "expected": "The New Drawing action has a white leading document glyph on the purple primary surface, matching the frozen baseline and the primary action contrast treatment.",
+      "actual": "The New Drawing glyph is black/dark on the purple surface while its label remains white, producing an unapproved contrast and emphasis mismatch.",
+      "reproduction": "Open the bound baseline and actual.png at 100% and compare the New Drawing leading glyph near x=176..194, y=318..336. The baseline glyph is white; the actual glyph is black/dark.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/fe7ca058763a3736bc661c69620d7b6ed1932e19/HF2-01/collection/HF2-01-light-hidden-browser/actual.png"
+    },
+    {
+      "id": "HF2-01-VIS-002",
+      "severity": "MEDIUM",
+      "screenState": "01 · Welcome · Light / Recent Workspaces rows",
+      "expected": "Recent rows use flat semantic surfaces with restrained subtle borders; the reference Architecture row uses the light filled hover/active surface.",
+      "actual": "All three rows show a pronounced dark right/bottom bevel characteristic of an unreset browser button, and the Architecture row lacks the reference filled surface.",
+      "reproduction": "Open the bound baseline and actual.png at 100% and compare the three Recent row perimeters and Architecture row fill. In actual.png the right and bottom edges are visibly dark on every row.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/fe7ca058763a3736bc661c69620d7b6ed1932e19/HF2-01/collection/HF2-01-light-hidden-browser/actual.png"
+    },
+    {
+      "id": "HF2-01-VIS-003",
+      "severity": "MEDIUM",
+      "screenState": "01 · Welcome · Light / Recent section vertical composition",
+      "expected": "The Recent section keeps the frozen baseline rhythm: a larger separation after the action group and a tighter visual grouping between the Recent heading/subtitle and the first row.",
+      "actual": "The heading moves materially closer to the actions while the first row is separated farther from the heading/subtitle, weakening the intended grouping.",
+      "reproduction": "Open the bound baseline and actual.png at 100% and compare the vertical intervals between the action row, Recent Workspaces heading/subtitle, and first Recent row.",
+      "evidencePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/evidence/003-visual-acceptance/fe7ca058763a3736bc661c69620d7b6ed1932e19/HF2-01/collection/HF2-01-light-hidden-browser/actual.png"
+    }
+  ],
+  "residualLowMediumFindings": [
+    "HF2-01-VIS-002: Recent row surfaces use a pronounced native-looking bevel and omit the reference Architecture-row filled surface.",
+    "HF2-01-VIS-003: Recent section vertical grouping differs materially from the frozen composition."
+  ],
+  "criticalCount": 0,
+  "highCount": 1,
+  "highCriticalCount": 1,
+  "unverified": [
+    "A native macOS package, bundle identifier, native window, physical display scale, native menus, and system dialogs were not reviewed; they are intentionally outside this intermediate browser-only checkpoint.",
+    "The recorded capture scale is derived from matching PNG and CSS viewport dimensions and does not establish the physical macOS display scale.",
+    "Behavior, persistence, keyboard operation, accessible names, focus-visible, loading, disabled, error, five-row overflow, and legacy counts were not re-proved from pixels; the immutable semantic collector owns those facts.",
+    "HF2-05 and the other four HF-2 screens were not reviewed by this single-screen checkpoint.",
+    "No product-owner decision was created or inferred because ownerRequirement is NOT_REQUIRED for HF2-01."
+  ],
+  "verdict": "FAIL",
+  "ownerRequirement": "NOT_REQUIRED",
+  "ownerArtifactCreated": false,
+  "nextGate": "Implementation remediation for the primary-action glyph color, Recent row surface reset/state fidelity, and Recent section spacing; then create a new immutable HF2-01 browser collection bound to the remediation commit and obtain another independent reviewer verdict."
+}

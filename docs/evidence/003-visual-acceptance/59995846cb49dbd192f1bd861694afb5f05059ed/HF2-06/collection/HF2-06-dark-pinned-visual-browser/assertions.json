@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 1,
+  "legacyCounts": {
+    "globalNewDrawing": 0,
+    "textSidebar": 0,
+    "largePinUnpin": 0,
+    "topLevelSaveExportAppearance": 0,
+    "autosaveStrip": 0,
+    "tabScrollbar": 0,
+    "sidebarScrollbar": 0,
+    "placeholderIcons": 0,
+    "horizontalEllipsis": 0,
+    "duplicateWorkspaceRoots": 0,
+    "headerActionOverflow": 0
+  },
+  "legacyAssertions": [
+    {
+      "name": "legacy.globalNewDrawing",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.textSidebar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.largePinUnpin",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.topLevelSaveExportAppearance",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.autosaveStrip",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.tabScrollbar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.sidebarScrollbar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.placeholderIcons",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.horizontalEllipsis",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.duplicateWorkspaceRoots",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.headerActionOverflow",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    }
+  ],
+  "semanticAssertions": [
+    {
+      "name": "semantic.tab.fixture-overlay-system-map.save-state",
+      "expected": "clean",
+      "actual": "clean",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-system-map.visible-unsaved-marker",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-flow.save-state",
+      "expected": "dirty",
+      "actual": "dirty",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-flow.visible-unsaved-marker",
+      "expected": "1",
+      "actual": "1",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-research.save-state",
+      "expected": "clean",
+      "actual": "clean",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-research.visible-unsaved-marker",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    }
+  ],
+  "geometryAssertions": [
+    {
+      "name": "geometry.pinned.top-layer",
+      "expected": "44",
+      "actual": "44",
+      "tolerance": "2px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.pinned.workspace-sidebar",
+      "expected": "360",
+      "actual": "360",
+      "tolerance": "2px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.pinned.icon-hit-target",
+      "expected": "32",
+      "actual": "32",
+      "tolerance": "2px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.pinned.workspace-action-icon",
+      "expected": "16",
+      "actual": "16",
+      "tolerance": "2px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.pinned.workspace-row",
+      "expected": "28",
+      "actual": "28",
+      "tolerance": "2px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.pinned.tab-width",
+      "expected": "196",
+      "actual": "196",
+      "tolerance": "2px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.pinned.tab-height",
+      "expected": "36",
+      "actual": "36",
+      "tolerance": "2px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.pinned.canvas-share-percent",
+      "expected": "70",
+      "actual": "71.875",
+      "tolerance": "1.875% minimum",
+      "result": "PASS"
+    }
+  ],
+  "tokenAssertions": [
+    {
+      "name": "token.--app-background",
+      "expected": "#121212",
+      "actual": "#121212",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--panel-background",
+      "expected": "#232329",
+      "actual": "#232329",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--surface-hover",
+      "expected": "#31303B",
+      "actual": "#31303B",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--text-primary",
+      "expected": "#F1F3F5",
+      "actual": "#F1F3F5",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--text-secondary",
+      "expected": "#CED4DA",
+      "actual": "#CED4DA",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--focus-ring",
+      "expected": "#74C0FC",
+      "actual": "#74C0FC",
+      "tolerance": "exact",
+      "result": "PASS"
+    }
+  ],
+  "cropComparisons": [
+    {
+      "componentId": "workspace-sidebar",
+      "baselineComponentId": "workspace-sidebar",
+      "baselineSha256": "5e82908e8ce13b79e1d1ef0d5676eac77f9de50c5a7beef9976a852bc084db4a",
+      "actualSha256": "5e82908e8ce13b79e1d1ef0d5676eac77f9de50c5a7beef9976a852bc084db4a",
+      "fontReady": true,
+      "maxDiffPixelRatio": 0
+    }
+  ],
+  "cropAssertions": [
+    {
+      "name": "component-crop-binding.workspace-sidebar",
+      "expected": "same semantic component; fonts ready; valid digests; diff <=0.01",
+      "actual": "baseline=workspace-sidebar; fontReady=true; diff=0",
+      "tolerance": "auxiliary; component crop only",
+      "result": "PASS"
+    }
+  ]
+}

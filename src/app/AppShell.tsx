@@ -4,6 +4,9 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
   documentManager,
@@ -14,25 +17,47 @@ import {
 } from "../documents/documentStore";
 import { conflictDetector } from "../documents/conflictDetector";
 import { ConflictDialog } from "../documents/ConflictDialog";
-import { RecoveryStartup } from "../documents/RecoveryStartup";
+import {
+  RecoveryNotice,
+  RecoveryStartup,
+  type RecoveryStartupState,
+} from "../documents/RecoveryStartup";
 import { ExcalidrawEditor } from "../editor/ExcalidrawEditor";
 import type { ExcalidrawAdapter } from "../editor/ExcalidrawAdapter";
-import { hasTauriCommandRuntime } from "../ipc/client";
+import {
+  createTauriCommandInvoker,
+  hasTauriCommandRuntime,
+  type CommandInvoker,
+} from "../ipc/client";
+import type { Workspace } from "../ipc/contracts";
+import { BrowsingHistory, type BrowsingLocation } from "./browsingHistory";
 import { WorkspacePanel } from "../workspaces/WorkspacePanel";
-import { AppearanceControl } from "./AppearanceControl";
 import { ExportDialog } from "./ExportDialog";
 import {
   hasNativeWindowRuntime,
   registerExitCheckpoint,
 } from "./exitCheckpoint";
-import { fileDialogActions, type FileDialogActions } from "./fileDialogs";
 import { registerOpenFileHandler } from "./openFileHandler";
 import { TabBar } from "./TabBar";
 import { OrphanCloseDialog } from "./OrphanCloseDialog";
+import { WelcomeScreen } from "./WelcomeScreen";
+import backIcon from "../../docs/design/desktop-shell/hf-2/icons/back.svg";
+import sidebarIcon from "../../docs/design/desktop-shell/hf-2/icons/sidebar.svg";
 import { interactionStore } from "./interaction";
 import { createSidebarController } from "./sidebarController";
-import { ShellPreferences } from "./shellPreferences";
+import {
+  SIDEBAR_WIDTH_MAX,
+  SIDEBAR_WIDTH_MIN,
+  ShellPreferences,
+  clampSidebarWidth,
+} from "./shellPreferences";
+import { deriveStartupRoute } from "./startupRoute";
 import { useAppStore } from "./store";
+import {
+  createNativeMenuCommandHandler,
+  registerNativeMenuCommand,
+  type NativeMenuCommand,
+} from "./nativeMenu";
 import {
   initializeBrowserThemeController,
   type ThemeController,
@@ -40,15 +65,17 @@ import {
 
 interface AppShellProps {
   onCreateDocument?: () => void | Promise<void>;
-  onOpenDocument?: () => void | Promise<void>;
-  dialogs?: FileDialogActions;
+  onOpenWorkspace?: () => void | Promise<void>;
+  workspaceInvoker?: CommandInvoker;
+  selectWorkspaceDirectory?: () => Promise<string | null>;
   themeController?: ThemeController;
 }
 
 export function AppShell({
   onCreateDocument,
-  onOpenDocument,
-  dialogs = fileDialogActions,
+  onOpenWorkspace,
+  workspaceInvoker: providedWorkspaceInvoker,
+  selectWorkspaceDirectory = selectNativeWorkspaceDirectory,
   themeController = initializeBrowserThemeController(),
 }: AppShellProps) {
   const [interactionError, setInteractionError] = useState<string | null>(null);
@@ -71,6 +98,9 @@ export function AppShell({
       }
     | undefined
   >(undefined);
+  const nativeMenuHandlerRef = useRef<(command: NativeMenuCommand) => void>(
+    () => undefined,
+  );
   const [readyEditor, setReadyEditor] = useState<
     | {
         documentId: string;
@@ -78,10 +108,47 @@ export function AppShell({
       }
     | undefined
   >(undefined);
-  const exportButtonRef = useRef<HTMLButtonElement>(null);
   const [exportDocumentId, setExportDocumentId] = useState<string | null>(null);
   const [orphanCloseId, setOrphanCloseId] = useState<string | null>(null);
   const [preferences] = useState(() => new ShellPreferences());
+  const [sidebarWidth, setSidebarWidth] = useState(
+    () => preferences.getSnapshot().sidebarWidth,
+  );
+  const [sidebarMaximum, setSidebarMaximum] = useState(SIDEBAR_WIDTH_MAX);
+  const appShellRef = useRef<HTMLDivElement | null>(null);
+  const sidebarResizeRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+  const [workspaceInvoker] = useState(
+    () => providedWorkspaceInvoker ?? createTauriCommandInvoker(),
+  );
+  const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(
+    () => preferences.getSnapshot().currentWorkspaceId,
+  );
+  const [welcomeWorkspaces, setWelcomeWorkspaces] = useState<Workspace[]>([]);
+  const [mountedWorkspaces, setMountedWorkspaces] = useState<Workspace[]>([]);
+  const workspaceRevisionRef = useRef(0);
+  const [welcomeBusy, setWelcomeBusy] = useState(false);
+  const [welcomeError, setWelcomeError] = useState<string | null>(null);
+  const [welcomeErrorVisuallyHidden, setWelcomeErrorVisuallyHidden] =
+    useState(false);
+  const [unavailableWorkspaceId, setUnavailableWorkspaceId] = useState<
+    string | null
+  >(null);
+  const [browsingHistory] = useState(() => new BrowsingHistory());
+  const currentBrowsingLocationRef = useRef<BrowsingLocation | null>(null);
+  const [backLocation, setBackLocation] = useState<BrowsingLocation | null>(
+    null,
+  );
+  const [, setHistoryVersion] = useState(0);
+  const [startupState, setStartupState] = useState<RecoveryStartupState>({
+    status: hasNativeWindowRuntime() ? "checking" : "ready",
+    handshake: null,
+    candidates: [],
+    recoveredCount: 0,
+  });
   const [sidebarController] = useState(() =>
     createSidebarController({
       initiallyPinned: preferences.getSnapshot().sidebarPinned,
@@ -93,7 +160,68 @@ export function AppShell({
     sidebarController.getSnapshot,
   );
   const pointerLeaveTimerRef = useRef<number | undefined>(undefined);
-  const hasMountedWorkspace = useAppStore((state) => state.hasMountedWorkspace);
+
+  const getSidebarMaximum = useCallback(() => {
+    const measuredWidth =
+      appShellRef.current?.getBoundingClientRect().width ?? 0;
+    const shellWidth = measuredWidth > 0 ? measuredWidth : window.innerWidth;
+    if (shellWidth <= 0) return SIDEBAR_WIDTH_MAX;
+    return Math.max(
+      SIDEBAR_WIDTH_MIN,
+      Math.min(SIDEBAR_WIDTH_MAX, Math.floor(shellWidth * 0.3)),
+    );
+  }, []);
+
+  const renderedSidebarWidth = Math.min(sidebarWidth, sidebarMaximum);
+
+  const commitSidebarWidth = useCallback(
+    (candidate: number) => {
+      const width = Math.min(clampSidebarWidth(candidate), getSidebarMaximum());
+      setSidebarWidth(width);
+      preferences.setSidebarWidth(width);
+    },
+    [getSidebarMaximum, preferences],
+  );
+
+  const handleSidebarResizeKeyDown = (
+    event: ReactKeyboardEvent<HTMLDivElement>,
+  ) => {
+    let nextWidth: number | null = null;
+    if (event.key === "ArrowLeft") nextWidth = renderedSidebarWidth - 8;
+    if (event.key === "ArrowRight") nextWidth = renderedSidebarWidth + 8;
+    if (event.key === "Home") nextWidth = SIDEBAR_WIDTH_MIN;
+    if (event.key === "End") nextWidth = getSidebarMaximum();
+    if (nextWidth === null) return;
+    event.preventDefault();
+    commitSidebarWidth(nextWidth);
+  };
+
+  const handleSidebarResizePointerDown = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    sidebarResizeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: renderedSidebarWidth,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleSidebarResizePointerMove = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    const resize = sidebarResizeRef.current;
+    if (resize === null || resize.pointerId !== event.pointerId) return;
+    commitSidebarWidth(resize.startWidth + event.clientX - resize.startX);
+  };
+
+  const handleSidebarResizePointerEnd = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    if (sidebarResizeRef.current?.pointerId !== event.pointerId) return;
+    sidebarResizeRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
   const setHasMountedWorkspace = useAppStore(
     (state) => state.setHasMountedWorkspace,
   );
@@ -102,29 +230,35 @@ export function AppShell({
   const activeSession =
     activeDocumentId === null ? undefined : sessionsById[activeDocumentId];
   const documentSessions = Object.values(sessionsById);
+  const exportReady =
+    activeSession !== undefined && readyEditor?.documentId === activeSession.id;
+  const startupRoute = deriveStartupRoute({
+    handshake:
+      startupState.handshake ??
+      ({ abnormalExit: false, pendingOpenPaths: [] } as const),
+    recoveryCandidates: startupState.candidates,
+    currentWorkspaceId,
+    workspaces: mountedWorkspaces,
+    openDocumentCount: documentSessions.length,
+  });
+  const showWelcome =
+    startupState.status === "ready" && startupRoute.kind === "welcome";
   const themeSnapshot = useSyncExternalStore(
     themeController.subscribe,
     themeController.getSnapshot,
     themeController.getSnapshot,
   );
-  const saveShortcutLabel = /Mac|iPhone|iPad/.test(navigator.platform)
-    ? "⌘S"
-    : "Ctrl+S";
-  const exportReady =
-    activeSession !== undefined && readyEditor?.documentId === activeSession.id;
-
-  const openExportDialog = () => {
-    if (!exportReady || activeSession === undefined) {
-      return;
-    }
-    setExportDocumentId(activeSession.id);
-  };
-
-  const closeExportDialog = () => {
-    setExportDocumentId(null);
-    exportButtonRef.current?.focus();
-  };
-
+  const clearWelcomeError = useCallback((): void => {
+    setWelcomeError(null);
+    setWelcomeErrorVisuallyHidden(false);
+  }, []);
+  const reportWelcomeError = useCallback(
+    (error: unknown, visuallyHidden = false): void => {
+      setWelcomeError(getErrorMessage(error));
+      setWelcomeErrorVisuallyHidden(visuallyHidden);
+    },
+    [],
+  );
   const runAction = async (action: () => void | Promise<unknown>) => {
     setInteractionError(null);
     try {
@@ -134,21 +268,255 @@ export function AppShell({
     }
   };
 
-  const createDocument = () =>
-    runAction(onCreateDocument ?? dialogs.createDocument);
-  const openDocument = () => runAction(onOpenDocument ?? dialogs.openDocument);
-  const saveDocument = () =>
-    runAction(() => documentManager.checkpointActive("manualSave"));
-  const saveOrphanedAs = async (documentId: string) => {
-    const session = documentManager.store.getState().sessionsById[documentId];
-    if (session === undefined) {
-      return;
-    }
-    const selectedPath = await chooseSavePath(session.title);
-    if (selectedPath !== null) {
-      await documentManager.saveOrphanedAs(documentId, selectedPath);
+  const closeOpenDocumentsForWorkspaceSwitch = async (): Promise<void> => {
+    const tabOrder = documentManager.store.getState().tabOrder;
+    const outcome = await documentManager.closeMany(tabOrder);
+    if (outcome.status !== "closed") {
+      throw new Error(
+        outcome.status === "failed"
+          ? outcome.message
+          : "Close or save the open drawings before switching workspaces.",
+      );
     }
   };
+
+  const selectCurrentWorkspace = useCallback(
+    (workspace: Workspace): void => {
+      preferences.setCurrentWorkspaceId(workspace.id);
+      setCurrentWorkspaceId(workspace.id);
+      setUnavailableWorkspaceId(null);
+      clearWelcomeError();
+    },
+    [clearWelcomeError, preferences],
+  );
+
+  const handleMountedWorkspacesChange = useCallback(
+    (items: Workspace[]): void => {
+      workspaceRevisionRef.current += 1;
+      setMountedWorkspaces(items);
+      setUnavailableWorkspaceId((current) =>
+        items.some((workspace) => workspace.id === current) ? null : current,
+      );
+      void workspaceInvoker
+        .invoke("workspace_recent_list", {})
+        .then(setWelcomeWorkspaces)
+        .catch((error: unknown) => reportWelcomeError(error));
+    },
+    [reportWelcomeError, workspaceInvoker],
+  );
+
+  const handleCurrentWorkspaceChange = useCallback(
+    (workspace: Workspace | null): void => {
+      preferences.setCurrentWorkspaceId(workspace?.id ?? null);
+      setCurrentWorkspaceId(workspace?.id ?? null);
+      setUnavailableWorkspaceId(null);
+      clearWelcomeError();
+    },
+    [clearWelcomeError, preferences],
+  );
+
+  const openWorkspace = async (): Promise<void> => {
+    if (onOpenWorkspace !== undefined) {
+      await onOpenWorkspace();
+      setUnavailableWorkspaceId(null);
+      clearWelcomeError();
+      return;
+    }
+    setWelcomeBusy(true);
+    clearWelcomeError();
+    try {
+      const rootPath = await selectWorkspaceDirectory();
+      if (rootPath === null) return;
+      await closeOpenDocumentsForWorkspaceSwitch();
+      const workspace = await workspaceInvoker.invoke("workspace_add", {
+        rootPath,
+      });
+      workspaceRevisionRef.current += 1;
+      selectCurrentWorkspace(workspace);
+      setWelcomeWorkspaces((current) => [
+        ...current.filter((item) => item.id !== workspace.id),
+        workspace,
+      ]);
+      setMountedWorkspaces((current) => [
+        ...current.filter((item) => item.id !== workspace.id),
+        workspace,
+      ]);
+    } catch (error) {
+      reportWelcomeError(error);
+    } finally {
+      setWelcomeBusy(false);
+    }
+  };
+
+  const openRecentWorkspace = async (workspace: Workspace): Promise<void> => {
+    setWelcomeBusy(true);
+    clearWelcomeError();
+    try {
+      await closeOpenDocumentsForWorkspaceSwitch();
+    } catch (error) {
+      reportWelcomeError(error);
+      setWelcomeBusy(false);
+      return;
+    }
+    try {
+      const remounted = await workspaceInvoker.invoke("workspace_remount", {
+        workspaceId: workspace.id,
+      });
+      workspaceRevisionRef.current += 1;
+      selectCurrentWorkspace(remounted);
+      setMountedWorkspaces((current) => [
+        ...current.filter((item) => item.id !== remounted.id),
+        remounted,
+      ]);
+    } catch (error) {
+      reportWelcomeError(error, true);
+      setUnavailableWorkspaceId(workspace.id);
+    } finally {
+      setWelcomeBusy(false);
+    }
+  };
+
+  const removeRecentWorkspace = async (workspace: Workspace): Promise<void> => {
+    setWelcomeBusy(true);
+    clearWelcomeError();
+    try {
+      await workspaceInvoker.invoke("workspace_recent_remove", {
+        workspaceId: workspace.id,
+      });
+      workspaceRevisionRef.current += 1;
+      setUnavailableWorkspaceId((current) =>
+        current === workspace.id ? null : current,
+      );
+      setWelcomeWorkspaces((current) =>
+        current.filter((item) => item.id !== workspace.id),
+      );
+    } catch (error) {
+      reportWelcomeError(error);
+    } finally {
+      setWelcomeBusy(false);
+    }
+  };
+
+  const createWelcomeDrawing = async (): Promise<void> => {
+    setWelcomeBusy(true);
+    clearWelcomeError();
+    try {
+      await (onCreateDocument === undefined
+        ? documentManager.createUntitled()
+        : onCreateDocument());
+    } catch (error) {
+      reportWelcomeError(error);
+    } finally {
+      setWelcomeBusy(false);
+    }
+  };
+
+  const handleBrowse = (location: BrowsingLocation): void => {
+    const current = currentBrowsingLocationRef.current;
+    if (
+      current?.workspaceId === location.workspaceId &&
+      current.directoryRelativePath === location.directoryRelativePath
+    ) {
+      return;
+    }
+    if (current !== null) browsingHistory.push(current);
+    currentBrowsingLocationRef.current = location;
+    setHistoryVersion((version) => version + 1);
+  };
+
+  const goBack = (): void => {
+    const target = browsingHistory.pop(
+      (location) => location.workspaceId === currentWorkspaceId,
+    );
+    if (target === null) return;
+    currentBrowsingLocationRef.current = target;
+    setBackLocation(target);
+    setHistoryVersion((version) => version + 1);
+  };
+
+  const canGoBack = browsingHistory.canGoBack(
+    (location) => location.workspaceId === currentWorkspaceId,
+  );
+
+  useEffect(() => {
+    const updateMaximum = () => setSidebarMaximum(getSidebarMaximum());
+    updateMaximum();
+    window.addEventListener("resize", updateMaximum);
+    const observer =
+      typeof ResizeObserver === "function"
+        ? new ResizeObserver(updateMaximum)
+        : null;
+    if (appShellRef.current !== null) observer?.observe(appShellRef.current);
+    return () => {
+      window.removeEventListener("resize", updateMaximum);
+      observer?.disconnect();
+    };
+  }, [getSidebarMaximum]);
+
+  useEffect(() => {
+    if (!hasTauriCommandRuntime()) return;
+    let disposed = false;
+    const requestedRevision = workspaceRevisionRef.current;
+    void Promise.all([
+      workspaceInvoker.invoke("workspace_list", {}),
+      workspaceInvoker.invoke("workspace_recent_list", {}),
+    ])
+      .then(([items, recentItems]) => {
+        if (disposed || workspaceRevisionRef.current !== requestedRevision)
+          return;
+        setMountedWorkspaces(items);
+        setWelcomeWorkspaces(recentItems);
+        const validIds = new Set(items.map((workspace) => workspace.id));
+        const nextCurrentWorkspaceId = preferences.resolveCurrentWorkspaceId(
+          validIds,
+          null,
+        );
+        const nextWorkspace = items.find(
+          (workspace) => workspace.id === nextCurrentWorkspaceId,
+        );
+        if (nextWorkspace === undefined) {
+          preferences.setCurrentWorkspaceId(null);
+          setCurrentWorkspaceId(null);
+        } else {
+          selectCurrentWorkspace(nextWorkspace);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!disposed) reportWelcomeError(error);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [
+    preferences,
+    reportWelcomeError,
+    selectCurrentWorkspace,
+    workspaceInvoker,
+  ]);
+
+  const saveDocument = () =>
+    runAction(() => documentManager.checkpointActive("manualSave"));
+  const openExportDialog = (): void => {
+    if (!exportReady || activeSession === undefined) {
+      setInteractionError(
+        "Export is unavailable until the active drawing is ready.",
+      );
+      return;
+    }
+    setInteractionError(null);
+    setExportDocumentId(activeSession.id);
+  };
+  const closeExportDialog = (): void => {
+    setExportDocumentId(null);
+  };
+  useEffect(() => {
+    nativeMenuHandlerRef.current = createNativeMenuCommandHandler({
+      onSave: () => void saveDocument(),
+      onExportImage: openExportDialog,
+      onAppearance: (mode) =>
+        void runAction(() => themeController.setModePreference(mode)),
+    });
+  });
   const applyCloseOutcome = (outcome: CloseOutcome) => {
     if (outcome.status === "orphaned") {
       setOrphanCloseId(outcome.documentId);
@@ -177,6 +545,27 @@ export function AppShell({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void registerNativeMenuCommand((command) =>
+      nativeMenuHandlerRef.current(command),
+    )
+      .then((nextUnlisten) => {
+        if (disposed) {
+          nextUnlisten();
+        } else {
+          unlisten = nextUnlisten;
+        }
+      })
+      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (import.meta.env.VITE_E2E_HARNESS !== "1") {
@@ -349,69 +738,76 @@ export function AppShell({
   ]);
 
   return (
-    <div className="app-shell">
-      <RecoveryStartup enabled={hasNativeWindowRuntime()} />
-      <header className="app-shell-tabs">
-        <button
-          aria-expanded={sidebarSnapshot.mode !== "hidden"}
-          aria-controls="workspace-sidebar"
-          onClick={() => {
-            if (sidebarSnapshot.mode === "hidden") {
-              sidebarController.openOverlay();
-            } else if (sidebarSnapshot.mode === "overlay") {
-              sidebarController.hide();
-            } else {
-              sidebarController.unpin();
-              preferences.setSidebarPinned(false);
+    <div
+      className="app-shell"
+      ref={appShellRef}
+      style={
+        {
+          "--workspace-sidebar-width": `${renderedSidebarWidth}px`,
+        } as CSSProperties
+      }
+    >
+      <RecoveryStartup
+        enabled={hasNativeWindowRuntime()}
+        onStateChange={setStartupState}
+      />
+      <header
+        className="app-shell-tabs"
+        data-sidebar-mode={sidebarSnapshot.mode}
+      >
+        <div className="shell-left" aria-label="Shell navigation" role="group">
+          <button
+            aria-expanded={sidebarSnapshot.mode !== "hidden"}
+            aria-controls="workspace-sidebar"
+            aria-label="Toggle workspace sidebar"
+            className="icon-button shell-sidebar-toggle"
+            onClick={() => {
+              if (sidebarSnapshot.mode === "hidden") {
+                sidebarController.openOverlay();
+              } else if (sidebarSnapshot.mode === "overlay") {
+                sidebarController.pin();
+                preferences.setSidebarPinned(true);
+              } else {
+                sidebarController.unpin();
+                sidebarController.hide();
+                preferences.setSidebarPinned(false);
+              }
+            }}
+            title="Toggle workspace sidebar"
+            type="button"
+          >
+            <img alt="" aria-hidden="true" src={sidebarIcon} />
+          </button>
+          <button
+            aria-label="Back"
+            className="icon-button shell-back-button"
+            disabled={!canGoBack}
+            onClick={goBack}
+            title="Back"
+            type="button"
+          >
+            <img alt="" aria-hidden="true" src={backIcon} />
+          </button>
+        </div>
+        <div className="shell-center">
+          <TabBar
+            onCloseOutcome={(_, outcome) => {
+              applyCloseOutcome(outcome);
+            }}
+          />
+        </div>
+        <div className="app-commands" aria-live="polite">
+          <p
+            className={
+              interactionError
+                ? "save-status save-status--error"
+                : "save-status visually-hidden"
             }
-          }}
-          type="button"
-        >
-          Workspace sidebar
-        </button>
-        <TabBar
-          onCloseOutcome={(_, outcome) => {
-            applyCloseOutcome(outcome);
-          }}
-        />
-        <div
-          className="app-commands"
-          role="toolbar"
-          aria-label="Drawing commands"
-        >
-          <p className="save-status" role="status" aria-live="polite">
+            role="status"
+            aria-live="polite"
+          >
             {interactionError ?? getSaveStatus(activeSession?.saveState)}
           </p>
-          <button
-            aria-keyshortcuts="Meta+S Control+S"
-            disabled={activeSession === undefined}
-            onClick={() => void saveDocument()}
-            type="button"
-          >
-            Save
-            <span className="shortcut-hint" aria-hidden="true">
-              {saveShortcutLabel}
-            </span>
-          </button>
-          <button
-            disabled={!exportReady}
-            onClick={openExportDialog}
-            ref={exportButtonRef}
-            type="button"
-          >
-            Export…
-          </button>
-          {activeSession?.saveState === "orphaned" ? (
-            <button
-              onClick={() =>
-                void runAction(() => saveOrphanedAs(activeSession.id))
-              }
-              type="button"
-            >
-              Save as…
-            </button>
-          ) : null}
-          <AppearanceControl controller={themeController} />
         </div>
       </header>
 
@@ -447,6 +843,15 @@ export function AppShell({
         }
         data-sidebar-mode={sidebarSnapshot.mode}
       >
+        {sidebarSnapshot.mode === "hidden" ? (
+          <div
+            aria-hidden="true"
+            className="sidebar-reveal-zone"
+            data-testid="sidebar-reveal-zone"
+            onPointerEnter={() => sidebarController.openOverlay()}
+            style={{ position: "absolute" }}
+          />
+        ) : null}
         <aside
           aria-label="Files"
           className="file-sidebar"
@@ -467,59 +872,70 @@ export function AppShell({
             }
           }}
         >
-          {sidebarSnapshot.mode === "overlay" ? (
-            <button
-              onClick={() => {
-                sidebarController.pin();
-                preferences.setSidebarPinned(true);
-              }}
-              type="button"
-            >
-              Pin workspace sidebar
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                sidebarController.unpin();
-                preferences.setSidebarPinned(false);
-              }}
-              type="button"
-            >
-              Unpin workspace sidebar
-            </button>
-          )}
           {hasTauriCommandRuntime() ? (
             <WorkspacePanel
+              currentWorkspaceId={currentWorkspaceId}
+              invoker={workspaceInvoker}
               preferences={preferences}
-              captureFocus={sidebarSnapshot.mode === "pinned"}
+              captureFocus={sidebarSnapshot.mode === "overlay"}
               onOpenFile={(entry) => {
                 void runAction(() => documentManager.open(entry.canonicalPath));
               }}
               onWorkspacePresenceChange={setHasMountedWorkspace}
+              onWorkspacesChange={handleMountedWorkspacesChange}
+              onCurrentWorkspaceChange={handleCurrentWorkspaceChange}
+              onBrowse={handleBrowse}
+              backLocation={backLocation}
+              onBackLocationApplied={() => setBackLocation(null)}
             />
           ) : null}
-          {!hasMountedWorkspace ? (
-            <div className="workspace-empty-state">
-              <h2>No workspace mounted</h2>
-              <p>Open a drawing directly, or create a new local drawing.</p>
-              <div className="empty-state-actions">
-                <button
-                  className="primary-action"
-                  type="button"
-                  onClick={() => void createDocument()}
-                >
-                  New drawing
-                </button>
-                <button type="button" onClick={() => void openDocument()}>
-                  Open drawing…
-                </button>
-              </div>
-            </div>
+          {sidebarSnapshot.mode === "pinned" ? (
+            <div
+              aria-label="Resize workspace sidebar"
+              aria-orientation="vertical"
+              aria-valuemax={sidebarMaximum}
+              aria-valuemin={SIDEBAR_WIDTH_MIN}
+              aria-valuenow={renderedSidebarWidth}
+              className="sidebar-resizer"
+              onKeyDown={handleSidebarResizeKeyDown}
+              onPointerCancel={handleSidebarResizePointerEnd}
+              onPointerDown={handleSidebarResizePointerDown}
+              onPointerMove={handleSidebarResizePointerMove}
+              onPointerUp={handleSidebarResizePointerEnd}
+              role="separator"
+              tabIndex={0}
+            />
           ) : null}
         </aside>
 
-        <main className="canvas-region" aria-label="Drawing canvas">
-          {documentSessions.length > 0 ? (
+        <main
+          aria-label="Drawing canvas"
+          className={
+            showWelcome
+              ? "canvas-region canvas-region--welcome"
+              : "canvas-region"
+          }
+        >
+          {startupState.status === "ready" &&
+          startupState.recoveredCount > 0 ? (
+            <RecoveryNotice count={startupState.recoveredCount} />
+          ) : null}
+          {showWelcome ? (
+            <WelcomeScreen
+              busy={welcomeBusy}
+              error={welcomeError}
+              errorVisuallyHidden={welcomeErrorVisuallyHidden}
+              unavailableWorkspaceId={unavailableWorkspaceId}
+              onNewDrawing={createWelcomeDrawing}
+              onOpenRecentWorkspace={openRecentWorkspace}
+              onOpenWorkspace={openWorkspace}
+              onRemoveRecentWorkspace={removeRecentWorkspace}
+              mountedWorkspaceIds={
+                new Set(mountedWorkspaces.map((workspace) => workspace.id))
+              }
+              workspaces={welcomeWorkspaces}
+            />
+          ) : documentSessions.length > 0 ? (
             documentSessions.map((session) => (
               <section
                 aria-labelledby={`tab-${session.id}`}
@@ -678,4 +1094,14 @@ async function chooseSavePath(defaultTitle: string): Promise<string | null> {
     ],
     title: "Save drawing as",
   });
+}
+
+async function selectNativeWorkspaceDirectory(): Promise<string | null> {
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const selected = await open({
+    directory: true,
+    multiple: false,
+    title: "Open workspace",
+  });
+  return typeof selected === "string" ? selected : null;
 }

@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import collapseAllIcon from "../../docs/design/desktop-shell/hf-2/icons/collapse-all.svg";
+import expandAllIcon from "../../docs/design/desktop-shell/hf-2/icons/expand-all.svg";
+import newDrawingIcon from "../../docs/design/desktop-shell/hf-2/icons/new-drawing.svg";
+import newFolderIcon from "../../docs/design/desktop-shell/hf-2/icons/new-folder.svg";
+import refreshIcon from "../../docs/design/desktop-shell/hf-2/icons/refresh.svg";
 import {
   ApplicationDialog,
   ContextMenu,
@@ -16,6 +21,7 @@ import {
   ShellPreferences,
 } from "../app/shellPreferences";
 import { documentManager, useDocumentStore } from "../documents/documentStore";
+import type { BrowsingLocation } from "../app/browsingHistory";
 import type { CommandInvoker } from "../ipc/client";
 import {
   createTauriCommandInvoker,
@@ -39,9 +45,15 @@ import {
 
 export interface WorkspacePanelProps {
   invoker?: CommandInvoker;
+  currentWorkspaceId?: string | null;
   selectDirectory?: () => Promise<string | null>;
   onOpenFile?: (entry: FileEntry) => void;
+  onCurrentWorkspaceChange?: (workspace: Workspace | null) => void;
+  onBrowse?: (location: BrowsingLocation) => void;
+  backLocation?: BrowsingLocation | null;
+  onBackLocationApplied?: () => void;
   onWorkspacePresenceChange?: (hasAny: boolean) => void;
+  onWorkspacesChange?: (workspaces: Workspace[]) => void;
   preferences?: ShellPreferences;
   captureFocus?: boolean;
 }
@@ -73,9 +85,15 @@ const firstListAppliedByStorage = new WeakMap<object, boolean>();
 
 export function WorkspacePanel({
   invoker: providedInvoker,
+  currentWorkspaceId: controlledCurrentWorkspaceId,
   selectDirectory: providedSelectDirectory,
   onOpenFile,
+  onCurrentWorkspaceChange,
+  onBrowse,
+  backLocation = null,
+  onBackLocationApplied,
   onWorkspacePresenceChange,
+  onWorkspacesChange,
   preferences: providedPreferences,
   captureFocus = true,
 }: WorkspacePanelProps) {
@@ -88,11 +106,15 @@ export function WorkspacePanel({
   );
   const preferences = providedPreferences ?? ownedPreferences;
   const knownWorkspaceIdsRef = useRef<Set<string> | null>(null);
+  const workspaceListGenerationRef = useRef(0);
   const expandedWorkspaceIdsRef = useRef<Set<string>>(new Set());
   const entriesRef = useRef<Record<string, Record<string, WorkspaceEntry[]>>>(
     {},
   );
   const loadingRef = useRef(new Set<string>());
+  const loadingPromisesRef = useRef(
+    new Map<string, Promise<WorkspaceEntry[] | undefined>>(),
+  );
   const loadGenerationRef = useRef(new Map<string, number>());
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const menuTriggerRef = useRef<HTMLElement | null>(null);
@@ -100,6 +122,12 @@ export function WorkspacePanel({
   const openMenu = useInteractionStore((state) => state.menu);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(
+    () =>
+      controlledCurrentWorkspaceId === undefined
+        ? preferences.getSnapshot().currentWorkspaceId
+        : controlledCurrentWorkspaceId,
+  );
   const [entriesByWorkspace, setEntriesByWorkspace] = useState<
     Record<string, Record<string, WorkspaceEntry[]>>
   >({});
@@ -125,9 +153,21 @@ export function WorkspacePanel({
   const [deleting, setDeleting] = useState<DeletingState | null>(null);
   const [treeMenu, setTreeMenu] = useState<TreeMenuState | null>(null);
   const [focusRequestKey, setFocusRequestKey] = useState<string | null>(null);
+  const [selectedDirectoryRelativePath, setSelectedDirectoryRelativePath] =
+    useState<string | null>(null);
 
   entriesRef.current = entriesByWorkspace;
   expandedWorkspaceIdsRef.current = expandedWorkspaceIds;
+
+  useEffect(() => {
+    if (controlledCurrentWorkspaceId !== undefined) {
+      setCurrentWorkspaceId(controlledCurrentWorkspaceId);
+      return;
+    }
+    return preferences.subscribe(() => {
+      setCurrentWorkspaceId(preferences.getSnapshot().currentWorkspaceId);
+    });
+  }, [controlledCurrentWorkspaceId, preferences]);
 
   const dismissMenu = useCallback((reason: MenuDismissalReason): void => {
     if (interactionStore.getState().menu !== null) {
@@ -163,47 +203,60 @@ export function WorkspacePanel({
   );
 
   const loadEntries = useCallback(
-    async (workspaceId: string, parentRelativePath: string, force = false) => {
+    (
+      workspaceId: string,
+      parentRelativePath: string,
+      force = false,
+    ): Promise<WorkspaceEntry[] | undefined> => {
       const loadKey = `${workspaceId}:${parentRelativePath}`;
       if (!force) {
-        if (loadingRef.current.has(loadKey)) return;
-        if (entriesRef.current[workspaceId]?.[parentRelativePath] !== undefined)
-          return;
+        const pending = loadingPromisesRef.current.get(loadKey);
+        if (pending !== undefined) return pending;
+        const cached = entriesRef.current[workspaceId]?.[parentRelativePath];
+        if (cached !== undefined) return Promise.resolve(cached);
       }
-      const generation = (loadGenerationRef.current.get(loadKey) ?? 0) + 1;
-      loadGenerationRef.current.set(loadKey, generation);
-      loadingRef.current.add(loadKey);
-      setLoadingKeys((current) => {
-        const next = new Set(current);
-        next.add(loadKey);
-        return next;
-      });
-      try {
-        const entries = await invoker.invoke("workspace_entry_list", {
-          workspaceId,
-          parentRelativePath,
+      const pending = (async (): Promise<WorkspaceEntry[] | undefined> => {
+        const generation = (loadGenerationRef.current.get(loadKey) ?? 0) + 1;
+        loadGenerationRef.current.set(loadKey, generation);
+        loadingRef.current.add(loadKey);
+        setLoadingKeys((current) => {
+          const next = new Set(current);
+          next.add(loadKey);
+          return next;
         });
-        if (loadGenerationRef.current.get(loadKey) !== generation) return;
-        setEntriesByWorkspace((current) => ({
-          ...current,
-          [workspaceId]: {
-            ...(current[workspaceId] ?? {}),
-            [parentRelativePath]: entries,
-          },
-        }));
-      } catch (nextError) {
-        if (loadGenerationRef.current.get(loadKey) !== generation) return;
-        setError(operationError(nextError, "Unable to load this folder."));
-      } finally {
-        if (loadGenerationRef.current.get(loadKey) === generation) {
-          loadingRef.current.delete(loadKey);
-          setLoadingKeys((current) => {
-            const next = new Set(current);
-            next.delete(loadKey);
-            return next;
+        try {
+          const entries = await invoker.invoke("workspace_entry_list", {
+            workspaceId,
+            parentRelativePath,
           });
+          if (loadGenerationRef.current.get(loadKey) !== generation)
+            return undefined;
+          setEntriesByWorkspace((current) => ({
+            ...current,
+            [workspaceId]: {
+              ...(current[workspaceId] ?? {}),
+              [parentRelativePath]: entries,
+            },
+          }));
+          return entries;
+        } catch (nextError) {
+          if (loadGenerationRef.current.get(loadKey) !== generation) return;
+          setError(operationError(nextError, "Unable to load this folder."));
+          return undefined;
+        } finally {
+          if (loadGenerationRef.current.get(loadKey) === generation) {
+            loadingRef.current.delete(loadKey);
+            loadingPromisesRef.current.delete(loadKey);
+            setLoadingKeys((current) => {
+              const next = new Set(current);
+              next.delete(loadKey);
+              return next;
+            });
+          }
         }
-      }
+      })();
+      loadingPromisesRef.current.set(loadKey, pending);
+      return pending;
     },
     [invoker],
   );
@@ -212,6 +265,21 @@ export function WorkspacePanel({
     (items: Workspace[]) => {
       const liveIds = new Set(items.map((workspace) => workspace.id));
       preferences.pruneWorkspaceIds(liveIds);
+      const nextCurrentWorkspaceId =
+        controlledCurrentWorkspaceId === undefined
+          ? preferences.resolveCurrentWorkspaceId(liveIds, items[0]?.id ?? null)
+          : controlledCurrentWorkspaceId !== null &&
+              liveIds.has(controlledCurrentWorkspaceId)
+            ? controlledCurrentWorkspaceId
+            : null;
+      if (controlledCurrentWorkspaceId === undefined) {
+        preferences.setCurrentWorkspaceId(nextCurrentWorkspaceId);
+      }
+      setCurrentWorkspaceId(nextCurrentWorkspaceId);
+      onCurrentWorkspaceChange?.(
+        items.find((workspace) => workspace.id === nextCurrentWorkspaceId) ??
+          null,
+      );
       const known = knownWorkspaceIdsRef.current;
       const next = new Set(expandedWorkspaceIdsRef.current);
       if (known === null) {
@@ -258,17 +326,25 @@ export function WorkspacePanel({
         }
       }
     },
-    [firstLaunch, loadEntries, preferences],
+    [
+      controlledCurrentWorkspaceId,
+      firstLaunch,
+      loadEntries,
+      onCurrentWorkspaceChange,
+      preferences,
+    ],
   );
 
   useEffect(() => {
     let disposed = false;
+    const generation = ++workspaceListGenerationRef.current;
     void invoker
       .invoke("workspace_list", {})
       .then((items) => {
-        if (!disposed) {
+        if (!disposed && workspaceListGenerationRef.current === generation) {
           applyWorkspaceList(items);
           onWorkspacePresenceChange?.(items.length > 0);
+          onWorkspacesChange?.(items);
         }
       })
       .catch((nextError: unknown) => {
@@ -282,7 +358,50 @@ export function WorkspacePanel({
     return () => {
       disposed = true;
     };
-  }, [applyWorkspaceList, invoker, onWorkspacePresenceChange]);
+  }, [
+    applyWorkspaceList,
+    invoker,
+    onWorkspacePresenceChange,
+    onWorkspacesChange,
+  ]);
+
+  useEffect(() => {
+    if (
+      controlledCurrentWorkspaceId === undefined ||
+      controlledCurrentWorkspaceId === null
+    ) {
+      return;
+    }
+    let disposed = false;
+    const generation = ++workspaceListGenerationRef.current;
+    void invoker
+      .invoke("workspace_list", {})
+      .then((items) => {
+        if (!disposed && workspaceListGenerationRef.current === generation) {
+          applyWorkspaceList(items);
+          onWorkspacePresenceChange?.(items.length > 0);
+          onWorkspacesChange?.(items);
+        }
+      })
+      .catch((nextError: unknown) => {
+        if (!disposed) {
+          setError(
+            nextError instanceof Error
+              ? nextError.message
+              : "Unable to load workspaces.",
+          );
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [
+    applyWorkspaceList,
+    controlledCurrentWorkspaceId,
+    invoker,
+    onWorkspacePresenceChange,
+    onWorkspacesChange,
+  ]);
 
   useEffect(() => {
     if (!hasTauriCommandRuntime()) return;
@@ -309,6 +428,40 @@ export function WorkspacePanel({
   useEffect(() => {
     if (openMenu === null && treeMenu !== null) setTreeMenu(null);
   }, [openMenu, treeMenu]);
+
+  useEffect(() => {
+    if (
+      backLocation === null ||
+      backLocation.workspaceId !== currentWorkspaceId
+    ) {
+      return;
+    }
+    setSelectedDirectoryRelativePath(
+      backLocation.directoryRelativePath.length > 0
+        ? backLocation.directoryRelativePath
+        : null,
+    );
+    setFocusRequestKey(
+      backLocation.directoryRelativePath.length === 0
+        ? makeWorkspaceRowKey(backLocation.workspaceId)
+        : makeEntryRowKey(
+            backLocation.workspaceId,
+            backLocation.directoryRelativePath,
+          ),
+    );
+    if (backLocation.directoryRelativePath.length > 0) {
+      const parentRelativePath = backLocation.directoryRelativePath.includes(
+        "/",
+      )
+        ? backLocation.directoryRelativePath.slice(
+            0,
+            backLocation.directoryRelativePath.lastIndexOf("/"),
+          )
+        : "";
+      void loadEntries(backLocation.workspaceId, parentRelativePath);
+    }
+    onBackLocationApplied?.();
+  }, [backLocation, currentWorkspaceId, loadEntries, onBackLocationApplied]);
 
   useEffect(() => {
     if (treeMenu === null) return;
@@ -350,8 +503,17 @@ export function WorkspacePanel({
     try {
       const rootPath = await selectDirectory();
       if (rootPath) {
+        workspaceListGenerationRef.current += 1;
         const workspace = await invoker.invoke("workspace_add", { rootPath });
-        setWorkspaces((current) => [...current, workspace]);
+        const next = [
+          ...workspaces.filter((item) => item.id !== workspace.id),
+          workspace,
+        ];
+        setWorkspaces(next);
+        onWorkspacesChange?.(next);
+        preferences.setCurrentWorkspaceId(workspace.id);
+        setCurrentWorkspaceId(workspace.id);
+        onCurrentWorkspaceChange?.(workspace);
         expandWorkspace(workspace.id);
         onWorkspacePresenceChange?.(true);
       }
@@ -370,9 +532,37 @@ export function WorkspacePanel({
     setBusy(true);
     setError(null);
     try {
+      const closeOutcome = await documentManager.closeWorkspaceDocuments(
+        workspace.rootPath,
+      );
+      if (closeOutcome.status === "orphaned") {
+        await documentManager.activate(closeOutcome.documentId);
+        throw new Error(
+          "Resolve the unavailable open drawing before removing this Workspace.",
+        );
+      }
+      if (closeOutcome.status === "failed") {
+        throw new Error(closeOutcome.message);
+      }
+      if (closeOutcome.status !== "closed") {
+        throw new Error(
+          "Open drawings are still closing. Try removing the Workspace again.",
+        );
+      }
       await invoker.invoke("workspace_remove", { workspaceId: workspace.id });
+      workspaceListGenerationRef.current += 1;
       const next = workspaces.filter((item) => item.id !== workspace.id);
+      const nextCurrentWorkspaceId =
+        workspace.id === currentWorkspaceId
+          ? (next[0]?.id ?? null)
+          : currentWorkspaceId;
+      preferences.setCurrentWorkspaceId(nextCurrentWorkspaceId);
+      setCurrentWorkspaceId(nextCurrentWorkspaceId);
+      onCurrentWorkspaceChange?.(
+        next.find((item) => item.id === nextCurrentWorkspaceId) ?? null,
+      );
       setWorkspaces(next);
+      onWorkspacesChange?.(next);
       setExpandedWorkspaceIds((current) => {
         const withoutRemoved = new Set(current);
         withoutRemoved.delete(workspace.id);
@@ -697,6 +887,85 @@ export function WorkspacePanel({
     ];
   };
 
+  const currentWorkspace = workspaces.find(
+    (workspace) => workspace.id === currentWorkspaceId,
+  );
+  const currentWorkspaceEntries =
+    currentWorkspaceId === null
+      ? {}
+      : (entriesByWorkspace[currentWorkspaceId] ?? {});
+  const knownDirectoryKeys = Object.values(currentWorkspaceEntries)
+    .flat()
+    .filter(
+      (entry) =>
+        entry.workspaceId === currentWorkspaceId && entry.kind === "directory",
+    )
+    .map((entry) => makeEntryRowKey(entry.workspaceId, entry.relativePath));
+  const allCurrentDirectoriesExpanded =
+    currentWorkspaceId !== null &&
+    expandedWorkspaceIds.has(currentWorkspaceId) &&
+    knownDirectoryKeys.every((key) => expandedDirectoryKeys.has(key));
+
+  const expandAllDirectories = async (
+    workspaceId: string,
+    parentRelativePath: string,
+    visited: Set<string>,
+  ): Promise<void> => {
+    const pathKey = `${workspaceId}:${parentRelativePath}`;
+    if (visited.has(pathKey)) return;
+    visited.add(pathKey);
+    const entries = await loadEntries(workspaceId, parentRelativePath);
+    if (entries === undefined) return;
+    const directories = entries.filter((entry) => entry.kind === "directory");
+    if (directories.length === 0) return;
+    setExpandedDirectoryKeys((current) => {
+      const next = new Set(current);
+      for (const directory of directories) {
+        next.add(
+          makeEntryRowKey(directory.workspaceId, directory.relativePath),
+        );
+      }
+      return next;
+    });
+    await Promise.all(
+      directories.map((directory) =>
+        expandAllDirectories(workspaceId, directory.relativePath, visited),
+      ),
+    );
+  };
+
+  const toggleAllCurrentWorkspace = (): void => {
+    if (currentWorkspaceId === null) return;
+    const shouldExpand = !allCurrentDirectoriesExpanded;
+    preferences.setWorkspaceExpanded(currentWorkspaceId, shouldExpand);
+    setExpandedWorkspaceIds((current) => {
+      const next = new Set(current);
+      if (shouldExpand) next.add(currentWorkspaceId);
+      else next.delete(currentWorkspaceId);
+      expandedWorkspaceIdsRef.current = next;
+      return next;
+    });
+    setExpandedDirectoryKeys((current) => {
+      const next = new Set(current);
+      for (const key of knownDirectoryKeys) {
+        if (shouldExpand) next.add(key);
+        else next.delete(key);
+      }
+      return next;
+    });
+    if (shouldExpand) {
+      void expandAllDirectories(currentWorkspaceId, "", new Set());
+    }
+  };
+
+  const refreshCurrentWorkspace = (): void => {
+    if (currentWorkspaceId === null) return;
+    forgetEntrySubtree(currentWorkspaceId, "");
+    void loadEntries(currentWorkspaceId, "", true);
+  };
+
+  const targetRelativePath = selectedDirectoryRelativePath ?? "";
+
   const treeEntries: WorkspaceTreeEntriesByWorkspace = entriesByWorkspace;
 
   return (
@@ -706,15 +975,89 @@ export function WorkspacePanel({
       className="workspace-panel"
     >
       <div className="workspace-panel-header">
-        <h2>Workspaces</h2>
-        <button
-          ref={mountButtonRef}
-          type="button"
-          disabled={busy}
-          onClick={() => void mountWorkspace()}
-        >
-          Mount folder…
-        </button>
+        <p className="workspace-panel-eyebrow">Workspace</p>
+        <div className="workspace-panel-title-row">
+          <h2 title={currentWorkspace?.name ?? "Workspace"}>
+            {currentWorkspace?.name ?? "Workspace"}
+          </h2>
+          <div
+            aria-label="Workspace actions"
+            className="workspace-panel-actions"
+            role="toolbar"
+          >
+            <button
+              aria-label="New Drawing"
+              className="icon-button"
+              disabled={busy || currentWorkspaceId === null}
+              onClick={() =>
+                currentWorkspaceId !== null &&
+                beginNaming(
+                  "newDrawing",
+                  currentWorkspaceId,
+                  targetRelativePath,
+                )
+              }
+              title="New Drawing"
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src={newDrawingIcon} />
+            </button>
+            <button
+              aria-label="New Folder"
+              className="icon-button"
+              disabled={busy || currentWorkspaceId === null}
+              onClick={() =>
+                currentWorkspaceId !== null &&
+                beginNaming(
+                  "newDirectory",
+                  currentWorkspaceId,
+                  targetRelativePath,
+                )
+              }
+              title="New Folder"
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src={newFolderIcon} />
+            </button>
+            <button
+              aria-label={
+                allCurrentDirectoriesExpanded ? "Collapse all" : "Expand all"
+              }
+              className="icon-button"
+              disabled={busy || currentWorkspaceId === null}
+              onClick={toggleAllCurrentWorkspace}
+              title={
+                allCurrentDirectoriesExpanded ? "Collapse all" : "Expand all"
+              }
+              type="button"
+            >
+              <img
+                alt=""
+                aria-hidden="true"
+                className={
+                  allCurrentDirectoriesExpanded
+                    ? "workspace-panel-collapse-all-icon"
+                    : undefined
+                }
+                src={
+                  allCurrentDirectoriesExpanded
+                    ? collapseAllIcon
+                    : expandAllIcon
+                }
+              />
+            </button>
+            <button
+              aria-label="Refresh"
+              className="icon-button"
+              disabled={busy || currentWorkspaceId === null}
+              onClick={refreshCurrentWorkspace}
+              title="Refresh"
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src={refreshIcon} />
+            </button>
+          </div>
+        </div>
       </div>
       {loadingKeys.size > 0 ? (
         <p aria-live="polite" role="status">
@@ -725,11 +1068,22 @@ export function WorkspacePanel({
         <p role="alert">{error}</p>
       ) : null}
       {workspaces.length === 0 ? (
-        <p className="sidebar-placeholder">No workspace mounted.</p>
+        <div className="sidebar-placeholder">
+          <p>No workspace mounted.</p>
+          <button
+            ref={mountButtonRef}
+            type="button"
+            disabled={busy}
+            onClick={() => void mountWorkspace()}
+          >
+            Mount folder…
+          </button>
+        </div>
       ) : (
         <WorkspaceTree
           workspaces={workspaces}
           entriesByWorkspace={treeEntries}
+          currentWorkspaceId={currentWorkspaceId}
           expandedWorkspaceIds={expandedWorkspaceIds}
           expandedDirectoryKeys={expandedDirectoryKeys}
           activeDocumentPath={activeDocumentPath}
@@ -766,6 +1120,17 @@ export function WorkspacePanel({
             }
           }}
           onOpenDrawing={(entry) => onOpenFile?.(asFileEntry(entry))}
+          onSelectRow={(row) => {
+            const directoryRelativePath =
+              row.kind === "directory" ? row.entry.relativePath : "";
+            setSelectedDirectoryRelativePath(
+              directoryRelativePath.length > 0 ? directoryRelativePath : null,
+            );
+            onBrowse?.({
+              workspaceId: row.workspaceId,
+              directoryRelativePath,
+            });
+          }}
           onRowAction={handleRowAction}
           focusRequestKey={focusRequestKey}
           onFocusRequestApplied={() => setFocusRequestKey(null)}
@@ -833,7 +1198,10 @@ export function WorkspacePanel({
           returnFocusRef={returnFocusRef}
           title={`Remove ${pendingRemoval.name}?`}
         >
-          <p>Files on disk will not be deleted.</p>
+          <p>
+            Open drawings from this Workspace will be saved and closed. Files on
+            disk will not be deleted.
+          </p>
           <div className="application-dialog-actions conflict-dialog-actions">
             <button
               disabled={busy}

@@ -1,0 +1,283 @@
+{
+  "schemaVersion": 1,
+  "version": "003-ownership-v3",
+  "productIdentity": {
+    "pathPrefixes": [
+      "index.html",
+      "package.json",
+      "pnpm-lock.yaml",
+      "public/",
+      "src/",
+      "src-tauri/Cargo.lock",
+      "src-tauri/Cargo.toml",
+      "src-tauri/capabilities/",
+      "src-tauri/src/",
+      "src-tauri/tauri.conf.json",
+      "tsconfig.json",
+      "tsconfig.node.json",
+      "vite.config.ts",
+      "vitest.config.ts"
+    ]
+  },
+  "commandCatalog": {
+    "cargo-clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
+    "cargo-fmt": "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
+    "cargo-test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "documentation-check": "git diff --check",
+    "evidence-aggregate-test": "pnpm evidence:aggregate:test",
+    "evidence-publish-test": "pnpm evidence:publish:test",
+    "focused-a11y-welcome-overlay": "PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 APP_E2E=1 pnpm e2e e2e/tests/a11y-audit.spec.ts --project=browser-ui --workers=1 --retries=0 --grep \"shell chrome is axe-clean in light theme|sidebar overlay is keyboard operable\"",
+    "focused-routing-browser": "PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 APP_E2E=1 pnpm e2e e2e/tests/ui-desktop-shell-routing.spec.ts --project=browser-ui --workers=1 --retries=0",
+    "focused-sidebar-browser": "PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 APP_E2E=1 pnpm e2e e2e/tests/ui-sidebar-modes.spec.ts --project=browser-ui --workers=1 --retries=0",
+    "focused-visual-browser": "PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1420 APP_E2E=1 SHELL_EVIDENCE_RUN_ROOT=$T059_BROWSER_RUN_ROOT pnpm e2e e2e/tests/ui-desktop-shell-visual.spec.ts --project=browser-ui --workers=1 --retries=0",
+    "lint": "pnpm lint",
+    "native-macos-test": "pnpm native:macos:test",
+    "native-screen-capture-test": "pnpm native:screen:capture:test",
+    "native-screen-prepare-test": "pnpm native:screen:prepare:test",
+    "node-validation-harness": "node --test scripts/*.test.mjs",
+    "typecheck": "pnpm typecheck",
+    "vitest": "pnpm test"
+  },
+  "claimCommands": {
+    "aggregate-validation": ["evidence-aggregate-test"],
+    "capture-harness-validation": [
+      "native-screen-capture-test",
+      "native-screen-prepare-test"
+    ],
+    "documentation-check": ["documentation-check"],
+    "document-regression": ["lint", "typecheck", "vitest"],
+    "final-regression": [
+      "cargo-clippy",
+      "cargo-fmt",
+      "cargo-test",
+      "focused-a11y-welcome-overlay",
+      "focused-routing-browser",
+      "focused-sidebar-browser",
+      "focused-visual-browser",
+      "lint",
+      "node-validation-harness",
+      "typecheck",
+      "vitest"
+    ],
+    "native-harness-validation": ["native-macos-test"],
+    "native-entrypoint-route": [
+      "cargo-clippy",
+      "cargo-fmt",
+      "cargo-test",
+      "focused-routing-browser",
+      "lint",
+      "node-validation-harness",
+      "typecheck",
+      "vitest"
+    ],
+    "package-identity": [
+      "cargo-clippy",
+      "cargo-fmt",
+      "cargo-test",
+      "lint",
+      "node-validation-harness",
+      "typecheck"
+    ],
+    "publisher-validation": ["evidence-publish-test"],
+    "persistence-regression": [
+      "cargo-clippy",
+      "cargo-fmt",
+      "cargo-test",
+      "lint",
+      "typecheck",
+      "vitest"
+    ],
+    "shell-geometry": [
+      "focused-sidebar-browser",
+      "focused-visual-browser",
+      "typecheck",
+      "vitest"
+    ],
+    "shell-semantic": [
+      "focused-a11y-welcome-overlay",
+      "focused-routing-browser",
+      "focused-sidebar-browser",
+      "lint",
+      "typecheck",
+      "vitest"
+    ],
+    "technical-aggregate": ["node-validation-harness"],
+    "tracked-evidence-validation": ["evidence-aggregate-test"],
+    "visual-fidelity": [
+      "focused-a11y-welcome-overlay",
+      "focused-visual-browser",
+      "lint",
+      "typecheck"
+    ]
+  },
+  "rules": [
+    {
+      "id": "shell-runtime",
+      "pathPrefixes": ["src/app/", "src/workspaces/", "src/App.css"],
+      "owners": ["shell-semantics", "shell-geometry", "visual-screens"],
+      "claimIds": ["shell-semantic", "shell-geometry", "visual-fidelity"]
+    },
+    {
+      "id": "document-runtime",
+      "pathPrefixes": ["src/documents/", "src/editor/", "src/ipc/"],
+      "owners": ["document-safety", "application-route"],
+      "claimIds": ["document-regression", "native-entrypoint-route"]
+    },
+    {
+      "id": "frontend-entry-assets",
+      "pathPrefixes": [
+        "src/assets/",
+        "src/e2e/",
+        "src/App.tsx",
+        "src/main.tsx",
+        "src/test-setup.ts",
+        "src/vite-env.d.ts",
+        "public/",
+        "index.html"
+      ],
+      "owners": ["frontend-build"],
+      "claimIds": ["shell-semantic", "final-regression"]
+    },
+    {
+      "id": "native-runtime",
+      "pathPrefixes": ["src-tauri/"],
+      "owners": ["native-package", "native-entrypoint", "persistence"],
+      "claimIds": [
+        "package-identity",
+        "native-entrypoint-route",
+        "persistence-regression"
+      ]
+    },
+    {
+      "id": "native-validation-harness",
+      "pathPrefixes": [
+        "scripts/native-macos-validation.mjs",
+        "scripts/native-macos-validation.test.mjs"
+      ],
+      "owners": ["native-entrypoint-validator"],
+      "claimIds": ["native-harness-validation"]
+    },
+    {
+      "id": "capture-validation-harness",
+      "pathPrefixes": [
+        "scripts/native-screen-prepare.mjs",
+        "scripts/native-screen-prepare.test.mjs",
+        "scripts/native-screen-capture.mjs",
+        "scripts/native-screen-capture.test.mjs",
+        "e2e/native/003-native-capture-fixtures.json"
+      ],
+      "owners": ["capture-validator"],
+      "claimIds": ["capture-harness-validation"]
+    },
+    {
+      "id": "aggregate-validation-harness",
+      "pathPrefixes": [
+        "scripts/evidence-aggregate.mjs",
+        "scripts/evidence-aggregate.test.mjs",
+        "e2e/visual/003EvidenceOwnership.json"
+      ],
+      "owners": ["aggregate-validator"],
+      "claimIds": ["aggregate-validation"]
+    },
+    {
+      "id": "publisher-validation-harness",
+      "pathPrefixes": [
+        "scripts/publish-evidence.mjs",
+        "scripts/publish-evidence.test.mjs"
+      ],
+      "owners": ["publisher-validator"],
+      "claimIds": ["publisher-validation"]
+    },
+    {
+      "id": "other-validation-harness",
+      "pathPrefixes": ["e2e/", "scripts/"],
+      "excludePrefixes": [
+        "scripts/native-macos-validation.mjs",
+        "scripts/native-macos-validation.test.mjs",
+        "scripts/native-screen-prepare.mjs",
+        "scripts/native-screen-prepare.test.mjs",
+        "scripts/native-screen-capture.mjs",
+        "scripts/native-screen-capture.test.mjs",
+        "scripts/evidence-aggregate.mjs",
+        "scripts/evidence-aggregate.test.mjs",
+        "scripts/publish-evidence.mjs",
+        "scripts/publish-evidence.test.mjs",
+        "e2e/native/003-native-capture-fixtures.json",
+        "e2e/visual/003EvidenceOwnership.json"
+      ],
+      "owners": ["fixture", "collector", "capture", "aggregation"],
+      "claimIds": [
+        "shell-semantic",
+        "visual-fidelity",
+        "native-entrypoint-route",
+        "technical-aggregate"
+      ]
+    },
+    {
+      "id": "frozen-design",
+      "pathPrefixes": ["docs/design/"],
+      "owners": ["hf2-baseline"],
+      "claimIds": ["visual-fidelity", "shell-geometry"]
+    },
+    {
+      "id": "tracked-evidence",
+      "pathPrefixes": ["docs/evidence/"],
+      "owners": ["evidence-artifacts"],
+      "claimIds": ["tracked-evidence-validation"]
+    },
+    {
+      "id": "public-architecture-docs",
+      "pathPrefixes": [
+        "docs/adr/",
+        "docs/contracts/",
+        "docs/architecture.md",
+        "docs/architecture.zh.md",
+        "docs/quickstart.md",
+        "docs/quickstart.zh.md",
+        "docs/release-notes-footer.md",
+        "docs/ux-ui-redesign-brief.md"
+      ],
+      "owners": ["documentation-contract"],
+      "claimIds": ["documentation-check"]
+    },
+    {
+      "id": "build-tooling",
+      "pathPrefixes": [
+        ".github/",
+        ".specify/",
+        ".gitignore",
+        ".prettierignore",
+        ".prettierrc",
+        ".python-version",
+        "eslint.config.js",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pyproject.toml",
+        "tsconfig.json",
+        "tsconfig.node.json",
+        "uv.lock",
+        "vite.config.ts",
+        "vitest.config.ts"
+      ],
+      "owners": ["build-and-validation-config"],
+      "claimIds": ["final-regression", "package-identity"]
+    },
+    {
+      "id": "root-product-docs",
+      "pathPrefixes": [
+        "AGENTS.md",
+        "AGENTS.zh.md",
+        "CHANGELOG.md",
+        "CONTEXT.md",
+        "CONTEXT.zh.md",
+        "DESIGN.md",
+        "DESIGN.zh.md",
+        "LICENSE",
+        "README.md",
+        "README.zh.md"
+      ],
+      "owners": ["product-documentation"],
+      "claimIds": ["documentation-check"]
+    }
+  ]
+}

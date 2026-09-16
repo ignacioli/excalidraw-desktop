@@ -5,7 +5,10 @@ use crate::{
         dto::{RecoveryAction, RecoveryApplyRequest},
         recovery::RecoveryService,
     },
-    database::repository::{SqliteRepository, WorkspaceRecord, WorkspaceRepository},
+    database::repository::{
+        DraftRepository, FileIndexRepository, SqliteRepository, WorkspaceRecord,
+        WorkspaceRepository,
+    },
 };
 
 use super::recovery::{
@@ -187,6 +190,7 @@ async fn lists_and_restores_a_newer_scene_then_cleans_up_the_ring() {
             name: "Recovery".to_owned(),
             root_path: workspace.display().to_string(),
             created_at: 1,
+            mounted: true,
         })
         .await
         .expect("mount workspace");
@@ -220,6 +224,84 @@ async fn lists_and_restores_a_newer_scene_then_cleans_up_the_ring() {
         response.scene.expect("restore scene")["appState"]["name"],
         "recovered"
     );
+    assert!(store
+        .list_snapshots()
+        .expect("list remaining snapshots")
+        .is_empty());
+
+    fs::remove_dir_all(root).expect("remove recovery fixture");
+}
+
+#[tokio::test]
+async fn save_as_new_registers_a_clean_draft_and_workspace_index() {
+    let root = fixture_root("save-as-new");
+    let data = root.join("data");
+    let workspace = root.join("workspace");
+    fs::create_dir_all(&data).expect("create data directory");
+    fs::create_dir_all(&workspace).expect("create workspace");
+    let workspace = workspace.canonicalize().expect("canonicalize workspace");
+    let original = workspace.join("drawing.excalidraw");
+    let target = workspace.join("recovered.excalidraw");
+    fs::write(&original, scene_json("on-disk")).expect("write cold document");
+
+    let repository = Arc::new(
+        SqliteRepository::open(&data.join("recovery.sqlite3"))
+            .await
+            .expect("open repository"),
+    );
+    repository
+        .workspace_upsert(WorkspaceRecord {
+            id: "recovery-workspace".to_owned(),
+            name: "Recovery".to_owned(),
+            root_path: workspace.display().to_string(),
+            created_at: 1,
+            mounted: true,
+        })
+        .await
+        .expect("mount workspace");
+    let store = Arc::new(RecoveryStore::with_app_version(&data, "0.1.0"));
+    let document_id = document_id_for_path(&original);
+    let recovered = scene_json("recovered");
+    store
+        .write_snapshot(
+            &document_id,
+            Some(&original),
+            "different-base",
+            super::recovery::unix_timestamp().expect("read clock") + 2,
+            &recovered,
+        )
+        .expect("write recovery snapshot");
+    let service = RecoveryService::new(Arc::clone(&repository), Arc::clone(&store));
+
+    let response = service
+        .apply(RecoveryApplyRequest {
+            document_id,
+            action: RecoveryAction::SaveAsNew,
+            save_as_path: Some(target.display().to_string()),
+        })
+        .await
+        .expect("save recovery as new");
+
+    assert_eq!(
+        response.new_path.as_deref(),
+        Some(target.display().to_string().as_str())
+    );
+    let draft = repository
+        .draft_get(target.display().to_string())
+        .await
+        .expect("read recovered draft")
+        .expect("recovered draft exists");
+    assert!(!draft.is_dirty);
+    assert_eq!(
+        draft.scene_json,
+        fs::read_to_string(&target).expect("read target")
+    );
+    let indexed = repository
+        .file_index_list("recovery-workspace".to_owned())
+        .await
+        .expect("read workspace index");
+    assert_eq!(indexed.len(), 1);
+    assert_eq!(indexed[0].canonical_path, target.display().to_string());
     assert!(store
         .list_snapshots()
         .expect("list remaining snapshots")

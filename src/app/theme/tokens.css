@@ -26,6 +26,12 @@
   --space-3: 0.75rem;
   --space-4: 1rem;
   --space-6: 1.5rem;
+  --border-default: 1px;
+  --border-icon: 1.75px;
+  --icon-size: 1rem;
+  --hit-target-size: 2rem;
+  --tree-row-height: 1.75rem;
+  --tab-height: 2.25rem;
 }
 
 :root[data-theme="excalidraw"][data-color-scheme="dark"] {
@@ -48,6 +54,12 @@
   --warning: #ffd43b;
   --success: #69db7c;
   --shadow-floating: 0 8px 24px rgb(0 0 0 / 40%);
+  --border-default: 1px;
+  --border-icon: 1.75px;
+  --icon-size: 1rem;
+  --hit-target-size: 2rem;
+  --tree-row-height: 1.75rem;
+  --tab-height: 2.25rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

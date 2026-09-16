@@ -11,7 +11,8 @@ use tauri::State;
 
 use crate::{
     database::repository::{
-        is_path_or_descendant, migrate_path, DraftRepository, SqliteRepository, WorkspaceRepository,
+        is_path_or_descendant, migrate_path, DocumentRepository, DraftRecord, DraftRepository,
+        FileIndexRecord, SqliteRepository, WorkspaceRecord, WorkspaceRepository,
     },
     documents::{
         assets::{asset_root_for, reembed_files},
@@ -20,6 +21,7 @@ use crate::{
         validation::{validate_scene, SceneValidationError},
     },
     security::{PathSecurityError, WorkspacePathPolicy},
+    watcher::WatcherService,
     workspace_entries::{
         mutation_journal::{
             filesystem_commit_observed, load_journals, MutationJournalKind, MutationJournalRecord,
@@ -64,6 +66,7 @@ pub struct RecoveryService {
     store: Arc<RecoveryStore>,
     path_grant: Arc<dyn RecoveryPathGrant>,
     scene_limit_bytes: usize,
+    watcher: Option<Arc<WatcherService>>,
 }
 
 impl RecoveryService {
@@ -100,7 +103,12 @@ impl RecoveryService {
             store,
             path_grant,
             scene_limit_bytes,
+            watcher: None,
         }
+    }
+
+    pub fn attach_watcher(&mut self, watcher: Arc<WatcherService>) {
+        self.watcher = Some(watcher);
     }
 
     pub async fn list(&self) -> Result<Vec<RecoveryCandidate>, AppError> {
@@ -253,10 +261,43 @@ impl RecoveryService {
                     }
                     None => scene_json.clone(),
                 };
+                let persisted_bytes = write_bytes.clone();
                 run_blocking(move || {
                     atomic_write(&target_for_write, &write_bytes).map_err(AppError::from)
                 })
                 .await?;
+                let metadata_path = target.clone();
+                let (mtime, file_size) =
+                    run_blocking(move || recovery_file_metadata(&metadata_path)).await?;
+                let disk_hash = format!("{:x}", Sha256::digest(&persisted_bytes));
+                let stored_scene = String::from_utf8(persisted_bytes)
+                    .map_err(|error| AppError::InvalidScene(error.to_string()))?;
+                let workspaces = self.repository.workspace_list().await?;
+                let indexed_file = workspaces
+                    .iter()
+                    .find(|workspace| target.starts_with(Path::new(&workspace.root_path)))
+                    .map(|workspace| {
+                        recovery_file_index_record(workspace, &target, mtime, file_size, &disk_hash)
+                    })
+                    .transpose()?;
+                self.repository
+                    .document_checkpoint_commit(
+                        DraftRecord {
+                            file_path: target.display().to_string(),
+                            scene_json: stored_scene,
+                            content_hash: disk_hash.clone(),
+                            base_hash: Some(disk_hash.clone()),
+                            updated_at: mtime,
+                            is_dirty: false,
+                        },
+                        indexed_file,
+                    )
+                    .await?;
+                if let Some(watcher) = self.watcher.clone() {
+                    watcher
+                        .note_own_write(target.clone(), mtime, file_size, disk_hash)
+                        .await;
+                }
                 RecoveryApplyResponse {
                     scene: None,
                     new_path: Some(target.display().to_string()),
@@ -460,6 +501,51 @@ fn normalize_granted_path(path: &Path) -> Result<PathBuf, AppError> {
         .file_name()
         .ok_or_else(|| AppError::PathAccessDenied(path.to_path_buf()))?;
     Ok(canonical_parent.join(file_name))
+}
+
+fn recovery_file_metadata(path: &Path) -> Result<(i64, i64), AppError> {
+    let metadata = fs::metadata(path).map_err(|source| AppError::Io {
+        path: Some(path.to_path_buf()),
+        source,
+    })?;
+    let modified = metadata
+        .modified()
+        .map_err(|source| AppError::Io {
+            path: Some(path.to_path_buf()),
+            source,
+        })?
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| AppError::Internal(format!("file mtime predates Unix epoch: {error}")))?;
+    let mtime = i64::try_from(modified.as_secs())
+        .map_err(|_| AppError::Internal("file mtime exceeds the IPC range".to_owned()))?;
+    let file_size = i64::try_from(metadata.len())
+        .map_err(|_| AppError::Internal("file size exceeds the IPC range".to_owned()))?;
+    Ok((mtime, file_size))
+}
+
+fn recovery_file_index_record(
+    workspace: &WorkspaceRecord,
+    path: &Path,
+    mtime: i64,
+    file_size: i64,
+    hash: &str,
+) -> Result<FileIndexRecord, AppError> {
+    let relative = path
+        .strip_prefix(Path::new(&workspace.root_path))
+        .map_err(|_| AppError::PathAccessDenied(path.to_path_buf()))?;
+    let display_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| AppError::InvalidScene("document path has no UTF-8 file name".to_owned()))?;
+    Ok(FileIndexRecord {
+        canonical_path: path.display().to_string(),
+        workspace_id: workspace.id.clone(),
+        display_name: display_name.to_owned(),
+        relative_path: relative.display().to_string(),
+        mtime,
+        file_size,
+        content_hash: Some(hash.to_owned()),
+    })
 }
 
 async fn run_blocking<T, F>(operation: F) -> Result<T, AppError>

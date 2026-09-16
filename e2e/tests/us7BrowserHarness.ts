@@ -87,6 +87,7 @@ export async function installUs7Harness(
               pendingOpenPaths: [],
             };
           if (command === "workspace_list") return state.mountedWorkspaces;
+          if (command === "workspace_recent_list") return state.mountedWorkspaces;
           if (command === "workspace_add") {
             const workspace = {
               id: "workspace-2",

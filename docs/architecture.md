@@ -2,11 +2,13 @@
 
 # Excalidraw Desktop architecture
 
-**Last updated**: 2026-08-24
+**Last updated**: 2026-09-16
 
 This document describes the **current** implementation architecture of Excalidraw Desktop: layered view, reliability data flows, workspace-entry mutations, module responsibilities, dependency direction and trust boundaries, native-window boundary, and storage. Decision records live in `docs/adr/`. The visual and interaction contract is the root `DESIGN.md` (English; Chinese: `DESIGN.zh.md`). The public IPC contract is `docs/contracts/ipc-contracts.md` (v2).
 
 The current shell is a canvas-first overlay/pinned sidebar, IPC v2 Workspace Entry commands, and unified in-app menus/dialogs. Crash-safe persistence (drafts, atomic writes, recovery snapshots, external-change conflicts) still applies. What follows is the current path, not the retired FileTree + `thumbnails/` production implementation.
+
+Workspace persistence separates mounted authority from Recent history. Mounted records feed path policy, Workspace Entry commands, indexing, and watching; only the single Current Workspace feeds the Sidebar tree. Unmounting retains the record; remount validates the stored root on activation, while removing an unmounted record from Recents changes application history only.
 
 ## 1. Overall structure
 
@@ -19,7 +21,7 @@ flowchart TB
     subgraph frontend [Frontend React 19 + TypeScript strict]
         AppShell["app/AppShell: canvas-first · overlay/pinned sidebar"]
         Interaction["interaction store: one global menu and dialog"]
-        Tree["workspaces/WorkspaceTree: continuous virtualized tree"]
+        Tree["workspaces/WorkspaceTree: Current Workspace virtualized tree"]
         Docs["documents/ DocumentManager: session · close/activation queues · path migration"]
         Editor["editor/ official Excalidraw public integration"]
         Theme["app/theme/ theme registry · preference resolution"]
@@ -200,7 +202,7 @@ Closing an orphaned document must not send a checkpoint that requires the missin
 | `app/theme/` | Theme types, registry, preference resolution, semantic tokens, and pre-startup apply (DESIGN.md); decoupled from system title-bar color |
 | `editor/` | ExcalidrawAdapter + canvas, scene serialization, export, offline fonts, IME bridge; only the locked package's public API |
 | `documents/` | DocumentManager: session identity, tab order, dirty/orphan/conflict, close/activation queues, path migration, recovery UI |
-| `workspaces/WorkspaceTree.tsx` | One continuous virtualized workspace tree (several workspaces, one scroll surface); no thumbnail rows |
+| `workspaces/WorkspaceTree.tsx` | One continuous virtualized tree for the Current Workspace and its descendants; other workspace records are reached through Welcome/Recent; no thumbnail rows |
 | `ipc/` | Typed v2 command bindings and event subscription (`IPC_CONTRACT_VERSION = 2`) |
 
 ### Backend (`src-tauri/`)
@@ -249,7 +251,58 @@ Configuration and implementation: `src-tauri/tauri.conf.json` (window `title`) a
 
 Storage design detail is in ADR-002 (two-tier persistence) and ADR-003 (SQLite-first and the redb trigger). The hot tier keeps WAL drafts. Do not switch back to in-place cold-file overwrites, and do not remove recovery snapshots.
 
-## 11. Related documents
+## 11. Native visual validation layers
+
+This section describes the collector boundary and evidence ownership used by the native tooling. The detailed historical validation record belongs in [`docs/evidence/validation-summary.md`](evidence/validation-summary.md); collector architecture alone does not establish a current release gate.
+
+Native visual capture is a collector-side validation path, not a production IPC path. The collector prepares safe fixtures and immutable schema-v2 plans, launches the ordinary production package with an isolated profile, and records only package/isolation/window/capture facts. Semantic browser evidence remains the owner of app state and interaction facts.
+
+```mermaid
+flowchart TB
+  Prepare["Prepare CLI: schema-v2 plan + safe fixture + profiles"] --> Plan["Immutable capture plan"]
+  Plan --> Launcher["Owned child launcher"]
+  Launcher --> App["Normal production Tauri package"]
+  subgraph Collector["Collector-owned native facts"]
+    Isolation["Isolation/path evidence"]
+    Window["Owned PID/window + 1280x760 + scale"]
+    Confirm["One exact terminal confirmation"]
+    Capture["One capture + normalization + digests"]
+  end
+  subgraph AppEvidence["Application-owned semantic facts"]
+    Browser["Semantic browser collection"]
+    Reviewer["Independent visual reviewer"]
+  end
+  App --> Browser
+  Plan --> Isolation --> Window --> Confirm --> Capture
+  Capture --> Reviewer
+  Browser --> Reviewer
+```
+
+## 12. Native capture request-to-ready flow
+
+```mermaid
+sequenceDiagram
+  participant P as Prepare CLI
+  participant L as Owned launcher
+  participant A as Production package
+  participant D as Native collector
+  participant W as Semantic browser collector
+  P->>P: Validate package, manifest, fixture and isolation paths
+  P->>P: Create distinct empty profiles and schema-v2 plan
+  L->>A: Launch normal package with isolated HOME
+  D->>D: Validate child PID, one owned window and two stable 1280x760 samples
+  D-->>L: Print visual checklist and CAPTURE gate challenge
+  L->>D: Accept exact confirmation once within timeout
+  D->>D: Revalidate same PID/window/bounds/scale
+  D->>D: Capture once and write capture-readiness/isolation artifacts
+  D->>D: Normalize without crop or repair; hash immutable outputs
+  W->>W: Independently prove semantic state, geometry, fonts and interaction
+  D-->>W: Bind package/capture collection for later independent review
+```
+
+The collector owns only its child process and declared profile. Missing isolation, an ambiguous process/window, confirmation mismatch/timeout, path escape, changed package/plan, dimension mismatch or a fourth same-direction retry produces structured `BLOCKED`/`FAIL`; the collector never claims that the requested UI state is visible.
+
+## 13. Related documents
 
 - ADRs: ADR-001 framework choice, ADR-002 two-tier persistence, ADR-003 SQLite-first and redb trigger, ADR-004 declared reference-environment performance measurement, ADR-005 theme boundary (shell-layout / thumbnail sentences: see ADR-009), ADR-006/007/008 reference performance budgets and measurement series, ADR-009 desktop UI interactions
 - `DESIGN.md` / `DESIGN.zh.md` (visual and interaction contract)

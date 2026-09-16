@@ -3,7 +3,10 @@ import {
   getUiInteractionHarnessState,
   installUiInteractionHarness,
 } from "./uiInteractionHarness";
-import { openWorkspaceSidebar } from "./workspaceSidebar";
+import {
+  openWorkspaceSidebar,
+  persistPinnedWorkspaceSidebar,
+} from "./workspaceSidebar";
 
 const workspace = {
   id: "workspace-1",
@@ -19,11 +22,11 @@ test("entry dialogs cancel without mutation and keep naming conflicts inline", a
     workspaces: [workspace],
     entries: [drawing("drawing.excalidraw", "drawing")],
   });
+  await persistPinnedWorkspaceSidebar(page, [workspace.id], workspace.id);
   await page.goto("/");
   await openWorkspaceSidebar(page);
 
-  await page.getByRole("button", { name: "Actions for Workspace" }).click();
-  await page.getByRole("menuitem", { name: "New Drawing" }).click();
+  await page.getByRole("button", { name: "New Drawing" }).click();
   const input = page.getByRole("textbox", { name: "Name" });
   await expect(input).toHaveValue("Untitled");
   await expect(page.getByLabel("Fixed extension .excalidraw")).toBeVisible();
@@ -34,10 +37,7 @@ test("entry dialogs cancel without mutation and keep naming conflicts inline", a
     ),
   ).toHaveLength(0);
 
-  await page
-    .getByRole("button", { name: "Actions for Workspace" })
-    .click();
-  await page.getByRole("menuitem", { name: "New Drawing" }).click();
+  await page.getByRole("button", { name: "New Drawing" }).click();
   await input.fill("drawing");
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page.getByRole("alert")).toContainText("already exists");
@@ -54,9 +54,10 @@ test("non-empty Directory blocker reveals only after explicit action", async ({
       drawing("folder/child.excalidraw", "child", "folder"),
     ],
   });
+  await persistPinnedWorkspaceSidebar(page, [workspace.id], workspace.id);
   await page.goto("/");
   await openWorkspaceSidebar(page);
-  await page.getByRole("button", { name: "Actions for folder" }).click();
+  await openEntryActions(page, "folder");
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await expect(
     page.getByRole("dialog", { name: "Folder isn’t empty" }),
@@ -91,9 +92,10 @@ test("rename preserves the fixed suffix and delete cancellation performs no muta
     workspaces: [workspace],
     entries: [drawing("drawing.excalidraw", "drawing")],
   });
+  await persistPinnedWorkspaceSidebar(page, [workspace.id], workspace.id);
   await page.goto("/");
   await openWorkspaceSidebar(page);
-  await page.getByRole("button", { name: "Actions for drawing" }).click();
+  await openEntryActions(page, "drawing");
   await page.getByRole("menuitem", { name: "Rename" }).click();
   const input = page.getByRole("textbox", { name: "Name" });
   await expect(input).toHaveValue("drawing");
@@ -102,7 +104,7 @@ test("rename preserves the fixed suffix and delete cancellation performs no muta
   await page.getByRole("button", { name: "Rename" }).click();
   await expect(page.getByRole("treeitem", { name: "renamed" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Actions for renamed" }).click();
+  await openEntryActions(page, "renamed");
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await expect(
     page.getByRole("dialog", { name: "Delete renamed.excalidraw?" }),
@@ -124,6 +126,7 @@ test("dirty Drawing deletion focuses its Open Document and performs no hidden mu
     workspaces: [workspace],
     entries: [drawing("drawing.excalidraw", "drawing")],
   });
+  await persistPinnedWorkspaceSidebar(page, [workspace.id], workspace.id);
   await page.goto("/");
   await openWorkspaceSidebar(page);
   await page.getByRole("treeitem", { name: "drawing" }).click();
@@ -137,12 +140,11 @@ test("dirty Drawing deletion focuses its Open Document and performs no hidden mu
   await page.mouse.up();
   await expect(page.getByRole("status")).not.toHaveText("All changes saved");
 
-  await page.getByRole("button", { name: "Actions for drawing" }).click();
+  await openEntryActions(page, "drawing");
   await page.getByRole("menuitem", { name: "Delete" }).click();
-  await expect(page.getByRole("tab", { name: /drawing\.excalidraw/ })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  await expect(
+    page.getByRole("tab", { name: /drawing\.excalidraw/ }),
+  ).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("alert")).toContainText("Save the open drawing");
   const calls = (await getUiInteractionHarnessState(page)).invocations;
   expect(
@@ -185,4 +187,14 @@ function directory(relativePath: string, parentRelativePath: string) {
     mtime: 1,
     fileSize: 0,
   };
+}
+
+async function openEntryActions(
+  page: import("@playwright/test").Page,
+  displayName: string,
+): Promise<void> {
+  await page.getByRole("treeitem", { name: displayName }).hover();
+  await page
+    .getByRole("button", { name: `Actions for ${displayName}` })
+    .click();
 }

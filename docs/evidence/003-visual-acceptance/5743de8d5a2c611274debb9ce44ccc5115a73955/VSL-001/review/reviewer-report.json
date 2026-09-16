@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "gateId": "VSL-001",
+  "reviewerIdentity": {
+    "role": "ui-visual-acceptance-reviewer",
+    "taskIdentity": "/root/vsl001_remediation_review",
+    "runtimeIdentity": "/root/vsl001_remediation_review"
+  },
+  "runtimeConfig": {
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "high"
+  },
+  "independenceConfirmed": true,
+  "independenceStatement": "This reviewer did not author or modify the reviewed production UI, capture harness, specifications, immutable collection, owner artifacts, or task checkboxes.",
+  "implementationTaskIdentity": [
+    "/root",
+    "commit:5743de8d5a2c611274debb9ce44ccc5115a73955"
+  ],
+  "reviewedProductCommit": "5743de8d5a2c611274debb9ce44ccc5115a73955",
+  "buildIdentity": {
+    "appPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/src-tauri/target/release/bundle/macos/Excalidraw.app",
+    "bundleIdentifier": "excalidraw-desktop",
+    "bundleName": "Excalidraw",
+    "windowTitle": "Excalidraw Whiteboard",
+    "version": "0.2.0",
+    "os": "macOS 26.6.2",
+    "architecture": "arm64",
+    "displayScale": 2,
+    "logicalWindow": {
+      "width": 1280,
+      "height": 760
+    },
+    "rawCapture": {
+      "width": 2560,
+      "height": 1520
+    },
+    "theme": "Light",
+    "fixture": "003-native-capture-v4 / Design Workspace"
+  },
+  "reviewedPackageArtifactSha256": "e98afb4c55f2ea373adc2441a30596a2d0e553d1fbd8d9ba11e07d74acfc7e59",
+  "reviewedHf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+  "reviewedBaseline": {
+    "manifestName": "03 · Workspace · Pinned · Light",
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/feat-003-desktop-shell-ux-ui/docs/design/desktop-shell/hf-2/screens/workspace-pinned-light.png",
+    "sha256": "5bfbd5dba0363271192309594304a2291166a65bf91df5c2effb5550e961829a"
+  },
+  "reviewedCollectorReport": {
+    "path": "/private/tmp/excalidraw-vsl-native-v6-PjtcZq/VSL-001/collection/VSL-001-native-capture/collector-report.json",
+    "sha256": "52a634d262a5638c163cb71ab8b7e6c0ce74ce49b0eb5949568fe05e029e8d6f",
+    "collectionId": "VSL-001-native-capture",
+    "collectionDigest": "ecc7a598f613efbae37ece92cb9afd0b0bf3c03323a01d7bd028cfc3a8189b92",
+    "result": "PASS"
+  },
+  "reviewedCollections": [
+    {
+      "collectionId": "VSL-001-light-pinned-browser",
+      "collectionDigest": "beb9ea5a4f33d357031e8e8c300af1fb043bd2bb056cef9ebca51ab89b356b59",
+      "collectorReportSha256": "bd2b2f2da801cfb8e9ac57dbb2ea8c5bbbe6e79d5453ff265dfeeaf7aafbb8a0",
+      "role": "composed semantic browser authority"
+    },
+    {
+      "collectionId": "VSL-001-native-capture",
+      "collectionDigest": "ecc7a598f613efbae37ece92cb9afd0b0bf3c03323a01d7bd028cfc3a8189b92",
+      "collectorReportSha256": "52a634d262a5638c163cb71ab8b7e6c0ce74ce49b0eb5949568fe05e029e8d6f",
+      "role": "fixed native screenshot and capture integrity"
+    }
+  ],
+  "reviewedActualSha256": "dd554bc699585e6919bccb22a96311dc785626f8c6498061c81a0ba15fc0117b",
+  "maskSha256": "94ffa491f715acf0b7ec69c1d519b2add60c1e5edc496f69cb8a8a996705c226",
+  "screenMatrix": [
+    {
+      "screen": "03 · Workspace · Pinned · Light",
+      "status": "PASS",
+      "evidence": "/private/tmp/excalidraw-vsl-native-v6-PjtcZq/VSL-001/collection/VSL-001-native-capture/actual.png",
+      "mismatchCount": 0
+    }
+  ],
+  "remediationChecks": [
+    {
+      "check": "Selected Architecture row file icon and content preserve the same horizontal origin as same-depth Migration and Research rows",
+      "result": "PASS",
+      "measurement": {
+        "method": "normalized actual.png dark-core pixel bounds below RGB 140",
+        "architectureIconX": "64..75",
+        "migrationIconX": "64..75",
+        "researchIconX": "64..75",
+        "architectureTextStartX": 93,
+        "migrationTextStartX": 93,
+        "researchTextStartX": 93
+      },
+      "evidence": [
+        "collection/VSL-001-native-capture/actual.png"
+      ]
+    },
+    {
+      "check": "Collapse All glyph has reasonable optical vertical alignment with New Drawing, New Folder, and Refresh",
+      "result": "PASS",
+      "measurement": {
+        "method": "normalized actual.png dark-core pixel bounds below RGB 140",
+        "newDrawingY": "119..130",
+        "newFolderY": "121..129",
+        "collapseAllY": "121..127",
+        "collapseAllCentroidY": 123.833,
+        "refreshY": "119..131",
+        "buttonOpticalCenterY": 124
+      },
+      "evidence": [
+        "collection/VSL-001-native-capture/actual.png"
+      ]
+    },
+    {
+      "check": "The alignment remediation introduces no other High or Critical shell visual regression",
+      "result": "PASS",
+      "evidence": [
+        "collection/VSL-001-native-capture/actual.png",
+        "collection/VSL-001-native-capture/mask.json"
+      ]
+    }
+  ],
+  "compositionChecks": [
+    {
+      "check": "360px Sidebar perimeter remains visible and unmasked",
+      "result": "PASS"
+    },
+    {
+      "check": "flows is expanded and Architecture, Migration, and Research are visible",
+      "result": "PASS"
+    },
+    {
+      "check": "Architecture is active and selected",
+      "result": "PASS"
+    },
+    {
+      "check": "Library is open",
+      "result": "PASS"
+    },
+    {
+      "check": "Workspace header actions and shell perimeter have no clipping or overflow",
+      "result": "PASS"
+    }
+  ],
+  "legacyRemoval": [
+    {"control": "separate global top-level New Drawing", "observedCount": 0},
+    {"control": "textual Workspace sidebar control", "observedCount": 0},
+    {"control": "large textual Pin or Unpin control", "observedCount": 0},
+    {"control": "legacy top-level Save", "observedCount": 0},
+    {"control": "persistent normal-state All changes saved strip", "observedCount": 0},
+    {"control": "standalone top-level Export", "observedCount": 0},
+    {"control": "legacy top-level Appearance", "observedCount": 0},
+    {"control": "visible native-looking tab-strip scrollbar", "observedCount": 0},
+    {"control": "thick or always-visible Sidebar scrollbar", "observedCount": 0},
+    {"control": "Unicode placeholder tree or file icons", "observedCount": 0},
+    {"control": "always-visible horizontal ellipsis", "observedCount": 0},
+    {"control": "duplicate workspace navigation state beyond the approved current-workspace header and root row", "observedCount": 0},
+    {"control": "clipped or overflowed workspace-header actions", "observedCount": 0},
+    {"control": "old 002 shell composition", "observedCount": 0}
+  ],
+  "masks": [
+    {
+      "maskId": "sdk-canvas",
+      "selectorOrRect": "rect(480,74,506,686)",
+      "surface": "canvas",
+      "justification": "Approved official SDK-owned editor interior; begins after the 480px maximum Sidebar width and leaves the Sidebar and shell perimeter visible.",
+      "perimeterChecked": true
+    },
+    {
+      "maskId": "sdk-library",
+      "selectorOrRect": "rect(986,74,294,686)",
+      "surface": "library",
+      "justification": "Approved official SDK-owned Library interior below the native titlebar.",
+      "perimeterChecked": true
+    }
+  ],
+  "tolerances": {
+    "structureHierarchyAndPerimeter": "0 tolerance",
+    "nativeReviewerRasterToleranceUsed": false,
+    "rasterDiffRatio": null,
+    "composedBrowserGeometryTolerance": "±2 CSS px; owned by the bound semantic collection and not re-proved by this review",
+    "pixelThresholdPurpose": "Dark-core coordinate localization only; not an acceptance tolerance"
+  },
+  "findings": [
+    {
+      "severity": "INFO",
+      "description": "The selected-row 2px content displacement is absent in the reviewed native capture."
+    },
+    {
+      "severity": "INFO",
+      "description": "The Collapse All glyph is optically centered without visible overcorrection."
+    },
+    {
+      "severity": "INFO",
+      "description": "No High or Critical regression is visible in the decorated macOS window, tabs, Workspace header, tree rows, dividers, or unmasked shell perimeter."
+    }
+  ],
+  "residualLowMediumFindings": [],
+  "criticalCount": 0,
+  "highCount": 0,
+  "highCriticalCount": 0,
+  "unverified": [
+    "Product-owner approval is a separate T034 gate and was not inferred or authored.",
+    "SDK-owned canvas and Library interiors were not reviewed beyond their required visible boundary and presence.",
+    "This remediation review covers only the assigned Pinned Light screen and does not claim final six-screen acceptance.",
+    "Hover, focus-visible, disabled, Dark, and other unassigned component states were not re-reviewed by this gate."
+  ],
+  "verdict": "PASS",
+  "ownerGate": "PENDING",
+  "nextGate": "T034 product-owner review bound to this exact package, both reviewed collection digests, and this reviewer report."
+}

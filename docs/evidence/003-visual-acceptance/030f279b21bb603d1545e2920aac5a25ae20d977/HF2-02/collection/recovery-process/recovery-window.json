@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "scenario": "recovery-window",
+  "result": "PASS",
+  "normalExitAbnormalExit": false,
+  "normalExitDialogVisible": false,
+  "forcedExitAbnormalExit": true,
+  "forcedExitDialogVisible": true,
+  "recoveryCandidateCount": 1,
+  "recoveryElapsedMs": 12,
+  "recoveryDeadlineMs": 5000,
+  "expectedScene": {
+    "type": "excalidraw",
+    "version": 2,
+    "elements": [{ "id": "last-edit" }]
+  },
+  "restoredScene": {
+    "type": "excalidraw",
+    "version": 2,
+    "elements": [{ "id": "last-edit" }]
+  },
+  "sceneMatches": true
+}

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  HF2_NATIVE_MONO_FONT_STACK,
+  HF2_NATIVE_UI_FONT_STACK,
   THEME_PREFERENCE_STORAGE_KEY,
   THEME_PREFERENCE_VERSION,
   ThemeController,
@@ -54,8 +56,12 @@ function preference(modePreference: "light" | "dark" | "system") {
   });
 }
 
-function createController(options?: { stored?: string; systemDark?: boolean }) {
-  const storage = new MemoryStorage();
+function createController(options?: {
+  stored?: string;
+  systemDark?: boolean;
+  storage?: MemoryStorage;
+}) {
+  const storage = options?.storage ?? new MemoryStorage();
   const media = new ColorSchemeMedia(options?.systemDark ?? false);
   const root = document.createElement("html");
 
@@ -126,6 +132,112 @@ describe("ThemeController", () => {
     const { controller } = createController({ stored: preference("dark") });
 
     expect(controller.getSnapshot().preference.modePreference).toBe("dark");
+  });
+
+  it("persists Appearance and restores the exact manual mode", () => {
+    const storage = new MemoryStorage();
+    const first = createController({ storage, systemDark: false });
+
+    first.controller.setModePreference("dark");
+    expect(storage.getItem(THEME_PREFERENCE_STORAGE_KEY)).toBe(
+      preference("dark"),
+    );
+    first.controller.dispose();
+
+    const restored = createController({ storage, systemDark: false });
+    expect(restored.controller.getSnapshot()).toEqual({
+      preference: {
+        version: THEME_PREFERENCE_VERSION,
+        themeId: "excalidraw",
+        modePreference: "dark",
+      },
+      resolvedColorScheme: "dark",
+    });
+  });
+
+  it("keeps every HF-2 component geometry token identical across Light and Dark", () => {
+    const { controller, root } = createController({
+      stored: preference("light"),
+    });
+    const geometryVariables = [
+      "--icon-button-size",
+      "--icon-button-icon-size",
+      "--icon-button-radius",
+      "--tab-reference-width",
+      "--tab-component-height",
+      "--tab-radius",
+      "--workspace-row-reference-width",
+      "--workspace-row-height",
+      "--workspace-row-radius",
+      "--welcome-action-height",
+      "--welcome-action-reference-width",
+      "--welcome-action-radius",
+      "--welcome-action-border-width",
+      "--welcome-action-icon-size",
+    ] as const;
+    const lightGeometry = geometryVariables.map((name) => [
+      name,
+      root.style.getPropertyValue(name),
+    ]);
+
+    controller.setModePreference("dark");
+
+    expect(
+      geometryVariables.map((name) => [name, root.style.getPropertyValue(name)]),
+    ).toEqual(lightGeometry);
+    expect(root.style.getPropertyValue("--app-background")).toBe("#121212");
+    expect(root.style.getPropertyValue("--accent")).toBe("#BBB8FF");
+  });
+
+  it("maps HF-2 semantic and geometry tokens onto the shell root", () => {
+    const { root } = createController({
+      stored: preference("light"),
+    });
+
+    expect(root.style.getPropertyValue("--accent")).toBe("#6965DB");
+    expect(root.style.getPropertyValue("--focus-ring")).toBe("#1C7ED6");
+    expect(root.style.getPropertyValue("--hit-target-size")).toBe("32px");
+    expect(root.style.getPropertyValue("--icon-size")).toBe("16px");
+    expect(root.style.getPropertyValue("--border-icon")).toBe("1px");
+    expect(root.style.getPropertyValue("--border-icon-directional")).toBe(
+      "1.25px",
+    );
+    expect(root.style.getPropertyValue("--surface-hover")).toBe("#F1F0FF");
+    expect(root.style.getPropertyValue("--tree-row-height")).toBe("28px");
+    expect(root.style.getPropertyValue("--tab-height")).toBe("36px");
+    expect(root.style.getPropertyValue("--font-ui")).toBe(
+      HF2_NATIVE_UI_FONT_STACK,
+    );
+    expect(root.style.getPropertyValue("--font-mono")).toBe(
+      HF2_NATIVE_MONO_FONT_STACK,
+    );
+    expect(root.style.getPropertyValue("--font-size-title")).toBe("28px");
+    expect(root.style.getPropertyValue("--font-weight-semibold")).toBe("600");
+    expect(root.style.getPropertyValue("--icon-button-size")).toBe("32px");
+    expect(root.style.getPropertyValue("--icon-button-focus-ring-width")).toBe(
+      "2px",
+    );
+    expect(
+      root.style.getPropertyValue("--icon-button-default-foreground"),
+    ).toBe("#5C5C5C");
+    expect(root.style.getPropertyValue("--tab-reference-width")).toBe("196px");
+    expect(root.style.getPropertyValue("--tab-component-height")).toBe("36px");
+    expect(root.style.getPropertyValue("--tab-radius")).toBe("6px");
+    expect(root.style.getPropertyValue("--workspace-row-reference-width")).toBe(
+      "360px",
+    );
+    expect(root.style.getPropertyValue("--workspace-row-radius")).toBe("6px");
+    expect(root.style.getPropertyValue("--workspace-row-height")).toBe("28px");
+    expect(root.style.getPropertyValue("--welcome-action-height")).toBe("40px");
+    expect(
+      root.style.getPropertyValue("--welcome-action-reference-width"),
+    ).toBe("220px");
+    expect(
+      root.style.getPropertyValue("--workspace-sidebar-default-width"),
+    ).toBe("360px");
+    expect(
+      root.style.getPropertyValue("--workspace-sidebar-min-canvas-share"),
+    ).toBe("0.7");
   });
 
   it.each([

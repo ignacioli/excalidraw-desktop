@@ -1,0 +1,47 @@
+{
+  "recorded": "2026-09-05",
+  "status": "PASS",
+  "deviationId": "HF2-FONT-001",
+  "fixture": "unicode-pinned",
+  "viewport": {
+    "width": 1280,
+    "height": 760
+  },
+  "externalNetworkOffline": true,
+  "remoteFontRequests": 0,
+  "fontStatus": "loaded",
+  "uiStack": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+  "monoStack": "ui-monospace, SFMono-Regular, Menlo, monospace",
+  "computedUiFamily": "-apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+  "computedMonoFamily": "ui-monospace, SFMono-Regular, Menlo, monospace",
+  "englishTargetVerified": true,
+  "unicodeFallbackVerified": true,
+  "styles": {
+    "body": {
+      "fontFamily": "-apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "19.6px"
+    },
+    "header": {
+      "fontFamily": "-apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+      "fontSize": "20px",
+      "fontWeight": "600",
+      "lineHeight": "28px"
+    },
+    "tab": {
+      "fontFamily": "-apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "19.6px"
+    },
+    "workspaceRow": {
+      "fontFamily": "-apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "28px"
+    }
+  },
+  "command": "PHASE2_PRINT_FONT_EVIDENCE=1 PLAYWRIGHT_SKIP_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:1421 APP_E2E=1 pnpm exec playwright test --config e2e/playwright.config.ts e2e/tests/ui-desktop-shell-visual.spec.ts --grep 'computed HF2-FONT-001' --reporter=line",
+  "result": "1 passed"
+}

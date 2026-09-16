@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 1,
+  "legacyCounts": {
+    "globalNewDrawing": 0,
+    "textSidebar": 0,
+    "largePinUnpin": 0,
+    "topLevelSaveExportAppearance": 0,
+    "autosaveStrip": 0,
+    "tabScrollbar": 0,
+    "sidebarScrollbar": 0,
+    "placeholderIcons": 0,
+    "horizontalEllipsis": 0,
+    "duplicateWorkspaceRoots": 0,
+    "headerActionOverflow": 0
+  },
+  "legacyAssertions": [
+    {
+      "name": "legacy.globalNewDrawing",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.textSidebar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.largePinUnpin",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.topLevelSaveExportAppearance",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.autosaveStrip",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.tabScrollbar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.sidebarScrollbar",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.placeholderIcons",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.horizontalEllipsis",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.duplicateWorkspaceRoots",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy.headerActionOverflow",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    }
+  ],
+  "semanticAssertions": [
+    {
+      "name": "semantic.tab.fixture-overlay-system-map.save-state",
+      "expected": "clean",
+      "actual": "clean",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-system-map.visible-unsaved-marker",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-flow.save-state",
+      "expected": "dirty",
+      "actual": "dirty",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-flow.visible-unsaved-marker",
+      "expected": "1",
+      "actual": "1",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-research.save-state",
+      "expected": "clean",
+      "actual": "clean",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.tab.fixture-overlay-research.visible-unsaved-marker",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "semantic.back.valid-history-enabled",
+      "expected": "true",
+      "actual": "true",
+      "tolerance": "exact",
+      "result": "PASS"
+    }
+  ],
+  "geometryAssertions": [
+    {
+      "name": "geometry.overlay.canvas-box.x.before-after",
+      "expected": "0",
+      "actual": "0",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.overlay.canvas-box.y.before-after",
+      "expected": "44",
+      "actual": "44",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.overlay.canvas-box.width.before-after",
+      "expected": "1280",
+      "actual": "1280",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.overlay.canvas-box.height.before-after",
+      "expected": "716",
+      "actual": "716",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.overlay.back.width",
+      "expected": "32",
+      "actual": "32",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.overlay.back.height",
+      "expected": "32",
+      "actual": "32",
+      "tolerance": "0px",
+      "result": "PASS"
+    },
+    {
+      "name": "geometry.overlay.first-tab.x",
+      "expected": "88",
+      "actual": "88",
+      "tolerance": "2px",
+      "result": "PASS"
+    }
+  ],
+  "tokenAssertions": [
+    {
+      "name": "token.--app-background",
+      "expected": "#F8F9FA",
+      "actual": "#F8F9FA",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--panel-background",
+      "expected": "#FFFFFF",
+      "actual": "#FFFFFF",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--surface-hover",
+      "expected": "#F1F0FF",
+      "actual": "#F1F0FF",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--text-primary",
+      "expected": "#1B1B1F",
+      "actual": "#1B1B1F",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--text-secondary",
+      "expected": "#5C5C5C",
+      "actual": "#5C5C5C",
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "name": "token.--focus-ring",
+      "expected": "#1C7ED6",
+      "actual": "#1C7ED6",
+      "tolerance": "exact",
+      "result": "PASS"
+    }
+  ],
+  "cropComparisons": [
+    {
+      "componentId": "workspace-sidebar",
+      "baselineComponentId": "workspace-sidebar",
+      "baselineSha256": "3191949dd3c6d026e6be43fd798cf9529eed9e7056e5cfaeaefa016a2fe31768",
+      "actualSha256": "3191949dd3c6d026e6be43fd798cf9529eed9e7056e5cfaeaefa016a2fe31768",
+      "fontReady": true,
+      "maxDiffPixelRatio": 0
+    }
+  ],
+  "cropAssertions": [
+    {
+      "name": "component-crop-binding.workspace-sidebar",
+      "expected": "same semantic component; fonts ready; valid digests; diff <=0.01",
+      "actual": "baseline=workspace-sidebar; fontReady=true; diff=0",
+      "tolerance": "auxiliary; component crop only",
+      "result": "PASS"
+    }
+  ]
+}
