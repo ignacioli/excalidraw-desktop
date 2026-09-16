@@ -1,8 +1,23 @@
 # Changelog
 
-User-visible changes to Excalidraw Desktop, newest first. Ordinary feature work does not edit this file; append a section only in the version-bump pull request that ships a release.
+User-visible changes to Excalidraw Desktop, newest first.
 
-GitHub Release notes for a tag are this section plus the Gatekeeper footer in [`docs/release-notes-footer.md`](docs/release-notes-footer.md).
+## [0.3.0] - 2026-09-16
+
+### Added
+
+- A Welcome screen for creating a drawing, opening a workspace, and returning to recent workspaces. Removing an item from Recents clears only app history, not files on disk.
+
+### Changed
+
+- The sidebar now shows one Current Workspace tree at a time; other workspaces remain accessible through Welcome and Recent Workspaces.
+- Refined workspace navigation with a consistent custom icon set for Sidebar, Back, Collapse/Expand All, and Refresh, alongside compact actions and a resizable pinned sidebar.
+- Native application menus provide Save, Export Image, and System, Light, or Dark appearance choices.
+- Added a custom app icon and changed the name shown in the macOS Dock and application menus to Excalidraw.
+
+### Fixed
+
+- Fixed the macOS window close button so pending work is checkpointed before the window closes.
 
 ## [0.2.0] - 2026-08-25
 
@@ -29,5 +44,6 @@ Canvas-first desktop shell. Implemented in [#1](https://github.com/ignacioli/exc
 
 - GitHub Releases for unsigned, unnotarized macOS universal `.dmg` and best-effort Linux AppImage, deb, and rpm.
 
+[0.3.0]: https://github.com/ignacioli/excalidraw-desktop/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ignacioli/excalidraw-desktop/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/ignacioli/excalidraw-desktop/releases/tag/v0.1.1
