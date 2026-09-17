@@ -12,7 +12,7 @@
 
 - `src/`：React 19 + TypeScript strict 前端。
 - `src-tauri/`：Rust 后端（Tauri 2.x）。
-- `specs/`：指向私有 specs 仓库的软链接，存放权威功能规格、计划、研究、数据模型、任务与检查清单（被 Git 忽略，不属于本公开仓库）。修改任何链接规格前，必须读取 `specs/AGENTS.md`，并分别审计私有仓库的 Git 状态、暂存内容和未推送提交；本公开仓库的 Git 状态不包含这些链接文件。
+- `specs/`：被 Git 忽略、指向私有共享 checkout 的软链接，不负责选择专属 worktree。读取或修改项目 discovery、功能规格、计划、任务前，必须从本产品 worktree 根目录运行 `node scripts/specs-worktree-gate.mjs check`，仅使用输出的 `SPECS_DIR` 绝对路径；校验阻断时不得退回 `specs/`。首次绑定须在选定真实私有 worktree 后运行 `node scripts/specs-worktree-gate.mjs bind <私有specs-worktree规范绝对路径> <预期主题分支> <相对项目或功能目录>`；绑定被 Git 忽略，不能依据产品分支猜测。修改前读取 `<SPECS_WORKTREE>/AGENTS.md`，并单独审计私有 worktree 的状态、暂存内容及未推送提交。产品 Git 状态不覆盖私有规格。
 - `docs/`：面向实现的架构记录与 ADR。
 - `.codex/`：开发者本机 Codex 配置。它被 Git 忽略，**不得**作为构建、测试、审查或贡献本项目的前提。
 
@@ -158,6 +158,6 @@
 
 **本地工具链 bootstrap。** 编辑器 skills、SpecKit scripts/templates、Codex 项目 subagent、私有 `specs/` 软链和 `.handoff/` 属于开发者本地文件，已被 gitignore，以免公开仓库绑定某一种编辑器工具链。它们只安装在主 checkout。为本产品仓库执行 `git worktree add` 之后，以及在该 worktree 中使用项目 skills、SpecKit 脚本、`.handoff`、Cursor subagent 或 Codex 项目 subagent 之前，把该 worktree 作为当前工作目录运行 `scripts/bootstrap-local-worktree.sh`。若当前分支还没有这份脚本，用另一份已更新 checkout 里的拷贝同样调用：以要接线的 worktree 为 `cwd`，而不是以脚本所在位置为准。脚本是幂等的：它把主 checkout 上已存在的目录做成相对 symlink，缺失的源则跳过。若目标已是普通目录，则停止并报告；`--force` 会先备份再替换，且不得用于主 checkout。不要把另一位开发者的 `.agents`、`.cursor` 或 `.codex` 拷进 git 或 worktree。不要把整个 `.specify/`、`.cursor/` 或 `.codex/` 链过去——只链脚本列出的被忽略运行时子树（包括 `.codex/agents`，而不是整个 `.codex/`）。私有 specs worktree 属于另一个 Git 仓库，不受此脚本接线。
 
-**把产品 worktree 切到 Codex。** Codex 从该 worktree 根目录读取 `.codex/agents/*.toml`，不会去读主 checkout。若后续会话要在 Codex 里继续本分支，或对着已有产品 worktree 打开 Codex，agent 必须：(1) 以该 worktree 为 `cwd`，绝不在 `main` 上开发；(2) 运行 `scripts/bootstrap-local-worktree.sh`（幂等）；(3) 确认 `.codex/agents` 是指向主 checkout `.codex/agents` 的 symlink，且 TOML 可解析；(4) 确认 `specs/003-desktop-shell-ux-ui`（或当前 `feature.json` 目录）能解析。然后以该 worktree 为工作目录启动 Codex。不要复制 TOML，不要链整个 `.codex/`，不要在 `main` 上开始实现。
+**把产品 worktree 切到 Codex。** Codex 从该 worktree 根目录读取 `.codex/agents/*.toml`，不会去读主 checkout。若后续会话要在 Codex 里继续本分支，或对着已有产品 worktree 打开 Codex，agent 必须：(1) 以该 worktree 为 `cwd`，绝不在 `main` 上开发；(2) 运行 `scripts/bootstrap-local-worktree.sh`（幂等）；(3) 确认 `.codex/agents` 是指向主 checkout `.codex/agents` 的 symlink，且 TOML 可解析；(4) 如需访问项目或功能规格，运行 `node scripts/specs-worktree-gate.mjs check`，只使用验证后的 `SPECS_DIR`。然后以该 worktree 为工作目录启动 Codex。不要复制 TOML，不要链整个 `.codex/`，不要在 `main` 上开始实现。
 
 本项目没有冲突规则；若将来需要项目级例外，在此显式记录，而不是复制全局策略。
