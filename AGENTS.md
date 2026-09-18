@@ -57,7 +57,7 @@ User-facing and root contributor docs use English as the canonical filename (no 
 
 1. Translate a fuzzy request into the smallest coherent user-visible outcome. Identify assumptions, affected boundaries, and what success looks like.
 2. Inspect relevant code, configuration, tests, and established conventions before editing. Never invent commands, APIs, paths, Tauri permissions, or repository behavior.
-3. For low-risk ambiguity resolved by repository conventions, proceed and state the assumption. Ask one targeted question when the choice materially changes UX, data, APIs, security, dependencies, compatibility, or architecture.
+3. For low-risk ambiguity resolved by repository conventions, proceed and state the assumption. Ask one targeted question only when a material ambiguity remains unresolved or the requested action exceeds existing authorization. Do not re-ask choices already authorized in the current task, including behavior, API, UX, configuration, or compatibility decisions. Preserve the explicit confirmation requirement for destructive or irreversible operations.
 4. Implement a complete vertical slice rather than disconnected placeholders. Keep scope tight and preserve behavior outside the request.
 5. Add or update tests for changed behavior and run the narrowest relevant checks across every affected layer.
 6. Review the final diff for correctness, security, accessibility, compatibility, and unrelated churn before handoff.
@@ -105,7 +105,7 @@ The reference-performance workflow and test-only fault-injection harness are imp
 
 Performance validation order: after feature development, run the physical-macOS functional and performance measurements first (fast iteration that surfaces product regressions and workload-design flaws before the slow VM gate), then the declared-reference VM measurement (T090/T108) as the auditable gate. The VM report is authoritative evidence, but the physical run precedes it.
 
-Validation must be proportional to risk and should eventually include, as applicable:
+Validation must be proportional to risk. Once the required relevant checks for the affected layers pass, stop validation; expand or repeat checks only for a new change, a failure, or a concrete unresolved risk. This does not remove mandatory native, reliability, or other project-specific acceptance gates. Applicable checks include:
 
 - Frontend formatter, lint, strict typecheck, focused tests, and production build.
 - Rust formatting check, targeted compilation, Clippy, and focused tests.
@@ -143,7 +143,7 @@ These rules bind anyone who starts a command expected to run longer than a few m
 
 ## Git and Completion
 
-The primary branch is `main`. Keep changes focused, use short imperative commit subjects, and never bypass hooks or force-push the primary branch. Do not discard or overwrite unrelated local work. Automated coding tools MUST NOT create a commit unless the operator explicitly asked.
+The primary branch is `main`. Keep changes focused, use short imperative commit subjects, and never bypass hooks or force-push the primary branch. Do not discard or overwrite unrelated local work. Automated coding tools may create local commits within the authorized task scope when needed for builds, tests, checkpoints, or handoffs, without waiting for human review. Ordinary commits must contain only task-owned changes; full-worktree WIP backups before destructive operations remain governed by Worktree Safety. Local commit authorization does not authorize push, merge, publish, or release, and a commit is not owner approval or test evidence.
 
 **Protected primary branch.** Do not modify tracked files, stage, or commit on `main` or `master`. Fetch `origin/main` and create a topic branch from that up-to-date tip (or merge `origin/main` into the topic branch) before changing tracked files. Prefer a dedicated git worktree so the primary checkout can remain on `main`. Direct commits to `main`/`master` are forbidden even when they look small; land them through a branch and pull request. Gitignored local state on the primary checkout is allowed: editor/agent skills, `.codex/`, and `.handoff/`.
 
