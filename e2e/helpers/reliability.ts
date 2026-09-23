@@ -862,6 +862,14 @@ async function runHistoryOperationProbeProcess(
 }
 
 async function runHistoryOperationResultProcess(
+  scenario: "history-operation-failure",
+  overrides: Readonly<NodeJS.ProcessEnv>,
+): Promise<ReliabilityRun<HistoryOperationFailureEvidence>>;
+async function runHistoryOperationResultProcess(
+  scenario: "history-operation-concurrency",
+  overrides: Readonly<NodeJS.ProcessEnv>,
+): Promise<ReliabilityRun<HistoryOperationConcurrencyEvidence>>;
+async function runHistoryOperationResultProcess(
   scenario: "history-operation-failure" | "history-operation-concurrency",
   overrides: Readonly<NodeJS.ProcessEnv>,
 ): Promise<
@@ -909,6 +917,32 @@ async function runHistoryOperationResultProcess(
   }
 }
 
+async function runHistoryOperationResultProcessWithPaths(
+  binary: string,
+  paths: IsolatedDesktopPaths,
+  scenario: "history-operation-fault-probe",
+  overrides: Readonly<NodeJS.ProcessEnv>,
+): Promise<HistoryOperationFaultProbeEvidence>;
+async function runHistoryOperationResultProcessWithPaths(
+  binary: string,
+  paths: IsolatedDesktopPaths,
+  scenario: "history-operation-failure",
+  overrides: Readonly<NodeJS.ProcessEnv>,
+): Promise<HistoryOperationFailureEvidence>;
+async function runHistoryOperationResultProcessWithPaths(
+  binary: string,
+  paths: IsolatedDesktopPaths,
+  scenario: "history-operation-concurrency",
+  overrides: Readonly<NodeJS.ProcessEnv>,
+): Promise<HistoryOperationConcurrencyEvidence>;
+async function runHistoryOperationResultProcessWithPaths(
+  binary: string,
+  paths: IsolatedDesktopPaths,
+  scenario: "history-operation-failure" | "history-operation-concurrency",
+  overrides: Readonly<NodeJS.ProcessEnv>,
+): Promise<
+  HistoryOperationFailureEvidence | HistoryOperationConcurrencyEvidence
+>;
 async function runHistoryOperationResultProcessWithPaths(
   binary: string,
   paths: IsolatedDesktopPaths,
