@@ -1,10 +1,16 @@
-# Local Version History 低保真交互决策
+# Local Version History 交互与高保真决策
 
-**状态**：低保真已获产品负责人批准；必要高保真仍待审批
+**状态**：低保真与必要高保真均已获产品负责人批准；production package 视觉验收待实现后执行
 
 **批准日期**：2026-09-23
 
-**设计载体**：OpenDesign Local Codex
+**低保真载体**：OpenDesign Local Codex
+
+**高保真载体**：Penpot SaaS official hosted Remote MCP
+
+**高保真 Page**：`05 · Local Version History · T004`
+
+**高保真批准版本**：`T004 · Local Version History · High-Fidelity Review Baseline · Compact action menu`
 **参考视口**：1280 × 760
 
 ## 目标与边界
@@ -75,6 +81,8 @@ Local Version History 是应用拥有的桌面文件工作流，不是 Excalidra
 
 300 px 降级状态保持相同三段动作布局，不产生横向滚动。
 
+高保真批准的 More actions menu 使用 180 × 84 px 紧凑浮层、约 40 px 行高和 32 px 三点触发器。三点、bookmark 与 trash 均使用 vector geometry，不使用字体 glyph。Delete version 保持危险色和独立分隔，不扩大为常驻按钮。
+
 ## 完整状态
 
 低保真覆盖：
@@ -110,13 +118,16 @@ Local Version History 是应用拥有的桌面文件工作流，不是 Excalidra
 - loading、processing、error 使用适当 live region；
 - reduced motion 不依赖动画表达状态。
 
-## 审批边界
+## 高保真批准范围
 
-本记录只确认低保真信息架构与交互。以下仍未批准：
+2026-09-23 产品负责人批准以下必要高保真状态：
 
-- 精确颜色、排版、图标和阴影；
-- Light/Dark 的最终 token；
-- Penpot 高保真 screen baselines；
-- production macOS 包的视觉结果。
+- 360 px 默认 Light history list；
+- More actions menu 及紧凑间距、vector icons 和危险操作层级；
+- 独立 readonly version preview；
+- Restore confirmation；
+- External recovery issue；
+- 300 px compact Dark fallback；
+- 既有 Excalidraw semantic tokens、排版、边框、阴影和 Light/Dark 方向。
 
-下一阶段使用 Penpot SaaS official hosted Remote MCP 制作必要高保真状态。高保真批准前，不实施 T020 对应 UI。
+批准只解除 T020 的设计门槛。它不证明 production UI 已实现，也不代替 exact macOS production package 下的 Light/Dark、焦点、错误、裁切和 reduced-motion visual acceptance。

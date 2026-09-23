@@ -1,7 +1,8 @@
 # Local Version History visual checklist
 
-**Current gate**: Low-fidelity APPROVED; high-fidelity and production visual acceptance PENDING
+**Current gate**: Low-fidelity and high-fidelity APPROVED; production visual acceptance PENDING
 **Low-fidelity owner approval date**: 2026-09-23
+**High-fidelity owner approval date**: 2026-09-23
 
 ## Low-fidelity decision record
 
@@ -17,17 +18,19 @@
 - [x] Loading, empty, pending, permission, resource, conflict, generic error, dark, cramped, and reduced-motion states are represented.
 - [x] Review-only state navigator is not production UI.
 
-## Required high-fidelity review
+## High-fidelity review
 
-- [ ] Penpot file/page identity verified before writes.
-- [ ] Light history list and readonly preview approved.
-- [ ] Dark history list and readonly preview approved.
-- [ ] External recovery issue and confirmation flow approved.
-- [ ] Permission/resource/conflict/error states approved.
-- [ ] 1280 × 760 geometry and text truncation approved.
-- [ ] 360 px default and 300 px cramped fallback approved visually.
-- [ ] More actions menu, focus ring, destructive hierarchy, and icon treatment approved.
-- [ ] High-fidelity assets frozen locally with manifest and hashes.
+- [x] Penpot file/page identity verified before writes.
+- [x] Light history list and readonly preview approved.
+- [x] Dark history treatment and readonly-preview visual direction approved.
+- [x] External recovery issue and confirmation flow approved.
+- [x] Permission/resource/conflict/error states retain the approved low-fidelity hierarchy and high-fidelity semantic-token treatment.
+- [x] 1280 × 760 geometry and text truncation approved.
+- [x] 360 px default and 300 px cramped fallback approved visually.
+- [x] More actions menu, focus behavior, destructive hierarchy, and vector icon treatment approved; final menu is 180 × 84 px.
+- [x] High-fidelity Penpot archive frozen locally with manifest and SHA-256.
+
+The approved Penpot page contains six necessary high-fidelity frames. The low-fidelity prototype remains the exhaustive interaction-state reference for loading, empty, permission, unavailable-resource, conflict, generic-error, delete-confirmation, focus-return, and reduced-motion behavior. Production rendering of those states remains in the package-level gate below.
 
 ## Production visual acceptance
 

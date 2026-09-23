@@ -21,7 +21,9 @@
   "ownerDecision": {
     "lowFidelity": "APPROVED",
     "approvedAt": "2026-09-23",
-    "highFidelity": "PENDING"
+    "highFidelity": "APPROVED",
+    "highFidelityApprovedAt": "2026-09-23",
+    "highFidelityManifest": "../high-fi/manifest.json"
   },
   "notes": [
     "Preview and Restore remain visible.",
