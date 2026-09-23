@@ -1,6 +1,7 @@
 use std::{
     fs,
     path::{Path, PathBuf},
+    time::SystemTime,
 };
 
 use super::*;
@@ -8,6 +9,7 @@ use crate::database::repository::{
     DraftRepository, FileIndexRepository, SqliteRepository, WorkspaceRecord, WorkspaceRepository,
 };
 use crate::history::{
+    gc::{ObjectKey, ObjectReferences},
     identity::FileSystemIdentity,
     operation::{OperationObjectPin, OperationRequest},
     store::HistoryStore,
@@ -75,10 +77,13 @@ fn begin_operation(
                 expected_old_disk_hash: old_hash,
                 expected_old_identity: old_identity,
                 prepared_target_identity: new_identity.clone(),
-                target_scene_hash: scene_hash,
+                target_scene_hash: scene_hash.clone(),
                 target_manifest_hash: new_hash.clone(),
                 temp_file: None,
-                target_object_pins: Vec::<OperationObjectPin>::new(),
+                target_object_pins: scene_hash
+                    .as_ref()
+                    .map(|hash| vec![OperationObjectPin::scene(hash.clone())])
+                    .unwrap_or_default(),
             },
             1,
         )
@@ -95,6 +100,44 @@ fn begin_operation(
             2,
         )
         .expect("mark reconcile");
+}
+
+fn begin_operation_before_publish_observation(
+    store: &HistoryStore,
+    id: &str,
+    old_hash: String,
+    old_identity: String,
+    target_scene_hash: String,
+) {
+    let operations = OperationStore::new(store);
+    operations
+        .begin(
+            OperationRequest {
+                idempotency_id: id.to_owned(),
+                document_id: "doc".to_owned(),
+                session_generation: 1,
+                revision: 1,
+                kind: HistoryOperationKind::Replace,
+                protection_version_id: Some("protected-version".to_owned()),
+                expected_old_disk_hash: Some(old_hash),
+                expected_old_identity: Some(old_identity),
+                prepared_target_identity: Some("replacement-target-fingerprint".to_owned()),
+                target_scene_hash: Some(target_scene_hash.clone()),
+                target_manifest_hash: None,
+                temp_file: None,
+                target_object_pins: vec![OperationObjectPin::scene(target_scene_hash)],
+            },
+            1,
+        )
+        .expect("begin operation before publish observation");
+    operations
+        .transition(
+            id,
+            HistoryOperationState::Reconcile,
+            OperationUpdate::default(),
+            2,
+        )
+        .expect("mark operation for restart reconciliation");
 }
 
 #[test]
@@ -145,6 +188,315 @@ fn new_hash_without_durable_published_identity_is_conflict() {
         report.outcomes.as_slice(),
         [ReconciliationOutcome::Conflict { .. }]
     ));
+    drop(store);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn rename_completed_before_publish_observation_recovers_from_durable_target() {
+    let (root, document, store, old_hash, old_identity, _) = fixture();
+    let new = br#"{"type":"excalidraw","version":2,"elements":[{"id":"durable-target"}]}"#;
+    fs::write(&document, new).expect("write renamed target");
+    let scene = store
+        .persist_scene(new, 1, 1)
+        .expect("persist durable target scene");
+    let target_scene_hash = scene.hash.clone();
+    begin_operation_before_publish_observation(
+        &store,
+        "after-rename",
+        old_hash,
+        old_identity,
+        target_scene_hash.clone(),
+    );
+    store
+        .reachability()
+        .restore_operation_pin(
+            "after-rename".to_owned(),
+            ObjectReferences::from_objects(vec![
+                ObjectKey::scene(target_scene_hash.clone()).expect("target scene key")
+            ]),
+        )
+        .expect("retain completed target");
+
+    let report = reconcile_incomplete_operations(&store).expect("reconcile renamed target");
+    assert!(matches!(
+        report.outcomes.as_slice(),
+        [ReconciliationOutcome::Completed { .. }]
+    ));
+    let operation = OperationStore::new(&store)
+        .load("after-rename")
+        .expect("load operation")
+        .expect("operation row");
+    assert_eq!(operation.state, HistoryOperationState::Completed);
+    assert_eq!(operation.actual_target_byte_hash, Some(sha256_hex(new)));
+    assert!(operation.observed_published_identity.is_some());
+    let garbage = store
+        .collect_garbage(SystemTime::now(), std::time::Duration::ZERO)
+        .expect("collect after completed reconciliation");
+    assert!(!garbage
+        .deleted
+        .iter()
+        .any(|object| object.hash == target_scene_hash));
+    assert!(store
+        .objects()
+        .scene_path(&target_scene_hash)
+        .expect("target scene path")
+        .is_file());
+    drop(store);
+    let reopened = HistoryStore::open_version_history_root(&root.join("history"))
+        .expect("reopen completed history store");
+    let restart_garbage = reopened
+        .collect_garbage(SystemTime::now(), std::time::Duration::ZERO)
+        .expect("collect after restart");
+    assert!(!restart_garbage
+        .deleted
+        .iter()
+        .any(|object| object.hash == target_scene_hash));
+    assert!(reopened
+        .objects()
+        .scene_path(&target_scene_hash)
+        .expect("reopened target scene path")
+        .is_file());
+    drop(reopened);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[tokio::test]
+async fn late_external_write_after_main_metadata_stays_pending() {
+    let (root, document, store, old_hash, old_identity, _) = fixture();
+    let repository = SqliteRepository::open(&root.join("main.sqlite3"))
+        .await
+        .expect("open main repository");
+    repository
+        .workspace_upsert(WorkspaceRecord {
+            id: "workspace".to_owned(),
+            name: "Workspace".to_owned(),
+            root_path: root.display().to_string(),
+            created_at: 1,
+            mounted: true,
+        })
+        .await
+        .expect("workspace");
+    repository
+        .draft_upsert(crate::database::repository::DraftRecord {
+            file_path: canonical_path(&document),
+            scene_json: "{\"stale\":true}".to_owned(),
+            content_hash: "stale".to_owned(),
+            base_hash: None,
+            updated_at: 1,
+            is_dirty: true,
+        })
+        .await
+        .expect("stale draft");
+    let new = br#"{"type":"excalidraw","version":2,"elements":[{"id":"new"}]}"#;
+    let late = br#"{"type":"excalidraw","version":2,"elements":[{"id":"late-external"}]}"#;
+    fs::write(&document, new).expect("write new file");
+    let scene = store
+        .persist_scene(new, 1, 1)
+        .expect("persist target scene");
+    begin_operation_before_publish_observation(
+        &store,
+        "late-external-write",
+        old_hash,
+        old_identity,
+        scene.hash,
+    );
+    install_late_external_write("late-external-write", late.to_vec());
+
+    let report = reconcile_incomplete_operations_with_repository(&store, &repository)
+        .await
+        .expect("cross-db reconcile");
+    assert!(matches!(
+        report.outcomes.as_slice(),
+        [ReconciliationOutcome::Pending { .. }]
+    ));
+    assert_eq!(
+        OperationStore::new(&store)
+            .load("late-external-write")
+            .expect("load operation")
+            .expect("operation row")
+            .state,
+        HistoryOperationState::Reconcile
+    );
+    assert_eq!(fs::read(&document).expect("read late target"), late);
+    drop(repository);
+    drop(store);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[tokio::test]
+async fn identity_drift_before_history_metadata_transaction_stays_pending() {
+    let (root, document, store, old_hash, old_identity, _) = fixture();
+    let repository = SqliteRepository::open(&root.join("main.sqlite3"))
+        .await
+        .expect("open main repository");
+    repository
+        .workspace_upsert(WorkspaceRecord {
+            id: "workspace".to_owned(),
+            name: "Workspace".to_owned(),
+            root_path: root.display().to_string(),
+            created_at: 1,
+            mounted: true,
+        })
+        .await
+        .expect("workspace");
+    repository
+        .draft_upsert(crate::database::repository::DraftRecord {
+            file_path: canonical_path(&document),
+            scene_json: "{\"stale\":true}".to_owned(),
+            content_hash: "stale".to_owned(),
+            base_hash: None,
+            updated_at: 1,
+            is_dirty: true,
+        })
+        .await
+        .expect("stale draft");
+    let new = br#"{"type":"excalidraw","version":2,"elements":[{"id":"new"}]}"#;
+    let late = br#"{"type":"excalidraw","version":2,"elements":[{"id":"identity-drift"}]}"#;
+    fs::write(&document, new).expect("write new file");
+    let scene = store
+        .persist_scene(new, 1, 1)
+        .expect("persist target scene");
+    begin_operation_before_publish_observation(
+        &store,
+        "identity-drift",
+        old_hash,
+        old_identity,
+        scene.hash,
+    );
+    install_precommit_external_write("identity-drift", late.to_vec());
+
+    let report = reconcile_incomplete_operations_with_repository(&store, &repository)
+        .await
+        .expect("cross-db reconcile");
+    assert!(matches!(
+        report.outcomes.as_slice(),
+        [ReconciliationOutcome::Pending { .. }]
+    ));
+    assert_eq!(
+        OperationStore::new(&store)
+            .load("identity-drift")
+            .expect("load operation")
+            .expect("operation row")
+            .state,
+        HistoryOperationState::Reconcile
+    );
+    let history_hash = store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT last_self_written_hash FROM history_documents WHERE id = 'doc'",
+                [],
+                |row| row.get::<_, Option<String>>(0),
+            )
+        })
+        .expect("read history identity");
+    assert!(history_hash.is_none());
+    assert_eq!(
+        fs::read(&document).expect("read identity-drift target"),
+        late
+    );
+    drop(repository);
+    drop(store);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[tokio::test]
+async fn repository_reconciliation_recovers_durable_rename_gap() {
+    let (root, document, store, old_hash, old_identity, _) = fixture();
+    let repository = SqliteRepository::open(&root.join("main.sqlite3"))
+        .await
+        .expect("open main repository");
+    repository
+        .workspace_upsert(WorkspaceRecord {
+            id: "workspace".to_owned(),
+            name: "Workspace".to_owned(),
+            root_path: root.display().to_string(),
+            created_at: 1,
+            mounted: true,
+        })
+        .await
+        .expect("workspace");
+    repository
+        .draft_upsert(crate::database::repository::DraftRecord {
+            file_path: canonical_path(&document),
+            scene_json: "{\"stale\":true}".to_owned(),
+            content_hash: "stale".to_owned(),
+            base_hash: None,
+            updated_at: 1,
+            is_dirty: true,
+        })
+        .await
+        .expect("stale draft");
+    let new = br#"{"type":"excalidraw","version":2,"elements":[{"id":"repository-gap"}]}"#;
+    fs::write(&document, new).expect("write new file");
+    let scene = store
+        .persist_scene(new, 1, 1)
+        .expect("persist target scene");
+    begin_operation_before_publish_observation(
+        &store,
+        "repository-gap",
+        old_hash,
+        old_identity,
+        scene.hash,
+    );
+
+    let report = reconcile_incomplete_operations_with_repository(&store, &repository)
+        .await
+        .expect("cross-db reconcile");
+    assert!(matches!(
+        report.outcomes.as_slice(),
+        [ReconciliationOutcome::Completed { .. }]
+    ));
+    let draft = repository
+        .draft_get(canonical_path(&document))
+        .await
+        .expect("draft get")
+        .expect("draft row");
+    assert_eq!(draft.content_hash, sha256_hex(new));
+    assert!(!draft.is_dirty);
+    assert_eq!(
+        OperationStore::new(&store)
+            .load("repository-gap")
+            .expect("load operation")
+            .expect("operation row")
+            .state,
+        HistoryOperationState::Completed
+    );
+    drop(repository);
+    drop(store);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn durable_target_mismatch_remains_conflict_after_rename() {
+    let (root, document, store, old_hash, old_identity, _) = fixture();
+    let expected = br#"{"type":"excalidraw","version":2,"elements":[{"id":"expected"}]}"#;
+    let attacker = br#"{"type":"excalidraw","version":2,"elements":[{"id":"attacker"}]}"#;
+    let scene = store
+        .persist_scene(expected, 1, 1)
+        .expect("persist expected target scene");
+    fs::write(&document, attacker).expect("write unrelated new bytes");
+    begin_operation_before_publish_observation(
+        &store,
+        "after-rename-mismatch",
+        old_hash,
+        old_identity,
+        scene.hash,
+    );
+
+    let report = reconcile_incomplete_operations(&store).expect("reconcile mismatch");
+    assert!(matches!(
+        report.outcomes.as_slice(),
+        [ReconciliationOutcome::Conflict { .. }]
+    ));
+    assert_eq!(
+        OperationStore::new(&store)
+            .load("after-rename-mismatch")
+            .expect("load operation")
+            .expect("operation row")
+            .state,
+        HistoryOperationState::Conflict
+    );
     drop(store);
     fs::remove_dir_all(root).expect("cleanup");
 }

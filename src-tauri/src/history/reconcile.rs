@@ -13,10 +13,17 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+#[cfg(test)]
+use std::{
+    fs,
+    sync::{Mutex, OnceLock},
+};
+
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use super::{
+    gc::ObjectKind,
     identity::FileSystemIdentity,
     objects::ObjectStoreError,
     operation::{OperationError, OperationRecord, OperationStore, OperationUpdate},
@@ -40,6 +47,81 @@ fn history_fault_repair() -> Result<(), String> {
 
 #[cfg(not(feature = "e2e-harness"))]
 fn history_fault_repair() -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(test)]
+type LateExternalWrite = (String, Vec<u8>);
+
+#[cfg(test)]
+static LATE_EXTERNAL_WRITE: OnceLock<Mutex<Option<LateExternalWrite>>> = OnceLock::new();
+
+#[cfg(test)]
+static PRECOMMIT_EXTERNAL_WRITE: OnceLock<Mutex<Option<LateExternalWrite>>> = OnceLock::new();
+
+#[cfg(test)]
+fn install_late_external_write(request_id: &str, bytes: Vec<u8>) {
+    *LATE_EXTERNAL_WRITE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some((request_id.to_owned(), bytes));
+}
+
+#[cfg(test)]
+fn install_precommit_external_write(request_id: &str, bytes: Vec<u8>) {
+    *PRECOMMIT_EXTERNAL_WRITE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some((request_id.to_owned(), bytes));
+}
+
+#[cfg(test)]
+fn maybe_apply_late_external_write(path: &Path, request_id: &str) -> io::Result<()> {
+    let mut pending = LATE_EXTERNAL_WRITE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let bytes = if pending
+        .as_ref()
+        .is_some_and(|(expected_request_id, _)| expected_request_id == request_id)
+    {
+        pending.take().map(|(_, bytes)| bytes)
+    } else {
+        None
+    };
+    if let Some(bytes) = bytes {
+        fs::write(path, bytes)?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+fn maybe_apply_precommit_external_write(path: &Path, request_id: &str) -> io::Result<()> {
+    let mut pending = PRECOMMIT_EXTERNAL_WRITE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let bytes = if pending
+        .as_ref()
+        .is_some_and(|(expected_request_id, _)| expected_request_id == request_id)
+    {
+        pending.take().map(|(_, bytes)| bytes)
+    } else {
+        None
+    };
+    if let Some(bytes) = bytes {
+        fs::write(path, bytes)?;
+    }
+    Ok(())
+}
+
+#[cfg(not(test))]
+fn maybe_apply_late_external_write(_path: &Path, _request_id: &str) -> io::Result<()> {
+    Ok(())
+}
+
+#[cfg(not(test))]
+fn maybe_apply_precommit_external_write(_path: &Path, _request_id: &str) -> io::Result<()> {
     Ok(())
 }
 
@@ -204,7 +286,12 @@ async fn reconcile_one_with_repository(
         });
     }
 
-    if !new_state_matches(&operation, &observation) {
+    let target_is_durably_identified = if new_state_matches(&operation, &observation) {
+        true
+    } else {
+        durable_target_matches_observation(store, &operation, &observation)
+    };
+    if !target_is_durably_identified {
         let reason = if operation.observed_published_identity.is_none() {
             "new content observed without a durable published identity".to_owned()
         } else {
@@ -236,7 +323,12 @@ async fn reconcile_one_with_repository(
         );
     }
     let confirmed = match observe_file(&path) {
-        Ok(observation) if new_state_matches(&operation, &observation) => observation,
+        Ok(observation)
+            if new_state_matches(&operation, &observation)
+                || durable_target_matches_observation(store, &operation, &observation) =>
+        {
+            observation
+        }
         Ok(_) => {
             let reason = "new target changed after sync before draft/index repair".to_owned();
             let _ = transition_conflict(operations, &operation, &reason, now)?;
@@ -271,7 +363,41 @@ async fn reconcile_one_with_repository(
             now,
         );
     }
-    if let Err(error) = repair_document_metadata(store, &operation, &confirmed, now) {
+    if let Err(error) = maybe_apply_late_external_write(&path, &operation.idempotency_id) {
+        return mark_pending(
+            operations,
+            &operation,
+            format!("late target write could not be observed: {error}"),
+            now,
+        );
+    }
+    let metadata_confirmed = match observe_file(&path) {
+        Ok(observation)
+            if (new_state_matches(&operation, &observation)
+                || durable_target_matches_observation(store, &operation, &observation))
+                && observation.hash == confirmed.hash
+                && observation.identity_token == confirmed.identity_token =>
+        {
+            observation
+        }
+        Ok(_) => {
+            return mark_pending(
+                operations,
+                &operation,
+                "new target changed after main metadata repair".to_owned(),
+                now,
+            )
+        }
+        Err(error) => {
+            return mark_pending(
+                operations,
+                &operation,
+                format!("cannot recheck new target after main metadata repair: {error}"),
+                now,
+            )
+        }
+    };
+    if let Err(error) = repair_document_metadata(store, &operation, &metadata_confirmed, now) {
         let reason = format!("metadata_repair_failed:{error}");
         operations.transition(
             &operation.idempotency_id,
@@ -287,8 +413,31 @@ async fn reconcile_one_with_repository(
             reason,
         });
     }
-    transition_to_completed(operations, &operation, &confirmed, now)?;
-    release_terminal_pin(store, &operation.idempotency_id)?;
+    let final_confirmed = match observe_file(&path) {
+        Ok(observation)
+            if observation.hash == metadata_confirmed.hash
+                && observation.identity_token == metadata_confirmed.identity_token =>
+        {
+            observation
+        }
+        Ok(_) => {
+            return mark_pending(
+                operations,
+                &operation,
+                "new target changed after history metadata repair".to_owned(),
+                now,
+            )
+        }
+        Err(error) => {
+            return mark_pending(
+                operations,
+                &operation,
+                format!("cannot recheck new target after history metadata repair: {error}"),
+                now,
+            )
+        }
+    };
+    transition_to_completed(operations, &operation, &final_confirmed, now)?;
     Ok(ReconciliationOutcome::Completed {
         request_id: operation.idempotency_id,
     })
@@ -342,9 +491,15 @@ fn reconcile_one(
         });
     }
 
-    // A same-process hash observation is not sufficient. The published
-    // identity must have been durably recorded by the replacement pipeline.
-    if !new_state_matches(&operation, &observation) {
+    // A same-process hash observation is not sufficient. Either the published
+    // identity was durable, or the exact target scene/object set proves that
+    // this is the rename-before-observation recovery window.
+    let target_is_durably_identified = if new_state_matches(&operation, &observation) {
+        true
+    } else {
+        durable_target_matches_observation(store, &operation, &observation)
+    };
+    if !target_is_durably_identified {
         let reason = if operation.observed_published_identity.is_none() {
             "new content observed without a durable published identity".to_owned()
         } else {
@@ -387,7 +542,31 @@ fn reconcile_one(
             now,
         );
     }
-    if let Err(error) = repair_document_metadata(store, &operation, &observation, now) {
+    let confirmed = match observe_file(&path) {
+        Ok(observation)
+            if new_state_matches(&operation, &observation)
+                || durable_target_matches_observation(store, &operation, &observation) =>
+        {
+            observation
+        }
+        Ok(_) => {
+            return mark_pending(
+                operations,
+                &operation,
+                "published target changed after sync before history metadata repair".to_owned(),
+                now,
+            )
+        }
+        Err(error) => {
+            return mark_pending(
+                operations,
+                &operation,
+                format!("cannot recheck new target before history metadata repair: {error}"),
+                now,
+            )
+        }
+    };
+    if let Err(error) = repair_document_metadata(store, &operation, &confirmed, now) {
         // The filesystem is already the new target; leave the operation in
         // Reconcile so a later startup can retry metadata repair.
         let reason = format!("metadata_repair_failed:{error}");
@@ -406,8 +585,32 @@ fn reconcile_one(
         });
     }
 
-    transition_to_completed(operations, &operation, &observation, now)?;
-    release_terminal_pin(store, &operation.idempotency_id)?;
+    let final_confirmed = match observe_file(&path) {
+        Ok(observation)
+            if observation.hash == confirmed.hash
+                && observation.identity_token == confirmed.identity_token =>
+        {
+            observation
+        }
+        Ok(_) => {
+            return mark_pending(
+                operations,
+                &operation,
+                "published target changed after history metadata repair".to_owned(),
+                now,
+            )
+        }
+        Err(error) => {
+            return mark_pending(
+                operations,
+                &operation,
+                format!("cannot recheck new target after history metadata repair: {error}"),
+                now,
+            )
+        }
+    };
+
+    transition_to_completed(operations, &operation, &final_confirmed, now)?;
     Ok(ReconciliationOutcome::Completed {
         request_id: operation.idempotency_id,
     })
@@ -519,6 +722,52 @@ fn new_state_matches(operation: &OperationRecord, observation: &FileObservation)
             .observed_published_identity
             .as_deref()
             .is_some_and(|identity| identity == observation.identity_token)
+}
+
+/// Recover the narrow window after the target rename and before
+/// `mark_target_published` can commit its filesystem observation.  The
+/// operation row contains the immutable target scene hash and pins before the
+/// rename; those durable objects are the only acceptable source of truth when
+/// the published identity columns are still empty.
+///
+/// Exact byte equality with the verified scene object is required.  A hash or
+/// parseable JSON value supplied only by the current filesystem is not enough:
+/// arbitrary external bytes must remain a conflict.  When no published file
+/// identity was durable, a same-byte external rewrite is intentionally treated
+/// as content-equivalent because no stronger provenance exists; durable
+/// identity rows still reject that identity change. Strict scene/asset
+/// validation runs immediately after this predicate in both reconciliation
+/// paths, and the repository path separately proves mounted workspace
+/// authority before completion.
+fn durable_target_matches_observation(
+    store: &HistoryStore,
+    operation: &OperationRecord,
+    observation: &FileObservation,
+) -> bool {
+    let Some(scene_hash) = operation.target_scene_hash.as_deref() else {
+        return false;
+    };
+    let Ok(target_scene) = store.objects().read_scene(scene_hash) else {
+        return false;
+    };
+    if target_scene != observation.bytes {
+        return false;
+    }
+    if operation
+        .actual_target_byte_hash
+        .as_deref()
+        .is_some_and(|hash| hash != observation.hash)
+    {
+        return false;
+    }
+    if operation
+        .observed_published_identity
+        .as_deref()
+        .is_some_and(|identity| identity != observation.identity_token)
+    {
+        return false;
+    }
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -687,9 +936,31 @@ fn validate_target_objects(
         });
     }
     let files = scene_json_files(&scene_bytes)?;
+    if !operation
+        .target_object_pins
+        .iter()
+        .any(|pin| pin.kind == ObjectKind::Scene && pin.hash == scene_hash)
+    {
+        return Err(ReconcileError::InvalidMetadata {
+            document_id: operation.document_id.clone(),
+            reason: "target scene is not retained by the operation pin set".to_owned(),
+        });
+    }
     let mut asset_specs = Vec::with_capacity(files.len());
     let mut asset_bytes = Vec::with_capacity(files.len());
     for (file_id, asset_hash, _mime_type) in files {
+        if !operation
+            .target_object_pins
+            .iter()
+            .any(|pin| pin.kind == ObjectKind::Asset && pin.hash == asset_hash)
+        {
+            return Err(ReconcileError::InvalidMetadata {
+                document_id: operation.document_id.clone(),
+                reason: format!(
+                    "target asset {asset_hash} is not retained by the operation pin set"
+                ),
+            });
+        }
         let (byte_length, persisted_mime, relative_path) = store.with_connection(|connection| {
             connection.query_row(
                 "SELECT byte_length, mime_type, relative_path FROM asset_objects WHERE hash = ?1",
@@ -780,13 +1051,24 @@ fn repair_document_metadata(
     observation: &FileObservation,
     now: i64,
 ) -> Result<(), ReconcileError> {
+    let path = document_path(store, operation)?;
+    maybe_apply_precommit_external_write(&path, &operation.idempotency_id).map_err(|error| {
+        ReconcileError::InvalidMetadata {
+            document_id: operation.document_id.clone(),
+            reason: format!("precommit target write failed: {error}"),
+        }
+    })?;
     let identity =
-        FileSystemIdentity::from_path(&document_path(store, operation)?).map_err(|error| {
-            ReconcileError::InvalidMetadata {
-                document_id: operation.document_id.clone(),
-                reason: error.to_string(),
-            }
+        FileSystemIdentity::from_path(&path).map_err(|error| ReconcileError::InvalidMetadata {
+            document_id: operation.document_id.clone(),
+            reason: error.to_string(),
         })?;
+    if identity.to_string() != observation.identity_token {
+        return Err(ReconcileError::InvalidMetadata {
+            document_id: operation.document_id.clone(),
+            reason: "target identity changed before history metadata transaction".to_owned(),
+        });
+    }
     let device = identity
         .device
         .map(i64::try_from)

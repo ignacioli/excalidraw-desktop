@@ -229,6 +229,14 @@ generation/revision 必须是非负整数；hash 必须是 64 位小写 SHA-256 
 completed replacement 的 target scene/assets 在 history store 中保留为 GC root 24 小时，
 用于延迟的 `history_operation_status` replay；TTL 到期后才允许在 GC 中释放该 root。
 
+重启时若 `after_rename_before_parent_sync` 已完成文件 rename，但操作记录尚未写入
+published file identity/hash，仅当当前文件 bytes 与 durable target scene 完全一致、scene/assets
+对象及 operation pins 通过严格校验、且 canonical path 仍由 mounted workspace 授权时，才允许
+将操作核实为 `completed`；否则保持 `pendingReconciliation` 或转为 conflict。此窄窗口没有
+更强的 provenance 时，同 bytes 的外部重写只能按 content-equivalent 处理；不同 bytes 或已有
+durable identity 不一致必须拒绝。main SQLite 与 history metadata 写入前后都必须重新确认同一
+file identity 与 content hash，late external write 不得与旧 metadata 一起进入 `completed`。
+
 `HistoryVersionItem.availability` 为 `available` 或带结构化 `IpcError` 的
 `unavailable`；单个损坏版本不能伪装成空列表，也不能阻止其他有效版本显示。历史
 对象内容由后端 hydrate，不能通过扩大 Tauri fs capability 让前端读取 app-data。
