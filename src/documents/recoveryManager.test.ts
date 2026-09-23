@@ -105,4 +105,37 @@ describe("RecoveryManager", () => {
 
     expect(loadScene).not.toHaveBeenCalled();
   });
+
+  it("does not apply a recovery decision while startup reconciliation is pending", async () => {
+    let releaseHandshake!: () => void;
+    const handshakeReady = new Promise<void>((resolve) => {
+      releaseHandshake = resolve;
+    });
+    const apply = vi.fn(async () => ({ scene: null, newPath: undefined }));
+    const gateway = createGateway({
+      handshake: vi.fn(async () => {
+        await handshakeReady;
+        return {
+          contractVersion: 2,
+          appVersion: "0.1.0",
+          abnormalExit: false,
+          pendingOpenPaths: [],
+        };
+      }),
+      apply,
+    });
+    const manager = new RecoveryManager(gateway);
+    const startup = manager.start();
+    const applied = manager.apply({
+      documentId: "document-1",
+      action: "keepDisk",
+    });
+
+    await Promise.resolve();
+    expect(apply).not.toHaveBeenCalled();
+    releaseHandshake();
+    await startup;
+    await applied;
+    expect(apply).toHaveBeenCalledOnce();
+  });
 });

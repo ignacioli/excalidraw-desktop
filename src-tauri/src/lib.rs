@@ -2,11 +2,12 @@ pub mod commands;
 pub mod database;
 pub mod documents;
 #[cfg(feature = "e2e-harness")]
-mod e2e_harness;
+pub(crate) mod e2e_harness;
 #[cfg(feature = "e2e-harness")]
 mod e2e_performance;
 #[cfg(all(test, feature = "e2e-harness"))]
 mod e2e_performance_test;
+pub mod history;
 pub mod indexing;
 mod native_menu;
 pub mod security;
@@ -15,9 +16,12 @@ pub mod workspace_entries;
 
 use std::{path::Path, path::PathBuf, sync::Arc};
 
-use tauri::{Emitter, Manager};
+#[cfg(not(feature = "e2e-harness"))]
+use tauri::Emitter;
+use tauri::Manager;
 use tauri_plugin_fs::FsExt;
 
+#[cfg(not(feature = "e2e-harness"))]
 use commands::dto::OpenFileRequestEvent;
 use commands::{
     documents::{
@@ -29,6 +33,10 @@ use commands::{
         workspace_entry_list, workspace_entry_rename, workspace_entry_reveal, WorkspaceEntryState,
     },
     export::{doc_export, ExportService, ExportState},
+    history::{
+        history_list, history_operation_status, history_preview, history_replace,
+        HistoryReplacementState,
+    },
     recovery::{
         recovery_apply, recovery_list, RecoveryService, RecoveryState, TauriRecoveryPathGrant,
     },
@@ -45,6 +53,8 @@ use e2e_performance::{
     e2e_perf_bootstrap, e2e_perf_next_command, e2e_perf_publish_error, e2e_perf_publish_ready,
     e2e_perf_publish_result, PerformanceHarnessState,
 };
+use history::reconcile::reconcile_incomplete_operations_with_repository;
+use history::{query::HistoryState, store::HistoryStore};
 use watcher::{WatcherService, WatcherState};
 use workspace_entries::WorkspaceMutationGate;
 
@@ -65,101 +75,149 @@ pub fn run() {
     configure_linux_ime_environment();
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            let paths = drawing_paths_from_args(&argv);
-            if !paths.is_empty() {
-                let _ = app.emit("open-file-request", OpenFileRequestEvent { paths });
+        .plugin(tauri_plugin_dialog::init());
+    #[cfg(not(feature = "e2e-harness"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+        let paths = drawing_paths_from_args(&argv);
+        if !paths.is_empty() {
+            let _ = app.emit("open-file-request", OpenFileRequestEvent { paths });
+        }
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.set_focus();
+        }
+    }));
+    let builder = builder.setup(|app| {
+        let app_data_directory = resolve_app_data_directory(app)?;
+        std::fs::create_dir_all(&app_data_directory)?;
+        let web_kit_data_directory = app.path().app_local_data_dir()?;
+        std::fs::create_dir_all(&web_kit_data_directory)?;
+        let pending_open_paths = drawing_paths_from_env_args();
+        let repository = tauri::async_runtime::block_on(SqliteRepository::open(
+            &app_data_directory.join("excalidraw-desktop.sqlite3"),
+        ))?;
+        let session = SessionState::initialize(&app_data_directory, pending_open_paths)?;
+        let shared_repository = Arc::new(repository.clone());
+        let history_store = match HistoryStore::open(&app_data_directory) {
+            Ok(store) => Some(Arc::new(store)),
+            Err(error) => {
+                eprintln!("version history is unavailable; continuing without history");
+                eprintln!("version history initialization error: {error}");
+                None
             }
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_focus();
-            }
-        }))
-        .setup(|app| {
-            let app_data_directory = resolve_app_data_directory(app)?;
-            std::fs::create_dir_all(&app_data_directory)?;
-            let web_kit_data_directory = app.path().app_local_data_dir()?;
-            std::fs::create_dir_all(&web_kit_data_directory)?;
-            let pending_open_paths = drawing_paths_from_env_args();
-            let repository = tauri::async_runtime::block_on(SqliteRepository::open(
-                &app_data_directory.join("excalidraw-desktop.sqlite3"),
-            ))?;
-            let session = SessionState::initialize(&app_data_directory, pending_open_paths)?;
-            let shared_repository = Arc::new(repository.clone());
-            let workspace_mutation_gate = WorkspaceMutationGate::default();
-            let recovery_store = Arc::new(RecoveryStore::new(&app_data_directory));
-            #[cfg(feature = "e2e-harness")]
-            let performance_state = tauri::async_runtime::block_on(
-                PerformanceHarnessState::from_environment(Arc::clone(&shared_repository)),
-            )
-            .map_err(std::io::Error::other)?;
-            let conflicts = ConflictRegistry::default();
-            let watcher_service =
-                WatcherService::new(Arc::clone(&shared_repository), conflicts.clone());
-            let mut document_service = DocumentService::with_grant_and_scene_limit_and_recovery(
-                Arc::clone(&shared_repository),
-                Arc::new(TauriFileGrant(app.fs_scope())),
-                DocumentService::DEFAULT_SCENE_LIMIT_BYTES,
-                Arc::clone(&recovery_store),
-            );
-            document_service.attach_external_change_handlers(
-                conflicts,
-                Some(Arc::new(watcher_service.clone())),
-            );
-            if let Err(error) = tauri::async_runtime::block_on(
-                crate::workspace_entries::reconcile_pending_mutations(
-                    &shared_repository,
-                    recovery_store.as_ref(),
-                ),
-            ) {
-                eprintln!("failed to reconcile pending Workspace Entry mutations: {error}");
-            }
-            let mut recovery_service = RecoveryService::with_path_grant(
-                Arc::clone(&shared_repository),
-                Arc::clone(&recovery_store),
-                Arc::new(TauriRecoveryPathGrant(app.fs_scope())),
-            );
-            recovery_service.attach_watcher(Arc::new(watcher_service.clone()));
-            app.manage(repository);
-            #[cfg(feature = "e2e-harness")]
-            app.manage(performance_state);
-            app.manage(DocumentState::new(document_service));
-            app.manage(RecoveryState::new(recovery_service));
-            app.manage(WorkspaceState::new(Arc::clone(&shared_repository)));
-            app.manage(workspace_mutation_gate.clone());
-            app.manage(WorkspaceEntryState::new(
-                Arc::clone(&shared_repository),
-                workspace_mutation_gate,
-                Arc::clone(&recovery_store),
-                watcher_service.clone(),
-            ));
-            app.manage(ExportState::new(ExportService::new(
-                Arc::clone(&shared_repository),
-                Arc::new(TauriFileGrant(app.fs_scope())),
-                DocumentService::DEFAULT_SCENE_LIMIT_BYTES,
-            )));
-            app.manage(session);
-            app.manage(WatcherState::new(watcher_service.clone()));
-            tauri::async_runtime::block_on(watcher_service.start_existing(app.handle().clone()))?;
-            app.on_menu_event(crate::native_menu::handle_menu_event);
-            crate::native_menu::register_validation_listener(app.handle());
-            let menu = crate::native_menu::build_menu(app.handle())?;
-            app.set_menu(menu)?;
-            // rAF-driven performance workloads stall when the window is
-            // occluded (WebKit throttles occluded views); keep the test-only
-            // measurement window unoccluded on busy diagnostic hosts.
-            #[cfg(feature = "e2e-harness")]
-            if std::env::var_os("EXCALIDRAW_PERF_CONTROL_DIR").is_some() {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.set_always_on_top(true);
+        };
+        let history_state = HistoryState::with_direct_file_grant(
+            Arc::clone(&shared_repository),
+            history_store.clone(),
+            Arc::new(TauriFileGrant(app.fs_scope())),
+        );
+        // Reconcile durable protected replacements before any startup
+        // path can publish stale draft or Recovery state. A pending
+        // result remains durable and retryable; it must not be reported
+        // as a completed replacement.
+        if let Some(history_store) = history_store.as_ref() {
+            match tauri::async_runtime::block_on(reconcile_incomplete_operations_with_repository(
+                history_store,
+                &repository,
+            )) {
+                Ok(report) if report.has_pending() => {
+                    eprintln!("version history startup reconciliation remains pending");
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    eprintln!("version history startup reconciliation failed: {error}");
                 }
             }
-            Ok(())
-        });
+        }
+        let workspace_mutation_gate = WorkspaceMutationGate::default();
+        let recovery_store = Arc::new(RecoveryStore::new(&app_data_directory));
+        #[cfg(feature = "e2e-harness")]
+        let performance_state = tauri::async_runtime::block_on(
+            PerformanceHarnessState::from_environment(Arc::clone(&shared_repository)),
+        )
+        .map_err(std::io::Error::other)?;
+        let conflicts = ConflictRegistry::default();
+        let watcher_service =
+            WatcherService::new(Arc::clone(&shared_repository), conflicts.clone());
+        let mut document_service = DocumentService::with_grant_and_scene_limit_and_recovery(
+            Arc::clone(&shared_repository),
+            Arc::new(TauriFileGrant(app.fs_scope())),
+            DocumentService::DEFAULT_SCENE_LIMIT_BYTES,
+            Arc::clone(&recovery_store),
+        );
+        if let Some(history_store) = history_store.as_ref() {
+            document_service.attach_history_store(Arc::clone(history_store));
+        }
+        document_service
+            .attach_external_change_handlers(conflicts, Some(Arc::new(watcher_service.clone())));
+        let history_replacement_state = HistoryReplacementState::with_document_service(
+            document_service.clone(),
+            Arc::clone(&shared_repository),
+            history_store.clone(),
+            Arc::new(TauriFileGrant(app.fs_scope())),
+        );
+        if let Err(error) =
+            tauri::async_runtime::block_on(crate::workspace_entries::reconcile_pending_mutations(
+                &shared_repository,
+                recovery_store.as_ref(),
+            ))
+        {
+            eprintln!("failed to reconcile pending Workspace Entry mutations: {error}");
+        }
+        let mut recovery_service = RecoveryService::with_path_grant(
+            Arc::clone(&shared_repository),
+            Arc::clone(&recovery_store),
+            Arc::new(TauriRecoveryPathGrant(app.fs_scope())),
+        );
+        recovery_service.attach_watcher(Arc::new(watcher_service.clone()));
+        app.manage(repository);
+        app.manage(history_state);
+        app.manage(history_replacement_state);
+        if let Some(history_store) = history_store {
+            app.manage(history_store);
+        }
+        #[cfg(feature = "e2e-harness")]
+        app.manage(performance_state);
+        app.manage(DocumentState::new(document_service));
+        app.manage(RecoveryState::new(recovery_service));
+        app.manage(WorkspaceState::new(Arc::clone(&shared_repository)));
+        app.manage(workspace_mutation_gate.clone());
+        app.manage(WorkspaceEntryState::new(
+            Arc::clone(&shared_repository),
+            workspace_mutation_gate,
+            Arc::clone(&recovery_store),
+            watcher_service.clone(),
+        ));
+        app.manage(ExportState::new(ExportService::new(
+            Arc::clone(&shared_repository),
+            Arc::new(TauriFileGrant(app.fs_scope())),
+            DocumentService::DEFAULT_SCENE_LIMIT_BYTES,
+        )));
+        app.manage(session);
+        app.manage(WatcherState::new(watcher_service.clone()));
+        tauri::async_runtime::block_on(watcher_service.start_existing(app.handle().clone()))?;
+        app.on_menu_event(crate::native_menu::handle_menu_event);
+        crate::native_menu::register_validation_listener(app.handle());
+        let menu = crate::native_menu::build_menu(app.handle())?;
+        app.set_menu(menu)?;
+        // rAF-driven performance workloads stall when the window is
+        // occluded (WebKit throttles occluded views); keep the test-only
+        // measurement window unoccluded on busy diagnostic hosts.
+        #[cfg(feature = "e2e-harness")]
+        if std::env::var_os("EXCALIDRAW_PERF_CONTROL_DIR").is_some() {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_always_on_top(true);
+            }
+        }
+        Ok(())
+    });
 
     #[cfg(feature = "e2e-harness")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_handshake,
+        history_list,
+        history_preview,
+        history_replace,
+        history_operation_status,
         doc_open,
         doc_save_draft,
         doc_checkpoint,
@@ -183,6 +241,8 @@ pub fn run() {
         e2e_harness::e2e_set_atomic_write_fault,
         e2e_harness::e2e_clear_atomic_write_fault,
         e2e_harness::e2e_corrupt_latest_snapshot,
+        e2e_harness::e2e_history_frontend_bootstrap,
+        e2e_harness::e2e_history_frontend_publish,
         e2e_perf_bootstrap,
         e2e_perf_publish_ready,
         e2e_perf_next_command,
@@ -193,6 +253,10 @@ pub fn run() {
     #[cfg(not(feature = "e2e-harness"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_handshake,
+        history_list,
+        history_preview,
+        history_replace,
+        history_operation_status,
         doc_open,
         doc_save_draft,
         doc_checkpoint,

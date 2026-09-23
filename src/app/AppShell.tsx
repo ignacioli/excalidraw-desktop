@@ -90,6 +90,13 @@ export function AppShell({
       }
     | undefined
   >(undefined);
+  const historyFrontendDriverRef = useRef<
+    | {
+        attachEditor(documentId: string, adapter: ExcalidrawAdapter): void;
+        start(): void;
+      }
+    | undefined
+  >(undefined);
   const readyEditorRef = useRef<
     | {
         documentId: string;
@@ -541,6 +548,7 @@ export function AppShell({
         adapter,
         container,
       );
+      historyFrontendDriverRef.current?.attachEditor(documentId, adapter);
       setReadyEditor({ documentId, adapter });
     },
     [],
@@ -564,6 +572,30 @@ export function AppShell({
     return () => {
       disposed = true;
       unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (import.meta.env.VITE_E2E_HISTORY_FRONTEND !== "1") {
+      return;
+    }
+    let disposed = false;
+    void import("../e2e/historyFrontendDriver")
+      .then(({ nativeHistoryFrontendDriver }) => {
+        if (disposed) return;
+        historyFrontendDriverRef.current = nativeHistoryFrontendDriver;
+        nativeHistoryFrontendDriver.start();
+        const readyEditor = readyEditorRef.current;
+        if (readyEditor !== undefined) {
+          nativeHistoryFrontendDriver.attachEditor(
+            readyEditor.documentId,
+            readyEditor.adapter,
+          );
+        }
+      })
+      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+    return () => {
+      disposed = true;
     };
   }, []);
 

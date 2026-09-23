@@ -5,7 +5,24 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const IPC_CONTRACT_VERSION: u32 = 2;
+use crate::commands::error::IpcError;
+
+pub use crate::history::types::{
+    HistoryChangeKind, HistoryCurrentFileSaveOutcome, HistoryDocumentLocator, HistoryIssueSource,
+    HistoryOperationKind, HistoryOperationState, HistoryProtectedAction, HistoryReplaceResponse,
+    HistoryReplaceTarget, HistoryVersionAvailability, HistoryVersionItem, HistoryVersionSource,
+    HISTORY_DEFAULT_PAGE_LIMIT, HISTORY_MAX_PAGE_LIMIT, HISTORY_MAX_SCENE_BYTES,
+};
+
+use crate::history::types::{
+    validate_cursor, validate_hash, validate_identifier, validate_page_limit, validate_scene_json,
+    HistoryValidationError,
+};
+
+pub const IPC_CONTRACT_VERSION: u32 = 3;
+/// Reserved history contract version marker retained for compatibility with
+/// code that needs to distinguish the activated v3 boundary.
+pub const RESERVED_HISTORY_CONTRACT_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -325,6 +342,166 @@ pub struct ExportResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct HistoryListRequest {
+    pub document: HistoryDocumentLocator,
+    pub cursor: Option<String>,
+    pub limit: Option<u16>,
+}
+
+impl HistoryListRequest {
+    pub fn validate(&self) -> Result<(), HistoryValidationError> {
+        self.document.validate()?;
+        if let Some(cursor) = &self.cursor {
+            validate_cursor(cursor)?;
+        }
+        validate_page_limit(self.limit)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryListResponse {
+    pub document_id: String,
+    pub items: Vec<HistoryVersionItem>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_issue: Option<IpcError>,
+    pub list_revision: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryPreviewRequest {
+    pub document: HistoryDocumentLocator,
+    pub version_id: String,
+}
+
+impl HistoryPreviewRequest {
+    pub fn validate(&self) -> Result<(), HistoryValidationError> {
+        self.document.validate()?;
+        validate_identifier(&self.version_id, "versionId")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryPreviewResponse {
+    pub version_id: String,
+    pub scene: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryMarkRequest {
+    pub document: HistoryDocumentLocator,
+    pub request_id: String,
+    pub session_generation: u64,
+    pub revision: u64,
+    pub current_scene_json: String,
+}
+
+impl HistoryMarkRequest {
+    pub fn validate(&self) -> Result<(), HistoryValidationError> {
+        self.document.validate()?;
+        validate_identifier(&self.request_id, "requestId")?;
+        validate_scene_json(&self.current_scene_json)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryMarkResponse {
+    pub version_id: String,
+    pub recorded_at: i64,
+    pub source: HistoryVersionSource,
+    pub content_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryReplaceRequest {
+    pub document: HistoryDocumentLocator,
+    pub request_id: String,
+    pub session_generation: u64,
+    pub revision: u64,
+    pub expected_base_hash: String,
+    pub current_scene_json: String,
+    pub target: HistoryReplaceTarget,
+}
+
+impl HistoryReplaceRequest {
+    pub fn validate(&self) -> Result<(), HistoryValidationError> {
+        self.document.validate()?;
+        validate_identifier(&self.request_id, "requestId")?;
+        validate_hash(&self.expected_base_hash, "expectedBaseHash")?;
+        validate_scene_json(&self.current_scene_json)?;
+        match &self.target {
+            HistoryReplaceTarget::Restore { version_id } => {
+                validate_identifier(version_id, "target.versionId")
+            }
+            HistoryReplaceTarget::Clear => Ok(()),
+            HistoryReplaceTarget::Import {
+                candidate_scene_json,
+            } => validate_scene_json(candidate_scene_json),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryOperationStatusRequest {
+    pub document: HistoryDocumentLocator,
+    pub request_id: String,
+}
+
+impl HistoryOperationStatusRequest {
+    pub fn validate(&self) -> Result<(), HistoryValidationError> {
+        self.document.validate()?;
+        validate_identifier(&self.request_id, "requestId")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryOperationStatusResponse {
+    pub request_id: String,
+    pub state: HistoryOperationState,
+    pub replacement_committed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protection_version_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adopted_scene: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_base_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_session_generation: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryDeleteRequest {
+    pub document: HistoryDocumentLocator,
+    pub request_id: String,
+    pub version_id: String,
+}
+
+impl HistoryDeleteRequest {
+    pub fn validate(&self) -> Result<(), HistoryValidationError> {
+        self.document.validate()?;
+        validate_identifier(&self.request_id, "requestId")?;
+        validate_identifier(&self.version_id, "versionId")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryDeleteResponse {
+    pub deleted_version_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EmptyResponse {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -390,7 +567,7 @@ mod tests {
         };
         let value = serde_json::to_value(response)
             .unwrap_or_else(|error| panic!("serialize handshake: {error}"));
-        assert_eq!(value["contractVersion"], 2);
+        assert_eq!(value["contractVersion"], 3);
         assert_eq!(value["abnormalExit"], false);
         assert_eq!(value["pendingOpenPaths"][0], "/tmp/drawing.excalidraw");
 

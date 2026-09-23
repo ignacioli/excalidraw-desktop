@@ -37,6 +37,11 @@ pub enum ErrorCode {
     DiskFull,
     IoError,
     DbError,
+    HistoryUnavailable,
+    HistoryResourceMissing,
+    HistoryStaleDocument,
+    HistoryOperationPending,
+    HistoryBusy,
     Internal,
 }
 
@@ -96,6 +101,16 @@ pub enum AppError {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
+    #[error("history is unavailable: {0}")]
+    HistoryUnavailable(String),
+    #[error("a history resource is missing: {0}")]
+    HistoryResourceMissing(String),
+    #[error("the document is stale for history operation: {0}")]
+    HistoryStaleDocument(String),
+    #[error("history operation is pending reconciliation: {0}")]
+    HistoryOperationPending(String),
+    #[error("history is busy: {0}")]
+    HistoryBusy(String),
     #[error("internal operation failed: {0}")]
     Internal(String),
 }
@@ -205,6 +220,36 @@ impl AppError {
                 true,
                 None,
             ),
+            Self::HistoryUnavailable(_) => (
+                ErrorCode::HistoryUnavailable,
+                "Version history is unavailable.".to_owned(),
+                true,
+                None,
+            ),
+            Self::HistoryResourceMissing(_) => (
+                ErrorCode::HistoryResourceMissing,
+                "A version history resource is missing or corrupted.".to_owned(),
+                false,
+                None,
+            ),
+            Self::HistoryStaleDocument(_) => (
+                ErrorCode::HistoryStaleDocument,
+                "The document changed before the history operation could be applied.".to_owned(),
+                true,
+                None,
+            ),
+            Self::HistoryOperationPending(_) => (
+                ErrorCode::HistoryOperationPending,
+                "The history operation is pending reconciliation.".to_owned(),
+                true,
+                None,
+            ),
+            Self::HistoryBusy(_) => (
+                ErrorCode::HistoryBusy,
+                "Another history operation is already in progress.".to_owned(),
+                true,
+                None,
+            ),
             Self::Internal(_) => (
                 ErrorCode::Internal,
                 "An internal operation failed.".to_owned(),
@@ -306,5 +351,38 @@ mod tests {
         assert_eq!(value["code"], "PATH_ACCESS_DENIED");
         assert_eq!(value["retriable"], false);
         assert_eq!(value["context"]["path"], "/outside");
+    }
+
+    #[test]
+    fn serializes_reserved_history_error_codes_without_scene_data() {
+        let cases = [
+            (
+                AppError::HistoryUnavailable("document-1".to_owned()),
+                "HISTORY_UNAVAILABLE",
+            ),
+            (
+                AppError::HistoryResourceMissing("version-1".to_owned()),
+                "HISTORY_RESOURCE_MISSING",
+            ),
+            (
+                AppError::HistoryStaleDocument("document-1".to_owned()),
+                "HISTORY_STALE_DOCUMENT",
+            ),
+            (
+                AppError::HistoryOperationPending("request-1".to_owned()),
+                "HISTORY_OPERATION_PENDING",
+            ),
+            (
+                AppError::HistoryBusy("document-1".to_owned()),
+                "HISTORY_BUSY",
+            ),
+        ];
+
+        for (error, expected_code) in cases {
+            let value = serde_json::to_value(error.into_ipc())
+                .unwrap_or_else(|source| panic!("serialize history IPC error: {source}"));
+            assert_eq!(value["code"], expected_code);
+            assert!(value.get("scene").is_none());
+        }
     }
 }

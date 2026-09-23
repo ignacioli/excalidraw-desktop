@@ -5,7 +5,8 @@ import type {
   NormalizedZoomValue,
 } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
-import type { SceneSnapshot } from "./sceneSerializer";
+import { documentAppState, type SceneSnapshot } from "./sceneSerializer";
+import { adoptSceneAssets } from "../history/assetAdoption";
 
 export type SceneChangeListener = (scene: SceneSnapshot) => void;
 export type AssetFileResolver = (files: BinaryFiles) => Promise<BinaryFiles>;
@@ -32,18 +33,32 @@ export class ExcalidrawAdapter {
     const files = this.resolveFiles
       ? await this.resolveFiles(scene.files)
       : scene.files;
-    this.api.updateScene({ elements: scene.elements });
-    if (scene.appState.viewBackgroundColor !== undefined) {
+    const adopted = await adoptSceneAssets({ ...scene, files });
+
+    // Excalidraw keeps the first file registered for an SDK file ID. Register
+    // content-derived files before applying elements so a restored image can
+    // never render stale bytes from a previous scene.
+    this.api.addFiles(Object.values(adopted.files));
+    this.api.updateScene({ elements: adopted.elements });
+    const documentState = documentAppState(adopted.appState);
+    if (documentState.gridModeEnabled !== undefined) {
+      this.api.updateScene({
+        appState: { gridModeEnabled: documentState.gridModeEnabled },
+      });
+    }
+    if (documentState.gridSize !== undefined) {
+      this.api.updateScene({ appState: { gridSize: documentState.gridSize } });
+    }
+    if (documentState.gridStep !== undefined) {
+      this.api.updateScene({ appState: { gridStep: documentState.gridStep } });
+    }
+    if (documentState.viewBackgroundColor !== undefined) {
       this.api.updateScene({
         appState: {
-          viewBackgroundColor: scene.appState.viewBackgroundColor,
+          viewBackgroundColor: documentState.viewBackgroundColor,
         },
       });
     }
-    if (scene.appState.name !== undefined) {
-      this.api.updateScene({ appState: { name: scene.appState.name } });
-    }
-    this.api.addFiles(Object.values(files));
   }
 
   setReadOnly(readOnly: boolean): void {

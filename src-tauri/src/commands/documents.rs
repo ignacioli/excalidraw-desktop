@@ -21,6 +21,10 @@ use crate::{
         recovery::{document_id_for_path, RecoveryStore},
         validation::{validate_scene, SceneValidationError},
     },
+    history::{
+        identity::{DocumentIdentity, FileSystemIdentity, IdentityError, IdentityStoreError},
+        store::HistoryStore,
+    },
     security::{PathSecurityError, WorkspacePathPolicy},
     watcher::WatcherService,
 };
@@ -32,7 +36,7 @@ use super::{
         ResolveConflictRequest, ResolveConflictResponse, SaveDraftRequest, SaveDraftResponse,
         SceneOpenResponse,
     },
-    error::{AppError, IpcError},
+    error::{AppError, ErrorCode, IpcError},
 };
 
 pub trait DirectFileGrant: Send + Sync {
@@ -78,6 +82,169 @@ pub struct DocumentService {
     recovery: Option<Arc<RecoveryStore>>,
     conflicts: ConflictRegistry,
     watcher: Option<Arc<WatcherService>>,
+    history_store: Option<Arc<HistoryStore>>,
+    history_issues: Arc<tokio::sync::Mutex<HashMap<PathBuf, ErrorCode>>>,
+}
+
+/// A per-document lease shared by ordinary document writes and protected
+/// history replacement. The lease is acquired after path/conflict authority
+/// checks and remains held until replacement finalization or failure.
+pub struct HistoryOperationLease {
+    service: DocumentService,
+    path: PathBuf,
+    guard: Option<tokio::sync::OwnedMutexGuard<()>>,
+}
+
+impl HistoryOperationLease {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn assert_held(&self) -> Result<(), AppError> {
+        self.guard.as_ref().map(|_| ()).ok_or_else(|| {
+            AppError::HistoryBusy("history operation lease is no longer held".to_owned())
+        })
+    }
+
+    /// Finalize the already-published target through DocumentService's normal
+    /// repository, identity and watcher boundaries. The caller owns the
+    /// filesystem replacement; this method must not write the document again.
+    pub async fn finalize(
+        &self,
+        scene_json: String,
+        base_hash: String,
+        expected_identity: FileSystemIdentity,
+        expected_hash: String,
+    ) -> Result<(), AppError> {
+        self.finalize_with_barrier(
+            scene_json,
+            base_hash,
+            expected_identity,
+            expected_hash,
+            |_| {},
+        )
+        .await
+    }
+
+    #[cfg(test)]
+    pub async fn finalize_for_test<F>(
+        &self,
+        scene_json: String,
+        base_hash: String,
+        expected_identity: FileSystemIdentity,
+        expected_hash: String,
+        before_final_validation: F,
+    ) -> Result<(), AppError>
+    where
+        F: FnOnce(&Path),
+    {
+        self.finalize_with_barrier(
+            scene_json,
+            base_hash,
+            expected_identity,
+            expected_hash,
+            before_final_validation,
+        )
+        .await
+    }
+
+    async fn finalize_with_barrier<F>(
+        &self,
+        scene_json: String,
+        base_hash: String,
+        expected_identity: FileSystemIdentity,
+        expected_hash: String,
+        before_final_validation: F,
+    ) -> Result<(), AppError>
+    where
+        F: FnOnce(&Path),
+    {
+        if self.guard.is_none() {
+            return Err(AppError::HistoryBusy(
+                "history operation lease is no longer held".to_owned(),
+            ));
+        }
+        if self.service.conflicts.is_conflicted(&self.path).await {
+            return Err(AppError::ConflictPending(self.path.clone()));
+        }
+        if expected_hash != base_hash {
+            return Err(AppError::HistoryStaleDocument(
+                "published target hash does not match metadata commit hash".to_owned(),
+            ));
+        }
+        let _ = self.verify_published_target(&expected_identity, &expected_hash)?;
+        // This is the second observation after the rename. Test-only callers
+        // place an external writer after it; the final observation below is
+        // still immediately before the metadata commit.
+        let _second_observation =
+            self.verify_published_target(&expected_identity, &expected_hash)?;
+        before_final_validation(&self.path);
+        let (mtime, file_size) =
+            self.verify_published_target(&expected_identity, &expected_hash)?;
+        let workspaces = self.service.repository.workspace_list().await?;
+        let indexed_file = owning_workspace(&workspaces, &self.path)
+            .map(|workspace| {
+                file_index_record(&workspace, &self.path, mtime, file_size, &base_hash)
+            })
+            .transpose()?;
+        self.service
+            .repository
+            .document_checkpoint_commit(
+                DraftRecord {
+                    file_path: path_string(&self.path),
+                    scene_json,
+                    content_hash: base_hash.clone(),
+                    base_hash: Some(base_hash.clone()),
+                    updated_at: mtime,
+                    is_dirty: false,
+                },
+                indexed_file,
+            )
+            .await?;
+        self.service.remove_recovery_for_path(&self.path).await?;
+        let history_store = self.service.history_store.clone().ok_or_else(|| {
+            AppError::HistoryUnavailable("history store is not initialized".to_owned())
+        })?;
+        let identity = history_store
+            .load_active_document_identity(&path_string(&self.path))
+            .map_err(|error| AppError::HistoryUnavailable(error.to_string()))?
+            .ok_or_else(|| {
+                AppError::HistoryStaleDocument("document has no active history identity".to_owned())
+            })?;
+        let mut identity = identity;
+        identity
+            .record_self_write(&self.path, base_hash.clone())
+            .map_err(map_identity_error)?;
+        history_store
+            .persist_document_identity(&identity, mtime)
+            .map_err(map_history_identity_error)?;
+        if let Some(watcher) = self.service.watcher.clone() {
+            watcher
+                .note_own_write(self.path.clone(), mtime, file_size, base_hash)
+                .await;
+        }
+        Ok(())
+    }
+
+    fn verify_published_target(
+        &self,
+        expected_identity: &FileSystemIdentity,
+        expected_hash: &str,
+    ) -> Result<(i64, i64), AppError> {
+        let identity = FileSystemIdentity::from_path(&self.path).map_err(map_identity_error)?;
+        if !identity.reliable || &identity != expected_identity {
+            return Err(AppError::HistoryStaleDocument(
+                "published target filesystem identity changed before metadata commit".to_owned(),
+            ));
+        }
+        let bytes = fs::read(&self.path).map_err(|source| io_error(&self.path, source))?;
+        if content_hash(&bytes) != expected_hash {
+            return Err(AppError::HistoryStaleDocument(
+                "published target bytes changed before metadata commit".to_owned(),
+            ));
+        }
+        file_metadata(&self.path)
+    }
 }
 
 impl DocumentService {
@@ -108,6 +275,8 @@ impl DocumentService {
             recovery: None,
             conflicts: ConflictRegistry::default(),
             watcher: None,
+            history_store: None,
+            history_issues: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         }
     }
 
@@ -134,6 +303,8 @@ impl DocumentService {
             recovery: Some(recovery),
             conflicts: ConflictRegistry::default(),
             watcher: None,
+            history_store: None,
+            history_issues: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         }
     }
 
@@ -148,9 +319,45 @@ impl DocumentService {
         self.watcher = watcher;
     }
 
+    /// Attaches the durable version-history store after the app has opened its
+    /// independent history database.  Keeping this as an explicit wiring step
+    /// preserves existing unit-test constructors while production uses the
+    /// same persistent `history_documents` identity for every document path.
+    pub fn attach_history_store(&mut self, history_store: Arc<HistoryStore>) {
+        self.history_store = Some(history_store);
+    }
+
     /// Exposes the conflict registry for integration tests and wiring.
     pub fn conflicts(&self) -> &ConflictRegistry {
         &self.conflicts
+    }
+
+    /// Acquire the same lock used by open/save/checkpoint/conflict paths.
+    /// History replacement must not create a second lock domain.
+    pub async fn acquire_history_operation(
+        &self,
+        path: &Path,
+    ) -> Result<HistoryOperationLease, AppError> {
+        let authorized = self.authorize_path(path, PathMode::Existing).await?;
+        if self.conflicts.is_conflicted(&authorized.path).await {
+            return Err(AppError::ConflictPending(authorized.path));
+        }
+        let guard = self.lock_document(&authorized.path).await;
+        if self.conflicts.is_conflicted(&authorized.path).await {
+            return Err(AppError::ConflictPending(authorized.path));
+        }
+        Ok(HistoryOperationLease {
+            service: self.clone(),
+            path: authorized.path,
+            guard: Some(guard),
+        })
+    }
+
+    /// Returns the latest non-fatal history issue for a document. Current-file
+    /// save and Recovery remain authoritative; later history UI/event work can
+    /// consume this separate status without turning the save into a failure.
+    pub async fn history_issue_for_path(&self, path: &Path) -> Option<ErrorCode> {
+        self.history_issues.lock().await.get(path).copied()
     }
 
     pub async fn doc_open(&self, request: PathRequest) -> Result<SceneOpenResponse, IpcError> {
@@ -195,6 +402,10 @@ impl DocumentService {
         let bytes = run_blocking(move || read_bounded(&path, limit)).await?;
         let scene = validate_persisted_scene(&bytes, limit)?;
         let base_hash = content_hash(&bytes);
+        // Establish or reconcile identity only after the real file has been
+        // read and validated; an invalid open must not create a durable row.
+        self.resolve_history_identity_for_open(&authorized.path)
+            .await?;
         let draft = self
             .repository
             .draft_get(path_string(&authorized.path))
@@ -233,6 +444,10 @@ impl DocumentService {
             Ok((scene_json, hash))
         })
         .await?;
+
+        // Do not establish a persistent identity for a rejected scene payload.
+        self.resolve_history_identity_for_existing(&authorized.path)
+            .await?;
 
         let canonical_path = path_string(&authorized.path);
         let snapshot_scene_json = scene_json.clone();
@@ -305,11 +520,24 @@ impl DocumentService {
         })
         .await?;
 
+        // Only valid checkpoint content may establish the first persistent
+        // identity for an existing file.
+        let existing_history_identity = self
+            .resolve_history_identity_for_existing_or_new(&authorized.path)
+            .await?;
+
         let write_path = authorized.path.clone();
         let write_contents = scene_json.clone();
         run_blocking(move || {
             atomic_write(&write_path, write_contents.as_bytes()).map_err(AppError::from)
         })
+        .await?;
+
+        self.persist_history_identity_after_checkpoint(
+            &authorized.path,
+            existing_history_identity,
+            &hash,
+        )
         .await?;
 
         let metadata_path = authorized.path.clone();
@@ -660,6 +888,163 @@ impl DocumentService {
         };
         lock.lock_owned().await
     }
+
+    async fn resolve_history_identity_for_open(&self, path: &Path) -> Result<(), AppError> {
+        let Some(history_store) = self.history_store.clone() else {
+            return Ok(());
+        };
+        let path = path.to_path_buf();
+        let operation_path = path.clone();
+        let created_at = unix_timestamp()?;
+        let result = run_blocking(move || {
+            history_store
+                .resolve_document_identity_for_open(&operation_path, created_at)
+                .map(|_| ())
+                .map_err(map_history_identity_error)
+        })
+        .await;
+        match result {
+            Ok(()) => {
+                self.clear_history_issue(&path).await;
+                Ok(())
+            }
+            Err(error) if is_history_store_failure(&error) => {
+                self.remember_history_issue(&path, ErrorCode::HistoryUnavailable)
+                    .await;
+                Ok(())
+            }
+            Err(error) => {
+                self.remember_history_issue(&path, history_error_code(&error))
+                    .await;
+                Err(error)
+            }
+        }
+    }
+
+    async fn resolve_history_identity_for_existing(&self, path: &Path) -> Result<(), AppError> {
+        let Some(history_store) = self.history_store.clone() else {
+            return Ok(());
+        };
+        let path = path.to_path_buf();
+        let operation_path = path.clone();
+        let created_at = unix_timestamp()?;
+        let result = run_blocking(move || {
+            history_store
+                .resolve_document_identity_for_existing(&operation_path, created_at)
+                .map(|_| ())
+                .map_err(map_history_identity_error)
+        })
+        .await;
+        match result {
+            Ok(()) => {
+                self.clear_history_issue(&path).await;
+                Ok(())
+            }
+            Err(error) if is_history_store_failure(&error) => {
+                self.remember_history_issue(&path, ErrorCode::HistoryUnavailable)
+                    .await;
+                Ok(())
+            }
+            Err(error) => {
+                self.remember_history_issue(&path, history_error_code(&error))
+                    .await;
+                Err(error)
+            }
+        }
+    }
+
+    async fn resolve_history_identity_for_existing_or_new(
+        &self,
+        path: &Path,
+    ) -> Result<Option<DocumentIdentity>, AppError> {
+        let Some(history_store) = self.history_store.clone() else {
+            return Ok(None);
+        };
+        if !path.exists() {
+            return Ok(None);
+        }
+        let path = path.to_path_buf();
+        let operation_path = path.clone();
+        let created_at = unix_timestamp()?;
+        let result = run_blocking(move || {
+            history_store
+                .resolve_document_identity_for_existing(&operation_path, created_at)
+                .map(Some)
+                .map_err(map_history_identity_error)
+        })
+        .await;
+        match result {
+            Ok(identity) => {
+                self.clear_history_issue(&path).await;
+                Ok(identity)
+            }
+            Err(error) if is_history_store_failure(&error) => {
+                self.remember_history_issue(&path, ErrorCode::HistoryUnavailable)
+                    .await;
+                Ok(None)
+            }
+            Err(error) => {
+                self.remember_history_issue(&path, history_error_code(&error))
+                    .await;
+                Err(error)
+            }
+        }
+    }
+
+    async fn persist_history_identity_after_checkpoint(
+        &self,
+        path: &Path,
+        existing: Option<DocumentIdentity>,
+        content_hash: &str,
+    ) -> Result<(), AppError> {
+        let Some(history_store) = self.history_store.clone() else {
+            return Ok(());
+        };
+        let path = path.to_path_buf();
+        let operation_path = path.clone();
+        let content_hash = content_hash.to_owned();
+        let checkpoint_time = unix_timestamp()?;
+        let result = run_blocking(move || {
+            let mut identity = match existing {
+                Some(identity) => identity,
+                None => DocumentIdentity::establish(&operation_path).map_err(map_identity_error)?,
+            };
+            identity
+                .record_self_write(&operation_path, content_hash)
+                .map_err(map_identity_error)?;
+            history_store
+                .persist_document_identity(&identity, checkpoint_time)
+                .map_err(map_history_identity_error)
+        })
+        .await;
+        match result {
+            Ok(()) => {
+                self.clear_history_issue(&path).await;
+                Ok(())
+            }
+            Err(error) if is_history_store_failure(&error) => {
+                self.remember_history_issue(&path, ErrorCode::HistoryUnavailable)
+                    .await;
+                Ok(())
+            }
+            Err(error) => {
+                self.remember_history_issue(&path, history_error_code(&error))
+                    .await;
+                Err(error)
+            }
+        }
+    }
+
+    async fn remember_history_issue(&self, path: &Path, code: ErrorCode) {
+        self.history_issues
+            .lock()
+            .await
+            .insert(path.to_path_buf(), code);
+    }
+
+    async fn clear_history_issue(&self, path: &Path) {
+        self.history_issues.lock().await.remove(path);
+    }
 }
 
 fn is_supported_document_path(path: &Path) -> bool {
@@ -923,6 +1308,34 @@ fn io_error(path: &Path, source: std::io::Error) -> AppError {
     }
 }
 
+fn map_identity_error(error: IdentityError) -> AppError {
+    if error.is_stale_boundary() {
+        AppError::HistoryStaleDocument(
+            "document filesystem identity is no longer current".to_owned(),
+        )
+    } else {
+        AppError::HistoryUnavailable(error.to_string())
+    }
+}
+
+fn map_history_identity_error(error: IdentityStoreError) -> AppError {
+    match error {
+        IdentityStoreError::Identity(error) => map_identity_error(error),
+        other => AppError::HistoryUnavailable(other.to_string()),
+    }
+}
+
+fn is_history_store_failure(error: &AppError) -> bool {
+    matches!(error, AppError::HistoryUnavailable(_))
+}
+
+fn history_error_code(error: &AppError) -> ErrorCode {
+    match error {
+        AppError::HistoryStaleDocument(_) => ErrorCode::HistoryStaleDocument,
+        _ => ErrorCode::HistoryUnavailable,
+    }
+}
+
 async fn run_blocking<T, F>(operation: F) -> Result<T, AppError>
 where
     T: Send + 'static,
@@ -931,4 +1344,65 @@ where
     tokio::task::spawn_blocking(operation)
         .await
         .map_err(|error| AppError::Internal(format!("blocking document task failed: {error}")))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::repository::SqliteRepository;
+    use std::sync::Arc;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn finalize_rechecks_after_external_writer_barrier_before_metadata_commit() {
+        let root = std::env::temp_dir().join(format!(
+            "excalidraw-history-finalize-barrier-{}",
+            Uuid::new_v4()
+        ));
+        fs::create_dir_all(&root).expect("create test root");
+        let path = root.join("drawing.excalidraw");
+        let scene =
+            br#"{"type":"excalidraw","version":2,"elements":[],"appState":{},"files":{}}"#.to_vec();
+        fs::write(&path, &scene).expect("write initial scene");
+        let repository = Arc::new(
+            SqliteRepository::open(&root.join("state.sqlite3"))
+                .await
+                .expect("open repository"),
+        );
+        let service = DocumentService::new(repository.clone());
+        let identity = FileSystemIdentity::from_path(&path).expect("read initial identity");
+        let hash = content_hash(&scene);
+        let guard = service.lock_document(&path).await;
+        let lease = HistoryOperationLease {
+            service,
+            path: path.clone(),
+            guard: Some(guard),
+        };
+
+        let error = lease
+            .finalize_for_test(
+                String::from_utf8(scene.clone()).expect("scene UTF-8"),
+                hash.clone(),
+                identity,
+                hash,
+                |target| {
+                    fs::write(target, b"external writer after observation")
+                        .expect("external writer");
+                },
+            )
+            .await
+            .expect_err("external write must block metadata commit");
+        assert!(matches!(error, AppError::HistoryStaleDocument(_)));
+        assert!(repository
+            .draft_get(path.display().to_string())
+            .await
+            .expect("read draft")
+            .is_none());
+        assert_eq!(
+            fs::read(&path).expect("read externally changed file"),
+            b"external writer after observation"
+        );
+        drop(lease);
+        fs::remove_dir_all(root).expect("remove test root");
+    }
 }

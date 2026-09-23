@@ -1,5 +1,8 @@
 import type { EventName, EventPayload } from "./contracts";
 
+export const HISTORY_CHANGED_EVENT = "history-changed" as const;
+export const HISTORY_ISSUE_EVENT = "history-issue" as const;
+
 export interface TauriEventPayload<Name extends EventName> {
   payload: EventPayload<Name>;
 }

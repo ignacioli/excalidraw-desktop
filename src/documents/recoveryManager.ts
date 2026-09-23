@@ -62,6 +62,13 @@ export class RecoveryManager {
   private readonly gateway: RecoveryGateway;
   private readonly onSceneLoaded:
     RecoveryManagerOptions["onSceneLoaded"] | undefined;
+  /**
+   * `app_handshake` is the startup barrier: the native setup completes
+   * history-operation reconciliation before the command can be served. Keep
+   * one in-flight startup promise so a recovery action cannot race that
+   * barrier when a caller invokes `apply` while startup is still checking.
+   */
+  private startupPromise: Promise<RecoveryStartupResult> | null = null;
 
   constructor(
     gateway: RecoveryGateway = createRecoveryGateway(),
@@ -72,6 +79,19 @@ export class RecoveryManager {
   }
 
   async start(): Promise<RecoveryStartupResult> {
+    if (this.startupPromise !== null) {
+      return this.startupPromise;
+    }
+    this.startupPromise = this.loadStartup();
+    try {
+      return await this.startupPromise;
+    } catch (error) {
+      this.startupPromise = null;
+      throw error;
+    }
+  }
+
+  private async loadStartup(): Promise<RecoveryStartupResult> {
     const handshake = await this.gateway.handshake();
     if (!handshake.abnormalExit) {
       return {
@@ -90,6 +110,11 @@ export class RecoveryManager {
   }
 
   async apply(decision: RecoveryDecision): Promise<RecoveryApplyResponse> {
+    // RecoveryStartup only renders a decision after `start`, but this guard
+    // also covers native menu/event callers that arrive during startup.
+    if (this.startupPromise !== null) {
+      await this.startupPromise;
+    }
     const response = await this.gateway.apply(decision);
     if (
       response.scene !== undefined &&

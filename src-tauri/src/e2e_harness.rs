@@ -15,20 +15,24 @@ use std::{
     time::{Duration, Instant},
 };
 
-use serde::Serialize;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::Manager;
 
 use crate::{
     commands::{
-        documents::DocumentService,
+        documents::{DirectFileGrant, DocumentService},
         dto::{
             CheckpointReason, CheckpointRequest, CloseDocumentMode, CloseDocumentRequest,
-            ExpectedOpenDocument, PathRequest, RecoveryAction, RecoveryApplyRequest,
+            ExpectedOpenDocument, HistoryDocumentLocator, HistoryListRequest,
+            HistoryOperationStatusRequest, HistoryPreviewRequest, HistoryReplaceRequest,
+            HistoryReplaceTarget, PathRequest, RecoveryAction, RecoveryApplyRequest,
             SaveDraftRequest, WorkspaceEntryDeletePreflightResult, WorkspaceEntryDeleteRequest,
             WorkspaceEntryPathRequest, WorkspaceEntryRenameRequest,
         },
         error::IpcError,
+        history::{HistoryReplacementService, HistoryReplacementState},
         recovery::RecoveryService,
     },
     database::repository::{
@@ -44,11 +48,333 @@ use crate::{
         recovery::{document_id_for_path, unix_timestamp, RecoveryStore},
         session_lock::SessionLock,
     },
+    history::{
+        gc::{ObjectKey, ObjectReferences},
+        query::HistoryQueryService,
+        reconcile::reconcile_incomplete_operations_with_repository,
+        repository::{HistoryRepository, PublishSceneRequest},
+        store::HistoryStore,
+        types::{HistoryReplaceResponse, HistoryVersionSource},
+        validation::HISTORY_OBJECT_SCHEMA_VERSION,
+    },
     workspace_entries::{TrashOperator, WorkspaceEntryService, WorkspaceMutationGate},
 };
 
 pub(crate) const RELIABILITY_SCENARIO_FLAG: &str = "--e2e-reliability-scenario";
 const E2E_ROOT_PREFIX: &str = "excalidraw-desktop-e2e-";
+const HISTORY_FRONTEND_DRIVER_FLAG: &str = "EXCALIDRAW_E2E_HISTORY_FRONTEND";
+const HISTORY_FRONTEND_TARGET_ENV: &str = "EXCALIDRAW_E2E_HISTORY_TARGET_VERSION";
+const HISTORY_FRONTEND_REQUEST_ENV: &str = "EXCALIDRAW_E2E_HISTORY_REQUEST_ID";
+const HISTORY_FRONTEND_PATH_ENV: &str = "EXCALIDRAW_E2E_HISTORY_DOCUMENT_PATH";
+const HISTORY_FRONTEND_READY_MARKER: &str = "history-frontend.ready.json";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HistoryFrontendDriverRequest {
+    pub(crate) document_path: String,
+    pub(crate) target_version_id: String,
+    pub(crate) request_id: String,
+}
+
+#[tauri::command]
+pub(crate) fn e2e_history_frontend_bootstrap(
+) -> Result<Option<HistoryFrontendDriverRequest>, String> {
+    if env::var(HISTORY_FRONTEND_DRIVER_FLAG).as_deref() != Ok("1") {
+        return Ok(None);
+    }
+    let root = process_harness_root()?;
+    let document_path = env::var(HISTORY_FRONTEND_PATH_ENV)
+        .map_err(|_| format!("{HISTORY_FRONTEND_PATH_ENV} is required"))?;
+    let target_version_id = env::var(HISTORY_FRONTEND_TARGET_ENV)
+        .map_err(|_| format!("{HISTORY_FRONTEND_TARGET_ENV} is required"))?;
+    let request_id = env::var(HISTORY_FRONTEND_REQUEST_ENV)
+        .map_err(|_| format!("{HISTORY_FRONTEND_REQUEST_ENV} is required"))?;
+    assert_isolated_path(&root, Path::new(&document_path))?;
+    Ok(Some(HistoryFrontendDriverRequest {
+        document_path,
+        target_version_id,
+        request_id,
+    }))
+}
+
+#[tauri::command]
+pub(crate) fn e2e_history_frontend_publish(evidence: serde_json::Value) -> Result<(), String> {
+    if env::var(HISTORY_FRONTEND_DRIVER_FLAG).as_deref() != Ok("1") {
+        return Err("history frontend driver is disabled".to_owned());
+    }
+    let root = process_harness_root()?;
+    let control_directory = root.join("runtime").join("reliability");
+    fs::create_dir_all(&control_directory)
+        .map_err(|error| format!("failed to create history frontend control directory: {error}"))?;
+    let marker = control_directory.join(HISTORY_FRONTEND_READY_MARKER);
+    let payload = serde_json::to_vec(&evidence)
+        .map_err(|error| format!("failed to serialize history frontend evidence: {error}"))?;
+    fs::write(marker, payload)
+        .map_err(|error| format!("failed to publish history frontend evidence: {error}"))
+}
+
+/// History transaction barriers are deliberately separate from the existing
+/// atomic-document write points.  Replacement/reconciliation code calls this
+/// contract at the named boundary; the test process publishes a durable-ready
+/// marker and then waits for the parent to terminate it.  No production module
+/// imports this type because the containing module is feature-gated.
+#[cfg(any(test, feature = "e2e-harness"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum HistoryFaultStage {
+    ObjectPublish,
+    ProtectionCommit,
+    IntentCommit,
+    AfterRenameBeforeParentSync,
+    MetadataCompleteBeforeFrontendAck,
+    EvictionDeleteGc,
+    RenameDeleteRepair,
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+impl HistoryFaultStage {
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) const ALL: [Self; 7] = [
+        Self::ObjectPublish,
+        Self::ProtectionCommit,
+        Self::IntentCommit,
+        Self::AfterRenameBeforeParentSync,
+        Self::MetadataCompleteBeforeFrontendAck,
+        Self::EvictionDeleteGc,
+        Self::RenameDeleteRepair,
+    ];
+
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::ObjectPublish => "object_publish",
+            Self::ProtectionCommit => "protection_commit",
+            Self::IntentCommit => "intent_commit",
+            Self::AfterRenameBeforeParentSync => "after_rename_before_parent_sync",
+            Self::MetadataCompleteBeforeFrontendAck => "metadata_complete_before_frontend_ack",
+            Self::EvictionDeleteGc => "eviction_delete_gc",
+            Self::RenameDeleteRepair => "rename_delete_repair",
+        }
+    }
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+impl std::fmt::Display for HistoryFaultStage {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+impl std::str::FromStr for HistoryFaultStage {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "object_publish" => Ok(Self::ObjectPublish),
+            "protection_commit" => Ok(Self::ProtectionCommit),
+            "intent_commit" => Ok(Self::IntentCommit),
+            "after_rename_before_parent_sync" => Ok(Self::AfterRenameBeforeParentSync),
+            "metadata_complete_before_frontend_ack" => Ok(Self::MetadataCompleteBeforeFrontendAck),
+            "eviction_delete_gc" => Ok(Self::EvictionDeleteGc),
+            "rename_delete_repair" => Ok(Self::RenameDeleteRepair),
+            other => Err(format!("unknown history fault stage: {other}")),
+        }
+    }
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HistoryFaultContext {
+    pub(crate) operation_id: String,
+    pub(crate) document_id: String,
+    pub(crate) target_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) old_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) new_sha256: Option<String>,
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HistoryFaultReadyMarker {
+    pub(crate) scenario: String,
+    pub(crate) stage: HistoryFaultStage,
+    pub(crate) seed: String,
+    pub(crate) pid: u32,
+    pub(crate) context: HistoryFaultContext,
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+const HISTORY_FAULT_STAGE_ENV: &str = "EXCALIDRAW_E2E_HISTORY_FAULT_STAGE";
+#[cfg(any(test, feature = "e2e-harness"))]
+const HISTORY_FAULT_SEED_ENV: &str = "EXCALIDRAW_E2E_HISTORY_FAULT_SEED";
+#[cfg(any(test, feature = "e2e-harness"))]
+const HISTORY_FAULT_OPERATION_ENV: &str = "EXCALIDRAW_E2E_HISTORY_OPERATION_ID";
+#[cfg(any(test, feature = "e2e-harness"))]
+const HISTORY_FAULT_DOCUMENT_ENV: &str = "EXCALIDRAW_E2E_HISTORY_DOCUMENT_ID";
+#[cfg(any(test, feature = "e2e-harness"))]
+const HISTORY_FAULT_TARGET_ENV: &str = "EXCALIDRAW_E2E_HISTORY_TARGET_PATH";
+#[cfg(any(test, feature = "e2e-harness"))]
+const HISTORY_FAULT_OLD_HASH_ENV: &str = "EXCALIDRAW_E2E_HISTORY_OLD_SHA256";
+#[cfg(any(test, feature = "e2e-harness"))]
+const HISTORY_FAULT_NEW_HASH_ENV: &str = "EXCALIDRAW_E2E_HISTORY_NEW_SHA256";
+#[cfg(any(test, feature = "e2e-harness"))]
+const HISTORY_FAULT_READY_MARKER: &str = "history-fault.ready.json";
+#[cfg(any(test, feature = "e2e-harness"))]
+const HISTORY_FAULT_MODE_ENV: &str = "EXCALIDRAW_E2E_HISTORY_FAULT_MODE";
+#[cfg(any(test, feature = "e2e-harness"))]
+const HISTORY_FAULT_ARMED_ENV: &str = "EXCALIDRAW_E2E_HISTORY_FAULT_ARMED";
+#[cfg(any(test, feature = "e2e-harness"))]
+const HISTORY_FAULT_FAILURE_ENV: &str = "EXCALIDRAW_E2E_HISTORY_FAULT_FAILURE";
+
+#[cfg(test)]
+type HistoryFaultTestConfig = Option<(HistoryFaultStage, Vec<HistoryFaultStage>)>;
+#[cfg(test)]
+thread_local! {
+    static HISTORY_FAULT_TEST_CONFIG: std::cell::RefCell<HistoryFaultTestConfig> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) struct HistoryFaultTestScope;
+
+#[cfg(test)]
+pub(crate) fn history_fault_test_scope(stage: HistoryFaultStage) -> HistoryFaultTestScope {
+    HISTORY_FAULT_TEST_CONFIG.with(|config| {
+        config.replace(Some((stage, Vec::new())));
+    });
+    HistoryFaultTestScope
+}
+
+#[cfg(test)]
+pub(crate) fn history_fault_test_hits() -> Vec<HistoryFaultStage> {
+    HISTORY_FAULT_TEST_CONFIG.with(|config| {
+        config
+            .borrow()
+            .as_ref()
+            .map(|(_, hits)| hits.clone())
+            .unwrap_or_default()
+    })
+}
+
+#[cfg(test)]
+impl Drop for HistoryFaultTestScope {
+    fn drop(&mut self) {
+        HISTORY_FAULT_TEST_CONFIG.with(|config| {
+            config.take();
+        });
+    }
+}
+
+/// Feature/test-only adapter for product modules that should not import the
+/// harness context types. It is a no-op unless this exact stage is configured
+/// in the isolated process environment.
+#[cfg(any(test, feature = "e2e-harness"))]
+pub(crate) fn history_fault_barrier_from_environment(
+    stage: HistoryFaultStage,
+) -> Result<(), String> {
+    #[cfg(test)]
+    {
+        let test_stage_matches = HISTORY_FAULT_TEST_CONFIG.with(|config| {
+            config
+                .borrow()
+                .as_ref()
+                .is_some_and(|(configured, _)| *configured == stage)
+        });
+        if test_stage_matches {
+            return history_fault_barrier(
+                stage,
+                HistoryFaultContext {
+                    operation_id: "test-operation".to_owned(),
+                    document_id: "test-document".to_owned(),
+                    target_path: "test-target.excalidraw".to_owned(),
+                    old_sha256: None,
+                    new_sha256: None,
+                },
+            );
+        }
+    }
+    let configured = match env::var(HISTORY_FAULT_STAGE_ENV) {
+        Ok(value) => value.parse::<HistoryFaultStage>()?,
+        Err(env::VarError::NotPresent) => return Ok(()),
+        Err(error) => return Err(format!("failed to read {HISTORY_FAULT_STAGE_ENV}: {error}")),
+    };
+    if env::var(HISTORY_FAULT_ARMED_ENV).as_deref() != Ok("1") {
+        return Ok(());
+    }
+    if configured != stage {
+        return Ok(());
+    }
+    if let Ok(failure) = env::var(HISTORY_FAULT_FAILURE_ENV) {
+        return Err(format!("injected {failure} at {stage}"));
+    }
+    history_fault_barrier(stage, history_fault_context_from_environment()?)
+}
+
+/// Shared hook used by replacement/reconciliation code.  With no configured
+/// stage this is a no-op.  In a test process the matching stage emits one
+/// marker under the isolated root and blocks until SIGKILL; the marker is the
+/// only readiness signal, so callers must never infer readiness from sleeps.
+#[cfg(any(test, feature = "e2e-harness"))]
+pub(crate) fn history_fault_barrier(
+    stage: HistoryFaultStage,
+    context: HistoryFaultContext,
+) -> Result<(), String> {
+    #[cfg(test)]
+    #[cfg(test)]
+    let test_hit = HISTORY_FAULT_TEST_CONFIG.with(|config| {
+        let mut config = config.borrow_mut();
+        if let Some((configured, hits)) = config.as_mut() {
+            if *configured == stage {
+                hits.push(stage);
+                return true;
+            }
+        }
+        false
+    });
+    #[cfg(test)]
+    if test_hit {
+        return Ok(());
+    }
+    let configured = match env::var(HISTORY_FAULT_STAGE_ENV) {
+        Ok(value) => value,
+        Err(env::VarError::NotPresent) => return Ok(()),
+        Err(error) => return Err(format!("failed to read {HISTORY_FAULT_STAGE_ENV}: {error}")),
+    };
+    let configured = configured.parse::<HistoryFaultStage>()?;
+    if configured != stage {
+        return Ok(());
+    }
+
+    let root = process_harness_root()?;
+    let control_directory = root.join("runtime").join("reliability");
+    fs::create_dir_all(&control_directory)
+        .map_err(|error| format!("failed to create history fault control directory: {error}"))?;
+    let marker = HistoryFaultReadyMarker {
+        scenario: "history-fault-kill".to_owned(),
+        stage,
+        seed: env::var(HISTORY_FAULT_SEED_ENV).unwrap_or_else(|_| "deterministic".to_owned()),
+        pid: std::process::id(),
+        context,
+    };
+    let marker_path = control_directory.join(HISTORY_FAULT_READY_MARKER);
+    let payload = serde_json::to_vec(&marker)
+        .map_err(|error| format!("failed to serialize history fault marker: {error}"))?;
+    fs::write(&marker_path, payload)
+        .map_err(|error| format!("failed to publish history fault marker: {error}"))?;
+
+    if env::var(HISTORY_FAULT_MODE_ENV).as_deref() == Ok("record") {
+        return Ok(());
+    }
+
+    // Keep the process at the exact operation boundary.  The parent owns the
+    // SIGKILL and the subsequent same-root restart/probe.
+    loop {
+        thread::sleep(Duration::from_millis(10));
+    }
+}
 
 /// Prevents macOS App Nap from suspending the harness process.
 ///
@@ -77,6 +403,27 @@ pub(crate) fn e2e_set_atomic_write_fault(point: AtomicWriteFaultPoint) {
 #[tauri::command]
 pub(crate) fn e2e_clear_atomic_write_fault() {
     clear_fault_point();
+}
+
+/// Test-only race seam used by T025. It writes a caller-declared external
+/// scene after the guarded pre-rename check and before the rename. The native
+/// test then proves whether the product detects that race instead of silently
+/// overwriting the external bytes.
+#[cfg(feature = "e2e-harness")]
+pub(crate) fn history_external_write_after_precommit(target: &Path) {
+    if env::var("EXCALIDRAW_E2E_EXTERNAL_WRITE_AFTER_PRECOMMIT").as_deref() != Ok("1") {
+        return;
+    }
+    let expected_target = match env::var_os(HISTORY_FAULT_TARGET_ENV) {
+        Some(value) => PathBuf::from(value),
+        None => return,
+    };
+    if expected_target != target {
+        return;
+    }
+    let scene = env::var("EXCALIDRAW_E2E_EXTERNAL_SCENE_JSON")
+        .unwrap_or_else(|_| "{\"version\":2,\"source\":\"external-write\"}".to_owned());
+    let _ = fs::write(target, scene.as_bytes());
 }
 
 #[tauri::command]
@@ -142,6 +489,27 @@ fn process_harness_root() -> Result<PathBuf, String> {
 
 async fn run_scenario(scenario: &str, root: &Path) -> Result<String, String> {
     match scenario {
+        "history-fault-kill" => serialize_evidence(run_history_fault_kill(root)?),
+        "history-state-probe" => serialize_evidence(run_history_state_probe(root)?),
+        "history-operation-fault-kill" => run_history_operation_fault_kill(root)
+            .await
+            .map(|_| String::new()),
+        "history-operation-fault-probe" => {
+            serialize_evidence(run_history_operation_fault_probe(root).await?)
+        }
+        "history-operation-failure" => {
+            serialize_evidence(run_history_operation_failure(root).await?)
+        }
+        "history-operation-external-write" => {
+            serialize_evidence(run_history_operation_external_write(root).await?)
+        }
+        "history-operation-concurrency" => {
+            serialize_evidence(run_history_operation_concurrency(root).await?)
+        }
+        "history-restart-seed" => serialize_evidence(run_history_restart_seed(root).await?),
+        "history-restart-restore" => serialize_evidence(run_history_restart_restore(root).await?),
+        "history-restart-verify" => serialize_evidence(run_history_restart_verify(root).await?),
+        "history-restart-evict" => serialize_evidence(run_history_restart_evict(root).await?),
         "concurrent-checkpoints" => serialize_evidence(run_concurrent_checkpoints(root).await?),
         "disk-full-checkpoint" => serialize_evidence(run_disk_full_checkpoint(root).await?),
         "atomic-write-kill" => serialize_evidence(run_atomic_write_kill(root)?),
@@ -296,6 +664,1236 @@ fn parse_fault_point(value: &str) -> Result<AtomicWriteFaultPoint, String> {
         "parent_synced" => Ok(AtomicWriteFaultPoint::ParentSynced),
         other => Err(format!("unknown atomic write fault point: {other}")),
     }
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryFaultKillEvidence {
+    scenario: &'static str,
+    stage: HistoryFaultStage,
+    seed: String,
+    context: HistoryFaultContext,
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+fn history_fault_context_from_environment() -> Result<HistoryFaultContext, String> {
+    let required = |name: &str| {
+        env::var(name).map_err(|_| format!("{name} is required for history fault scenario"))
+    };
+    Ok(HistoryFaultContext {
+        operation_id: required(HISTORY_FAULT_OPERATION_ENV)?,
+        document_id: required(HISTORY_FAULT_DOCUMENT_ENV)?,
+        target_path: required(HISTORY_FAULT_TARGET_ENV)?,
+        old_sha256: env::var(HISTORY_FAULT_OLD_HASH_ENV).ok(),
+        new_sha256: env::var(HISTORY_FAULT_NEW_HASH_ENV).ok(),
+    })
+}
+
+/// Process entrypoint for the shared History barrier protocol.  Real product
+/// operations normally reach the same barrier through `history_fault_barrier`;
+/// this direct scenario keeps the marker/kill protocol unit-testable before
+/// T013 has wired each replacement stage.
+#[cfg(any(test, feature = "e2e-harness"))]
+fn run_history_fault_kill(root: &Path) -> Result<HistoryFaultKillEvidence, String> {
+    let stage = env::var(HISTORY_FAULT_STAGE_ENV)
+        .map_err(|_| format!("{HISTORY_FAULT_STAGE_ENV} is required"))?
+        .parse::<HistoryFaultStage>()?;
+    let context = history_fault_context_from_environment()?;
+    // Keep the root argument part of the contract and fail closed if the
+    // caller points at a target outside the managed fixture root.
+    assert_isolated_path(root, Path::new(&context.target_path))?;
+    history_fault_barrier(stage, context.clone())?;
+    Ok(HistoryFaultKillEvidence {
+        scenario: "history-fault-kill",
+        stage,
+        seed: env::var(HISTORY_FAULT_SEED_ENV).unwrap_or_else(|_| "deterministic".to_owned()),
+        context,
+    })
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryStateProbeEvidence {
+    scenario: &'static str,
+    target_path: String,
+    exists: bool,
+    parseable_json: bool,
+    byte_length: Option<usize>,
+    sha256: Option<String>,
+    expected_state: &'static str,
+    temporary_files: Vec<String>,
+    fault_marker_exists: bool,
+}
+
+/// Restart probe used after SIGKILL.  It runs as a fresh test-only process in
+/// the same isolated root and classifies the target as old/new/other/missing/
+/// invalid using exact bytes and hashes, never by mtime or timing.
+#[cfg(any(test, feature = "e2e-harness"))]
+fn run_history_state_probe(root: &Path) -> Result<HistoryStateProbeEvidence, String> {
+    let target = PathBuf::from(
+        env::var(HISTORY_FAULT_TARGET_ENV)
+            .map_err(|_| format!("{HISTORY_FAULT_TARGET_ENV} is required"))?,
+    );
+    assert_isolated_path(root, &target)?;
+    let old_hash = env::var(HISTORY_FAULT_OLD_HASH_ENV).ok();
+    let new_hash = env::var(HISTORY_FAULT_NEW_HASH_ENV).ok();
+    let (exists, parseable_json, byte_length, sha256_value, expected_state) =
+        match fs::read(&target) {
+            Ok(bytes) => {
+                let hash = sha256(&bytes);
+                let parseable = serde_json::from_slice::<serde_json::Value>(&bytes).is_ok();
+                let state = if old_hash.as_deref() == Some(hash.as_str()) {
+                    "old"
+                } else if new_hash.as_deref() == Some(hash.as_str()) {
+                    "new"
+                } else if parseable {
+                    "other"
+                } else {
+                    "invalid"
+                };
+                (true, parseable, Some(bytes.len()), Some(hash), state)
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                (false, false, None, None, "missing")
+            }
+            Err(error) => {
+                return Err(format!(
+                    "failed to probe history target {}: {error}",
+                    target.display()
+                ))
+            }
+        };
+    let temporary_files = temporary_files(&target)?;
+    let fault_marker_exists = root
+        .join("runtime")
+        .join("reliability")
+        .join(HISTORY_FAULT_READY_MARKER)
+        .is_file();
+    Ok(HistoryStateProbeEvidence {
+        scenario: "history-state-probe",
+        target_path: path_string(&target),
+        exists,
+        parseable_json,
+        byte_length,
+        sha256: sha256_value,
+        expected_state,
+        temporary_files,
+        fault_marker_exists,
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryOperationFaultProbeEvidence {
+    scenario: &'static str,
+    stage: String,
+    request_id: String,
+    target_path: String,
+    old_sha256: String,
+    new_sha256: String,
+    target_sha256: String,
+    expected_state: &'static str,
+    parseable_json: bool,
+    operation_state: String,
+    replacement_committed: Option<bool>,
+    reconciliation_outcomes: Vec<String>,
+    temporary_files: Vec<String>,
+    target_object_exists: bool,
+    target_asset_exists: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryOperationFailureEvidence {
+    scenario: &'static str,
+    failure_mode: String,
+    request_id: String,
+    target_path: String,
+    target_sha256: String,
+    original_sha256: String,
+    target_unchanged: bool,
+    error: String,
+    temporary_files: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryExternalWriteEvidence {
+    scenario: &'static str,
+    target_path: String,
+    external_sha256: String,
+    published_sha256: String,
+    observed_sha256: String,
+    external_write_preserved: bool,
+    response_state: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryOperationConcurrencyEvidence {
+    scenario: &'static str,
+    target_path: String,
+    request_id: String,
+    response_states: Vec<String>,
+    replacement_committed: Vec<Option<bool>>,
+    different_response_states: Vec<String>,
+    different_replacement_committed: Vec<Option<bool>>,
+    target_sha256: String,
+    target_object_exists: bool,
+    target_asset_exists: bool,
+}
+
+/// Runs the real protected replacement service until a configured History
+/// barrier. The parent process owns the SIGKILL; returning normally is a
+/// failure because it means the requested barrier was not reached.
+async fn run_history_operation_fault_kill(root: &Path) -> Result<(), String> {
+    let context = setup_history_fault_operation(root).await?;
+    env::set_var(HISTORY_FAULT_ARMED_ENV, "1");
+    let target = context
+        .1
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize fault target: {error}"))?;
+    let current_scene_json = fs::read_to_string(&target)
+        .map_err(|error| format!("failed to read fault current scene: {error}"))?;
+    let current_hash = sha256(current_scene_json.as_bytes());
+    let target_version_id = "history-fault-version-a".to_owned();
+    let request_id = env::var(HISTORY_FAULT_OPERATION_ENV)
+        .unwrap_or_else(|_| "history-fault-operation".to_owned());
+    let response = context
+        .0
+        .replacement
+        .e2e_replace(HistoryReplaceRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id,
+            session_generation: 1,
+            revision: 1,
+            expected_base_hash: current_hash,
+            current_scene_json,
+            target: HistoryReplaceTarget::Restore {
+                version_id: target_version_id,
+            },
+        })
+        .await;
+    Err(format!(
+        "history operation fault fixture resumed before SIGKILL: {response:?}"
+    ))
+}
+
+async fn run_history_operation_fault_probe(
+    root: &Path,
+) -> Result<HistoryOperationFaultProbeEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target = PathBuf::from(
+        env::var(HISTORY_FAULT_TARGET_ENV)
+            .map_err(|_| format!("{HISTORY_FAULT_TARGET_ENV} is required"))?,
+    )
+    .canonicalize()
+    .map_err(|error| format!("failed to canonicalize fault probe target: {error}"))?;
+    assert_isolated_path(root, &target)?;
+    let old_sha256 = context
+        .store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT scene_hash FROM history_versions WHERE id=?1",
+                ["history-fault-version-b"],
+                |row| row.get::<_, String>(0),
+            )
+        })
+        .map_err(|error| format!("failed to load fault old scene hash: {error}"))?;
+    let new_sha256 = context
+        .store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT scene_hash FROM history_versions WHERE id=?1",
+                ["history-fault-version-a"],
+                |row| row.get::<_, String>(0),
+            )
+        })
+        .map_err(|error| format!("failed to load fault new scene hash: {error}"))?;
+    let asset_sha256 = history_restart_scene("fault-A", "历史故障 A").2;
+    let request_id = env::var(HISTORY_FAULT_OPERATION_ENV)
+        .unwrap_or_else(|_| "history-fault-operation".to_owned());
+    let report =
+        reconcile_incomplete_operations_with_repository(&context.store, &context.repository)
+            .await
+            .map_err(|error| format!("history fault restart reconciliation failed: {error}"))?;
+    let target_bytes =
+        fs::read(&target).map_err(|error| format!("failed to read fault probe target: {error}"))?;
+    let target_sha256 = sha256(&target_bytes);
+    let expected_state = if target_sha256 == old_sha256 {
+        "old"
+    } else if target_sha256 == new_sha256 {
+        "new"
+    } else if serde_json::from_slice::<serde_json::Value>(&target_bytes).is_ok() {
+        "other"
+    } else {
+        "invalid"
+    };
+    let requested_id = request_id.clone();
+    let status = context
+        .replacement
+        .e2e_operation_status(HistoryOperationStatusRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id,
+        })
+        .await;
+    let (status_request_id, operation_state, replacement_committed) = match status {
+        Ok(status) => (
+            status.request_id,
+            format!("{:?}", status.state),
+            status.replacement_committed,
+        ),
+        Err(error) => (requested_id, format!("status-error:{error:?}"), None),
+    };
+    let target_object_exists = context
+        .store
+        .objects()
+        .scene_path(&target_sha256)
+        .map(|path| path.exists())
+        .unwrap_or(false);
+    let target_asset_exists = context
+        .store
+        .objects()
+        .asset_path(&asset_sha256)
+        .map(|path| path.exists())
+        .unwrap_or(false);
+    Ok(HistoryOperationFaultProbeEvidence {
+        scenario: "history-operation-fault-probe",
+        stage: env::var(HISTORY_FAULT_STAGE_ENV).unwrap_or_else(|_| "unknown".to_owned()),
+        request_id: status_request_id,
+        target_path: path_string(&target),
+        old_sha256,
+        new_sha256,
+        target_sha256,
+        expected_state,
+        parseable_json: serde_json::from_slice::<serde_json::Value>(&target_bytes).is_ok(),
+        operation_state,
+        replacement_committed,
+        reconciliation_outcomes: report
+            .outcomes
+            .into_iter()
+            .map(|outcome| format!("{outcome:?}"))
+            .collect(),
+        temporary_files: temporary_files(&target)?,
+        target_object_exists,
+        target_asset_exists,
+    })
+}
+
+async fn run_history_operation_failure(
+    root: &Path,
+) -> Result<HistoryOperationFailureEvidence, String> {
+    let (context, target, old_sha256, _, asset_hash) = setup_history_fault_operation(root).await?;
+    let failure_mode = env::var("EXCALIDRAW_E2E_HISTORY_FAILURE_MODE")
+        .unwrap_or_else(|_| "missing-version".to_owned());
+    let request_id = env::var(HISTORY_FAULT_OPERATION_ENV)
+        .unwrap_or_else(|_| "history-fault-failure".to_owned());
+    let current_scene_json = fs::read_to_string(&target)
+        .map_err(|error| format!("failed to read failure target: {error}"))?;
+    let current_hash = sha256(current_scene_json.as_bytes());
+    let target_version = match failure_mode.as_str() {
+        "missing-version" | "corrupt-asset" | "object-permission" | "object-enospc"
+        | "sqlite-permission" | "sqlite-enospc" | "partial-protection" => {
+            "history-fault-version-a".to_owned()
+        }
+        other => return Err(format!("unknown history failure mode: {other}")),
+    };
+    if failure_mode == "corrupt-asset" {
+        let asset_path = context
+            .store
+            .objects()
+            .asset_path(&asset_hash)
+            .map_err(|error| format!("failed to resolve corrupt asset path: {error}"))?;
+        fs::write(&asset_path, b"corrupt-history-asset")
+            .map_err(|error| format!("failed to corrupt isolated asset: {error}"))?;
+    }
+    if matches!(
+        failure_mode.as_str(),
+        "object-permission" | "object-enospc" | "partial-protection"
+    ) {
+        env::set_var(HISTORY_FAULT_STAGE_ENV, "object_publish");
+        env::set_var(HISTORY_FAULT_FAILURE_ENV, &failure_mode);
+        env::set_var(HISTORY_FAULT_ARMED_ENV, "1");
+    } else if matches!(failure_mode.as_str(), "sqlite-permission" | "sqlite-enospc") {
+        env::set_var(HISTORY_FAULT_STAGE_ENV, "protection_commit");
+        env::set_var(HISTORY_FAULT_FAILURE_ENV, &failure_mode);
+        env::set_var(HISTORY_FAULT_ARMED_ENV, "1");
+    }
+    let replacement_target = if failure_mode == "missing-version" {
+        HistoryReplaceTarget::Restore {
+            version_id: "history-version-does-not-exist".to_owned(),
+        }
+    } else {
+        HistoryReplaceTarget::Restore {
+            version_id: target_version,
+        }
+    };
+    let error = context
+        .replacement
+        .e2e_replace(HistoryReplaceRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id,
+            session_generation: 1,
+            revision: 1,
+            expected_base_hash: current_hash,
+            current_scene_json,
+            target: replacement_target,
+        })
+        .await
+        .err()
+        .map(|value| format!("{value:?}"))
+        .unwrap_or_else(|| "unexpected success".to_owned());
+    let persisted = fs::read(&target)
+        .map_err(|read_error| format!("failed to read failure result: {read_error}"))?;
+    let persisted_sha256 = sha256(&persisted);
+    Ok(HistoryOperationFailureEvidence {
+        scenario: "history-operation-failure",
+        failure_mode,
+        request_id: env::var(HISTORY_FAULT_OPERATION_ENV)
+            .unwrap_or_else(|_| "history-fault-failure".to_owned()),
+        target_path: path_string(&target),
+        target_sha256: persisted_sha256.clone(),
+        original_sha256: old_sha256.clone(),
+        target_unchanged: persisted_sha256 == old_sha256,
+        error,
+        temporary_files: temporary_files(&target)?,
+    })
+}
+
+async fn run_history_operation_external_write(
+    root: &Path,
+) -> Result<HistoryExternalWriteEvidence, String> {
+    let (context, target, _, new_sha256, _) = setup_history_fault_operation(root).await?;
+    let external_scene = serde_json::json!({
+        "version": 2,
+        "source": "external-write-between-check-and-publish",
+        "elements": [{"id": "external-element", "type": "diamond"}],
+        "files": {}
+    });
+    let external_json = serde_json::to_string(&external_scene)
+        .map_err(|error| format!("failed to serialize external scene: {error}"))?;
+    let external_sha256 = sha256(external_json.as_bytes());
+    env::set_var("EXCALIDRAW_E2E_EXTERNAL_WRITE_AFTER_PRECOMMIT", "1");
+    env::set_var(HISTORY_FAULT_TARGET_ENV, &target);
+    env::set_var("EXCALIDRAW_E2E_EXTERNAL_SCENE_JSON", &external_json);
+    let current_scene_json = fs::read_to_string(&target)
+        .map_err(|error| format!("failed to read external-write target: {error}"))?;
+    let response = context
+        .replacement
+        .e2e_replace(HistoryReplaceRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id: "history-external-write".to_owned(),
+            session_generation: 1,
+            revision: 1,
+            expected_base_hash: sha256(current_scene_json.as_bytes()),
+            current_scene_json,
+            target: HistoryReplaceTarget::Restore {
+                version_id: "history-fault-version-a".to_owned(),
+            },
+        })
+        .await;
+    let observed = fs::read(&target)
+        .map_err(|error| format!("failed to read external-write result: {error}"))?;
+    let observed_sha256 = sha256(&observed);
+    Ok(HistoryExternalWriteEvidence {
+        scenario: "history-operation-external-write",
+        target_path: path_string(&target),
+        external_sha256: external_sha256.clone(),
+        published_sha256: new_sha256,
+        observed_sha256: observed_sha256.clone(),
+        external_write_preserved: observed_sha256 == external_sha256,
+        response_state: response
+            .map(|value| format!("{value:?}"))
+            .unwrap_or_else(|error| format!("error:{error:?}")),
+    })
+}
+
+async fn run_history_operation_concurrency(
+    root: &Path,
+) -> Result<HistoryOperationConcurrencyEvidence, String> {
+    let (context, target, _, _, _) = setup_history_fault_operation(root).await?;
+    let current_scene_json = fs::read_to_string(&target)
+        .map_err(|error| format!("failed to read concurrency target: {error}"))?;
+    let current_hash = sha256(current_scene_json.as_bytes());
+    let request = HistoryReplaceRequest {
+        document: HistoryDocumentLocator::Path {
+            path: path_string(&target),
+        },
+        request_id: "history-concurrent-same".to_owned(),
+        session_generation: 1,
+        revision: 1,
+        expected_base_hash: current_hash,
+        current_scene_json,
+        target: HistoryReplaceTarget::Restore {
+            version_id: "history-fault-version-a".to_owned(),
+        },
+    };
+    let (first, second) = tokio::join!(
+        context.replacement.e2e_replace(request.clone()),
+        context.replacement.e2e_replace(request),
+    );
+    let responses = [first, second];
+    let response_states = responses
+        .iter()
+        .map(|response| {
+            response
+                .as_ref()
+                .map(|value| format!("{value:?}"))
+                .unwrap_or_else(|error| format!("error:{error:?}"))
+        })
+        .collect();
+    let replacement_committed = responses
+        .iter()
+        .map(|response| response.as_ref().ok().and_then(response_committed))
+        .collect();
+    let reset_scene = history_restart_scene("fault-B", "历史故障 B");
+    fs::write(&target, reset_scene.0.as_bytes())
+        .map_err(|error| format!("failed to reset concurrency target: {error}"))?;
+    context
+        .store
+        .resolve_document_identity_for_open(&target, 2)
+        .map_err(|error| format!("failed to refresh concurrent document identity: {error}"))?;
+    let reset_hash = sha256(reset_scene.0.as_bytes());
+    let request_a = HistoryReplaceRequest {
+        document: HistoryDocumentLocator::Path {
+            path: path_string(&target),
+        },
+        request_id: "history-concurrent-different-a".to_owned(),
+        session_generation: 2,
+        revision: 2,
+        expected_base_hash: reset_hash.clone(),
+        current_scene_json: reset_scene.0.clone(),
+        target: HistoryReplaceTarget::Restore {
+            version_id: "history-fault-version-a".to_owned(),
+        },
+    };
+    let request_b = HistoryReplaceRequest {
+        request_id: "history-concurrent-different-b".to_owned(),
+        target: HistoryReplaceTarget::Restore {
+            version_id: "history-fault-version-b".to_owned(),
+        },
+        ..request_a.clone()
+    };
+    let (different_first, different_second) = tokio::join!(
+        context.replacement.e2e_replace(request_a),
+        context.replacement.e2e_replace(request_b),
+    );
+    let different_responses = [different_first, different_second];
+    let different_response_states = different_responses
+        .iter()
+        .map(|response| {
+            response
+                .as_ref()
+                .map(|value| format!("{value:?}"))
+                .unwrap_or_else(|error| format!("error:{error:?}"))
+        })
+        .collect();
+    let different_replacement_committed = different_responses
+        .iter()
+        .map(|response| response.as_ref().ok().and_then(response_committed))
+        .collect();
+    let persisted =
+        fs::read(&target).map_err(|error| format!("failed to read concurrency result: {error}"))?;
+    let target_sha256 = sha256(&persisted);
+    Ok(HistoryOperationConcurrencyEvidence {
+        scenario: "history-operation-concurrency",
+        target_path: path_string(&target),
+        request_id: "history-concurrent-same".to_owned(),
+        response_states,
+        replacement_committed,
+        different_response_states,
+        different_replacement_committed,
+        target_object_exists: context
+            .store
+            .objects()
+            .scene_path(&target_sha256)
+            .map(|path| path.exists())
+            .unwrap_or(false),
+        target_asset_exists: true,
+        target_sha256,
+    })
+}
+
+fn response_committed(response: &HistoryReplaceResponse) -> Option<bool> {
+    match response {
+        HistoryReplaceResponse::Completed {
+            replacement_committed,
+            ..
+        } => Some(*replacement_committed),
+        HistoryReplaceResponse::PendingReconciliation {
+            replacement_committed,
+            ..
+        } => *replacement_committed,
+    }
+}
+
+async fn setup_history_fault_operation(
+    root: &Path,
+) -> Result<(HistoryRestartContext, PathBuf, String, String, String), String> {
+    let context = open_history_restart_context(root).await?;
+    let target = PathBuf::from(
+        env::var(HISTORY_FAULT_TARGET_ENV)
+            .map_err(|_| format!("{HISTORY_FAULT_TARGET_ENV} is required"))?,
+    );
+    assert_isolated_path(root, &target)?;
+    let scene_a = history_restart_scene("fault-A", "历史故障 A");
+    let scene_b = history_restart_scene("fault-B", "历史故障 B");
+    fs::write(&target, scene_b.0.as_bytes())
+        .map_err(|error| format!("failed to write history fault target: {error}"))?;
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize history fault target: {error}"))?;
+    let asset_directory = context.workspace.join(".excalidraw_assets");
+    fs::create_dir_all(&asset_directory)
+        .map_err(|error| format!("failed to create history fault asset directory: {error}"))?;
+    fs::write(asset_directory.join(&scene_b.2), &scene_b.1)
+        .map_err(|error| format!("failed to materialize history fault asset: {error}"))?;
+    let identity = context
+        .store
+        .resolve_document_identity_for_open(&target, 1)
+        .map_err(|error| format!("failed to persist history fault identity: {error}"))?;
+    publish_history_restart_version(
+        &context.store,
+        &identity.document_id,
+        "history-fault-version-a",
+        &scene_a.0,
+        1,
+        &scene_a.2,
+    )?;
+    publish_history_restart_version(
+        &context.store,
+        &identity.document_id,
+        "history-fault-version-b",
+        &scene_b.0,
+        2,
+        &scene_b.2,
+    )?;
+    Ok((
+        context,
+        target,
+        sha256(scene_b.0.as_bytes()),
+        sha256(scene_a.0.as_bytes()),
+        scene_a.2,
+    ))
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryRestartSeedEvidence {
+    scenario: &'static str,
+    target_path: String,
+    document_id: String,
+    version_a_id: String,
+    version_b_id: String,
+    scene_a_sha256: String,
+    scene_b_sha256: String,
+    asset_sha256: String,
+    version_count: usize,
+    history_database_path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryRestartRestoreEvidence {
+    scenario: &'static str,
+    request_id: String,
+    target_version_id: String,
+    target_path: String,
+    target_scene_sha256: String,
+    persisted_scene_sha256: String,
+    adopted_scene_sha256: Option<String>,
+    protection_version_id: Option<String>,
+    operation_state: String,
+    operation_status_state: String,
+    target_asset_sha256: String,
+    response: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryRestartVerifyEvidence {
+    scenario: &'static str,
+    request_id: String,
+    target_version_id: String,
+    target_path: String,
+    persisted_scene_sha256: String,
+    status_scene_sha256: Option<String>,
+    status_state: String,
+    protection_version_id: Option<String>,
+    listed_version_ids: Vec<String>,
+    preview_scene_sha256: Option<String>,
+    target_asset_sha256: String,
+    target_object_exists: bool,
+    target_asset_exists: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryRestartEvictEvidence {
+    scenario: &'static str,
+    request_id: String,
+    retained_version_count: usize,
+    evicted_version_id: String,
+    operation_status_state: String,
+    target_scene_sha256: String,
+    target_asset_sha256: String,
+    target_object_exists_after_gc: bool,
+    target_asset_exists_after_gc: bool,
+    gc_deleted_target: bool,
+}
+
+#[derive(Clone)]
+struct E2eDirectFileGrant {
+    workspace: PathBuf,
+}
+
+impl DirectFileGrant for E2eDirectFileGrant {
+    fn is_allowed(&self, path: &Path) -> bool {
+        path.starts_with(&self.workspace)
+    }
+}
+
+struct HistoryRestartContext {
+    repository: Arc<SqliteRepository>,
+    store: Arc<HistoryStore>,
+    query: HistoryQueryService,
+    replacement: Arc<HistoryReplacementService>,
+    workspace: PathBuf,
+}
+
+async fn open_history_restart_context(root: &Path) -> Result<HistoryRestartContext, String> {
+    let (repository, mut document_service, workspace) = open_scenario_service(root).await?;
+    let store = Arc::new(
+        HistoryStore::open(&root.join("data"))
+            .map_err(|error| format!("failed to open history store: {error}"))?,
+    );
+    document_service.attach_history_store(Arc::clone(&store));
+    let grant = Arc::new(E2eDirectFileGrant {
+        workspace: workspace.clone(),
+    });
+    let query = HistoryQueryService::with_direct_file_grant(
+        Arc::clone(&repository),
+        Some(Arc::clone(&store)),
+        Arc::clone(&grant) as Arc<dyn DirectFileGrant>,
+    );
+    let replacement = HistoryReplacementState::with_document_service(
+        document_service.clone(),
+        Arc::clone(&repository),
+        Some(Arc::clone(&store)),
+        grant,
+    )
+    .service;
+    Ok(HistoryRestartContext {
+        repository,
+        store,
+        query,
+        replacement,
+        workspace,
+    })
+}
+
+async fn run_history_restart_seed(root: &Path) -> Result<HistoryRestartSeedEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target = context.workspace.join("history-restart.excalidraw");
+    let scene_a = history_restart_scene("A", "历史 A");
+    let scene_b = history_restart_scene("B", "历史 B");
+    fs::write(&target, &scene_b.0)
+        .map_err(|error| format!("failed to write restart target: {error}"))?;
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize restart target: {error}"))?;
+    let asset_directory = context.workspace.join(".excalidraw_assets");
+    fs::create_dir_all(&asset_directory)
+        .map_err(|error| format!("failed to create restart asset directory: {error}"))?;
+    fs::write(asset_directory.join(&scene_b.2), &scene_b.1)
+        .map_err(|error| format!("failed to materialize restart asset: {error}"))?;
+    let identity = context
+        .store
+        .resolve_document_identity_for_open(&target, 1)
+        .map_err(|error| format!("failed to persist restart identity: {error}"))?;
+    publish_history_restart_version(
+        &context.store,
+        &identity.document_id,
+        "history-version-a",
+        &scene_a.0,
+        1,
+        &scene_a.2,
+    )?;
+    publish_history_restart_version(
+        &context.store,
+        &identity.document_id,
+        "history-version-b",
+        &scene_b.0,
+        2,
+        &scene_b.2,
+    )?;
+    let version_count = context
+        .store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT COUNT(*) FROM history_versions WHERE document_id=?1",
+                [&identity.document_id],
+                |row| row.get::<_, i64>(0),
+            )
+        })
+        .map_err(|error| format!("failed to count restart versions: {error}"))?
+        as usize;
+    Ok(HistoryRestartSeedEvidence {
+        scenario: "history-restart-seed",
+        target_path: path_string(&target),
+        document_id: identity.document_id,
+        version_a_id: "history-version-a".to_owned(),
+        version_b_id: "history-version-b".to_owned(),
+        scene_a_sha256: sha256(scene_a.0.as_bytes()),
+        scene_b_sha256: sha256(scene_b.0.as_bytes()),
+        asset_sha256: scene_a.2,
+        version_count,
+        history_database_path: path_string(context.store.database_path()),
+    })
+}
+
+async fn run_history_restart_restore(root: &Path) -> Result<HistoryRestartRestoreEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target = context.workspace.join("history-restart.excalidraw");
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize restore target: {error}"))?;
+    let target_version_id = env::var("EXCALIDRAW_E2E_HISTORY_TARGET_VERSION")
+        .unwrap_or_else(|_| "history-version-a".to_owned());
+    let request_id = env::var("EXCALIDRAW_E2E_HISTORY_REQUEST_ID")
+        .unwrap_or_else(|_| format!("history-restart-{target_version_id}"));
+    let current_scene_json = fs::read_to_string(&target)
+        .map_err(|error| format!("failed to read current restart scene: {error}"))?;
+    let current_hash = sha256(current_scene_json.as_bytes());
+    let preview = context
+        .query
+        .preview(HistoryPreviewRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            version_id: target_version_id.clone(),
+        })
+        .await
+        .map_err(|error| format!("history preview before restore failed: {error:?}"))?;
+    let response = context
+        .replacement
+        .e2e_replace(HistoryReplaceRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id: request_id.clone(),
+            session_generation: 1,
+            revision: 1,
+            expected_base_hash: current_hash,
+            current_scene_json,
+            target: HistoryReplaceTarget::Restore {
+                version_id: target_version_id.clone(),
+            },
+        })
+        .await
+        .map_err(|error| format!("history replacement failed: {error:?}"))?;
+    let persisted = fs::read(&target)
+        .map_err(|error| format!("failed to read restored restart scene: {error}"))?;
+    let status = context
+        .replacement
+        .e2e_operation_status(HistoryOperationStatusRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id: request_id.clone(),
+        })
+        .await
+        .map_err(|error| format!("history operation status failed: {error:?}"))?;
+    let adopted_scene_sha256 = response_scene(&response)
+        .as_deref()
+        .map(|scene| sha256(scene.as_bytes()));
+    let status_scene_sha256 = status
+        .adopted_scene
+        .as_ref()
+        .map(|scene| sha256(serde_json::to_string(scene).unwrap_or_default().as_bytes()));
+    Ok(HistoryRestartRestoreEvidence {
+        scenario: "history-restart-restore",
+        request_id,
+        target_version_id,
+        target_path: path_string(&target),
+        target_scene_sha256: scene_sha256(&preview.scene)?,
+        persisted_scene_sha256: sha256(&persisted),
+        adopted_scene_sha256: adopted_scene_sha256.or(status_scene_sha256),
+        protection_version_id: status.protection_version_id,
+        operation_state: response_state(&response).to_owned(),
+        operation_status_state: format!("{:?}", status.state),
+        target_asset_sha256: scene_asset_hash(&preview.scene)?,
+        response: serde_json::to_value(response)
+            .map_err(|error| format!("failed to serialize restore response: {error}"))?,
+    })
+}
+
+async fn run_history_restart_verify(root: &Path) -> Result<HistoryRestartVerifyEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target = context.workspace.join("history-restart.excalidraw");
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize verify target: {error}"))?;
+    let request_id = env::var("EXCALIDRAW_E2E_HISTORY_REQUEST_ID")
+        .map_err(|_| "EXCALIDRAW_E2E_HISTORY_REQUEST_ID is required".to_owned())?;
+    let target_version_id = env::var("EXCALIDRAW_E2E_HISTORY_TARGET_VERSION")
+        .map_err(|_| "EXCALIDRAW_E2E_HISTORY_TARGET_VERSION is required".to_owned())?;
+    let persisted =
+        fs::read(&target).map_err(|error| format!("failed to read verify scene: {error}"))?;
+    let list = context
+        .query
+        .list(HistoryListRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            cursor: None,
+            limit: Some(100),
+        })
+        .await
+        .map_err(|error| format!("history list after restart failed: {error:?}"))?;
+    let status = context
+        .replacement
+        .e2e_operation_status(HistoryOperationStatusRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id: request_id.clone(),
+        })
+        .await
+        .map_err(|error| format!("history status after restart failed: {error:?}"))?;
+    let preview = context
+        .query
+        .preview(HistoryPreviewRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            version_id: target_version_id.clone(),
+        })
+        .await
+        .ok();
+    let persisted_scene_sha256 = sha256(&persisted);
+    let target_asset_sha256 = status
+        .adopted_scene
+        .as_ref()
+        .and_then(|scene| scene_asset_hash(scene).ok())
+        .unwrap_or_default();
+    let target_object_exists = context
+        .store
+        .objects()
+        .scene_path(&persisted_scene_sha256)
+        .map(|path| path.exists())
+        .unwrap_or(false);
+    let target_asset_exists = if target_asset_sha256.is_empty() {
+        false
+    } else {
+        context
+            .store
+            .objects()
+            .asset_path(&target_asset_sha256)
+            .map(|path| path.exists())
+            .unwrap_or(false)
+    };
+    Ok(HistoryRestartVerifyEvidence {
+        scenario: "history-restart-verify",
+        request_id,
+        target_version_id,
+        target_path: path_string(&target),
+        persisted_scene_sha256,
+        status_scene_sha256: status
+            .adopted_scene
+            .as_ref()
+            .map(|scene| sha256(serde_json::to_string(scene).unwrap_or_default().as_bytes())),
+        status_state: format!("{:?}", status.state),
+        protection_version_id: status.protection_version_id,
+        listed_version_ids: list.items.into_iter().map(|item| item.version_id).collect(),
+        preview_scene_sha256: preview.as_ref().map(|value| {
+            sha256(
+                serde_json::to_string(&value.scene)
+                    .unwrap_or_default()
+                    .as_bytes(),
+            )
+        }),
+        target_asset_sha256,
+        target_object_exists,
+        target_asset_exists,
+    })
+}
+
+async fn run_history_restart_evict(root: &Path) -> Result<HistoryRestartEvictEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target = context.workspace.join("history-restart.excalidraw");
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize eviction target: {error}"))?;
+    let request_id = env::var("EXCALIDRAW_E2E_HISTORY_REQUEST_ID")
+        .map_err(|_| "EXCALIDRAW_E2E_HISTORY_REQUEST_ID is required".to_owned())?;
+    let identity = context
+        .store
+        .load_active_document_identity(&path_string(&target))
+        .map_err(|error| format!("failed to load eviction identity: {error}"))?
+        .ok_or_else(|| "eviction identity is missing".to_owned())?;
+    let target_scene_hash = sha256(
+        &fs::read(&target).map_err(|error| format!("failed to read eviction target: {error}"))?,
+    );
+    let initial_status = context
+        .replacement
+        .e2e_operation_status(HistoryOperationStatusRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id: request_id.clone(),
+        })
+        .await
+        .map_err(|error| format!("initial eviction status failed: {error:?}"))?;
+    let target_asset_sha256 = initial_status
+        .adopted_scene
+        .as_ref()
+        .and_then(|scene| scene_asset_hash(scene).ok())
+        .ok_or_else(|| "completed eviction operation has no target asset".to_owned())?;
+    let target_version_id = env::var("EXCALIDRAW_E2E_HISTORY_TARGET_VERSION")
+        .unwrap_or_else(|_| "history-version-b".to_owned());
+    for sequence in 0..21_u64 {
+        let version_id = format!("history-eviction-{sequence:02}");
+        let scene = history_restart_scene(&format!("E{sequence}"), "淘汰检查");
+        publish_history_restart_version(
+            &context.store,
+            &identity.document_id,
+            &version_id,
+            &scene.0,
+            100 + sequence as i64,
+            &scene.2,
+        )?;
+    }
+    let target_version_exists = context
+        .store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM history_versions WHERE document_id=?1 AND id=?2)",
+                rusqlite::params![&identity.document_id, &target_version_id],
+                |row| row.get::<_, bool>(0),
+            )
+        })
+        .map_err(|error| format!("failed to inspect evicted target version: {error}"))?;
+    let status = context
+        .replacement
+        .e2e_operation_status(HistoryOperationStatusRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id: request_id.clone(),
+        })
+        .await
+        .map_err(|error| format!("status after history eviction failed: {error:?}"))?;
+    let gc = context
+        .store
+        .collect_garbage(
+            std::time::SystemTime::now() + Duration::from_secs(120),
+            Duration::ZERO,
+        )
+        .map_err(|error| format!("history GC after eviction failed: {error}"))?;
+    let target_object = context
+        .store
+        .objects()
+        .scene_path(&target_scene_hash)
+        .map_err(|error| format!("target scene path failed: {error}"))?;
+    let target_asset = context
+        .store
+        .objects()
+        .asset_path(&target_asset_sha256)
+        .map_err(|error| format!("target asset path failed: {error}"))?;
+    let target_key = ObjectKey::scene(target_scene_hash.clone())
+        .map_err(|error| format!("target scene key failed: {error}"))?;
+    Ok(HistoryRestartEvictEvidence {
+        scenario: "history-restart-evict",
+        request_id,
+        retained_version_count: context
+            .store
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT COUNT(*) FROM history_versions WHERE document_id=?1",
+                    [&identity.document_id],
+                    |row| row.get::<_, i64>(0),
+                )
+            })
+            .map_err(|error| format!("failed to count retained history versions: {error}"))?
+            as usize,
+        evicted_version_id: if target_version_exists {
+            String::new()
+        } else {
+            target_version_id
+        },
+        operation_status_state: format!("{:?}", status.state),
+        target_scene_sha256: target_scene_hash,
+        target_asset_sha256,
+        target_object_exists_after_gc: target_object.exists(),
+        target_asset_exists_after_gc: target_asset.exists(),
+        gc_deleted_target: gc.deleted.iter().any(|object| object == &target_key),
+    })
+}
+
+fn history_restart_scene(label: &str, text: &str) -> (String, Vec<u8>, String) {
+    let asset = b"\x89PNG\r\n\x1a\nlocal-version-history".to_vec();
+    let asset_hash = sha256(&asset);
+    let scene = serde_json::json!({
+        "type": "excalidraw",
+        "version": 2,
+        "elements": [
+            {"id": format!("text-{label}"), "type": "text", "text": text},
+            {"id": format!("rect-{label}"), "type": "rectangle"},
+            {"id": format!("image-{label}"), "type": "image", "fileId": "history-image"}
+        ],
+        "appState": {"viewBackgroundColor": "#ffffff"},
+        "files": {
+            "history-image": {
+                "id": "history-image",
+                "mimeType": "image/png",
+                "dataURL": format!("asset://{asset_hash}"),
+                "created": 1,
+                "lastRetrieved": 1,
+                "status": "saved"
+            }
+        }
+    });
+    (
+        serde_json::to_string(&scene).expect("history restart scene serializes"),
+        asset,
+        asset_hash,
+    )
+}
+
+fn publish_history_restart_version(
+    store: &HistoryStore,
+    document_id: &str,
+    version_id: &str,
+    scene_json: &str,
+    recorded_at: i64,
+    asset_hash: &str,
+) -> Result<(), String> {
+    let asset = b"\x89PNG\r\n\x1a\nlocal-version-history";
+    let asset_object = store
+        .persist_asset(asset, "image/png", recorded_at)
+        .map_err(|error| format!("failed to persist history asset: {error}"))?;
+    if asset_object.hash != asset_hash {
+        return Err("history restart asset hash drifted".to_owned());
+    }
+    HistoryRepository::new(store)
+        .publish_scene(PublishSceneRequest {
+            version_id: version_id.to_owned(),
+            document_id: document_id.to_owned(),
+            scene_bytes: scene_json.as_bytes().to_vec(),
+            schema_version: HISTORY_OBJECT_SCHEMA_VERSION as i64,
+            source: HistoryVersionSource::Automatic,
+            protected_action: None,
+            recorded_at,
+            sequence: recorded_at as u64,
+        })
+        .map_err(|error| format!("failed to publish history scene {version_id}: {error}"))?;
+    store
+        .with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO version_assets (version_id, sdk_file_id, asset_hash, mime_type, byte_length) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![version_id, "history-image", asset_hash, "image/png", asset.len() as i64],
+            )?;
+            Ok::<_, rusqlite::Error>(())
+        })
+        .map_err(|error| format!("failed to attach history asset {version_id}: {error}"))?;
+    store
+        .reachability()
+        .set_committed_version(
+            version_id,
+            ObjectReferences::new(sha256(scene_json.as_bytes()), vec![asset_hash.to_owned()])
+                .map_err(|error| format!("failed to bind history references: {error}"))?,
+        )
+        .map_err(|error| format!("failed to bind history reachability: {error}"))?;
+    Ok(())
+}
+
+fn response_scene(response: &crate::commands::dto::HistoryReplaceResponse) -> Option<String> {
+    match response {
+        crate::commands::dto::HistoryReplaceResponse::Completed { adopted_scene, .. } => {
+            serde_json::to_string(adopted_scene).ok()
+        }
+        crate::commands::dto::HistoryReplaceResponse::PendingReconciliation { .. } => None,
+    }
+}
+
+fn response_state(response: &crate::commands::dto::HistoryReplaceResponse) -> &'static str {
+    match response {
+        crate::commands::dto::HistoryReplaceResponse::Completed { .. } => "completed",
+        crate::commands::dto::HistoryReplaceResponse::PendingReconciliation { .. } => {
+            "pendingReconciliation"
+        }
+    }
+}
+
+fn scene_sha256(scene: &serde_json::Value) -> Result<String, String> {
+    serde_json::to_string(scene)
+        .map(|value| sha256(value.as_bytes()))
+        .map_err(|error| format!("failed to hash scene: {error}"))
+}
+
+fn scene_asset_hash(scene: &serde_json::Value) -> Result<String, String> {
+    let data_url = scene
+        .get("files")
+        .and_then(|files| files.get("history-image"))
+        .and_then(|file| file.get("dataURL"))
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "history restart scene has no asset data".to_owned())?;
+    if let Some(hash) = data_url.strip_prefix("asset://") {
+        return Ok(hash.to_owned());
+    }
+    let encoded = data_url
+        .split_once(",")
+        .map(|(_, encoded)| encoded)
+        .ok_or_else(|| "history restart asset data URL is malformed".to_owned())?;
+    let bytes = BASE64
+        .decode(encoded)
+        .map_err(|error| format!("history restart asset data URL is invalid: {error}"))?;
+    Ok(sha256(&bytes))
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+fn assert_isolated_path(root: &Path, candidate: &Path) -> Result<(), String> {
+    let root = root
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve isolated root: {error}"))?;
+    let candidate = if candidate.is_absolute() {
+        candidate.to_path_buf()
+    } else {
+        root.join(candidate)
+    };
+    if candidate != root && !candidate.starts_with(&root) {
+        return Err(format!(
+            "refusing history harness path outside isolated root: {}",
+            candidate.display()
+        ));
+    }
+    let parent = candidate.parent().ok_or_else(|| {
+        format!(
+            "history harness path has no parent: {}",
+            candidate.display()
+        )
+    })?;
+    let canonical_parent = parent
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve history harness path parent: {error}"))?;
+    if !canonical_parent.starts_with(&root) {
+        return Err(format!(
+            "refusing history harness symlink outside isolated root: {}",
+            candidate.display()
+        ));
+    }
+    Ok(())
 }
 
 async fn run_snapshot_corruption(root: &Path) -> Result<SnapshotCorruptionEvidence, String> {
@@ -1729,4 +3327,56 @@ fn latest_snapshot(directory: &Path) -> Result<PathBuf, String> {
         .max_by_key(|(modified, _)| *modified)
         .map(|(_, path)| path)
         .ok_or_else(|| format!("no recovery snapshot found in {}", directory.display()))
+}
+
+#[cfg(test)]
+mod history_fault_contract_tests {
+    use super::{HistoryFaultContext, HistoryFaultReadyMarker, HistoryFaultStage};
+
+    #[test]
+    fn history_fault_stage_names_are_stable_and_complete() {
+        let names: Vec<_> = HistoryFaultStage::ALL
+            .into_iter()
+            .map(|stage| stage.to_string())
+            .collect();
+        assert_eq!(
+            names,
+            vec![
+                "object_publish",
+                "protection_commit",
+                "intent_commit",
+                "after_rename_before_parent_sync",
+                "metadata_complete_before_frontend_ack",
+                "eviction_delete_gc",
+                "rename_delete_repair",
+            ]
+        );
+        for name in names {
+            assert_eq!(name.parse::<HistoryFaultStage>().unwrap().to_string(), name);
+        }
+    }
+
+    #[test]
+    fn history_fault_ready_marker_round_trips_as_camel_case_json() {
+        let marker = HistoryFaultReadyMarker {
+            scenario: "history-fault-kill".to_owned(),
+            stage: HistoryFaultStage::IntentCommit,
+            seed: "seed-17".to_owned(),
+            pid: 42,
+            context: HistoryFaultContext {
+                operation_id: "operation-17".to_owned(),
+                document_id: "document-17".to_owned(),
+                target_path: "/isolated/workspace/document.excalidraw".to_owned(),
+                old_sha256: Some("a".repeat(64)),
+                new_sha256: Some("b".repeat(64)),
+            },
+        };
+        let value = serde_json::to_value(&marker).expect("marker should serialize");
+        assert_eq!(value["scenario"], "history-fault-kill");
+        assert_eq!(value["stage"], "intent_commit");
+        assert_eq!(value["context"]["operationId"], "operation-17");
+        let decoded: HistoryFaultReadyMarker =
+            serde_json::from_value(value).expect("marker should deserialize");
+        assert_eq!(decoded, marker);
+    }
 }

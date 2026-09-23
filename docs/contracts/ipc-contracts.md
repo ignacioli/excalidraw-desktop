@@ -1,6 +1,6 @@
-# IPC Contracts: Excalidraw Desktop（v2）
+# IPC Contracts: Excalidraw Desktop（v3）
 
-**Date**: 2026-08-23 | **架构**: [../architecture.md](../architecture.md)
+**Date**: 2026-09-22 | **架构**: [../architecture.md](../architecture.md)
 
 本文件定义前端 ↔ Rust 后端的**当前**公开 IPC 边界（Tauri commands + events）。契约为强类型、显式、版本可感知。TypeScript 类型置于 `src/ipc/contracts.ts`，Rust 对应类型置于 `src-tauri/src/commands/dto.rs` 与 `src-tauri/src/commands/error.rs`，两侧字段名以本文件与 `contracts.ts` 为准（serde `camelCase`）。
 
@@ -10,9 +10,10 @@ v1 的 `dir_list` / `file_create` / `file_rename` / `file_delete` / `thumb_looku
 
 ### 版本与演进
 
-- 契约版本常量 `IPC_CONTRACT_VERSION = 2`（TS）/ `IPC_CONTRACT_VERSION`（Rust），随 `app_handshake` 返回；不兼容变更须递增版本并在本文件记录迁移说明。
+- 契约版本常量 `IPC_CONTRACT_VERSION = 3`（TS/Rust），随 `app_handshake` 返回；不兼容变更须递增版本并在本文件记录迁移说明。
 - 字段演进规则：新增可选字段 = 兼容；删除/改类型/改语义 = 不兼容。
 - v1 → v2 不兼容变更：删除缩略图命令；用统一 Workspace Entry 命令替换 `dir_list` 与 `file_*`；`doc_close` 改为显式 `mode`（可丢弃失联文档而不再授权已缺失路径）。
+- v3 首批公开 history command 为 `history_list`、`history_preview`、`history_replace` 和 `history_operation_status`；`history_mark` 与 `history_delete` 仍是 reserved，未注册且不可调用。v2 客户端不兼容此握手版本。
 
 ### 信任边界规则（所有命令统一执行）
 
@@ -190,7 +191,73 @@ interface ExportOptions {
 type SceneData = unknown; // 官方 .excalidraw JSON；后端只做结构校验
 ```
 
-### 1.5 原生视觉验收边界
+### 1.5 v3 版本历史类型（部分可用）
+
+以下 DTO、validators、错误码和事件属于 v3 contract。`history_list` 与
+`history_preview`、`history_replace` 与 `history_operation_status` 已注册并按当前
+文档授权执行；`history_mark` 与 `history_delete` 仍是 reserved，调用会得到
+Tauri 的未知 command 错误。
+
+保留的 history error codes 为 `HISTORY_UNAVAILABLE`、`HISTORY_RESOURCE_MISSING`、
+`HISTORY_STALE_DOCUMENT`、`HISTORY_OPERATION_PENDING` 和 `HISTORY_BUSY`；它们当前
+会由已实现的 v3 history handler 返回；事件仍只保留为后续 mutation service 的
+reserved 结构。
+
+未来历史请求只能携带当前文档授权 locator，不能携带 history store 路径。locator 是
+`{ kind: "path"; path }` 或 `{ kind: "handle"; documentId }`；Rust 仍需重新解析
+当前路径/工作区权限和持久身份。持久 `documentId`、前端 tab UUID 和 `versionId`
+是不同标识，不能互相冒充。
+
+所有 history 请求拒绝空字符串、NUL、超长 ID/path；scene JSON 上限为 256 MiB；
+`history_list.limit` 默认 50、最大 100；cursor 是不透明字符串且最大 4096 bytes；
+generation/revision 必须是非负整数；hash 必须是 64 位小写 SHA-256 hex。前端校验
+只是早期错误反馈，Rust 必须重复校验并执行权限、版本归属和冲突检查。
+
+| 命令 | 请求 | 响应 / 约束 |
+|------|------|------|
+| `history_list` | `{ document; cursor?; limit? }` | `documentId`、不含 scene bytes 的版本 metadata、`nextCursor?`、`listRevision`、`pendingIssue?` |
+| `history_preview` | `{ document; versionId }` | 后端严格 hydration 后返回 `{ versionId; scene }`；不写 current file 或 draft |
+| `history_mark` | reserved（当前未注册） | 调用会得到 Tauri 的未知 command 错误 |
+| `history_replace` | `{ document; requestId; sessionGeneration; revision; expectedBaseHash; currentSceneJson; target }` | `target` 为 `restore(versionId)`、`clear` 或 `import(candidateSceneJson)`；返回 `completed` 或 `pendingReconciliation` |
+| `history_operation_status` | `{ document; requestId }` | 只查询既有操作；返回 state、`replacementCommitted: boolean \| null` 和完成时的 adoption payload |
+| `history_delete` | reserved（当前未注册） | 调用会得到 Tauri 的未知 command 错误 |
+
+`history_replace` 完成响应包含 `protectionVersionId`、`adoptedScene`、`newBaseHash` 和
+`newSessionGeneration`。不确定的发布结果必须为 `pendingReconciliation`，其中
+`replacementCommitted` 为 `null`，不能用 after-rename 错误推断文件未改变。未来命令
+实现必须幂等：传入同一个 requestId 只查询/返回原操作，不重新执行破坏性替换；同 requestId 携带不同 target 或 generation/revision/base identity 必须拒绝。
+completed replacement 的 target scene/assets 在 history store 中保留为 GC root 24 小时，
+用于延迟的 `history_operation_status` replay；TTL 到期后才允许在 GC 中释放该 root。
+
+`HistoryVersionItem.availability` 为 `available` 或带结构化 `IpcError` 的
+`unavailable`；单个损坏版本不能伪装成空列表，也不能阻止其他有效版本显示。历史
+对象内容由后端 hydrate，不能通过扩大 Tauri fs capability 让前端读取 app-data。
+
+### 1.5.1 History 共同事务故障与重启判定
+
+`history_replace` 的故障证据必须来自 native test-only process journey，而不是
+browser mock。`e2e-harness` 仅在 `APP_E2E=1` 的 `--features e2e-harness` 构建中
+注册；测试进程在屏障 ready marker 后才允许 `SIGKILL`，随后必须以同一隔离根启动
+新的 process 查询状态。超时、进程仍存活、未知字节、临时文件残留或未绑定的目标
+对象均为失败，不能解释为成功。
+
+当前共同事务屏障及其状态含义为：
+
+| 屏障 | 状态判定 |
+|------|----------|
+| `object_publish`、`protection_commit`、`intent_commit` | rename 尚未发生；完整旧文件必须保持权威，保护/意图失败须独立可见 |
+| `after_rename_before_parent_sync` | 文件可能已经是完整新文件；只能返回 `pendingReconciliation` 或经重启核实的 `completed`，不得返回“未改变” |
+| `metadata_complete_before_frontend_ack` | response 丢失时按原 `requestId` 查询，不能重放替换；新文件、目标 scene 和 assets 必须可读 |
+| `eviction_delete_gc` | 统一保留池淘汰与 GC 不能删除 operation/request pins 仍引用的 scene/assets |
+| `rename_delete_repair` | 重启修复只允许按实际文件身份和字节判定，不得用旧排队 autosave 覆盖外部结果 |
+
+T025 还要求对缺图/损坏版本、对象或 SQLite 的权限/ENOSPC/部分失败，以及同一/不同
+request 的并发命令记录隔离根、seed、二进制 digest、旧/新 hash、asset hash、操作
+状态和清理结果。上述测试证据不改变 production IPC 的路径授权和状态机；如果
+pre-rename 核对与目标发布之间发生外部写入，结果必须是 `HISTORY_STALE_DOCUMENT`
+或独立 conflict，绝不能覆盖外部字节。
+
+### 1.6 原生视觉验收边界
 
 原生视觉 capture 不属于 production IPC contract。`native:screen:prepare` 生成 schema v2 的 immutable plan 和安全 fixture；`native:screen:capture` 在 collector 侧验证 isolation、owned PID/window、1280×760 bounds、backing scale、一次性 terminal confirmation、单次 capture、normalization 与 artifact digests。它不得通过 React、Rust command、隐藏 state channel 或 production diagnostic projection 读取或写入 app-owned UI state。
 
@@ -220,6 +287,31 @@ interface WorkspaceEntriesChangedEvent {
 应用发起的变更加命令响应为权威；匹配 `operationId` 的事件是 watcher 回声，必须幂等。无法自信配对的外部目录批处理对最近已知父目录发 `invalidated`，不虚构精确 rename。
 
 事件只通知状态事实，不携带业务决策。
+
+### 2.1 Reserved v3 版本历史事件结构（尚未注册）
+
+以下事件属于 reserved v3 contract；当前后端不会发送它们。
+
+```typescript
+interface HistoryChangedEvent {
+  documentId: string;
+  requestId?: string;
+  listRevision: number;
+  change: "automatic" | "manual" | "protected" | "deleted" | "reconciled" | "invalidated";
+}
+
+interface HistoryIssueEvent {
+  documentId: string;
+  operation?: "mark" | "replace" | "delete" | "reconcile";
+  source: "automatic" | "manual" | "protected" | "reconciliation";
+  error: IpcError;
+  currentFileSaveOutcome?: "notAttempted" | "succeeded" | "failed" | "pending";
+}
+```
+
+事件只通知后端确认的状态事实，不携带 scene/image bytes 或 history-store path。前端
+可合并 `history-changed` 的列表刷新，但不得丢弃 `history-issue`；晚到事件必须按
+documentId 和当前 tab/session generation 丢弃，不能把结果应用到另一个 tab。
 
 ## 3. 已退休、不得再文档化为活动产品 IPC
 

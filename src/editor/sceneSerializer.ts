@@ -9,6 +9,18 @@ export interface SceneSnapshot {
   files: BinaryFiles;
 }
 
+/**
+ * Excalidraw's local scene schema persists only document-owned settings.
+ * Viewport, selection, active tool, sidebar and other UI/session state must
+ * never cross the history/current-document boundary.
+ */
+export type DocumentAppState = Partial<
+  Pick<
+    AppState,
+    "gridModeEnabled" | "gridSize" | "gridStep" | "viewBackgroundColor"
+  >
+>;
+
 export class SceneSerializationError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -20,8 +32,28 @@ export function createEmptyScene(): SceneSnapshot {
   return { elements: [], appState: {}, files: {} };
 }
 
+export function documentAppState(
+  appState: Partial<AppState>,
+): DocumentAppState {
+  return {
+    ...(appState.gridModeEnabled === undefined
+      ? {}
+      : { gridModeEnabled: appState.gridModeEnabled }),
+    ...(appState.gridSize === undefined ? {} : { gridSize: appState.gridSize }),
+    ...(appState.gridStep === undefined ? {} : { gridStep: appState.gridStep }),
+    ...(appState.viewBackgroundColor === undefined
+      ? {}
+      : { viewBackgroundColor: appState.viewBackgroundColor }),
+  };
+}
+
 export function serializeScene(scene: SceneSnapshot): string {
-  return serializeAsJSON(scene.elements, scene.appState, scene.files, "local");
+  return serializeAsJSON(
+    scene.elements,
+    documentAppState(scene.appState),
+    scene.files,
+    "local",
+  );
 }
 
 export function deserializeScene(sceneJson: string): SceneSnapshot {
@@ -44,12 +76,7 @@ export function deserializeScene(sceneJson: string): SceneSnapshot {
     const restored = restore(parsed, null, null);
     return {
       elements: restored.elements,
-      appState: {
-        gridModeEnabled: restored.appState.gridModeEnabled,
-        gridSize: restored.appState.gridSize,
-        gridStep: restored.appState.gridStep,
-        viewBackgroundColor: restored.appState.viewBackgroundColor,
-      },
+      appState: documentAppState(restored.appState),
       files: restored.files,
     };
   } catch (error) {

@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "../app/store";
 import type { SceneSnapshot } from "../editor/sceneSerializer";
-import type { ExpectedOpenDocument } from "../ipc/contracts";
+import type { ExpectedOpenDocument, HistoryIssueEvent } from "../ipc/contracts";
 import type { DocumentGateway } from "./documentGateway";
 import {
   DocumentManager,
+  registerDocumentHistoryEvents,
   registerDocumentFileChangeEvents,
 } from "./documentStore";
 
@@ -176,6 +177,104 @@ describe("DocumentManager", () => {
     expect(Object.keys(manager.store.getState().sessionsById)).toEqual([
       firstId,
     ]);
+    manager.dispose();
+  });
+
+  it("serializes document operations behind pending draft writes", async () => {
+    const gateway = createGateway();
+    let finishDraft: () => void = () => undefined;
+    vi.mocked(gateway.saveDraft).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishDraft = () => resolve({ contentHash: "draft", savedAt: 1 });
+        }),
+    );
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/drawing.excalidraw");
+    const initial = manager.store.getState().sessionsById[documentId]?.scene;
+    manager.updateScene(documentId, {
+      ...initial!,
+      elements: [{ version: 1 } as SceneSnapshot["elements"][number]],
+    });
+    await vi.advanceTimersByTimeAsync(300);
+
+    const operation = vi.fn(async () => "history-result");
+    const pending = manager.runDocumentOperation(documentId, operation);
+    await Promise.resolve();
+    expect(operation).not.toHaveBeenCalled();
+
+    finishDraft();
+    await expect(pending).resolves.toBe("history-result");
+    expect(operation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentId,
+        sessionGeneration: 0,
+        revision: 1,
+      }),
+    );
+    manager.dispose();
+  });
+
+  it("blocks app-exit checkpoints while history replacement is frozen", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/drawing.excalidraw");
+    let finish: () => void = () => undefined;
+    const operation = manager.runHistoryReplacement(documentId, async () => {
+      manager.retainHistoryPending(documentId, "request-1");
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    });
+    await Promise.resolve();
+    await expect(manager.checkpointAll("appExit")).rejects.toThrow(
+      "history operation is still in progress",
+    );
+    manager.releaseHistoryPending(documentId, "request-1");
+    finish();
+    await operation;
+    manager.dispose();
+  });
+
+  it("exposes session generations independently from scene revisions", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/drawing.excalidraw");
+    const initial = manager.getDocumentVersion(documentId);
+    expect(initial).toEqual({ sessionGeneration: 0, revision: 0 });
+
+    const next = manager.advanceSessionGeneration(documentId);
+    expect(next).toEqual({ sessionGeneration: 1, revision: 0 });
+    expect(manager.isDocumentVersionCurrent(documentId, initial!)).toBe(false);
+    expect(manager.isDocumentVersionCurrent(documentId, next!)).toBe(true);
+    manager.dispose();
+  });
+
+  it("keeps history issues separate from current-file save state", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/drawing.excalidraw");
+    const issue: HistoryIssueEvent = {
+      documentId,
+      operation: "replace",
+      source: "protected",
+      error: {
+        code: "HISTORY_OPERATION_PENDING",
+        message: "The history operation is pending reconciliation.",
+        retriable: true,
+      },
+      currentFileSaveOutcome: "pending",
+    };
+
+    manager.handleHistoryIssue(issue);
+    expect(manager.store.getState().sessionsById[documentId]).toMatchObject({
+      saveState: "clean",
+      historyIssue: issue,
+    });
+    manager.clearHistoryIssue(documentId);
+    expect(
+      manager.store.getState().sessionsById[documentId]?.historyIssue,
+    ).toBe(null);
     manager.dispose();
   });
 
@@ -379,6 +478,54 @@ describe("DocumentManager", () => {
     expect(manager.store.getState().sessionsById[documentId]).toMatchObject({
       path: "/tmp/after.excalidraw",
       saveState: "orphaned",
+    });
+    manager.dispose();
+  });
+
+  it("routes history issue events only to the owning open document", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/drawing.excalidraw");
+    expect(
+      manager.bindHistoryDocumentId(documentId, "history-document-1"),
+    ).toBe(true);
+    let handleEvent:
+      ((event: { payload: HistoryIssueEvent }) => void) | undefined;
+    const unlisten = vi.fn();
+
+    await registerDocumentHistoryEvents(manager, async (_name, handler) => {
+      handleEvent = handler;
+      return unlisten;
+    });
+    handleEvent?.({
+      payload: {
+        documentId: "other-document",
+        source: "automatic",
+        error: {
+          code: "HISTORY_UNAVAILABLE",
+          message: "Version history is unavailable.",
+          retriable: true,
+        },
+      },
+    });
+    expect(
+      manager.store.getState().sessionsById[documentId]?.historyIssue,
+    ).toBe(null);
+    handleEvent?.({
+      payload: {
+        documentId: "history-document-1",
+        source: "automatic",
+        error: {
+          code: "HISTORY_UNAVAILABLE",
+          message: "Version history is unavailable.",
+          retriable: true,
+        },
+      },
+    });
+    expect(
+      manager.store.getState().sessionsById[documentId]?.historyIssue,
+    ).toMatchObject({
+      source: "automatic",
     });
     manager.dispose();
   });

@@ -61,9 +61,13 @@ export function RecoveryStartup({
   const [startupError, setStartupError] = useState<string | null>(null);
   const [recoveredCount, setRecoveredCount] = useState(0);
   const handshakeRef = useRef<AppHandshakeResponse | null>(null);
+  const startupPromiseRef = useRef<ReturnType<RecoveryManager["start"]> | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!enabled) {
+      startupPromiseRef.current = null;
       onStateChange?.({
         status: "ready",
         handshake: null,
@@ -79,8 +83,9 @@ export function RecoveryStartup({
       recoveredCount: 0,
     });
     let disposed = false;
-    void manager
-      .start()
+    const startupPromise = manager.start();
+    startupPromiseRef.current = startupPromise;
+    void startupPromise
       .then((result) => {
         if (disposed) {
           return;
@@ -107,10 +112,17 @@ export function RecoveryStartup({
       });
     return () => {
       disposed = true;
+      if (startupPromiseRef.current === startupPromise) {
+        startupPromiseRef.current = null;
+      }
     };
   }, [enabled, manager, onStateChange]);
 
   const apply = async (decision: RecoveryDecision) => {
+    const pendingStartup = startupPromiseRef.current;
+    if (pendingStartup !== null) {
+      await pendingStartup;
+    }
     const candidate = candidates.find(
       (item) => item.documentId === decision.documentId,
     );

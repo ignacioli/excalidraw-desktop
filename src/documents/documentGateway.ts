@@ -1,4 +1,11 @@
-import type { CheckpointReason, CommandResponse } from "../ipc/contracts";
+import type {
+  CheckpointReason,
+  CommandResponse,
+  HistoryOperationStatusRequest,
+  HistoryOperationStatusResponse,
+  HistoryReplaceRequest,
+  HistoryReplaceResponse,
+} from "../ipc/contracts";
 import type { CommandInvoker } from "../ipc/client";
 
 export interface DocumentGateway {
@@ -17,6 +24,12 @@ export interface DocumentGateway {
     resolution: "takeExternal" | "keepLocal" | "saveAsNew",
     saveAsPath?: string,
   ): Promise<CommandResponse<"doc_resolve_conflict">>;
+  historyReplace?(
+    request: HistoryReplaceRequest,
+  ): Promise<HistoryReplaceResponse>;
+  historyOperationStatus?(
+    request: HistoryOperationStatusRequest,
+  ): Promise<HistoryOperationStatusResponse>;
   close(path: string, mode: "checkpointed" | "discardOrphan"): Promise<void>;
 }
 
@@ -35,6 +48,9 @@ export function createDocumentGateway(
         resolution,
         ...(saveAsPath === undefined ? {} : { saveAsPath }),
       }),
+    historyReplace: (request) => invoker.invoke("history_replace", request),
+    historyOperationStatus: (request) =>
+      invoker.invoke("history_operation_status", request),
     async close(path, mode) {
       await invoker.invoke("doc_close", { path, mode });
     },

@@ -4,6 +4,7 @@ export interface DraftSchedulerOptions<Payload = string> {
   persistDraft: (payload: Payload) => Promise<void>;
   checkpoint: (payload: Payload, reason: CheckpointReason) => Promise<void>;
   onError?: (error: unknown) => void;
+  operationQueue?: DocumentOperationQueue;
   debounceMs?: number;
   idleMs?: number;
   maxWaitMs?: number;
@@ -13,6 +14,86 @@ const DEFAULT_DEBOUNCE_MS = 300;
 const DEFAULT_IDLE_MS = 3_000;
 const DEFAULT_MAX_WAIT_MS = 60_000;
 
+/**
+ * Serializes all writes belonging to one open document. The queue is shared
+ * with DocumentManager operations so a history operation can wait behind a
+ * pending draft/checkpoint and future drafts cannot overtake it.
+ */
+export class DocumentOperationQueue {
+  private readonly pending: Array<{
+    operation: () => Promise<unknown> | unknown;
+    resolve: (value: unknown) => void;
+    reject: (reason?: unknown) => void;
+  }> = [];
+  private idle: Promise<void> = Promise.resolve();
+  private resolveIdle: (() => void) | undefined;
+  private running = false;
+  private disposed = false;
+
+  enqueue<Result>(operation: () => Promise<Result> | Result): Promise<Result> {
+    if (this.disposed) {
+      return Promise.reject(
+        new Error("The document operation queue is closed."),
+      );
+    }
+
+    let resolveResult: (value: Result) => void = () => undefined;
+    let rejectResult: (reason?: unknown) => void = () => undefined;
+    const result = new Promise<Result>((resolve, reject) => {
+      resolveResult = resolve;
+      rejectResult = reject;
+    });
+    this.pending.push({
+      operation: operation as () => Promise<unknown> | unknown,
+      resolve: resolveResult as (value: unknown) => void,
+      reject: rejectResult,
+    });
+    if (!this.running) {
+      this.running = true;
+      this.idle = new Promise<void>((resolve) => {
+        this.resolveIdle = resolve;
+      });
+      this.pump();
+    }
+    return result;
+  }
+
+  async drain(): Promise<void> {
+    await this.idle;
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    const error = new Error("The document operation queue is closed.");
+    for (const pending of this.pending.splice(0)) {
+      pending.reject(error);
+    }
+  }
+
+  private pump(): void {
+    const next = this.pending.shift();
+    if (next === undefined) {
+      this.running = false;
+      this.resolveIdle?.();
+      this.resolveIdle = undefined;
+      return;
+    }
+
+    let result: Promise<unknown>;
+    try {
+      result = Promise.resolve(next.operation());
+    } catch (error) {
+      next.reject(error);
+      this.pump();
+      return;
+    }
+    void result.then(next.resolve, next.reject).then(
+      () => this.pump(),
+      () => this.pump(),
+    );
+  }
+}
+
 export class DraftScheduler<Payload = string> {
   private readonly persistDraft: DraftSchedulerOptions<Payload>["persistDraft"];
   private readonly writeCheckpoint: DraftSchedulerOptions<Payload>["checkpoint"];
@@ -20,6 +101,7 @@ export class DraftScheduler<Payload = string> {
   private readonly debounceMs: number;
   private readonly idleMs: number;
   private readonly maxWaitMs: number;
+  private readonly operationQueue: DocumentOperationQueue;
   private draftTimer: ReturnType<typeof setTimeout> | undefined;
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
   private maxWaitTimer: ReturnType<typeof setTimeout> | undefined;
@@ -27,12 +109,12 @@ export class DraftScheduler<Payload = string> {
   private revision = 0;
   private conflicted = false;
   private disposed = false;
-  private writeQueue = Promise.resolve();
 
   constructor({
     persistDraft,
     checkpoint,
     onError = () => undefined,
+    operationQueue = new DocumentOperationQueue(),
     debounceMs = DEFAULT_DEBOUNCE_MS,
     idleMs = DEFAULT_IDLE_MS,
     maxWaitMs = DEFAULT_MAX_WAIT_MS,
@@ -40,6 +122,7 @@ export class DraftScheduler<Payload = string> {
     this.persistDraft = persistDraft;
     this.writeCheckpoint = checkpoint;
     this.onError = onError;
+    this.operationQueue = operationQueue;
     this.debounceMs = debounceMs;
     this.idleMs = idleMs;
     this.maxWaitMs = maxWaitMs;
@@ -115,9 +198,7 @@ export class DraftScheduler<Payload = string> {
   }
 
   private enqueue(operation: () => Promise<void>): Promise<void> {
-    const next = this.writeQueue.then(operation);
-    this.writeQueue = next.catch(() => undefined);
-    return next;
+    return this.operationQueue.enqueue(operation);
   }
 
   private ensureMaxWaitTimer(): void {

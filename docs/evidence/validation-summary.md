@@ -1,4 +1,26 @@
-# 验证证据汇总（003 当前状态；001/002 历史）
+# 验证证据汇总（004 实施中；003 已完成；001/002 历史）
+
+## Feature 004 当前状态（实施基线，2026-09-22）
+
+Feature 004（跨重启本地版本历史）已完成规格、方案和 SDK 边界资格研究，现进入产品实施；**产品功能尚未实现，T001–T054 尚未形成任何运行验收结论**。本节记录实施起点和后续证据的归属格式，不把研究 stub、文档批准或旧功能证据改写为产品通过。
+
+| 事实 | 当前基线 |
+|---|---|
+| Product worktree / branch | `/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history` / `codex/local-version-history` |
+| Source baseline | `babc027d64c2c50e6922482b416ef1099ea9d07e`（`Point SpecKit to the independent local history feature`） |
+| Feature 004 candidate binary | **尚无**；不得复用 Feature 003 package 或研究 Vite 进程作为候选二进制 |
+| Implementation environment | macOS `26.6.2`（build `25G83`），`arm64` |
+| Authoritative private specs | `codex/excalidraw-local-version-history` 的 `004-local-version-history/`；实施入口提交 `0e1661dee12c11327fab8d502a78beaeff0e2456` |
+| Working-tree audit | 产品与 private-specs worktree 在实施开始时均无 tracked、untracked 或 staged 变更；private-specs 相对本地 `origin/main` ahead 7 |
+
+后续每项证据须记录适用的产品提交、精确 `.app`/可执行文件路径与 SHA-256（若涉及二进制）、操作系统与文件系统、夹具或 seed、文档/操作/版本身份、前后内容与资源哈希、原始报告路径及 verdict。证据职责保持分离：
+
+- SDK 边界资格只证明 Excalidraw `0.18.1` 的公开入口可被宿主控制；异步 stub 不证明真实持久化、macOS package、视觉或性能。
+- Rust/TypeScript 核心测试负责身份、对象、保留、引用保护、状态机和 IPC 契约；浏览器语义测试负责 WebView 可访问行为，二者均不替代真实进程故障与重启。
+- 真实进程测试负责磁盘字节、SIGKILL/故障屏障、重启修复及外部竞争；原生菜单、人工视觉、性能和产品负责人接受各自单独记录，不能由其他层推断。
+- 缺少必需环境或批准记为 `BLOCKED`，已执行且行为不符记为 `FAIL`；本地实现或测试通过不等于 push、merge、tag、release 或产品负责人批准。
+
+Feature 003 以下记录保持其既有完成身份；不得将其 package、视觉结论或 owner acceptance 继承给 Feature 004。
 
 ## Feature 003 当前状态（已完成，R15 轻量验收，2026-09-16）
 
