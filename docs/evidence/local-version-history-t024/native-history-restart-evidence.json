@@ -1,0 +1,632 @@
+{
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "filesystemType": "26",
+    "binaryPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/excalidraw-desktop",
+    "binarySha256": "5fc8286101c28f5b8ca1d42099961712752fa959b300c782cddcdc55b8c14977",
+    "seed": "deterministic"
+  },
+  "paths": {
+    "root": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp",
+    "data": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/data",
+    "config": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/config",
+    "cache": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/cache",
+    "runtime": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/runtime",
+    "workspace": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/workspace",
+    "temporary": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/tmp"
+  },
+  "evidence": {
+    "seed": {
+      "scenario": "history-restart-seed",
+      "targetPath": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/workspace/history-restart.excalidraw",
+      "documentId": "f19757fa-aa3b-4c6d-b77f-58f9fe8243d2",
+      "versionAId": "history-version-a",
+      "versionBId": "history-version-b",
+      "sceneASha256": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4",
+      "sceneBSha256": "e140cb016de1a62825d0791d0a2e90c83a68cbb26a7696b605719dcc262ec57c",
+      "assetSha256": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+      "versionCount": 20,
+      "historyDatabasePath": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/data/version-history/history.sqlite3",
+      "initialSceneSha256": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4"
+    },
+    "frontendB": {
+      "activeDocumentId": "f19757fa-aa3b-4c6d-b77f-58f9fe8243d2",
+      "adopted": true,
+      "beforeReplacement": {
+        "appState": {
+          "viewBackgroundColor": "#ffffff"
+        },
+        "assetHashes": {
+          "history-image": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463"
+        },
+        "decodedImages": {
+          "history-image": {
+            "height": 1,
+            "width": 1
+          }
+        },
+        "elementIds": [
+          "text-A",
+          "rect-A",
+          "image-A"
+        ],
+        "elementTypes": [
+          "text",
+          "rectangle",
+          "image"
+        ],
+        "elements": [
+          {
+            "angle": 0,
+            "height": 30,
+            "id": "text-A",
+            "originalText": "历史 A",
+            "text": "历史 A",
+            "type": "text",
+            "width": 180,
+            "x": 40,
+            "y": 40
+          },
+          {
+            "angle": 0,
+            "height": 90,
+            "id": "rect-A",
+            "type": "rectangle",
+            "width": 180,
+            "x": 40,
+            "y": 100
+          },
+          {
+            "angle": 0,
+            "fileId": "history-image",
+            "height": 80,
+            "id": "image-A",
+            "scale": [
+              1,
+              1
+            ],
+            "status": "saved",
+            "type": "image",
+            "width": 80,
+            "x": 260,
+            "y": 100
+          }
+        ]
+      },
+      "canvasReadback": {
+        "appState": {
+          "viewBackgroundColor": "#ffffff"
+        },
+        "assetHashes": {
+          "sha256-207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463"
+        },
+        "decodedImages": {
+          "sha256-207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463": {
+            "height": 1,
+            "width": 1
+          }
+        },
+        "elementIds": [
+          "text-B",
+          "rect-B",
+          "image-B"
+        ],
+        "elementTypes": [
+          "text",
+          "rectangle",
+          "image"
+        ],
+        "elements": [
+          {
+            "angle": 0,
+            "height": 30,
+            "id": "text-B",
+            "originalText": "历史 B",
+            "text": "历史 B",
+            "type": "text",
+            "width": 180,
+            "x": 40,
+            "y": 40
+          },
+          {
+            "angle": 0,
+            "height": 90,
+            "id": "rect-B",
+            "type": "rectangle",
+            "width": 180,
+            "x": 40,
+            "y": 100
+          },
+          {
+            "angle": 0,
+            "fileId": "sha256-207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+            "height": 80,
+            "id": "image-B",
+            "scale": [
+              1,
+              1
+            ],
+            "status": "saved",
+            "type": "image",
+            "width": 80,
+            "x": 260,
+            "y": 100
+          }
+        ]
+      },
+      "documentId": "927b7303-a500-4f71-a21b-3e85975e97fc",
+      "historyDatabasePath": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/data/version-history/history.sqlite3",
+      "listedVersionIds": [
+        "history-seed-17",
+        "history-seed-16",
+        "history-seed-15",
+        "history-seed-14",
+        "history-seed-13",
+        "history-seed-12",
+        "history-seed-11",
+        "history-seed-10",
+        "history-seed-09",
+        "history-seed-08",
+        "history-seed-07",
+        "history-seed-06",
+        "history-seed-05",
+        "history-seed-04",
+        "history-seed-03",
+        "history-seed-02",
+        "history-seed-01",
+        "history-seed-00",
+        "history-version-a",
+        "history-version-b"
+      ],
+      "operationDocumentId": "f19757fa-aa3b-4c6d-b77f-58f9fe8243d2",
+      "operationState": "completed",
+      "previewReadback": {
+        "appState": {
+          "viewBackgroundColor": "#ffffff"
+        },
+        "assetHashes": {
+          "sha256-207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463"
+        },
+        "decodedImages": {
+          "sha256-207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463": {
+            "height": 1,
+            "width": 1
+          }
+        },
+        "elementIds": [
+          "text-B",
+          "rect-B",
+          "image-B"
+        ],
+        "elementTypes": [
+          "text",
+          "rectangle",
+          "image"
+        ],
+        "elements": [
+          {
+            "angle": 0,
+            "height": 30,
+            "id": "text-B",
+            "originalText": "历史 B",
+            "text": "历史 B",
+            "type": "text",
+            "width": 180,
+            "x": 40,
+            "y": 40
+          },
+          {
+            "angle": 0,
+            "height": 90,
+            "id": "rect-B",
+            "type": "rectangle",
+            "width": 180,
+            "x": 40,
+            "y": 100
+          },
+          {
+            "angle": 0,
+            "fileId": "sha256-207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+            "height": 80,
+            "id": "image-B",
+            "scale": [
+              1,
+              1
+            ],
+            "status": "saved",
+            "type": "image",
+            "width": 80,
+            "x": 260,
+            "y": 100
+          }
+        ]
+      },
+      "previewVersionId": "history-version-b",
+      "requestId": "history-restart-b",
+      "scenario": "history-frontend-adoption",
+      "targetVersionId": "history-version-b",
+      "processExit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    "verifyB": {
+      "scenario": "history-restart-verify",
+      "requestId": "history-restart-b",
+      "targetVersionId": "history-version-b",
+      "targetPath": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/workspace/history-restart.excalidraw",
+      "historyDatabasePath": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/data/version-history/history.sqlite3",
+      "activeDocumentId": "f19757fa-aa3b-4c6d-b77f-58f9fe8243d2",
+      "operationDocumentId": "f19757fa-aa3b-4c6d-b77f-58f9fe8243d2",
+      "operationState": "completed",
+      "persistedSceneSha256": "e140cb016de1a62825d0791d0a2e90c83a68cbb26a7696b605719dcc262ec57c",
+      "statusSceneSha256": "e140cb016de1a62825d0791d0a2e90c83a68cbb26a7696b605719dcc262ec57c",
+      "statusState": "Completed",
+      "protectionVersionId": "protected-28bbfb91-c2d5-4a6f-858d-f8e7a05f277b",
+      "listedVersionIds": [
+        "protected-28bbfb91-c2d5-4a6f-858d-f8e7a05f277b",
+        "history-seed-17",
+        "history-seed-16",
+        "history-seed-15",
+        "history-seed-14",
+        "history-seed-13",
+        "history-seed-12",
+        "history-seed-11",
+        "history-seed-10",
+        "history-seed-09",
+        "history-seed-08",
+        "history-seed-07",
+        "history-seed-06",
+        "history-seed-05",
+        "history-seed-04",
+        "history-seed-03",
+        "history-seed-02",
+        "history-seed-01",
+        "history-seed-00",
+        "history-version-a"
+      ],
+      "targetVersionEvicted": true,
+      "retainedVersionCount": 20,
+      "protectionSceneSha256": "2506373bc9da897d74fde981f4e8aa355d149659b7448dfb3fedd6b2eef8836a",
+      "protectionAssetSha256": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+      "protectionElements": [
+        {
+          "height": 30,
+          "id": "text-A",
+          "text": "历史 A",
+          "type": "text",
+          "width": 180,
+          "x": 40,
+          "y": 40
+        },
+        {
+          "height": 90,
+          "id": "rect-A",
+          "type": "rectangle",
+          "width": 180,
+          "x": 40,
+          "y": 100
+        },
+        {
+          "height": 80,
+          "id": "image-A",
+          "imageAssetSha256": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+          "type": "image",
+          "width": 80,
+          "x": 260,
+          "y": 100
+        }
+      ],
+      "targetAssetSha256": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+      "targetObjectExists": true,
+      "targetAssetExists": true
+    },
+    "frontendA": {
+      "activeDocumentId": "f19757fa-aa3b-4c6d-b77f-58f9fe8243d2",
+      "adopted": true,
+      "beforeReplacement": {
+        "appState": {
+          "viewBackgroundColor": "#ffffff"
+        },
+        "assetHashes": {
+          "history-image": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463"
+        },
+        "decodedImages": {
+          "history-image": {
+            "height": 1,
+            "width": 1
+          }
+        },
+        "elementIds": [
+          "text-B",
+          "rect-B",
+          "image-B"
+        ],
+        "elementTypes": [
+          "text",
+          "rectangle",
+          "image"
+        ],
+        "elements": [
+          {
+            "angle": 0,
+            "height": 30,
+            "id": "text-B",
+            "originalText": "历史 B",
+            "text": "历史 B",
+            "type": "text",
+            "width": 180,
+            "x": 40,
+            "y": 40
+          },
+          {
+            "angle": 0,
+            "height": 90,
+            "id": "rect-B",
+            "type": "rectangle",
+            "width": 180,
+            "x": 40,
+            "y": 100
+          },
+          {
+            "angle": 0,
+            "fileId": "history-image",
+            "height": 80,
+            "id": "image-B",
+            "scale": [
+              1,
+              1
+            ],
+            "status": "saved",
+            "type": "image",
+            "width": 80,
+            "x": 260,
+            "y": 100
+          }
+        ]
+      },
+      "canvasReadback": {
+        "appState": {
+          "viewBackgroundColor": "#ffffff"
+        },
+        "assetHashes": {
+          "sha256-207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463"
+        },
+        "decodedImages": {
+          "sha256-207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463": {
+            "height": 1,
+            "width": 1
+          }
+        },
+        "elementIds": [
+          "text-A",
+          "rect-A",
+          "image-A"
+        ],
+        "elementTypes": [
+          "text",
+          "rectangle",
+          "image"
+        ],
+        "elements": [
+          {
+            "angle": 0,
+            "height": 30,
+            "id": "text-A",
+            "originalText": "历史 A",
+            "text": "历史 A",
+            "type": "text",
+            "width": 180,
+            "x": 40,
+            "y": 40
+          },
+          {
+            "angle": 0,
+            "height": 90,
+            "id": "rect-A",
+            "type": "rectangle",
+            "width": 180,
+            "x": 40,
+            "y": 100
+          },
+          {
+            "angle": 0,
+            "fileId": "sha256-207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+            "height": 80,
+            "id": "image-A",
+            "scale": [
+              1,
+              1
+            ],
+            "status": "saved",
+            "type": "image",
+            "width": 80,
+            "x": 260,
+            "y": 100
+          }
+        ]
+      },
+      "documentId": "fadb0d8c-33b9-4b9b-be94-c1b8dfd9e707",
+      "historyDatabasePath": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/data/version-history/history.sqlite3",
+      "listedVersionIds": [
+        "protected-28bbfb91-c2d5-4a6f-858d-f8e7a05f277b",
+        "history-seed-17",
+        "history-seed-16",
+        "history-seed-15",
+        "history-seed-14",
+        "history-seed-13",
+        "history-seed-12",
+        "history-seed-11",
+        "history-seed-10",
+        "history-seed-09",
+        "history-seed-08",
+        "history-seed-07",
+        "history-seed-06",
+        "history-seed-05",
+        "history-seed-04",
+        "history-seed-03",
+        "history-seed-02",
+        "history-seed-01",
+        "history-seed-00",
+        "history-version-a"
+      ],
+      "operationDocumentId": "f19757fa-aa3b-4c6d-b77f-58f9fe8243d2",
+      "operationState": "completed",
+      "previewReadback": {
+        "appState": {
+          "viewBackgroundColor": "#ffffff"
+        },
+        "assetHashes": {
+          "sha256-207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463"
+        },
+        "decodedImages": {
+          "sha256-207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463": {
+            "height": 1,
+            "width": 1
+          }
+        },
+        "elementIds": [
+          "text-A",
+          "rect-A",
+          "image-A"
+        ],
+        "elementTypes": [
+          "text",
+          "rectangle",
+          "image"
+        ],
+        "elements": [
+          {
+            "angle": 0,
+            "height": 30,
+            "id": "text-A",
+            "originalText": "历史 A",
+            "text": "历史 A",
+            "type": "text",
+            "width": 180,
+            "x": 40,
+            "y": 40
+          },
+          {
+            "angle": 0,
+            "height": 90,
+            "id": "rect-A",
+            "type": "rectangle",
+            "width": 180,
+            "x": 40,
+            "y": 100
+          },
+          {
+            "angle": 0,
+            "fileId": "sha256-207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+            "height": 80,
+            "id": "image-A",
+            "scale": [
+              1,
+              1
+            ],
+            "status": "saved",
+            "type": "image",
+            "width": 80,
+            "x": 260,
+            "y": 100
+          }
+        ]
+      },
+      "previewVersionId": "history-version-a",
+      "requestId": "history-restart-a",
+      "scenario": "history-frontend-adoption",
+      "targetVersionId": "history-version-a",
+      "processExit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    "verifyA": {
+      "scenario": "history-restart-verify",
+      "requestId": "history-restart-a",
+      "targetVersionId": "history-version-a",
+      "targetPath": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/workspace/history-restart.excalidraw",
+      "historyDatabasePath": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-NxShSp/data/version-history/history.sqlite3",
+      "activeDocumentId": "f19757fa-aa3b-4c6d-b77f-58f9fe8243d2",
+      "operationDocumentId": "f19757fa-aa3b-4c6d-b77f-58f9fe8243d2",
+      "operationState": "completed",
+      "persistedSceneSha256": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4",
+      "statusSceneSha256": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4",
+      "statusState": "Completed",
+      "protectionVersionId": "protected-0e54b977-bb2e-4d1d-9946-f9a19fa5de16",
+      "listedVersionIds": [
+        "protected-0e54b977-bb2e-4d1d-9946-f9a19fa5de16",
+        "protected-28bbfb91-c2d5-4a6f-858d-f8e7a05f277b",
+        "history-seed-17",
+        "history-seed-16",
+        "history-seed-15",
+        "history-seed-14",
+        "history-seed-13",
+        "history-seed-12",
+        "history-seed-11",
+        "history-seed-10",
+        "history-seed-09",
+        "history-seed-08",
+        "history-seed-07",
+        "history-seed-06",
+        "history-seed-05",
+        "history-seed-04",
+        "history-seed-03",
+        "history-seed-02",
+        "history-seed-01",
+        "history-seed-00"
+      ],
+      "targetVersionEvicted": true,
+      "retainedVersionCount": 20,
+      "protectionSceneSha256": "5fd2c27ada2963c239faaa927ccd6f2a551431cbabc55e6d13c3792ee31d7793",
+      "protectionAssetSha256": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+      "protectionElements": [
+        {
+          "height": 30,
+          "id": "text-B",
+          "text": "历史 B",
+          "type": "text",
+          "width": 180,
+          "x": 40,
+          "y": 40
+        },
+        {
+          "height": 90,
+          "id": "rect-B",
+          "type": "rectangle",
+          "width": 180,
+          "x": 40,
+          "y": 100
+        },
+        {
+          "height": 80,
+          "id": "image-B",
+          "imageAssetSha256": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+          "type": "image",
+          "width": 80,
+          "x": 260,
+          "y": 100
+        }
+      ],
+      "targetAssetSha256": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+      "targetObjectExists": true,
+      "targetAssetExists": true
+    },
+    "evict": {
+      "scenario": "history-restart-evict",
+      "requestId": "history-restart-a",
+      "retainedVersionCount": 20,
+      "evictedVersionId": "history-version-a",
+      "operationStatusState": "Completed",
+      "targetSceneSha256": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4",
+      "targetAssetSha256": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+      "targetObjectExistsAfterGc": true,
+      "targetAssetExistsAfterGc": true,
+      "gcDeletedTarget": false,
+      "targetRetainedSceneReferences": 0,
+      "targetRetainedAssetReferences": 0
+    }
+  }
+}
