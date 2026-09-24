@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-import { runTauriHistoryRestartJourney } from "../helpers/reliability";
+import {
+  HistoryRestartJourneyError,
+  runTauriHistoryRestartJourney,
+} from "../helpers/reliability";
 
 test("native history survives restart and restores A→B→A with pinned target resources", async ({
   browserName,
@@ -15,7 +18,29 @@ test("native history survives restart and restores A→B→A with pinned target 
     return;
   }
 
-  const run = await runTauriHistoryRestartJourney();
+  const run = await runTauriHistoryRestartJourney().catch(
+    async (error: unknown) => {
+      if (error instanceof HistoryRestartJourneyError) {
+        await testInfo.attach("native-history-restart-failure", {
+          body: Buffer.from(
+            JSON.stringify(
+              {
+                stage: error.stage,
+                paths: error.paths,
+                evidence: error.evidence,
+                error: error.message,
+              },
+              null,
+              2,
+            ),
+          ),
+          contentType: "application/json",
+        });
+      }
+      throw error;
+    },
+  );
+  let passed = false;
   try {
     await testInfo.attach("native-history-restart-evidence", {
       body: Buffer.from(
@@ -66,8 +91,9 @@ test("native history survives restart and restores A→B→A with pinned target 
     expect(evict.targetObjectExistsAfterGc).toBe(true);
     expect(evict.targetAssetExistsAfterGc).toBe(true);
     expect(evict.gcDeletedTarget).toBe(false);
+    passed = true;
   } finally {
-    await run.cleanup();
+    if (passed) await run.cleanup();
   }
 });
 

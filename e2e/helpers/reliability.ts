@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readdir, readFile, statfs, writeFile } from "node:fs/promises";
+import { readdir, readFile, rm, statfs, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -246,6 +246,7 @@ export interface HistoryFrontendCanvasEvidence {
 
 interface HistoryFrontendErrorEvidence {
   scenario: "history-frontend-error";
+  requestId: string;
   error: string;
 }
 
@@ -261,6 +262,21 @@ export interface HistoryRestartJourneyEvidence {
   frontendA: HistoryFrontendCanvasEvidence;
   verifyA: HistoryRestartVerifyEvidence;
   evict: HistoryRestartEvictEvidence;
+}
+
+export class HistoryRestartJourneyError extends Error {
+  constructor(
+    readonly paths: IsolatedDesktopPaths,
+    readonly evidence: Partial<HistoryRestartJourneyEvidence>,
+    readonly stage: string,
+    cause: unknown,
+  ) {
+    super(
+      `History restart failed at ${stage}: ${cause instanceof Error ? cause.message : String(cause)}. Evidence retained at ${paths.root}`,
+      { cause },
+    );
+    this.name = "HistoryRestartJourneyError";
+  }
 }
 
 export interface SnapshotCorruptionEvidence {
@@ -342,6 +358,8 @@ async function runTauriHistoryFrontendAdoption(
     "history-frontend.ready.json",
   );
   const targetPath = join(paths.workspace, "history-restart.excalidraw");
+  // A previous round's terminal marker must never acknowledge this process.
+  await rm(markerPath, { force: true });
   const child = spawn(binary, [targetPath], {
     detached: process.platform !== "win32",
     env: isolatedDesktopEnvironment(paths, {
@@ -362,6 +380,7 @@ async function runTauriHistoryFrontendAdoption(
       child,
       markerPath,
       30_000,
+      { requestId, targetVersionId },
     );
     await terminateReliabilityChild(child);
     if (marker.scenario === "history-frontend-error") {
@@ -391,10 +410,11 @@ async function runTauriHistoryFrontendAdoption(
   }
 }
 
-async function waitForHistoryFrontendEvidence(
+export async function waitForHistoryFrontendEvidence(
   child: ReturnType<typeof spawn>,
   markerPath: string,
   timeoutMs: number,
+  expected: { requestId: string; targetVersionId: string },
 ): Promise<HistoryFrontendCanvasEvidence | HistoryFrontendErrorEvidence> {
   const deadline = Date.now() + timeoutMs;
   let lastProgress: string | undefined;
@@ -413,6 +433,18 @@ async function waitForHistoryFrontendEvidence(
         (evidence.scenario === "history-frontend-adoption" ||
           evidence.scenario === "history-frontend-error")
       ) {
+        if (
+          !("requestId" in evidence) ||
+          evidence.requestId !== expected.requestId ||
+          (evidence.scenario === "history-frontend-adoption" &&
+            (!("targetVersionId" in evidence) ||
+              evidence.targetVersionId !== expected.targetVersionId)) ||
+          ("targetVersionId" in evidence &&
+            evidence.targetVersionId !== expected.targetVersionId)
+        ) {
+          await delay(25);
+          continue;
+        }
         return evidence as
           HistoryFrontendCanvasEvidence | HistoryFrontendErrorEvidence;
       }
@@ -1057,18 +1089,24 @@ export async function runTauriHistoryRestartJourney(): Promise<
     cleaned = true;
     await cleanupIsolatedDesktopPaths(paths);
   };
+  const evidence: Partial<HistoryRestartJourneyEvidence> = {};
+  let stage = "seed";
   try {
     const seed = await runHistoryRestartProcess(
       binary,
       paths,
       "history-restart-seed",
     );
+    evidence.seed = seed;
+    stage = "frontendB";
     const frontendB = await runTauriHistoryFrontendAdoption(
       binary,
       paths,
       seed.versionBId,
       "history-restart-b",
     );
+    evidence.frontendB = frontendB;
+    stage = "verifyB";
     const verifyB = await runHistoryRestartProcess(
       binary,
       paths,
@@ -1078,12 +1116,16 @@ export async function runTauriHistoryRestartJourney(): Promise<
         EXCALIDRAW_E2E_HISTORY_REQUEST_ID: "history-restart-b",
       },
     );
+    evidence.verifyB = verifyB;
+    stage = "frontendA";
     const frontendA = await runTauriHistoryFrontendAdoption(
       binary,
       paths,
       seed.versionAId,
       "history-restart-a",
     );
+    evidence.frontendA = frontendA;
+    stage = "verifyA";
     const verifyA = await runHistoryRestartProcess(
       binary,
       paths,
@@ -1093,6 +1135,8 @@ export async function runTauriHistoryRestartJourney(): Promise<
         EXCALIDRAW_E2E_HISTORY_REQUEST_ID: "history-restart-a",
       },
     );
+    evidence.verifyA = verifyA;
+    stage = "evict";
     const evict = await runHistoryRestartProcess(
       binary,
       paths,
@@ -1102,6 +1146,8 @@ export async function runTauriHistoryRestartJourney(): Promise<
         EXCALIDRAW_E2E_HISTORY_TARGET_VERSION: seed.versionAId,
       },
     );
+    evidence.evict = evict;
+    stage = "environment";
     const filesystem = await statfs(paths.workspace);
     return {
       evidence: { seed, frontendB, verifyB, frontendA, verifyA, evict },
@@ -1117,8 +1163,25 @@ export async function runTauriHistoryRestartJourney(): Promise<
       cleanup,
     };
   } catch (error) {
-    await cleanup();
-    throw error;
+    const failure = new HistoryRestartJourneyError(
+      paths,
+      evidence,
+      stage,
+      error,
+    );
+    try {
+      await writeFile(
+        join(paths.root, "history-restart-failure.json"),
+        JSON.stringify(
+          { stage, paths, evidence, error: failure.message },
+          null,
+          2,
+        ),
+      );
+    } catch (artifactError) {
+      failure.message += ` (Failure report write also failed: ${String(artifactError)})`;
+    }
+    throw failure;
   }
 }
 
