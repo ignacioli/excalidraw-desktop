@@ -198,6 +198,10 @@ export interface HistoryRestartVerifyEvidence {
   requestId: string;
   targetVersionId: string;
   targetPath: string;
+  historyDatabasePath: string;
+  activeDocumentId?: string;
+  operationDocumentId?: string;
+  operationState?: string;
   persistedSceneSha256: string;
   statusSceneSha256?: string;
   statusState: string;
@@ -227,6 +231,10 @@ export interface HistoryFrontendCanvasEvidence {
   requestId: string;
   targetVersionId: string;
   documentId: string;
+  historyDatabasePath: string;
+  activeDocumentId?: string;
+  operationDocumentId?: string;
+  operationState?: string;
   adopted: true;
   canvasReadback: {
     elementIds: string[];

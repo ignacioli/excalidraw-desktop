@@ -50,6 +50,7 @@ use crate::{
     },
     history::{
         gc::{ObjectKey, ObjectReferences},
+        operation::OperationStore,
         query::HistoryQueryService,
         reconcile::reconcile_incomplete_operations_with_repository,
         repository::{HistoryRepository, PublishSceneRequest},
@@ -107,10 +108,95 @@ pub(crate) fn e2e_history_frontend_publish(evidence: serde_json::Value) -> Resul
     fs::create_dir_all(&control_directory)
         .map_err(|error| format!("failed to create history frontend control directory: {error}"))?;
     let marker = control_directory.join(HISTORY_FRONTEND_READY_MARKER);
+    let evidence = if evidence.get("scenario").and_then(serde_json::Value::as_str)
+        == Some("history-frontend-progress")
+    {
+        evidence
+    } else {
+        enrich_history_frontend_evidence(evidence, &root)?
+    };
     let payload = serde_json::to_vec(&evidence)
         .map_err(|error| format!("failed to serialize history frontend evidence: {error}"))?;
     fs::write(marker, payload)
         .map_err(|error| format!("failed to publish history frontend evidence: {error}"))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct HistoryIdentityDiagnostics {
+    history_database_path: String,
+    active_document_id: Option<String>,
+    operation_document_id: Option<String>,
+    operation_state: Option<String>,
+}
+
+fn load_history_identity_diagnostics(
+    store: &HistoryStore,
+    target: &Path,
+    request_id: &str,
+) -> Result<HistoryIdentityDiagnostics, String> {
+    let history_database_path = store.database_path().canonicalize().map_err(|error| {
+        format!(
+            "failed to canonicalize history database path {}: {error}",
+            store.database_path().display()
+        )
+    })?;
+    let target = target.canonicalize().map_err(|error| {
+        format!(
+            "failed to canonicalize history diagnostic target {}: {error}",
+            target.display()
+        )
+    })?;
+    let active_document_id = store
+        .load_active_document_identity(&path_string(&target))
+        .map_err(|error| format!("failed to load active history identity: {error}"))?
+        .map(|identity| identity.document_id);
+    let operation = OperationStore::new(store)
+        .load(request_id)
+        .map_err(|error| format!("failed to load history operation {request_id}: {error}"))?;
+    Ok(HistoryIdentityDiagnostics {
+        history_database_path: path_string(&history_database_path),
+        active_document_id,
+        operation_document_id: operation.as_ref().map(|value| value.document_id.clone()),
+        operation_state: operation
+            .as_ref()
+            .and_then(|value| serde_json::to_value(value.state).ok())
+            .and_then(|value| value.as_str().map(str::to_owned)),
+    })
+}
+
+fn enrich_history_frontend_evidence(
+    mut evidence: serde_json::Value,
+    root: &Path,
+) -> Result<serde_json::Value, String> {
+    let request_id = env::var(HISTORY_FRONTEND_REQUEST_ENV)
+        .map_err(|_| format!("{HISTORY_FRONTEND_REQUEST_ENV} is required"))?;
+    let document_path = env::var(HISTORY_FRONTEND_PATH_ENV)
+        .map_err(|_| format!("{HISTORY_FRONTEND_PATH_ENV} is required"))?;
+    let store = HistoryStore::open(&root.join("data"))
+        .map_err(|error| format!("failed to open history store for frontend evidence: {error}"))?;
+    let diagnostics =
+        load_history_identity_diagnostics(&store, Path::new(&document_path), &request_id)?;
+    let object = evidence
+        .as_object_mut()
+        .ok_or_else(|| "history frontend evidence must be a JSON object".to_owned())?;
+    object.insert("requestId".to_owned(), serde_json::json!(request_id));
+    object.insert(
+        "historyDatabasePath".to_owned(),
+        serde_json::json!(diagnostics.history_database_path),
+    );
+    object.insert(
+        "activeDocumentId".to_owned(),
+        serde_json::json!(diagnostics.active_document_id),
+    );
+    object.insert(
+        "operationDocumentId".to_owned(),
+        serde_json::json!(diagnostics.operation_document_id),
+    );
+    object.insert(
+        "operationState".to_owned(),
+        serde_json::json!(diagnostics.operation_state),
+    );
+    Ok(evidence)
 }
 
 /// History transaction barriers are deliberately separate from the existing
@@ -1326,6 +1412,10 @@ struct HistoryRestartVerifyEvidence {
     request_id: String,
     target_version_id: String,
     target_path: String,
+    history_database_path: String,
+    active_document_id: Option<String>,
+    operation_document_id: Option<String>,
+    operation_state: Option<String>,
     persisted_scene_sha256: String,
     status_scene_sha256: Option<String>,
     status_state: String,
@@ -1550,6 +1640,8 @@ async fn run_history_restart_verify(root: &Path) -> Result<HistoryRestartVerifyE
         .map_err(|_| "EXCALIDRAW_E2E_HISTORY_TARGET_VERSION is required".to_owned())?;
     let persisted =
         fs::read(&target).map_err(|error| format!("failed to read verify scene: {error}"))?;
+    let identity_diagnostics =
+        load_history_identity_diagnostics(&context.store, &target, &request_id)?;
     let list = context
         .query
         .list(HistoryListRequest {
@@ -1571,24 +1663,12 @@ async fn run_history_restart_verify(root: &Path) -> Result<HistoryRestartVerifyE
         })
         .await
         .map_err(|error| {
-            let active_document_id = context
-                .store
-                .load_active_document_identity(&path_string(&target))
-                .ok()
-                .flatten()
-                .map(|identity| identity.document_id);
-            let operation_document_id = context
-                .store
-                .with_connection(|connection| {
-                    connection.query_row(
-                        "SELECT document_id FROM history_operations WHERE idempotency_id=?1",
-                        [&request_id],
-                        |row| row.get::<_, String>(0),
-                    )
-                })
-                .ok();
             format!(
-                "history status after restart failed: {error:?}; activeDocumentId={active_document_id:?}; operationDocumentId={operation_document_id:?}"
+                "history status after restart failed: {error:?}; historyDatabasePath={}; activeDocumentId={:?}; operationDocumentId={:?}; operationState={:?}",
+                identity_diagnostics.history_database_path,
+                identity_diagnostics.active_document_id,
+                identity_diagnostics.operation_document_id,
+                identity_diagnostics.operation_state,
             )
         })?;
     let preview = context
@@ -1628,6 +1708,10 @@ async fn run_history_restart_verify(root: &Path) -> Result<HistoryRestartVerifyE
         request_id,
         target_version_id,
         target_path: path_string(&target),
+        history_database_path: identity_diagnostics.history_database_path,
+        active_document_id: identity_diagnostics.active_document_id,
+        operation_document_id: identity_diagnostics.operation_document_id,
+        operation_state: identity_diagnostics.operation_state,
         persisted_scene_sha256,
         status_scene_sha256: status
             .adopted_scene

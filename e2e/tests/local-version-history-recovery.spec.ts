@@ -47,6 +47,7 @@ test("native history survives restart and restores A→B→A with pinned target 
       seed.assetSha256,
     );
     assertVerify(verifyB, seed.sceneBSha256, seed.assetSha256, seed.versionBId);
+    assertSharedOperationIdentity(frontendB, verifyB);
     assertFrontendCanvas(
       frontendA,
       seed.versionAId,
@@ -54,6 +55,7 @@ test("native history survives restart and restores A→B→A with pinned target 
       seed.assetSha256,
     );
     assertVerify(verifyA, seed.sceneASha256, seed.assetSha256, seed.versionAId);
+    assertSharedOperationIdentity(frontendA, verifyA);
 
     expect(evict.requestId).toBe("history-restart-a");
     expect(evict.retainedVersionCount).toBe(20);
@@ -95,6 +97,29 @@ function assertFrontendCanvas(
   expect(Object.values(evidence.canvasReadback.assetHashes)).toContain(
     expectedAssetSha256,
   );
+}
+
+function assertSharedOperationIdentity(
+  frontend: {
+    historyDatabasePath: string;
+    activeDocumentId?: string;
+    operationDocumentId?: string;
+    operationState?: string;
+  },
+  verify: {
+    historyDatabasePath: string;
+    activeDocumentId?: string;
+    operationDocumentId?: string;
+    operationState?: string;
+  },
+): void {
+  expect(frontend.historyDatabasePath).toBe(verify.historyDatabasePath);
+  expect(frontend.activeDocumentId).toBeDefined();
+  expect(frontend.operationDocumentId).toBe(frontend.activeDocumentId);
+  expect(frontend.operationState).toBe("completed");
+  expect(verify.activeDocumentId).toBe(frontend.activeDocumentId);
+  expect(verify.operationDocumentId).toBe(frontend.operationDocumentId);
+  expect(verify.operationState).toBe("completed");
 }
 
 function assertVerify(
