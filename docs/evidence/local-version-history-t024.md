@@ -7,7 +7,7 @@
 - 产品与 harness 提交：`113e18b`；此前 marker 隔离修复：`b5ffbda`。
 - macOS 26.6.2（25G83），arm64；使用本 worktree 的 `e2e-harness` release binary。
 - [原始 evidence](local-version-history-t024/native-history-restart-evidence.json)；[提交、binary 和报告 SHA-256 binding](local-version-history-t024/binding.json)。原始 evidence 从 Playwright 产物逐字节复制。
-- 按用户要求，private `tasks.md` 未修改，T024 checkbox 仍未勾选。技术通过不代表任务跟踪文件已同步。
+- 用户随后明确授权完成本轮收尾；private specs 提交 `f724bea` 已将 T024 勾选完成并引用上述验收证据。T025 保持未完成。
 - 本轮不进入 T025，不宣称 User Story 1 全部完成、生产包验收、视觉验收、性能验收或 release。
 
 ## T024 实际要证明什么
@@ -81,6 +81,6 @@ PLAYWRIGHT_SKIP_WEBSERVER=1 \
 
 ## 下一次会话的边界
 
-T024 技术验证已经完成，本轮结束。用户明确要求暂不修改 `tasks.md`，因此下一会话先同步已通过的证据与 T024 checkbox，再按新授权推进 T025；不要把当前结论扩大为 US1 全部完成。
+T024 的实现、技术验证、证据和任务状态均已完成，本轮结束。下一会话从 T025 开始，无需补做 T024 状态同步；不要把当前结论扩大为 US1 全部完成。此前暂不修改 `tasks.md` 的限制已由用户本轮收尾指令解除。
 
 独立 review 另指出 HOME 外文档的既有 Recovery Restore／Conflict TakeExternal 返回资源路径尚未应用本轮 exact grant；这不是 T024 已通过路径的证明范围，本轮未扩展修改。这些邻接问题及既有 fault 测试预期差异需要后续有界处理。
