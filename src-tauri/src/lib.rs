@@ -80,7 +80,15 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
         let paths = drawing_paths_from_args(&argv);
         if !paths.is_empty() {
-            let _ = app.emit("open-file-request", OpenFileRequestEvent { paths });
+            let scope = app.fs_scope();
+            match grant_drawing_paths(&scope, &paths) {
+                Ok(()) => {
+                    let _ = app.emit("open-file-request", OpenFileRequestEvent { paths });
+                }
+                Err(error) => {
+                    eprintln!("failed to grant single-instance open-file paths: {error}");
+                }
+            }
         }
         if let Some(window) = app.get_webview_window("main") {
             let _ = window.set_focus();
@@ -92,6 +100,7 @@ pub fn run() {
         let web_kit_data_directory = app.path().app_local_data_dir()?;
         std::fs::create_dir_all(&web_kit_data_directory)?;
         let pending_open_paths = drawing_paths_from_env_args();
+        grant_drawing_paths(&app.fs_scope(), &pending_open_paths)?;
         let repository = tauri::async_runtime::block_on(SqliteRepository::open(
             &app_data_directory.join("excalidraw-desktop.sqlite3"),
         ))?;
@@ -315,6 +324,23 @@ fn drawing_paths_from_args(args: &[String]) -> Vec<String> {
         .collect()
 }
 
+trait ExactFileScope {
+    fn allow_exact_file(&self, path: &Path) -> tauri::Result<()>;
+}
+
+impl ExactFileScope for tauri::fs::Scope {
+    fn allow_exact_file(&self, path: &Path) -> tauri::Result<()> {
+        self.allow_file(path)
+    }
+}
+
+fn grant_drawing_paths<S: ExactFileScope>(scope: &S, paths: &[String]) -> tauri::Result<()> {
+    for path in paths {
+        scope.allow_exact_file(Path::new(path))?;
+    }
+    Ok(())
+}
+
 fn is_supported_drawing_path(path: &Path) -> bool {
     match path.extension().and_then(|extension| extension.to_str()) {
         Some("excalidraw") => true,
@@ -402,7 +428,9 @@ fn resolve_app_data_directory(app: &tauri::App) -> Result<PathBuf, Box<dyn std::
 
 #[cfg(test)]
 mod tests {
-    use super::{drawing_paths_from_args, inferred_linux_ime_module};
+    use std::path::PathBuf;
+
+    use super::{drawing_paths_from_args, grant_drawing_paths, inferred_linux_ime_module};
 
     #[test]
     fn infers_linux_ime_without_replacing_an_explicit_gtk_choice() {
@@ -439,5 +467,85 @@ mod tests {
 
         assert_eq!(paths, vec![existing.display().to_string()]);
         let _ = std::fs::remove_file(existing);
+    }
+
+    #[test]
+    fn grants_only_the_validated_exact_drawing_file() {
+        let scope = RecordingExactFileScope::default();
+        let directory = tempfile_directory("exact-grant");
+        let target = directory.join("target.excalidraw");
+        let neighbor = directory.join("neighbor.excalidraw");
+        std::fs::write(&target, b"{}").expect("write target fixture");
+        std::fs::write(&neighbor, b"{}").expect("write neighbor fixture");
+
+        let args = vec![
+            "excalidraw-desktop".to_owned(),
+            target.display().to_string(),
+        ];
+        let paths = drawing_paths_from_args(&args);
+        grant_drawing_paths(&scope, &paths).expect("grant exact drawing file paths");
+
+        assert!(scope.is_allowed(&target));
+        assert!(!scope.is_allowed(&neighbor));
+        remove_directory(directory);
+    }
+
+    #[test]
+    fn invalid_nonexistent_and_unsupported_arguments_receive_no_grant() {
+        let scope = RecordingExactFileScope::default();
+        let directory = tempfile_directory("invalid-grant");
+        let unsupported = directory.join("notes.txt");
+        let nonexistent = directory.join("missing.excalidraw");
+        std::fs::write(&unsupported, b"{}").expect("write unsupported fixture");
+        let args = vec![
+            "excalidraw-desktop".to_owned(),
+            "relative.excalidraw".to_owned(),
+            nonexistent.display().to_string(),
+            unsupported.display().to_string(),
+        ];
+
+        let paths = drawing_paths_from_args(&args);
+        grant_drawing_paths(&scope, &paths).expect("grant filtered paths");
+
+        assert!(paths.is_empty());
+        assert!(!scope.is_allowed(&unsupported));
+        assert!(!scope.is_allowed(&nonexistent));
+        remove_directory(directory);
+    }
+
+    #[derive(Default)]
+    struct RecordingExactFileScope {
+        allowed: std::sync::Mutex<Vec<PathBuf>>,
+    }
+
+    impl super::ExactFileScope for RecordingExactFileScope {
+        fn allow_exact_file(&self, path: &std::path::Path) -> tauri::Result<()> {
+            self.allowed
+                .lock()
+                .expect("recording scope mutex")
+                .push(path.to_path_buf());
+            Ok(())
+        }
+    }
+
+    impl RecordingExactFileScope {
+        fn is_allowed(&self, path: &std::path::Path) -> bool {
+            self.allowed
+                .lock()
+                .expect("recording scope mutex")
+                .iter()
+                .any(|allowed| allowed == path)
+        }
+    }
+
+    fn tempfile_directory(label: &str) -> PathBuf {
+        let directory =
+            std::env::temp_dir().join(format!("excalidraw-open-{label}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).expect("create temp fixture directory");
+        directory
+    }
+
+    fn remove_directory(directory: PathBuf) {
+        std::fs::remove_dir_all(directory).expect("remove temp fixture directory");
     }
 }
