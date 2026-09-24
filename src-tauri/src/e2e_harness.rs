@@ -1570,7 +1570,27 @@ async fn run_history_restart_verify(root: &Path) -> Result<HistoryRestartVerifyE
             request_id: request_id.clone(),
         })
         .await
-        .map_err(|error| format!("history status after restart failed: {error:?}"))?;
+        .map_err(|error| {
+            let active_document_id = context
+                .store
+                .load_active_document_identity(&path_string(&target))
+                .ok()
+                .flatten()
+                .map(|identity| identity.document_id);
+            let operation_document_id = context
+                .store
+                .with_connection(|connection| {
+                    connection.query_row(
+                        "SELECT document_id FROM history_operations WHERE idempotency_id=?1",
+                        [&request_id],
+                        |row| row.get::<_, String>(0),
+                    )
+                })
+                .ok();
+            format!(
+                "history status after restart failed: {error:?}; activeDocumentId={active_document_id:?}; operationDocumentId={operation_document_id:?}"
+            )
+        })?;
     let preview = context
         .query
         .preview(HistoryPreviewRequest {

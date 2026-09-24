@@ -13,6 +13,7 @@ import {
 } from "../documents/documentStore";
 import type { ExcalidrawAdapter } from "../editor/ExcalidrawAdapter";
 import type { SceneSnapshot } from "../editor/sceneSerializer";
+import { formatHistoryFrontendError } from "./historyFrontendError";
 
 interface DriverRequest {
   documentPath: string;
@@ -39,6 +40,14 @@ interface AttachedEditor {
   adapter: ExcalidrawAdapter;
 }
 
+type FrontendProgressStage =
+  | "startupPathReceived"
+  | "sessionOpened"
+  | "editorAttached"
+  | "replacementStarted"
+  | "replacementCompleted"
+  | "canvasReadbackReady";
+
 export class NativeHistoryFrontendDriver {
   private attachedEditor: AttachedEditor | null = null;
   private started = false;
@@ -57,7 +66,7 @@ export class NativeHistoryFrontendDriver {
       void invoke("e2e_history_frontend_publish", {
         evidence: {
           scenario: "history-frontend-error",
-          error: error instanceof Error ? error.message : String(error),
+          error: formatHistoryFrontendError(error),
         },
       });
     });
@@ -73,9 +82,12 @@ export class NativeHistoryFrontendDriver {
       {},
     );
     if (request === null) return;
+    await publishProgress("startupPathReceived");
 
-    const documentId = await this.documents.open(request.documentPath);
+    const documentId = await this.waitForDocument(request.documentPath);
+    await publishProgress("sessionOpened");
     const editor = await this.waitForEditor(documentId);
+    await publishProgress("editorAttached");
     const coordinator = new HistoryCoordinator(
       this.documents,
       createHistoryClient(createTauriCommandInvoker()),
@@ -86,6 +98,7 @@ export class NativeHistoryFrontendDriver {
         return context.commit(adopted);
       },
     );
+    await publishProgress("replacementStarted");
     const result = await coordinator.replace(
       documentId,
       { kind: "restore", versionId: request.targetVersionId },
@@ -96,9 +109,12 @@ export class NativeHistoryFrontendDriver {
         "History replacement did not commit to the active canvas.",
       );
     }
+    await publishProgress("replacementCompleted");
     const readback = editor.adapter.readScene();
+    const evidence = await createEvidence(request, documentId, readback);
+    await publishProgress("canvasReadbackReady");
     await invoke("e2e_history_frontend_publish", {
-      evidence: await createEvidence(request, documentId, readback),
+      evidence,
     });
   }
 
@@ -113,6 +129,26 @@ export class NativeHistoryFrontendDriver {
     }
     throw new Error("Timed out waiting for the native Excalidraw editor.");
   }
+
+  private async waitForDocument(path: string): Promise<string> {
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      const session = Object.values(
+        this.documents.store.getState().sessionsById,
+      ).find((candidate) => candidate.path === path);
+      if (session !== undefined) return session.id;
+      await new Promise((resolve) => window.setTimeout(resolve, 25));
+    }
+    throw new Error(
+      "Timed out waiting for the authorized startup document session.",
+    );
+  }
+}
+
+async function publishProgress(stage: FrontendProgressStage): Promise<void> {
+  await invoke("e2e_history_frontend_publish", {
+    evidence: { scenario: "history-frontend-progress", stage },
+  });
 }
 
 async function createEvidence(

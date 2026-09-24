@@ -241,6 +241,11 @@ interface HistoryFrontendErrorEvidence {
   error: string;
 }
 
+interface HistoryFrontendProgressEvidence {
+  scenario: "history-frontend-progress";
+  stage: string;
+}
+
 export interface HistoryRestartJourneyEvidence {
   seed: HistoryRestartSeedEvidence;
   frontendB: HistoryFrontendCanvasEvidence;
@@ -384,6 +389,7 @@ async function waitForHistoryFrontendEvidence(
   timeoutMs: number,
 ): Promise<HistoryFrontendCanvasEvidence | HistoryFrontendErrorEvidence> {
   const deadline = Date.now() + timeoutMs;
+  let lastProgress: string | undefined;
   while (Date.now() < deadline) {
     if (child.exitCode !== null || child.signalCode !== null) {
       throw new Error(
@@ -402,6 +408,18 @@ async function waitForHistoryFrontendEvidence(
         return evidence as
           HistoryFrontendCanvasEvidence | HistoryFrontendErrorEvidence;
       }
+      if (
+        typeof evidence === "object" &&
+        evidence !== null &&
+        "scenario" in evidence &&
+        evidence.scenario === "history-frontend-progress" &&
+        "stage" in evidence &&
+        typeof evidence.stage === "string"
+      ) {
+        lastProgress = (evidence as HistoryFrontendProgressEvidence).stage;
+        await delay(25);
+        continue;
+      }
       throw new Error("History frontend evidence shape is invalid.");
     } catch (error) {
       if (
@@ -415,7 +433,7 @@ async function waitForHistoryFrontendEvidence(
     }
   }
   throw new Error(
-    `History frontend evidence did not arrive within ${timeoutMs} ms.`,
+    `History frontend evidence did not arrive within ${timeoutMs} ms.${lastProgress === undefined ? " No progress marker was published." : ` Last progress: ${lastProgress}.`}`,
   );
 }
 
