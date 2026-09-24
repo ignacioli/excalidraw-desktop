@@ -252,6 +252,7 @@ pub fn run() {
         e2e_harness::e2e_corrupt_latest_snapshot,
         e2e_harness::e2e_history_frontend_bootstrap,
         e2e_harness::e2e_history_frontend_publish,
+        e2e_harness::e2e_history_frontend_close,
         e2e_perf_bootstrap,
         e2e_perf_publish_ready,
         e2e_perf_next_command,

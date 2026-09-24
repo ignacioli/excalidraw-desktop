@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, rm, statfs, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import type { createHistoryFrontendEvidence } from "../../src/e2e/historyFrontendEvidence";
 
 import {
   cleanupIsolatedDesktopPaths,
@@ -176,6 +177,7 @@ export interface HistoryRestartSeedEvidence {
   assetSha256: string;
   versionCount: number;
   historyDatabasePath: string;
+  initialSceneSha256: string;
 }
 
 export interface HistoryRestartRestoreEvidence {
@@ -211,6 +213,11 @@ export interface HistoryRestartVerifyEvidence {
   targetAssetSha256: string;
   targetObjectExists: boolean;
   targetAssetExists: boolean;
+  targetVersionEvicted: boolean;
+  retainedVersionCount: number;
+  protectionSceneSha256: string;
+  protectionAssetSha256: string;
+  protectionElements: Array<Record<string, unknown>>;
 }
 
 export interface HistoryRestartEvictEvidence {
@@ -224,7 +231,13 @@ export interface HistoryRestartEvictEvidence {
   targetObjectExistsAfterGc: boolean;
   targetAssetExistsAfterGc: boolean;
   gcDeletedTarget: boolean;
+  targetRetainedSceneReferences: number;
+  targetRetainedAssetReferences: number;
 }
+
+export type HistoryCanvasReadback = Awaited<
+  ReturnType<typeof createHistoryFrontendEvidence>
+>["canvasReadback"];
 
 export interface HistoryFrontendCanvasEvidence {
   scenario: "history-frontend-adoption";
@@ -236,12 +249,12 @@ export interface HistoryFrontendCanvasEvidence {
   operationDocumentId?: string;
   operationState?: string;
   adopted: true;
-  canvasReadback: {
-    elementIds: string[];
-    elementTypes: string[];
-    appState: Record<string, unknown>;
-    assetHashes: Record<string, string>;
-  };
+  canvasReadback: HistoryCanvasReadback;
+  beforeReplacement: HistoryCanvasReadback;
+  listedVersionIds: string[];
+  previewVersionId: string;
+  previewReadback: HistoryCanvasReadback;
+  processExit?: { code: 0; signal: null };
 }
 
 interface HistoryFrontendErrorEvidence {
@@ -382,7 +395,6 @@ async function runTauriHistoryFrontendAdoption(
       30_000,
       { requestId, targetVersionId },
     );
-    await terminateReliabilityChild(child);
     if (marker.scenario === "history-frontend-error") {
       throw new Error(`Frontend driver error: ${marker.error}`);
     }
@@ -391,6 +403,7 @@ async function runTauriHistoryFrontendAdoption(
         "History frontend driver published an unexpected scenario.",
       );
     }
+    const processExit = await waitForHistoryFrontendExit(child, 10_000);
     for (const hash of Object.values(marker.canvasReadback.assetHashes)) {
       const assetPath = join(paths.workspace, ".excalidraw_assets", hash);
       const bytes = await readFile(assetPath);
@@ -400,7 +413,7 @@ async function runTauriHistoryFrontendAdoption(
         );
       }
     }
-    return marker;
+    return { ...marker, processExit };
   } catch (error) {
     await terminateReliabilityChild(child);
     throw new Error(
@@ -418,12 +431,14 @@ export async function waitForHistoryFrontendEvidence(
 ): Promise<HistoryFrontendCanvasEvidence | HistoryFrontendErrorEvidence> {
   const deadline = Date.now() + timeoutMs;
   let lastProgress: string | undefined;
-  while (Date.now() < deadline) {
+  const assertRunning = (): void => {
     if (child.exitCode !== null || child.signalCode !== null) {
       throw new Error(
         `History frontend process exited before evidence (code=${child.exitCode}, signal=${child.signalCode}).`,
       );
     }
+  };
+  while (Date.now() < deadline) {
     try {
       const evidence: unknown = JSON.parse(await readFile(markerPath, "utf8"));
       if (
@@ -442,6 +457,7 @@ export async function waitForHistoryFrontendEvidence(
           ("targetVersionId" in evidence &&
             evidence.targetVersionId !== expected.targetVersionId)
         ) {
+          assertRunning();
           await delay(25);
           continue;
         }
@@ -457,6 +473,7 @@ export async function waitForHistoryFrontendEvidence(
         typeof evidence.stage === "string"
       ) {
         lastProgress = (evidence as HistoryFrontendProgressEvidence).stage;
+        assertRunning();
         await delay(25);
         continue;
       }
@@ -466,6 +483,7 @@ export async function waitForHistoryFrontendEvidence(
         (error as NodeJS.ErrnoException).code === "ENOENT" ||
         error instanceof SyntaxError
       ) {
+        assertRunning();
         await delay(25);
         continue;
       }
@@ -475,6 +493,19 @@ export async function waitForHistoryFrontendEvidence(
   throw new Error(
     `History frontend evidence did not arrive within ${timeoutMs} ms.${lastProgress === undefined ? " No progress marker was published." : ` Last progress: ${lastProgress}.`}`,
   );
+}
+
+export async function waitForHistoryFrontendExit(
+  child: ReturnType<typeof spawn>,
+  timeoutMs: number,
+): Promise<{ code: 0; signal: null }> {
+  await waitForChildExit(child, timeoutMs);
+  if (child.exitCode !== 0 || child.signalCode !== null) {
+    throw new Error(
+      `History frontend did not close normally (code=${child.exitCode}, signal=${child.signalCode}).`,
+    );
+  }
+  return { code: 0, signal: null };
 }
 
 async function terminateReliabilityChild(

@@ -99,6 +99,17 @@ pub(crate) fn e2e_history_frontend_bootstrap(
 }
 
 #[tauri::command]
+pub(crate) fn e2e_history_frontend_close(window: tauri::Window) -> Result<(), String> {
+    if env::var(HISTORY_FRONTEND_DRIVER_FLAG).as_deref() != Ok("1") {
+        return Err("history frontend driver is disabled".to_owned());
+    }
+    process_harness_root()?;
+    // Use the normal close-request event so the production checkpoint handler
+    // owns checkpoint-before-destroy. A process signal cannot prove this path.
+    window.close().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub(crate) fn e2e_history_frontend_publish(evidence: serde_json::Value) -> Result<(), String> {
     if env::var(HISTORY_FRONTEND_DRIVER_FLAG).as_deref() != Ok("1") {
         return Err("history frontend driver is disabled".to_owned());
@@ -1386,6 +1397,7 @@ struct HistoryRestartSeedEvidence {
     asset_sha256: String,
     version_count: usize,
     history_database_path: String,
+    initial_scene_sha256: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -1421,7 +1433,11 @@ struct HistoryRestartVerifyEvidence {
     status_state: String,
     protection_version_id: Option<String>,
     listed_version_ids: Vec<String>,
-    preview_scene_sha256: Option<String>,
+    target_version_evicted: bool,
+    retained_version_count: usize,
+    protection_scene_sha256: String,
+    protection_asset_sha256: String,
+    protection_elements: Vec<serde_json::Value>,
     target_asset_sha256: String,
     target_object_exists: bool,
     target_asset_exists: bool,
@@ -1440,6 +1456,8 @@ struct HistoryRestartEvictEvidence {
     target_object_exists_after_gc: bool,
     target_asset_exists_after_gc: bool,
     gc_deleted_target: bool,
+    target_retained_scene_references: usize,
+    target_retained_asset_references: usize,
 }
 
 #[derive(Clone)]
@@ -1497,7 +1515,7 @@ async fn run_history_restart_seed(root: &Path) -> Result<HistoryRestartSeedEvide
     let target = context.workspace.join("history-restart.excalidraw");
     let scene_a = history_restart_scene("A", "历史 A");
     let scene_b = history_restart_scene("B", "历史 B");
-    fs::write(&target, &scene_b.0)
+    fs::write(&target, &scene_a.0)
         .map_err(|error| format!("failed to write restart target: {error}"))?;
     let target = target
         .canonicalize()
@@ -1516,7 +1534,7 @@ async fn run_history_restart_seed(root: &Path) -> Result<HistoryRestartSeedEvide
         &identity.document_id,
         "history-version-a",
         &scene_a.0,
-        1,
+        2,
         &scene_a.2,
     )?;
     publish_history_restart_version(
@@ -1524,9 +1542,22 @@ async fn run_history_restart_seed(root: &Path) -> Result<HistoryRestartSeedEvide
         &identity.document_id,
         "history-version-b",
         &scene_b.0,
-        2,
+        1,
         &scene_b.2,
     )?;
+    // B is oldest and A is next. Each restore's protection publication must
+    // evict its already accepted target from this full 20-record pool.
+    for sequence in 0..18_u64 {
+        let scene = history_restart_scene(&format!("E{sequence}"), "填充");
+        publish_history_restart_version(
+            &context.store,
+            &identity.document_id,
+            &format!("history-seed-{sequence:02}"),
+            &scene.0,
+            3 + sequence as i64,
+            &scene.2,
+        )?;
+    }
     let version_count = context
         .store
         .with_connection(|connection| {
@@ -1549,6 +1580,7 @@ async fn run_history_restart_seed(root: &Path) -> Result<HistoryRestartSeedEvide
         asset_sha256: scene_a.2,
         version_count,
         history_database_path: path_string(context.store.database_path()),
+        initial_scene_sha256: sha256(scene_a.0.as_bytes()),
     })
 }
 
@@ -1671,16 +1703,28 @@ async fn run_history_restart_verify(root: &Path) -> Result<HistoryRestartVerifyE
                 identity_diagnostics.operation_state,
             )
         })?;
-    let preview = context
+    let protection_version_id = status
+        .protection_version_id
+        .clone()
+        .ok_or_else(|| "completed restore has no protection version".to_owned())?;
+    let protection = context
         .query
         .preview(HistoryPreviewRequest {
             document: HistoryDocumentLocator::Path {
                 path: path_string(&target),
             },
-            version_id: target_version_id.clone(),
+            version_id: protection_version_id,
         })
         .await
-        .ok();
+        .map_err(|error| format!("protection preview after restart failed: {error:?}"))?;
+    let protection_asset_sha256 = scene_asset_hash(&protection.scene)?;
+    let protection_elements = history_restart_elements(&protection.scene)?;
+    let protection_scene_sha256 = scene_sha256(&protection.scene)?;
+    let target_version_evicted = !list
+        .items
+        .iter()
+        .any(|item| item.version_id == target_version_id);
+    let retained_version_count = list.items.len();
     let persisted_scene_sha256 = sha256(&persisted);
     let target_asset_sha256 = status
         .adopted_scene
@@ -1720,13 +1764,11 @@ async fn run_history_restart_verify(root: &Path) -> Result<HistoryRestartVerifyE
         status_state: format!("{:?}", status.state),
         protection_version_id: status.protection_version_id,
         listed_version_ids: list.items.into_iter().map(|item| item.version_id).collect(),
-        preview_scene_sha256: preview.as_ref().map(|value| {
-            sha256(
-                serde_json::to_string(&value.scene)
-                    .unwrap_or_default()
-                    .as_bytes(),
-            )
-        }),
+        target_version_evicted,
+        retained_version_count,
+        protection_scene_sha256,
+        protection_asset_sha256,
+        protection_elements,
         target_asset_sha256,
         target_object_exists,
         target_asset_exists,
@@ -1766,6 +1808,9 @@ async fn run_history_restart_evict(root: &Path) -> Result<HistoryRestartEvictEvi
         .ok_or_else(|| "completed eviction operation has no target asset".to_owned())?;
     let target_version_id = env::var("EXCALIDRAW_E2E_HISTORY_TARGET_VERSION")
         .unwrap_or_else(|_| "history-version-b".to_owned());
+    let eviction_time = unix_timestamp()
+        .map_err(|error| format!("failed to read eviction fixture time: {error}"))?
+        + 1;
     for sequence in 0..21_u64 {
         let version_id = format!("history-eviction-{sequence:02}");
         let scene = history_restart_scene(&format!("E{sequence}"), "淘汰检查");
@@ -1774,7 +1819,7 @@ async fn run_history_restart_evict(root: &Path) -> Result<HistoryRestartEvictEvi
             &identity.document_id,
             &version_id,
             &scene.0,
-            100 + sequence as i64,
+            eviction_time + sequence as i64,
             &scene.2,
         )?;
     }
@@ -1788,6 +1833,34 @@ async fn run_history_restart_evict(root: &Path) -> Result<HistoryRestartEvictEvi
             )
         })
         .map_err(|error| format!("failed to inspect evicted target version: {error}"))?;
+    let (scene_references, asset_references) = context
+        .store
+        .with_connection(|connection| {
+            let scenes: i64 = connection.query_row(
+                "SELECT COUNT(*) FROM history_versions WHERE scene_hash=?1",
+                [&target_scene_hash],
+                |row| row.get(0),
+            )?;
+            let assets: i64 = connection.query_row(
+                "SELECT COUNT(*) FROM version_assets WHERE asset_hash=?1",
+                [&target_asset_sha256],
+                |row| row.get(0),
+            )?;
+            Ok::<_, rusqlite::Error>((scenes, assets))
+        })
+        .map_err(|error| format!("failed to inspect retained target references: {error}"))?;
+    if scene_references != 0 || asset_references != 0 {
+        return Err(format!("eviction fixture still retains target references: scenes={scene_references}, assets={asset_references}"));
+    }
+    let gc = context
+        .store
+        .collect_garbage(
+            std::time::SystemTime::now() + Duration::from_secs(120),
+            Duration::ZERO,
+        )
+        .map_err(|error| format!("history GC after eviction failed: {error}"))?;
+    // Read after GC: reading before it would not establish that replay's
+    // complete dependency set survives collection without visible versions.
     let status = context
         .replacement
         .e2e_operation_status(HistoryOperationStatusRequest {
@@ -1797,14 +1870,7 @@ async fn run_history_restart_evict(root: &Path) -> Result<HistoryRestartEvictEvi
             request_id: request_id.clone(),
         })
         .await
-        .map_err(|error| format!("status after history eviction failed: {error:?}"))?;
-    let gc = context
-        .store
-        .collect_garbage(
-            std::time::SystemTime::now() + Duration::from_secs(120),
-            Duration::ZERO,
-        )
-        .map_err(|error| format!("history GC after eviction failed: {error}"))?;
+        .map_err(|error| format!("status after history eviction and GC failed: {error:?}"))?;
     let target_object = context
         .store
         .objects()
@@ -1842,20 +1908,54 @@ async fn run_history_restart_evict(root: &Path) -> Result<HistoryRestartEvictEvi
         target_object_exists_after_gc: target_object.exists(),
         target_asset_exists_after_gc: target_asset.exists(),
         gc_deleted_target: gc.deleted.iter().any(|object| object == &target_key),
+        target_retained_scene_references: scene_references as usize,
+        target_retained_asset_references: asset_references as usize,
     })
 }
 
 fn history_restart_scene(label: &str, text: &str) -> (String, Vec<u8>, String) {
-    let asset = b"\x89PNG\r\n\x1a\nlocal-version-history".to_vec();
+    let asset = history_restart_asset(label.starts_with('E'));
     let asset_hash = sha256(&asset);
+    let mut elements: Vec<serde_json::Value> = [
+        (format!("text-{label}"), "text", 40, 40, 180, 30),
+        (format!("rect-{label}"), "rectangle", 40, 100, 180, 90),
+        (format!("image-{label}"), "image", 260, 100, 80, 80),
+    ]
+    .into_iter()
+    .map(|(id, kind, x, y, width, height)| {
+        serde_json::json!({
+            "id": id, "type": kind, "x": x, "y": y,
+            "width": width, "height": height, "angle": 0,
+            "strokeColor": "#1e1e1e", "backgroundColor": "transparent",
+            "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+            "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+            "roundness": null, "seed": 1, "version": 1, "versionNonce": 1,
+            "isDeleted": false, "boundElements": null, "updated": 1,
+            "link": null, "locked": false
+        })
+    })
+    .collect();
+    let text_element = elements[0]
+        .as_object_mut()
+        .expect("fixture element is an object");
+    text_element.extend(
+        serde_json::json!({
+            "text": text, "originalText": text, "fontSize": 24, "fontFamily": 1,
+            "textAlign": "left", "verticalAlign": "top", "containerId": null,
+            "autoResize": false, "lineHeight": 1.25
+        })
+        .as_object()
+        .expect("fixture text fields are an object")
+        .clone(),
+    );
+    elements[2].as_object_mut().expect("fixture element is an object").extend(
+        serde_json::json!({"fileId": "history-image", "status": "saved", "scale": [1, 1], "crop": null})
+            .as_object().expect("fixture image fields are an object").clone(),
+    );
     let scene = serde_json::json!({
         "type": "excalidraw",
         "version": 2,
-        "elements": [
-            {"id": format!("text-{label}"), "type": "text", "text": text},
-            {"id": format!("rect-{label}"), "type": "rectangle"},
-            {"id": format!("image-{label}"), "type": "image", "fileId": "history-image"}
-        ],
+        "elements": elements,
         "appState": {"viewBackgroundColor": "#ffffff"},
         "files": {
             "history-image": {
@@ -1875,6 +1975,18 @@ fn history_restart_scene(label: &str, text: &str) -> (String, Vec<u8>, String) {
     )
 }
 
+fn history_restart_asset(filler: bool) -> Vec<u8> {
+    // Valid 1x1 RGBA PNGs, with distinct pixels for target and filler objects.
+    let encoded = if filler {
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGN4f8LtPwAHpAL91SMEHAAAAABJRU5ErkJggg=="
+    } else {
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMQtzb9DwACewGHJn8pxQAAAABJRU5ErkJggg=="
+    };
+    BASE64
+        .decode(encoded)
+        .expect("fixed PNG fixture is valid base64")
+}
+
 fn publish_history_restart_version(
     store: &HistoryStore,
     document_id: &str,
@@ -1883,9 +1995,14 @@ fn publish_history_restart_version(
     recorded_at: i64,
     asset_hash: &str,
 ) -> Result<(), String> {
-    let asset = b"\x89PNG\r\n\x1a\nlocal-version-history";
+    let target_asset = history_restart_asset(false);
+    let asset = if sha256(&target_asset) == asset_hash {
+        target_asset
+    } else {
+        history_restart_asset(true)
+    };
     let asset_object = store
-        .persist_asset(asset, "image/png", recorded_at)
+        .persist_asset(&asset, "image/png", recorded_at)
         .map_err(|error| format!("failed to persist history asset: {error}"))?;
     if asset_object.hash != asset_hash {
         return Err("history restart asset hash drifted".to_owned());
@@ -1947,9 +2064,14 @@ fn scene_sha256(scene: &serde_json::Value) -> Result<String, String> {
 }
 
 fn scene_asset_hash(scene: &serde_json::Value) -> Result<String, String> {
+    let file_id = scene["elements"]
+        .as_array()
+        .and_then(|elements| elements.iter().find(|element| element["type"] == "image"))
+        .and_then(|element| element["fileId"].as_str())
+        .unwrap_or("history-image");
     let data_url = scene
         .get("files")
-        .and_then(|files| files.get("history-image"))
+        .and_then(|files| files.get(file_id))
         .and_then(|file| file.get("dataURL"))
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| "history restart scene has no asset data".to_owned())?;
@@ -1964,6 +2086,30 @@ fn scene_asset_hash(scene: &serde_json::Value) -> Result<String, String> {
         .decode(encoded)
         .map_err(|error| format!("history restart asset data URL is invalid: {error}"))?;
     Ok(sha256(&bytes))
+}
+
+fn history_restart_elements(scene: &serde_json::Value) -> Result<Vec<serde_json::Value>, String> {
+    let elements = scene["elements"]
+        .as_array()
+        .ok_or_else(|| "history scene has no elements".to_owned())?;
+    elements
+        .iter()
+        .map(|element| {
+            let mut summary = serde_json::Map::new();
+            for key in ["id", "type", "x", "y", "width", "height", "text"] {
+                if let Some(value) = element.get(key) {
+                    summary.insert(key.to_owned(), value.clone());
+                }
+            }
+            if element["type"] == "image" {
+                summary.insert(
+                    "imageAssetSha256".to_owned(),
+                    serde_json::json!(scene_asset_hash(scene)?),
+                );
+            }
+            Ok(serde_json::Value::Object(summary))
+        })
+        .collect()
 }
 
 #[cfg(any(test, feature = "e2e-harness"))]
@@ -3436,6 +3582,113 @@ fn latest_snapshot(directory: &Path) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod history_fault_contract_tests {
     use super::{HistoryFaultContext, HistoryFaultReadyMarker, HistoryFaultStage};
+
+    #[test]
+    fn history_restart_fixture_has_complete_geometry_and_png() {
+        let (scene, asset, hash) = super::history_restart_scene("A", "历史 A");
+        let scene: serde_json::Value = serde_json::from_str(&scene).unwrap();
+        for element in scene["elements"].as_array().unwrap() {
+            assert!(element["width"].as_f64().unwrap_or(0.0) > 0.0);
+            assert!(element["height"].as_f64().unwrap_or(0.0) > 0.0);
+            assert!(element["x"].is_number());
+            assert!(element["y"].is_number());
+        }
+        assert_eq!(&asset[..8], b"\x89PNG\r\n\x1a\n");
+        assert!(asset.windows(4).any(|bytes| bytes == b"IHDR"));
+        assert!(asset.windows(4).any(|bytes| bytes == b"IDAT"));
+        assert!(asset.windows(4).any(|bytes| bytes == b"IEND"));
+        assert_eq!(hash, super::sha256(&asset));
+        assert_ne!(hash, super::history_restart_scene("E0", "填充").2);
+    }
+
+    #[tokio::test]
+    async fn history_restart_seed_and_protection_evict_each_accepted_target() {
+        let root = std::env::temp_dir().join(format!(
+            "excalidraw-desktop-e2e-history-contract-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let seed = super::run_history_restart_seed(&root).await.unwrap();
+        assert_eq!(seed.version_count, 20);
+        assert_eq!(seed.initial_scene_sha256, seed.scene_a_sha256);
+        assert_eq!(
+            super::sha256(&std::fs::read(&seed.target_path).unwrap()),
+            seed.scene_a_sha256
+        );
+        for (target_id, target_hash, previous_label) in [
+            (
+                seed.version_b_id.as_str(),
+                seed.scene_b_sha256.as_str(),
+                "A",
+            ),
+            (
+                seed.version_a_id.as_str(),
+                seed.scene_a_sha256.as_str(),
+                "B",
+            ),
+        ] {
+            let context = super::open_history_restart_context(&root).await.unwrap();
+            let current = std::fs::read_to_string(&seed.target_path).unwrap();
+            let document = super::HistoryDocumentLocator::Path {
+                path: seed.target_path.clone(),
+            };
+            let request_id = format!("contract-{target_id}");
+            context
+                .replacement
+                .e2e_replace(super::HistoryReplaceRequest {
+                    document: document.clone(),
+                    request_id: request_id.clone(),
+                    session_generation: 1,
+                    revision: 1,
+                    expected_base_hash: super::sha256(current.as_bytes()),
+                    current_scene_json: current,
+                    target: super::HistoryReplaceTarget::Restore {
+                        version_id: target_id.to_owned(),
+                    },
+                })
+                .await
+                .unwrap();
+            assert_eq!(
+                super::sha256(&std::fs::read(&seed.target_path).unwrap()),
+                target_hash
+            );
+            let listed = context
+                .query
+                .list(super::HistoryListRequest {
+                    document: document.clone(),
+                    cursor: None,
+                    limit: Some(100),
+                })
+                .await
+                .unwrap();
+            assert_eq!(listed.items.len(), 20);
+            assert!(!listed.items.iter().any(|item| item.version_id == target_id));
+            let status = context
+                .replacement
+                .e2e_operation_status(super::HistoryOperationStatusRequest {
+                    document: document.clone(),
+                    request_id,
+                })
+                .await
+                .unwrap();
+            let protection = context
+                .query
+                .preview(super::HistoryPreviewRequest {
+                    document,
+                    version_id: status.protection_version_id.unwrap(),
+                })
+                .await
+                .unwrap();
+            assert_eq!(
+                protection.scene["elements"][0]["id"],
+                format!("text-{previous_label}")
+            );
+            assert_eq!(
+                super::scene_asset_hash(&protection.scene).unwrap(),
+                seed.asset_sha256
+            );
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn history_fault_stage_names_are_stable_and_complete() {

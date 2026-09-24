@@ -213,6 +213,32 @@ describe("HistoryCoordinator", () => {
     expect(adopt).toHaveBeenCalledOnce();
   });
 
+  it("retains pending when disk committed but display access is unavailable", async () => {
+    const { manager } = createManager();
+    const client = clientWith({
+      status: "pendingReconciliation",
+      requestId: "display-retry",
+      replacementCommitted: null,
+      operationState: "pendingReconciliation",
+    });
+    client.operationStatus = vi.fn().mockResolvedValue({
+      requestId: "display-retry",
+      state: "pendingReconciliation",
+      replacementCommitted: true,
+    } satisfies HistoryOperationStatusResponse);
+    const adopt = vi.fn();
+    const coordinator = new HistoryCoordinator(manager, client, adopt);
+    await coordinator.replace("doc", { kind: "clear" }, "display-retry");
+    await coordinator.resolvePending("doc", "display-retry");
+    expect(manager.retainHistoryPending).toHaveBeenLastCalledWith(
+      "doc",
+      "display-retry",
+    );
+    expect(manager.releaseHistoryPending).not.toHaveBeenCalled();
+    expect(adopt).not.toHaveBeenCalled();
+    expect(client.replace).toHaveBeenCalledOnce();
+  });
+
   it("does not freeze the document after a structured replacement error", async () => {
     const { manager } = createManager();
     const error = { code: "HISTORY_BUSY", message: "busy", retriable: true };

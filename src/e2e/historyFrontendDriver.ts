@@ -12,27 +12,14 @@ import {
   type DocumentManager,
 } from "../documents/documentStore";
 import type { ExcalidrawAdapter } from "../editor/ExcalidrawAdapter";
-import type { SceneSnapshot } from "../editor/sceneSerializer";
+import { deserializeSceneData } from "../editor/sceneSerializer";
+import { createHistoryFrontendEvidence } from "./historyFrontendEvidence";
 import { formatHistoryFrontendError } from "./historyFrontendError";
 
 interface DriverRequest {
   documentPath: string;
   targetVersionId: string;
   requestId: string;
-}
-
-interface FrontendEvidence {
-  scenario: "history-frontend-adoption";
-  requestId: string;
-  targetVersionId: string;
-  documentId: string;
-  adopted: true;
-  canvasReadback: {
-    elementIds: string[];
-    elementTypes: string[];
-    appState: Record<string, unknown>;
-    assetHashes: Record<string, string>;
-  };
 }
 
 interface AttachedEditor {
@@ -88,15 +75,41 @@ export class NativeHistoryFrontendDriver {
     await publishProgress("sessionOpened");
     const editor = await this.waitForEditor(documentId);
     await publishProgress("editorAttached");
+    const client = createHistoryClient(createTauriCommandInvoker());
+    const document = { kind: "path" as const, path: request.documentPath };
+    const listing = await client.list({ document });
+    if (
+      !listing.items.some((item) => item.versionId === request.targetVersionId)
+    ) {
+      throw new Error(
+        "Requested history version is absent from the reopened history list.",
+      );
+    }
+    const preview = await client.preview({
+      document,
+      versionId: request.targetVersionId,
+    });
+    if (preview.versionId !== request.targetVersionId)
+      throw new Error("History preview version does not match the request.");
+    const previewEvidence = await createHistoryFrontendEvidence(
+      request,
+      documentId,
+      await adoptSceneAssets(deserializeSceneData(preview.scene)),
+    );
     const coordinator = new HistoryCoordinator(
       this.documents,
-      createHistoryClient(createTauriCommandInvoker()),
+      client,
       async (scene, context) => {
         const adopted = await adoptSceneAssets(scene);
         if (this.attachedEditor?.documentId !== documentId) return false;
         await editor.adapter.replaceScene(adopted);
         return context.commit(adopted);
       },
+    );
+    const beforeReplacement = await createHistoryFrontendEvidence(
+      request,
+      documentId,
+      editor.adapter.readScene(),
     );
     await publishProgress("replacementStarted");
     const result = await coordinator.replace(
@@ -111,11 +124,22 @@ export class NativeHistoryFrontendDriver {
     }
     await publishProgress("replacementCompleted");
     const readback = editor.adapter.readScene();
-    const evidence = await createEvidence(request, documentId, readback);
+    const evidence = await createHistoryFrontendEvidence(
+      request,
+      documentId,
+      readback,
+    );
     await publishProgress("canvasReadbackReady");
     await invoke("e2e_history_frontend_publish", {
-      evidence,
+      evidence: {
+        ...evidence,
+        beforeReplacement: beforeReplacement.canvasReadback,
+        listedVersionIds: listing.items.map((item) => item.versionId),
+        previewVersionId: preview.versionId,
+        previewReadback: previewEvidence.canvasReadback,
+      },
     });
+    await invoke("e2e_history_frontend_close", {});
   }
 
   private async waitForEditor(documentId: string): Promise<AttachedEditor> {
@@ -149,50 +173,6 @@ async function publishProgress(stage: FrontendProgressStage): Promise<void> {
   await invoke("e2e_history_frontend_publish", {
     evidence: { scenario: "history-frontend-progress", stage },
   });
-}
-
-async function createEvidence(
-  request: DriverRequest,
-  documentId: string,
-  scene: SceneSnapshot,
-): Promise<FrontendEvidence> {
-  const assetHashes: Record<string, string> = {};
-  for (const [fileId, file] of Object.entries(scene.files)) {
-    if (!file.dataURL.startsWith("data:")) continue;
-    const bytes = decodeDataUrl(file.dataURL);
-    const digest = await crypto.subtle.digest("SHA-256", bytes);
-    assetHashes[fileId] = bytesToHex(new Uint8Array(digest));
-  }
-  return {
-    scenario: "history-frontend-adoption",
-    requestId: request.requestId,
-    targetVersionId: request.targetVersionId,
-    documentId,
-    adopted: true,
-    canvasReadback: {
-      elementIds: scene.elements.map((element) => element.id),
-      elementTypes: scene.elements.map((element) => element.type),
-      appState: {
-        viewBackgroundColor: scene.appState.viewBackgroundColor,
-      },
-      assetHashes,
-    },
-  };
-}
-
-function decodeDataUrl(dataUrl: string): ArrayBuffer {
-  const payload = dataUrl.split(",", 2)[1];
-  if (payload === undefined)
-    throw new Error("Canvas asset data URL is malformed.");
-  const binary = atob(payload);
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  return bytes.buffer;
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-    "",
-  );
 }
 
 export const nativeHistoryFrontendDriver = new NativeHistoryFrontendDriver(

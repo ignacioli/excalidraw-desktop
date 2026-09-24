@@ -14,6 +14,137 @@ use std::fs;
 use uuid::Uuid;
 
 #[test]
+fn accepted_restore_target_survives_retention_and_releases_its_temporary_pin() {
+    use crate::history::{
+        gc::{GcCandidate, ObjectKey},
+        repository::{HistoryRepository, PublishSceneRequest},
+        store::HistoryStore,
+        types::HistoryVersionSource,
+    };
+    use std::time::{Duration, SystemTime};
+    let root = std::env::temp_dir().join(format!("history-target-pin-{}", Uuid::new_v4()));
+    let store = HistoryStore::open_version_history_root(&root).unwrap();
+    store.with_connection(|connection| {
+        connection.execute("INSERT INTO history_documents (id, canonical_path, created_at, state) VALUES ('doc', '/tmp/drawing.excalidraw', 0, 'active')", [])?;
+        Ok(())
+    }).unwrap();
+    let repository = HistoryRepository::new(&store);
+    let mut original = Vec::new();
+    for index in 0..20 {
+        let scene = serde_json::to_vec(&serde_json::json!({
+            "type": "excalidraw", "version": 2, "elements": [],
+            "appState": {"viewBackgroundColor": format!("#{index:06x}")}, "files": {}
+        }))
+        .unwrap();
+        if index == 0 {
+            original = scene.clone();
+        }
+        repository
+            .publish_scene(PublishSceneRequest {
+                version_id: format!("v{index}"),
+                document_id: "doc".to_owned(),
+                scene_bytes: scene,
+                schema_version: 1,
+                source: HistoryVersionSource::Automatic,
+                protected_action: None,
+                recorded_at: index,
+                sequence: index as u64,
+            })
+            .unwrap();
+    }
+    let target = super::history::load_history_scene(&store, "doc", "v0").unwrap();
+    repository
+        .publish_scene(PublishSceneRequest {
+            version_id: "protection".to_owned(),
+            document_id: "doc".to_owned(),
+            scene_bytes: empty_scene_bytes(),
+            schema_version: 1,
+            source: HistoryVersionSource::Protected,
+            protected_action: Some(HistoryProtectedAction::Restore),
+            recorded_at: 20,
+            sequence: 20,
+        })
+        .unwrap();
+    assert!(super::history::load_history_scene(&store, "doc", "v0").is_err());
+    assert_eq!(target.scene, original);
+    assert!(target.assets.is_empty());
+    let key = ObjectKey::scene(format!("{:x}", Sha256::digest(&original))).unwrap();
+    let candidate = GcCandidate {
+        object: key.clone(),
+        registered: true,
+        created_at: SystemTime::UNIX_EPOCH,
+    };
+    let before = store
+        .reachability()
+        .collect(
+            [candidate.clone()],
+            SystemTime::now(),
+            Duration::ZERO,
+            |_| Ok::<(), String>(()),
+        )
+        .unwrap();
+    assert_eq!(before.retained, vec![key.clone()]);
+    drop(target);
+    let after = store
+        .reachability()
+        .collect([candidate], SystemTime::now(), Duration::ZERO, |_| {
+            Ok::<(), String>(())
+        })
+        .unwrap();
+    assert_eq!(after.deleted, vec![key]);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn invalid_restore_target_releases_hydration_pin_on_error() {
+    use crate::history::{
+        gc::{GcCandidate, ObjectKey},
+        repository::{HistoryRepository, PublishSceneRequest},
+        store::HistoryStore,
+        types::HistoryVersionSource,
+    };
+    use std::time::{Duration, SystemTime};
+    let root = std::env::temp_dir().join(format!("history-target-error-{}", Uuid::new_v4()));
+    let store = HistoryStore::open_version_history_root(&root).unwrap();
+    store.with_connection(|connection| {
+        connection.execute("INSERT INTO history_documents (id, canonical_path, created_at, state) VALUES ('doc', '/tmp/drawing.excalidraw', 0, 'active')", [])?;
+        Ok(())
+    }).unwrap();
+    let bytes = b"invalid scene";
+    HistoryRepository::new(&store)
+        .publish_scene(PublishSceneRequest {
+            version_id: "invalid".to_owned(),
+            document_id: "doc".to_owned(),
+            scene_bytes: bytes.to_vec(),
+            schema_version: 1,
+            source: HistoryVersionSource::Automatic,
+            protected_action: None,
+            recorded_at: 1,
+            sequence: 1,
+        })
+        .unwrap();
+    assert!(super::history::load_history_scene(&store, "doc", "invalid").is_err());
+    store
+        .reachability()
+        .remove_committed_version("invalid")
+        .unwrap();
+    let key = ObjectKey::scene(format!("{:x}", Sha256::digest(bytes))).unwrap();
+    let report = store
+        .reachability()
+        .collect(
+            [GcCandidate::registered(key.clone(), SystemTime::UNIX_EPOCH)],
+            SystemTime::now(),
+            Duration::ZERO,
+            |_| Ok::<(), String>(()),
+        )
+        .unwrap();
+    assert_eq!(report.deleted, vec![key]);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn clear_target_uses_the_protected_clear_action_and_valid_scene() {
     assert_eq!(
         action_for_target(&HistoryReplaceTarget::Clear),

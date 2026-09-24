@@ -1,8 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
 
 import {
   HistoryRestartJourneyError,
   runTauriHistoryRestartJourney,
+  type HistoryFrontendCanvasEvidence,
+  type HistoryCanvasReadback,
+  type HistoryRestartVerifyEvidence,
 } from "../helpers/reliability";
 
 test("native history survives restart and restores A→B→A with pinned target resources", async ({
@@ -42,24 +46,30 @@ test("native history survives restart and restores A→B→A with pinned target 
   );
   let passed = false;
   try {
-    await testInfo.attach("native-history-restart-evidence", {
-      body: Buffer.from(
-        JSON.stringify(
-          {
-            environment: run.environment,
-            paths: run.paths,
-            evidence: run.evidence,
-          },
-          null,
-          2,
-        ),
+    const evidencePath = testInfo.outputPath(
+      "native-history-restart-evidence.json",
+    );
+    await writeFile(
+      evidencePath,
+      JSON.stringify(
+        {
+          environment: run.environment,
+          paths: run.paths,
+          evidence: run.evidence,
+        },
+        null,
+        2,
       ),
+    );
+    await testInfo.attach("native-history-restart-evidence", {
+      path: evidencePath,
       contentType: "application/json",
     });
 
     const { seed, frontendB, verifyB, frontendA, verifyA, evict } =
       run.evidence;
-    expect(seed.versionCount).toBe(2);
+    expect(seed.versionCount).toBe(20);
+    expect(seed.initialSceneSha256).toBe(seed.sceneASha256);
     expect(seed.targetPath.startsWith(`${run.paths.workspace}/`)).toBe(true);
     expect(seed.historyDatabasePath.startsWith(`${run.paths.data}/`)).toBe(
       true,
@@ -73,6 +83,7 @@ test("native history survives restart and restores A→B→A with pinned target 
     );
     assertVerify(verifyB, seed.sceneBSha256, seed.assetSha256, seed.versionBId);
     assertSharedOperationIdentity(frontendB, verifyB);
+    assertProtectedPriorState(frontendB, verifyB, "A", seed.assetSha256);
     assertFrontendCanvas(
       frontendA,
       seed.versionAId,
@@ -81,6 +92,7 @@ test("native history survives restart and restores A→B→A with pinned target 
     );
     assertVerify(verifyA, seed.sceneASha256, seed.assetSha256, seed.versionAId);
     assertSharedOperationIdentity(frontendA, verifyA);
+    assertProtectedPriorState(frontendA, verifyA, "B", seed.assetSha256);
 
     expect(evict.requestId).toBe("history-restart-a");
     expect(evict.retainedVersionCount).toBe(20);
@@ -91,6 +103,8 @@ test("native history survives restart and restores A→B→A with pinned target 
     expect(evict.targetObjectExistsAfterGc).toBe(true);
     expect(evict.targetAssetExistsAfterGc).toBe(true);
     expect(evict.gcDeletedTarget).toBe(false);
+    expect(evict.targetRetainedSceneReferences).toBe(0);
+    expect(evict.targetRetainedAssetReferences).toBe(0);
     passed = true;
   } finally {
     if (passed) await run.cleanup();
@@ -98,16 +112,7 @@ test("native history survives restart and restores A→B→A with pinned target 
 });
 
 function assertFrontendCanvas(
-  evidence: {
-    requestId: string;
-    targetVersionId: string;
-    adopted: true;
-    canvasReadback: {
-      elementIds: string[];
-      elementTypes: string[];
-      assetHashes: Record<string, string>;
-    };
-  },
+  evidence: HistoryFrontendCanvasEvidence,
   expectedVersionId: string,
   expectedElementIds: string[],
   expectedAssetSha256: string,
@@ -117,6 +122,12 @@ function assertFrontendCanvas(
   );
   expect(evidence.targetVersionId).toBe(expectedVersionId);
   expect(evidence.adopted).toBe(true);
+  expect(evidence.processExit).toEqual({ code: 0, signal: null });
+  expect(evidence.listedVersionIds).toContain(expectedVersionId);
+  expect(evidence.previewVersionId).toBe(expectedVersionId);
+  const label = expectedVersionId.at(-1)!.toUpperCase();
+  assertSceneContents(evidence.canvasReadback, label, expectedAssetSha256);
+  assertSceneContents(evidence.previewReadback, label, expectedAssetSha256);
   expect(evidence.canvasReadback.elementIds).toEqual(
     expect.arrayContaining(expectedElementIds),
   );
@@ -149,17 +160,7 @@ function assertSharedOperationIdentity(
 }
 
 function assertVerify(
-  evidence: {
-    requestId: string;
-    targetVersionId: string;
-    persistedSceneSha256: string;
-    statusSceneSha256?: string;
-    statusState: string;
-    listedVersionIds: string[];
-    targetAssetSha256: string;
-    targetObjectExists: boolean;
-    targetAssetExists: boolean;
-  },
+  evidence: HistoryRestartVerifyEvidence,
   expectedSceneSha256: string,
   expectedAssetSha256: string,
   expectedVersionId: string,
@@ -171,7 +172,9 @@ function assertVerify(
   expect(evidence.persistedSceneSha256).toBe(expectedSceneSha256);
   expect(evidence.statusSceneSha256).toBe(expectedSceneSha256);
   expect(evidence.statusState).toBe("Completed");
-  expect(evidence.listedVersionIds).toContain(expectedVersionId);
+  expect(evidence.listedVersionIds).not.toContain(expectedVersionId);
+  expect(evidence.targetVersionEvicted).toBe(true);
+  expect(evidence.retainedVersionCount).toBe(20);
   expect(evidence.targetAssetSha256).toBe(expectedAssetSha256);
   expect(evidence.targetObjectExists).toBe(true);
   expect(evidence.targetAssetExists).toBe(true);
@@ -183,4 +186,63 @@ function nativeHistoryRestartBuildConfigured(): boolean {
     Boolean(process.env.EXCALIDRAW_E2E_BINARY) &&
     process.env.EXCALIDRAW_E2E_HISTORY_RESTART === "1"
   );
+}
+
+function assertSceneContents(
+  scene: HistoryCanvasReadback,
+  label: string,
+  hash: string,
+): void {
+  expect(scene.elementIds).toEqual([
+    `text-${label}`,
+    `rect-${label}`,
+    `image-${label}`,
+  ]);
+  expect(scene.elements[0]).toMatchObject({
+    type: "text",
+    text: `历史 ${label}`,
+    x: 40,
+    y: 40,
+    width: 180,
+    height: 30,
+  });
+  expect(scene.elements[1]).toMatchObject({
+    type: "rectangle",
+    x: 40,
+    y: 100,
+    width: 180,
+    height: 90,
+  });
+  expect(scene.elements[2]).toMatchObject({
+    type: "image",
+    x: 260,
+    y: 100,
+    width: 80,
+    height: 80,
+  });
+  expect(Object.values(scene.assetHashes)).toEqual([hash]);
+  expect(Object.values(scene.decodedImages)).toEqual([{ width: 1, height: 1 }]);
+}
+
+function assertProtectedPriorState(
+  frontend: HistoryFrontendCanvasEvidence,
+  verify: HistoryRestartVerifyEvidence,
+  label: string,
+  hash: string,
+): void {
+  assertSceneContents(frontend.beforeReplacement, label, hash);
+  expect(verify.protectionVersionId).toBeTruthy();
+  expect(verify.listedVersionIds).toContain(verify.protectionVersionId);
+  expect(verify.protectionAssetSha256).toBe(hash);
+  const expected = frontend.beforeReplacement.elements.map((element) => ({
+    id: element.id,
+    type: element.type,
+    x: element.x,
+    y: element.y,
+    width: element.width,
+    height: element.height,
+    ...(element.type === "text" ? { text: element.text } : {}),
+    ...(element.type === "image" ? { imageAssetSha256: hash } : {}),
+  }));
+  expect(verify.protectionElements).toEqual(expected);
 }

@@ -1068,9 +1068,26 @@ impl DocumentState {
 #[tauri::command]
 pub async fn doc_open(
     path: String,
+    app: AppHandle,
     state: State<'_, DocumentState>,
 ) -> Result<SceneOpenResponse, IpcError> {
-    state.service.doc_open(PathRequest { path }).await
+    let response = state
+        .service
+        .doc_open(PathRequest { path: path.clone() })
+        .await?;
+    let authorized = state
+        .service
+        .authorize_path(Path::new(&path), PathMode::Existing)
+        .await?;
+    let asset_root = asset_root_for(
+        &authorized.path,
+        authorized
+            .workspace
+            .as_ref()
+            .map(|workspace| Path::new(&workspace.root_path)),
+    );
+    super::asset_scope::grant_response_assets(&app, &asset_root, &response.scene)?;
+    Ok(response)
 }
 
 #[tauri::command]

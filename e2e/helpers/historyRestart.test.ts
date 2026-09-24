@@ -13,6 +13,7 @@ import {
   waitForHistoryFrontendEvidence,
   runTauriHistoryRestartJourney,
   HistoryRestartJourneyError,
+  waitForHistoryFrontendExit,
   type HistoryFrontendCanvasEvidence,
 } from "./reliability";
 
@@ -31,8 +32,28 @@ const adoption: HistoryFrontendCanvasEvidence = {
   canvasReadback: {
     elementIds: [],
     elementTypes: [],
-    appState: {},
+    appState: { viewBackgroundColor: "#ffffff" },
     assetHashes: {},
+    elements: [],
+    decodedImages: {},
+  },
+  beforeReplacement: {
+    elementIds: [],
+    elementTypes: [],
+    elements: [],
+    appState: { viewBackgroundColor: "#ffffff" },
+    assetHashes: {},
+    decodedImages: {},
+  },
+  listedVersionIds: [],
+  previewVersionId: "version-a",
+  previewReadback: {
+    elementIds: [],
+    elementTypes: [],
+    elements: [],
+    appState: { viewBackgroundColor: "#ffffff" },
+    assetHashes: {},
+    decodedImages: {},
   },
 };
 
@@ -51,6 +72,33 @@ async function writeMarker(value: unknown): Promise<void> {
 }
 
 describe("history frontend marker identity", () => {
+  it("requires an unsignalled zero exit for the normal-close journey", async () => {
+    const child = new ChildProcess();
+    Object.defineProperty(child, "exitCode", { value: 0, configurable: true });
+    await expect(waitForHistoryFrontendExit(child, 10)).resolves.toEqual({
+      code: 0,
+      signal: null,
+    });
+    Object.defineProperty(child, "exitCode", {
+      value: null,
+      configurable: true,
+    });
+    Object.defineProperty(child, "signalCode", {
+      value: "SIGTERM",
+      configurable: true,
+    });
+    await expect(waitForHistoryFrontendExit(child, 10)).rejects.toThrow(
+      "did not close normally",
+    );
+  });
+  it("reads the matching final marker after a normal process exit", async () => {
+    await writeMarker(adoption);
+    const child = new ChildProcess();
+    Object.defineProperty(child, "exitCode", { value: 0, configurable: true });
+    await expect(
+      waitForHistoryFrontendEvidence(child, marker, 1_000, expected),
+    ).resolves.toEqual(adoption);
+  });
   it.each([
     { requestId: "restore-b", targetVersionId: "version-b" },
     { requestId: expected.requestId, targetVersionId: "version-b" },
@@ -133,7 +181,7 @@ describe("history frontend marker identity", () => {
   it("reports process exit even when a stale marker exists", async () => {
     await writeMarker({ ...adoption, requestId: "restore-b" });
     const child = new ChildProcess();
-    child.exitCode = 1;
+    Object.defineProperty(child, "exitCode", { value: 1, configurable: true });
     await expect(
       waitForHistoryFrontendEvidence(child, marker, 1_000, expected),
     ).rejects.toThrow("process exited before evidence");
@@ -192,6 +240,11 @@ describe("history restart failure evidence", () => {
               (error as NodeJS.ErrnoException).code === "ENOENT";
           }
           await writeFile(readyPath, JSON.stringify(frontendB));
+          Object.defineProperty(child, "exitCode", {
+            value: 0,
+            configurable: true,
+          });
+          child.emit("close", 0);
         })();
       } else {
         queueMicrotask(() => {
@@ -211,7 +264,10 @@ describe("history restart failure evidence", () => {
       throw new Error("Expected retained journey failure");
     expect(failure.stage).toBe("verifyB");
     expect(failure.paths).toEqual(paths);
-    expect(failure.evidence).toEqual({ seed, frontendB });
+    expect(failure.evidence).toEqual({
+      seed,
+      frontendB: { ...frontendB, processExit: { code: 0, signal: null } },
+    });
     expect(failure.message).toContain(root);
     expect(failure.message).toContain("HistoryStaleDocument");
     expect(markerRemovedBeforeLaunch).toBe(true);

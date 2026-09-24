@@ -14,7 +14,7 @@ use std::{
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use tauri::State;
+use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::{
@@ -35,7 +35,7 @@ use crate::{
         validation::validate_scene,
     },
     history::{
-        gc::{ObjectKey, ObjectReferences},
+        gc::{HydrationPin, ObjectKey, ObjectReferences},
         identity::{DocumentIdentity, FileSystemIdentity},
         operation::{OperationObjectPin, OperationRequest, OperationStore, OperationUpdate},
         query::HistoryState,
@@ -101,13 +101,15 @@ pub struct HistoryReplacementService {
     document_service: DocumentService,
 }
 
+type ResponseAssetGrant = Arc<dyn Fn(&Path, &Value) -> Result<(), AppError> + Send + Sync>;
+
 impl HistoryReplacementService {
     #[cfg(feature = "e2e-harness")]
     pub(crate) async fn e2e_replace(
         &self,
         request: HistoryReplaceRequest,
     ) -> Result<HistoryReplaceResponse, IpcError> {
-        self.replace(request).await
+        self.replace(request, None).await
     }
 
     #[cfg(feature = "e2e-harness")]
@@ -121,6 +123,7 @@ impl HistoryReplacementService {
     async fn replace(
         &self,
         request: HistoryReplaceRequest,
+        asset_grant: Option<ResponseAssetGrant>,
     ) -> Result<HistoryReplaceResponse, IpcError> {
         request
             .validate()
@@ -140,13 +143,33 @@ impl HistoryReplacementService {
             .existing_operation_outcome(&unresolved.document_id, &request)
             .await?
         {
+            if let (
+                Some(grant),
+                HistoryReplaceResponse::Completed {
+                    adopted_scene,
+                    request_id,
+                    ..
+                },
+            ) = (&asset_grant, &response)
+            {
+                if let Err(error) = grant(&unresolved.asset_root, adopted_scene) {
+                    eprintln!("completed history replay asset authorization failed: {error}");
+                    // A replay is already committed. Failed display access
+                    // cannot turn that durable outcome into a precommit error.
+                    return Ok(HistoryReplaceResponse::PendingReconciliation {
+                        request_id: request_id.clone(),
+                        replacement_committed: None,
+                        operation_state: HistoryOperationState::PendingReconciliation,
+                    });
+                }
+            }
             return Ok(response);
         }
         let resolved = self.verify_document(unresolved)?;
         let store = self.store()?;
         let action = action_for_target(&request.target);
         tokio::task::spawn_blocking(move || {
-            replace_blocking(request, resolved, store, action, lease)
+            replace_blocking(request, resolved, store, action, lease, asset_grant)
         })
         .await
         .map_err(|error| AppError::Internal(format!("history replacement task failed: {error}")))?
@@ -183,6 +206,28 @@ impl HistoryReplacementService {
         .await
         .map_err(|error| AppError::Internal(format!("history status task failed: {error}")))?
         .map_err(Into::into)
+    }
+
+    async fn status_with_asset_grant(
+        &self,
+        request: HistoryOperationStatusRequest,
+        grant: ResponseAssetGrant,
+    ) -> Result<HistoryOperationStatusResponse, IpcError> {
+        let locator = request.document.clone();
+        let mut response = self.operation_status(request).await?;
+        if let Some(scene) = &response.adopted_scene {
+            let result = match self.resolve_document_without_file_check(&locator).await {
+                Ok(resolved) => grant(&resolved.asset_root, scene).map_err(IpcError::from),
+                Err(error) => Err(error),
+            };
+            if let Err(error) = result {
+                eprintln!("completed history status asset authorization failed: {error:?}");
+                response.state = HistoryOperationState::PendingReconciliation;
+                response.replacement_committed = Some(true);
+                response.adopted_scene = None;
+            }
+        }
+        Ok(response)
     }
 
     fn store(&self) -> Result<Arc<HistoryStore>, IpcError> {
@@ -290,17 +335,23 @@ impl HistoryReplacementService {
 #[tauri::command]
 pub async fn history_replace(
     request: HistoryReplaceRequest,
+    app: AppHandle,
     state: State<'_, HistoryReplacementState>,
 ) -> Result<HistoryReplaceResponse, IpcError> {
-    state.service.replace(request).await
+    let grant: ResponseAssetGrant =
+        Arc::new(move |root, scene| super::asset_scope::grant_response_assets(&app, root, scene));
+    state.service.replace(request, Some(grant)).await
 }
 
 #[tauri::command]
 pub async fn history_operation_status(
     request: HistoryOperationStatusRequest,
+    app: AppHandle,
     state: State<'_, HistoryReplacementState>,
 ) -> Result<HistoryOperationStatusResponse, IpcError> {
-    state.service.operation_status(request).await
+    let grant: ResponseAssetGrant =
+        Arc::new(move |root, scene| super::asset_scope::grant_response_assets(&app, root, scene));
+    state.service.status_with_asset_grant(request, grant).await
 }
 
 #[derive(Debug, Clone)]
@@ -393,6 +444,7 @@ fn replace_blocking(
     store: Arc<HistoryStore>,
     action: HistoryProtectedAction,
     lease: HistoryOperationLease,
+    asset_grant: Option<ResponseAssetGrant>,
 ) -> Result<HistoryReplaceResponse, AppError> {
     if resolved.current_hash != request.expected_base_hash {
         return Err(AppError::HistoryStaleDocument(
@@ -409,8 +461,14 @@ fn replace_blocking(
         expected_identity: resolved.current_identity.clone(),
         action,
     };
-    let backend =
-        RealReplacementBackend::new(request.clone(), resolved, Arc::clone(&store), action, lease);
+    let backend = RealReplacementBackend::new(
+        request.clone(),
+        resolved,
+        Arc::clone(&store),
+        action,
+        lease,
+        asset_grant,
+    );
     let mut engine = ProtectedReplacementEngine::new(backend);
     match engine.execute(protected_request) {
         ReplacementOutcome::Completed(finalized) => {
@@ -628,6 +686,8 @@ struct RealReplacementBackend {
     lease: HistoryOperationLease,
     protection_version_id: Option<String>,
     protection: Option<ProtectionReceipt>,
+    restore_target: Option<PinnedHistoryTarget>,
+    asset_grant: Option<ResponseAssetGrant>,
 }
 
 impl RealReplacementBackend {
@@ -637,6 +697,7 @@ impl RealReplacementBackend {
         store: Arc<HistoryStore>,
         action: HistoryProtectedAction,
         lease: HistoryOperationLease,
+        asset_grant: Option<ResponseAssetGrant>,
     ) -> Self {
         Self {
             request,
@@ -646,6 +707,8 @@ impl RealReplacementBackend {
             lease,
             protection_version_id: None,
             protection: None,
+            restore_target: None,
+            asset_grant,
         }
     }
 
@@ -662,9 +725,11 @@ impl RealReplacementBackend {
             HistoryReplaceTarget::Import {
                 candidate_scene_json,
             } => normalize_scene(&self.resolved.asset_root, candidate_scene_json),
-            HistoryReplaceTarget::Restore { version_id } => {
-                load_history_scene(&self.store, &self.resolved.document_id, version_id)
-            }
+            HistoryReplaceTarget::Restore { .. } => self
+                .restore_target
+                .as_ref()
+                .map(|target| (target.scene.clone(), target.assets.clone()))
+                .ok_or_else(|| "restore target was not pinned before protection".to_owned()),
         }
     }
 }
@@ -680,6 +745,15 @@ impl ProtectedReplacementBackend for RealReplacementBackend {
         &mut self,
         _: &ProtectedReplacementRequest,
     ) -> Result<CapturedDocument, Self::Error> {
+        // Protection publication may evict the selected oldest version. Own
+        // its immutable bytes and pin its objects before that mutation.
+        if let HistoryReplaceTarget::Restore { version_id } = &self.request.target {
+            self.restore_target = Some(load_history_scene(
+                &self.store,
+                &self.resolved.document_id,
+                version_id,
+            )?);
+        }
         let (scene_json, assets) =
             normalize_scene(&self.resolved.asset_root, &self.request.current_scene_json)?;
         Ok(CapturedDocument { scene_json, assets })
@@ -788,6 +862,10 @@ impl ProtectedReplacementBackend for RealReplacementBackend {
         let (scene_json, target_assets) = self.target_scene()?;
         validate_scene_payload(&scene_json, &target_assets)?;
         materialize_workspace_assets(&self.resolved.asset_root, &target_assets)?;
+        if let Some(grant) = &self.asset_grant {
+            let scene = serde_json::from_slice(&scene_json).map_err(|error| error.to_string())?;
+            grant(&self.resolved.asset_root, &scene).map_err(|error| error.to_string())?;
+        }
         let scene = self
             .store
             .put_scene(&scene_json, 1)
@@ -1277,11 +1355,17 @@ fn decode_data_url(value: &str) -> Option<(Vec<u8>, String)> {
     Some((BASE64.decode(payload.as_bytes()).ok()?, mime))
 }
 
-fn load_history_scene(
+pub(crate) struct PinnedHistoryTarget {
+    pub(crate) scene: Vec<u8>,
+    pub(crate) assets: Vec<CapturedAsset>,
+    _pin: HydrationPin,
+}
+
+pub(crate) fn load_history_scene(
     store: &HistoryStore,
     document_id: &str,
     version_id: &str,
-) -> Result<(Vec<u8>, Vec<CapturedAsset>), String> {
+) -> Result<PinnedHistoryTarget, String> {
     let (scene_hash, assets) = store
         .with_connection(|connection| {
             let scene_hash = connection.query_row(
@@ -1304,6 +1388,15 @@ fn load_history_scene(
             Ok::<_, rusqlite::Error>((scene_hash, rows))
         })
         .map_err(|error| error.to_string())?;
+    let references = ObjectReferences::new(
+        scene_hash.clone(),
+        assets.iter().map(|(_, hash, _)| hash.clone()),
+    )
+    .map_err(|error| error.to_string())?;
+    let pin = store
+        .reachability()
+        .acquire_hydration_pin(references)
+        .map_err(|error| error.to_string())?;
     let scene = store
         .objects()
         .read_scene(&scene_hash)
@@ -1321,7 +1414,12 @@ fn load_history_scene(
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok((scene, assets))
+    validate_scene_payload(&scene, &assets)?;
+    Ok(PinnedHistoryTarget {
+        scene,
+        assets,
+        _pin: pin,
+    })
 }
 
 pub(crate) fn empty_scene_bytes() -> Vec<u8> {
@@ -1402,4 +1500,143 @@ fn block_on_history_lease(
 
 fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
+}
+
+#[cfg(test)]
+mod asset_grant_lifecycle_tests {
+    use super::*;
+    use crate::{commands::dto::PathRequest, database::repository::WorkspaceRecord};
+
+    struct DenyDirect;
+    impl DirectFileGrant for DenyDirect {
+        fn is_allowed(&self, _: &Path) -> bool {
+            false
+        }
+    }
+
+    async fn fixture() -> (
+        PathBuf,
+        PathBuf,
+        HistoryReplacementService,
+        HistoryReplaceRequest,
+    ) {
+        let root = std::env::temp_dir().join(format!("history-grant-lifecycle-{}", Uuid::new_v4()));
+        fs::create_dir_all(root.join("workspace")).unwrap();
+        let workspace = root.join("workspace").canonicalize().unwrap();
+        let path = workspace.join("drawing.excalidraw");
+        let current = r##"{"type":"excalidraw","version":2,"elements":[],"appState":{"viewBackgroundColor":"#123456"},"files":{}}"##;
+        fs::write(&path, current).unwrap();
+        let repository = Arc::new(
+            SqliteRepository::open(&root.join("documents.sqlite3"))
+                .await
+                .unwrap(),
+        );
+        repository
+            .workspace_upsert(WorkspaceRecord {
+                id: "workspace".to_owned(),
+                name: "workspace".to_owned(),
+                root_path: workspace.display().to_string(),
+                created_at: 1,
+                mounted: true,
+            })
+            .await
+            .unwrap();
+        let store = Arc::new(HistoryStore::open(&root).unwrap());
+        let mut document_service = DocumentService::new(Arc::clone(&repository));
+        document_service.attach_history_store(Arc::clone(&store));
+        document_service
+            .doc_open(PathRequest {
+                path: path.display().to_string(),
+            })
+            .await
+            .unwrap();
+        let service = HistoryReplacementService {
+            repository,
+            store: Some(store),
+            direct_file_grant: Arc::new(DenyDirect),
+            document_service,
+        };
+        let request = HistoryReplaceRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path.display().to_string(),
+            },
+            request_id: "grant-request".to_owned(),
+            session_generation: 1,
+            revision: 1,
+            expected_base_hash: sha256_hex(current.as_bytes()),
+            current_scene_json: current.to_owned(),
+            target: HistoryReplaceTarget::Clear,
+        };
+        (root, path, service, request)
+    }
+
+    fn reject_grant() -> ResponseAssetGrant {
+        Arc::new(|_, _| {
+            Err(AppError::Internal(
+                "injected asset scope rejection".to_owned(),
+            ))
+        })
+    }
+
+    #[tokio::test]
+    async fn asset_grant_failure_aborts_before_disk_replacement() {
+        let (root, path, service, request) = fixture().await;
+        let before = fs::read(&path).unwrap();
+        assert!(service
+            .replace(request.clone(), Some(reject_grant()))
+            .await
+            .is_err());
+        assert_eq!(fs::read(&path).unwrap(), before);
+        let status = service
+            .operation_status(HistoryOperationStatusRequest {
+                document: request.document,
+                request_id: request.request_id,
+            })
+            .await
+            .unwrap();
+        assert_eq!(status.state, HistoryOperationState::Aborted);
+        assert_eq!(status.replacement_committed, Some(false));
+        assert!(status.adopted_scene.is_none());
+        drop(service);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn committed_asset_grant_failure_remains_pending_and_recoverable() {
+        let (root, path, service, request) = fixture().await;
+        let completed = service.replace(request.clone(), None).await.unwrap();
+        assert!(matches!(
+            completed,
+            HistoryReplaceResponse::Completed { .. }
+        ));
+        let committed = fs::read(&path).unwrap();
+        let replay = service
+            .replace(request.clone(), Some(reject_grant()))
+            .await
+            .unwrap();
+        let json = serde_json::to_value(replay).unwrap();
+        assert_eq!(json["status"], "pendingReconciliation");
+        assert!(json["replacementCommitted"].is_null());
+        assert_eq!(json["operationState"], "pendingReconciliation");
+        let query = HistoryOperationStatusRequest {
+            document: request.document,
+            request_id: request.request_id,
+        };
+        let pending = service
+            .status_with_asset_grant(query.clone(), reject_grant())
+            .await
+            .unwrap();
+        assert_eq!(pending.state, HistoryOperationState::PendingReconciliation);
+        assert_eq!(pending.replacement_committed, Some(true));
+        assert!(pending.adopted_scene.is_none());
+        let recovered = service
+            .status_with_asset_grant(query, Arc::new(|_, _| Ok(())))
+            .await
+            .unwrap();
+        assert_eq!(recovered.state, HistoryOperationState::Completed);
+        assert!(recovered.adopted_scene.is_some());
+        assert_eq!(fs::read(&path).unwrap(), committed);
+        drop(service);
+        fs::remove_dir_all(root).unwrap();
+    }
 }

@@ -1,3 +1,4 @@
+mod asset_scope;
 pub mod documents;
 pub mod dto;
 pub mod entries;
