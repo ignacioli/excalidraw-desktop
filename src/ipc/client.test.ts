@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { validateHistoryCommandRequest } from "./client";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createTauriCommandInvoker,
+  validateHistoryCommandRequest,
+} from "./client";
+
+const { tauriInvoke } = vi.hoisted(() => ({ tauriInvoke: vi.fn() }));
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke: tauriInvoke }));
 
 describe("IPC v3 history input boundary", () => {
   const document = { kind: "handle" as const, documentId: "document-1" };
@@ -68,5 +75,36 @@ describe("IPC v3 history input boundary", () => {
         target: { kind: "import", candidateSceneJson: "" },
       }),
     ).toThrow();
+  });
+});
+
+describe("Tauri command envelope", () => {
+  beforeEach(() => {
+    tauriInvoke.mockReset();
+  });
+
+  it("wraps history commands in the Rust request argument", async () => {
+    tauriInvoke.mockResolvedValue({
+      documentId: "document-1",
+      items: [],
+      listRevision: 1,
+    });
+    const request = {
+      document: { kind: "handle" as const, documentId: "document-1" },
+      limit: 50,
+    };
+
+    await createTauriCommandInvoker().invoke("history_list", request);
+
+    expect(tauriInvoke).toHaveBeenCalledWith("history_list", { request });
+  });
+
+  it("keeps legacy flat command arguments unchanged", async () => {
+    tauriInvoke.mockResolvedValue([]);
+    const request = { workspaceId: "workspace-1", parentRelativePath: "" };
+
+    await createTauriCommandInvoker().invoke("workspace_entry_list", request);
+
+    expect(tauriInvoke).toHaveBeenCalledWith("workspace_entry_list", request);
   });
 });

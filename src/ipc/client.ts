@@ -10,8 +10,7 @@ import {
   type HistoryCommandName,
 } from "./contracts";
 
-export type HistoryCommandRequest =
-  CommandRequest<HistoryCommandName>;
+export type HistoryCommandRequest = CommandRequest<HistoryCommandName>;
 
 // History list/preview and protected replacement/status are available on the
 // v3 backend. Manual mark and deletion remain typed but reserved.
@@ -71,11 +70,7 @@ function requireVersionId(value: unknown): string {
 }
 
 function requireGeneration(value: unknown, field: string): void {
-  if (
-    typeof value !== "number" ||
-    !Number.isSafeInteger(value) ||
-    value < 0
-  ) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     throw new TypeError(`${field} must be a non-negative safe integer`);
   }
 }
@@ -198,7 +193,9 @@ export function createTauriCommandInvoker(): CommandInvoker {
       const { invoke } = await import("@tauri-apps/api/core");
       return invoke<CommandResponse<Name>>(
         commandForInvoke,
-        requestForInvoke as Record<string, unknown>,
+        (isHistoryCommand(commandForInvoke)
+          ? { request: requestForInvoke }
+          : requestForInvoke) as Record<string, unknown>,
       );
     },
   };
