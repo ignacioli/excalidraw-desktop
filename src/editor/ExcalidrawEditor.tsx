@@ -8,6 +8,7 @@ import { ExcalidrawAdapter } from "./ExcalidrawAdapter";
 import { resolveAssetFiles } from "./assetResolver";
 import { ImeBridge } from "./imeBridge";
 import type { SceneSnapshot } from "./sceneSerializer";
+import type { ProtectedInputHandlers } from "../history/protectedInput";
 
 interface ExcalidrawEditorProps {
   documentId: string;
@@ -15,6 +16,8 @@ interface ExcalidrawEditorProps {
   theme: ResolvedColorScheme;
   readOnly?: boolean;
   onSceneChange: (scene: SceneSnapshot) => void;
+  /** Host-owned handlers for destructive clear/import entry points. */
+  protectedInput?: ProtectedInputHandlers;
   onReady?: (
     documentId: string,
     adapter: ExcalidrawAdapter,
@@ -28,11 +31,13 @@ export function ExcalidrawEditor({
   theme,
   readOnly = false,
   onSceneChange,
+  protectedInput,
   onReady,
 }: ExcalidrawEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const adapterRef = useRef<ExcalidrawAdapter | undefined>(undefined);
   const imeBridgeRef = useRef<ImeBridge | undefined>(undefined);
+  const protectedInputRef = useRef(protectedInput);
   const [initialData, setInitialData] = useState<SceneSnapshot | undefined>(
     undefined,
   );
@@ -41,8 +46,9 @@ export function ExcalidrawEditor({
 
   useEffect(() => {
     onSceneChangeRef.current = onSceneChange;
+    protectedInputRef.current = protectedInput;
     onReadyRef.current = onReady;
-  }, [onReady, onSceneChange]);
+  }, [onReady, onSceneChange, protectedInput]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +93,17 @@ export function ExcalidrawEditor({
 
       if (containerRef.current !== null) {
         imeBridgeRef.current = new ImeBridge(containerRef.current, api);
+        const removeProtectedInput = adapter.installProtectedInput(
+          containerRef.current,
+          {
+            onClear: () => protectedInputRef.current?.onClear?.(),
+            onImportShortcut: () =>
+              protectedInputRef.current?.onImportShortcut?.(),
+            onSceneDrop: (drop) =>
+              protectedInputRef.current?.onSceneDrop?.(drop),
+            onError: (error) => protectedInputRef.current?.onError?.(error),
+          },
+        );
         const observer = new ResizeObserver(() => {
           adapter.refresh();
         });
@@ -94,6 +111,7 @@ export function ExcalidrawEditor({
         const previousDispose = adapter.dispose.bind(adapter);
         adapter.dispose = () => {
           observer.disconnect();
+          removeProtectedInput();
           previousDispose();
         };
       }
@@ -140,6 +158,7 @@ export function ExcalidrawEditor({
         viewModeEnabled={readOnly}
         UIOptions={{
           canvasActions: {
+            clearCanvas: false,
             export: false,
             loadScene: false,
             saveToActiveFile: false,

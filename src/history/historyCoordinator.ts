@@ -20,6 +20,7 @@ import type {
   DocumentSessionVersion,
 } from "../documents/documentStore";
 import type { HistoryClient } from "./types";
+import { importTarget, type ImportedSceneCandidate } from "./importProtection";
 
 export interface HistoryAdoptionContext {
   documentId: string;
@@ -41,6 +42,41 @@ export type HistorySceneAdopter = (
 export interface HistoryReplacementResult {
   response: HistoryReplaceResponse;
   adopted: boolean;
+}
+
+export interface HistoryReplacementOptions {
+  /** Reuse the existing Save As/first-save flow for an untitled session. */
+  prepareUnsaved?: HistoryMarkSaveHandler;
+}
+
+export class HistoryReplacementRequiresSaveError extends Error {
+  constructor() {
+    super("An untitled drawing must be saved before it can be replaced.");
+    this.name = "HistoryReplacementRequiresSaveError";
+  }
+}
+
+export class HistoryReplacementCancelledError extends Error {
+  constructor() {
+    super("The first save was cancelled; the drawing was not replaced.");
+    this.name = "HistoryReplacementCancelledError";
+  }
+}
+
+export type HistoryReplacementBlockedReason = "conflict";
+
+export class HistoryReplacementBlockedError extends Error {
+  readonly reason: HistoryReplacementBlockedReason;
+
+  constructor(reason: HistoryReplacementBlockedReason) {
+    super(
+      reason === "conflict"
+        ? "Resolve the file conflict before replacing the drawing."
+        : "The drawing cannot be replaced.",
+    );
+    this.name = "HistoryReplacementBlockedError";
+    this.reason = reason;
+  }
 }
 
 /**
@@ -185,7 +221,16 @@ export class HistoryCoordinator {
     documentId: string,
     target: HistoryReplaceTarget,
     requestId = createRequestId(),
+    options: HistoryReplacementOptions = {},
   ): Promise<HistoryReplacementResult> {
+    const preparedDocument = await this.prepareReplacement(documentId, options);
+    const current = this.manager.store.getState().sessionsById[documentId];
+    if (
+      current !== undefined &&
+      (current.saveState === "conflicted" || current.conflictInfo !== null)
+    ) {
+      throw new HistoryReplacementBlockedError("conflict");
+    }
     let adopted = false;
     const response = await this.manager.runHistoryReplacement(
       documentId,
@@ -196,12 +241,13 @@ export class HistoryCoordinator {
         }
         const request = {
           document:
-            session.historyDocumentId === undefined
+            preparedDocument ??
+            (session.historyDocumentId === undefined
               ? { kind: "path" as const, path: session.path }
               : {
                   kind: "handle" as const,
                   documentId: session.historyDocumentId,
-                },
+                }),
           requestId,
           sessionGeneration: context.sessionGeneration,
           revision: context.revision,
@@ -230,6 +276,43 @@ export class HistoryCoordinator {
       },
     );
     return { response, adopted };
+  }
+
+  /** Clear/reset uses the same protected replacement transaction exactly once. */
+  async clear(
+    documentId: string,
+    requestId = createRequestId(),
+    options: HistoryReplacementOptions = {},
+  ): Promise<HistoryReplacementResult> {
+    return this.replace(documentId, { kind: "clear" }, requestId, options);
+  }
+
+  /** Alias used by reset commands; it must not create a second transaction. */
+  async reset(
+    documentId: string,
+    requestId = createRequestId(),
+    options: HistoryReplacementOptions = {},
+  ): Promise<HistoryReplacementResult> {
+    return this.clear(documentId, requestId, options);
+  }
+
+  /**
+   * Import callers must parse through importProtection first. Accepting its
+   * canonical candidate here keeps arbitrary frontend strings out of this
+   * convenience path while the Rust boundary still validates the payload.
+   */
+  async replaceImportedScene(
+    documentId: string,
+    candidate: ImportedSceneCandidate,
+    requestId = createRequestId(),
+    options: HistoryReplacementOptions = {},
+  ): Promise<HistoryReplacementResult> {
+    return this.replace(
+      documentId,
+      importTarget(candidate),
+      requestId,
+      options,
+    );
   }
 
   /** Resolve a pending/uncertain operation without issuing another replace. */
@@ -394,6 +477,41 @@ export class HistoryCoordinator {
       sessionGeneration: session.sessionGeneration ?? 0,
       revision: session.revision,
     };
+  }
+
+  private async prepareReplacement(
+    documentId: string,
+    options: HistoryReplacementOptions,
+  ): Promise<HistoryDocumentLocator | undefined> {
+    const current = this.manager.store.getState().sessionsById[documentId];
+    if (current === undefined) {
+      throw new Error(`Document ${documentId} is not open.`);
+    }
+    if (current.path.length > 0) {
+      return current.historyDocumentId === undefined
+        ? { kind: "path", path: current.path }
+        : { kind: "handle", documentId: current.historyDocumentId };
+    }
+    if (options.prepareUnsaved === undefined) {
+      throw new HistoryReplacementRequiresSaveError();
+    }
+    const capture = this.captureMark(documentId);
+    const prepared = await options.prepareUnsaved(capture);
+    if (prepared?.status === "cancelled") {
+      throw new HistoryReplacementCancelledError();
+    }
+    const updated = this.manager.store.getState().sessionsById[documentId];
+    if (prepared?.document !== undefined) {
+      return prepared.document;
+    }
+    if (updated?.path.length === 0) {
+      throw new HistoryReplacementRequiresSaveError();
+    }
+    return updated === undefined
+      ? undefined
+      : updated.historyDocumentId === undefined
+        ? { kind: "path", path: updated.path }
+        : { kind: "handle", documentId: updated.historyDocumentId };
   }
 
   private async finishAdoption(

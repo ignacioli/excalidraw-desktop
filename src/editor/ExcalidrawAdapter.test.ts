@@ -154,6 +154,37 @@ describe("ExcalidrawAdapter scene adoption", () => {
     expect(ids).toHaveLength(2);
     expect(ids[0]).toBe(ids[1]);
   });
+
+  it("exposes host-owned protected input installation with cleanup", () => {
+    const root = document.createElement("div");
+    const canvas = document.createElement("div");
+    root.append(canvas);
+    document.body.append(root);
+    const onClear = vi.fn();
+    const adapter = new ExcalidrawAdapter(fakeApi());
+
+    adapter.installProtectedInput(root, { onClear });
+    canvas.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "Delete",
+        metaKey: true,
+      }),
+    );
+    expect(onClear).toHaveBeenCalledOnce();
+
+    adapter.dispose();
+    canvas.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "Delete",
+        metaKey: true,
+      }),
+    );
+    expect(onClear).toHaveBeenCalledOnce();
+  });
 });
 
 function sceneWithImage(dataURL: string, fileId = OLD_FILE_ID): SceneSnapshot {

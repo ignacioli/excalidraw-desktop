@@ -7,6 +7,10 @@ import type {
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { documentAppState, type SceneSnapshot } from "./sceneSerializer";
 import { adoptSceneAssets } from "../history/assetAdoption";
+import {
+  installProtectedInput,
+  type ProtectedInputHandlers,
+} from "../history/protectedInput";
 
 export type SceneChangeListener = (scene: SceneSnapshot) => void;
 export type AssetFileResolver = (files: BinaryFiles) => Promise<BinaryFiles>;
@@ -14,6 +18,7 @@ export type AssetFileResolver = (files: BinaryFiles) => Promise<BinaryFiles>;
 export class ExcalidrawAdapter {
   private readonly api: ExcalidrawImperativeAPI;
   private readonly subscriptions = new Set<() => void>();
+  private readonly protectedInputDisposers = new Set<() => void>();
   private readonly resolveFiles: AssetFileResolver | undefined;
 
   constructor(api: ExcalidrawImperativeAPI, resolveFiles?: AssetFileResolver) {
@@ -125,12 +130,37 @@ export class ExcalidrawAdapter {
   }
 
   dispose(): void {
+    this.protectedInputDisposers.forEach((dispose) => dispose());
+    this.protectedInputDisposers.clear();
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();
   }
 
   refresh(): void {
     this.api.refresh();
+  }
+
+  /**
+   * Attach host-owned guards before the SDK's container handlers run.  The
+   * adapter owns lifecycle disposal so replacing an editor cannot leave a
+   * stale coordinator callback attached to the old canvas.
+   */
+  installProtectedInput(
+    container: HTMLElement,
+    handlers: ProtectedInputHandlers,
+  ): () => void {
+    const remove = installProtectedInput(container, handlers);
+    let disposed = false;
+    const dispose = () => {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
+      remove();
+      this.protectedInputDisposers.delete(dispose);
+    };
+    this.protectedInputDisposers.add(dispose);
+    return dispose;
   }
 }
 
