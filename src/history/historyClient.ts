@@ -2,6 +2,8 @@ import {
   HISTORY_DEFAULT_PAGE_LIMIT,
   HISTORY_MAX_PAGE_LIMIT,
   type HistoryListRequest,
+  type HistoryMarkRequest,
+  type HistoryMarkResponse,
   type HistoryOperationStatusRequest,
   type HistoryOperationStatusResponse,
   type HistoryReplaceRequest,
@@ -121,6 +123,7 @@ function validateRequest<Name extends Parameters<CommandInvoker["invoke"]>[0]>(
   if (
     command === "history_list" ||
     command === "history_preview" ||
+    command === "history_mark" ||
     command === "history_replace" ||
     command === "history_operation_status"
   ) {
@@ -177,6 +180,10 @@ export function createHistoryClient(invoker: CommandInvoker): HistoryClient {
     async preview(request) {
       validateRequest("history_preview", request);
       return invoker.invoke("history_preview", request);
+    },
+    async mark(request: HistoryMarkRequest): Promise<HistoryMarkResponse> {
+      validateRequest("history_mark", request);
+      return invoker.invoke("history_mark", request);
     },
     replace,
     operationStatus,

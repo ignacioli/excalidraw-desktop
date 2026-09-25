@@ -106,6 +106,27 @@ describe("history client", () => {
     });
   });
 
+  it("forwards a mark request and waits for the durable response", async () => {
+    const response = {
+      versionId: "manual-1",
+      recordedAt: 123,
+      source: "manual" as const,
+      contentHash: "hash-1",
+    };
+    const invoke = vi.fn().mockResolvedValue(response);
+    const client = createHistoryClient(createInvoker(invoke));
+    const request = {
+      document,
+      requestId: "mark-1",
+      sessionGeneration: 2,
+      revision: 8,
+      currentSceneJson: '{"type":"excalidraw","elements":[]}',
+    };
+
+    await expect(client.mark(request)).resolves.toEqual(response);
+    expect(invoke).toHaveBeenCalledWith("history_mark", request);
+  });
+
   it("recovers a lost replacement response by querying status once, never replaying replace", async () => {
     const status: HistoryOperationStatusResponse = {
       requestId: "replace-1",

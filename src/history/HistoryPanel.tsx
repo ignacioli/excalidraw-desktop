@@ -31,6 +31,11 @@ export interface HistoryPanelProps {
   onPreview?: (item: HistoryVersionView) => void;
   onExitPreview?: (item: HistoryVersionView) => void;
   onRestore?: (item: HistoryVersionView) => void | Promise<void>;
+  /** Marks the live canvas; the caller resolves only after durable publish. */
+  onMark?: () => void | Promise<void>;
+  markProcessing?: boolean;
+  markSuccessMessage?: string;
+  markErrorMessage?: string;
   /** Future Mark/Delete controls are supplied by the domain owner. */
   moreActions?: ReactNode;
   triggerRef?: RefObject<HTMLElement | null>;
@@ -59,6 +64,10 @@ export function HistoryPanel({
   onPreview,
   onExitPreview,
   onRestore,
+  onMark,
+  markProcessing = false,
+  markSuccessMessage = "Version marked and saved to history.",
+  markErrorMessage,
   moreActions,
   triggerRef,
 }: HistoryPanelProps) {
@@ -68,6 +77,13 @@ export function HistoryPanel({
   const [internalPreviewId, setInternalPreviewId] = useState<string | null>(
     previewVersionId ?? null,
   );
+  const [markFeedback, setMarkFeedback] = useState<
+    | { status: "success"; message: string }
+    | { status: "error"; message: string }
+    | null
+  >(null);
+  const [markBusy, setMarkBusy] = useState(false);
+  const markIsProcessing = markProcessing || markBusy;
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
   const previewReturnIdRef = useRef<string | null>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -114,6 +130,25 @@ export function HistoryPanel({
     onClose();
   };
 
+  const handleMark = async () => {
+    if (onMark === undefined || processing || markIsProcessing) return;
+    setMarkFeedback(null);
+    setMarkBusy(true);
+    try {
+      await onMark();
+      setMarkFeedback({ status: "success", message: markSuccessMessage });
+    } catch (error) {
+      const message =
+        markErrorMessage ??
+        (error instanceof Error
+          ? error.message
+          : "The current version could not be marked.");
+      setMarkFeedback({ status: "error", message });
+    } finally {
+      setMarkBusy(false);
+    }
+  };
+
   const handlePanelKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== "Escape") return;
     event.preventDefault();
@@ -153,6 +188,32 @@ export function HistoryPanel({
       </header>
 
       <div className="history-panel-body">
+        {onMark !== undefined ? (
+          <section
+            aria-label="Current version actions"
+            className="history-current-actions"
+          >
+            <button
+              disabled={processing || markIsProcessing}
+              onClick={() => void handleMark()}
+              type="button"
+            >
+              {markIsProcessing
+                ? "Marking current version…"
+                : "Mark current version"}
+            </button>
+            {markFeedback?.status === "success" ? (
+              <p aria-live="polite" role="status">
+                {markFeedback.message}
+              </p>
+            ) : null}
+            {markFeedback?.status === "error" ? (
+              <p aria-live="assertive" role="alert">
+                {markFeedback.message}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
         {previewItem !== undefined ? (
           <HistoryPreview
             content={previewContent}

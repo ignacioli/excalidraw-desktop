@@ -5,6 +5,7 @@ import { HistoryCoordinator } from "./historyCoordinator";
 import { HistoryReplaceStatusError } from "./historyClient";
 import { DocumentManager } from "../documents/documentStore";
 import type { DocumentGateway } from "../documents/documentGateway";
+import { serializeScene } from "../editor/sceneSerializer";
 
 vi.mock("../editor/sceneSerializer", () => ({
   serializeScene: vi.fn(() => '{"type":"excalidraw","elements":[],"files":{}}'),
@@ -70,12 +71,139 @@ function clientWith(
   return {
     list: vi.fn(),
     preview: vi.fn(),
+    mark: vi.fn().mockResolvedValue({
+      versionId: "marked-1",
+      recordedAt: 123,
+      source: "manual",
+      contentHash: "content-hash",
+    }),
     replace: vi.fn().mockResolvedValue(response),
     operationStatus: vi.fn(),
   };
 }
 
 describe("HistoryCoordinator", () => {
+  it("captures the click state and reports success only after history_mark replies", async () => {
+    const { manager } = createManager();
+    const client = clientWith({
+      status: "pendingReconciliation",
+      requestId: "unused",
+      replacementCommitted: null,
+      operationState: "pendingReconciliation",
+    });
+    const mark = vi.mocked(client.mark);
+    const coordinator = new HistoryCoordinator(manager, client, vi.fn());
+
+    const result = await coordinator.mark("doc", { requestId: "mark-1" });
+
+    expect(result.status).toBe("marked");
+    expect(mark).toHaveBeenCalledWith({
+      document: { kind: "handle", documentId: "history-doc" },
+      requestId: "mark-1",
+      sessionGeneration: 4,
+      revision: 9,
+      currentSceneJson: serializeScene(scene),
+    });
+    expect(manager.store.getState().sessionsById.doc.scene).toBe(scene);
+  });
+
+  it("does not change the canvas when mark fails", async () => {
+    const { manager } = createManager();
+    const client = clientWith({
+      status: "pendingReconciliation",
+      requestId: "unused",
+      replacementCommitted: null,
+      operationState: "pendingReconciliation",
+    });
+    const error = new Error("history is unavailable");
+    client.mark = vi.fn().mockRejectedValue(error);
+    const coordinator = new HistoryCoordinator(manager, client, vi.fn());
+
+    await expect(
+      coordinator.mark("doc", { requestId: "mark-failed" }),
+    ).rejects.toBe(error);
+    expect(manager.store.getState().sessionsById.doc.scene).toBe(scene);
+  });
+
+  it("keeps the current canvas when an untitled first-save flow is cancelled", async () => {
+    const { manager } = createManager();
+    manager.store.setState((state) => ({
+      ...state,
+      sessionsById: {
+        ...state.sessionsById,
+        doc: {
+          ...state.sessionsById.doc,
+          path: "",
+          historyDocumentId: undefined,
+        },
+      },
+    }));
+    const client = clientWith({
+      status: "pendingReconciliation",
+      requestId: "unused",
+      replacementCommitted: null,
+      operationState: "pendingReconciliation",
+    });
+    const prepareUnsaved = vi
+      .fn()
+      .mockResolvedValue({ status: "cancelled" as const });
+    const coordinator = new HistoryCoordinator(manager, client, vi.fn());
+
+    await expect(
+      coordinator.mark("doc", { prepareUnsaved }),
+    ).resolves.toMatchObject({ status: "cancelled" });
+    expect(prepareUnsaved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "",
+        scene,
+        sceneJson: serializeScene(scene),
+      }),
+    );
+    expect(client.mark).not.toHaveBeenCalled();
+    expect(manager.store.getState().sessionsById.doc.scene).toBe(scene);
+  });
+
+  it("marks the captured untitled scene after the existing first-save flow", async () => {
+    const { manager } = createManager();
+    manager.store.setState((state) => ({
+      ...state,
+      sessionsById: {
+        ...state.sessionsById,
+        doc: {
+          ...state.sessionsById.doc,
+          path: "",
+          historyDocumentId: undefined,
+        },
+      },
+    }));
+    const client = clientWith({
+      status: "pendingReconciliation",
+      requestId: "unused",
+      replacementCommitted: null,
+      operationState: "pendingReconciliation",
+    });
+    const prepareUnsaved = vi.fn().mockResolvedValue({
+      status: "saved" as const,
+      document: { kind: "path" as const, path: "/workspace/new.excalidraw" },
+      sessionGeneration: 1,
+      revision: 10,
+    });
+    const coordinator = new HistoryCoordinator(manager, client, vi.fn());
+
+    await coordinator.mark("doc", {
+      requestId: "mark-unsaved",
+      prepareUnsaved,
+    });
+
+    expect(client.mark).toHaveBeenCalledWith({
+      document: { kind: "path", path: "/workspace/new.excalidraw" },
+      requestId: "mark-unsaved",
+      sessionGeneration: 1,
+      revision: 10,
+      currentSceneJson: serializeScene(scene),
+    });
+  });
+
   it("captures one document version and adopts one completed response", async () => {
     const { manager, context } = createManager();
     const adopt = vi.fn((_scene, context) => context.commit(_scene));

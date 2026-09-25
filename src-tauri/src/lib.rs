@@ -34,7 +34,7 @@ use commands::{
     },
     export::{doc_export, ExportService, ExportState},
     history::{
-        history_list, history_operation_status, history_preview, history_replace,
+        history_list, history_mark, history_operation_status, history_preview, history_replace,
         HistoryReplacementState,
     },
     recovery::{
@@ -225,6 +225,7 @@ pub fn run() {
         app_handshake,
         history_list,
         history_preview,
+        history_mark,
         history_replace,
         history_operation_status,
         doc_open,
@@ -265,6 +266,7 @@ pub fn run() {
         app_handshake,
         history_list,
         history_preview,
+        history_mark,
         history_replace,
         history_operation_status,
         doc_open,

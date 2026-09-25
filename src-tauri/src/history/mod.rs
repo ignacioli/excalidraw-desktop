@@ -1,3 +1,4 @@
+pub mod automatic;
 pub mod gc;
 pub mod identity;
 pub mod objects;

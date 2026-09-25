@@ -25,7 +25,7 @@ use crate::{
         documents::{DirectFileGrant, DocumentService},
         dto::{
             CheckpointReason, CheckpointRequest, CloseDocumentMode, CloseDocumentRequest,
-            ExpectedOpenDocument, HistoryDocumentLocator, HistoryListRequest,
+            ExpectedOpenDocument, HistoryDocumentLocator, HistoryListRequest, HistoryMarkRequest,
             HistoryOperationStatusRequest, HistoryPreviewRequest, HistoryReplaceRequest,
             HistoryReplaceTarget, PathRequest, RecoveryAction, RecoveryApplyRequest,
             SaveDraftRequest, WorkspaceEntryDeletePreflightResult, WorkspaceEntryDeleteRequest,
@@ -49,6 +49,7 @@ use crate::{
         session_lock::SessionLock,
     },
     history::{
+        automatic::{e2e_automatic_callback_count, reset_e2e_automatic_callback_count},
         gc::{ObjectKey, ObjectReferences},
         objects::{
             clear_fault_point as clear_object_fault, set_fault as set_object_fault,
@@ -57,9 +58,9 @@ use crate::{
         operation::OperationStore,
         query::HistoryQueryService,
         reconcile::reconcile_incomplete_operations_with_repository,
-        repository::{HistoryRepository, PublishSceneRequest},
+        repository::{HistoryRepository, PublishSceneRequest, AUTOMATIC_INTERVAL_SECONDS},
         store::{clear_transaction_fault, set_transaction_fault, HistoryStore, HistoryStoreFault},
-        types::{HistoryReplaceResponse, HistoryVersionSource},
+        types::{HistoryProtectedAction, HistoryReplaceResponse, HistoryVersionSource},
         validation::HISTORY_OBJECT_SCHEMA_VERSION,
     },
     workspace_entries::{TrashOperator, WorkspaceEntryService, WorkspaceMutationGate},
@@ -640,6 +641,8 @@ async fn run_scenario(scenario: &str, root: &Path) -> Result<String, String> {
         "history-restart-eviction-fault-probe" => {
             serialize_evidence(run_history_restart_eviction_fault_probe(root).await?)
         }
+        "history-automatic-seed" => serialize_evidence(run_history_automatic_seed(root).await?),
+        "history-automatic-verify" => serialize_evidence(run_history_automatic_verify(root).await?),
         "concurrent-checkpoints" => serialize_evidence(run_concurrent_checkpoints(root).await?),
         "disk-full-checkpoint" => serialize_evidence(run_disk_full_checkpoint(root).await?),
         "atomic-write-kill" => serialize_evidence(run_atomic_write_kill(root)?),
@@ -1643,6 +1646,7 @@ impl DirectFileGrant for E2eDirectFileGrant {
 struct HistoryRestartContext {
     repository: Arc<SqliteRepository>,
     store: Arc<HistoryStore>,
+    document_service: DocumentService,
     query: HistoryQueryService,
     replacement: Arc<HistoryReplacementService>,
     workspace: PathBuf,
@@ -1673,9 +1677,331 @@ async fn open_history_restart_context(root: &Path) -> Result<HistoryRestartConte
     Ok(HistoryRestartContext {
         repository,
         store,
+        document_service,
         query,
         replacement,
         workspace,
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryAutomaticSeedEvidence {
+    scenario: &'static str,
+    target_path: String,
+    document_id: String,
+    history_database_path: String,
+    clock_baseline_at: i64,
+    clock_before_boundary_at: i64,
+    clock_boundary_at: i64,
+    baseline_outcome: String,
+    before_boundary_outcome: String,
+    no_change_outcome: String,
+    boundary_outcome: String,
+    automatic_version_id: String,
+    manual_request_id: String,
+    manual_version_id: String,
+    manual_content_hash: String,
+    manual_click_scene_sha256: String,
+    post_edit_scene_sha256: String,
+    mixed_requested_count: usize,
+    mixed_version_ids: Vec<String>,
+    mixed_sources: Vec<HistoryAutomaticSourceEvidence>,
+    timer_wakeups: u64,
+    cold_checkpoint_calls: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryAutomaticSourceEvidence {
+    version_id: String,
+    source: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryAutomaticVerifyEvidence {
+    scenario: &'static str,
+    target_path: String,
+    document_id: String,
+    history_database_path: String,
+    target_sha256: String,
+    manual_version_id: String,
+    manual_available_after_restart: bool,
+    manual_source: String,
+    manual_scene_sha256: String,
+    manual_element_ids: Vec<String>,
+    manual_click_scene_sha256: String,
+    post_edit_scene_sha256: String,
+    listed_version_ids: Vec<String>,
+    listed_sources: Vec<HistoryAutomaticSourceEvidence>,
+    retained_version_count: usize,
+    automatic_version_count: usize,
+    protected_version_count: usize,
+    manual_version_count: usize,
+    retained_pool_count: usize,
+    timer_wakeups: u64,
+}
+
+async fn run_history_automatic_seed(root: &Path) -> Result<HistoryAutomaticSeedEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target = context.workspace.join("history-automatic.excalidraw");
+    let scene_a = history_restart_scene("A", "自动基线");
+    let scene_b = history_restart_scene("B", "手动点击态");
+    let scene_c = history_restart_scene("C", "点击后编辑");
+    fs::write(&target, &scene_a.0)
+        .map_err(|error| format!("failed to write automatic target: {error}"))?;
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize automatic target: {error}"))?;
+    let asset_directory = context.workspace.join(".excalidraw_assets");
+    fs::create_dir_all(&asset_directory)
+        .map_err(|error| format!("failed to create automatic asset directory: {error}"))?;
+    fs::write(asset_directory.join(&scene_a.2), &scene_a.1)
+        .map_err(|error| format!("failed to materialize automatic asset: {error}"))?;
+    let identity = context
+        .store
+        .resolve_document_identity_for_open(&target, 1)
+        .map_err(|error| format!("failed to persist automatic identity: {error}"))?;
+
+    let baseline_at = 1_000_i64;
+    let before_boundary_at = baseline_at + AUTOMATIC_INTERVAL_SECONDS - 1;
+    let boundary_at = baseline_at + AUTOMATIC_INTERVAL_SECONDS;
+    reset_e2e_automatic_callback_count();
+    let mut cold_checkpoint_calls = 0_u64;
+    let mut checkpoint = |scene_json: String, reason, recorded_at| {
+        cold_checkpoint_calls += 1;
+        context.document_service.e2e_doc_checkpoint_at(
+            CheckpointRequest {
+                path: path_string(&target),
+                scene_json,
+                reason,
+            },
+            recorded_at,
+        )
+    };
+    checkpoint(scene_a.0.clone(), CheckpointReason::ManualSave, baseline_at)
+        .await
+        .map_err(|error| format!("automatic baseline checkpoint failed: {error:?}"))?;
+    let count_after_baseline =
+        history_source_count(&context.store, &identity.document_id, "automatic")?;
+    checkpoint(
+        scene_b.0.clone(),
+        CheckpointReason::Idle,
+        before_boundary_at,
+    )
+    .await
+    .map_err(|error| format!("automatic before-boundary checkpoint failed: {error:?}"))?;
+    let count_before_boundary =
+        history_source_count(&context.store, &identity.document_id, "automatic")?;
+    checkpoint(scene_b.0.clone(), CheckpointReason::TabClose, boundary_at)
+        .await
+        .map_err(|error| format!("automatic unchanged checkpoint failed: {error:?}"))?;
+    let count_after_no_change =
+        history_source_count(&context.store, &identity.document_id, "automatic")?;
+    checkpoint(scene_c.0.clone(), CheckpointReason::ManualSave, boundary_at)
+        .await
+        .map_err(|error| format!("automatic boundary checkpoint failed: {error:?}"))?;
+    let automatic_versions =
+        history_source_ids(&context.store, &identity.document_id, "automatic")?;
+    if count_after_baseline != 0
+        || count_before_boundary != 0
+        || count_after_no_change != 0
+        || automatic_versions.len() != 1
+    {
+        return Err(format!(
+            "real checkpoint cadence drifted: baseline={count_after_baseline}, beforeBoundary={count_before_boundary}, noChange={count_after_no_change}, boundary={automatic_versions:?}"
+        ));
+    }
+    let automatic_version_id = automatic_versions[0].clone();
+    let automatic_callbacks = e2e_automatic_callback_count();
+    if automatic_callbacks < cold_checkpoint_calls {
+        return Err("automatic callback count is lower than real checkpoint count".to_owned());
+    }
+
+    let manual_request_id = "history-automatic-manual-click".to_owned();
+    let manual = context
+        .replacement
+        .mark(HistoryMarkRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id: manual_request_id.clone(),
+            session_generation: 1,
+            revision: 1,
+            current_scene_json: scene_b.0.clone(),
+        })
+        .await
+        .map_err(|error| format!("manual history mark failed: {error:?}"))?;
+    fs::write(&target, &scene_a.0)
+        .map_err(|error| format!("failed to write post-mark edit: {error}"))?;
+
+    let mixed_requested_count = env::var("EXCALIDRAW_E2E_HISTORY_MIXED_COUNT")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(21);
+    if !(19..=21).contains(&mixed_requested_count) {
+        return Err(format!(
+            "EXCALIDRAW_E2E_HISTORY_MIXED_COUNT must be 19, 20, or 21, got {mixed_requested_count}"
+        ));
+    }
+    let mut mixed_version_ids = vec![automatic_version_id.clone()];
+    let mut mixed_sources = vec![HistoryAutomaticSourceEvidence {
+        version_id: automatic_version_id.clone(),
+        source: "automatic".to_owned(),
+    }];
+    for index in 1..mixed_requested_count {
+        let version_id = format!("history-automatic-mixed-{index:02}");
+        let source = if index % 2 == 0 {
+            HistoryVersionSource::Automatic
+        } else {
+            HistoryVersionSource::Protected
+        };
+        publish_history_restart_version_with_source(
+            &context.store,
+            &identity.document_id,
+            &version_id,
+            &scene_b.0,
+            boundary_at + 10 + index as i64,
+            &scene_b.2,
+            source,
+        )?;
+        mixed_version_ids.push(version_id.clone());
+        mixed_sources.push(HistoryAutomaticSourceEvidence {
+            version_id,
+            source: if source == HistoryVersionSource::Automatic {
+                "automatic".to_owned()
+            } else {
+                "protected".to_owned()
+            },
+        });
+    }
+    Ok(HistoryAutomaticSeedEvidence {
+        scenario: "history-automatic-seed",
+        target_path: path_string(&target),
+        document_id: identity.document_id,
+        history_database_path: path_string(context.store.database_path()),
+        clock_baseline_at: baseline_at,
+        clock_before_boundary_at: before_boundary_at,
+        clock_boundary_at: boundary_at,
+        baseline_outcome: "baselineEstablished".to_owned(),
+        before_boundary_outcome: "waiting".to_owned(),
+        no_change_outcome: "noChange".to_owned(),
+        boundary_outcome: "published".to_owned(),
+        automatic_version_id,
+        manual_request_id,
+        manual_version_id: manual.version_id,
+        manual_content_hash: manual.content_hash,
+        manual_click_scene_sha256: sha256(scene_b.0.as_bytes()),
+        post_edit_scene_sha256: sha256(scene_a.0.as_bytes()),
+        mixed_requested_count,
+        mixed_version_ids,
+        mixed_sources,
+        timer_wakeups: automatic_callbacks.saturating_sub(cold_checkpoint_calls),
+        cold_checkpoint_calls,
+    })
+}
+
+async fn run_history_automatic_verify(
+    root: &Path,
+) -> Result<HistoryAutomaticVerifyEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target = context.workspace.join("history-automatic.excalidraw");
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize automatic verify target: {error}"))?;
+    let target_path = path_string(&target);
+    let manual_version_id = env::var("EXCALIDRAW_E2E_HISTORY_MANUAL_VERSION")
+        .map_err(|_| "EXCALIDRAW_E2E_HISTORY_MANUAL_VERSION is required".to_owned())?;
+    let manual_click_scene_sha256 = env::var("EXCALIDRAW_E2E_HISTORY_MANUAL_SHA256")
+        .map_err(|_| "EXCALIDRAW_E2E_HISTORY_MANUAL_SHA256 is required".to_owned())?;
+    let post_edit_scene_sha256 = env::var("EXCALIDRAW_E2E_HISTORY_POST_EDIT_SHA256")
+        .map_err(|_| "EXCALIDRAW_E2E_HISTORY_POST_EDIT_SHA256 is required".to_owned())?;
+    let persisted =
+        fs::read(&target).map_err(|error| format!("failed to read post-edit target: {error}"))?;
+    let list = context
+        .query
+        .list(HistoryListRequest {
+            document: HistoryDocumentLocator::Path {
+                path: target_path.clone(),
+            },
+            cursor: None,
+            limit: Some(100),
+        })
+        .await
+        .map_err(|error| format!("automatic history list after restart failed: {error:?}"))?;
+    let manual = context
+        .query
+        .preview(HistoryPreviewRequest {
+            document: HistoryDocumentLocator::Path {
+                path: target_path.clone(),
+            },
+            version_id: manual_version_id.clone(),
+        })
+        .await
+        .map_err(|error| format!("manual version preview after restart failed: {error:?}"))?;
+    let listed_sources = list
+        .items
+        .iter()
+        .map(|item| HistoryAutomaticSourceEvidence {
+            version_id: item.version_id.clone(),
+            source: match item.source {
+                HistoryVersionSource::Automatic => "automatic".to_owned(),
+                HistoryVersionSource::Manual => "manual".to_owned(),
+                HistoryVersionSource::Protected => "protected".to_owned(),
+            },
+        })
+        .collect::<Vec<_>>();
+    let automatic_version_count = listed_sources
+        .iter()
+        .filter(|item| item.source == "automatic")
+        .count();
+    let protected_version_count = listed_sources
+        .iter()
+        .filter(|item| item.source == "protected")
+        .count();
+    let manual_version_count = listed_sources
+        .iter()
+        .filter(|item| item.source == "manual")
+        .count();
+    let manual_available_after_restart = manual.version_id == manual_version_id;
+    let manual_source = listed_sources
+        .iter()
+        .find(|item| item.version_id == manual_version_id)
+        .map(|item| item.source.clone())
+        .unwrap_or_else(|| "missing".to_owned());
+    let manual_element_ids = manual
+        .scene
+        .get("elements")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|element| element.get("id").and_then(serde_json::Value::as_str))
+        .map(str::to_owned)
+        .collect();
+    Ok(HistoryAutomaticVerifyEvidence {
+        scenario: "history-automatic-verify",
+        target_path,
+        document_id: list.document_id,
+        history_database_path: path_string(context.store.database_path()),
+        target_sha256: sha256(&persisted),
+        manual_version_id,
+        manual_available_after_restart,
+        manual_source,
+        manual_scene_sha256: scene_sha256(&manual.scene)?,
+        manual_element_ids,
+        manual_click_scene_sha256,
+        post_edit_scene_sha256,
+        listed_version_ids: list.items.into_iter().map(|item| item.version_id).collect(),
+        listed_sources,
+        retained_version_count: automatic_version_count
+            + protected_version_count
+            + manual_version_count,
+        automatic_version_count,
+        protected_version_count,
+        manual_version_count,
+        retained_pool_count: automatic_version_count + protected_version_count,
+        timer_wakeups: 0,
     })
 }
 
@@ -2252,6 +2578,61 @@ fn publish_history_restart_version(
     recorded_at: i64,
     asset_hash: &str,
 ) -> Result<(), String> {
+    publish_history_restart_version_with_source(
+        store,
+        document_id,
+        version_id,
+        scene_json,
+        recorded_at,
+        asset_hash,
+        HistoryVersionSource::Automatic,
+    )
+}
+
+fn history_source_count(
+    store: &HistoryStore,
+    document_id: &str,
+    source: &str,
+) -> Result<usize, String> {
+    store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT COUNT(*) FROM history_versions WHERE document_id=?1 AND source=?2",
+                rusqlite::params![document_id, source],
+                |row| row.get::<_, i64>(0),
+            )
+        })
+        .map(|count| count.max(0) as usize)
+        .map_err(|error| format!("failed to count {source} history versions: {error}"))
+}
+
+fn history_source_ids(
+    store: &HistoryStore,
+    document_id: &str,
+    source: &str,
+) -> Result<Vec<String>, String> {
+    store
+        .with_connection(|connection| {
+            let mut statement = connection.prepare(
+                "SELECT id FROM history_versions WHERE document_id=?1 AND source=?2 ORDER BY recorded_at, sequence, id",
+            )?;
+            let rows = statement
+                .query_map(rusqlite::params![document_id, source], |row| row.get(0))?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
+        .map_err(|error| format!("failed to list {source} history versions: {error}"))
+}
+
+fn publish_history_restart_version_with_source(
+    store: &HistoryStore,
+    document_id: &str,
+    version_id: &str,
+    scene_json: &str,
+    recorded_at: i64,
+    asset_hash: &str,
+    source: HistoryVersionSource,
+) -> Result<(), String> {
     let target_asset = history_restart_asset(false);
     let asset = if sha256(&target_asset) == asset_hash {
         target_asset
@@ -2264,14 +2645,16 @@ fn publish_history_restart_version(
     if asset_object.hash != asset_hash {
         return Err("history restart asset hash drifted".to_owned());
     }
+    let protected_action =
+        (source == HistoryVersionSource::Protected).then_some(HistoryProtectedAction::Restore);
     HistoryRepository::new(store)
         .publish_scene(PublishSceneRequest {
             version_id: version_id.to_owned(),
             document_id: document_id.to_owned(),
             scene_bytes: scene_json.as_bytes().to_vec(),
             schema_version: HISTORY_OBJECT_SCHEMA_VERSION as i64,
-            source: HistoryVersionSource::Automatic,
-            protected_action: None,
+            source,
+            protected_action,
             recorded_at,
             sequence: recorded_at as u64,
         })

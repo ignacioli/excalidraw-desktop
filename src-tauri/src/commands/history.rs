@@ -21,10 +21,10 @@ use crate::{
     commands::{
         documents::{DirectFileGrant, DocumentService, HistoryOperationLease},
         dto::{
-            HistoryDocumentLocator, HistoryListRequest, HistoryListResponse,
-            HistoryOperationStatusRequest, HistoryOperationStatusResponse, HistoryPreviewRequest,
-            HistoryPreviewResponse, HistoryReplaceRequest, HistoryReplaceResponse,
-            HistoryReplaceTarget,
+            HistoryDocumentLocator, HistoryListRequest, HistoryListResponse, HistoryMarkRequest,
+            HistoryMarkResponse, HistoryOperationStatusRequest, HistoryOperationStatusResponse,
+            HistoryPreviewRequest, HistoryPreviewResponse, HistoryReplaceRequest,
+            HistoryReplaceResponse, HistoryReplaceTarget,
         },
         error::{AppError, IpcError},
     },
@@ -44,6 +44,7 @@ use crate::{
             ProtectedReplacementBackend, ProtectedReplacementEngine, ProtectedReplacementRequest,
             ProtectionReceipt, ReplacementOutcome, ReplacementPhase,
         },
+        repository::{HistoryRepository, PublishAsset, PublishSceneRequest},
         store::HistoryStore,
         types::{HistoryOperationKind, HistoryOperationState, HistoryProtectedAction},
         validation::{
@@ -68,6 +69,14 @@ pub async fn history_preview(
     state: State<'_, HistoryState>,
 ) -> Result<HistoryPreviewResponse, IpcError> {
     state.service.preview(request).await
+}
+
+#[tauri::command]
+pub async fn history_mark(
+    request: HistoryMarkRequest,
+    state: State<'_, HistoryReplacementState>,
+) -> Result<HistoryMarkResponse, IpcError> {
+    state.service.mark(request).await
 }
 
 #[derive(Clone)]
@@ -104,6 +113,67 @@ pub struct HistoryReplacementService {
 type ResponseAssetGrant = Arc<dyn Fn(&Path, &Value) -> Result<(), AppError> + Send + Sync>;
 
 impl HistoryReplacementService {
+    pub async fn mark(&self, request: HistoryMarkRequest) -> Result<HistoryMarkResponse, IpcError> {
+        request
+            .validate()
+            .map_err(|error| AppError::HistoryStaleDocument(error.to_string()))?;
+        let resolved = self
+            .resolve_document_without_file_check(&request.document)
+            .await?;
+        let resolved = self.verify_document(resolved)?;
+        let document_id = resolved.document_id.clone();
+        let store = self.store()?;
+        let scene_json = request.current_scene_json;
+        tokio::task::spawn_blocking(move || {
+            let (scene_bytes, assets) = normalize_scene(&resolved.asset_root, &scene_json)
+                .map_err(AppError::InvalidScene)?;
+            let sequence = store
+                .with_connection(|connection| {
+                    connection.query_row(
+                        "SELECT COALESCE(MAX(sequence), 0) + 1
+                         FROM history_versions WHERE document_id = ?1",
+                        [&document_id],
+                        |row| row.get::<_, i64>(0),
+                    )
+                })
+                .map_err(|error| AppError::HistoryUnavailable(error.to_string()))?;
+            let sequence = u64::try_from(sequence).map_err(|_| {
+                AppError::HistoryUnavailable("history sequence overflow".to_owned())
+            })?;
+            let published = HistoryRepository::new(&store)
+                .publish_scene_with_assets(
+                    PublishSceneRequest {
+                        version_id: format!("manual-{}", Uuid::new_v4()),
+                        document_id,
+                        scene_bytes,
+                        schema_version: HISTORY_OBJECT_SCHEMA_VERSION as i64,
+                        source: crate::history::types::HistoryVersionSource::Manual,
+                        protected_action: None,
+                        recorded_at: RealReplacementBackend::now(),
+                        sequence,
+                    },
+                    assets
+                        .into_iter()
+                        .map(|asset| PublishAsset {
+                            file_id: asset.file_id,
+                            bytes: asset.bytes,
+                            mime_type: asset.mime_type,
+                        })
+                        .collect(),
+                )
+                .map_err(|error| AppError::HistoryUnavailable(error.to_string()))?;
+            Ok::<_, AppError>(HistoryMarkResponse {
+                version_id: published.version_id,
+                recorded_at: published.recorded_at,
+                source: published.source,
+                content_hash: published.scene_hash,
+            })
+        })
+        .await
+        .map_err(|error| AppError::Internal(format!("history mark task failed: {error}")))?
+        .map_err(Into::into)
+    }
+
     #[cfg(feature = "e2e-harness")]
     pub(crate) async fn e2e_replace(
         &self,

@@ -77,6 +77,38 @@ describe("history event session boundary", () => {
     expect(unlistenIssue).toHaveBeenCalledOnce();
   });
 
+  it("passes the independent current-file save outcome through unchanged", async () => {
+    let issueHandler: IssueHandler | undefined;
+    const listenIssue = vi.fn(async (_eventName, handler) => {
+      issueHandler = handler as IssueHandler;
+      return vi.fn();
+    }) as unknown as EventListener<"history-issue">;
+    const onIssue = vi.fn();
+
+    await registerHistoryEvents(
+      { documentId: "document-1", sessionGeneration: 2, isCurrent: () => true },
+      { onIssue },
+      { listenIssue },
+    );
+    issueHandler?.({
+      payload: {
+        ...issue,
+        operation: "mark",
+        source: "manual",
+        currentFileSaveOutcome: "succeeded",
+      },
+    });
+
+    expect(onIssue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "mark",
+        source: "manual",
+        currentFileSaveOutcome: "succeeded",
+      }),
+      2,
+    );
+  });
+
   it("does not install listeners for omitted handlers", async () => {
     const listenChanged = vi.fn();
     const listenIssue = vi.fn();

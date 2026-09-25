@@ -120,6 +120,17 @@ The browser can cover dialogs, the tree, and the keyboard. Process-level proof o
 5. Close several tabs in a row, or switch rapidly with the scroll wheel.
    - Expected: closes are serialized; a failure stops the batch; activation applies only the latest intent. The browser can measure queue behavior. Real Cmd+W / middle-click hits need physical macOS; harness-synthesized events must not be claimed as proof of the real shortcut.
 
+### Local version history cadence
+
+1. Save a new document, advance the controlled clock to 29m59s, and complete another changed cold checkpoint.
+   - Expected: the first save establishes the baseline and the second remains pending; no automatic version is created early.
+
+2. At 30m, complete the next changed cold checkpoint, then perform unchanged Cmd+S/close checkpoints and leave the app idle.
+   - Expected: exactly one automatic version is published from the qualifying checkpoint; unchanged saves and idle time add none, and history creates zero independent timer wakeups.
+
+3. Mark the current state, edit again, restart against the same isolated data root, and inspect mixed automatic/protected pools at 19, 20, and 21 records.
+   - Expected: the manual version still contains the click-time scene and is not auto-evicted; automatic/protected retain the newest 20 together, while a history failure remains separate from the successful current-file save.
+
 ### Export
 
 1. Export a mixed Chinese/English canvas as PNG (2x / transparent) and SVG → open the SVG in a clean environment with no fonts installed.

@@ -13,7 +13,7 @@ v1 的 `dir_list` / `file_create` / `file_rename` / `file_delete` / `thumb_looku
 - 契约版本常量 `IPC_CONTRACT_VERSION = 3`（TS/Rust），随 `app_handshake` 返回；不兼容变更须递增版本并在本文件记录迁移说明。
 - 字段演进规则：新增可选字段 = 兼容；删除/改类型/改语义 = 不兼容。
 - v1 → v2 不兼容变更：删除缩略图命令；用统一 Workspace Entry 命令替换 `dir_list` 与 `file_*`；`doc_close` 改为显式 `mode`（可丢弃失联文档而不再授权已缺失路径）。
-- v3 首批公开 history command 为 `history_list`、`history_preview`、`history_replace` 和 `history_operation_status`；`history_mark` 与 `history_delete` 仍是 reserved，未注册且不可调用。v2 客户端不兼容此握手版本。
+- v3 当前公开 history command 为 `history_list`、`history_preview`、`history_mark`、`history_replace` 和 `history_operation_status`；`history_delete` 仍是 reserved，未注册且不可调用。v2 客户端不兼容此握手版本。
 
 ### 信任边界规则（所有命令统一执行）
 
@@ -194,16 +194,15 @@ type SceneData = unknown; // 官方 .excalidraw JSON；后端只做结构校验
 ### 1.5 v3 版本历史类型（部分可用）
 
 以下 DTO、validators、错误码和事件属于 v3 contract。`history_list` 与
-`history_preview`、`history_replace` 与 `history_operation_status` 已注册并按当前
-文档授权执行；`history_mark` 与 `history_delete` 仍是 reserved，调用会得到
-Tauri 的未知 command 错误。
+`history_preview`、`history_mark`、`history_replace` 与 `history_operation_status` 已注册并按当前
+文档授权执行；`history_delete` 仍是 reserved，调用会得到 Tauri 的未知 command 错误。
 
 保留的 history error codes 为 `HISTORY_UNAVAILABLE`、`HISTORY_RESOURCE_MISSING`、
 `HISTORY_STALE_DOCUMENT`、`HISTORY_OPERATION_PENDING` 和 `HISTORY_BUSY`；它们当前
-会由已实现的 v3 history handler 返回；事件仍只保留为后续 mutation service 的
-reserved 结构。
+会由已实现的 v3 history handler 返回。成功 cold checkpoint 后的普通历史失败还会
+发出 `history-issue`；`history-changed` 暂未由后端发出。
 
-未来历史请求只能携带当前文档授权 locator，不能携带 history store 路径。locator 是
+历史请求只能携带当前文档授权 locator，不能携带 history store 路径。locator 是
 `{ kind: "path"; path }` 或 `{ kind: "handle"; documentId }`；Rust 仍需重新解析
 当前路径/工作区权限和持久身份。持久 `documentId`、前端 tab UUID 和 `versionId`
 是不同标识，不能互相冒充。
@@ -217,7 +216,7 @@ generation/revision 必须是非负整数；hash 必须是 64 位小写 SHA-256 
 |------|------|------|
 | `history_list` | `{ document; cursor?; limit? }` | `documentId`、不含 scene bytes 的版本 metadata、`nextCursor?`、`listRevision`、`pendingIssue?` |
 | `history_preview` | `{ document; versionId }` | 后端严格 hydration 后返回 `{ versionId; scene }`；不写 current file 或 draft |
-| `history_mark` | reserved（当前未注册） | 调用会得到 Tauri 的未知 command 错误 |
+| `history_mark` | `{ document; requestId; sessionGeneration; revision; currentSceneJson }` | 持久发布点击时完整场景后返回 `{ versionId; recordedAt; source: "manual"; contentHash }`；manual 记录不进入 automatic/protected 最新 20 条池 |
 | `history_replace` | `{ document; requestId; sessionGeneration; revision; expectedBaseHash; currentSceneJson; target }` | `target` 为 `restore(versionId)`、`clear` 或 `import(candidateSceneJson)`；返回 `completed` 或 `pendingReconciliation` |
 | `history_operation_status` | `{ document; requestId }` | 只查询既有操作；返回 state、`replacementCommitted: boolean \| null` 和完成时的 adoption payload |
 | `history_delete` | reserved（当前未注册） | 调用会得到 Tauri 的未知 command 错误 |
@@ -300,9 +299,9 @@ interface WorkspaceEntriesChangedEvent {
 
 事件只通知状态事实，不携带业务决策。
 
-### 2.1 Reserved v3 版本历史事件结构（尚未注册）
+### 2.1 v3 版本历史事件结构
 
-以下事件属于 reserved v3 contract；当前后端不会发送它们。
+`history-issue` 已用于普通历史失败且与当前文件保存结果分离；`history-changed` 类型已冻结，但当前后端尚未发送。
 
 ```typescript
 interface HistoryChangedEvent {

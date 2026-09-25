@@ -1,4 +1,6 @@
 import type {
+  HistoryDocumentLocator,
+  HistoryMarkResponse,
   HistoryOperationStatusResponse,
   HistoryReplaceResponse,
   HistoryReplaceTarget,
@@ -42,6 +44,63 @@ export interface HistoryReplacementResult {
 }
 
 /**
+ * Immutable state captured at the moment the user pressed Mark. The scene
+ * JSON is intentionally retained separately from the live session so edits
+ * made while the mark request is in flight cannot change the version being
+ * published.
+ */
+export interface HistoryMarkCapture {
+  documentId: string;
+  document: HistoryDocumentLocator;
+  path: string;
+  scene: SceneSnapshot;
+  sceneJson: string;
+  sessionGeneration: number;
+  revision: number;
+}
+
+export interface HistoryMarkSaveOutcome {
+  status: "saved" | "cancelled";
+  document?: HistoryDocumentLocator;
+  sessionGeneration?: number;
+  revision?: number;
+}
+
+export type HistoryMarkSaveHandler = (
+  capture: HistoryMarkCapture,
+) => Promise<HistoryMarkSaveOutcome | void> | HistoryMarkSaveOutcome | void;
+
+export interface HistoryMarkOptions {
+  requestId?: string;
+  /**
+   * Existing Save As/first-save flow supplied by the shell for untitled
+   * documents. The coordinator never opens a named history dialog and never
+   * mutates the canvas while preparing the document.
+   */
+  prepareUnsaved?: HistoryMarkSaveHandler;
+}
+
+export interface HistoryMarkResult {
+  status: "marked";
+  response: HistoryMarkResponse;
+  captured: HistoryMarkCapture;
+}
+
+export interface HistoryMarkCancelledResult {
+  status: "cancelled";
+  captured: HistoryMarkCapture;
+}
+
+export type HistoryMarkOutcome = HistoryMarkResult | HistoryMarkCancelledResult;
+
+export class HistoryMarkRequiresSaveError extends Error {
+  constructor() {
+    super("An untitled drawing must be saved before it can be marked.");
+    this.name = "HistoryMarkRequiresSaveError";
+  }
+}
+
+/**
  * Coordinates one document's destructive history replacement. The manager
  * owns queue/freeze/session guards; the adopter owns the editor-specific
  * asset adoption seam. This module never calls the replacement command twice.
@@ -66,6 +125,61 @@ export class HistoryCoordinator {
     private readonly client: HistoryClient,
     private readonly adoptScene: HistorySceneAdopter,
   ) {}
+
+  /**
+   * Publish a manual history version without freezing or replacing the live
+   * canvas. The capture happens synchronously before any await; a successful
+   * result is returned only after history_mark has durably replied.
+   */
+  async mark(
+    documentId: string,
+    options: HistoryMarkOptions = {},
+  ): Promise<HistoryMarkOutcome> {
+    const capture = this.captureMark(documentId);
+    let document = capture.document;
+    let sessionGeneration = capture.sessionGeneration;
+    let revision = capture.revision;
+
+    if (capture.path.length === 0) {
+      if (options.prepareUnsaved === undefined) {
+        throw new HistoryMarkRequiresSaveError();
+      }
+      const prepared = await options.prepareUnsaved(capture);
+      if (prepared !== undefined && prepared.status === "cancelled") {
+        return { status: "cancelled", captured: capture };
+      }
+      const current = this.manager.store.getState().sessionsById[documentId];
+      if (current === undefined) {
+        throw new HistoryMarkRequiresSaveError();
+      }
+      if (prepared?.document !== undefined) {
+        document = prepared.document;
+      } else if (current.path.length > 0) {
+        document =
+          current.historyDocumentId === undefined
+            ? { kind: "path", path: current.path }
+            : { kind: "handle", documentId: current.historyDocumentId };
+      } else {
+        throw new HistoryMarkRequiresSaveError();
+      }
+      sessionGeneration =
+        prepared?.sessionGeneration ?? current.sessionGeneration ?? 0;
+      revision = prepared?.revision ?? current.revision;
+    }
+
+    const response = await this.manager.runDocumentOperation(
+      documentId,
+      async () =>
+        this.client.mark({
+          document,
+          requestId: options.requestId ?? createRequestId(),
+          sessionGeneration,
+          revision,
+          currentSceneJson: capture.sceneJson,
+        }),
+    );
+    return { status: "marked", response, captured: capture };
+  }
 
   async replace(
     documentId: string,
@@ -261,6 +375,25 @@ export class HistoryCoordinator {
       responseRequestId,
       response,
     );
+  }
+
+  private captureMark(documentId: string): HistoryMarkCapture {
+    const session = this.manager.store.getState().sessionsById[documentId];
+    if (session === undefined) {
+      throw new Error(`Document ${documentId} is not open.`);
+    }
+    return {
+      documentId,
+      document:
+        session.historyDocumentId === undefined
+          ? { kind: "path", path: session.path }
+          : { kind: "handle", documentId: session.historyDocumentId },
+      path: session.path,
+      scene: session.scene,
+      sceneJson: serializeScene(session.scene),
+      sessionGeneration: session.sessionGeneration ?? 0,
+      revision: session.revision,
+    };
   }
 
   private async finishAdoption(

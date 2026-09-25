@@ -1,5 +1,6 @@
 use super::repository::{
-    HistoryRepository, HistoryRepositoryError, PublishSceneRequest, RETAINED_VERSION_LIMIT,
+    HistoryRepository, HistoryRepositoryError, PublishAsset, PublishSceneRequest,
+    RETAINED_VERSION_LIMIT,
 };
 use crate::history::{store::HistoryStore, types::HistoryVersionSource};
 use std::{fs, path::PathBuf};
@@ -228,6 +229,56 @@ fn manual_versions_are_deduplicated_by_object_but_excluded_from_retention() {
         })
         .unwrap_or_else(|error| panic!("count scene objects: {error}"));
     assert_eq!(object_count, 1, "equal content must reuse one object");
+
+    drop(store);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+#[test]
+fn scene_assets_are_published_after_the_version_row_and_kept_reachable() {
+    let (root, store) = fixture();
+    let published = HistoryRepository::new(&store)
+        .publish_scene_with_assets(
+            PublishSceneRequest {
+                version_id: "manual-with-asset".to_owned(),
+                document_id: "doc".to_owned(),
+                scene_bytes: br#"{"files":{"image":{"dataURL":"asset://placeholder","mimeType":"image/png"}}}"#.to_vec(),
+                schema_version: 1,
+                source: HistoryVersionSource::Manual,
+                protected_action: None,
+                recorded_at: 1,
+                sequence: 1,
+            },
+            vec![PublishAsset {
+                file_id: "image".to_owned(),
+                bytes: b"png-bytes".to_vec(),
+                mime_type: "image/png".to_owned(),
+            }],
+        )
+        .unwrap_or_else(|error| panic!("publish scene with asset: {error}"));
+
+    let (asset_count, reachable_asset) = store
+        .with_connection(|connection| {
+            let count = connection.query_row(
+                "SELECT COUNT(*) FROM version_assets WHERE version_id = ?1",
+                [&published.version_id],
+                |row| row.get::<_, i64>(0),
+            )?;
+            let hash = connection.query_row(
+                "SELECT asset_hash FROM version_assets WHERE version_id = ?1",
+                [&published.version_id],
+                |row| row.get::<_, String>(0),
+            )?;
+            Ok((count, hash))
+        })
+        .unwrap_or_else(|error| panic!("read published asset: {error}"));
+    assert_eq!(asset_count, 1);
+    assert!(store
+        .reachability()
+        .live_objects()
+        .unwrap_or_else(|error| panic!("read live objects: {error}"))
+        .iter()
+        .any(|object| object.hash == reachable_asset));
 
     drop(store);
     fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));

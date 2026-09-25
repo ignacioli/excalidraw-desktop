@@ -58,6 +58,20 @@
   overscroll-behavior: contain;
 }
 
+.history-current-actions {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.history-current-actions button {
+  justify-self: start;
+}
+
+.history-current-actions p {
+  margin: 0;
+}
+
 .history-list,
 .history-state {
   margin: 0;

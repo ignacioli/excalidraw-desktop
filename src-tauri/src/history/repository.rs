@@ -21,6 +21,11 @@ use super::{
 /// document. Manual records are outside this pool.
 pub const RETAINED_VERSION_LIMIT: i64 = 20;
 
+/// The minimum time between ordinary automatic history records for one
+/// document.  This is deliberately measured only when a successful cold
+/// checkpoint calls the automatic coordinator; it is not a timer interval.
+pub const AUTOMATIC_INTERVAL_SECONDS: i64 = 30 * 60;
+
 /// Input to the metadata publication primitive. The scene object must already
 /// have been written through [`HistoryStore::put_scene`] (or the convenience
 /// [`HistoryRepository::publish_scene`] method).
@@ -49,6 +54,16 @@ pub struct PublishSceneRequest {
     pub protected_action: Option<HistoryProtectedAction>,
     pub recorded_at: i64,
     pub sequence: u64,
+}
+
+/// An asset captured from the exact scene being published.  Asset bytes are
+/// copied into the immutable history object store before the metadata
+/// transaction, so a workspace asset can never become a dangling reference.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishAsset {
+    pub file_id: String,
+    pub bytes: Vec<u8>,
+    pub mime_type: String,
 }
 
 impl PublishSceneRequest {
@@ -114,6 +129,46 @@ impl<'store> HistoryRepository<'store> {
         self.store
     }
 
+    /// Return the durable automatic-history baseline. It is separate from the
+    /// latest version row because the first successful checkpoint establishes
+    /// the interval without creating a history record.
+    pub fn automatic_baseline(
+        &self,
+        document_id: &str,
+    ) -> Result<Option<i64>, HistoryRepositoryError> {
+        self.store
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT last_automatic_at FROM history_documents WHERE id = ?1",
+                    [document_id],
+                    |row| row.get::<_, Option<i64>>(0),
+                )
+            })
+            .map_err(HistoryRepositoryError::Store)
+    }
+
+    /// Establish the first-checkpoint baseline without moving an existing
+    /// baseline.  This compare-and-set behavior makes a concurrent retry
+    /// harmless and keeps manual/protected publication from changing it.
+    pub fn establish_automatic_baseline(
+        &self,
+        document_id: &str,
+        recorded_at: i64,
+    ) -> Result<bool, HistoryRepositoryError> {
+        let changed = self
+            .store
+            .with_transaction(|transaction| {
+                let updated = transaction.execute(
+                    "UPDATE history_documents SET last_automatic_at = ?2
+                     WHERE id = ?1 AND last_automatic_at IS NULL",
+                    rusqlite::params![document_id, recorded_at],
+                )?;
+                Ok::<_, rusqlite::Error>(updated != 0)
+            })
+            .map_err(HistoryRepositoryError::Store)?;
+        Ok(changed)
+    }
+
     /// Write an immutable scene object, then publish its metadata and version
     /// row. The version transaction owns the object metadata insert and the
     /// retention delete, so any metadata failure rolls both back together.
@@ -127,10 +182,37 @@ impl<'store> HistoryRepository<'store> {
         self.publish(request.into_version_request(scene))
     }
 
+    pub fn publish_scene_with_assets(
+        &self,
+        request: PublishSceneRequest,
+        assets: Vec<PublishAsset>,
+    ) -> Result<PublishedVersion, HistoryRepositoryError> {
+        let scene = self
+            .store
+            .put_scene(&request.scene_bytes, request.schema_version)?;
+        let asset_objects = assets
+            .iter()
+            .map(|asset| {
+                self.store
+                    .put_asset(&asset.bytes, &asset.mime_type)
+                    .map(|object| (asset.file_id.clone(), object))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.publish_with_assets(request.into_version_request(scene), asset_objects)
+    }
+
     /// Publish metadata for an already-written immutable scene object.
     pub fn publish(
         &self,
         request: PublishVersionRequest,
+    ) -> Result<PublishedVersion, HistoryRepositoryError> {
+        self.publish_with_assets(request, Vec::new())
+    }
+
+    fn publish_with_assets(
+        &self,
+        request: PublishVersionRequest,
+        asset_objects: Vec<(String, super::objects::StoredAssetObject)>,
     ) -> Result<PublishedVersion, HistoryRepositoryError> {
         validate_request(&request)?;
         let sequence = i64::try_from(request.sequence)
@@ -175,6 +257,22 @@ impl<'store> HistoryRepository<'store> {
                 });
             }
 
+            for (_, asset) in &asset_objects {
+                transaction.execute(
+                    "INSERT INTO asset_objects
+                     (hash, byte_length, mime_type, relative_path, created_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5)
+                     ON CONFLICT(hash) DO NOTHING",
+                    rusqlite::params![
+                        &asset.hash,
+                        asset.byte_length,
+                        &asset.mime_type,
+                        &asset.relative_path,
+                        request.recorded_at,
+                    ],
+                )?;
+            }
+
                 transaction.execute(
                 "INSERT INTO history_versions
                  (id, document_id, scene_hash, source, protected_action, recorded_at, sequence)
@@ -189,6 +287,28 @@ impl<'store> HistoryRepository<'store> {
                     sequence,
                 ],
             )?;
+
+                if request.source == HistoryVersionSource::Automatic {
+                    transaction.execute(
+                        "UPDATE history_documents SET last_automatic_at = ?2 WHERE id = ?1",
+                        rusqlite::params![&request.document_id, request.recorded_at],
+                    )?;
+                }
+
+                for (file_id, asset) in &asset_objects {
+                    transaction.execute(
+                        "INSERT INTO version_assets
+                         (version_id, sdk_file_id, asset_hash, mime_type, byte_length)
+                         VALUES (?1, ?2, ?3, ?4, ?5)",
+                        rusqlite::params![
+                            &request.version_id,
+                            file_id,
+                            &asset.hash,
+                            &asset.mime_type,
+                            asset.byte_length,
+                        ],
+                    )?;
+                }
 
                 let mut objects = vec![ObjectKey::scene(request.scene.hash.clone())?];
                 let mut asset_statement = transaction.prepare(

@@ -199,6 +199,64 @@ export interface HistoryRestartSeedEvidence {
   initialSceneSha256: string;
 }
 
+export interface HistoryAutomaticSourceEvidence {
+  versionId: string;
+  source: "automatic" | "manual" | "protected";
+}
+
+export interface HistoryAutomaticSeedEvidence {
+  scenario: "history-automatic-seed";
+  targetPath: string;
+  documentId: string;
+  historyDatabasePath: string;
+  clockBaselineAt: number;
+  clockBeforeBoundaryAt: number;
+  clockBoundaryAt: number;
+  baselineOutcome: "baselineEstablished";
+  beforeBoundaryOutcome: "waiting";
+  noChangeOutcome: "noChange";
+  boundaryOutcome: "published";
+  automaticVersionId: string;
+  manualRequestId: string;
+  manualVersionId: string;
+  manualContentHash: string;
+  manualClickSceneSha256: string;
+  postEditSceneSha256: string;
+  mixedRequestedCount: 19 | 20 | 21;
+  mixedVersionIds: string[];
+  mixedSources: HistoryAutomaticSourceEvidence[];
+  timerWakeups: 0;
+  coldCheckpointCalls: 4;
+}
+
+export interface HistoryAutomaticVerifyEvidence {
+  scenario: "history-automatic-verify";
+  targetPath: string;
+  documentId: string;
+  historyDatabasePath: string;
+  targetSha256: string;
+  manualVersionId: string;
+  manualAvailableAfterRestart: boolean;
+  manualSource: "manual";
+  manualSceneSha256: string;
+  manualElementIds: string[];
+  manualClickSceneSha256: string;
+  postEditSceneSha256: string;
+  listedVersionIds: string[];
+  listedSources: HistoryAutomaticSourceEvidence[];
+  retainedVersionCount: number;
+  automaticVersionCount: number;
+  protectedVersionCount: number;
+  manualVersionCount: number;
+  retainedPoolCount: number;
+  timerWakeups: 0;
+}
+
+export interface HistoryAutomaticJourneyEvidence {
+  seed: HistoryAutomaticSeedEvidence;
+  verify: HistoryAutomaticVerifyEvidence;
+}
+
 export interface HistoryRestartRestoreEvidence {
   scenario: "history-restart-restore";
   requestId: string;
@@ -1400,6 +1458,60 @@ export async function runTauriHistoryRestartJourney(): Promise<
 }
 
 /**
+ * Seed automatic/manual history in one native process, then reopen the same
+ * isolated root in a fresh process and verify the durable list and preview.
+ * The binary path is resolved once and passed to both children so the
+ * evidence cannot mix product builds across the restart boundary.
+ */
+export async function runTauriHistoryAutomaticJourney(
+  mixedCount: 19 | 20 | 21 = 21,
+): Promise<ReliabilityRun<HistoryAutomaticJourneyEvidence>> {
+  const binary = await resolveDesktopBinary();
+  const paths = await createIsolatedDesktopPaths();
+  let cleaned = false;
+  const cleanup = async (): Promise<void> => {
+    if (cleaned) return;
+    cleaned = true;
+    await cleanupIsolatedDesktopPaths(paths);
+  };
+  try {
+    const seed = await runHistoryRestartProcess(
+      binary,
+      paths,
+      "history-automatic-seed",
+      { EXCALIDRAW_E2E_HISTORY_MIXED_COUNT: String(mixedCount) },
+    );
+    const verify = await runHistoryRestartProcess(
+      binary,
+      paths,
+      "history-automatic-verify",
+      {
+        EXCALIDRAW_E2E_HISTORY_MANUAL_VERSION: seed.manualVersionId,
+        EXCALIDRAW_E2E_HISTORY_MANUAL_SHA256: seed.manualClickSceneSha256,
+        EXCALIDRAW_E2E_HISTORY_POST_EDIT_SHA256: seed.postEditSceneSha256,
+      },
+    );
+    const filesystem = await statfs(paths.workspace);
+    return {
+      evidence: { seed, verify },
+      environment: {
+        platform: process.platform,
+        architecture: process.arch,
+        filesystemType: String(filesystem.type),
+        binaryPath: binary,
+        binarySha256: sha256(await readFile(binary)),
+        seed: `t031-automatic-${mixedCount}`,
+      },
+      paths,
+      cleanup,
+    };
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
+}
+
+/**
  * Run a recovery acceptance scenario implemented by the test-only native
  * harness. The helper reports native process errors directly instead of
  * substituting browser-local state when the recovery integration is absent or
@@ -1507,12 +1619,26 @@ async function runScenarioProcess(
 }
 
 type HistoryRestartProcessScenario =
+  | "history-automatic-seed"
+  | "history-automatic-verify"
   | "history-restart-seed"
   | "history-restart-restore"
   | "history-restart-verify"
   | "history-restart-evict"
   | "history-restart-eviction-fault-probe";
 
+async function runHistoryRestartProcess(
+  binary: string,
+  paths: IsolatedDesktopPaths,
+  scenario: "history-automatic-seed",
+  overrides?: Readonly<NodeJS.ProcessEnv>,
+): Promise<HistoryAutomaticSeedEvidence>;
+async function runHistoryRestartProcess(
+  binary: string,
+  paths: IsolatedDesktopPaths,
+  scenario: "history-automatic-verify",
+  overrides?: Readonly<NodeJS.ProcessEnv>,
+): Promise<HistoryAutomaticVerifyEvidence>;
 async function runHistoryRestartProcess(
   binary: string,
   paths: IsolatedDesktopPaths,
@@ -1550,6 +1676,8 @@ async function runHistoryRestartProcess(
   overrides: Readonly<NodeJS.ProcessEnv> = {},
 ): Promise<
   | HistoryRestartSeedEvidence
+  | HistoryAutomaticSeedEvidence
+  | HistoryAutomaticVerifyEvidence
   | HistoryRestartRestoreEvidence
   | HistoryRestartVerifyEvidence
   | HistoryRestartEvictEvidence
@@ -1613,6 +1741,8 @@ async function runHistoryRestartProcess(
     throw new Error(`History restart scenario mismatch for ${scenario}.`);
   }
   return evidence as
+    | HistoryAutomaticSeedEvidence
+    | HistoryAutomaticVerifyEvidence
     | HistoryRestartSeedEvidence
     | HistoryRestartRestoreEvidence
     | HistoryRestartVerifyEvidence

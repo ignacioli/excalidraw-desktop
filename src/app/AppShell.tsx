@@ -11,6 +11,7 @@ import {
 import {
   documentManager,
   registerDocumentFileChangeEvents,
+  registerDocumentHistoryEvents,
   useDocumentStore,
   type CloseOutcome,
   type DocumentSaveState,
@@ -635,6 +636,27 @@ export function AppShell({
     void registerExitCheckpoint(documentManager, (error) =>
       setInteractionError(getErrorMessage(error)),
     )
+      .then((nextUnlisten) => {
+        if (disposed) {
+          nextUnlisten();
+        } else {
+          unlisten = nextUnlisten;
+        }
+      })
+      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) {
+      return;
+    }
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void registerDocumentHistoryEvents(documentManager)
       .then((nextUnlisten) => {
         if (disposed) {
           nextUnlisten();

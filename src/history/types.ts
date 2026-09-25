@@ -2,6 +2,8 @@ import type {
   HistoryChangedEvent,
   HistoryListRequest,
   HistoryListResponse,
+  HistoryMarkRequest,
+  HistoryMarkResponse,
   HistoryOperationStatusRequest,
   HistoryOperationStatusResponse,
   HistoryPreviewRequest,
@@ -38,6 +40,7 @@ export type {
 export interface HistoryClient {
   list(request: HistoryListRequest): Promise<HistoryListResponse>;
   preview(request: HistoryPreviewRequest): Promise<HistoryPreviewResponse>;
+  mark(request: HistoryMarkRequest): Promise<HistoryMarkResponse>;
   replace(request: HistoryReplaceRequest): Promise<HistoryReplaceResponse>;
   operationStatus(
     request: HistoryOperationStatusRequest,

@@ -194,6 +194,43 @@ impl HistoryStore {
         &self.reachability
     }
 
+    /// Persist a non-fatal history maintenance issue.  The current document
+    /// save remains authoritative even if this best-effort record itself
+    /// cannot be written (for example, on a read-only history directory).
+    pub fn record_maintenance_issue(
+        &self,
+        document_id: &str,
+        issue_code: &str,
+        phase: &str,
+        updated_at: i64,
+    ) -> Result<(), HistoryStoreError> {
+        let scope_key = format!("document:{document_id}");
+        self.with_transaction(|transaction| {
+            transaction.execute(
+                "INSERT INTO maintenance_state
+                 (scope_key, scope, document_id, issue_code, last_phase, updated_at)
+                 VALUES (?1, 'document', ?2, ?3, ?4, ?5)
+                 ON CONFLICT(scope_key) DO UPDATE SET
+                   issue_code = excluded.issue_code,
+                   last_phase = excluded.last_phase,
+                   updated_at = excluded.updated_at",
+                rusqlite::params![scope_key, document_id, issue_code, phase, updated_at],
+            )?;
+            Ok::<_, rusqlite::Error>(())
+        })
+    }
+
+    pub fn clear_maintenance_issue(&self, document_id: &str) -> Result<(), HistoryStoreError> {
+        let scope_key = format!("document:{document_id}");
+        self.with_connection(|connection| {
+            connection.execute(
+                "DELETE FROM maintenance_state WHERE scope_key = ?1",
+                [scope_key],
+            )?;
+            Ok(())
+        })
+    }
+
     pub fn put_scene(
         &self,
         bytes: &[u8],

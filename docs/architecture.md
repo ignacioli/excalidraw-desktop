@@ -116,6 +116,17 @@ store are therefore observed independently during restart reconciliation; an
 `after_rename_before_parent_sync` result is `pendingReconciliation`, not an
 assumption that the old file survived.
 
+Ordinary history is driven only by a successfully completed cold checkpoint.
+The first successful checkpoint establishes a durable per-document baseline;
+the first changed checkpoint at least 30 minutes later publishes the exact
+immutable scene and asset bytes from that save. Manual and protected versions
+do not move this baseline, and no history-only timer catches up while the app
+is idle. Automatic-history failure is reported through the independent
+`history-issue` state/event and never rewrites a successful current-file save
+as failed. Manual marks publish the click-time scene as an uncapped `manual`
+record; equal bytes may reuse objects without collapsing semantic records.
+Automatic and protected records continue to share the newest-20 pool.
+
 The test-only `e2e-harness` exposes seven process barriers. The parent process
 waits for the exact ready marker, verifies the marker's isolated target path,
 sends `SIGKILL`, and starts a fresh probe with the same isolated root. A

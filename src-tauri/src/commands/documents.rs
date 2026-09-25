@@ -7,6 +7,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, State};
 
@@ -16,14 +17,23 @@ use crate::{
         WorkspaceRecord, WorkspaceRepository,
     },
     documents::{
-        assets::{asset_root_for, externalize_files, reembed_files},
+        assets::{
+            asset_root_for, assets_dir, externalize_files, hash_from_reference, reembed_files,
+        },
         atomic_write::atomic_write,
         recovery::{document_id_for_path, RecoveryStore},
         validation::{validate_scene, SceneValidationError},
     },
     history::{
+        automatic::after_successful_checkpoint_with_assets,
         identity::{DocumentIdentity, FileSystemIdentity, IdentityError, IdentityStoreError},
+        repository::PublishAsset,
         store::HistoryStore,
+        types::{HistoryCurrentFileSaveOutcome, HistoryIssueEvent, HistoryIssueSource},
+        validation::{
+            validate_scene_and_assets, AssetObject, AssetObjectMetadata, SceneObjectMetadata,
+            HISTORY_OBJECT_CODEC, HISTORY_OBJECT_SCHEMA_VERSION,
+        },
     },
     security::{PathSecurityError, WorkspacePathPolicy},
     watcher::WatcherService,
@@ -360,6 +370,33 @@ impl DocumentService {
         self.history_issues.lock().await.get(path).copied()
     }
 
+    pub async fn history_issue_event_for_path(&self, path: &Path) -> Option<HistoryIssueEvent> {
+        let code = self.history_issue_for_path(path).await?;
+        let history_store = self.history_store.clone()?;
+        let canonical_path = path_string(path);
+        let identity = run_blocking(move || {
+            Ok(history_store
+                .load_active_document_identity(&canonical_path)
+                .ok()
+                .flatten())
+        })
+        .await
+        .ok()
+        .flatten()?;
+        Some(HistoryIssueEvent {
+            document_id: identity.document_id,
+            operation: None,
+            source: HistoryIssueSource::Automatic,
+            error: IpcError {
+                code,
+                message: "Automatic history publication failed.".to_owned(),
+                retriable: true,
+                context: None,
+            },
+            current_file_save_outcome: Some(HistoryCurrentFileSaveOutcome::Succeeded),
+        })
+    }
+
     pub async fn doc_open(&self, request: PathRequest) -> Result<SceneOpenResponse, IpcError> {
         self.open(request).await.map_err(Into::into)
     }
@@ -376,6 +413,17 @@ impl DocumentService {
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, IpcError> {
         self.checkpoint(request).await.map_err(Into::into)
+    }
+
+    #[cfg(feature = "e2e-harness")]
+    pub(crate) async fn e2e_doc_checkpoint_at(
+        &self,
+        request: CheckpointRequest,
+        recorded_at: i64,
+    ) -> Result<CheckpointResponse, IpcError> {
+        self.checkpoint_at(request, Some(recorded_at))
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn doc_close(
@@ -496,6 +544,14 @@ impl DocumentService {
     }
 
     async fn checkpoint(&self, request: CheckpointRequest) -> Result<CheckpointResponse, AppError> {
+        self.checkpoint_at(request, None).await
+    }
+
+    async fn checkpoint_at(
+        &self,
+        request: CheckpointRequest,
+        history_recorded_at: Option<i64>,
+    ) -> Result<CheckpointResponse, AppError> {
         let authorized = self
             .authorize_path(Path::new(&request.path), PathMode::CreateOrReplace)
             .await?;
@@ -504,6 +560,18 @@ impl DocumentService {
         }
         let _document_guard = self.lock_document(&authorized.path).await;
         let limit = self.scene_limit_bytes;
+        let history_asset_root = asset_root_for(
+            &authorized.path,
+            authorized
+                .workspace
+                .as_ref()
+                .map(|workspace| Path::new(&workspace.root_path)),
+        );
+        let previous_base_hash = self
+            .repository
+            .draft_get(path_string(&authorized.path))
+            .await?
+            .and_then(|draft| draft.base_hash);
         let asset_root = asset_root_for(
             &authorized.path,
             authorized
@@ -553,7 +621,7 @@ impl DocumentService {
             .document_checkpoint_commit(
                 DraftRecord {
                     file_path: canonical_path,
-                    scene_json,
+                    scene_json: scene_json.clone(),
                     content_hash: hash.clone(),
                     base_hash: Some(hash.clone()),
                     updated_at: mtime,
@@ -564,14 +632,115 @@ impl DocumentService {
             .await?;
         if let Some(watcher) = self.watcher.clone() {
             watcher
-                .note_own_write(authorized.path, mtime, file_size, hash.clone())
+                .note_own_write(authorized.path.clone(), mtime, file_size, hash.clone())
                 .await;
         }
         let _reason: CheckpointReason = request.reason;
+        // History cadence is based on the successful save activity, not on a
+        // file-provided mtime that may be preserved or externally adjusted.
+        let history_recorded_at =
+            history_recorded_at.unwrap_or_else(|| unix_timestamp().unwrap_or(mtime));
+        self.publish_automatic_history_after_checkpoint(
+            &authorized.path,
+            &scene_json,
+            &history_asset_root,
+            previous_base_hash.as_deref(),
+            history_recorded_at,
+        )
+        .await;
         Ok(CheckpointResponse {
             new_base_hash: hash,
             mtime,
         })
+    }
+
+    /// Automatic history is deliberately downstream of the successful cold
+    /// checkpoint.  Any history failure is converted into a visible,
+    /// durable issue and never changes the already-successful save result.
+    async fn publish_automatic_history_after_checkpoint(
+        &self,
+        path: &Path,
+        scene_json: &str,
+        asset_root: &Path,
+        previous_base_hash: Option<&str>,
+        recorded_at: i64,
+    ) {
+        let Some(history_store) = self.history_store.clone() else {
+            return;
+        };
+        let canonical_path = path_string(path);
+        let identity = match history_store.load_active_document_identity(&canonical_path) {
+            Ok(Some(identity)) => identity,
+            Ok(None) => {
+                self.remember_history_issue(path, ErrorCode::HistoryUnavailable)
+                    .await;
+                return;
+            }
+            Err(error) => {
+                self.remember_history_issue(path, ErrorCode::HistoryUnavailable)
+                    .await;
+                eprintln!("automatic history identity lookup failed: {error}");
+                return;
+            }
+        };
+        let document_id = identity.document_id;
+        let store = history_store;
+        let scene = scene_json.as_bytes().to_vec();
+        let asset_root = asset_root.to_path_buf();
+        let previous_base_hash = previous_base_hash.map(str::to_owned);
+        let document_id_for_publish = document_id.clone();
+        let result = run_blocking(move || {
+            let assets = checkpoint_assets(&scene, &asset_root)?;
+            after_successful_checkpoint_with_assets(
+                &store,
+                &document_id_for_publish,
+                &scene,
+                assets,
+                previous_base_hash.as_deref(),
+                recorded_at,
+            )
+            .map(|_| ())
+            .map_err(|error| AppError::HistoryUnavailable(error.to_string()))
+        })
+        .await;
+        match result {
+            Ok(()) => {
+                self.clear_history_issue(path).await;
+                // A successful baseline/no-op is also a successful recovery
+                // of a prior automatic issue.
+                let Some(store) = self.history_store.clone() else {
+                    return;
+                };
+                let document_id = document_id.clone();
+                let _ = run_blocking(move || {
+                    store
+                        .clear_maintenance_issue(&document_id)
+                        .map_err(|error| AppError::HistoryUnavailable(error.to_string()))
+                })
+                .await;
+            }
+            Err(error) => {
+                let code = history_error_code(&error);
+                self.remember_history_issue(path, code).await;
+                let Some(store) = self.history_store.clone() else {
+                    return;
+                };
+                let document_id = document_id.clone();
+                let code_name = format!("{code:?}");
+                let _ = run_blocking(move || {
+                    store
+                        .record_maintenance_issue(
+                            &document_id,
+                            &code_name,
+                            "automatic",
+                            recorded_at,
+                        )
+                        .map_err(|error| AppError::HistoryUnavailable(error.to_string()))
+                })
+                .await;
+                eprintln!("automatic history publication failed: {error}");
+            }
+        }
     }
 
     async fn resolve_conflict(
@@ -1120,16 +1289,26 @@ pub async fn doc_checkpoint(
     path: String,
     scene_json: String,
     reason: CheckpointReason,
+    app: AppHandle,
     state: State<'_, DocumentState>,
 ) -> Result<CheckpointResponse, IpcError> {
-    state
+    let event_path = fs::canonicalize(&path).unwrap_or_else(|_| PathBuf::from(&path));
+    let response = state
         .service
         .doc_checkpoint(CheckpointRequest {
             path,
             scene_json,
             reason,
         })
+        .await?;
+    if let Some(event) = state
+        .service
+        .history_issue_event_for_path(&event_path)
         .await
+    {
+        let _ = app.emit("history-issue", event);
+    }
+    Ok(response)
 }
 
 #[tauri::command]
@@ -1310,6 +1489,72 @@ fn content_hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+fn checkpoint_assets(scene_json: &[u8], asset_root: &Path) -> Result<Vec<PublishAsset>, AppError> {
+    let scene: Value = serde_json::from_slice(scene_json)
+        .map_err(|error| AppError::InvalidScene(error.to_string()))?;
+    let Some(files) = scene.get("files").and_then(Value::as_object) else {
+        return Ok(Vec::new());
+    };
+    let mut assets = Vec::new();
+    for (file_id, file) in files {
+        let file = file.as_object().ok_or_else(|| {
+            AppError::InvalidScene(format!("history asset {file_id} is not an object"))
+        })?;
+        let reference = file.get("dataURL").and_then(Value::as_str).ok_or_else(|| {
+            AppError::InvalidScene(format!("history asset {file_id} has no dataURL"))
+        })?;
+        let hash = hash_from_reference(reference).ok_or_else(|| {
+            AppError::InvalidScene(format!(
+                "history asset {file_id} is not an internal content-addressed reference"
+            ))
+        })?;
+        let path = assets_dir(asset_root).join(hash);
+        let bytes = fs::read(&path).map_err(|source| io_error(&path, source))?;
+        let actual_hash = content_hash(&bytes);
+        if actual_hash != hash {
+            return Err(AppError::InvalidScene(format!(
+                "history asset {file_id} content hash does not match its reference"
+            )));
+        }
+        let mime_type = file
+            .get("mimeType")
+            .and_then(Value::as_str)
+            .unwrap_or("application/octet-stream")
+            .to_owned();
+        assets.push(PublishAsset {
+            file_id: file_id.clone(),
+            bytes,
+            mime_type,
+        });
+    }
+    let scene_metadata = SceneObjectMetadata {
+        schema_version: HISTORY_OBJECT_SCHEMA_VERSION,
+        codec: HISTORY_OBJECT_CODEC.to_owned(),
+        raw_length: scene_json.len() as u64,
+        sha256: content_hash(scene_json),
+        relative_path: PathBuf::from("scenes/checkpoint-validation.json"),
+    };
+    let asset_objects = assets
+        .iter()
+        .map(|asset| {
+            let hash = content_hash(&asset.bytes);
+            AssetObject {
+                file_id: asset.file_id.clone(),
+                metadata: AssetObjectMetadata {
+                    sha256: hash.clone(),
+                    byte_length: asset.bytes.len() as u64,
+                    mime_type: asset.mime_type.clone(),
+                    relative_path: PathBuf::from(format!("assets/{hash}")),
+                },
+                bytes: &asset.bytes,
+            }
+        })
+        .collect::<Vec<_>>();
+    validate_scene_and_assets(scene_json, &scene_metadata, &asset_objects)
+        .map_err(|error| AppError::InvalidScene(error.to_string()))?;
+    Ok(assets)
+}
+
 fn path_string(path: &Path) -> String {
     path.display().to_string()
 }
@@ -1369,6 +1614,61 @@ mod tests {
     use crate::database::repository::SqliteRepository;
     use std::sync::Arc;
     use uuid::Uuid;
+
+    #[test]
+    fn checkpoint_assets_rejects_bytes_that_do_not_match_the_reference_hash() {
+        let root =
+            std::env::temp_dir().join(format!("excalidraw-history-asset-hash-{}", Uuid::new_v4()));
+        fs::create_dir_all(assets_dir(&root)).expect("create asset directory");
+        let expected_bytes = b"expected image bytes";
+        let expected_hash = content_hash(expected_bytes);
+        fs::write(assets_dir(&root).join(&expected_hash), b"corrupted bytes")
+            .expect("write corrupt asset");
+        let scene = serde_json::json!({
+            "files": {
+                "image": {
+                    "dataURL": format!("asset://{expected_hash}"),
+                    "mimeType": "image/png"
+                }
+            }
+        });
+
+        let error = checkpoint_assets(scene.to_string().as_bytes(), &root)
+            .expect_err("corrupt asset must block automatic history publication");
+        assert!(
+            matches!(error, AppError::InvalidScene(message) if message.contains("content hash"))
+        );
+        fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn checkpoint_assets_rejects_digest_valid_non_image_bytes() {
+        let root =
+            std::env::temp_dir().join(format!("excalidraw-history-asset-image-{}", Uuid::new_v4()));
+        fs::create_dir_all(assets_dir(&root)).expect("create asset directory");
+        let bytes = b"not a PNG";
+        let hash = content_hash(bytes);
+        fs::write(assets_dir(&root).join(&hash), bytes).expect("write invalid image");
+        let scene = serde_json::json!({
+            "type": "excalidraw",
+            "version": 2,
+            "elements": [{"id":"image","type":"image","fileId":"image"}],
+            "appState": {},
+            "files": {
+                "image": {
+                    "dataURL": format!("asset://{hash}"),
+                    "mimeType": "image/png"
+                }
+            }
+        });
+
+        let error = checkpoint_assets(scene.to_string().as_bytes(), &root)
+            .expect_err("non-image bytes must block automatic history publication");
+        assert!(
+            matches!(error, AppError::InvalidScene(message) if message.contains("image bytes"))
+        );
+        fs::remove_dir_all(root).expect("remove test root");
+    }
 
     #[tokio::test]
     async fn finalize_rechecks_after_external_writer_barrier_before_metadata_commit() {

@@ -141,4 +141,87 @@ describe("HistoryPanel", () => {
     expect(onClose).toHaveBeenCalledOnce();
     expect(trigger.current).toHaveFocus();
   });
+
+  it("shows durable mark feedback inline without opening a named dialog", async () => {
+    const user = userEvent.setup();
+    const onMark = vi.fn(async () => undefined);
+    render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[makeItem()]}
+        onClose={vi.fn()}
+        onMark={onMark}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Mark current version" }),
+    );
+
+    expect(onMark).toHaveBeenCalledOnce();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Version marked and saved to history.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("does not report success before the durable mark callback resolves", async () => {
+    const user = userEvent.setup();
+    let resolveMark: (() => void) | undefined;
+    const onMark = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveMark = resolve;
+        }),
+    );
+    render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        onClose={vi.fn()}
+        onMark={onMark}
+      />,
+    );
+    const markButton = screen.getByRole("button", {
+      name: "Mark current version",
+    });
+
+    await user.click(markButton);
+
+    expect(markButton).toBeDisabled();
+    expect(
+      screen.queryByText("Version marked and saved to history."),
+    ).not.toBeInTheDocument();
+    resolveMark?.();
+    await vi.waitFor(() => {
+      expect(
+        screen.getByText("Version marked and saved to history."),
+      ).toBeInTheDocument();
+    });
+    expect(markButton).toBeEnabled();
+  });
+
+  it("keeps the panel usable and reports a failed mark inline", async () => {
+    const user = userEvent.setup();
+    const onMark = vi.fn(async () => {
+      throw new Error("History is unavailable.");
+    });
+    render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        onClose={vi.fn()}
+        onMark={onMark}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Mark current version" }),
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "History is unavailable.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Mark current version" }),
+    ).toBeEnabled();
+  });
 });
