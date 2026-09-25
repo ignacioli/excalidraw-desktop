@@ -12,6 +12,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[cfg(all(feature = "e2e-harness", not(test)))]
+use std::sync::{Mutex, OnceLock};
+
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use uuid::Uuid;
@@ -21,6 +24,82 @@ use super::types::HISTORY_MAX_SCENE_BYTES;
 const SCENES_DIRECTORY: &str = "objects/scenes";
 const ASSETS_DIRECTORY: &str = "objects/assets";
 const HASH_LENGTH: usize = 64;
+
+#[cfg(any(test, feature = "e2e-harness"))]
+const ENOSPC_OS_ERROR: i32 = 28;
+#[cfg(any(test, feature = "e2e-harness"))]
+const EACCES_OS_ERROR: i32 = 13;
+
+/// Deterministic publication boundaries used only by focused tests and the
+/// test-only native harness.  Production builds do not contain a selector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ObjectStoreFaultPoint {
+    BeforeTempWrite,
+    AfterTempSync,
+    BeforeHardLink,
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code, reason = "selected by the e2e harness fault scenario")]
+pub(crate) enum ObjectStoreFaultKind {
+    DiskFull,
+    PermissionDenied,
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+type ConfiguredFault = (ObjectStoreFaultPoint, ObjectStoreFaultKind);
+
+#[cfg(test)]
+thread_local! {
+    static CONFIGURED_FAULT_POINT: std::cell::RefCell<Option<ConfiguredFault>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(all(feature = "e2e-harness", not(test)))]
+static CONFIGURED_FAULT_POINT: OnceLock<Mutex<Option<ConfiguredFault>>> = OnceLock::new();
+
+#[cfg(any(test, feature = "e2e-harness"))]
+#[allow(dead_code, reason = "called by focused tests and the e2e harness")]
+pub(crate) fn set_fault(point: ObjectStoreFaultPoint, kind: ObjectStoreFaultKind) {
+    #[cfg(test)]
+    CONFIGURED_FAULT_POINT.with(|configured| configured.replace(Some((point, kind))));
+    #[cfg(all(feature = "e2e-harness", not(test)))]
+    {
+        *configured_fault_point()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some((point, kind));
+    }
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+#[allow(dead_code, reason = "called by focused tests and the e2e harness")]
+pub(crate) fn set_fault_point(point: Option<ObjectStoreFaultPoint>) {
+    match point {
+        Some(point) => set_fault(point, ObjectStoreFaultKind::DiskFull),
+        None => {
+            #[cfg(test)]
+            CONFIGURED_FAULT_POINT.with(|configured| configured.replace(None));
+            #[cfg(all(feature = "e2e-harness", not(test)))]
+            {
+                *configured_fault_point()
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+            }
+        }
+    }
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+#[allow(dead_code, reason = "called by focused tests and the e2e harness")]
+pub(crate) fn clear_fault_point() {
+    set_fault_point(None);
+}
+
+#[cfg(all(feature = "e2e-harness", not(test)))]
+fn configured_fault_point() -> &'static Mutex<Option<ConfiguredFault>> {
+    CONFIGURED_FAULT_POINT.get_or_init(|| Mutex::new(None))
+}
 
 #[derive(Debug, Error)]
 pub enum ObjectStoreError {
@@ -299,6 +378,7 @@ fn write_immutable(path: &Path, bytes: &[u8]) -> Result<(), ObjectStoreError> {
                 path: temp_path.clone(),
                 source,
             })?;
+        inject_fault(ObjectStoreFaultPoint::BeforeTempWrite, &temp_path)?;
         temporary
             .write_all(bytes)
             .and_then(|_| temporary.flush())
@@ -308,6 +388,7 @@ fn write_immutable(path: &Path, bytes: &[u8]) -> Result<(), ObjectStoreError> {
                 path: temp_path.clone(),
                 source,
             })?;
+        inject_fault(ObjectStoreFaultPoint::AfterTempSync, &temp_path)?;
         drop(temporary);
         // Re-read the synced inode before publication.  This makes the
         // write/validate/sync ordering explicit and protects metadata from a
@@ -317,6 +398,7 @@ fn write_immutable(path: &Path, bytes: &[u8]) -> Result<(), ObjectStoreError> {
 
         // A hard link publishes the already-synced temporary inode without
         // replacing a concurrently-created object at the same content path.
+        inject_fault(ObjectStoreFaultPoint::BeforeHardLink, path)?;
         match fs::hard_link(&temp_path, path) {
             Ok(()) => {
                 fs::remove_file(&temp_path).map_err(|source| ObjectStoreError::Io {
@@ -349,6 +431,39 @@ fn write_immutable(path: &Path, bytes: &[u8]) -> Result<(), ObjectStoreError> {
         let _ = fs::remove_file(&temp_path);
     }
     result
+}
+
+fn inject_fault(
+    #[allow(unused_variables)] point: ObjectStoreFaultPoint,
+    #[allow(unused_variables)] path: &Path,
+) -> Result<(), ObjectStoreError> {
+    #[cfg(any(test, feature = "e2e-harness"))]
+    {
+        #[cfg(test)]
+        let configured = CONFIGURED_FAULT_POINT.with(|configured| *configured.borrow());
+        #[cfg(all(feature = "e2e-harness", not(test)))]
+        let configured = *configured_fault_point()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some((configured_point, kind)) = configured {
+            if configured_point != point {
+                return Ok(());
+            }
+            return Err(ObjectStoreError::Io {
+                operation: match point {
+                    ObjectStoreFaultPoint::BeforeTempWrite => "write temporary object",
+                    ObjectStoreFaultPoint::AfterTempSync => "sync temporary object",
+                    ObjectStoreFaultPoint::BeforeHardLink => "publish immutable object",
+                },
+                path: path.to_path_buf(),
+                source: io::Error::from_raw_os_error(match kind {
+                    ObjectStoreFaultKind::DiskFull => ENOSPC_OS_ERROR,
+                    ObjectStoreFaultKind::PermissionDenied => EACCES_OS_ERROR,
+                }),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn sync_directory(path: &Path) -> Result<(), ObjectStoreError> {
@@ -451,6 +566,60 @@ mod tests {
             store.read_scene(&scene.hash),
             Err(ObjectStoreError::IntegrityMismatch { .. })
         ));
+        cleanup(&root);
+    }
+
+    #[test]
+    fn injected_object_publish_failures_remove_the_temporary_inode() {
+        struct FaultReset;
+        impl Drop for FaultReset {
+            fn drop(&mut self) {
+                clear_fault_point();
+            }
+        }
+
+        let _fault_reset = FaultReset;
+        let (root, store) = fixture();
+        let bytes = br#"{"elements":[{"id":"fault"}]}"#;
+        let object_path = store
+            .scene_path(&sha256_hex(bytes))
+            .unwrap_or_else(|error| panic!("resolve object path: {error}"));
+        let parent = object_path
+            .parent()
+            .unwrap_or_else(|| panic!("object parent missing"));
+
+        for point in [
+            ObjectStoreFaultPoint::BeforeTempWrite,
+            ObjectStoreFaultPoint::AfterTempSync,
+            ObjectStoreFaultPoint::BeforeHardLink,
+        ] {
+            for (kind, expected_os_error) in [
+                (ObjectStoreFaultKind::DiskFull, ENOSPC_OS_ERROR),
+                (ObjectStoreFaultKind::PermissionDenied, EACCES_OS_ERROR),
+            ] {
+                set_fault(point, kind);
+                let result = store.put_scene(bytes, 1);
+                clear_fault_point();
+
+                match result {
+                    Err(ObjectStoreError::Io { source, .. }) => {
+                        assert_eq!(source.raw_os_error(), Some(expected_os_error));
+                    }
+                    other => panic!("expected injected {kind:?} at {point:?}, got {other:?}"),
+                }
+                let entries = fs::read_dir(parent)
+                    .unwrap_or_else(|error| panic!("read object parent: {error}"));
+                assert!(entries
+                    .flatten()
+                    .all(|entry| { !entry.file_name().to_string_lossy().ends_with(".tmp") }));
+                assert!(!object_path.exists());
+            }
+        }
+
+        store
+            .put_scene(bytes, 1)
+            .unwrap_or_else(|error| panic!("publish after clearing fault: {error}"));
+        assert!(object_path.is_file());
         cleanup(&root);
     }
 }

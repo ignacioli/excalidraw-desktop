@@ -411,9 +411,11 @@ fn guarded_write_and_publish(
     injector
         .interrupt(AtomicWriteFaultPoint::BeforeRename)
         .map_err(GuardedAtomicWriteError::Atomic)?;
-    validator(target)?;
     #[cfg(feature = "e2e-harness")]
-    crate::e2e_harness::history_external_write_after_precommit(target);
+    crate::e2e_harness::history_external_write_after_precommit(target).map_err(|source| {
+        GuardedAtomicWriteError::Atomic(io_error("inject external history write", target, source))
+    })?;
+    validator(target)?;
     fs::rename(temp_path, target).map_err(|source| {
         GuardedAtomicWriteError::Atomic(io_error("rename temporary file", target, source))
     })?;

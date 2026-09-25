@@ -250,6 +250,48 @@ describe("DocumentManager", () => {
     manager.dispose();
   });
 
+  it("rejects a captured autosave after history adoption advances its generation", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open(
+      "/tmp/history-stale-draft.excalidraw",
+    );
+    const before = manager.store.getState().sessionsById[documentId];
+    expect(before).toBeDefined();
+    const probe = manager.prepareHistoryAutosaveProbe(documentId);
+    expect(probe).toMatchObject({
+      captured: { sessionGeneration: 0, revision: 0 },
+      path: "/tmp/history-stale-draft.excalidraw",
+    });
+
+    const adoptedScene: SceneSnapshot = {
+      ...before!.scene,
+      elements: [{ version: 2 } as SceneSnapshot["elements"][number]],
+    };
+    expect(
+      manager.adoptHistoryScene(
+        documentId,
+        { sessionGeneration: 0, revision: 0 },
+        adoptedScene,
+        "history-base",
+        1,
+      ),
+    ).toBe(true);
+
+    await expect(probe!.queue()).resolves.toMatchObject({
+      status: "rejected",
+      rejection: "sessionGeneration",
+      captured: { sessionGeneration: 0, revision: 0 },
+      observed: { sessionGeneration: 1, revision: 1 },
+    });
+    expect(gateway.saveDraft).not.toHaveBeenCalled();
+    expect(manager.store.getState().sessionsById[documentId]).toMatchObject({
+      saveState: "clean",
+      sessionGeneration: 1,
+    });
+    manager.dispose();
+  });
+
   it("keeps history issues separate from current-file save state", async () => {
     const gateway = createGateway();
     const manager = new DocumentManager(gateway);

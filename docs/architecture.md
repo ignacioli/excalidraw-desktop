@@ -2,7 +2,7 @@
 
 # Excalidraw Desktop architecture
 
-**Last updated**: 2026-09-22
+**Last updated**: 2026-09-24
 
 This document describes the **current** implementation architecture of Excalidraw Desktop: layered view, reliability data flows, workspace-entry mutations, module responsibilities, dependency direction and trust boundaries, native-window boundary, and storage. Decision records live in `docs/adr/`. The visual and interaction contract is the root `DESIGN.md` (English; Chinese: `DESIGN.zh.md`). The public IPC contract is `docs/contracts/ipc-contracts.md` (v3).
 
@@ -119,12 +119,14 @@ assumption that the old file survived.
 The test-only `e2e-harness` exposes seven process barriers. The parent process
 waits for the exact ready marker, verifies the marker's isolated target path,
 sends `SIGKILL`, and starts a fresh probe with the same isolated root. A
-timeout or a still-live PID is a failure. The current standalone barrier
-fixture proves the kill/restart protocol and complete old/new target-file
-classification; it does not claim that a real `history_replace` operation,
-SQLite ENOSPC/permission injection, asset hydration, or external-write race
-has run. Those operation-specific assertions require a native IPC/process
-journey and must remain separate from this barrier evidence.
+timeout or a still-live PID is a failure. Standalone fixtures validate the
+marker protocol only; operation evidence runs the real protected-replacement
+service for object publication, protection, intent, rename/directory sync,
+metadata/acknowledgement, and retention-eviction boundaries. Deterministic
+typed object (`ENOSPC`/`EACCES`) and SQLite pre-commit faults remain test-only,
+while missing/corrupt objects, concurrent requests, external writes, response
+loss, and stale queued autosaves are checked through fresh-process or exact
+frontend-driver readback. Each evidence owner stays separate.
 
 | Barrier                                 | Product boundary                                 | Required restart question                                                |
 | --------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------ |
@@ -133,14 +135,20 @@ journey and must remain separate from this barrier evidence.
 | `intent_commit`                         | replacement intent record                        | restart reconciles old/new/pending from durable facts                    |
 | `after_rename_before_parent_sync`       | target rename before parent sync                 | published identity is not reported as old merely because sync is unknown |
 | `metadata_complete_before_frontend_ack` | backend complete before frontend acknowledgement | response loss is recovered by request-id status, without replay          |
-| `eviction_delete_gc`                    | reachability/eviction deletion                   | operation/request pins keep the target objects readable                  |
-| `rename_delete_repair`                  | restart draft/index repair                       | stale queued writes cannot overwrite the observed file                   |
+| `eviction_delete_gc`                    | retention commit before reachability GC          | pre-intent crash keeps the old file; GC removes only genuinely unreachable objects |
+| `rename_delete_repair`                  | restart draft/index repair                       | lifecycle repair follows durable identity and bytes                      |
 
 The fault harness is compiled and registered only with `--features e2e-harness`
 and `APP_E2E=1`; production builds must omit the commands and harness strings.
 All native runs use a fresh `excalidraw-desktop-e2e-*` root and record the
 platform, filesystem, binary digest, seed, barrier marker, process signal, and
 post-restart hashes.
+
+Frontend draft scheduling carries the captured session generation and revision.
+After replacement adoption advances either value, a queued callback captured
+from the old session is rejected before `doc_save_draft` or checkpoint IPC.
+The native journey additionally verifies that the cold target and clean draft
+do not contain the stale attempted scene.
 
 ## 4. Data-flow 2: external change → conflict resolution
 

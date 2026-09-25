@@ -1214,6 +1214,10 @@ fn publish_snapshot(
             Ok::<(), crate::history::store::HistoryStoreError>(())
         })
         .map_err(|error| error.to_string())?;
+    #[cfg(feature = "e2e-harness")]
+    crate::e2e_harness::history_fault_barrier_from_environment(
+        crate::e2e_harness::HistoryFaultStage::EvictionDeleteGc,
+    )?;
     Ok(ProtectionReceipt {
         version_id: version_id.to_owned(),
         scene_hash: scene.hash,

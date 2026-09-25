@@ -2,7 +2,7 @@
 
 # Excalidraw Desktop 架构文档
 
-**最后更新**：2026-09-22
+**最后更新**：2026-09-24
 
 本文档描述 Excalidraw Desktop 的**当前**实现架构：分层视图、可靠性数据流、工作区条目变更、模块职责、依赖方向与信任边界、原生窗口边界与存储层。决策记录见 `docs/adr/`；视觉与交互契约见根目录 `DESIGN.md`（英文正文；中文见 `DESIGN.zh.md`）。公开 IPC 契约见 `docs/contracts/ipc-contracts.md`（v3）。
 
@@ -110,7 +110,7 @@ flowchart LR
 
 版本历史是独立的持久化平面。受保护替换先发布不可变场景/资源对象及持久的保护/意图元数据，再复用共享文档锁和受保护的原子 rename，最后修复主草稿/索引状态。因此重启协调会独立观察当前文件、历史 SQLite 和对象存储；`after_rename_before_parent_sync` 的结果必须是 `pendingReconciliation`，不能因为目录同步未知就假定旧文件仍然存在。
 
-仅测试用的 `e2e-harness` 提供七个进程屏障。父进程等待精确 ready marker，验证 marker 中的目标路径仍在隔离根内，发送 `SIGKILL`，然后以同一隔离根启动全新的 probe。超时或 PID 仍存活均为失败。当前独立屏障 fixture 证明的是强退/重启协议和目标文件完整旧/新分类；它不声称执行了真实 `history_replace`、SQLite ENOSPC/权限注入、资源 hydration 或外部写入竞争。上述事务级断言必须由 native IPC/process 旅程单独覆盖，不能从屏障证据推导。
+仅测试用的 `e2e-harness` 提供七个进程屏障。父进程等待精确 ready marker，验证 marker 中的目标路径仍在隔离根内，发送 `SIGKILL`，然后以同一隔离根启动全新的 probe。超时或 PID 仍存活均为失败。独立 fixture 只验证 marker 协议；事务证据则通过真实受保护替换服务覆盖对象发布、保护、意图、rename／目录同步、metadata／ack 以及 retention 淘汰边界。对象层使用 typed `ENOSPC`／`EACCES`，SQLite 在 commit 前使用 deterministic typed fault；缺失／损坏对象、并发、外部写入、响应丢失与旧排队 autosave 分别由 fresh-process 或精确 frontend driver readback 负责，不能相互替代。
 
 | 屏障                                    | 产品边界                        | 重启必须回答的问题                     |
 | --------------------------------------- | ------------------------------- | -------------------------------------- |
@@ -119,10 +119,12 @@ flowchart LR
 | `intent_commit`                         | 替换意图 SQLite 提交            | 按持久事实协调旧/新/待处理             |
 | `after_rename_before_parent_sync`       | 目标 rename 后、父目录同步前    | 同步未知时不把已发布身份报告为旧状态   |
 | `metadata_complete_before_frontend_ack` | 后端完成、前端确认前            | 响应丢失按 request-id 查询，不重放替换 |
-| `eviction_delete_gc`                    | 可达性/淘汰删除                 | 操作/请求引用保护使目标对象继续可读    |
-| `rename_delete_repair`                  | 重启时 rename/delete 元数据修复 | 旧排队写入不能覆盖已观察文件           |
+| `eviction_delete_gc`                    | retention 提交后、可达性 GC 前  | intent 前强退保留旧文件；GC 只删除真正不可达对象 |
+| `rename_delete_repair`                  | 重启时 rename/delete 元数据修复 | lifecycle 修复遵守持久身份与实际字节   |
 
 故障 harness 仅在 `--features e2e-harness` 且 `APP_E2E=1` 时编译和注册；生产构建必须没有这些命令及 harness 字符串。所有 native 运行使用新的 `excalidraw-desktop-e2e-*` 根，并记录平台、文件系统、二进制 digest、seed、屏障 marker、进程信号和重启后 hash。
+
+前端草稿调度 payload 携带捕获时的 session generation 与 revision。替换采用推进任一值后，旧 session 捕获的排队 callback 会在 `doc_save_draft` 或 checkpoint IPC 前被拒绝；native journey 还会核对冷文件与 clean draft 都没有采用 stale attempted scene。
 
 ## 4. 数据流图 2：外部变更 → 冲突消解
 

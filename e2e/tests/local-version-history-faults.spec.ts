@@ -6,7 +6,9 @@ import { expect, test } from "@playwright/test";
 import { HISTORY_FAULT_MATRIX } from "../helpers/fault";
 import {
   runTauriHistoryFaultKill,
+  runTauriHistoryEvictionFaultKill,
   runTauriHistoryOperationConcurrency,
+  runTauriHistoryOperationExternalWrite,
   runTauriHistoryOperationFailure,
   runTauriHistoryOperationFaultKill,
 } from "../helpers/reliability";
@@ -164,6 +166,7 @@ test.describe("US1 local version history process fault barriers", () => {
         const { evidence } = run;
         expect(evidence.scenario).toBe("history-operation-fault-probe");
         expect(evidence.stage).toBe(stage);
+        expect(evidence.requestId).toBe(`history-fault-operation-t025-real-${stage}`);
         expect(evidence.targetPath.startsWith(`${run.paths.workspace}/`)).toBe(
           true,
         );
@@ -176,6 +179,12 @@ test.describe("US1 local version history process fault barriers", () => {
         );
         expect(evidence.targetObjectExists).toBe(true);
         expect(evidence.targetAssetExists).toBe(true);
+        expect(evidence.operationRowCount).toBe(
+          stage === "object_publish" || stage === "protection_commit" ? 0 : 1,
+        );
+        expect(evidence.protectionVersionCount).toBe(
+          stage === "object_publish" ? 0 : 1,
+        );
         expect(evidence.temporaryFiles).toEqual([]);
         if (stage === "after_rename_before_parent_sync") {
           // The target rename is observable, while metadata repair may still
@@ -185,6 +194,7 @@ test.describe("US1 local version history process fault barriers", () => {
           );
         } else if (stage === "metadata_complete_before_frontend_ack") {
           expect(evidence.replacementCommitted).toBe(true);
+          expect(evidence.operationState).toContain("Completed");
         } else {
           expect(evidence.replacementCommitted).not.toBe(true);
         }
@@ -196,6 +206,9 @@ test.describe("US1 local version history process fault barriers", () => {
 
   for (const failureMode of [
     "missing-version",
+    "missing-scene",
+    "corrupt-scene",
+    "missing-asset",
     "corrupt-asset",
     "object-permission",
     "object-enospc",
@@ -234,6 +247,30 @@ test.describe("US1 local version history process fault barriers", () => {
         expect(run.evidence.targetSha256).toBe(run.evidence.originalSha256);
         expect(run.evidence.error).not.toBe("unexpected success");
         expect(run.evidence.temporaryFiles).toEqual([]);
+        expect(run.evidence.validSiblingAvailable).toBe(true);
+        expect(run.evidence.protectedVersionCount).toBe(0);
+        expect(run.evidence.operationRowCount).toBe(0);
+        if (failureMode === "partial-protection") {
+          expect(run.evidence.faultSceneRegistered).toBe(false);
+          expect(run.evidence.unregisteredObjectHashes.length).toBeGreaterThan(
+            0,
+          );
+        }
+        if (
+          failureMode === "object-permission" ||
+          failureMode === "object-enospc"
+        ) {
+          expect(run.evidence.faultSceneObjectExists).toBe(false);
+          expect(run.evidence.faultSceneRegistered).toBe(false);
+        }
+        if (
+          failureMode === "sqlite-permission" ||
+          failureMode === "sqlite-enospc"
+        ) {
+          expect(run.evidence.error).toContain("HistoryUnavailable");
+          expect(run.evidence.faultSceneObjectExists).toBe(false);
+          expect(run.evidence.faultSceneRegistered).toBe(false);
+        }
       } finally {
         await run.cleanup();
       }
@@ -283,6 +320,86 @@ test.describe("US1 local version history process fault barriers", () => {
       ).toHaveLength(1);
       expect(run.evidence.targetObjectExists).toBe(true);
       expect(run.evidence.targetAssetExists).toBe(true);
+    } finally {
+      await run.cleanup();
+    }
+  });
+
+  test("preserves an external write between precheck and target publication", async ({
+    browserName,
+  }, testInfo) => {
+    void browserName;
+    test.skip(
+      !nativeReliabilityBuildConfigured(),
+      "Native History external-write tests require APP_E2E=1 and EXCALIDRAW_E2E_BINARY pointing at the e2e-harness Tauri build.",
+    );
+    if (!nativeReliabilityBuildConfigured()) return;
+
+    const run = await runTauriHistoryOperationExternalWrite();
+    try {
+      await testInfo.attach("native-history-external-write-evidence", {
+        body: Buffer.from(
+          JSON.stringify(
+            { environment: run.environment, evidence: run.evidence },
+            null,
+            2,
+          ),
+        ),
+        contentType: "application/json",
+      });
+      expect(run.evidence.scenario).toBe(
+        "history-operation-external-write",
+      );
+      expect(run.evidence.externalWritePreserved).toBe(true);
+      expect(run.evidence.observedSha256).toBe(
+        run.evidence.externalSha256,
+      );
+      expect(run.evidence.observedSha256).not.toBe(
+        run.evidence.publishedSha256,
+      );
+      expect(run.evidence.responseState).toContain("HistoryStaleDocument");
+    } finally {
+      await run.cleanup();
+    }
+  });
+
+  test("restarts safely after real retention eviction before GC", async ({
+    browserName,
+  }, testInfo) => {
+    void browserName;
+    test.skip(
+      !nativeReliabilityBuildConfigured(),
+      "Native History eviction fault tests require the e2e-harness Tauri build.",
+    );
+    if (!nativeReliabilityBuildConfigured()) return;
+
+    const run = await runTauriHistoryEvictionFaultKill();
+    try {
+      await testInfo.attach("native-history-eviction-fault-evidence", {
+        body: Buffer.from(
+          JSON.stringify(
+            { environment: run.environment, evidence: run.evidence },
+            null,
+            2,
+          ),
+        ),
+        contentType: "application/json",
+      });
+      const { evidence } = run;
+      expect(evidence.processSignal).toBe("SIGKILL");
+      expect(evidence.persistedSceneSha256).toBe(
+        evidence.expectedOldSceneSha256,
+      );
+      expect(evidence.targetVersionExists).toBe(false);
+      expect(evidence.retainedVersionCount).toBe(20);
+      expect(evidence.protectionVersionCount).toBe(1);
+      expect(evidence.operationRowCount).toBe(0);
+      expect(evidence.targetObjectExistedBeforeGc).toBe(true);
+      expect(evidence.targetAssetExistedBeforeGc).toBe(true);
+      expect(evidence.gcDeletedTargetScene).toBe(true);
+      expect(evidence.targetObjectExistsAfterGc).toBe(false);
+      expect(evidence.gcDeletedTargetAsset).toBe(false);
+      expect(evidence.targetAssetExistsAfterGc).toBe(true);
     } finally {
       await run.cleanup();
     }

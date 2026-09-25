@@ -137,6 +137,8 @@ export interface HistoryOperationFaultProbeEvidence {
   temporaryFiles: string[];
   targetObjectExists: boolean;
   targetAssetExists: boolean;
+  operationRowCount: number;
+  protectionVersionCount: number;
   processSignal?: NodeJS.Signals | null;
   readyMarkerPid?: number;
 }
@@ -151,6 +153,23 @@ export interface HistoryOperationFailureEvidence {
   targetUnchanged: boolean;
   error: string;
   temporaryFiles: string[];
+  validSiblingAvailable: boolean;
+  protectedVersionCount: number;
+  operationRowCount: number;
+  faultSceneHash: string;
+  faultSceneObjectExists: boolean;
+  faultSceneRegistered: boolean;
+  unregisteredObjectHashes: string[];
+}
+
+export interface HistoryExternalWriteEvidence {
+  scenario: "history-operation-external-write";
+  targetPath: string;
+  externalSha256: string;
+  publishedSha256: string;
+  observedSha256: string;
+  externalWritePreserved: boolean;
+  responseState: string;
 }
 
 export interface HistoryOperationConcurrencyEvidence {
@@ -204,6 +223,17 @@ export interface HistoryRestartVerifyEvidence {
   activeDocumentId?: string;
   operationDocumentId?: string;
   operationState?: string;
+  targetSha256: string;
+  draftSceneSha256?: string;
+  draftDirty?: boolean;
+  staleAutosaveAttemptedHash: string;
+  staleAutosaveCapturedSessionGeneration: number;
+  staleAutosaveCapturedRevision: number;
+  staleAutosaveObservedSessionGeneration?: number;
+  staleAutosaveObservedRevision?: number;
+  staleAutosaveRejected: boolean;
+  staleAutosaveRejection: string | null;
+  staleAutosaveDraftSaveState: string | null;
   persistedSceneSha256: string;
   statusSceneSha256?: string;
   statusState: string;
@@ -233,6 +263,25 @@ export interface HistoryRestartEvictEvidence {
   gcDeletedTarget: boolean;
   targetRetainedSceneReferences: number;
   targetRetainedAssetReferences: number;
+}
+
+export interface HistoryRestartEvictionFaultEvidence {
+  scenario: "history-restart-eviction-fault-probe";
+  targetPath: string;
+  persistedSceneSha256: string;
+  expectedOldSceneSha256: string;
+  targetVersionExists: boolean;
+  retainedVersionCount: number;
+  protectionVersionCount: number;
+  operationRowCount: number;
+  targetObjectExistedBeforeGc: boolean;
+  targetAssetExistedBeforeGc: boolean;
+  targetObjectExistsAfterGc: boolean;
+  targetAssetExistsAfterGc: boolean;
+  gcDeletedTargetScene: boolean;
+  gcDeletedTargetAsset: boolean;
+  processSignal: NodeJS.Signals | null;
+  readyMarkerPid: number;
 }
 
 export type HistoryCanvasReadback = Awaited<
@@ -928,6 +977,15 @@ export async function runTauriHistoryOperationFailure(
   });
 }
 
+export async function runTauriHistoryOperationExternalWrite(): Promise<
+  ReliabilityRun<HistoryExternalWriteEvidence>
+> {
+  return runHistoryOperationResultProcess(
+    "history-operation-external-write",
+    {},
+  );
+}
+
 export async function runTauriHistoryOperationConcurrency(): Promise<
   ReliabilityRun<HistoryOperationConcurrencyEvidence>
 > {
@@ -935,6 +993,109 @@ export async function runTauriHistoryOperationConcurrency(): Promise<
     EXCALIDRAW_E2E_HISTORY_OPERATION_ID: "history-concurrent-same",
     EXCALIDRAW_E2E_HISTORY_TARGET_PATH: "",
   });
+}
+
+export async function runTauriHistoryEvictionFaultKill(): Promise<
+  ReliabilityRun<HistoryRestartEvictionFaultEvidence>
+> {
+  const binary = await resolveDesktopBinary();
+  const paths = await createIsolatedDesktopPaths();
+  let cleaned = false;
+  let child: ReturnType<typeof spawn> | undefined;
+  let childStdout = "";
+  let childStderr = "";
+  const cleanup = async (): Promise<void> => {
+    if (cleaned) return;
+    cleaned = true;
+    if (child !== undefined) await terminateReliabilityChild(child);
+    await cleanupIsolatedDesktopPaths(paths);
+  };
+  try {
+    const seed = await runHistoryRestartProcess(
+      binary,
+      paths,
+      "history-restart-seed",
+    );
+    const operationId = "history-eviction-fault";
+    const readyPath = join(
+      paths.runtime,
+      "reliability",
+      "history-fault.ready.json",
+    );
+    child = spawn(
+      binary,
+      [RELIABILITY_SCENARIO_FLAG, "history-restart-restore"],
+      {
+        detached: process.platform !== "win32",
+        env: isolatedDesktopEnvironment(paths, {
+          ...historyFaultEnvironment({
+            stage: "eviction_delete_gc",
+            seed: "t025-eviction-real",
+            operationId,
+            documentId: seed.documentId,
+            targetPath: seed.targetPath,
+            oldSha256: seed.sceneASha256,
+            newSha256: seed.sceneBSha256,
+          }),
+          EXCALIDRAW_E2E_HISTORY_TARGET_VERSION: seed.versionBId,
+          EXCALIDRAW_E2E_HISTORY_REQUEST_ID: operationId,
+        }),
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk: string) => (childStdout += chunk));
+    child.stderr?.on("data", (chunk: string) => (childStderr += chunk));
+    const ready = await waitForHistoryFaultReady(
+      child,
+      readyPath,
+      "eviction_delete_gc",
+      15_000,
+    ).catch((error: unknown) => {
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)} stdout=${childStdout.trim()} stderr=${childStderr.trim()}`,
+        { cause: error },
+      );
+    });
+    if (child.pid === undefined) {
+      throw new Error("History eviction fault process has no PID.");
+    }
+    if (process.platform !== "win32") process.kill(-child.pid, "SIGKILL");
+    else child.kill("SIGKILL");
+    await waitForChildExit(child, 5_000);
+    if (child.signalCode !== "SIGKILL") {
+      throw new Error(
+        `History eviction fault process did not terminate by SIGKILL: ${child.signalCode}`,
+      );
+    }
+    const probe = await runHistoryRestartProcess(
+      binary,
+      paths,
+      "history-restart-eviction-fault-probe",
+    );
+    const filesystem = await statfs(paths.workspace);
+    return {
+      evidence: {
+        ...probe,
+        processSignal: child.signalCode,
+        readyMarkerPid: ready.pid,
+      },
+      environment: {
+        platform: process.platform,
+        architecture: process.arch,
+        filesystemType: String(filesystem.type),
+        binaryPath: binary,
+        binarySha256: sha256(await readFile(binary)),
+        seed: "t025-eviction-real",
+      },
+      paths,
+      cleanup,
+    };
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
 }
 
 async function runHistoryOperationProbeProcess(
@@ -955,15 +1116,24 @@ async function runHistoryOperationResultProcess(
   overrides: Readonly<NodeJS.ProcessEnv>,
 ): Promise<ReliabilityRun<HistoryOperationFailureEvidence>>;
 async function runHistoryOperationResultProcess(
+  scenario: "history-operation-external-write",
+  overrides: Readonly<NodeJS.ProcessEnv>,
+): Promise<ReliabilityRun<HistoryExternalWriteEvidence>>;
+async function runHistoryOperationResultProcess(
   scenario: "history-operation-concurrency",
   overrides: Readonly<NodeJS.ProcessEnv>,
 ): Promise<ReliabilityRun<HistoryOperationConcurrencyEvidence>>;
 async function runHistoryOperationResultProcess(
-  scenario: "history-operation-failure" | "history-operation-concurrency",
+  scenario:
+    | "history-operation-failure"
+    | "history-operation-external-write"
+    | "history-operation-concurrency",
   overrides: Readonly<NodeJS.ProcessEnv>,
 ): Promise<
   ReliabilityRun<
-    HistoryOperationFailureEvidence | HistoryOperationConcurrencyEvidence
+    | HistoryOperationFailureEvidence
+    | HistoryExternalWriteEvidence
+    | HistoryOperationConcurrencyEvidence
   >
 > {
   const binary = await resolveDesktopBinary();
@@ -1021,16 +1191,27 @@ async function runHistoryOperationResultProcessWithPaths(
 async function runHistoryOperationResultProcessWithPaths(
   binary: string,
   paths: IsolatedDesktopPaths,
+  scenario: "history-operation-external-write",
+  overrides: Readonly<NodeJS.ProcessEnv>,
+): Promise<HistoryExternalWriteEvidence>;
+async function runHistoryOperationResultProcessWithPaths(
+  binary: string,
+  paths: IsolatedDesktopPaths,
   scenario: "history-operation-concurrency",
   overrides: Readonly<NodeJS.ProcessEnv>,
 ): Promise<HistoryOperationConcurrencyEvidence>;
 async function runHistoryOperationResultProcessWithPaths(
   binary: string,
   paths: IsolatedDesktopPaths,
-  scenario: "history-operation-failure" | "history-operation-concurrency",
+  scenario:
+    | "history-operation-failure"
+    | "history-operation-external-write"
+    | "history-operation-concurrency",
   overrides: Readonly<NodeJS.ProcessEnv>,
 ): Promise<
-  HistoryOperationFailureEvidence | HistoryOperationConcurrencyEvidence
+  | HistoryOperationFailureEvidence
+  | HistoryExternalWriteEvidence
+  | HistoryOperationConcurrencyEvidence
 >;
 async function runHistoryOperationResultProcessWithPaths(
   binary: string,
@@ -1038,11 +1219,13 @@ async function runHistoryOperationResultProcessWithPaths(
   scenario:
     | "history-operation-fault-probe"
     | "history-operation-failure"
+    | "history-operation-external-write"
     | "history-operation-concurrency",
   overrides: Readonly<NodeJS.ProcessEnv>,
 ): Promise<
   | HistoryOperationFaultProbeEvidence
   | HistoryOperationFailureEvidence
+  | HistoryExternalWriteEvidence
   | HistoryOperationConcurrencyEvidence
 > {
   const child = spawn(binary, [RELIABILITY_SCENARIO_FLAG, scenario], {
@@ -1327,7 +1510,8 @@ type HistoryRestartProcessScenario =
   | "history-restart-seed"
   | "history-restart-restore"
   | "history-restart-verify"
-  | "history-restart-evict";
+  | "history-restart-evict"
+  | "history-restart-eviction-fault-probe";
 
 async function runHistoryRestartProcess(
   binary: string,
@@ -1356,6 +1540,12 @@ async function runHistoryRestartProcess(
 async function runHistoryRestartProcess(
   binary: string,
   paths: IsolatedDesktopPaths,
+  scenario: "history-restart-eviction-fault-probe",
+  overrides?: Readonly<NodeJS.ProcessEnv>,
+): Promise<HistoryRestartEvictionFaultEvidence>;
+async function runHistoryRestartProcess(
+  binary: string,
+  paths: IsolatedDesktopPaths,
   scenario: HistoryRestartProcessScenario,
   overrides: Readonly<NodeJS.ProcessEnv> = {},
 ): Promise<
@@ -1363,6 +1553,7 @@ async function runHistoryRestartProcess(
   | HistoryRestartRestoreEvidence
   | HistoryRestartVerifyEvidence
   | HistoryRestartEvictEvidence
+  | HistoryRestartEvictionFaultEvidence
 > {
   const child = spawn(binary, [RELIABILITY_SCENARIO_FLAG, scenario], {
     env: isolatedDesktopEnvironment(paths, overrides),

@@ -13,6 +13,9 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+#[cfg(all(feature = "e2e-harness", not(test)))]
+use std::sync::OnceLock;
+
 use rusqlite::{params, Connection};
 use thiserror::Error;
 
@@ -31,6 +34,64 @@ pub const HISTORY_DATABASE_NAME: &str = "history.sqlite3";
 /// IPC response was lost.  The current document remains authoritative after
 /// expiry; this is only a bounded replay-retention window.
 pub const COMPLETED_RESULT_RETENTION: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// Typed SQLite commit failures exposed only to focused tests and the
+/// test-only native harness.  The production store has no selector for these
+/// failures; real I/O errors continue to use the existing `Sqlite` variant.
+#[cfg(any(test, feature = "e2e-harness"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum HistoryStoreFault {
+    #[error("disk full")]
+    DiskFull,
+    #[error("permission denied")]
+    PermissionDenied,
+    #[error("read-only filesystem")]
+    ReadOnly,
+}
+
+#[cfg(test)]
+thread_local! {
+    static CONFIGURED_TRANSACTION_FAULT: std::cell::RefCell<Option<HistoryStoreFault>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(all(feature = "e2e-harness", not(test)))]
+static CONFIGURED_TRANSACTION_FAULT: OnceLock<Mutex<Option<HistoryStoreFault>>> = OnceLock::new();
+
+#[cfg(any(test, feature = "e2e-harness"))]
+#[allow(dead_code, reason = "called by focused tests and the e2e harness")]
+pub(crate) fn set_transaction_fault(fault: Option<HistoryStoreFault>) {
+    #[cfg(test)]
+    CONFIGURED_TRANSACTION_FAULT.with(|configured| configured.replace(fault));
+    #[cfg(all(feature = "e2e-harness", not(test)))]
+    {
+        *configured_transaction_fault()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = fault;
+    }
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+#[allow(dead_code, reason = "called by focused tests and the e2e harness")]
+pub(crate) fn clear_transaction_fault() {
+    set_transaction_fault(None);
+}
+
+#[cfg(all(feature = "e2e-harness", not(test)))]
+fn configured_transaction_fault() -> &'static Mutex<Option<HistoryStoreFault>> {
+    CONFIGURED_TRANSACTION_FAULT.get_or_init(|| Mutex::new(None))
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+fn take_transaction_fault() -> Option<HistoryStoreFault> {
+    #[cfg(test)]
+    return CONFIGURED_TRANSACTION_FAULT.with(|configured| configured.take());
+    #[cfg(all(feature = "e2e-harness", not(test)))]
+    configured_transaction_fault()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take()
+}
 
 #[derive(Debug, Error)]
 pub enum HistoryStoreError {
@@ -64,6 +125,9 @@ pub enum HistoryStoreError {
     Sqlite(#[from] rusqlite::Error),
     #[error("metadata for immutable object {hash} does not match the persisted object")]
     ObjectMetadataMismatch { hash: String },
+    #[cfg(any(test, feature = "e2e-harness"))]
+    #[error("history transaction fault injected: {0}")]
+    InjectedTransactionFault(HistoryStoreFault),
     #[cfg(feature = "e2e-harness")]
     #[error("history fault barrier failed: {0}")]
     FaultInjected(String),
@@ -298,6 +362,12 @@ impl HistoryStore {
         let mut connection = self.lock_connection()?;
         let transaction = connection.transaction()?;
         let result = operation(&transaction).map_err(Into::into)?;
+        #[cfg(any(test, feature = "e2e-harness"))]
+        if let Some(fault) = take_transaction_fault() {
+            // Returning before `commit` deliberately drops the transaction;
+            // rusqlite rolls back the callback's successful writes.
+            return Err(HistoryStoreError::InjectedTransactionFault(fault));
+        }
         transaction.commit()?;
         Ok(result)
     }
@@ -739,6 +809,81 @@ mod tests {
             )
         });
         assert!(result.is_err());
+        drop(store);
+        fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+    }
+
+    #[test]
+    fn injected_commit_failures_roll_back_callback_rows_and_clear_for_recovery() {
+        struct FaultReset;
+        impl Drop for FaultReset {
+            fn drop(&mut self) {
+                clear_transaction_fault();
+            }
+        }
+
+        let _fault_reset = FaultReset;
+        let (root, store) = fixture();
+        for (index, fault) in [
+            HistoryStoreFault::DiskFull,
+            HistoryStoreFault::PermissionDenied,
+            HistoryStoreFault::ReadOnly,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let document_id = format!("fault-document-{index}");
+            set_transaction_fault(Some(fault));
+            let result = store.with_transaction(|transaction| {
+                transaction.execute(
+                    "INSERT INTO history_documents
+                     (id, canonical_path, created_at, state)
+                     VALUES (?1, ?2, 1, 'active')",
+                    rusqlite::params![&document_id, format!("/{document_id}.excalidraw")],
+                )?;
+                Ok::<_, rusqlite::Error>(())
+            });
+            clear_transaction_fault();
+
+            assert!(matches!(
+                result,
+                Err(HistoryStoreError::InjectedTransactionFault(actual)) if actual == fault
+            ));
+            let rows: i64 = store
+                .with_connection(|connection| {
+                    connection.query_row(
+                        "SELECT COUNT(*) FROM history_documents WHERE id = ?1",
+                        [&document_id],
+                        |row| row.get(0),
+                    )
+                })
+                .unwrap_or_else(|error| panic!("check rolled-back row: {error}"));
+            assert_eq!(rows, 0);
+        }
+
+        let recovered_id = "recovered-document";
+        store
+            .with_transaction(|transaction| {
+                transaction.execute(
+                    "INSERT INTO history_documents
+                     (id, canonical_path, created_at, state)
+                     VALUES (?1, ?2, 1, 'active')",
+                    rusqlite::params![recovered_id, "/recovered-document.excalidraw"],
+                )?;
+                Ok::<_, rusqlite::Error>(())
+            })
+            .unwrap_or_else(|error| panic!("transaction recovery: {error}"));
+        let rows: i64 = store
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT COUNT(*) FROM history_documents WHERE id = ?1",
+                    [recovered_id],
+                    |row| row.get(0),
+                )
+            })
+            .unwrap_or_else(|error| panic!("check recovered row: {error}"));
+        assert_eq!(rows, 1);
+
         drop(store);
         fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
     }

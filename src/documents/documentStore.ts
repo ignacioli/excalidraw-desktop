@@ -67,6 +67,29 @@ export interface DocumentOperationContext extends DocumentSessionVersion {
   isCurrent: () => boolean;
 }
 
+export type HistoryAutosaveProbeRejection =
+  "documentClosed" | "sessionGeneration" | "revision" | "path" | "scene";
+
+export interface HistoryAutosaveProbeResult {
+  status: "saved" | "rejected";
+  captured: DocumentSessionVersion;
+  observed?: DocumentSessionVersion;
+  rejection?: HistoryAutosaveProbeRejection;
+}
+
+/**
+ * A deterministic, production-coordinator-backed stale autosave callback.
+ * The callback captures one session generation and is released by the
+ * history E2E driver only after replacement adoption. It must never bypass
+ * the document operation queue or the normal doc_save_draft gateway.
+ */
+export interface HistoryAutosaveProbe {
+  readonly captured: DocumentSessionVersion;
+  readonly scene: SceneSnapshot;
+  readonly path: string;
+  queue(): Promise<HistoryAutosaveProbeResult>;
+}
+
 export interface DocumentStoreState {
   sessionsById: Record<string, DocumentSession>;
   tabOrder: string[];
@@ -85,7 +108,7 @@ export class DocumentManager {
   private readonly gateway: DocumentGateway;
   private readonly schedulers = new Map<
     string,
-    DraftScheduler<SceneSnapshot>
+    DraftScheduler<ScheduledScene, "saved" | "rejected">
   >();
   private readonly operationQueues = new Map<string, DocumentOperationQueue>();
   private readonly pathMutations = new Set<string>();
@@ -171,7 +194,14 @@ export class DocumentManager {
         saveState: "dirty",
       });
     }
-    this.schedulers.get(documentId)?.recordChange(scene);
+    const current = this.store.getState().sessionsById[documentId];
+    if (current !== undefined) {
+      this.schedulers.get(documentId)?.recordChange({
+        scene,
+        sessionGeneration: current.sessionGeneration ?? 0,
+        revision: current.revision,
+      });
+    }
     return documentId;
   }
 
@@ -197,7 +227,14 @@ export class DocumentManager {
       errorMessage: null,
       lastReloadedAt: null,
     });
-    this.schedulers.get(documentId)?.recordChange(scene);
+    const current = this.store.getState().sessionsById[documentId];
+    if (current !== undefined) {
+      this.schedulers.get(documentId)?.recordChange({
+        scene,
+        sessionGeneration: current.sessionGeneration ?? 0,
+        revision: current.revision,
+      });
+    }
   }
 
   async activate(documentId: string): Promise<void> {
@@ -423,6 +460,69 @@ export class DocumentManager {
       sessionGeneration: version.sessionGeneration,
     });
     return version;
+  }
+
+  /**
+   * Capture the real current scene as an autosave callback and release it
+   * later through this document's production operation queue. This seam is
+   * used by the native history journey to prove that a callback captured
+   * before replacement cannot write after the session generation advances.
+   */
+  prepareHistoryAutosaveProbe(
+    documentId: string,
+  ): HistoryAutosaveProbe | undefined {
+    const session = this.store.getState().sessionsById[documentId];
+    const scheduler = this.schedulers.get(documentId);
+    if (
+      session === undefined ||
+      scheduler === undefined ||
+      session.path.length === 0
+    ) {
+      return undefined;
+    }
+
+    const captured = {
+      sessionGeneration: session.sessionGeneration ?? 0,
+      revision: session.revision,
+    };
+    const scene = session.scene;
+    const path = session.path;
+    scheduler.recordChange({
+      scene,
+      sessionGeneration: captured.sessionGeneration,
+      revision: captured.revision,
+    });
+    const queueDraft = scheduler.prepareDeferredDraftFlush();
+    if (queueDraft === undefined) {
+      return undefined;
+    }
+    let queued: Promise<HistoryAutosaveProbeResult> | undefined;
+
+    return {
+      captured,
+      scene,
+      path,
+      queue: () => {
+        queued ??= queueDraft().then((status) => {
+          const current = this.store.getState().sessionsById[documentId];
+          const observed = current === undefined
+            ? undefined
+            : {
+                sessionGeneration: current.sessionGeneration ?? 0,
+                revision: current.revision,
+              };
+          const rejection = historyAutosaveProbeRejection(current, captured, scene)
+            ?? (current !== undefined && current.path !== path ? "path" : undefined);
+          return {
+            status,
+            captured,
+            ...(observed === undefined ? {} : { observed }),
+            ...(rejection === undefined ? {} : { rejection }),
+          };
+        });
+        return queued;
+      },
+    };
   }
 
   bindHistoryDocumentId(
@@ -897,22 +997,23 @@ export class DocumentManager {
     };
 
     const operationQueue = new DocumentOperationQueue();
-    const scheduler = new DraftScheduler<SceneSnapshot>({
+    const scheduler = new DraftScheduler<ScheduledScene, "saved" | "rejected">({
       operationQueue,
-      persistDraft: async (nextScene) => {
+      persistDraft: (nextDraft) => this.persistDraft(id, path, nextDraft),
+      checkpoint: async (nextDraft, reason) => {
         if (path.length === 0) {
           return;
         }
-        this.patchSession(id, { saveState: "savingDraft" });
-        const currentPath =
-          this.store.getState().sessionsById[id]?.path ?? path;
-        await this.gateway.saveDraft(currentPath, serializeScene(nextScene));
-        if (this.store.getState().sessionsById[id]?.scene === nextScene) {
-          this.patchSession(id, { saveState: "draftSaved" });
-        }
-      },
-      checkpoint: async (nextScene, reason) => {
-        if (path.length === 0) {
+        if (
+          historyAutosaveProbeRejection(
+            this.store.getState().sessionsById[id],
+            {
+              sessionGeneration: nextDraft.sessionGeneration,
+              revision: nextDraft.revision,
+            },
+            nextDraft.scene,
+          ) !== undefined
+        ) {
           return;
         }
         this.patchSession(id, { saveState: "checkpointing" });
@@ -920,13 +1021,13 @@ export class DocumentManager {
           this.store.getState().sessionsById[id]?.path ?? path;
         const response = await this.gateway.checkpoint(
           currentPath,
-          serializeScene(nextScene),
+          serializeScene(nextDraft.scene),
           reason,
         );
         const current = this.store.getState().sessionsById[id];
         this.patchSession(id, {
           baseHash: response.newBaseHash,
-          saveState: current?.scene === nextScene ? "clean" : "dirty",
+          saveState: current?.scene === nextDraft.scene ? "clean" : "dirty",
           errorMessage: null,
         });
       },
@@ -946,6 +1047,40 @@ export class DocumentManager {
       activeDocumentId: id,
     }));
     return id;
+  }
+
+  private async persistDraft(
+    documentId: string,
+    fallbackPath: string,
+    nextDraft: ScheduledScene,
+  ): Promise<"saved" | "rejected"> {
+    if (fallbackPath.length === 0) {
+      return "rejected";
+    }
+    const current = this.store.getState().sessionsById[documentId];
+    if (
+      historyAutosaveProbeRejection(
+        current,
+        {
+          sessionGeneration: nextDraft.sessionGeneration,
+          revision: nextDraft.revision,
+        },
+        nextDraft.scene,
+      ) !== undefined
+    ) {
+      return "rejected";
+    }
+
+    this.patchSession(documentId, { saveState: "savingDraft" });
+    const currentPath =
+      this.store.getState().sessionsById[documentId]?.path ?? fallbackPath;
+    await this.gateway.saveDraft(currentPath, serializeScene(nextDraft.scene));
+    if (
+      this.store.getState().sessionsById[documentId]?.scene === nextDraft.scene
+    ) {
+      this.patchSession(documentId, { saveState: "draftSaved" });
+    }
+    return "saved";
   }
 
   private findByPath(path: string): DocumentSession | undefined {
@@ -1015,6 +1150,26 @@ export class DocumentManager {
       };
     });
   }
+}
+
+interface ScheduledScene {
+  scene: SceneSnapshot;
+  sessionGeneration: number;
+  revision: number;
+}
+
+function historyAutosaveProbeRejection(
+  current: DocumentSession | undefined,
+  captured: DocumentSessionVersion,
+  capturedScene: SceneSnapshot,
+): HistoryAutosaveProbeRejection | undefined {
+  if (current === undefined) return "documentClosed";
+  if ((current.sessionGeneration ?? 0) !== captured.sessionGeneration) {
+    return "sessionGeneration";
+  }
+  if (current.revision !== captured.revision) return "revision";
+  if (current.scene !== capturedScene) return "scene";
+  return undefined;
 }
 
 function relativeDocumentPath(

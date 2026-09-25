@@ -43,6 +43,7 @@ const driverMocks = vi.hoisted(() => ({
   list: vi.fn(),
   preview: vi.fn(),
   replace: vi.fn(),
+  clientReplace: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: driverMocks.invoke }));
 vi.mock("../ipc/client", () => ({
@@ -54,11 +55,19 @@ vi.mock("../history/historyClient", () => ({
   createHistoryClient: () => ({
     list: driverMocks.list,
     preview: driverMocks.preview,
+    replace: driverMocks.clientReplace,
   }),
 }));
 vi.mock("../history/historyCoordinator", () => ({
   HistoryCoordinator: class {
-    replace = driverMocks.replace;
+    constructor(
+      _manager: unknown,
+      private readonly client: { replace: (request: unknown) => Promise<unknown> },
+    ) {}
+    replace = async (...args: unknown[]) => {
+      await this.client.replace({});
+      return driverMocks.replace(...args);
+    };
   },
 }));
 vi.mock("../history/assetAdoption", () => ({
@@ -66,6 +75,7 @@ vi.mock("../history/assetAdoption", () => ({
 }));
 vi.mock("../editor/sceneSerializer", () => ({
   deserializeSceneData: (scene: unknown) => scene,
+  serializeScene: (scene: unknown) => JSON.stringify(scene),
 }));
 
 import { NativeHistoryFrontendDriver } from "./historyFrontendDriver";
@@ -92,13 +102,28 @@ it("publishes evidence before requesting production window close", async () => {
   );
   driverMocks.list.mockResolvedValue({ items: [{ versionId: "version-a" }] });
   driverMocks.preview.mockResolvedValue({ versionId: "version-a", scene });
+  driverMocks.clientReplace.mockResolvedValue({});
   driverMocks.replace.mockResolvedValue({ adopted: true });
   const documents = {
     store: {
       getState: () => ({
-        sessionsById: { doc: { id: "doc", path: request.documentPath } },
+        sessionsById: {
+          doc: { id: "doc", path: request.documentPath, saveState: "clean" },
+        },
       }),
     },
+    updateScene: vi.fn(),
+    prepareHistoryAutosaveProbe: () => ({
+      captured: { sessionGeneration: 0, revision: 0 },
+      scene,
+      path: request.documentPath,
+      queue: async () => ({
+        status: "rejected" as const,
+        captured: { sessionGeneration: 0, revision: 0 },
+        observed: { sessionGeneration: 1, revision: 1 },
+        rejection: "sessionGeneration" as const,
+      }),
+    }),
   } as unknown as DocumentManager;
   const adapter = {
     isEditable: () => true,
@@ -127,6 +152,10 @@ it("publishes evidence before requesting production window close", async () => {
         previewVersionId: "version-a",
         beforeReplacement: expect.objectContaining({ elements: [] }),
         previewReadback: expect.objectContaining({ elements: [] }),
+        staleAutosaveAttemptedHash: expect.any(String),
+        staleAutosaveRejected: true,
+        staleAutosaveRejection: "sessionGeneration",
+        staleAutosaveDraftSaveState: "clean",
       }),
     },
   );

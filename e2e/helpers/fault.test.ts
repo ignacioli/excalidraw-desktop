@@ -29,6 +29,7 @@ describe("History fault barrier contract", () => {
         targetPath: "/tmp/excalidraw-desktop-e2e-seed-17/workspace/doc.excalidraw",
       }),
     ).toEqual({
+      EXCALIDRAW_E2E_HISTORY_FAULT_ARMED: "1",
       EXCALIDRAW_E2E_HISTORY_FAULT_STAGE: "intent_commit",
       EXCALIDRAW_E2E_HISTORY_FAULT_SEED: "seed-17",
       EXCALIDRAW_E2E_HISTORY_OPERATION_ID: "operation-17",

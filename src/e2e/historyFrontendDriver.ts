@@ -12,7 +12,10 @@ import {
   type DocumentManager,
 } from "../documents/documentStore";
 import type { ExcalidrawAdapter } from "../editor/ExcalidrawAdapter";
-import { deserializeSceneData } from "../editor/sceneSerializer";
+import {
+  deserializeSceneData,
+  serializeScene,
+} from "../editor/sceneSerializer";
 import { createHistoryFrontendEvidence } from "./historyFrontendEvidence";
 import { formatHistoryFrontendError } from "./historyFrontendError";
 
@@ -31,6 +34,7 @@ type FrontendProgressStage =
   | "startupPathReceived"
   | "sessionOpened"
   | "editorAttached"
+  | "staleAutosavePrepared"
   | "replacementStarted"
   | "replacementCompleted"
   | "canvasReadbackReady";
@@ -96,9 +100,33 @@ export class NativeHistoryFrontendDriver {
       documentId,
       await adoptSceneAssets(deserializeSceneData(preview.scene)),
     );
-    const coordinator = new HistoryCoordinator(
+    const beforeReplacement = await createHistoryFrontendEvidence(
+      request,
+      documentId,
+      editor.adapter.readScene(),
+    );
+    const staleAutosave =
+      this.documents.prepareHistoryAutosaveProbe(documentId);
+    if (staleAutosave === undefined) {
+      throw new Error(
+        "Could not capture the production document autosave callback before history replacement.",
+      );
+    }
+    const staleAutosaveAttemptedHash = await hashScene(staleAutosave.scene);
+    let staleAutosaveResultPromise:
+      | ReturnType<typeof staleAutosave.queue>
+      | undefined;
+    const instrumentedClient = {
+      ...client,
+      replace: (historyRequest: Parameters<typeof client.replace>[0]) => {
+        const response = client.replace(historyRequest);
+        staleAutosaveResultPromise ??= staleAutosave.queue();
+        return response;
+      },
+    };
+    const instrumentedCoordinator = new HistoryCoordinator(
       this.documents,
-      client,
+      instrumentedClient,
       async (scene, context) => {
         const adopted = await adoptSceneAssets(scene);
         if (this.attachedEditor?.documentId !== documentId) return false;
@@ -106,13 +134,9 @@ export class NativeHistoryFrontendDriver {
         return context.commit(adopted);
       },
     );
-    const beforeReplacement = await createHistoryFrontendEvidence(
-      request,
-      documentId,
-      editor.adapter.readScene(),
-    );
+    await publishProgress("staleAutosavePrepared");
     await publishProgress("replacementStarted");
-    const result = await coordinator.replace(
+    const result = await instrumentedCoordinator.replace(
       documentId,
       { kind: "restore", versionId: request.targetVersionId },
       request.requestId,
@@ -123,6 +147,12 @@ export class NativeHistoryFrontendDriver {
       );
     }
     await publishProgress("replacementCompleted");
+    if (staleAutosaveResultPromise === undefined) {
+      throw new Error("History replacement did not queue the stale autosave callback.");
+    }
+    const staleAutosaveResult = await staleAutosaveResultPromise;
+    const finalSession =
+      this.documents.store.getState().sessionsById[documentId];
     const readback = editor.adapter.readScene();
     const evidence = await createHistoryFrontendEvidence(
       request,
@@ -137,6 +167,16 @@ export class NativeHistoryFrontendDriver {
         listedVersionIds: listing.items.map((item) => item.versionId),
         previewVersionId: preview.versionId,
         previewReadback: previewEvidence.canvasReadback,
+        staleAutosaveAttemptedHash,
+        staleAutosaveCapturedSessionGeneration:
+          staleAutosaveResult.captured.sessionGeneration,
+        staleAutosaveCapturedRevision: staleAutosaveResult.captured.revision,
+        staleAutosaveObservedSessionGeneration:
+          staleAutosaveResult.observed?.sessionGeneration,
+        staleAutosaveObservedRevision: staleAutosaveResult.observed?.revision,
+        staleAutosaveRejected: staleAutosaveResult.status === "rejected",
+        staleAutosaveRejection: staleAutosaveResult.rejection ?? null,
+        staleAutosaveDraftSaveState: finalSession?.saveState ?? null,
       },
     });
     await invoke("e2e_history_frontend_close", {});
@@ -167,6 +207,16 @@ export class NativeHistoryFrontendDriver {
       "Timed out waiting for the authorized startup document session.",
     );
   }
+}
+
+async function hashScene(
+  scene: Parameters<typeof serializeScene>[0],
+): Promise<string> {
+  const bytes = new TextEncoder().encode(serializeScene(scene));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 }
 
 async function publishProgress(stage: FrontendProgressStage): Promise<void> {

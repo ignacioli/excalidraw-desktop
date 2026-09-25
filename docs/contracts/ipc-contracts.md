@@ -228,6 +228,9 @@ generation/revision 必须是非负整数；hash 必须是 64 位小写 SHA-256 
 实现必须幂等：传入同一个 requestId 只查询/返回原操作，不重新执行破坏性替换；同 requestId 携带不同 target 或 generation/revision/base identity 必须拒绝。
 completed replacement 的 target scene/assets 在 history store 中保留为 GC root 24 小时，
 用于延迟的 `history_operation_status` replay；TTL 到期后才允许在 GC 中释放该 root。
+前端草稿与 checkpoint scheduler 必须把捕获时的 `sessionGeneration` 和 `revision` 与
+scene 一起排队；replacement adoption 推进 generation/revision 后，旧 callback 必须在
+调用 `doc_save_draft`／`doc_checkpoint` 前被拒绝，不能留下 stale dirty draft。
 
 重启时若 `after_rename_before_parent_sync` 已完成文件 rename，但操作记录尚未写入
 published file identity/hash，仅当当前文件 bytes 与 durable target scene 完全一致、scene/assets
@@ -259,9 +262,10 @@ browser mock。`e2e-harness` 仅在 `APP_E2E=1` 的 `--features e2e-harness` 构
 | `eviction_delete_gc` | 统一保留池淘汰与 GC 不能删除 operation/request pins 仍引用的 scene/assets |
 | `rename_delete_repair` | 重启修复只允许按实际文件身份和字节判定，不得用旧排队 autosave 覆盖外部结果 |
 
-T025 还要求对缺图/损坏版本、对象或 SQLite 的权限/ENOSPC/部分失败，以及同一/不同
-request 的并发命令记录隔离根、seed、二进制 digest、旧/新 hash、asset hash、操作
-状态和清理结果。上述测试证据不改变 production IPC 的路径授权和状态机；如果
+共同事务 native matrix 对缺失／损坏 scene 与图片、对象层 typed `ENOSPC`／`EACCES`、
+SQLite commit 前 typed fault、部分发布 orphan、同一／不同 request 并发、旧 generation
+autosave、外部写入和真实 retention-eviction／GC 强退记录隔离根、seed、二进制 digest、
+旧／新 hash、asset hash、操作状态和清理结果。上述测试证据不改变 production IPC 的路径授权和状态机；如果
 pre-rename 核对与目标发布之间发生外部写入，结果必须是 `HISTORY_STALE_DOCUMENT`
 或独立 conflict，绝不能覆盖外部字节。
 

@@ -125,6 +125,19 @@ function assertFrontendCanvas(
   expect(evidence.processExit).toEqual({ code: 0, signal: null });
   expect(evidence.listedVersionIds).toContain(expectedVersionId);
   expect(evidence.previewVersionId).toBe(expectedVersionId);
+  expect(evidence.staleAutosaveRejected).toBe(true);
+  expect(evidence.staleAutosaveRejection).toBe("sessionGeneration");
+  expect(evidence.staleAutosaveObservedSessionGeneration).toBeGreaterThan(
+    evidence.staleAutosaveCapturedSessionGeneration,
+  );
+  expect(evidence.staleAutosaveDraftSaveState).toBe("clean");
+  expect(evidence.targetSha256).not.toBe(
+    evidence.staleAutosaveAttemptedHash,
+  );
+  expect(evidence.draftSceneSha256).not.toBe(
+    evidence.staleAutosaveAttemptedHash,
+  );
+  expect(evidence.draftDirty).toBe(false);
   const label = expectedVersionId.at(-1)!.toUpperCase();
   assertSceneContents(evidence.canvasReadback, label, expectedAssetSha256);
   assertSceneContents(evidence.previewReadback, label, expectedAssetSha256);

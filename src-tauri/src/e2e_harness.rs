@@ -12,7 +12,7 @@ use std::{
         Arc,
     },
     thread,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
@@ -50,11 +50,15 @@ use crate::{
     },
     history::{
         gc::{ObjectKey, ObjectReferences},
+        objects::{
+            clear_fault_point as clear_object_fault, set_fault as set_object_fault,
+            ObjectStoreFaultKind, ObjectStoreFaultPoint,
+        },
         operation::OperationStore,
         query::HistoryQueryService,
         reconcile::reconcile_incomplete_operations_with_repository,
         repository::{HistoryRepository, PublishSceneRequest},
-        store::HistoryStore,
+        store::{clear_transaction_fault, set_transaction_fault, HistoryStore, HistoryStoreFault},
         types::{HistoryReplaceResponse, HistoryVersionSource},
         validation::HISTORY_OBJECT_SCHEMA_VERSION,
     },
@@ -187,6 +191,22 @@ fn enrich_history_frontend_evidence(
         .map_err(|error| format!("failed to open history store for frontend evidence: {error}"))?;
     let diagnostics =
         load_history_identity_diagnostics(&store, Path::new(&document_path), &request_id)?;
+    let target_sha256 = sha256(
+        &fs::read(&document_path)
+            .map_err(|error| format!("failed to read frontend evidence target: {error}"))?,
+    );
+    let main_database =
+        rusqlite::Connection::open(root.join("data").join("excalidraw-desktop.sqlite3"))
+            .map_err(|error| format!("failed to open frontend evidence database: {error}"))?;
+    let draft = match main_database.query_row(
+        "SELECT scene_json, is_dirty FROM drafts WHERE file_path=?1",
+        [&document_path],
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?)),
+    ) {
+        Ok(value) => Some(value),
+        Err(rusqlite::Error::QueryReturnedNoRows) => None,
+        Err(error) => return Err(format!("failed to read frontend evidence draft: {error}")),
+    };
     let object = evidence
         .as_object_mut()
         .ok_or_else(|| "history frontend evidence must be a JSON object".to_owned())?;
@@ -206,6 +226,15 @@ fn enrich_history_frontend_evidence(
     object.insert(
         "operationState".to_owned(),
         serde_json::json!(diagnostics.operation_state),
+    );
+    object.insert("targetSha256".to_owned(), serde_json::json!(target_sha256));
+    object.insert(
+        "draftSceneSha256".to_owned(),
+        serde_json::json!(draft.as_ref().map(|(scene, _)| sha256(scene.as_bytes()))),
+    );
+    object.insert(
+        "draftDirty".to_owned(),
+        serde_json::json!(draft.as_ref().map(|(_, dirty)| *dirty)),
     );
     Ok(evidence)
 }
@@ -503,24 +532,25 @@ pub(crate) fn e2e_clear_atomic_write_fault() {
 }
 
 /// Test-only race seam used by T025. It writes a caller-declared external
-/// scene after the guarded pre-rename check and before the rename. The native
-/// test then proves whether the product detects that race instead of silently
-/// overwriting the external bytes.
+/// scene after the operation's earlier precheck and immediately before the
+/// guarded writer's final pre-rename validation. The native test then proves
+/// the final validation detects the race instead of silently overwriting the
+/// external bytes.
 #[cfg(feature = "e2e-harness")]
-pub(crate) fn history_external_write_after_precommit(target: &Path) {
+pub(crate) fn history_external_write_after_precommit(target: &Path) -> std::io::Result<()> {
     if env::var("EXCALIDRAW_E2E_EXTERNAL_WRITE_AFTER_PRECOMMIT").as_deref() != Ok("1") {
-        return;
+        return Ok(());
     }
     let expected_target = match env::var_os(HISTORY_FAULT_TARGET_ENV) {
         Some(value) => PathBuf::from(value),
-        None => return,
+        None => return Ok(()),
     };
     if expected_target != target {
-        return;
+        return Ok(());
     }
     let scene = env::var("EXCALIDRAW_E2E_EXTERNAL_SCENE_JSON")
         .unwrap_or_else(|_| "{\"version\":2,\"source\":\"external-write\"}".to_owned());
-    let _ = fs::write(target, scene.as_bytes());
+    fs::write(target, scene.as_bytes())
 }
 
 #[tauri::command]
@@ -607,6 +637,9 @@ async fn run_scenario(scenario: &str, root: &Path) -> Result<String, String> {
         "history-restart-restore" => serialize_evidence(run_history_restart_restore(root).await?),
         "history-restart-verify" => serialize_evidence(run_history_restart_verify(root).await?),
         "history-restart-evict" => serialize_evidence(run_history_restart_evict(root).await?),
+        "history-restart-eviction-fault-probe" => {
+            serialize_evidence(run_history_restart_eviction_fault_probe(root).await?)
+        }
         "concurrent-checkpoints" => serialize_evidence(run_concurrent_checkpoints(root).await?),
         "disk-full-checkpoint" => serialize_evidence(run_disk_full_checkpoint(root).await?),
         "atomic-write-kill" => serialize_evidence(run_atomic_write_kill(root)?),
@@ -899,6 +932,8 @@ struct HistoryOperationFaultProbeEvidence {
     temporary_files: Vec<String>,
     target_object_exists: bool,
     target_asset_exists: bool,
+    operation_row_count: usize,
+    protection_version_count: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -913,6 +948,13 @@ struct HistoryOperationFailureEvidence {
     target_unchanged: bool,
     error: String,
     temporary_files: Vec<String>,
+    valid_sibling_available: bool,
+    protected_version_count: usize,
+    operation_row_count: usize,
+    fault_scene_hash: String,
+    fault_scene_object_exists: bool,
+    fault_scene_registered: bool,
+    unregistered_object_hashes: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -965,7 +1007,7 @@ async fn run_history_operation_fault_kill(root: &Path) -> Result<(), String> {
             document: HistoryDocumentLocator::Path {
                 path: path_string(&target),
             },
-            request_id,
+            request_id: request_id.clone(),
             session_generation: 1,
             revision: 1,
             expected_base_hash: current_hash,
@@ -1037,7 +1079,7 @@ async fn run_history_operation_fault_probe(
             document: HistoryDocumentLocator::Path {
                 path: path_string(&target),
             },
-            request_id,
+            request_id: request_id.clone(),
         })
         .await;
     let (status_request_id, operation_state, replacement_committed) = match status {
@@ -1060,6 +1102,22 @@ async fn run_history_operation_fault_probe(
         .asset_path(&asset_sha256)
         .map(|path| path.exists())
         .unwrap_or(false);
+    let (operation_row_count, protection_version_count) = context
+        .store
+        .with_connection(|connection| {
+            let operation_count = connection.query_row(
+                "SELECT COUNT(*) FROM history_operations WHERE idempotency_id=?1",
+                [&status_request_id],
+                |row| row.get::<_, i64>(0),
+            )?;
+            let protection_count = connection.query_row(
+                "SELECT COUNT(*) FROM history_versions WHERE source='protected'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )?;
+            Ok::<_, rusqlite::Error>((operation_count as usize, protection_count as usize))
+        })
+        .map_err(|error| format!("failed to inspect fault operation cardinality: {error}"))?;
     Ok(HistoryOperationFaultProbeEvidence {
         scenario: "history-operation-fault-probe",
         stage: env::var(HISTORY_FAULT_STAGE_ENV).unwrap_or_else(|_| "unknown".to_owned()),
@@ -1080,47 +1138,84 @@ async fn run_history_operation_fault_probe(
         temporary_files: temporary_files(&target)?,
         target_object_exists,
         target_asset_exists,
+        operation_row_count,
+        protection_version_count,
     })
 }
 
 async fn run_history_operation_failure(
     root: &Path,
 ) -> Result<HistoryOperationFailureEvidence, String> {
-    let (context, target, old_sha256, _, asset_hash) = setup_history_fault_operation(root).await?;
+    let (context, target, old_sha256, target_scene_hash, asset_hash) =
+        setup_history_fault_operation(root).await?;
     let failure_mode = env::var("EXCALIDRAW_E2E_HISTORY_FAILURE_MODE")
         .unwrap_or_else(|_| "missing-version".to_owned());
     let request_id = env::var(HISTORY_FAULT_OPERATION_ENV)
         .unwrap_or_else(|_| "history-fault-failure".to_owned());
-    let current_scene_json = fs::read_to_string(&target)
+    let disk_scene_json = fs::read_to_string(&target)
         .map_err(|error| format!("failed to read failure target: {error}"))?;
-    let current_hash = sha256(current_scene_json.as_bytes());
+    let current_hash = sha256(disk_scene_json.as_bytes());
+    let mut current_scene_json = disk_scene_json;
     let target_version = match failure_mode.as_str() {
-        "missing-version" | "corrupt-asset" | "object-permission" | "object-enospc"
-        | "sqlite-permission" | "sqlite-enospc" | "partial-protection" => {
-            "history-fault-version-a".to_owned()
-        }
+        "missing-version" | "missing-scene" | "corrupt-scene" | "missing-asset"
+        | "corrupt-asset" | "object-permission" | "object-enospc" | "sqlite-permission"
+        | "sqlite-enospc" | "partial-protection" => "history-fault-version-a".to_owned(),
         other => return Err(format!("unknown history failure mode: {other}")),
     };
-    if failure_mode == "corrupt-asset" {
+    if matches!(failure_mode.as_str(), "missing-scene" | "corrupt-scene") {
+        let scene_path = context
+            .store
+            .objects()
+            .scene_path(&target_scene_hash)
+            .map_err(|error| format!("failed to resolve target scene path: {error}"))?;
+        if failure_mode == "missing-scene" {
+            fs::remove_file(&scene_path)
+                .map_err(|error| format!("failed to remove isolated scene: {error}"))?;
+        } else {
+            fs::write(&scene_path, b"corrupt-history-scene")
+                .map_err(|error| format!("failed to corrupt isolated scene: {error}"))?;
+        }
+    }
+    if matches!(failure_mode.as_str(), "missing-asset" | "corrupt-asset") {
         let asset_path = context
             .store
             .objects()
             .asset_path(&asset_hash)
             .map_err(|error| format!("failed to resolve corrupt asset path: {error}"))?;
-        fs::write(&asset_path, b"corrupt-history-asset")
-            .map_err(|error| format!("failed to corrupt isolated asset: {error}"))?;
+        if failure_mode == "missing-asset" {
+            fs::remove_file(&asset_path)
+                .map_err(|error| format!("failed to remove isolated asset: {error}"))?;
+        } else {
+            fs::write(&asset_path, b"corrupt-history-asset")
+                .map_err(|error| format!("failed to corrupt isolated asset: {error}"))?;
+        }
     }
     if matches!(
         failure_mode.as_str(),
         "object-permission" | "object-enospc" | "partial-protection"
     ) {
-        env::set_var(HISTORY_FAULT_STAGE_ENV, "object_publish");
-        env::set_var(HISTORY_FAULT_FAILURE_ENV, &failure_mode);
-        env::set_var(HISTORY_FAULT_ARMED_ENV, "1");
+        current_scene_json = scene_json(&format!("protection-{failure_mode}"));
+        if failure_mode == "partial-protection" {
+            env::set_var(HISTORY_FAULT_STAGE_ENV, "object_publish");
+            env::set_var(HISTORY_FAULT_FAILURE_ENV, &failure_mode);
+            env::set_var(HISTORY_FAULT_ARMED_ENV, "1");
+        } else {
+            set_object_fault(
+                ObjectStoreFaultPoint::BeforeTempWrite,
+                if failure_mode == "object-enospc" {
+                    ObjectStoreFaultKind::DiskFull
+                } else {
+                    ObjectStoreFaultKind::PermissionDenied
+                },
+            );
+        }
     } else if matches!(failure_mode.as_str(), "sqlite-permission" | "sqlite-enospc") {
-        env::set_var(HISTORY_FAULT_STAGE_ENV, "protection_commit");
-        env::set_var(HISTORY_FAULT_FAILURE_ENV, &failure_mode);
-        env::set_var(HISTORY_FAULT_ARMED_ENV, "1");
+        current_scene_json = scene_json(&format!("protection-{failure_mode}"));
+        set_transaction_fault(Some(if failure_mode == "sqlite-enospc" {
+            HistoryStoreFault::DiskFull
+        } else {
+            HistoryStoreFault::PermissionDenied
+        }));
     }
     let replacement_target = if failure_mode == "missing-version" {
         HistoryReplaceTarget::Restore {
@@ -1131,13 +1226,14 @@ async fn run_history_operation_failure(
             version_id: target_version,
         }
     };
+    let fault_scene_hash = sha256(current_scene_json.as_bytes());
     let error = context
         .replacement
         .e2e_replace(HistoryReplaceRequest {
             document: HistoryDocumentLocator::Path {
                 path: path_string(&target),
             },
-            request_id,
+            request_id: request_id.clone(),
             session_generation: 1,
             revision: 1,
             expected_base_hash: current_hash,
@@ -1148,9 +1244,56 @@ async fn run_history_operation_failure(
         .err()
         .map(|value| format!("{value:?}"))
         .unwrap_or_else(|| "unexpected success".to_owned());
+    clear_object_fault();
+    clear_transaction_fault();
     let persisted = fs::read(&target)
         .map_err(|read_error| format!("failed to read failure result: {read_error}"))?;
     let persisted_sha256 = sha256(&persisted);
+    let valid_sibling_available = context
+        .query
+        .preview(HistoryPreviewRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            version_id: "history-fault-version-b".to_owned(),
+        })
+        .await
+        .is_ok();
+    let (protected_version_count, operation_row_count, fault_scene_registered) = context
+        .store
+        .with_connection(|connection| {
+            let protected = connection.query_row(
+                "SELECT COUNT(*) FROM history_versions WHERE source='protected'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )?;
+            let operations = connection.query_row(
+                "SELECT COUNT(*) FROM history_operations WHERE idempotency_id=?1",
+                [&request_id],
+                |row| row.get::<_, i64>(0),
+            )?;
+            let registered = connection.query_row(
+                "SELECT COUNT(*) FROM scene_objects WHERE hash=?1",
+                [&fault_scene_hash],
+                |row| row.get::<_, i64>(0),
+            )?;
+            Ok::<_, rusqlite::Error>((protected as usize, operations as usize, registered > 0))
+        })
+        .map_err(|error| format!("failed to inspect history failure rollback: {error}"))?;
+    let fault_scene_object_exists = context
+        .store
+        .objects()
+        .scene_path(&fault_scene_hash)
+        .map(|path| path.exists())
+        .unwrap_or(false);
+    let unregistered_object_hashes = context
+        .store
+        .enumerate_object_candidates()
+        .map_err(|error| format!("failed to inspect unregistered fault objects: {error}"))?
+        .into_iter()
+        .filter(|candidate| !candidate.registered)
+        .map(|candidate| candidate.object.hash)
+        .collect();
     Ok(HistoryOperationFailureEvidence {
         scenario: "history-operation-failure",
         failure_mode,
@@ -1162,6 +1305,13 @@ async fn run_history_operation_failure(
         target_unchanged: persisted_sha256 == old_sha256,
         error,
         temporary_files: temporary_files(&target)?,
+        valid_sibling_available,
+        protected_version_count,
+        operation_row_count,
+        fault_scene_hash,
+        fault_scene_object_exists,
+        fault_scene_registered,
+        unregistered_object_hashes,
     })
 }
 
@@ -1344,7 +1494,7 @@ async fn setup_history_fault_operation(
     );
     assert_isolated_path(root, &target)?;
     let scene_a = history_restart_scene("fault-A", "历史故障 A");
-    let scene_b = history_restart_scene("fault-B", "历史故障 B");
+    let scene_b = history_restart_scene("Efault-B", "历史故障 B");
     fs::write(&target, scene_b.0.as_bytes())
         .map_err(|error| format!("failed to write history fault target: {error}"))?;
     let target = target
@@ -1458,6 +1608,25 @@ struct HistoryRestartEvictEvidence {
     gc_deleted_target: bool,
     target_retained_scene_references: usize,
     target_retained_asset_references: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryRestartEvictionFaultEvidence {
+    scenario: &'static str,
+    target_path: String,
+    persisted_scene_sha256: String,
+    expected_old_scene_sha256: String,
+    target_version_exists: bool,
+    retained_version_count: usize,
+    protection_version_count: usize,
+    operation_row_count: usize,
+    target_object_existed_before_gc: bool,
+    target_asset_existed_before_gc: bool,
+    target_object_exists_after_gc: bool,
+    target_asset_exists_after_gc: bool,
+    gc_deleted_target_scene: bool,
+    gc_deleted_target_asset: bool,
 }
 
 #[derive(Clone)]
@@ -1657,6 +1826,94 @@ async fn run_history_restart_restore(root: &Path) -> Result<HistoryRestartRestor
         target_asset_sha256: scene_asset_hash(&preview.scene)?,
         response: serde_json::to_value(response)
             .map_err(|error| format!("failed to serialize restore response: {error}"))?,
+    })
+}
+
+async fn run_history_restart_eviction_fault_probe(
+    root: &Path,
+) -> Result<HistoryRestartEvictionFaultEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target = context.workspace.join("history-restart.excalidraw");
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize eviction probe target: {error}"))?;
+    let scene_a = history_restart_scene("A", "历史 A");
+    let scene_b = history_restart_scene("B", "历史 B");
+    let target_scene_hash = sha256(scene_b.0.as_bytes());
+    let target_asset_hash = scene_b.2;
+    let persisted_scene_sha256 = sha256(
+        &fs::read(&target)
+            .map_err(|error| format!("failed to read eviction probe target: {error}"))?,
+    );
+    let (
+        target_version_exists,
+        retained_version_count,
+        protection_version_count,
+        operation_row_count,
+    ) = context
+        .store
+        .with_connection(|connection| {
+            let target_exists = connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM history_versions WHERE id='history-version-b')",
+                [],
+                |row| row.get::<_, bool>(0),
+            )?;
+            let retained =
+                connection.query_row("SELECT COUNT(*) FROM history_versions", [], |row| {
+                    row.get::<_, i64>(0)
+                })?;
+            let protected = connection.query_row(
+                "SELECT COUNT(*) FROM history_versions WHERE source='protected'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )?;
+            let operations =
+                connection.query_row("SELECT COUNT(*) FROM history_operations", [], |row| {
+                    row.get::<_, i64>(0)
+                })?;
+            Ok::<_, rusqlite::Error>((
+                target_exists,
+                retained as usize,
+                protected as usize,
+                operations as usize,
+            ))
+        })
+        .map_err(|error| format!("failed to inspect eviction fault metadata: {error}"))?;
+    let target_object = context
+        .store
+        .objects()
+        .scene_path(&target_scene_hash)
+        .map_err(|error| format!("failed to resolve eviction target object: {error}"))?;
+    let target_asset = context
+        .store
+        .objects()
+        .asset_path(&target_asset_hash)
+        .map_err(|error| format!("failed to resolve eviction target asset: {error}"))?;
+    let target_object_existed_before_gc = target_object.exists();
+    let target_asset_existed_before_gc = target_asset.exists();
+    let gc = context
+        .store
+        .collect_garbage(SystemTime::now(), Duration::ZERO)
+        .map_err(|error| format!("eviction fault GC failed: {error}"))?;
+    let scene_key = ObjectKey::scene(target_scene_hash.clone())
+        .map_err(|error| format!("invalid eviction scene key: {error}"))?;
+    let asset_key = ObjectKey::asset(target_asset_hash.clone())
+        .map_err(|error| format!("invalid eviction asset key: {error}"))?;
+    Ok(HistoryRestartEvictionFaultEvidence {
+        scenario: "history-restart-eviction-fault-probe",
+        target_path: path_string(&target),
+        persisted_scene_sha256,
+        expected_old_scene_sha256: sha256(scene_a.0.as_bytes()),
+        target_version_exists,
+        retained_version_count,
+        protection_version_count,
+        operation_row_count,
+        target_object_existed_before_gc,
+        target_asset_existed_before_gc,
+        target_object_exists_after_gc: target_object.exists(),
+        target_asset_exists_after_gc: target_asset.exists(),
+        gc_deleted_target_scene: gc.deleted.iter().any(|object| object == &scene_key),
+        gc_deleted_target_asset: gc.deleted.iter().any(|object| object == &asset_key),
     })
 }
 

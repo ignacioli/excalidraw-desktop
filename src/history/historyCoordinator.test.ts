@@ -160,6 +160,65 @@ describe("HistoryCoordinator", () => {
     manager.dispose();
   });
 
+  it("rejects an autosave callback captured before replacement adoption", async () => {
+    const gateway: DocumentGateway = {
+      open: vi.fn(async () => ({
+        scene,
+        baseHash: "a".repeat(64),
+        hasNewerDraft: false,
+      })),
+      saveDraft: vi.fn(async () => ({ contentHash: "draft", savedAt: 1 })),
+      checkpoint: vi.fn(async () => ({
+        newBaseHash: "b".repeat(64),
+        mtime: 1,
+      })),
+      resolveConflict: vi.fn(async () => ({ newBaseHash: "b".repeat(64) })),
+      close: vi.fn(async () => undefined),
+    };
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open(
+      "/tmp/history-coordinator-stale.excalidraw",
+    );
+    const probe = manager.prepareHistoryAutosaveProbe(documentId);
+    expect(probe).toBeDefined();
+    const response = {
+      status: "completed" as const,
+      requestId: "request-stale-autosave",
+      replacementCommitted: true as const,
+      protectionVersionId: "protected-stale-autosave",
+      adoptedScene: {
+        type: "excalidraw",
+        elements: [{ id: "adopted" }],
+        files: {},
+      },
+      newBaseHash: "c".repeat(64),
+      newSessionGeneration: 1,
+    };
+    const coordinator = new HistoryCoordinator(
+      manager,
+      clientWith(response),
+      async (nextScene, context) => context.commit(nextScene),
+    );
+
+    await expect(
+      coordinator.replace(
+        documentId,
+        { kind: "clear" },
+        "request-stale-autosave",
+      ),
+    ).resolves.toMatchObject({ adopted: true });
+    await expect(probe!.queue()).resolves.toMatchObject({
+      status: "rejected",
+      rejection: "sessionGeneration",
+    });
+    expect(gateway.saveDraft).not.toHaveBeenCalled();
+    expect(manager.store.getState().sessionsById[documentId]).toMatchObject({
+      saveState: "clean",
+      sessionGeneration: 1,
+    });
+    manager.dispose();
+  });
+
   it("does not write a late response after the captured version is stale", async () => {
     const { manager } = createManager(false);
     const adopt = vi.fn((_scene, context) => context.commit(_scene));
