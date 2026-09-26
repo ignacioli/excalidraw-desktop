@@ -689,8 +689,10 @@ describe("AppShell", () => {
     nativeMenuHarness.handler?.("save");
 
     expect(checkpoint).toHaveBeenCalledWith("manualSave");
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "native save failed",
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "native save failed",
+      ),
     );
     expect(
       screen.queryByRole("button", { name: /^Save/ }),
