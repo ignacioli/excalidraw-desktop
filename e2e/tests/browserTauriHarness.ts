@@ -96,6 +96,9 @@ export async function installBrowserTauriHarness(
           if (command === "plugin:window|destroy") {
             return {};
           }
+          if (command === "native_menu_set_enabled") {
+            return {};
+          }
           if (command === "app_handshake") {
             return {
               contractVersion: 2,
