@@ -3884,6 +3884,9 @@ async fn run_history_automatic_verify(
 
 async fn run_history_restart_seed(root: &Path) -> Result<HistoryRestartSeedEvidence, String> {
     let context = open_history_restart_context(root).await?;
+    let seed_start = unix_timestamp()
+        .map_err(|error| format!("failed to read restart seed clock: {error}"))?
+        .saturating_sub(20);
     let target = context.workspace.join("history-restart.excalidraw");
     let scene_a = history_restart_scene("A", "历史 A");
     let scene_b = history_restart_scene("B", "历史 B");
@@ -3913,7 +3916,7 @@ async fn run_history_restart_seed(root: &Path) -> Result<HistoryRestartSeedEvide
         &identity.document_id,
         "history-version-a",
         &scene_a.0,
-        2,
+        seed_start + 1,
         &scene_a.2,
     )?;
     publish_history_restart_version(
@@ -3921,7 +3924,7 @@ async fn run_history_restart_seed(root: &Path) -> Result<HistoryRestartSeedEvide
         &identity.document_id,
         "history-version-b",
         &scene_b.0,
-        1,
+        seed_start,
         &scene_b.2,
     )?;
     // B is oldest and A is next. Each restore's protection publication must
@@ -3933,7 +3936,7 @@ async fn run_history_restart_seed(root: &Path) -> Result<HistoryRestartSeedEvide
             &identity.document_id,
             &format!("history-seed-{sequence:02}"),
             &scene.0,
-            3 + sequence as i64,
+            seed_start + 2 + sequence as i64,
             &scene.2,
         )?;
     }
@@ -6299,6 +6302,12 @@ mod history_fault_contract_tests {
             seed.scene_a_sha256
         );
         let seed_context = super::open_history_restart_context(&root).await.unwrap();
+        let baseline = super::HistoryRepository::new(&seed_context.store)
+            .automatic_baseline(&seed.document_id)
+            .unwrap()
+            .unwrap();
+        let now = super::unix_timestamp().unwrap();
+        assert!(now.saturating_sub(baseline) < super::AUTOMATIC_INTERVAL_SECONDS);
         let identity = seed_context
             .store
             .load_active_document_identity(&seed.target_path)
