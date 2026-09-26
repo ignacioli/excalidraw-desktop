@@ -794,6 +794,101 @@ describe("native macOS validation helpers", () => {
     assert.equal("filesystemOutcomes" in adapted, false);
   });
 
+  it("collects an early process-safety BLOCKED report with its verified profile identity", async () => {
+    const binding = nativeBinding();
+    const report = buildReport({
+      command: "validate",
+      manifest: {
+        artifactSha256: binding.packageArtifactSha256,
+        bundleIdentifier: binding.productIdentity.bundleIdentifier,
+        version: binding.productIdentity.version,
+      },
+      checks: [
+        makeCheck("disposable-profile", "prepared profile", "PASS", {
+          nativeEntrypointProfileSha256:
+            binding.nativeEntrypointProfileSha256,
+        }),
+        makeCheck("process-safety", "no ambiguous app process", "BLOCKED", {
+          processes: ["9395 /tmp/excalidraw-desktop"],
+        }),
+      ],
+    });
+    assert.equal(report.nativeEntrypointProfileSha256, undefined);
+    assert.equal(report.status, "BLOCKED");
+
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "excalidraw-native-early-block-"),
+    );
+    try {
+      const collection = path.join(root, "collection");
+      const collectorReport = await writeNativeValidationCollection(
+        collection,
+        report,
+        binding,
+      );
+      assert.equal(collectorReport.result, "BLOCKED");
+      assert.equal(collectorReport.claims[0].result, "BLOCKED");
+      assert.equal(
+        JSON.parse(
+          await fs.readFile(
+            path.join(collection, "route-acknowledgements.json"),
+            "utf8",
+          ),
+        ).result,
+        "BLOCKED",
+      );
+      assert.equal(
+        JSON.parse(
+          await fs.readFile(
+            path.join(
+              root,
+              "attempts",
+              binding.attemptIdentity.attemptId,
+              "attempt.json",
+            ),
+            "utf8",
+          ),
+        ).verdict,
+        "BLOCKED",
+      );
+      assert.throws(
+        () =>
+          adaptNativeValidationReport(
+            {
+              ...report,
+              checks: [
+                {
+                  ...report.checks[0],
+                  nativeEntrypointProfileSha256: "00".repeat(32),
+                },
+                report.checks[1],
+              ],
+            },
+            binding,
+          ),
+        /identity does not match/u,
+      );
+      assert.throws(
+        () =>
+          adaptNativeValidationReport(
+            { ...report, checks: [report.checks[1]] },
+            binding,
+          ),
+        /identity does not match/u,
+      );
+      assert.throws(
+        () =>
+          adaptNativeValidationReport(
+            { ...report, nativeEntrypointProfileSha256: "00".repeat(32) },
+            binding,
+          ),
+        /identity does not match/u,
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("normalizes failure identity independently of PID, path, timestamp, and wording", () => {
     const binding = nativeBinding({ consecutiveFailureCount: 1 });
     const left = buildAttemptRecord(

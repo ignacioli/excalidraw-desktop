@@ -676,9 +676,22 @@ export function adaptNativeValidationReport(report, bindingValue) {
       "native validation report is malformed",
     );
   }
+  const profileChecks = report.checks.filter(
+    (check) => check.id === "disposable-profile",
+  );
+  const profileCheck = profileChecks.length === 1 ? profileChecks[0] : null;
+  const profileSha256 =
+    report.nativeEntrypointProfileSha256 ??
+    (aggregateStatus(report.checks) !== "PASS" &&
+    profileCheck?.status === "PASS"
+      ? profileCheck.nativeEntrypointProfileSha256
+      : null);
   if (
-    report.nativeEntrypointProfileSha256 !==
-      binding.nativeEntrypointProfileSha256 ||
+    profileChecks.length > 1 ||
+    profileSha256 !== binding.nativeEntrypointProfileSha256 ||
+    (profileCheck?.status === "PASS" &&
+      profileCheck.nativeEntrypointProfileSha256 !==
+        binding.nativeEntrypointProfileSha256) ||
     report.manifest?.artifactSha256 !== binding.packageArtifactSha256 ||
     report.manifest?.bundleIdentifier !==
       binding.productIdentity.bundleIdentifier ||
