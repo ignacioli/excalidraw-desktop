@@ -1,5 +1,31 @@
 # T024：真实进程历史恢复验证
 
+## 当前结论（2026-09-26）
+
+**T024 当前 native A→B→A 旅程：PASS（1/1）。T050 的 T024 回归项随本次复验闭合。** 本轮失败不是历史保留实现回归，而是 Phase 3 的 T024 seed 使用了与运行时相差数十年的固定时间戳；修正 fixture 时间基准后，当前 test-only binary fresh-process 复验通过。
+
+- 产品提交：`b6fca0d77d2b3e9d06b7f866fbd6ff79eaa56766`；改动仅在 T024 harness fixture clock。
+- Test-only release binary SHA-256：`c43012c081fc8d9616194bc61db1eceb9eb693ebaf896419d44353e03acfab49`。
+- 环境：macOS `26.6.2`（build `25G83`），`arm64`；运行环境由 `sw_vers` 与报告中的 Darwin/arm64 字段核对。
+- fresh-process journey：**1/1 PASS**；A→B→A 两次恢复、正常窗口关闭、独立进程验证及后续淘汰/GC 资源读取均记录在原始报告中。
+- [本次原始 JSON](local-version-history-t024/t024-2026-09-26-fixture-clock-retest/native-history-restart-evidence.json) SHA-256：`1c1c1cabd9a41cf343429bf5506a702b96889d26e3c9bd28b7691ed8516d29e5`；[binding](local-version-history-t024/t024-2026-09-26-fixture-clock-retest/binding.json)。
+- 失败根 `/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-7W21bo` 保留为历史诊断数据；原失败不从记录中删除。
+- 结论边界：本轮确认并修复 T024 fixture 时间基准，不能据此宣布 T047/T048/T049 或 Feature 004 完成。启动时 SDK 规范化旧格式场景并在没有用户编辑时触发保存，是独立观察。只读追踪确认现有 `hasPersistedSceneChange` 判定早于历史功能；FR-003/004 未定义这种格式规范化是否属于内容变化，因此现有证据不足以判定产品回归或契约违反。若另立产品问题，需要规范文件与旧格式文件的无操作启动对照。
+
+### 根因分类：T024 fixture 时间基准
+
+旧 seed 将完整 20 条历史池的 `recorded_at` 固定为 `1..20`：B 是最旧项，A 次旧，另外 18 条为 filler。前端启动后发生的 automatic checkpoint 使用实际当前时间；由于它晚于 seed 数十年，统一 newest-20 淘汰会先删除 B。之后恢复请求针对已经淘汰的 B 返回 `HISTORY_UNAVAILABLE`。这条排序与淘汰路径解释了失败，且没有要求产品代码改变。
+
+fixture 现以运行时 Unix 时间减 20 秒作为 seed 起点，保留相同的 20 项满池、B 最旧、A 次旧和原有淘汰断言。由此 seed 与运行时处于同一时间窗口，启动时检查点不会仅因 fixture 时间落后数十年而淘汰 B。当前实现见 `src-tauri/src/e2e_harness.rs` 的 `run_history_restart_seed`；本次原始报告记录 seed 20 条、B/A 场景哈希、两个 GUI 进程、两次独立 verify 进程、各自保护记录、池大小与 GC 后对象状态。
+
+旧场景在 SDK 启动时被规范化、随后观察到无用户编辑保存的现象不等同于上面的淘汰根因。本次不据此认定产品实现违反 FR-003/FR-007；它保留为单独的产品契约评估项。
+
+| 记录 | 事实 | 结论 |
+|---|---|---|
+| 旧失败 | 20 条 fixture 时间戳为 `1..20`，B 最旧；前端启动写入的 automatic 版本排在 B 之后并触发淘汰，恢复 B 报 `HISTORY_UNAVAILABLE` | T024 本次失败由 harness fixture 的时间基准触发；历史 `FAIL` 保留在失败 root |
+| 本次修正 | 只将 seed 起点改为运行时附近；保留 20 项、A/B 次序、恢复和淘汰断言 | fixture-only 修正 |
+| 本次 fresh run | 当前 test-only binary；fresh process A→B→A；1/1 PASS | 当前 T024 技术旅程 PASS；不推导视觉、性能或生产包结论 |
+
 ## 当前结论（2026-09-24）
 
 **T024 技术验收 PASS：native journey 1/1，通过耗时 3.3 秒。**
@@ -79,8 +105,8 @@ PLAYWRIGHT_SKIP_WEBSERVER=1 \
 
 构建后应先确认 `dist/assets` 含 history driver；缺少 `VITE_E2E_HISTORY_FRONTEND=1` 的包不能执行此旅程。成功报告写入 Playwright output directory 的 `native-history-restart-evidence.json`；失败保留隔离 root，不自动删除诊断文件。
 
-## 下一次会话的边界
+## 2026-09-24 记录的下一次会话边界（历史）
 
-T024 的实现、技术验证、证据和任务状态均已完成，本轮结束。下一会话从 T025 开始，无需补做 T024 状态同步；不要把当前结论扩大为 US1 全部完成。此前暂不修改 `tasks.md` 的限制已由用户本轮收尾指令解除。
+在 2026-09-24 的记录点，T024 实现、技术验证及当时引用的证据已完成，下一会话计划从 T025 开始。2026-09-26 的 fixture-clock 复验和当前结论见本文顶部；本历史段不覆盖该更新，也不把 T024 扩大为 US1 全部完成。
 
 独立 review 另指出 HOME 外文档的既有 Recovery Restore／Conflict TakeExternal 返回资源路径尚未应用本轮 exact grant；这不是 T024 已通过路径的证明范围，本轮未扩展修改。这些邻接问题及既有 fault 测试预期差异需要后续有界处理。

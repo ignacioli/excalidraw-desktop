@@ -1,0 +1,22 @@
+{
+  "productCommit": "b6fca0d77d2b3e9d06b7f866fbd6ff79eaa56766",
+  "changeScope": "T024 harness fixture clock only",
+  "platform": "macOS",
+  "osVersion": "26.6.2",
+  "osBuild": "25G83",
+  "architecture": "arm64",
+  "buildCommand": "VITE_E2E_HARNESS=1 VITE_E2E_HISTORY_FRONTEND=1 pnpm tauri build --features e2e-harness --no-bundle",
+  "binaryPath": "src-tauri/target/release/excalidraw-desktop",
+  "binarySha256": "c43012c081fc8d9616194bc61db1eceb9eb693ebaf896419d44353e03acfab49",
+  "test": "e2e/tests/local-version-history-recovery.spec.ts focused native history restart journey",
+  "result": "PASS",
+  "tests": {
+    "passed": 1,
+    "failed": 0
+  },
+  "runDate": "2026-09-26",
+  "reportPath": "native-history-restart-evidence.json",
+  "reportSha256": "1c1c1cabd9a41cf343429bf5506a702b96889d26e3c9bd28b7691ed8516d29e5",
+  "sourceReportPath": "/private/tmp/history-t024-current-clock-20260926/tests-local-version-histor-211ee-ith-pinned-target-resources-browser-ui/native-history-restart-evidence.json",
+  "boundary": "Test-only native process journey; the result is not production package, native menu, visual, performance, or feature-wide acceptance."
+}

@@ -4,7 +4,9 @@
 
 Phase 6 的 T038–T044 已完成，用户故事 4 检查点为 **`PASS`（产品实现及真实进程可靠性范围）**。产品代码提交 `01977ec` 的 test-only release binary SHA-256 为 `585ad9ae4731838e480d876d70af2571af9fdd61bc1f02d1e368df134f250496`；故障与生命周期真实进程测试共 36/36 PASS，Rust 205 个库测试及全部 integration suites PASS。具体证明和边界见 [`local-version-history-t038-t044.md`](./local-version-history-t038-t044.md)。Phase 7 已完成 T045/T046 的实现，T047/T048 均未取得最终运行验收。
 
-T050 已通过共享 Harness 47/47、US4 5/5、原子写 9/9（包括 100 seeds）、Recovery 1/1 及前端/Rust 核心门禁；但本轮重跑既有 T024 前端 A→B→A 旅程时，在 `frontendB` 得到 `HISTORY_UNAVAILABLE`。其 seed 的最旧 B 版本在前端打开后的 automatic 记录进入统一 20 条池时被淘汰；仅补全测试 seed 的自写回执后仍可复现。T050 因此保留 **`FAIL` / 未勾选**，失败数据根 `/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-7W21bo` 未删除。T049 工作负载 smoke 同样在该旅程失败，未生成有效性能报告；参考 VM 版本/内存也不符，性能仍为 `not_evaluated`。
+T050 的既有共享 Harness（47/47）、US4（5/5）、原子写（9/9，含 100 seeds）、Recovery（1/1）及前端/Rust 核心门禁均保持 PASS；这些未受本次 harness-only fixture 修正影响的结果按原记录复用。T024 A→B→A 曾在 `frontendB` 失败，初始证据与原因分类见 [T024 复验记录](local-version-history-t024.md)：seed 将 20 个版本的时间戳固定在 1–20，旧 B 因而远早于实际运行时；启动产生的 automatic 版本进入统一保留池后淘汰 B。T024 seed 时间改为运行时附近后，当前产品提交 `b6fca0d77d2b3e9d06b7f866fbd6ff79eaa56766` 的 test-only binary 完成 fresh-process A→B→A **1/1 PASS**。T050 技术回归证据现为 **`PASS`（上述既有门禁复用，加本次 T024 复验）**；旧失败根 `/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-7W21bo` 保留为历史诊断数据。此结果只排除该次 fixture 时间基准导致的淘汰；启动格式规范化与无用户编辑时的保存观察仍需单独对照产品契约评估，不据此断言产品回归。
+
+T049 工作负载 smoke 曾因旧 T024 失败而中止；fixture 修正后的 history 专项 smoke 已 1/1 PASS，原始描述性报告见 [`e2e/perf/local-version-history-baseline.md`](../../e2e/perf/local-version-history-baseline.md)。该报告未做基线/候选配对或进程树采样，`executionEnvironment.type=unspecified`；参考 VM 版本和内存也不符合声明环境，性能仍为 `not_evaluated`。T047 原生菜单运行验收与 T048 精确生产包人工视觉验收继续保持 `BLOCKED`。
 
 ### T051 精确生产包隔离
 

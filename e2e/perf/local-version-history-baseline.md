@@ -1,6 +1,6 @@
 # Local version history performance baseline
 
-状态：**准备完成，尚未测量**（T003）
+状态：**正式性能测量尚未执行**（T003/T049）；history 专项 smoke 已运行，预算仍为 `not_evaluated`
 
 本文件定义功能 004 的可比较性能证据格式。它不是测量结果，也不把计划中的二进制、环境或预算写成已经执行的事实。
 
@@ -108,6 +108,8 @@ comparability:
 `sameWorkloadAndSeed`、`sameEnvironment` 在实际核对前必须保持 `false`；不能用模板本身宣称可比较。每个原始 JSON 报告必须符合 `e2e/perf/report.schema.json`，且 schema 中的 `binary` 字段在有效 T003/T049 结果里必须实际填充。
 
 ## 当前证据边界
+
+2026-09-26 修正 T024 fixture 时间基准后，以产品提交 `b6fca0d77d2b3e9d06b7f866fbd6ff79eaa56766` 的 test-only binary（SHA-256 `c43012c081fc8d9616194bc61db1eceb9eb693ebaf896419d44353e03acfab49`）运行一次 history 专项工作负载 smoke，1/1 PASS。原始 JSON 为 `/private/tmp/history-t049-smoke-b6fca0d.json`（SHA-256 `4a3801de9054784b5bf29f4d7d34bea72dc4cd410cf5ee9faa19ca902ed38f37`）：20 条池、A→B→A、恢复后场景与图片哈希、资源和 GC 检查均通过；单次旅程耗时 `1913.049167 ms`，仅为描述值。第一次调用遗漏 `PERF_TEST=1`，Playwright 报 `No tests found`，未进入产品旅程；加上该配置开关后才产生上述报告。该报告的 `executionEnvironment.type` 为 `unspecified`，未做基线／候选配对、进程树资源采样或规定 VM 运行，`verdict.overall` 仍为 `not_evaluated`；它只解除先前 smoke 的功能失败，不构成 T049 性能验收。
 
 2026-09-26 T049 候选工作负载 smoke 已启动，但实际 test-only 前端 A→B→A 旅程在 `frontendB` 收到 `HISTORY_UNAVAILABLE`，没有生成可比较的性能 JSON。当前候选 `ab67c3c43ee69ae32a040bb3e6f9c762807d8c3c` 的测试专用二进制 SHA-256 为 `0a24d93a280c7db4c0231a3a244dcdd70928f76b5f998c8b2c64c622a6b654ba`；失败根 `/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-7W21bo` 含 `history-restart-failure.json` 和前端状态。该 smoke 是实际失败，不得计作性能样本；T049 的预算 verdict 仍为 `not_evaluated`。修复旅程后仍须完成物理机基线/候选配对与规定 VM 的测量。
 
