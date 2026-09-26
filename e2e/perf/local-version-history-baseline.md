@@ -109,6 +109,8 @@ comparability:
 
 ## 当前证据边界
 
+2026-09-25 只读环境审计：本机 `prlctl --version` 返回 `27.0.1 (58670)`；名为 `macOS26.5.2` 的 VM 处于 suspended 状态，`prlctl list -i` 显示 4 vCPU、12288 MB 内存。该名称不证明 guest 的实际 OS/build。Parallels 版本与声明的 `26.4.1`、VM 内存与声明的约 8 GiB 均不符；未恢复或修改 VM，未运行参考测量。当前环境不能进入既定 reference series，也不能把它的结果与旧系列直接配对。
+
 - 已确认并固定：基线 commit、比较字段、物理 macOS 诊断→Parallels reference VM 的顺序、参考 VM 预算、环境分代规则、进程树计量边界及二进制占位规则。
 - 尚未执行：同一物理 macOS 配对诊断、Parallels Desktop Pro 26.4.1 VM 测量、候选版本测量、任何 T090/T108 原始报告生成。
 - 因此当前状态是 `not_evaluated`，不是 `pass`、`fail` 或 speedup/regression 结论。
