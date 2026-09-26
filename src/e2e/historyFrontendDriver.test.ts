@@ -62,7 +62,9 @@ vi.mock("../history/historyCoordinator", () => ({
   HistoryCoordinator: class {
     constructor(
       _manager: unknown,
-      private readonly client: { replace: (request: unknown) => Promise<unknown> },
+      private readonly client: {
+        replace: (request: unknown) => Promise<unknown>;
+      },
     ) {}
     replace = async (...args: unknown[]) => {
       await this.client.replace({});

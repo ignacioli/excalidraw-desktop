@@ -11,7 +11,9 @@ describe("DocumentGateway protected replacement seam", () => {
       replacementCommitted: null,
       operationState: "pendingReconciliation",
     });
-    const gateway = createDocumentGateway({ invoke } as unknown as CommandInvoker);
+    const gateway = createDocumentGateway({
+      invoke,
+    } as unknown as CommandInvoker);
     const request: HistoryReplaceRequest = {
       document: { kind: "handle", documentId: "document-1" },
       requestId: "request-1",

@@ -137,19 +137,25 @@ describe("RecoveryDialog", () => {
       "Discard recovery for drawing.excalidraw",
       { documentId: "document-1", action: "discard" },
     ],
-  ] as const)("emits the exact recovery decision for %s", async (label, decision) => {
-    const user = userEvent.setup();
-    const onApply = vi.fn(async () => ({ scene: undefined, newPath: undefined }));
-    render(
-      <RecoveryDialog
-        candidates={[recoveryCandidate]}
-        onApply={onApply}
-        requestSaveAsPath={async () => "/workspace/recovered.excalidraw"}
-      />,
-    );
+  ] as const)(
+    "emits the exact recovery decision for %s",
+    async (label, decision) => {
+      const user = userEvent.setup();
+      const onApply = vi.fn(async () => ({
+        scene: undefined,
+        newPath: undefined,
+      }));
+      render(
+        <RecoveryDialog
+          candidates={[recoveryCandidate]}
+          onApply={onApply}
+          requestSaveAsPath={async () => "/workspace/recovered.excalidraw"}
+        />,
+      );
 
-    await user.click(screen.getByRole("button", { name: label }));
+      await user.click(screen.getByRole("button", { name: label }));
 
-    expect(onApply).toHaveBeenCalledWith(decision);
-  });
+      expect(onApply).toHaveBeenCalledWith(decision);
+    },
+  );
 });

@@ -34,10 +34,7 @@ export function RecoveryNotice({
 
   useEffect(() => {
     if (count <= 0) return;
-    const timer = window.setTimeout(
-      () => setDismissedCount(count),
-      durationMs,
-    );
+    const timer = window.setTimeout(() => setDismissedCount(count), durationMs);
     return () => window.clearTimeout(timer);
   }, [count, durationMs]);
 

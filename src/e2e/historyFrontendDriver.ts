@@ -114,8 +114,7 @@ export class NativeHistoryFrontendDriver {
     }
     const staleAutosaveAttemptedHash = await hashScene(staleAutosave.scene);
     let staleAutosaveResultPromise:
-      | ReturnType<typeof staleAutosave.queue>
-      | undefined;
+      ReturnType<typeof staleAutosave.queue> | undefined;
     const instrumentedClient = {
       ...client,
       replace: (historyRequest: Parameters<typeof client.replace>[0]) => {
@@ -148,7 +147,9 @@ export class NativeHistoryFrontendDriver {
     }
     await publishProgress("replacementCompleted");
     if (staleAutosaveResultPromise === undefined) {
-      throw new Error("History replacement did not queue the stale autosave callback.");
+      throw new Error(
+        "History replacement did not queue the stale autosave callback.",
+      );
     }
     const staleAutosaveResult = await staleAutosaveResultPromise;
     const finalSession =

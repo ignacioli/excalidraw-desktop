@@ -95,8 +95,14 @@ export class DocumentOperationQueue {
 }
 
 export class DraftScheduler<Payload = string, PersistResult = void> {
-  private readonly persistDraft: DraftSchedulerOptions<Payload, PersistResult>["persistDraft"];
-  private readonly writeCheckpoint: DraftSchedulerOptions<Payload, PersistResult>["checkpoint"];
+  private readonly persistDraft: DraftSchedulerOptions<
+    Payload,
+    PersistResult
+  >["persistDraft"];
+  private readonly writeCheckpoint: DraftSchedulerOptions<
+    Payload,
+    PersistResult
+  >["checkpoint"];
   private readonly onError: (error: unknown) => void;
   private readonly debounceMs: number;
   private readonly idleMs: number;

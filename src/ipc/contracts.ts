@@ -45,7 +45,13 @@ export interface IpcError {
 export type SceneData = unknown;
 export type ColorScheme = "light" | "dark";
 export type CheckpointReason =
-  "manualSave" | "saveAsNew" | "tabSwitch" | "tabClose" | "idle" | "appExit" | "maxWait";
+  | "manualSave"
+  | "saveAsNew"
+  | "tabSwitch"
+  | "tabClose"
+  | "idle"
+  | "appExit"
+  | "maxWait";
 
 export interface AppHandshakeResponse {
   contractVersion: number;
@@ -142,15 +148,13 @@ export interface ExportOptions {
  * document is being resolved by the existing direct-file authority.
  */
 export type HistoryDocumentLocator =
-  | { kind: "path"; path: string }
-  | { kind: "handle"; documentId: string };
+  { kind: "path"; path: string } | { kind: "handle"; documentId: string };
 
 export type HistoryVersionSource = "automatic" | "manual" | "protected";
 export type HistoryProtectedAction = "restore" | "clear" | "import";
 
 export type HistoryVersionAvailability =
-  | { status: "available" }
-  | { status: "unavailable"; error: IpcError };
+  { status: "available" } | { status: "unavailable"; error: IpcError };
 
 export interface HistoryVersionItem {
   versionId: string;
@@ -273,10 +277,7 @@ export interface HistoryDeleteResponse {
 
 export type HistoryOperationKind = "mark" | "replace" | "delete" | "reconcile";
 export type HistoryIssueSource =
-  | "automatic"
-  | "manual"
-  | "protected"
-  | "reconciliation";
+  "automatic" | "manual" | "protected" | "reconciliation";
 export type HistoryChangeKind =
   | "automatic"
   | "manual"
@@ -285,10 +286,7 @@ export type HistoryChangeKind =
   | "reconciled"
   | "invalidated";
 export type HistoryCurrentFileSaveOutcome =
-  | "notAttempted"
-  | "succeeded"
-  | "failed"
-  | "pending";
+  "notAttempted" | "succeeded" | "failed" | "pending";
 
 export interface HistoryChangedEvent {
   documentId: string;
@@ -455,10 +453,7 @@ export interface IpcCommands {
 }
 
 export type CommandName = keyof IpcCommands;
-export type HistoryCommandName = Extract<
-  CommandName,
-  `history_${string}`
->;
+export type HistoryCommandName = Extract<CommandName, `history_${string}`>;
 export type CommandRequest<Name extends CommandName> =
   IpcCommands[Name]["request"];
 export type CommandResponse<Name extends CommandName> =

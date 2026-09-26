@@ -165,15 +165,13 @@ describe("IPC v3 history read contract", () => {
   it("defines the six history commands without exposing store paths", () => {
     expectTypeOf<HistoryListRequest>().toEqualTypeOf<{
       document:
-        | { kind: "path"; path: string }
-        | { kind: "handle"; documentId: string };
+        { kind: "path"; path: string } | { kind: "handle"; documentId: string };
       cursor?: string;
       limit?: number;
     }>();
     expectTypeOf<HistoryReplaceRequest>().toMatchTypeOf<{
       document:
-        | { kind: "path"; path: string }
-        | { kind: "handle"; documentId: string };
+        { kind: "path"; path: string } | { kind: "handle"; documentId: string };
       requestId: string;
       sessionGeneration: number;
       revision: number;
@@ -193,15 +191,17 @@ describe("IPC v3 history read contract", () => {
     expectTypeOf<HistoryDeleteResponse>().toEqualTypeOf<{
       deletedVersionId: string;
     }>();
-    expectTypeOf<keyof Pick<
-      IpcCommands,
-      | "history_list"
-      | "history_preview"
-      | "history_mark"
-      | "history_replace"
-      | "history_operation_status"
-      | "history_delete"
-    >>().toEqualTypeOf<
+    expectTypeOf<
+      keyof Pick<
+        IpcCommands,
+        | "history_list"
+        | "history_preview"
+        | "history_mark"
+        | "history_replace"
+        | "history_operation_status"
+        | "history_delete"
+      >
+    >().toEqualTypeOf<
       | "history_list"
       | "history_preview"
       | "history_mark"
@@ -229,11 +229,11 @@ describe("IPC v3 history read contract", () => {
       source: "automatic" | "manual" | "protected" | "reconciliation";
       error: import("./contracts").IpcError;
     }>();
-    expectTypeOf<IpcEvents["history-changed"]>().toEqualTypeOf<
-      HistoryChangedEvent
-    >();
-    expectTypeOf<IpcEvents["history-issue"]>().toEqualTypeOf<
-      HistoryIssueEvent
-    >();
+    expectTypeOf<
+      IpcEvents["history-changed"]
+    >().toEqualTypeOf<HistoryChangedEvent>();
+    expectTypeOf<
+      IpcEvents["history-issue"]
+    >().toEqualTypeOf<HistoryIssueEvent>();
   });
 });
