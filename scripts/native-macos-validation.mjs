@@ -29,7 +29,9 @@ export const PRODUCTION_APP_BUILD_ARGS = Object.freeze([
 export const PROOF_SCOPES = Object.freeze({
   QUALIFICATION: "qualification",
   FINAL: "final",
+  HISTORY: "history",
 });
+export const HISTORY_MENU_READY_TIMEOUT_MS = 15_000;
 export const STOPPED_COMMAND_S_ISSUE_ID =
   "issue-v1:7cec23a398ea5bc45123e3d0fe2fd415214e13cca31393b6fd94ecc9da1be99e";
 export const PHYSICAL_COMMAND_S_TIMEOUT_MS = 600_000;
@@ -129,6 +131,7 @@ export const VERSION_HISTORY_MENU_ITEM = Object.freeze({
 });
 
 export function nativeActionsForScope(scope) {
+  if (scope === PROOF_SCOPES.HISTORY) return [];
   if (scope === PROOF_SCOPES.QUALIFICATION) {
     return NATIVE_ACTION_STEPS.filter((action) =>
       new Set(["save-keyboard", "save-menu"]).has(action.id),
@@ -139,6 +142,7 @@ export function nativeActionsForScope(scope) {
 }
 
 export function nativeMenuItemsForScope(scope) {
+  if (scope === PROOF_SCOPES.HISTORY) return [VERSION_HISTORY_MENU_ITEM];
   if (scope === PROOF_SCOPES.QUALIFICATION) return [EXPECTED_MENU_ITEMS[0]];
   if (scope === PROOF_SCOPES.FINAL)
     return [...EXPECTED_MENU_ITEMS, VERSION_HISTORY_MENU_ITEM];
@@ -735,27 +739,44 @@ export function adaptNativeValidationReport(report, bindingValue) {
     requiredChecks.every((check) => check?.status === "PASS")
       ? "PASS"
       : "BLOCKED";
-  const versionHistoryCheck = report.checks.find(
+  const versionHistoryChecks = report.checks.filter(
     (check) => check.id === "version-history-route",
   );
+  const versionHistoryCheck = versionHistoryChecks[0];
   const versionHistoryTarget = versionHistoryCheck?.targetDocumentBinding;
-  const versionHistoryResult =
-    binding.proofScope !== PROOF_SCOPES.FINAL
-      ? null
-      : versionHistoryCheck?.command === VERSION_HISTORY_MENU_ITEM.command &&
-          Number.isSafeInteger(versionHistoryCheck.validationId) &&
-          versionHistoryCheck.validationId > 0 &&
-          versionHistoryCheck.status === "PASS" &&
-          versionHistoryTarget &&
-          versionHistoryTarget.launchMode === "single-normal-open-argument" &&
-          typeof versionHistoryTarget.path === "string" &&
-          path.isAbsolute(versionHistoryTarget.path) &&
-          versionHistoryTarget.path.endsWith(".excalidraw") &&
-          /^[0-9a-f]{64}$/u.test(versionHistoryTarget.sha256 ?? "") &&
-          Number.isSafeInteger(versionHistoryTarget.byteLength) &&
-          versionHistoryTarget.byteLength >= 0
-        ? "PASS"
-        : "BLOCKED";
+  const versionHistoryResult = ![
+    PROOF_SCOPES.FINAL,
+    PROOF_SCOPES.HISTORY,
+  ].includes(binding.proofScope)
+    ? null
+    : routeResult === "PASS" &&
+        versionHistoryChecks.length === 1 &&
+        versionHistoryCheck?.command === VERSION_HISTORY_MENU_ITEM.command &&
+        Number.isSafeInteger(versionHistoryCheck.validationId) &&
+        versionHistoryCheck.validationId > 0 &&
+        versionHistoryCheck.status === "PASS" &&
+        versionHistoryTarget &&
+        versionHistoryTarget.launchMode === "single-normal-open-argument" &&
+        typeof versionHistoryTarget.path === "string" &&
+        path.isAbsolute(versionHistoryTarget.path) &&
+        versionHistoryTarget.path.endsWith(".excalidraw") &&
+        /^[0-9a-f]{64}$/u.test(versionHistoryTarget.sha256 ?? "") &&
+        Number.isSafeInteger(versionHistoryTarget.byteLength) &&
+        versionHistoryTarget.byteLength >= 0 &&
+        (binding.proofScope !== PROOF_SCOPES.HISTORY ||
+          (versionHistoryTarget.observationMethod ===
+            "ax-history-panel-filename" &&
+            versionHistoryTarget.path === statePreparationCheck?.path &&
+            versionHistoryTarget.sha256 ===
+              statePreparationCheck?.sha256Before &&
+            versionHistoryTarget.byteLength ===
+              statePreparationCheck?.byteLength &&
+            versionHistoryTarget.observedFileName ===
+              path.basename(versionHistoryTarget.path) &&
+            versionHistoryTarget.uniqueFileNameInFixture === true &&
+            versionHistoryTarget.panelObservation?.pass === true))
+      ? "PASS"
+      : "BLOCKED";
   const versionHistoryEntry =
     versionHistoryResult === null
       ? null
@@ -1076,6 +1097,7 @@ function runSync(command, args, options = {}) {
     env: options.env,
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
+    timeout: options.timeoutMs,
     stdio: options.inherit ? "inherit" : ["ignore", "pipe", "pipe"],
   });
   return {
@@ -1351,8 +1373,8 @@ function appleScriptLabels(labels) {
   return `{${labels.map(appleScriptQuote).join(", ")}}`;
 }
 
-function runAppleScript(script) {
-  const result = runSync("osascript", ["-e", script]);
+function runAppleScript(script, timeoutMs) {
+  const result = runSync("osascript", ["-e", script], { timeoutMs });
   if (result.status !== 0) {
     const detail = result.stderr.trim() || "System Events rejected the request";
     if (
@@ -1416,14 +1438,99 @@ export function inspectMenuItemAppleScript(pid, expected) {
   );
 }
 
-function inspectMenuItem(pid, expected) {
+function inspectMenuItem(pid, expected, timeoutMs) {
   const script = inspectMenuItemAppleScript(pid, expected);
-  const [label, enabled, character, modifiers] =
-    runAppleScript(script).split("\t");
+  const [label, enabled, character, modifiers] = runAppleScript(
+    script,
+    timeoutMs,
+  ).split("\t");
   return {
     label,
     enabled: enabled === "true",
     keyboard: { character, modifiers: decodeAXModifiers(modifiers) },
+  };
+}
+
+export async function waitForHistoryMenuReady(
+  inspect,
+  {
+    timeoutMs = HISTORY_MENU_READY_TIMEOUT_MS,
+    now = Date.now,
+    delay = wait,
+  } = {},
+) {
+  const deadline = now() + timeoutMs;
+  let attempts = 0;
+  let lastItem = null;
+  let lastError = null;
+  do {
+    attempts += 1;
+    try {
+      const result = compareMenuObservation(
+        VERSION_HISTORY_MENU_ITEM,
+        await inspect(),
+      );
+      lastItem = { path: VERSION_HISTORY_MENU_ITEM.path, ...result };
+      lastError = null;
+      if (!result.labelMatches || !result.keyboardMatches) {
+        return { status: "FAIL", attempts, item: lastItem };
+      }
+      if (result.pass) return { status: "PASS", attempts, item: lastItem };
+    } catch (error) {
+      lastError = String(error.message ?? error);
+    }
+    if (now() >= deadline) break;
+    await delay(Math.min(250, Math.max(0, deadline - now())));
+  } while (now() <= deadline);
+  return {
+    status: lastItem === null ? "BLOCKED" : "FAIL",
+    attempts,
+    ...(lastItem === null ? { error: lastError } : { item: lastItem }),
+  };
+}
+
+export function historyPanelObservationAppleScript(pid, fileName) {
+  if (typeof fileName !== "string" || fileName.length === 0) {
+    throw new TypeError("History target filename is required");
+  }
+  return `tell application "System Events"
+  set appProcess to first application process whose unix id is ${Number(pid)}
+  tell appProcess
+    set headingCount to 0
+    set fileCount to 0
+    set closeCount to 0
+    repeat with elementRef in (entire contents of front window)
+      try
+        if role of elementRef is "AXStaticText" then
+          set elementValue to (value of elementRef) as text
+          if elementValue is "Version History" then set headingCount to headingCount + 1
+          if elementValue is ${appleScriptQuote(fileName)} then set fileCount to fileCount + 1
+        else if role of elementRef is "AXButton" then
+          if name of elementRef is "Close version history" then set closeCount to closeCount + 1
+        end if
+      end try
+    end repeat
+    return (headingCount as text) & tab & (fileCount as text) & tab & (closeCount as text)
+  end tell
+end tell`;
+}
+
+export function parseHistoryPanelObservation(output) {
+  const counts = String(output).trim().split("\t").map(Number);
+  if (
+    counts.length !== 3 ||
+    counts.some((count) => !Number.isSafeInteger(count) || count < 0)
+  ) {
+    throw new NativeValidationBlockedError(
+      "History panel AX observation must contain three nonnegative counts",
+    );
+  }
+  const [headingCount, fileNameCount, closeCount] = counts;
+  return {
+    headingCount,
+    fileNameCount,
+    closeCount,
+    pass: headingCount > 0 && fileNameCount > 0 && closeCount > 0,
   };
 }
 
@@ -2063,6 +2170,21 @@ async function validExcalidrawSnapshot(filePath) {
   }
 }
 
+export function uniqueHistoryTargetFileName(fixtureFiles, launchDocument) {
+  const fileName = path.basename(launchDocument);
+  if (
+    !Array.isArray(fixtureFiles) ||
+    fixtureFiles.filter(
+      (entry) =>
+        typeof entry?.path === "string" &&
+        path.basename(entry.path) === fileName,
+    ).length !== 1
+  ) {
+    return null;
+  }
+  return fileName;
+}
+
 async function resolvePreparedLaunchDocument(nativeProfile) {
   const fixtureManifest = JSON.parse(
     await fsp.readFile(nativeProfile.fixtureManifestPath, "utf8"),
@@ -2120,6 +2242,7 @@ async function runNativeChecks(
   timeoutMs,
   launchDocument,
   proofScope,
+  fixtureManifestPath,
 ) {
   const { child, events } = processInfo;
   const expectedMenuItems = nativeMenuItemsForScope(proofScope);
@@ -2127,35 +2250,54 @@ async function runNativeChecks(
   const launchBefore = await validExcalidrawSnapshot(launchDocument);
   let menuObservations = [];
   try {
-    let lastError;
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      try {
-        const attemptObservations = [];
-        for (const expected of expectedMenuItems) {
-          const observed = inspectMenuItem(child.pid, expected);
-          const result = compareMenuObservation(expected, observed);
-          attemptObservations.push({ path: expected.path, ...result });
+    if (proofScope === PROOF_SCOPES.HISTORY) {
+      const readiness = await waitForHistoryMenuReady(() =>
+        inspectMenuItem(child.pid, VERSION_HISTORY_MENU_ITEM, 5000),
+      );
+      checks.push(
+        makeCheck(
+          "native-menu",
+          "native Version History menu hierarchy, label, and enabled state",
+          readiness.status,
+          {
+            attempts: readiness.attempts,
+            items: readiness.item === undefined ? [] : [readiness.item],
+            ...(readiness.error ? { error: readiness.error } : {}),
+          },
+        ),
+      );
+      if (readiness.status !== "PASS") return;
+    } else {
+      let lastError;
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        try {
+          const attemptObservations = [];
+          for (const expected of expectedMenuItems) {
+            const observed = inspectMenuItem(child.pid, expected);
+            const result = compareMenuObservation(expected, observed);
+            attemptObservations.push({ path: expected.path, ...result });
+          }
+          menuObservations = attemptObservations;
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error;
+          await wait(250);
         }
-        menuObservations = attemptObservations;
-        lastError = null;
-        break;
-      } catch (error) {
-        lastError = error;
-        await wait(250);
       }
+      if (lastError) throw lastError;
+      const allMenuItemsPass =
+        menuObservations.length === expectedMenuItems.length &&
+        menuObservations.every((item) => item.pass);
+      checks.push(
+        makeCheck(
+          "native-menu",
+          "native menu hierarchy, labels, enabled state, keyboard equivalents",
+          allMenuItemsPass ? "PASS" : "FAIL",
+          { items: menuObservations },
+        ),
+      );
     }
-    if (lastError) throw lastError;
-    const allMenuItemsPass =
-      menuObservations.length === expectedMenuItems.length &&
-      menuObservations.every((item) => item.pass);
-    checks.push(
-      makeCheck(
-        "native-menu",
-        "native menu hierarchy, labels, enabled state, keyboard equivalents",
-        allMenuItemsPass ? "PASS" : "FAIL",
-        { items: menuObservations },
-      ),
-    );
   } catch (error) {
     checks.push(
       makeCheck(
@@ -2253,12 +2395,12 @@ async function runNativeChecks(
     }
   }
 
-  // The history entry is validated as a feature-specific route so the
-  // established 003 action graph remains unchanged.  The production process
-  // is launched with exactly one digest-bound drawing argument; requiring that
-  // same snapshot here binds the native route to that target document without
-  // introducing a second command or browser-side proof channel.
-  if (proofScope === PROOF_SCOPES.FINAL) {
+  // History has a separate native route. The dedicated history scope also
+  // observes the opened panel's filename before claiming a target binding.
+  if (
+    proofScope === PROOF_SCOPES.FINAL ||
+    proofScope === PROOF_SCOPES.HISTORY
+  ) {
     try {
       if (
         launchBefore === null ||
@@ -2269,6 +2411,21 @@ async function runNativeChecks(
         throw new NativeValidationBlockedError(
           "Version History route has no valid digest-bound launch document",
         );
+      }
+      let fileName = null;
+      if (proofScope === PROOF_SCOPES.HISTORY) {
+        const fixtureManifest = JSON.parse(
+          await fsp.readFile(fixtureManifestPath, "utf8"),
+        );
+        fileName = uniqueHistoryTargetFileName(
+          fixtureManifest.files,
+          launchDocument,
+        );
+        if (fileName === null) {
+          throw new NativeValidationBlockedError(
+            "History target filename is not unique in the prepared fixture",
+          );
+        }
       }
       const before = new Set(events.map((event) => event.validationId));
       invokeMenuItem(child.pid, VERSION_HISTORY_MENU_ITEM.path);
@@ -2290,6 +2447,32 @@ async function runNativeChecks(
           "more than one fresh Version History route pair was observed",
         );
       }
+      let panelObservation = null;
+      if (proofScope === PROOF_SCOPES.HISTORY) {
+        const deadline = Date.now() + 10_000;
+        let lastError = null;
+        do {
+          try {
+            panelObservation = parseHistoryPanelObservation(
+              runAppleScript(
+                historyPanelObservationAppleScript(child.pid, fileName),
+                5000,
+              ),
+            );
+            lastError = null;
+            if (panelObservation.pass) break;
+          } catch (error) {
+            lastError = String(error.message ?? error);
+          }
+          if (Date.now() >= deadline) break;
+          await wait(250);
+        } while (Date.now() < deadline);
+        if (!panelObservation?.pass) {
+          throw new NativeValidationBlockedError(
+            `History panel AX did not show the launched document filename${lastError ? `: ${lastError}` : ""}`,
+          );
+        }
+      }
       checks.push(
         makeCheck(
           "version-history-route",
@@ -2303,6 +2486,14 @@ async function runNativeChecks(
               path: launchBefore.path,
               sha256: launchBefore.sha256,
               byteLength: launchBefore.byteLength,
+              ...(panelObservation
+                ? {
+                    observationMethod: "ax-history-panel-filename",
+                    observedFileName: fileName,
+                    uniqueFileNameInFixture: true,
+                    panelObservation,
+                  }
+                : {}),
             },
           },
         ),
@@ -2655,6 +2846,7 @@ export async function validateProductionBundle({
         timeoutMs,
         nativeProfile?.launchDocument,
         evidenceBinding?.proofScope ?? PROOF_SCOPES.FINAL,
+        nativeProfile?.fixtureManifestPath,
       );
     } finally {
       await stopOwnedChild(processInfo);

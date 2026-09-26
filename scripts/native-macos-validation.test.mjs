@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import {
   EXPECTED_MENU_ITEMS,
   EXPECTED_WINDOW_SIZE,
+  HISTORY_MENU_READY_TIMEOUT_MS,
   NATIVE_ACTION_STEPS,
   PHYSICAL_COMMAND_S_TIMEOUT_MS,
   PROOF_SCOPES,
@@ -22,6 +23,7 @@ import {
   compareManifest,
   compareMenuObservation,
   commandSConfirmationLine,
+  historyPanelObservationAppleScript,
   completeExportDialogAppleScript,
   decodeAXModifiers,
   inspectMenuItemAppleScript,
@@ -33,6 +35,7 @@ import {
   parseWindowGeometryOutput,
   parseNativeValidationEvents,
   parseNativeValidationLine,
+  parseHistoryPanelObservation,
   resolveMenuItemAppleScript,
   runtimeProductIdentitySha256,
   sha256Path,
@@ -42,6 +45,8 @@ import {
   validatePreparedNativeProfile,
   validationPair,
   VERSION_HISTORY_MENU_ITEM,
+  uniqueHistoryTargetFileName,
+  waitForHistoryMenuReady,
   windowGeometryAppleScript,
   writeNativeValidationCollection,
 } from "./native-macos-validation.mjs";
@@ -129,6 +134,75 @@ describe("native macOS validation helpers", () => {
     assert.deepEqual(
       nativeMenuItemsForScope(PROOF_SCOPES.FINAL).at(-1),
       VERSION_HISTORY_MENU_ITEM,
+    );
+    assert.deepEqual(nativeActionsForScope(PROOF_SCOPES.HISTORY), []);
+    assert.deepEqual(nativeMenuItemsForScope(PROOF_SCOPES.HISTORY), [
+      VERSION_HISTORY_MENU_ITEM,
+    ]);
+  });
+
+  it("waits for the actual History menu enabled state and fails at a bounded deadline", async () => {
+    assert.equal(HISTORY_MENU_READY_TIMEOUT_MS, 15_000);
+    let time = 0;
+    const observed = (enabled) => ({
+      label: "Version History…",
+      enabled,
+      keyboard: { character: "", modifiers: [] },
+    });
+    let count = 0;
+    const ready = await waitForHistoryMenuReady(() => observed(++count >= 3), {
+      timeoutMs: 500,
+      now: () => time,
+      delay: async (ms) => {
+        time += ms;
+      },
+    });
+    assert.equal(ready.status, "PASS");
+    assert.equal(ready.attempts, 3);
+    time = 0;
+    const timedOut = await waitForHistoryMenuReady(() => observed(false), {
+      timeoutMs: 500,
+      now: () => time,
+      delay: async (ms) => {
+        time += ms;
+      },
+    });
+    assert.equal(timedOut.status, "FAIL");
+    assert.equal(timedOut.item.observed.enabled, false);
+    const wrongLabel = await waitForHistoryMenuReady(
+      () => ({ ...observed(true), label: "History" }),
+      { timeoutMs: 500, now: () => 0 },
+    );
+    assert.equal(wrongLabel.status, "FAIL");
+    assert.equal(wrongLabel.attempts, 1);
+  });
+
+  it("requires a fixture-unique History filename and a complete AX panel observation", () => {
+    const fixtureFiles = [
+      { path: "flows/Checkout Flow.excalidraw" },
+      { path: "flows/Overview.excalidraw" },
+    ];
+    const launchDocument = "/tmp/workspace/flows/Checkout Flow.excalidraw";
+    assert.equal(
+      uniqueHistoryTargetFileName(fixtureFiles, launchDocument),
+      "Checkout Flow.excalidraw",
+    );
+    assert.equal(
+      uniqueHistoryTargetFileName(
+        [...fixtureFiles, { path: "other/Checkout Flow.excalidraw" }],
+        launchDocument,
+      ),
+      null,
+    );
+    assert.match(
+      historyPanelObservationAppleScript(123, 'a "quoted".excalidraw'),
+      /a \\"quoted\\"\.excalidraw/u,
+    );
+    assert.equal(parseHistoryPanelObservation("1\t1\t1").pass, true);
+    assert.equal(parseHistoryPanelObservation("1\t0\t1").pass, false);
+    assert.throws(
+      () => parseHistoryPanelObservation("1\tbad\t1"),
+      NativeValidationBlockedError,
     );
   });
 
@@ -712,6 +786,44 @@ describe("native macOS validation helpers", () => {
       ["save-menu", "save-keyboard"],
     );
 
+    const historyBinding = nativeBinding({ proofScope: PROOF_SCOPES.HISTORY });
+    const historyReport = structuredClone(report);
+    historyReport.checks = historyReport.checks.filter((check) =>
+      new Set([
+        "native-menu",
+        "window-geometry",
+        "state-preparation",
+        "version-history-route",
+      ]).has(check.id),
+    );
+    const historyRoute = historyReport.checks.find(
+      (check) => check.id === "version-history-route",
+    );
+    Object.assign(historyRoute.targetDocumentBinding, {
+      observationMethod: "ax-history-panel-filename",
+      observedFileName: "Architecture.excalidraw",
+      uniqueFileNameInFixture: true,
+      panelObservation: {
+        headingCount: 1,
+        fileNameCount: 1,
+        closeCount: 1,
+        pass: true,
+      },
+    });
+    const history = adaptNativeValidationReport(historyReport, historyBinding);
+    assert.deepEqual(history.routeAcknowledgements.actions, []);
+    assert.equal(history.routeAcknowledgements.result, "PASS");
+    assert.equal(history.versionHistoryEntry.result, "PASS");
+    const launchOnlyReport = structuredClone(historyReport);
+    delete launchOnlyReport.checks.find(
+      (check) => check.id === "version-history-route",
+    ).targetDocumentBinding.observationMethod;
+    const launchOnly = adaptNativeValidationReport(
+      launchOnlyReport,
+      historyBinding,
+    );
+    assert.equal(launchOnly.versionHistoryEntry.result, "BLOCKED");
+
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "excalidraw-native-adapter-"),
     );
@@ -805,8 +917,7 @@ describe("native macOS validation helpers", () => {
       },
       checks: [
         makeCheck("disposable-profile", "prepared profile", "PASS", {
-          nativeEntrypointProfileSha256:
-            binding.nativeEntrypointProfileSha256,
+          nativeEntrypointProfileSha256: binding.nativeEntrypointProfileSha256,
         }),
         makeCheck("process-safety", "no ambiguous app process", "BLOCKED", {
           processes: ["9395 /tmp/excalidraw-desktop"],
