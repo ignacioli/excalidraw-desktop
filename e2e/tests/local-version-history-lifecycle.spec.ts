@@ -37,6 +37,9 @@ interface HistoryLifecycleEvidence {
   activeIdentityAfterDelete: boolean;
   originalExistsAfterDelete: boolean;
   trashExistsAfterDelete: boolean;
+  samePathRecreatedDistinct: boolean;
+  samePathRecreatedHistoryCount: number;
+  samePathRecreatedExists: boolean;
 }
 
 interface HistoryLifecycleJournalEvidence {
@@ -107,6 +110,9 @@ test("native lifecycle preserves identity across rename/move, isolates Save As, 
     expect(evidence.activeIdentityAfterDelete).toBe(false);
     expect(evidence.originalExistsAfterDelete).toBe(false);
     expect(evidence.trashExistsAfterDelete).toBe(true);
+    expect(evidence.samePathRecreatedDistinct).toBe(true);
+    expect(evidence.samePathRecreatedHistoryCount).toBe(0);
+    expect(evidence.samePathRecreatedExists).toBe(true);
   } finally {
     await cleanupIsolatedDesktopPaths(run.paths);
   }

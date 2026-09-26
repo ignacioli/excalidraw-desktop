@@ -14,6 +14,8 @@
 | `pnpm typecheck`、`pnpm lint` | PASS | TypeScript 严格类型与 ESLint |
 | `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --features e2e-harness -- -D warnings` | PASS | Rust 所有 target 的 lint |
 | `git diff --check` | PASS | 改动的空白检查 |
+| `cargo test --manifest-path src-tauri/Cargo.toml --test contract_workspace -q` | 4/4 PASS | 卸载/重挂重新授权、原 UUID 保留、同路径新 inode 拒绝 |
+| `e2e/tests/local-version-history-faults.spec.ts` | test-only native 30/30 PASS | 第三阶段 transaction fault 与 fresh-process retry、父目录同步权限失败、缺失 scene/asset、hydration pin 与 GC |
 
 首次 Rust 全套运行中，旧 `contract_entries` 入口因无 HistoryStore 的测试服务被错误地要求 History 阶段而失败（8/9）。随后把该要求限定在生产 `WorkspaceEntryState` 接线；定向合同测试 9/9、修正后 Rust 全套通过。失败未被删除或跳过。
 
@@ -21,7 +23,7 @@ T044 的保留规则引用 T010 的唯一后端矩阵：`retains_mixed_nineteen_
 
 ## 尚待证明
 
-- T043 已有 test-only macOS binary 真实进程生命周期 3/3 PASS，覆盖改名/祖先移动、同路径外部替换拒绝、Trash 后历史清理、真实 `DocumentService` conflict Save As New 与孤儿 Save As、带持久提交标记的日志 fresh-process 重放。该 Harness 的 Trash 是隔离的 `RecordingTrashOperator`，不代表 Finder/系统 Trash 验收；产品提交后需用该提交的二进制重新绑定此进程结果。
-- T043 仍缺 post-FS/pre-marker SIGKILL 的自动修复证据；当前实现对此保留 `HistoryOperationPending` 日志，避免误清理。父目录同步故障、GC 锁/完整加载、历史资源缺失等专门故障矩阵尚未完成，因此 T043 不标记完成。
+- T043 已有 test-only macOS binary 真实进程生命周期 3/3 PASS，覆盖改名/祖先移动、同路径外部替换拒绝、Trash 后历史清理、真实 `DocumentService` conflict Save As New 与孤儿 Save As、带持久提交标记的日志 fresh-process 重放。新增 fault suite 30/30 PASS；该运行使用的 test-only 可执行文件 SHA-256 为 `b2b8d859066566bf15670ee25b6219fa5d5dc115f15ef85f281c88b4e0acc6e9`，尚待绑定后续产品提交。Harness 的 Trash 是隔离的 `RecordingTrashOperator`，不代表 Finder/系统 Trash 验收。
+- T043 仍缺实际 Workspace Entry rename 的 post-FS/pre-marker SIGKILL 证据；当前实现对此保留 `HistoryOperationPending` 日志，避免误清理。卸载/Remove from Recents 后 fresh-process 重挂授权、部分保护失败后的 fresh-process repair，以及并发 Preview IPC 与 GC 的端到端竞争尚未完成，因此 T043 不标记完成。现有父目录同步权限失败、资源缺失和 hydration pin 只证明各自测试的进程/对象边界，不扩展为物理断电安全声明。
 - 精确生产包 WKWebView、原生菜单、视觉审批和性能仍属后续验收，不由本文件声称通过。
 - 手动版本删除的组件与 IPC 已实现；生产 History drawer 的最终入口及原生菜单路由由后续产品接线和原生验证负责。

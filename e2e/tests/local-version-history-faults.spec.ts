@@ -1,9 +1,17 @@
 import { createHash } from "node:crypto";
-import { readFile, readdir } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { chmod, readFile, readdir } from "node:fs/promises";
 
 import { expect, test } from "@playwright/test";
 
 import { HISTORY_FAULT_MATRIX } from "../helpers/fault";
+import {
+  cleanupIsolatedDesktopPaths,
+  createIsolatedDesktopPaths,
+  isolatedDesktopEnvironment,
+  resolveDesktopBinary,
+  type IsolatedDesktopPaths,
+} from "../helpers/app";
 import {
   runTauriHistoryFaultKill,
   runTauriHistoryEvictionFaultKill,
@@ -12,6 +20,8 @@ import {
   runTauriHistoryOperationFailure,
   runTauriHistoryOperationFaultKill,
 } from "../helpers/reliability";
+
+const RELIABILITY_SCENARIO_FLAG = "--e2e-reliability-scenario";
 
 /**
  * This suite owns the native barrier protocol for the shared History
@@ -166,7 +176,9 @@ test.describe("US1 local version history process fault barriers", () => {
         const { evidence } = run;
         expect(evidence.scenario).toBe("history-operation-fault-probe");
         expect(evidence.stage).toBe(stage);
-        expect(evidence.requestId).toBe(`history-fault-operation-t025-real-${stage}`);
+        expect(evidence.requestId).toBe(
+          `history-fault-operation-t025-real-${stage}`,
+        );
         expect(evidence.targetPath.startsWith(`${run.paths.workspace}/`)).toBe(
           true,
         );
@@ -347,13 +359,9 @@ test.describe("US1 local version history process fault barriers", () => {
         ),
         contentType: "application/json",
       });
-      expect(run.evidence.scenario).toBe(
-        "history-operation-external-write",
-      );
+      expect(run.evidence.scenario).toBe("history-operation-external-write");
       expect(run.evidence.externalWritePreserved).toBe(true);
-      expect(run.evidence.observedSha256).toBe(
-        run.evidence.externalSha256,
-      );
+      expect(run.evidence.observedSha256).toBe(run.evidence.externalSha256);
       expect(run.evidence.observedSha256).not.toBe(
         run.evidence.publishedSha256,
       );
@@ -404,7 +412,231 @@ test.describe("US1 local version history process fault barriers", () => {
       await run.cleanup();
     }
   });
+
+  test("keeps the third journal phase pending across a fresh process fault and repairs it", async ({
+    browserName,
+  }, testInfo) => {
+    void browserName;
+    test.skip(
+      !nativeReliabilityBuildConfigured(),
+      "Native History journal replay tests require the e2e-harness Tauri build.",
+    );
+    if (!nativeReliabilityBuildConfigured()) return;
+
+    const run = await createIsolatedDesktopPaths();
+    try {
+      const seed = await runScenarioProcess(
+        run,
+        "history-lifecycle-journal-seed",
+      );
+      const failed = await runScenarioProcess(
+        run,
+        "history-lifecycle-journal-fault-probe",
+        {
+          EXCALIDRAW_E2E_HISTORY_REPLAY_FAULT: "disk-full",
+        },
+      );
+      const repaired = await runScenarioProcess(
+        run,
+        "history-lifecycle-journal-fault-probe",
+      );
+      await testInfo.attach("native-history-journal-replay-fault-evidence", {
+        body: Buffer.from(JSON.stringify({ seed, failed, repaired }, null, 2)),
+        contentType: "application/json",
+      });
+      expect(seed.journalPendingAfter).toBe(true);
+      expect(failed.scenario).toBe("history-lifecycle-journal-fault");
+      expect(failed.firstError).toContain("transaction fault injected");
+      expect(failed.journalPendingAfter).toBe(true);
+      expect(failed.historyReplayApplied).toBe(false);
+      expect(repaired.firstError).toBeNull();
+      expect(repaired.journalPendingAfter).toBe(false);
+      expect(repaired.historyReplayApplied).toBe(true);
+      expect(repaired.identityAtNewPath).toBe(seed.documentId);
+      expect(repaired.identityAtOldPath).toBeNull();
+    } finally {
+      await cleanupIsolatedDesktopPaths(run);
+    }
+  });
+
+  test("keeps a filesystem rename journal pending when parent sync is denied, then repairs it", async ({
+    browserName,
+  }, testInfo) => {
+    void browserName;
+    test.skip(
+      !nativeReliabilityBuildConfigured(),
+      "Native History parent-sync tests require the e2e-harness Tauri build.",
+    );
+    if (!nativeReliabilityBuildConfigured()) return;
+
+    const paths = await createIsolatedDesktopPaths();
+    const journalParent = `${paths.workspace}/journal`;
+    try {
+      const seed = await runScenarioProcess(
+        paths,
+        "history-lifecycle-journal-seed",
+      );
+      const denied = await runScenarioProcess(
+        paths,
+        "history-lifecycle-journal-parent-sync-probe",
+        { EXCALIDRAW_E2E_HISTORY_PARENT_SYNC_DENIED: "1" },
+      );
+      await chmod(journalParent, 0o755);
+      const repaired = await runScenarioProcess(
+        paths,
+        "history-lifecycle-journal-parent-sync-probe",
+      );
+      await testInfo.attach("native-history-parent-sync-evidence", {
+        body: Buffer.from(JSON.stringify({ seed, denied, repaired }, null, 2)),
+        contentType: "application/json",
+      });
+      expect(seed.journalPendingAfter).toBe(true);
+      expect(denied.scenario).toBe("history-lifecycle-journal-parent-sync");
+      expect(denied.faultInjected).toBe(true);
+      expect(denied.firstError).toContain("Permission denied");
+      expect(denied.journalPendingAfter).toBe(true);
+      expect(denied.historyReplayApplied).toBe(false);
+      expect(repaired.firstError).toBeNull();
+      expect(repaired.journalPendingAfter).toBe(false);
+      expect(repaired.historyReplayApplied).toBe(true);
+    } finally {
+      await chmod(journalParent, 0o755).catch(() => undefined);
+      await cleanupIsolatedDesktopPaths(paths);
+    }
+  });
+
+  for (const resource of ["scene", "asset"] as const) {
+    test(`reports missing history ${resource} after a fresh process restart`, async ({
+      browserName,
+    }, testInfo) => {
+      void browserName;
+      test.skip(
+        !nativeReliabilityBuildConfigured(),
+        "Native History missing-resource tests require the e2e-harness Tauri build.",
+      );
+      if (!nativeReliabilityBuildConfigured()) return;
+
+      const paths = await createIsolatedDesktopPaths();
+      const targetPath = `${paths.workspace}/history-fault-operation.excalidraw`;
+      try {
+        const seed = await runScenarioProcess(
+          paths,
+          "history-missing-resource-seed",
+          {
+            EXCALIDRAW_E2E_HISTORY_TARGET_PATH: targetPath,
+            EXCALIDRAW_E2E_HISTORY_MISSING_RESOURCE: resource,
+          },
+        );
+        const probe = await runScenarioProcess(
+          paths,
+          "history-missing-resource-probe",
+          {
+            EXCALIDRAW_E2E_HISTORY_MISSING_RESOURCE: resource,
+          },
+        );
+        await testInfo.attach(`native-history-missing-${resource}-evidence`, {
+          body: Buffer.from(JSON.stringify({ seed, probe }, null, 2)),
+          contentType: "application/json",
+        });
+        expect(seed.resource).toBe(resource);
+        expect(seed.resourceExists).toBe(false);
+        expect(seed.targetParseable).toBe(true);
+        expect(probe.scenario).toBe("history-missing-resource-probe");
+        expect(probe.resource).toBe(resource);
+        expect(probe.targetParseable).toBe(true);
+        expect(probe.resourceExists).toBe(false);
+        expect(probe.previewSucceeded).toBe(false);
+        expect(probe.error).toBeTruthy();
+      } finally {
+        await cleanupIsolatedDesktopPaths(paths);
+      }
+    });
+  }
+
+  test("holds scene and asset objects during a real hydration pin and collects them after release", async ({
+    browserName,
+  }, testInfo) => {
+    void browserName;
+    test.skip(
+      !nativeReliabilityBuildConfigured(),
+      "Native History GC pin tests require the e2e-harness Tauri build.",
+    );
+    if (!nativeReliabilityBuildConfigured()) return;
+    const paths = await createIsolatedDesktopPaths();
+    try {
+      const evidence = await runScenarioProcess(
+        paths,
+        "history-gc-hydration-pin",
+      );
+      await testInfo.attach("native-history-gc-hydration-pin-evidence", {
+        body: Buffer.from(JSON.stringify(evidence, null, 2)),
+        contentType: "application/json",
+      });
+      expect(evidence.scenario).toBe("history-gc-hydration-pin");
+      expect(evidence.retainedWhileHydrating).toBe(true);
+      expect(evidence.hydrationCallbackCompleted).toBe(true);
+      expect(evidence.deletedAfterRelease).toBe(true);
+    } finally {
+      await cleanupIsolatedDesktopPaths(paths);
+    }
+  });
 });
+
+interface ScenarioEvidence {
+  scenario: string;
+  [key: string]: unknown;
+}
+
+async function runScenarioProcess(
+  paths: IsolatedDesktopPaths,
+  scenario: string,
+  extraEnvironment: Record<string, string> = {},
+): Promise<ScenarioEvidence> {
+  const binary = await resolveDesktopBinary();
+  const child = spawn(binary, [RELIABILITY_SCENARIO_FLAG, scenario], {
+    detached: process.platform !== "win32",
+    env: isolatedDesktopEnvironment(paths, extraEnvironment),
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk: string) => (stdout += chunk));
+  child.stderr.on("data", (chunk: string) => (stderr += chunk));
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      if (child.pid !== undefined) {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          // The close event below reports the terminal state.
+        }
+      }
+      reject(new Error(`${scenario} exceeded 30 seconds.`));
+    }, 30_000);
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.once("close", (code) => {
+      clearTimeout(timeout);
+      resolve(code ?? -1);
+    });
+  });
+  if (exitCode !== 0) {
+    throw new Error(`${scenario} exited with ${exitCode}: ${stderr.trim()}`);
+  }
+  const line = stdout
+    .split(/\r?\n/u)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .at(-1);
+  if (line === undefined) {
+    throw new Error(`${scenario} produced no evidence.`);
+  }
+  return JSON.parse(line) as ScenarioEvidence;
+}
 
 function nativeReliabilityBuildConfigured(): boolean {
   return (

@@ -15,6 +15,9 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -661,6 +664,19 @@ async fn run_scenario(scenario: &str, root: &Path) -> Result<String, String> {
         "history-lifecycle-journal-probe" => {
             serialize_evidence(run_history_lifecycle_journal_probe(root).await?)
         }
+        "history-lifecycle-journal-fault-probe" => {
+            serialize_evidence(run_history_lifecycle_journal_fault_probe(root).await?)
+        }
+        "history-lifecycle-journal-parent-sync-probe" => {
+            serialize_evidence(run_history_lifecycle_journal_parent_sync_probe(root).await?)
+        }
+        "history-missing-resource-seed" => {
+            serialize_evidence(run_history_missing_resource_seed(root).await?)
+        }
+        "history-missing-resource-probe" => {
+            serialize_evidence(run_history_missing_resource_probe(root).await?)
+        }
+        "history-gc-hydration-pin" => serialize_evidence(run_history_gc_hydration_pin(root).await?),
         "history-restart-seed" => serialize_evidence(run_history_restart_seed(root).await?),
         "history-restart-restore" => serialize_evidence(run_history_restart_restore(root).await?),
         "history-restart-verify" => serialize_evidence(run_history_restart_verify(root).await?),
@@ -1829,6 +1845,9 @@ struct HistoryLifecycleEvidence {
     active_identity_after_delete: bool,
     original_exists_after_delete: bool,
     trash_exists_after_delete: bool,
+    same_path_recreated_distinct: bool,
+    same_path_recreated_history_count: usize,
+    same_path_recreated_exists: bool,
 }
 
 async fn run_history_lifecycle(root: &Path) -> Result<HistoryLifecycleEvidence, String> {
@@ -1946,6 +1965,18 @@ async fn run_history_lifecycle(root: &Path) -> Result<HistoryLifecycleEvidence, 
         .load_active_document_identity(&path_string(&ancestor_moved_path))
         .map_err(|error| format!("failed to inspect deleted lifecycle identity: {error}"))?
         .is_some();
+    let original_exists_after_delete = ancestor_moved_path.exists();
+    let recreated_scene = scene_json("same-path-recreated-after-trash");
+    fs::write(&ancestor_moved_path, recreated_scene.as_bytes())
+        .map_err(|error| format!("failed to recreate same-path drawing after Trash: {error}"))?;
+    let recreated_identity = context
+        .store
+        .resolve_document_identity_for_open(&ancestor_moved_path, 3)
+        .map_err(|error| format!("failed to resolve recreated same-path identity: {error}"))?;
+    let same_path_recreated_history_count =
+        history_source_count(&context.store, &recreated_identity.document_id, "automatic")?
+            + history_source_count(&context.store, &recreated_identity.document_id, "protected")?
+            + history_source_count(&context.store, &recreated_identity.document_id, "manual")?;
     Ok(HistoryLifecycleEvidence {
         scenario: "history-lifecycle",
         workspace: path_string(&context.workspace),
@@ -1954,7 +1985,7 @@ async fn run_history_lifecycle(root: &Path) -> Result<HistoryLifecycleEvidence, 
         ancestor_moved_path: path_string(&ancestor_moved_path),
         save_as_path: path_string(&save_as_path),
         trash_path: path_string(&trash_path),
-        document_id_before: original_identity.document_id,
+        document_id_before: original_identity.document_id.clone(),
         document_id_after_rename: moved_identity.document_id.clone(),
         save_as_document_id,
         rename_operation_id: rename.operation_id,
@@ -1980,8 +2011,13 @@ async fn run_history_lifecycle(root: &Path) -> Result<HistoryLifecycleEvidence, 
         delete_committed: invoked.load(Ordering::SeqCst) && trash_path.exists(),
         history_versions_after_delete,
         active_identity_after_delete,
-        original_exists_after_delete: ancestor_moved_path.exists(),
+        original_exists_after_delete,
         trash_exists_after_delete: trash_path.exists(),
+        same_path_recreated_distinct: recreated_identity.document_id
+            != original_identity.document_id
+            && recreated_identity.document_id != save_as_identity.document_id,
+        same_path_recreated_history_count,
+        same_path_recreated_exists: ancestor_moved_path.is_file(),
     })
 }
 
@@ -2298,6 +2334,330 @@ async fn run_history_lifecycle_journal_probe(
         identity_at_new_path: identity_at_new_path.clone(),
         identity_at_old_path,
         history_replay_applied: identity_at_new_path.as_deref() == Some(document_id.as_str()),
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryReplayFaultEvidence {
+    scenario: &'static str,
+    fault: Option<String>,
+    first_error: Option<String>,
+    journal_pending_after: bool,
+    identity_at_new_path: Option<String>,
+    identity_at_old_path: Option<String>,
+    history_replay_applied: bool,
+}
+
+/// Replay a durable third-stage journal in a fresh process.  The injected
+/// transaction fault is consumed by the real HistoryStore transaction used by
+/// `migrate_app_rename`; the journal must remain pending until a later process
+/// retries without the fault.
+async fn run_history_lifecycle_journal_fault_probe(
+    root: &Path,
+) -> Result<HistoryReplayFaultEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let recovery = RecoveryStore::with_app_version(root.join("lifecycle-recovery"), "0.3.0");
+    let fault = env::var("EXCALIDRAW_E2E_HISTORY_REPLAY_FAULT").ok();
+    if let Some(value) = fault.as_deref() {
+        let selected = match value {
+            "disk-full" => HistoryStoreFault::DiskFull,
+            "permission-denied" => HistoryStoreFault::PermissionDenied,
+            "read-only" => HistoryStoreFault::ReadOnly,
+            other => return Err(format!("unknown history replay fault: {other}")),
+        };
+        set_transaction_fault(Some(selected));
+    }
+    let first_error = reconcile_pending_mutations_with_history(
+        &context.repository,
+        &recovery,
+        history_replay_for_store(Arc::clone(&context.store)),
+    )
+    .await
+    .err()
+    .map(|error| format!("{error:?}"));
+    clear_transaction_fault();
+    let after = load_journals(&recovery)
+        .map_err(|error| format!("failed to load journal after replay fault: {error:?}"))?;
+    let new_path = context.workspace.join("journal/moved.excalidraw");
+    let old_path = context.workspace.join("journal/original.excalidraw");
+    let identity_at_new_path = context
+        .store
+        .load_active_document_identity(&path_string(&new_path))
+        .map_err(|error| format!("failed to inspect replayed new identity: {error}"))?
+        .map(|identity| identity.document_id);
+    let identity_at_old_path = context
+        .store
+        .load_active_document_identity(&path_string(&old_path))
+        .map_err(|error| format!("failed to inspect replayed old identity: {error}"))?
+        .map(|identity| identity.document_id);
+    let journal_pending_after = after.iter().any(MutationJournalRecord::history_pending);
+    Ok(HistoryReplayFaultEvidence {
+        scenario: "history-lifecycle-journal-fault",
+        fault,
+        first_error,
+        journal_pending_after,
+        history_replay_applied: !journal_pending_after && identity_at_new_path.is_some(),
+        identity_at_new_path,
+        identity_at_old_path,
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryParentSyncFaultEvidence {
+    scenario: &'static str,
+    fault_injected: bool,
+    first_error: Option<String>,
+    journal_pending_after: bool,
+    history_replay_applied: bool,
+}
+
+/// Exercise the real journal replay parent-directory `sync_all` path.  The
+/// fault is a scoped mode change on the isolated journal fixture directory;
+/// the caller restores the mode between fresh processes before retrying.
+async fn run_history_lifecycle_journal_parent_sync_probe(
+    root: &Path,
+) -> Result<HistoryParentSyncFaultEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let recovery = RecoveryStore::with_app_version(root.join("lifecycle-recovery"), "0.3.0");
+    let fault_injected =
+        env::var("EXCALIDRAW_E2E_HISTORY_PARENT_SYNC_DENIED").as_deref() == Ok("1");
+    let parent = context.workspace.join("journal");
+    if fault_injected {
+        #[cfg(unix)]
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o000))
+            .map_err(|error| format!("failed to deny journal parent sync: {error}"))?;
+    }
+    let first_error = reconcile_pending_mutations_with_history(
+        &context.repository,
+        &recovery,
+        history_replay_for_store(Arc::clone(&context.store)),
+    )
+    .await
+    .err()
+    .map(|error| format!("{error:?}"));
+    let pending = load_journals(&recovery)
+        .map_err(|error| format!("failed to load parent-sync journal: {error:?}"))?;
+    let journal_pending_after = pending.iter().any(|record| record.history_pending());
+    Ok(HistoryParentSyncFaultEvidence {
+        scenario: "history-lifecycle-journal-parent-sync",
+        fault_injected,
+        first_error,
+        journal_pending_after,
+        history_replay_applied: !journal_pending_after,
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryMissingResourceEvidence {
+    scenario: &'static str,
+    resource: String,
+    target_path: String,
+    document_id: String,
+    version_id: String,
+    target_parseable: bool,
+    resource_exists: bool,
+    preview_succeeded: bool,
+    error: Option<String>,
+}
+
+async fn run_history_missing_resource_seed(
+    root: &Path,
+) -> Result<HistoryMissingResourceEvidence, String> {
+    let (context, target, _old_hash, target_scene_hash, asset_hash) =
+        setup_history_fault_operation(root).await?;
+    let resource =
+        env::var("EXCALIDRAW_E2E_HISTORY_MISSING_RESOURCE").unwrap_or_else(|_| "scene".to_owned());
+    let resource_path = match resource.as_str() {
+        "scene" => context
+            .store
+            .objects()
+            .scene_path(&target_scene_hash)
+            .map_err(|error| format!("failed to resolve scene path: {error}"))?,
+        "asset" => context
+            .store
+            .objects()
+            .asset_path(&asset_hash)
+            .map_err(|error| format!("failed to resolve asset path: {error}"))?,
+        other => return Err(format!("unknown missing history resource: {other}")),
+    };
+    fs::remove_file(&resource_path)
+        .map_err(|error| format!("failed to remove isolated history {resource}: {error}"))?;
+    let target_bytes = fs::read(&target)
+        .map_err(|error| format!("failed to read missing-resource target: {error}"))?;
+    Ok(HistoryMissingResourceEvidence {
+        scenario: "history-missing-resource-seed",
+        resource,
+        target_path: path_string(&target),
+        document_id: context
+            .store
+            .load_active_document_identity(&path_string(&target))
+            .map_err(|error| format!("failed to read missing-resource identity: {error}"))?
+            .ok_or_else(|| "missing-resource identity is absent".to_owned())?
+            .document_id,
+        version_id: "history-fault-version-a".to_owned(),
+        target_parseable: serde_json::from_slice::<serde_json::Value>(&target_bytes).is_ok(),
+        resource_exists: resource_path.exists(),
+        preview_succeeded: false,
+        error: None,
+    })
+}
+
+async fn run_history_missing_resource_probe(
+    root: &Path,
+) -> Result<HistoryMissingResourceEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let resource =
+        env::var("EXCALIDRAW_E2E_HISTORY_MISSING_RESOURCE").unwrap_or_else(|_| "scene".to_owned());
+    let target = context.workspace.join("history-fault-operation.excalidraw");
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize missing-resource target: {error}"))?;
+    let target_bytes = fs::read(&target)
+        .map_err(|error| format!("failed to read missing-resource target: {error}"))?;
+    let identity = context
+        .store
+        .load_active_document_identity(&path_string(&target))
+        .map_err(|error| format!("failed to read missing-resource identity: {error}"))?
+        .ok_or_else(|| "missing-resource identity is absent after restart".to_owned())?;
+    let preview = context
+        .query
+        .preview(HistoryPreviewRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            version_id: "history-fault-version-a".to_owned(),
+        })
+        .await;
+    let resource_exists = match resource.as_str() {
+        "scene" => {
+            let hash = context
+                .store
+                .with_connection(|connection| {
+                    connection.query_row(
+                        "SELECT scene_hash FROM history_versions WHERE id=?1",
+                        ["history-fault-version-a"],
+                        |row| row.get::<_, String>(0),
+                    )
+                })
+                .map_err(|error| format!("failed to inspect missing scene hash: {error}"))?;
+            context
+                .store
+                .objects()
+                .scene_path(&hash)
+                .map(|path| path.exists())
+                .unwrap_or(false)
+        }
+        "asset" => {
+            let hash = context
+                .store
+                .with_connection(|connection| {
+                    connection.query_row(
+                        "SELECT asset_hash FROM version_assets WHERE version_id=?1 LIMIT 1",
+                        ["history-fault-version-a"],
+                        |row| row.get::<_, String>(0),
+                    )
+                })
+                .map_err(|error| format!("failed to inspect missing asset hash: {error}"))?;
+            context
+                .store
+                .objects()
+                .asset_path(&hash)
+                .map(|path| path.exists())
+                .unwrap_or(false)
+        }
+        other => return Err(format!("unknown missing history resource: {other}")),
+    };
+    let error = preview.as_ref().err().map(|value| format!("{value:?}"));
+    Ok(HistoryMissingResourceEvidence {
+        scenario: "history-missing-resource-probe",
+        resource,
+        target_path: path_string(&target),
+        document_id: identity.document_id,
+        version_id: "history-fault-version-a".to_owned(),
+        target_parseable: serde_json::from_slice::<serde_json::Value>(&target_bytes).is_ok(),
+        resource_exists,
+        preview_succeeded: preview.is_ok(),
+        error,
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryGcHydrationPinEvidence {
+    scenario: &'static str,
+    scene_hash: String,
+    asset_hash: String,
+    retained_while_hydrating: bool,
+    deleted_after_release: bool,
+    hydration_callback_completed: bool,
+}
+
+async fn run_history_gc_hydration_pin(
+    root: &Path,
+) -> Result<HistoryGcHydrationPinEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target = context.workspace.join("history-gc-pin.excalidraw");
+    let scene = history_restart_scene("gc-pin", "GC 引用保护");
+    fs::write(&target, scene.0.as_bytes())
+        .map_err(|error| format!("failed to create GC pin target: {error}"))?;
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize GC pin target: {error}"))?;
+    let identity = context
+        .store
+        .resolve_document_identity_for_open(&target, 1)
+        .map_err(|error| format!("failed to persist GC pin identity: {error}"))?;
+    publish_history_restart_version(
+        &context.store,
+        &identity.document_id,
+        "history-gc-pin-version",
+        &scene.0,
+        1,
+        &scene.2,
+    )?;
+    let scene_hash = sha256(scene.0.as_bytes());
+    let asset_hash = scene.2;
+    context
+        .store
+        .reachability()
+        .remove_committed_version("history-gc-pin-version")
+        .map_err(|error| format!("failed to remove semantic reachability root: {error}"))?;
+    let references = ObjectReferences::new(scene_hash.clone(), vec![asset_hash.clone()])
+        .map_err(|error| format!("failed to create GC pin references: {error}"))?;
+    let pin = context
+        .store
+        .reachability()
+        .acquire_hydration_pin(references)
+        .map_err(|error| format!("hydration pin acquisition failed: {error}"))?;
+    let report = context
+        .store
+        .collect_garbage(SystemTime::now(), Duration::ZERO)
+        .map_err(|error| format!("GC while hydration pin is held failed: {error}"))?;
+    let scene_key = ObjectKey::scene(scene_hash.clone())
+        .map_err(|error| format!("invalid scene hash: {error}"))?;
+    let asset_key = ObjectKey::asset(asset_hash.clone())
+        .map_err(|error| format!("invalid asset hash: {error}"))?;
+    let retained_while_hydrating =
+        report.retained.contains(&scene_key) && report.retained.contains(&asset_key);
+    pin.release()
+        .map_err(|error| format!("hydration pin release failed: {error}"))?;
+    let hydration_callback_completed = true;
+    let report = context
+        .store
+        .collect_garbage(SystemTime::now(), Duration::ZERO)
+        .map_err(|error| format!("GC after hydration release failed: {error}"))?;
+    let deleted_after_release =
+        report.deleted.contains(&scene_key) && report.deleted.contains(&asset_key);
+    Ok(HistoryGcHydrationPinEvidence {
+        scenario: "history-gc-hydration-pin",
+        scene_hash,
+        asset_hash,
+        retained_while_hydrating,
+        deleted_after_release,
+        hydration_callback_completed,
     })
 }
 

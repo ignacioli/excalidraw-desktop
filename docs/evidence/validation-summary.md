@@ -1,5 +1,49 @@
 # 验证证据汇总（004 实施中；003 已完成；001/002 历史）
 
+## Feature 004 当前最新状态（T048 视觉门控，2026-09-25）
+
+Phase 6 的 T038–T042、T044 已完成局部实现/测试，但 T043 的真实 post-FS/pre-marker SIGKILL、fresh-process 重挂授权与部分失败后修复仍缺证据，用户故事 4 检查点为 **`PENDING`**。Phase 7 已完成 T045/T046 的实现，T047/T048 均未取得最终运行验收。
+
+产品实现已推进到 `66e5b77e1ab5a38a9c55a1a3a9a0d3622c4bfe07`，Phase 7 的
+T045/T046 已完成，T047 的收集器结构测试已通过；T048 的生产包人工视觉
+验收仍为 **`BLOCKED` / `PENDING`**。低保真和必要高保真设计审批已完成，
+`66e5b77` 的 production `.app` 已 seal（包 SHA-256 `336531060a938b10480f5126b1c5fac518abf5a36134de7c16c4e709b408dcea`），但当前没有与它绑定的 1280 × 760 原生窗口
+记录、独立视觉 reviewer verdict 或 product-owner decision，因此本节不声称
+Light/Dark、列表可读性、当前／预览区分、错误状态、焦点或裁切已经通过。
+
+### T048 证据分工
+
+| 事实 | 主要证据 | 当前结果 | 边界 |
+| --- | --- | --- | --- |
+| 低保真与必要高保真审批 | [`docs/design/local-version-history/interaction.md`](../design/local-version-history/interaction.md)、[`low-fi/manifest.json`](../design/local-version-history/low-fi/manifest.json)、[`high-fi/manifest.json`](../design/local-version-history/high-fi/manifest.json) | **PASS — design approval** | 审批解除界面实现门控，不是 production rendering 验收 |
+| History 列表、键盘、焦点、预览退出和 reduced motion | [`e2e/tests/local-version-history-preview.spec.ts`](../../e2e/tests/local-version-history-preview.spec.ts)（T023） | 由 browser semantic tests 负责 | Chromium/WebView 语义证据不证明 macOS package 的视觉结果 |
+| `File → Version History…` 原生菜单层级、标签、状态和路由 | [`docs/evidence/local-version-history-t045-t047.md`](./local-version-history-t045-t047.md)（T047） | 收集器测试 23/23 PASS；精确 package runtime **PENDING** | 不以 browser event 注入替代 Accessibility/System Events |
+| Light/Dark、1280 × 760、可读性、当前／预览、错误、焦点、裁切 | [`docs/evidence/local-version-history-visual-checklist.md`](./local-version-history-visual-checklist.md)（T048） | **BLOCKED / PENDING** | 必须由 exact production package 上的人类视觉 reviewer 记录 |
+
+T048 的 checklist 已固定六个必要高保真状态：Light 默认列表、Light
+More Actions、Light readonly preview、Light restore confirmation、Light
+external recovery，以及 Dark 300 px compact fallback；同时要求检查
+error/conflict/pending/unavailable、焦点返回和 reduced motion。T047、T023
+和 T048 分别负责 native entry、semantic keyboard behavior 和 visual
+fidelity，三者不合并为单一验收。
+
+### 当前 package binding 与阻断原因
+
+| 项目 | 当前记录 |
+| --- | --- |
+| Reviewed product commit | `66e5b77e1ab5a38a9c55a1a3a9a0d3622c4bfe07` |
+| Production `.app` path / bundle identity | `src-tauri/target/release/bundle/macos/Excalidraw.app` 已针对 `66e5b77` seal；bundle ID `excalidraw-desktop`、版本 `0.3.0`、包 SHA-256 `336531060a938b10480f5126b1c5fac518abf5a36134de7c16c4e709b408dcea`；未绑定视觉 collection，后续产品提交需重建 |
+| Native executable | production `.app` 内可执行文件 SHA-256 `718347d8ff1e2990e8f6c1c1e6eabd606a011515b1c67c33a22024de838e6701`；未运行 T048 视觉 collection |
+| Exact native window | **未记录** 1280 × 760 两次稳定采样 |
+| Independent visual reviewer report | **未记录** |
+| Product-owner decision | **未记录** |
+
+因此 T048 不能勾选为 PASS。后续应从干净的精确 production package
+开始，记录 package identity、macOS/build、filesystem、display scale 和
+窗口稳定采样，再由独立 reviewer 完成 checklist，并单独取得 product-owner
+decision。缺少必需输入继续记为 `BLOCKED`；实际观察到的视觉不符记为
+`FAIL`。
+
 ## Feature 004 当前状态（实施基线，2026-09-22）
 
 Feature 004（跨重启本地版本历史）已完成规格、方案和 SDK 边界资格研究，现进入产品实施；**产品功能尚未实现，T001–T054 尚未形成任何运行验收结论**。本节记录实施起点和后续证据的归属格式，不把研究 stub、文档批准或旧功能证据改写为产品通过。
