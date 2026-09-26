@@ -39,16 +39,16 @@ The approved Penpot page contains six necessary high-fidelity frames. The low-fi
 The design approvals above are complete. A qualifying visual verdict still
 requires a freshly built exact macOS production `.app`, a stable 1280 × 760
 window, and a human visual review on that package. The production `.app` for
-`a4262f7` has been sealed, but it has no native window collection or human
+`ab67c3c` has been sealed, but it has no native window collection or human
 visual review.
 
 ### Package binding to record before review
 
 | Fact               | Required record                                               | Current status                                                                                                                                                                    |
 | ------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Product commit     | Full `git rev-parse HEAD`                                     | Production package sealed from `a4262f7e45d7840bfdd595b2132fe207b3435a10`; later documentation commits do not alter its runtime inputs                                            |
-| Production package | Absolute `.app` path, bundle ID, version                      | `Excalidraw.app`, bundle ID `excalidraw-desktop`, version `0.3.0`, package SHA-256 `1d3ed8785e52064cd0bff2db44eb3b4fca3cc11bd86e6c2e6ed26126967bf676`; no visual collection bound |
-| Executable         | Absolute executable path and SHA-256                          | Production executable SHA-256 `c2d4da17df7c16f9037324258bff54906b756c0741c3b9cc363773106b624f05`; no visual collection bound                                                      |
+| Product commit     | Full `git rev-parse HEAD`                                     | Production package sealed from `ab67c3c43ee69ae32a040bb3e6f9c762807d8c3c`; later documentation commits do not alter its runtime inputs                                            |
+| Production package | Absolute `.app` path, bundle ID, version                      | `Excalidraw.app`, bundle ID `excalidraw-desktop`, version `0.3.0`, package SHA-256 `f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f`; no visual collection bound |
+| Executable         | Absolute executable path and SHA-256                          | Production executable SHA-256 `7ef5956afe65549602bbb05dfdf73f2944d754fad777dcbd4abbcd84b9fdeb35`; no visual collection bound                                                      |
 | Environment        | macOS version/build, filesystem, display scale                | `BLOCKED`: no package review session recorded                                                                                                                                     |
 | Window             | Native logical bounds, exactly 1280 × 760, two stable samples | `BLOCKED`: no package review session recorded                                                                                                                                     |
 | Review identity    | Reviewer and product-owner decision kept separate             | `PENDING`                                                                                                                                                                         |
