@@ -7,7 +7,7 @@
 
 use std::{fs, path::PathBuf, sync::Arc};
 
-#[cfg(any(test, feature = "e2e-harness"))]
+#[cfg(feature = "e2e-harness")]
 use std::{
     sync::{Condvar, Mutex, OnceLock},
     time::Duration,
@@ -57,20 +57,20 @@ pub struct HistoryQueryService {
 /// This lets the harness run real GC against a live preview without relying
 /// on timing or sleeps.  The type and all accessors are absent from a
 /// production build.
-#[cfg(any(test, feature = "e2e-harness"))]
+#[cfg(feature = "e2e-harness")]
 pub(crate) struct E2ePreviewHydrationPinBarrier {
     state: Mutex<PreviewHydrationPinBarrierState>,
     changed: Condvar,
 }
 
-#[cfg(any(test, feature = "e2e-harness"))]
+#[cfg(feature = "e2e-harness")]
 #[derive(Default)]
 struct PreviewHydrationPinBarrierState {
     reached: bool,
     released: bool,
 }
 
-#[cfg(any(test, feature = "e2e-harness"))]
+#[cfg(feature = "e2e-harness")]
 impl E2ePreviewHydrationPinBarrier {
     pub(crate) fn new() -> Arc<Self> {
         Arc::new(Self {
@@ -122,12 +122,12 @@ impl E2ePreviewHydrationPinBarrier {
     }
 }
 
-#[cfg(any(test, feature = "e2e-harness"))]
+#[cfg(feature = "e2e-harness")]
 static E2E_PREVIEW_HYDRATION_PIN_BARRIER: OnceLock<
     Mutex<Option<Arc<E2ePreviewHydrationPinBarrier>>>,
 > = OnceLock::new();
 
-#[cfg(any(test, feature = "e2e-harness"))]
+#[cfg(feature = "e2e-harness")]
 pub(crate) fn set_e2e_preview_hydration_pin_barrier(
     barrier: Option<Arc<E2ePreviewHydrationPinBarrier>>,
 ) {
@@ -137,7 +137,7 @@ pub(crate) fn set_e2e_preview_hydration_pin_barrier(
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = barrier;
 }
 
-#[cfg(any(test, feature = "e2e-harness"))]
+#[cfg(feature = "e2e-harness")]
 fn e2e_preview_hydration_pin_barrier() -> Option<Arc<E2ePreviewHydrationPinBarrier>> {
     E2E_PREVIEW_HYDRATION_PIN_BARRIER
         .get_or_init(|| Mutex::new(None))
@@ -669,7 +669,7 @@ fn hydrate_preview(
         .reachability()
         .acquire_hydration_pin(references)
         .map_err(|error| AppError::HistoryUnavailable(error.to_string()))?;
-    #[cfg(any(test, feature = "e2e-harness"))]
+    #[cfg(feature = "e2e-harness")]
     if let Some(barrier) = e2e_preview_hydration_pin_barrier() {
         barrier.wait_after_pin();
     }
