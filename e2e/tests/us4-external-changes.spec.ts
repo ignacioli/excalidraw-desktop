@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   emitFileChanged,
+  getHarnessDraft,
+  getHarnessFile,
   getHarnessState,
   installUs4Harness,
   setExternalFile,
@@ -78,7 +80,10 @@ test("shows a conflict dialog for a dirty drawing and writes nothing before a de
   ).toHaveCount(0);
   await expect(page.getByRole("status")).toHaveText(/unsaved changes/i);
 
-  await page.getByRole("button", { name: /^Save/ }).click();
+  await page.keyboard.press("Meta+s");
+  await expect
+    .poll(async () => (await getHarnessState(page)).checkpointCount)
+    .toBe(before.checkpointCount + 1);
   await expect(page.getByRole("status")).toHaveText("All changes saved");
   const after = await getHarnessState(page);
   expect(after.checkpointCount).toBe(before.checkpointCount + 1);
@@ -92,6 +97,19 @@ test("marks a removed external file as orphaned and guides the user to save as",
   await mountAndOpen(page);
   await drawRectangle(page);
 
+  await expect
+    .poll(async () => {
+      const draft = await getHarnessDraft(page, DRAWING);
+      if (draft === null) return false;
+      const scene = JSON.parse(draft) as {
+        elements?: Array<{ type?: string }>;
+      };
+      return (
+        scene.elements?.some((element) => element.type === "rectangle") ?? false
+      );
+    })
+    .toBe(true);
+
   await emitFileChanged(page, {
     path: DRAWING,
     change: "removed",
@@ -99,17 +117,26 @@ test("marks a removed external file as orphaned and guides the user to save as",
   await expect(
     page.getByRole("tab", { name: /file unavailable/i }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save as…" })).toBeVisible();
-
+  const before = await getHarnessState(page);
+  await page.getByRole("button", { name: "Close drawing.excalidraw" }).click();
+  const dialog = page.getByRole("dialog", { name: "File is unavailable" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Save As" })).toBeVisible();
   await setSaveAsPath(page, "/workspace/recovered.excalidraw");
-  await page.getByRole("button", { name: "Save as…" }).click();
-  await expect(
-    page.getByRole("tab", { name: "recovered.excalidraw" }),
-  ).toBeVisible();
+  await dialog.getByRole("button", { name: "Save As" }).click();
+  await expect(dialog).toHaveCount(0);
   await expect(
     page.getByRole("tab", { name: /file unavailable/i }),
   ).toHaveCount(0);
-  await expect(page.getByRole("status")).toHaveText("All changes saved");
+  await expect
+    .poll(async () => (await getHarnessState(page)).checkpointCount)
+    .toBe(before.checkpointCount + 1);
+  const recovered = JSON.parse(
+    (await getHarnessFile(page, "/workspace/recovered.excalidraw")) ?? "null",
+  ) as { elements?: Array<{ type?: string }> } | null;
+  expect(recovered?.elements).toEqual(
+    expect.arrayContaining([expect.objectContaining({ type: "rectangle" })]),
+  );
 });
 
 async function mountAndOpen(page: Page): Promise<void> {
@@ -130,14 +157,14 @@ async function drawRectangle(page: Page): Promise<void> {
     throw new Error("The Excalidraw canvas did not expose a bounding box.");
   }
   await page.getByTitle(/^Rectangle/).click();
-  await page.mouse.move(canvasBox.x + 120, canvasBox.y + 100);
+  await page.mouse.move(canvasBox.x + 500, canvasBox.y + 150);
   await page.mouse.down();
-  await page.mouse.move(canvasBox.x + 220, canvasBox.y + 180, { steps: 6 });
+  await page.mouse.move(canvasBox.x + 620, canvasBox.y + 230, { steps: 6 });
   await page.mouse.up();
 }
 
 async function saveDocumentClean(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Save/ }).click();
+  await page.keyboard.press("Meta+s");
   await expect(page.getByRole("status")).toHaveText("All changes saved");
 }
 

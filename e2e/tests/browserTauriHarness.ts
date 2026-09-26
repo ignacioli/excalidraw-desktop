@@ -8,9 +8,17 @@ export async function installBrowserTauriHarness(
   initialSceneJson?: string,
   dialogPaths: readonly string[] = [documentPath],
   checkpointFailureAfter?: number,
+  seedWorkspaceEntries = true,
 ): Promise<void> {
   await page.addInitScript(
-    ({ path, emptyScene, initialScene, paths, failCheckpointAfter }) => {
+    ({
+      path,
+      emptyScene,
+      initialScene,
+      paths,
+      failCheckpointAfter,
+      seedEntries,
+    }) => {
       type BrowserStorage = {
         getItem(key: string): string | null;
         setItem(key: string, value: string): void;
@@ -30,12 +38,58 @@ export async function installBrowserTauriHarness(
           unregisterListener(event: string, eventId: number): void;
         };
         __browserTauriEmit?: (event: string, payload: unknown) => void;
+        __browserTauriArmCheckpointFailure?: () => void;
       };
 
       const browser = globalThis as unknown as HarnessWindow;
       const fileKey = `excalidraw-e2e:file:${path}`;
+      const workspaceRoot = "/virtual";
+      const workspace = {
+        id: "workspace-1",
+        name: "Virtual Workspace",
+        rootPath: workspaceRoot,
+        createdAt: 1,
+      };
+      const workspaceEntriesKey = `excalidraw-e2e:workspace-entries:${workspace.id}`;
+      const seedWorkspaceEntry = (entryPath: string) => {
+        const relativePath = entryPath.startsWith(`${workspaceRoot}/`)
+          ? entryPath.slice(workspaceRoot.length + 1)
+          : entryPath.replace(/^\/+/, "");
+        const name = relativePath.split("/").at(-1) ?? relativePath;
+        return {
+          workspaceId: workspace.id,
+          kind: "drawing",
+          canonicalPath: `${workspaceRoot}/${relativePath}`,
+          relativePath,
+          parentRelativePath: "",
+          name,
+          displayName: name.replace(/\.excalidraw(?:\.json)?$/iu, ""),
+          mtime: 1,
+          fileSize: 100,
+        };
+      };
+      const seededEntries = paths.map(seedWorkspaceEntry);
+      let workspaceEntries = (() => {
+        const stored = browser.localStorage.getItem(workspaceEntriesKey);
+        if (stored !== null) {
+          try {
+            const parsed: unknown = JSON.parse(stored);
+            if (Array.isArray(parsed)) return parsed;
+          } catch {
+            // Ignore malformed test state and restore the declared fixture.
+          }
+        }
+        return seedEntries ? seededEntries : [];
+      })();
+      const persistWorkspaceEntries = () => {
+        browser.localStorage.setItem(
+          workspaceEntriesKey,
+          JSON.stringify(workspaceEntries),
+        );
+      };
       let nextDialogPath = 0;
       let checkpointCount = 0;
+      let checkpointFailureArmed = false;
       const hashScene = async (sceneJson: string): Promise<string> => {
         const digest = await globalThis.crypto.subtle.digest(
           "SHA-256",
@@ -114,7 +168,54 @@ export async function installBrowserTauriHarness(
             command === "workspace_list" ||
             command === "workspace_recent_list"
           ) {
-            return [];
+            return [workspace];
+          }
+          if (command === "workspace_entry_list") {
+            const workspaceId = String(args.workspaceId ?? "");
+            const parentRelativePath = String(args.parentRelativePath ?? "");
+            if (workspaceId !== workspace.id || parentRelativePath !== "") {
+              return [];
+            }
+            return workspaceEntries;
+          }
+          if (command === "workspace_entry_create") {
+            const workspaceId = String(args.workspaceId ?? "");
+            const parentRelativePath = String(args.parentRelativePath ?? "");
+            const kind = String(args.kind ?? "");
+            const baseName = String(args.baseName ?? "");
+            if (workspaceId !== workspace.id || kind !== "drawing") {
+              throw {
+                code: "PATH_ACCESS_DENIED",
+                message: "The requested entry is outside the Workspace.",
+              };
+            }
+            const relativePath = parentRelativePath
+              ? `${parentRelativePath}/${baseName}.excalidraw`
+              : `${baseName}.excalidraw`;
+            const existing = workspaceEntries.find(
+              (entry) => entry.relativePath === relativePath,
+            );
+            if (existing !== undefined) {
+              throw {
+                code: "NAME_CONFLICT",
+                message: "An entry with that name already exists.",
+              };
+            }
+            const name = relativePath.split("/").at(-1) ?? relativePath;
+            const entry = {
+              workspaceId: workspace.id,
+              kind: "drawing",
+              canonicalPath: `${workspaceRoot}/${relativePath}`,
+              relativePath,
+              parentRelativePath,
+              name,
+              displayName: name.replace(/\.excalidraw(?:\.json)?$/iu, ""),
+              mtime: 1,
+              fileSize: 0,
+            };
+            workspaceEntries = [...workspaceEntries, entry];
+            persistWorkspaceEntries();
+            return { entry };
           }
           if (
             command === "plugin:dialog|open" ||
@@ -148,6 +249,7 @@ export async function installBrowserTauriHarness(
           if (command === "doc_checkpoint") {
             if (
               failCheckpointAfter !== undefined &&
+              checkpointFailureArmed &&
               checkpointCount >= failCheckpointAfter
             ) {
               throw {
@@ -181,11 +283,15 @@ export async function installBrowserTauriHarness(
           callbacks.get(callbackId)?.({ event, id: callbackId, payload });
         }
       };
+      browser.__browserTauriArmCheckpointFailure = () => {
+        checkpointFailureArmed = true;
+      };
     },
     {
       path: documentPath,
       paths: [...dialogPaths],
       failCheckpointAfter: checkpointFailureAfter,
+      seedEntries: seedWorkspaceEntries,
       initialScene: initialSceneJson,
       emptyScene: JSON.stringify({
         type: "excalidraw",
@@ -197,6 +303,22 @@ export async function installBrowserTauriHarness(
       }),
     },
   );
+}
+
+export async function armBrowserTauriCheckpointFailure(
+  page: Page,
+): Promise<void> {
+  await page.evaluate(() => {
+    const arm = (
+      globalThis as typeof globalThis & {
+        __browserTauriArmCheckpointFailure?: () => void;
+      }
+    ).__browserTauriArmCheckpointFailure;
+    if (arm === undefined) {
+      throw new Error("Browser Tauri checkpoint failure is not configured.");
+    }
+    arm();
+  });
 }
 
 export async function emitBrowserTauriEvent(

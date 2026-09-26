@@ -8,7 +8,10 @@ import {
   readHarnessDraft,
   readHarnessFile,
 } from "./browserTauriHarness";
-import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
+import {
+  openWorkspaceSidebar,
+  persistPinnedWorkspaceSidebar,
+} from "./workspaceSidebar";
 
 test("two concurrent document checkpoints remain independent", async () => {
   const testInfo = test.info();
@@ -64,10 +67,11 @@ test("two visible tabs checkpoint independently without blocking the shell", asy
     firstPath,
     secondPath,
   ]);
-  await persistPinnedWorkspaceSidebar(page);
+  await persistPinnedWorkspaceSidebar(page, ["workspace-1"], "workspace-1");
   await page.goto("/");
 
-  await page.getByRole("button", { name: "New drawing" }).click();
+  await openWorkspaceSidebar(page);
+  await page.getByRole("treeitem", { name: "first" }).click();
   await expect(
     page.getByRole("tab", { name: "first.excalidraw" }),
   ).toBeVisible();
@@ -92,7 +96,7 @@ test("two visible tabs checkpoint independently without blocking the shell", asy
     )
     .toBe(true);
 
-  await page.getByRole("button", { name: "New drawing" }).click();
+  await page.getByRole("treeitem", { name: "second" }).click();
   await expect(
     page.getByRole("tab", { name: "second.excalidraw" }),
   ).toBeVisible();

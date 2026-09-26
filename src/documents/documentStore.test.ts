@@ -728,6 +728,18 @@ describe("DocumentManager", () => {
     expect(session?.saveState).toBe("dirty");
     expect(session?.baseHash).toBe("external");
     expect(session?.conflictInfo).toBeNull();
+    await manager.checkpoint(documentId, "manualSave");
+    expect(gateway.checkpoint).toHaveBeenCalledOnce();
+    const [path, sceneJson, reason] = vi.mocked(gateway.checkpoint).mock
+      .calls[0];
+    expect(path).toBe("/tmp/drawing.excalidraw");
+    expect(reason).toBe("manualSave");
+    expect(JSON.parse(sceneJson)).toEqual(
+      expect.objectContaining({ elements: [{ version: 3 }] }),
+    );
+    expect(manager.store.getState().sessionsById[documentId]?.saveState).toBe(
+      "clean",
+    );
     manager.dispose();
   });
 

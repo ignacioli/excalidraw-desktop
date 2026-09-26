@@ -304,3 +304,33 @@ export async function getHarnessState(
     };
   });
 }
+
+export async function getHarnessFile(
+  page: Page,
+  path: string,
+): Promise<string | null> {
+  return page.evaluate(
+    (filePath) =>
+      (
+        globalThis as {
+          __us4?: { state: { files: Map<string, string> } };
+        }
+      ).__us4?.state.files.get(filePath) ?? null,
+    path,
+  );
+}
+
+export async function getHarnessDraft(
+  page: Page,
+  path: string,
+): Promise<string | null> {
+  return page.evaluate(
+    (filePath) =>
+      (
+        globalThis as {
+          __us4?: { state: { drafts: Map<string, string> } };
+        }
+      ).__us4?.state.drafts.get(filePath) ?? null,
+    path,
+  );
+}

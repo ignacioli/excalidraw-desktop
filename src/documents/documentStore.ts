@@ -914,6 +914,14 @@ export class DocumentManager {
           conflictInfo: null,
           errorMessage: null,
         });
+        const rebased = this.store.getState().sessionsById[documentId];
+        if (rebased !== undefined) {
+          this.schedulers.get(documentId)?.recordChange({
+            scene: rebased.scene,
+            sessionGeneration: rebased.sessionGeneration ?? 0,
+            revision: rebased.revision,
+          });
+        }
         return;
       }
       if (saveAsPath === undefined) {

@@ -42,7 +42,7 @@ test("does not reload repeatedly for duplicate external events on a clean docume
   await installUs4Harness(page);
   await page.goto("/");
   await mountAndOpen(page);
-  await page.getByRole("button", { name: /^Save/ }).click();
+  await page.keyboard.press("Meta+s");
   await expect(page.getByRole("status")).toHaveText("All changes saved");
   const before = await getHarnessState(page);
 
@@ -82,8 +82,8 @@ async function drawRectangle(page: Page): Promise<void> {
     throw new Error("The Excalidraw canvas did not expose a bounding box.");
   }
   await page.getByTitle(/^Rectangle/).click();
-  await page.mouse.move(canvasBox.x + 120, canvasBox.y + 100);
+  await page.mouse.move(canvasBox.x + 500, canvasBox.y + 150);
   await page.mouse.down();
-  await page.mouse.move(canvasBox.x + 220, canvasBox.y + 180, { steps: 6 });
+  await page.mouse.move(canvasBox.x + 620, canvasBox.y + 230, { steps: 6 });
   await page.mouse.up();
 }
