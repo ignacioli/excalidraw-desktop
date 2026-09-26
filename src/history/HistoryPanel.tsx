@@ -24,6 +24,8 @@ export interface HistoryPanelProps {
   previewState?: HistoryPreviewState;
   previewErrorMessage?: string;
   previewContent?: ReactNode;
+  /** Callers without a safe rendered preview must keep restore disabled. */
+  restoreEnabled?: boolean;
   processing?: boolean;
   onClose(): void;
   onRetry?: () => void;
@@ -31,12 +33,16 @@ export interface HistoryPanelProps {
   onPreview?: (item: HistoryVersionView) => void;
   onExitPreview?: (item: HistoryVersionView) => void;
   onRestore?: (item: HistoryVersionView) => void | Promise<void>;
+  onDelete?: (item: HistoryVersionView) => void | Promise<void>;
   /** Marks the live canvas; the caller resolves only after durable publish. */
   onMark?: () => void | Promise<void>;
   markProcessing?: boolean;
   markSuccessMessage?: string;
   markErrorMessage?: string;
-  /** Future Mark/Delete controls are supplied by the domain owner. */
+  deleteProcessing?: boolean;
+  deleteSuccessMessage?: string;
+  deleteErrorMessage?: string;
+  /** Additional caller-owned actions rendered beside the delete action. */
   moreActions?: ReactNode;
   triggerRef?: RefObject<HTMLElement | null>;
 }
@@ -57,6 +63,7 @@ export function HistoryPanel({
   previewState = "ready",
   previewErrorMessage,
   previewContent,
+  restoreEnabled = true,
   processing = false,
   onClose,
   onRetry,
@@ -64,10 +71,14 @@ export function HistoryPanel({
   onPreview,
   onExitPreview,
   onRestore,
+  onDelete,
   onMark,
   markProcessing = false,
   markSuccessMessage = "Version marked and saved to history.",
   markErrorMessage,
+  deleteProcessing = false,
+  deleteSuccessMessage = "Version deleted from history.",
+  deleteErrorMessage,
   moreActions,
   triggerRef,
 }: HistoryPanelProps) {
@@ -84,6 +95,13 @@ export function HistoryPanel({
   >(null);
   const [markBusy, setMarkBusy] = useState(false);
   const markIsProcessing = markProcessing || markBusy;
+  const [deleteFeedback, setDeleteFeedback] = useState<
+    | { status: "success"; message: string }
+    | { status: "error"; message: string }
+    | null
+  >(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const deleteIsProcessing = deleteProcessing || deleteBusy;
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
   const previewReturnIdRef = useRef<string | null>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -159,6 +177,36 @@ export function HistoryPanel({
     }
   };
 
+  const handleDelete = async (item: HistoryVersionView) => {
+    if (onDelete === undefined || processing || deleteIsProcessing) return;
+    setDeleteFeedback(null);
+    setDeleteBusy(true);
+    try {
+      await onDelete(item);
+      setDeleteFeedback({ status: "success", message: deleteSuccessMessage });
+    } catch (error) {
+      const message =
+        deleteErrorMessage ??
+        (error instanceof Error
+          ? error.message
+          : "The selected version could not be deleted.");
+      setDeleteFeedback({ status: "error", message });
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const deleteAction = (item: HistoryVersionView) =>
+    onDelete === undefined ? null : (
+      <button
+        disabled={processing || deleteIsProcessing}
+        onClick={() => void handleDelete(item)}
+        type="button"
+      >
+        {deleteIsProcessing ? "Deleting version…" : "Delete this version"}
+      </button>
+    );
+
   return (
     <aside
       aria-labelledby="history-panel-title"
@@ -188,6 +236,10 @@ export function HistoryPanel({
       </header>
 
       <div className="history-panel-body">
+        <p className="history-retention-policy">
+          Automatic and before-operation versions share the newest 20 entries.
+          They do not expire by age. Manual marks stay until you delete them.
+        </p>
         {onMark !== undefined ? (
           <section
             aria-label="Current version actions"
@@ -215,16 +267,36 @@ export function HistoryPanel({
           </section>
         ) : null}
         {previewItem !== undefined ? (
-          <HistoryPreview
-            content={previewContent}
-            errorMessage={previewErrorMessage}
-            item={previewItem}
-            moreActions={moreActions}
-            onExit={exitPreview}
-            onRestore={() => onRestore?.(previewItem)}
-            processing={processing}
-            state={previewState}
-          />
+          <>
+            <HistoryPreview
+              content={previewContent}
+              errorMessage={previewErrorMessage}
+              item={previewItem}
+              moreActions={
+                moreActions !== undefined || onDelete !== undefined ? (
+                  <>
+                    {moreActions}
+                    {deleteAction(previewItem)}
+                  </>
+                ) : undefined
+              }
+              onExit={exitPreview}
+              onRestore={() => onRestore?.(previewItem)}
+              processing={processing}
+              restoreEnabled={restoreEnabled}
+              state={previewState}
+            />
+            {deleteFeedback?.status === "success" ? (
+              <p aria-live="polite" role="status">
+                {deleteFeedback.message}
+              </p>
+            ) : null}
+            {deleteFeedback?.status === "error" ? (
+              <p aria-live="assertive" role="alert">
+                {deleteFeedback.message}
+              </p>
+            ) : null}
+          </>
         ) : status === "available" ? (
           <>
             {items.length === 0 ? (
@@ -268,14 +340,26 @@ export function HistoryPanel({
                         className="primary-action"
                         disabled={
                           processing ||
-                          selectedItem.availability.status !== "available"
+                          selectedItem.availability.status !== "available" ||
+                          !restoreEnabled
                         }
                         onClick={() => onRestore?.(selectedItem)}
                         type="button"
                       >
                         Restore this version
                       </button>
+                      {deleteAction(selectedItem)}
                     </div>
+                    {deleteFeedback?.status === "success" ? (
+                      <p aria-live="polite" role="status">
+                        {deleteFeedback.message}
+                      </p>
+                    ) : null}
+                    {deleteFeedback?.status === "error" ? (
+                      <p aria-live="assertive" role="alert">
+                        {deleteFeedback.message}
+                      </p>
+                    ) : null}
                   </section>
                 ) : null}
               </>

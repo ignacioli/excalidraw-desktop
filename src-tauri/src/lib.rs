@@ -34,8 +34,8 @@ use commands::{
     },
     export::{doc_export, ExportService, ExportState},
     history::{
-        history_list, history_mark, history_operation_status, history_preview, history_replace,
-        HistoryReplacementState,
+        history_delete, history_list, history_mark, history_operation_status, history_preview,
+        history_replace, HistoryReplacementState,
     },
     recovery::{
         recovery_apply, recovery_list, RecoveryService, RecoveryState, TauriRecoveryPathGrant,
@@ -164,12 +164,22 @@ pub fn run() {
             history_store.clone(),
             Arc::new(TauriFileGrant(app.fs_scope())),
         );
-        if let Err(error) =
-            tauri::async_runtime::block_on(crate::workspace_entries::reconcile_pending_mutations(
-                &shared_repository,
-                recovery_store.as_ref(),
-            ))
-        {
+        let entry_reconciliation = match history_store.as_ref() {
+            Some(store) => tauri::async_runtime::block_on(
+                crate::workspace_entries::reconcile_pending_mutations_with_history(
+                    &shared_repository,
+                    recovery_store.as_ref(),
+                    crate::workspace_entries::history_replay_for_store(Arc::clone(store)),
+                ),
+            ),
+            None => tauri::async_runtime::block_on(
+                crate::workspace_entries::reconcile_pending_mutations(
+                    &shared_repository,
+                    recovery_store.as_ref(),
+                ),
+            ),
+        };
+        if let Err(error) = entry_reconciliation {
             eprintln!("failed to reconcile pending Workspace Entry mutations: {error}");
         }
         let mut recovery_service = RecoveryService::with_path_grant(
@@ -181,8 +191,8 @@ pub fn run() {
         app.manage(repository);
         app.manage(history_state);
         app.manage(history_replacement_state);
-        if let Some(history_store) = history_store {
-            app.manage(history_store);
+        if let Some(history_store) = history_store.as_ref() {
+            app.manage(Arc::clone(history_store));
         }
         #[cfg(feature = "e2e-harness")]
         app.manage(performance_state);
@@ -190,12 +200,17 @@ pub fn run() {
         app.manage(RecoveryState::new(recovery_service));
         app.manage(WorkspaceState::new(Arc::clone(&shared_repository)));
         app.manage(workspace_mutation_gate.clone());
-        app.manage(WorkspaceEntryState::new(
+        let mut workspace_entry_state = WorkspaceEntryState::new(
             Arc::clone(&shared_repository),
             workspace_mutation_gate,
             Arc::clone(&recovery_store),
             watcher_service.clone(),
-        ));
+        );
+        if let Some(history_store) = history_store.as_ref() {
+            workspace_entry_state =
+                workspace_entry_state.with_history_store(Arc::clone(history_store));
+        }
+        app.manage(workspace_entry_state);
         app.manage(ExportState::new(ExportService::new(
             Arc::clone(&shared_repository),
             Arc::new(TauriFileGrant(app.fs_scope())),
@@ -223,9 +238,11 @@ pub fn run() {
     #[cfg(feature = "e2e-harness")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_handshake,
+        crate::native_menu::set_native_menu_enabled,
         history_list,
         history_preview,
         history_mark,
+        history_delete,
         history_replace,
         history_operation_status,
         doc_open,
@@ -264,9 +281,11 @@ pub fn run() {
     #[cfg(not(feature = "e2e-harness"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_handshake,
+        crate::native_menu::set_native_menu_enabled,
         history_list,
         history_preview,
         history_mark,
+        history_delete,
         history_replace,
         history_operation_status,
         doc_open,

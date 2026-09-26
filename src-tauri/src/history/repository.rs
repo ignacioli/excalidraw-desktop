@@ -6,6 +6,7 @@
 //! row has been inserted.  This keeps a failed publication from evicting an
 //! older version.
 
+use rusqlite::OptionalExtension;
 use thiserror::Error;
 
 use super::{
@@ -95,6 +96,34 @@ pub struct PublishedVersion {
     pub evicted_version_ids: Vec<String>,
 }
 
+/// The durable result of an explicit user deletion.  The semantic version is
+/// gone before this value is returned; object bytes may remain when they are
+/// still reachable from another version or an in-flight operation pin.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeletedVersion {
+    pub version_id: String,
+    pub document_id: String,
+}
+
+/// The semantic result of deleting a document's history.  GC is deliberately
+/// represented separately because object cleanup can fail after the SQLite
+/// deletion has committed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeletedDocumentHistory {
+    pub document_id: String,
+    pub deleted_version_ids: Vec<String>,
+    pub gc: HistoryGcStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct HistoryGcStatus {
+    pub deleted_objects: usize,
+    pub retained_objects: usize,
+    pub failures: Vec<String>,
+    pub error: Option<String>,
+    pub maintenance_record_error: Option<String>,
+}
+
 #[derive(Debug, Error)]
 pub enum HistoryRepositoryError {
     #[error(transparent)]
@@ -109,6 +138,19 @@ pub enum HistoryRepositoryError {
     MissingProtectedAction,
     #[error("history sequence {0} cannot be represented by SQLite")]
     SequenceOverflow(u64),
+    #[error("history version {version_id} does not belong to document {document_id}")]
+    VersionNotFound {
+        document_id: String,
+        version_id: String,
+    },
+    #[error("history version is referenced by an active operation")]
+    VersionInUse,
+    #[error("history delete request conflicts with an existing operation")]
+    DeleteRequestConflict,
+    #[error("history delete operation is still pending")]
+    DeletePending,
+    #[error("history document does not exist: {0}")]
+    DocumentNotFound(String),
     #[cfg(feature = "e2e-harness")]
     #[error("history fault barrier failed: {0}")]
     FaultInjected(String),
@@ -167,6 +209,345 @@ impl<'store> HistoryRepository<'store> {
             })
             .map_err(HistoryRepositoryError::Store)?;
         Ok(changed)
+    }
+
+    /// Delete exactly one semantic version and record the idempotent delete
+    /// result in the same SQLite transaction.  The reachability gate is held
+    /// while the metadata mutation and committed-reference update occur, so
+    /// collection cannot race the removal.  Object files are collected only
+    /// after the transaction and remain protected by any operation or
+    /// hydration pins.
+    pub fn delete_version(
+        &self,
+        request_id: &str,
+        document_id: &str,
+        version_id: &str,
+        now: i64,
+    ) -> Result<DeletedVersion, HistoryRepositoryError> {
+        validate_identifier(request_id, "requestId")
+            .map_err(HistoryRepositoryError::InvalidVersionId)?;
+        validate_identifier(document_id, "documentId")
+            .map_err(HistoryRepositoryError::InvalidDocumentId)?;
+        validate_identifier(version_id, "versionId")
+            .map_err(HistoryRepositoryError::InvalidVersionId)?;
+
+        // A completed delete is the idempotent response.  A request ID can
+        // never be rebound to another document, operation kind, or version.
+        if let Some((existing_document, kind, target, state)) =
+            self.store.with_connection(|connection| {
+                connection
+                    .query_row(
+                        "SELECT document_id, kind, prepared_target_identity, state
+                         FROM history_operations WHERE idempotency_id = ?1",
+                        [request_id],
+                        |row| {
+                            Ok((
+                                row.get::<_, String>(0)?,
+                                row.get::<_, String>(1)?,
+                                row.get::<_, Option<String>>(2)?,
+                                row.get::<_, String>(3)?,
+                            ))
+                        },
+                    )
+                    .optional()
+            })?
+        {
+            if existing_document != document_id
+                || kind != "delete"
+                || target.as_deref() != Some(version_id)
+            {
+                return Err(HistoryRepositoryError::DeleteRequestConflict);
+            }
+            if state == "completed" {
+                return Ok(DeletedVersion {
+                    version_id: version_id.to_owned(),
+                    document_id: document_id.to_owned(),
+                });
+            }
+            return Err(HistoryRepositoryError::DeletePending);
+        }
+
+        let (deleted, version_exists, referenced) = self.store.with_mutation(|mutation| {
+            let result =
+                self.store
+                    .with_transaction(|transaction| -> Result<_, rusqlite::Error> {
+                        let version_exists = transaction
+                            .query_row(
+                                "SELECT 1 FROM history_versions
+                         WHERE id = ?1 AND document_id = ?2",
+                                rusqlite::params![version_id, document_id],
+                                |_| Ok(()),
+                            )
+                            .optional()?
+                            .is_some();
+                        let referenced = transaction
+                            .query_row(
+                                "SELECT 1 FROM history_operations
+                         WHERE document_id = ?1
+                           AND protection_version_id = ?2
+                           AND state NOT IN ('completed', 'aborted', 'conflict')
+                         LIMIT 1",
+                                rusqlite::params![document_id, version_id],
+                                |_| Ok(()),
+                            )
+                            .optional()?
+                            .is_some();
+                        if !version_exists || referenced {
+                            return Ok((false, version_exists, referenced));
+                        }
+
+                        // The delete operation is completed atomically with the
+                        // semantic row removal. A retry therefore returns the same
+                        // result without deleting another record.
+                        transaction.execute(
+                            "INSERT INTO history_operations
+                     (idempotency_id, document_id, session_generation, revision,
+                      kind, prepared_target_identity, target_object_pins_json,
+                      state, created_at, updated_at)
+                     VALUES (?1, ?2, 0, 0, 'delete', ?3, '[]', 'completed', ?4, ?4)",
+                            rusqlite::params![request_id, document_id, version_id, now],
+                        )?;
+                        transaction.execute(
+                            "DELETE FROM history_versions WHERE id = ?1 AND document_id = ?2",
+                            rusqlite::params![version_id, document_id],
+                        )?;
+                        Ok((true, true, false))
+                    })?;
+            if result.0 {
+                mutation.remove_committed_version(version_id);
+            }
+            Ok::<_, HistoryStoreError>(result)
+        })?;
+
+        if !deleted {
+            if referenced {
+                return Err(HistoryRepositoryError::VersionInUse);
+            }
+            if !version_exists {
+                return Err(HistoryRepositoryError::VersionNotFound {
+                    document_id: document_id.to_owned(),
+                    version_id: version_id.to_owned(),
+                });
+            }
+            return Err(HistoryRepositoryError::DeletePending);
+        }
+
+        let deleted = DeletedVersion {
+            version_id: version_id.to_owned(),
+            document_id: document_id.to_owned(),
+        };
+
+        // Physical cleanup is best effort.  Reachability pins keep shared
+        // objects alive; a cleanup failure leaves maintenance debt and does
+        // not change the already committed semantic deletion.
+        let _ = self.store.collect_garbage(
+            std::time::SystemTime::now(),
+            super::gc::DEFAULT_ORPHAN_GRACE,
+        );
+        Ok(deleted)
+    }
+
+    /// Remove every semantic history row for a document after the caller has
+    /// committed the document's filesystem/Trash deletion. The identity row
+    /// is retained in `deleting` state so a later same-path file cannot
+    /// inherit this document's history. Object bytes remain reachable through
+    /// other documents and all operation/hydration pins until GC can safely
+    /// remove them.
+    pub fn delete_document_history(
+        &self,
+        operation_id: &str,
+        document_id: &str,
+        now: i64,
+    ) -> Result<DeletedDocumentHistory, HistoryRepositoryError> {
+        validate_identifier(operation_id, "requestId")
+            .map_err(HistoryRepositoryError::InvalidVersionId)?;
+        validate_identifier(document_id, "documentId")
+            .map_err(HistoryRepositoryError::InvalidDocumentId)?;
+        // The document ID is already stored and checked on the operation row;
+        // keep this marker bounded so it remains valid operation metadata.
+        let target_marker = "document-history-delete";
+
+        if let Some((existing_document, kind, target, state)) =
+            self.store.with_connection(|connection| {
+                connection
+                    .query_row(
+                        "SELECT document_id, kind, prepared_target_identity, state
+                         FROM history_operations WHERE idempotency_id = ?1",
+                        [operation_id],
+                        |row| {
+                            Ok((
+                                row.get::<_, String>(0)?,
+                                row.get::<_, String>(1)?,
+                                row.get::<_, Option<String>>(2)?,
+                                row.get::<_, String>(3)?,
+                            ))
+                        },
+                    )
+                    .optional()
+            })?
+        {
+            if existing_document != document_id
+                || kind != "delete"
+                || target.as_deref() != Some(target_marker)
+            {
+                return Err(HistoryRepositoryError::DeleteRequestConflict);
+            }
+            if state == "completed" {
+                // A process may have stopped after the semantic transaction
+                // committed but before its best-effort GC pass. Retrying the
+                // same idempotent request is therefore also a safe chance to
+                // surface or clear the independent maintenance outcome.
+                return Ok(DeletedDocumentHistory {
+                    document_id: document_id.to_owned(),
+                    deleted_version_ids: Vec::new(),
+                    gc: self.collect_gc_after_document_delete(document_id, now),
+                });
+            }
+            return Err(HistoryRepositoryError::DeletePending);
+        }
+
+        let (deleted_version_ids, document_exists, pending_operation) =
+            self.store.with_mutation(|mutation| {
+                let result =
+                    self.store
+                        .with_transaction(|transaction| -> Result<_, rusqlite::Error> {
+                            let document_exists = transaction
+                                .query_row(
+                                    "SELECT 1 FROM history_documents WHERE id = ?1",
+                                    [document_id],
+                                    |_| Ok(()),
+                                )
+                                .optional()?
+                                .is_some();
+                            if !document_exists {
+                                return Ok((Vec::new(), false, false));
+                            }
+
+                            // Keep every semantic row needed to rebuild an
+                            // incomplete operation pin after restart. The
+                            // operation's protection_version_id may be the only
+                            // durable path to its scene/assets once in-memory
+                            // state is gone.
+                            let pending_operation = transaction.query_row(
+                                "SELECT EXISTS(
+                                   SELECT 1 FROM history_operations
+                                   WHERE document_id = ?1
+                                     AND state NOT IN ('completed', 'aborted', 'conflict')
+                                 )",
+                                [document_id],
+                                |row| row.get::<_, bool>(0),
+                            )?;
+                            if pending_operation {
+                                return Ok((Vec::new(), true, true));
+                            }
+
+                            let mut statement = transaction.prepare(
+                                "SELECT id FROM history_versions
+                         WHERE document_id = ?1 ORDER BY recorded_at, sequence, id",
+                            )?;
+                            let deleted_version_ids = statement
+                                .query_map([document_id], |row| row.get::<_, String>(0))?
+                                .collect::<Result<Vec<_>, _>>()?;
+                            drop(statement);
+
+                            // This operation row is an audit/idempotency record. Its
+                            // target marker is intentionally not a path, and its
+                            // absence of object pins does not release any existing
+                            // pins owned by other operations.
+                            transaction.execute(
+                                "INSERT INTO history_operations
+                         (idempotency_id, document_id, session_generation, revision,
+                          kind, prepared_target_identity, target_object_pins_json,
+                          state, created_at, updated_at)
+                         VALUES (?1, ?2, 0, 0, 'delete', ?3, '[]', 'completed', ?4, ?4)",
+                                rusqlite::params![operation_id, document_id, target_marker, now],
+                            )?;
+                            transaction.execute(
+                                "UPDATE history_documents SET state = 'deleting' WHERE id = ?1",
+                                [document_id],
+                            )?;
+                            transaction.execute(
+                                "DELETE FROM history_versions WHERE document_id = ?1",
+                                [document_id],
+                            )?;
+                            Ok((deleted_version_ids, true, false))
+                        })?;
+                for version_id in &result.0 {
+                    mutation.remove_committed_version(version_id);
+                }
+                Ok::<_, HistoryStoreError>(result)
+            })?;
+
+        if !document_exists {
+            return Err(HistoryRepositoryError::DocumentNotFound(
+                document_id.to_owned(),
+            ));
+        }
+        if pending_operation {
+            return Err(HistoryRepositoryError::DeletePending);
+        }
+
+        let gc = self.collect_gc_after_document_delete(document_id, now);
+        Ok(DeletedDocumentHistory {
+            document_id: document_id.to_owned(),
+            deleted_version_ids,
+            gc,
+        })
+    }
+
+    fn collect_gc_after_document_delete(&self, document_id: &str, now: i64) -> HistoryGcStatus {
+        let mut status = HistoryGcStatus::default();
+        match self.store.collect_garbage(
+            std::time::SystemTime::now(),
+            super::gc::DEFAULT_ORPHAN_GRACE,
+        ) {
+            Ok(report) => {
+                status.deleted_objects = report.deleted.len();
+                status.retained_objects = report.retained.len();
+                status.failures = report
+                    .failures
+                    .into_iter()
+                    .map(|(object, error)| format!("{object:?}: {error}"))
+                    .collect();
+                if !status.failures.is_empty() {
+                    let issue = format!(
+                        "{} history object cleanup failure(s)",
+                        status.failures.len()
+                    );
+                    if let Err(error) = self.store.record_maintenance_issue(
+                        document_id,
+                        "HISTORY_GC_FAILED",
+                        "document-delete-gc",
+                        now,
+                    ) {
+                        status.maintenance_record_error = Some(error.to_string());
+                    }
+                    status.error = Some(issue);
+                } else if let Err(error) = self.store.with_connection(|connection| {
+                    connection.execute(
+                        "DELETE FROM maintenance_state
+                         WHERE scope_key = ?1 AND issue_code = 'HISTORY_GC_FAILED'
+                           AND last_phase = 'document-delete-gc'",
+                        [format!("document:{document_id}")],
+                    )?;
+                    Ok(())
+                }) {
+                    status.maintenance_record_error = Some(error.to_string());
+                }
+            }
+            Err(error) => {
+                status.error = Some(error.to_string());
+                if let Err(record_error) = self.store.record_maintenance_issue(
+                    document_id,
+                    "HISTORY_GC_FAILED",
+                    "document-delete-gc",
+                    now,
+                ) {
+                    status.maintenance_record_error = Some(record_error.to_string());
+                }
+            }
+        }
+        status
     }
 
     /// Write an immutable scene object, then publish its metadata and version

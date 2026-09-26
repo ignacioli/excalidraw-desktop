@@ -25,10 +25,11 @@ use crate::{
         documents::{DirectFileGrant, DocumentService},
         dto::{
             CheckpointReason, CheckpointRequest, CloseDocumentMode, CloseDocumentRequest,
-            ExpectedOpenDocument, HistoryDocumentLocator, HistoryListRequest, HistoryMarkRequest,
-            HistoryOperationStatusRequest, HistoryPreviewRequest, HistoryReplaceRequest,
-            HistoryReplaceTarget, PathRequest, RecoveryAction, RecoveryApplyRequest,
-            SaveDraftRequest, WorkspaceEntryDeletePreflightResult, WorkspaceEntryDeleteRequest,
+            ConflictResolution, ExpectedOpenDocument, HistoryDocumentLocator, HistoryListRequest,
+            HistoryMarkRequest, HistoryOperationStatusRequest, HistoryPreviewRequest,
+            HistoryReplaceRequest, HistoryReplaceTarget, PathRequest, RecoveryAction,
+            RecoveryApplyRequest, ResolveConflictRequest, SaveDraftRequest,
+            WorkspaceEntryDeletePreflightResult, WorkspaceEntryDeleteRequest,
             WorkspaceEntryPathRequest, WorkspaceEntryRenameRequest,
         },
         error::IpcError,
@@ -63,7 +64,14 @@ use crate::{
         types::{HistoryProtectedAction, HistoryReplaceResponse, HistoryVersionSource},
         validation::HISTORY_OBJECT_SCHEMA_VERSION,
     },
-    workspace_entries::{TrashOperator, WorkspaceEntryService, WorkspaceMutationGate},
+    workspace_entries::{
+        history_replay_for_store,
+        mutation_journal::{
+            load_journals, reconcile_pending_mutations_with_history, save_journal,
+            MutationJournalRecord,
+        },
+        TrashOperator, WorkspaceEntryService, WorkspaceMutationGate,
+    },
 };
 
 pub(crate) const RELIABILITY_SCENARIO_FLAG: &str = "--e2e-reliability-scenario";
@@ -644,6 +652,14 @@ async fn run_scenario(scenario: &str, root: &Path) -> Result<String, String> {
             .map(|_| String::new()),
         "history-protected-replacement-probe" => {
             serialize_evidence(run_history_protected_replacement_probe(root).await?)
+        }
+        "history-lifecycle" => serialize_evidence(run_history_lifecycle(root).await?),
+        "history-document-save-as" => serialize_evidence(run_history_document_save_as(root).await?),
+        "history-lifecycle-journal-seed" => {
+            serialize_evidence(run_history_lifecycle_journal_seed(root).await?)
+        }
+        "history-lifecycle-journal-probe" => {
+            serialize_evidence(run_history_lifecycle_journal_probe(root).await?)
         }
         "history-restart-seed" => serialize_evidence(run_history_restart_seed(root).await?),
         "history-restart-restore" => serialize_evidence(run_history_restart_restore(root).await?),
@@ -1784,6 +1800,504 @@ async fn run_history_protected_replacement_probe(
         temporary_files: temporary_files(&target)?,
         response: None,
         error: None,
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryLifecycleEvidence {
+    scenario: &'static str,
+    workspace: String,
+    original_path: String,
+    renamed_path: String,
+    ancestor_moved_path: String,
+    save_as_path: String,
+    trash_path: String,
+    document_id_before: String,
+    document_id_after_rename: String,
+    save_as_document_id: String,
+    rename_operation_id: String,
+    ancestor_move_operation_id: String,
+    delete_operation_id: String,
+    rename_committed: bool,
+    ancestor_move_committed: bool,
+    save_as_has_distinct_identity: bool,
+    save_as_history_count: usize,
+    same_path_replacement_rejected: bool,
+    delete_committed: bool,
+    history_versions_after_delete: usize,
+    active_identity_after_delete: bool,
+    original_exists_after_delete: bool,
+    trash_exists_after_delete: bool,
+}
+
+async fn run_history_lifecycle(root: &Path) -> Result<HistoryLifecycleEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let recovery = Arc::new(RecoveryStore::with_app_version(
+        root.join("lifecycle-recovery"),
+        "0.3.0",
+    ));
+    let trash_path = root.join("trash").join("lifecycle-renamed.excalidraw");
+    let invoked = Arc::new(AtomicBool::new(false));
+    let trash = Arc::new(RecordingTrashOperator {
+        mode: E2eTrashMode::Success,
+        destination: trash_path.clone(),
+        invoked: Arc::clone(&invoked),
+    });
+    let service = WorkspaceEntryService::with_trash_and_recovery(
+        Arc::clone(&context.repository),
+        WorkspaceMutationGate::default(),
+        trash,
+        recovery,
+    )
+    .with_history_store(Arc::clone(&context.store));
+    let original_path = context.workspace.join("lifecycle/original.excalidraw");
+    let renamed_path = context.workspace.join("lifecycle/renamed.excalidraw");
+    let ancestor_moved_path = context.workspace.join("moved/renamed.excalidraw");
+    let save_as_path = context.workspace.join("save-as.excalidraw");
+    fs::create_dir_all(
+        original_path
+            .parent()
+            .ok_or_else(|| "lifecycle fixture has no parent".to_owned())?,
+    )
+    .map_err(|error| format!("failed to create lifecycle directory: {error}"))?;
+    let original_scene = history_restart_scene("lifecycle-original", "生命周期原始文档");
+    materialize_history_workspace_asset(&context.workspace, &original_scene.1)?;
+    fs::write(&original_path, original_scene.0.as_bytes())
+        .map_err(|error| format!("failed to write lifecycle document: {error}"))?;
+    let original_path = original_path
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize lifecycle document: {error}"))?;
+    let original_identity = context
+        .store
+        .resolve_document_identity_for_open(&original_path, 1)
+        .map_err(|error| format!("failed to establish lifecycle identity: {error}"))?;
+    publish_history_restart_version(
+        &context.store,
+        &original_identity.document_id,
+        "history-lifecycle-v1",
+        &original_scene.0,
+        1,
+        &original_scene.2,
+    )?;
+    let base_hash = sha256(original_scene.0.as_bytes());
+    let rename = service
+        .rename(WorkspaceEntryRenameRequest {
+            workspace_id: "e2e-reliability-workspace".to_owned(),
+            relative_path: "lifecycle/original.excalidraw".to_owned(),
+            base_name: "renamed".to_owned(),
+            expected_open_documents: vec![ExpectedOpenDocument {
+                relative_path: "lifecycle/original.excalidraw".to_owned(),
+                base_hash: base_hash.clone(),
+            }],
+        })
+        .await
+        .map_err(|error| format!("lifecycle file rename failed: {error:?}"))?;
+    let rename_committed = !original_path.exists() && renamed_path.exists();
+    let ancestor_move = service
+        .rename(WorkspaceEntryRenameRequest {
+            workspace_id: "e2e-reliability-workspace".to_owned(),
+            relative_path: "lifecycle".to_owned(),
+            base_name: "moved".to_owned(),
+            expected_open_documents: vec![ExpectedOpenDocument {
+                relative_path: "lifecycle/renamed.excalidraw".to_owned(),
+                base_hash: base_hash.clone(),
+            }],
+        })
+        .await
+        .map_err(|error| format!("lifecycle ancestor move failed: {error:?}"))?;
+    let ancestor_move_committed = !renamed_path.exists() && ancestor_moved_path.exists();
+    let moved_identity = context
+        .store
+        .load_active_document_identity(&path_string(&ancestor_moved_path))
+        .map_err(|error| format!("failed to read identity after ancestor move: {error}"))?
+        .ok_or_else(|| "ancestor-moved lifecycle identity is missing".to_owned())?;
+    fs::copy(&ancestor_moved_path, &save_as_path)
+        .map_err(|error| format!("failed to create Save As fixture: {error}"))?;
+    let save_as_identity = context
+        .store
+        .resolve_document_identity_for_open(&save_as_path, 2)
+        .map_err(|error| format!("failed to establish Save As identity: {error}"))?;
+    let unrelated_path = save_as_path.with_extension("replacement.tmp");
+    fs::write(&unrelated_path, scene_json("unrelated-same-path"))
+        .map_err(|error| format!("failed to write same-path replacement: {error}"))?;
+    fs::rename(&unrelated_path, &save_as_path)
+        .map_err(|error| format!("failed to install same-path replacement: {error}"))?;
+    let same_path_replacement_rejected = context
+        .store
+        .resolve_document_identity_for_existing(&save_as_path, 3)
+        .is_err();
+    let delete = service
+        .delete(WorkspaceEntryDeleteRequest {
+            workspace_id: "e2e-reliability-workspace".to_owned(),
+            relative_path: "moved/renamed.excalidraw".to_owned(),
+            expected_open_document: None,
+        })
+        .await
+        .map_err(|error| format!("lifecycle drawing delete failed: {error:?}"))?;
+    let save_as_has_distinct_identity = save_as_identity.document_id != moved_identity.document_id;
+    let save_as_document_id = save_as_identity.document_id.clone();
+    let history_versions_after_delete =
+        history_source_count(&context.store, &original_identity.document_id, "automatic")?
+            + history_source_count(&context.store, &original_identity.document_id, "protected")?
+            + history_source_count(&context.store, &original_identity.document_id, "manual")?;
+    let active_identity_after_delete = context
+        .store
+        .load_active_document_identity(&path_string(&ancestor_moved_path))
+        .map_err(|error| format!("failed to inspect deleted lifecycle identity: {error}"))?
+        .is_some();
+    Ok(HistoryLifecycleEvidence {
+        scenario: "history-lifecycle",
+        workspace: path_string(&context.workspace),
+        original_path: path_string(&original_path),
+        renamed_path: path_string(&renamed_path),
+        ancestor_moved_path: path_string(&ancestor_moved_path),
+        save_as_path: path_string(&save_as_path),
+        trash_path: path_string(&trash_path),
+        document_id_before: original_identity.document_id,
+        document_id_after_rename: moved_identity.document_id.clone(),
+        save_as_document_id,
+        rename_operation_id: rename.operation_id,
+        ancestor_move_operation_id: ancestor_move.operation_id,
+        delete_operation_id: delete.operation_id,
+        rename_committed,
+        ancestor_move_committed,
+        save_as_has_distinct_identity,
+        save_as_history_count: history_source_count(
+            &context.store,
+            &save_as_identity.document_id,
+            "automatic",
+        )? + history_source_count(
+            &context.store,
+            &save_as_identity.document_id,
+            "protected",
+        )? + history_source_count(
+            &context.store,
+            &save_as_identity.document_id,
+            "manual",
+        )?,
+        same_path_replacement_rejected,
+        delete_committed: invoked.load(Ordering::SeqCst) && trash_path.exists(),
+        history_versions_after_delete,
+        active_identity_after_delete,
+        original_exists_after_delete: ancestor_moved_path.exists(),
+        trash_exists_after_delete: trash_path.exists(),
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryLifecycleJournalEvidence {
+    scenario: &'static str,
+    phase: &'static str,
+    operation_id: String,
+    old_path: String,
+    new_path: String,
+    document_id: String,
+    journal_pending_before: bool,
+    journal_pending_after: bool,
+    old_exists_after: bool,
+    new_exists_after: bool,
+    identity_at_new_path: Option<String>,
+    identity_at_old_path: Option<String>,
+    history_replay_applied: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryDocumentSaveAsEvidence {
+    scenario: &'static str,
+    conflict_source_path: String,
+    conflict_target_path: String,
+    conflict_source_document_id: String,
+    conflict_target_document_id: String,
+    previous_target_state: String,
+    conflict_save_as_distinct: bool,
+    conflict_source_remains_active: bool,
+    orphan_source_path: String,
+    orphan_target_path: String,
+    orphan_target_document_id: String,
+    orphan_target_history_count: usize,
+    orphan_source_draft_exists_after_close: bool,
+    orphan_save_as_distinct: bool,
+    orphan_source_file_exists_after_close: bool,
+}
+
+async fn run_history_document_save_as(
+    root: &Path,
+) -> Result<HistoryDocumentSaveAsEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let source = context.workspace.join("conflict-source.excalidraw");
+    let target = context.workspace.join("conflict-target.excalidraw");
+    let source_scene = scene_json("conflict-external");
+    let local_scene = scene_json("conflict-local");
+    fs::write(&source, source_scene.as_bytes())
+        .map_err(|error| format!("failed to write conflict source: {error}"))?;
+    fs::write(&target, source_scene.as_bytes())
+        .map_err(|error| format!("failed to write conflict target: {error}"))?;
+    let source = source
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize conflict source: {error}"))?;
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize conflict target: {error}"))?;
+    let previous_target_identity = context
+        .store
+        .resolve_document_identity_for_open(&target, 1)
+        .map_err(|error| format!("failed to establish previous target identity: {error}"))?;
+    context
+        .document_service
+        .doc_open(PathRequest {
+            path: path_string(&source),
+        })
+        .await
+        .map_err(|error| format!("failed to open conflict source: {error:?}"))?;
+    context
+        .document_service
+        .doc_save_draft(SaveDraftRequest {
+            path: path_string(&source),
+            scene_json: local_scene.clone(),
+        })
+        .await
+        .map_err(|error| format!("failed to save conflict draft: {error:?}"))?;
+    context
+        .document_service
+        .conflicts()
+        .mark_conflicted(source.clone())
+        .await;
+    context
+        .document_service
+        .doc_resolve_conflict(ResolveConflictRequest {
+            path: path_string(&source),
+            resolution: ConflictResolution::SaveAsNew,
+            save_as_path: Some(path_string(&target)),
+        })
+        .await
+        .map_err(|error| format!("conflict Save As New failed: {error:?}"))?;
+    let source_identity = context
+        .store
+        .load_active_document_identity(&path_string(&source))
+        .map_err(|error| format!("failed to read conflict source identity: {error}"))?
+        .ok_or_else(|| "conflict source identity is missing".to_owned())?;
+    let target_identity = context
+        .store
+        .load_active_document_identity(&path_string(&target))
+        .map_err(|error| format!("failed to read conflict target identity: {error}"))?
+        .ok_or_else(|| "conflict target identity is missing".to_owned())?;
+    let previous_target_state = context
+        .store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT state FROM history_documents WHERE id=?1",
+                [&previous_target_identity.document_id],
+                |row| row.get::<_, String>(0),
+            )
+        })
+        .map_err(|error| format!("failed to inspect previous target state: {error}"))?;
+
+    let orphan_source = context.workspace.join("orphan-source.excalidraw");
+    let orphan_target = context.workspace.join("orphan-target.excalidraw");
+    fs::write(&orphan_source, source_scene.as_bytes())
+        .map_err(|error| format!("failed to write orphan source: {error}"))?;
+    let orphan_source = orphan_source
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize orphan source: {error}"))?;
+    context
+        .document_service
+        .doc_open(PathRequest {
+            path: path_string(&orphan_source),
+        })
+        .await
+        .map_err(|error| format!("failed to open orphan source: {error:?}"))?;
+    context
+        .document_service
+        .doc_save_draft(SaveDraftRequest {
+            path: path_string(&orphan_source),
+            scene_json: local_scene.clone(),
+        })
+        .await
+        .map_err(|error| format!("failed to save orphan draft: {error:?}"))?;
+    fs::remove_file(&orphan_source)
+        .map_err(|error| format!("failed to remove orphan source: {error}"))?;
+    context
+        .document_service
+        .doc_checkpoint(CheckpointRequest {
+            path: path_string(&orphan_target),
+            scene_json: local_scene,
+            reason: CheckpointReason::SaveAsNew,
+        })
+        .await
+        .map_err(|error| format!("orphan Save As checkpoint failed: {error:?}"))?;
+    context
+        .document_service
+        .doc_close(CloseDocumentRequest {
+            path: path_string(&orphan_source),
+            mode: CloseDocumentMode::DiscardOrphan,
+        })
+        .await
+        .map_err(|error| format!("orphan close failed: {error:?}"))?;
+    let orphan_target_identity = context
+        .store
+        .load_active_document_identity(&path_string(&orphan_target))
+        .map_err(|error| format!("failed to read orphan target identity: {error}"))?
+        .ok_or_else(|| "orphan target identity is missing".to_owned())?;
+    let orphan_source_draft_exists_after_close = context
+        .repository
+        .draft_get(path_string(&orphan_source))
+        .await
+        .map_err(|error| format!("failed to inspect orphan draft: {error}"))?
+        .is_some();
+    let orphan_target_history_count = history_source_count(
+        &context.store,
+        &orphan_target_identity.document_id,
+        "automatic",
+    )? + history_source_count(
+        &context.store,
+        &orphan_target_identity.document_id,
+        "protected",
+    )? + history_source_count(
+        &context.store,
+        &orphan_target_identity.document_id,
+        "manual",
+    )?;
+    let orphan_target_document_id = orphan_target_identity.document_id.clone();
+    let orphan_save_as_distinct = orphan_target_document_id != source_identity.document_id;
+    Ok(HistoryDocumentSaveAsEvidence {
+        scenario: "history-document-save-as",
+        conflict_source_path: path_string(&source),
+        conflict_target_path: path_string(&target),
+        conflict_source_document_id: source_identity.document_id.clone(),
+        conflict_target_document_id: target_identity.document_id.clone(),
+        previous_target_state,
+        conflict_save_as_distinct: source_identity.document_id != target_identity.document_id
+            && target_identity.document_id != previous_target_identity.document_id,
+        conflict_source_remains_active: source_identity.state
+            == crate::history::identity::IdentityState::Active,
+        orphan_source_path: path_string(&orphan_source),
+        orphan_target_path: path_string(&orphan_target),
+        orphan_target_document_id,
+        orphan_target_history_count,
+        orphan_source_draft_exists_after_close,
+        orphan_save_as_distinct,
+        orphan_source_file_exists_after_close: orphan_source.exists(),
+    })
+}
+
+async fn run_history_lifecycle_journal_seed(
+    root: &Path,
+) -> Result<HistoryLifecycleJournalEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let recovery = RecoveryStore::with_app_version(root.join("lifecycle-recovery"), "0.3.0");
+    let old_path = context.workspace.join("journal/original.excalidraw");
+    let new_path = context.workspace.join("journal/moved.excalidraw");
+    fs::create_dir_all(
+        old_path
+            .parent()
+            .ok_or_else(|| "journal path has no parent".to_owned())?,
+    )
+    .map_err(|error| format!("failed to create journal fixture: {error}"))?;
+    let scene = history_restart_scene("journal-original", "日志原始文档");
+    materialize_history_workspace_asset(&context.workspace, &scene.1)?;
+    fs::write(&old_path, scene.0.as_bytes())
+        .map_err(|error| format!("failed to write journal source: {error}"))?;
+    let old_path = old_path
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize journal source: {error}"))?;
+    let identity = context
+        .store
+        .resolve_document_identity_for_open(&old_path, 1)
+        .map_err(|error| format!("failed to establish journal identity: {error}"))?;
+    publish_history_restart_version(
+        &context.store,
+        &identity.document_id,
+        "history-lifecycle-journal-v1",
+        &scene.0,
+        1,
+        &scene.2,
+    )?;
+    fs::rename(&old_path, &new_path)
+        .map_err(|error| format!("failed to commit journal filesystem rename: {error}"))?;
+    let operation_id = "history-lifecycle-journal-replay".to_owned();
+    let record = MutationJournalRecord::rename(
+        operation_id.clone(),
+        "e2e-reliability-workspace".to_owned(),
+        path_string(&old_path),
+        path_string(&new_path),
+        "journal/original.excalidraw".to_owned(),
+        "journal/moved.excalidraw".to_owned(),
+        "moved".to_owned(),
+    )
+    .with_history_required(true)
+    .with_filesystem_committed(true)
+    .with_history_document_id(identity.document_id.clone());
+    save_journal(&recovery, &record)
+        .map_err(|error| format!("failed to save pending journal: {error:?}"))?;
+    let pending = load_journals(&recovery)
+        .map_err(|error| format!("failed to load seeded journal: {error:?}"))?;
+    Ok(HistoryLifecycleJournalEvidence {
+        scenario: "history-lifecycle-journal",
+        phase: "seed",
+        operation_id,
+        old_path: path_string(&old_path),
+        new_path: path_string(&new_path),
+        document_id: identity.document_id,
+        journal_pending_before: pending.iter().any(MutationJournalRecord::history_pending),
+        journal_pending_after: true,
+        old_exists_after: old_path.exists(),
+        new_exists_after: new_path.exists(),
+        identity_at_new_path: None,
+        identity_at_old_path: None,
+        history_replay_applied: false,
+    })
+}
+
+async fn run_history_lifecycle_journal_probe(
+    root: &Path,
+) -> Result<HistoryLifecycleJournalEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let recovery = RecoveryStore::with_app_version(root.join("lifecycle-recovery"), "0.3.0");
+    let old_path = context.workspace.join("journal/original.excalidraw");
+    let new_path = context.workspace.join("journal/moved.excalidraw");
+    let before = load_journals(&recovery)
+        .map_err(|error| format!("failed to load journal before replay: {error:?}"))?;
+    let operation_id = before
+        .first()
+        .map(|record| record.operation_id.clone())
+        .ok_or_else(|| "journal replay probe found no pending record".to_owned())?;
+    let document_id = before
+        .first()
+        .and_then(|record| record.history_document_id.clone())
+        .ok_or_else(|| "journal replay record has no history document id".to_owned())?;
+    let replay = history_replay_for_store(Arc::clone(&context.store));
+    reconcile_pending_mutations_with_history(&context.repository, &recovery, replay)
+        .await
+        .map_err(|error| format!("journal replay failed: {error:?}"))?;
+    let after = load_journals(&recovery)
+        .map_err(|error| format!("failed to load journal after replay: {error:?}"))?;
+    let identity_at_new_path = context
+        .store
+        .load_active_document_identity(&path_string(&new_path))
+        .map_err(|error| format!("failed to inspect replayed new identity: {error}"))?
+        .map(|identity| identity.document_id);
+    let identity_at_old_path = context
+        .store
+        .load_active_document_identity(&path_string(&old_path))
+        .map_err(|error| format!("failed to inspect replayed old identity: {error}"))?
+        .map(|identity| identity.document_id);
+    Ok(HistoryLifecycleJournalEvidence {
+        scenario: "history-lifecycle-journal",
+        phase: "probe",
+        operation_id,
+        old_path: path_string(&old_path),
+        new_path: path_string(&new_path),
+        document_id: document_id.clone(),
+        journal_pending_before: before.iter().any(MutationJournalRecord::history_pending),
+        journal_pending_after: after.iter().any(MutationJournalRecord::history_pending),
+        old_exists_after: old_path.exists(),
+        new_exists_after: new_path.exists(),
+        identity_at_new_path: identity_at_new_path.clone(),
+        identity_at_old_path,
+        history_replay_applied: identity_at_new_path.as_deref() == Some(document_id.as_str()),
     })
 }
 

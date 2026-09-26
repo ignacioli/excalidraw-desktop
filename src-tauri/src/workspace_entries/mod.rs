@@ -14,11 +14,11 @@ use uuid::Uuid;
 use crate::{
     commands::{
         dto::{
-            EmptyResponse, EntryMutationResult, ExpectedOpenDocument, PathMigration,
-            WorkspaceEntry, WorkspaceEntryCreateRequest, WorkspaceEntryDeletePreflightResult,
-            WorkspaceEntryDeleteRequest, WorkspaceEntryDeleteResult, WorkspaceEntryKind,
-            WorkspaceEntryListRequest, WorkspaceEntryPathRequest, WorkspaceEntryRenameRequest,
-            WorkspaceEntryRenameResult,
+            EmptyResponse, EntryHistoryMaintenance, EntryMutationResult, ExpectedOpenDocument,
+            PathMigration, WorkspaceEntry, WorkspaceEntryCreateRequest,
+            WorkspaceEntryDeletePreflightResult, WorkspaceEntryDeleteRequest,
+            WorkspaceEntryDeleteResult, WorkspaceEntryKind, WorkspaceEntryListRequest,
+            WorkspaceEntryPathRequest, WorkspaceEntryRenameRequest, WorkspaceEntryRenameResult,
         },
         error::{AppError, IpcError},
         workspace::{
@@ -31,20 +31,91 @@ use crate::{
         WorkspaceRecord,
     },
     documents::recovery::RecoveryStore,
+    history::{repository::HistoryRepository, store::HistoryStore},
 };
 
 pub(crate) mod mutation_journal;
 #[cfg(test)]
 mod mutation_test;
 
-pub use mutation_journal::reconcile_pending_mutations;
+pub use mutation_journal::{
+    reconcile_pending_mutations, reconcile_pending_mutations_with_history, HistoryReplay,
+};
 
 use mutation_journal::{
-    apply_committed_record_with_skip, delete_journal, save_journal, MutationJournalRecord,
+    apply_committed_record_with_history, delete_journal, save_journal, MutationJournalRecord,
 };
 
 const MANAGED_DIRECTORY_NAMES: &[&str] = &[".excalidraw_assets"];
 const EMPTY_SCENE: &[u8] = br#"{"type":"excalidraw","version":2,"source":"excalidraw-desktop","elements":[],"appState":{},"files":{}}"#;
+
+/// Build the history-side replay callback for application-owned entry
+/// renames. The callback is blocking because HistoryStore owns a synchronous
+/// SQLite connection; the journal invokes it only after filesystem, main
+/// SQLite, and Recovery phases have committed.
+pub fn history_replay_for_store(history_store: Arc<HistoryStore>) -> HistoryReplay {
+    Arc::new(move |record| {
+        let history_store = Arc::clone(&history_store);
+        Box::pin(async move {
+            let result = tokio::task::spawn_blocking(move || match record.kind {
+                mutation_journal::MutationJournalKind::Rename => {
+                    let new_path = record.new_canonical_path.ok_or_else(|| {
+                        AppError::Internal(
+                            "rename journal is missing the new path for history replay".to_owned(),
+                        )
+                    })?;
+                    if !Path::new(&new_path).exists() {
+                        return Err(AppError::HistoryOperationPending(record.operation_id));
+                    }
+                    history_store
+                        .migrate_app_rename(
+                            Path::new(&record.old_canonical_path),
+                            Path::new(&new_path),
+                        )
+                        .map_err(|error| AppError::HistoryUnavailable(error.to_string()))
+                }
+                mutation_journal::MutationJournalKind::Delete => {
+                    let document_id = match record.history_document_id.as_deref() {
+                        Some(document_id) => document_id,
+                        None if record.version == 1 => {
+                            if history_store
+                                .load_active_document_identity(&record.old_canonical_path)
+                                .map_err(|error| AppError::HistoryUnavailable(error.to_string()))?
+                                .is_some()
+                            {
+                                return Err(AppError::HistoryOperationPending(record.operation_id));
+                            }
+                            return Ok(());
+                        }
+                        None => return Ok(()),
+                    };
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_err(|error| AppError::Internal(error.to_string()))?
+                        .as_secs();
+                    let now = i64::try_from(now)
+                        .map_err(|_| AppError::Internal("history clock overflow".to_owned()))?;
+                    let deleted = HistoryRepository::new(&history_store)
+                        .delete_document_history(&record.operation_id, document_id, now)
+                        .map_err(|error| AppError::HistoryUnavailable(error.to_string()))?;
+                    if !deleted.gc.failures.is_empty()
+                        || deleted.gc.error.is_some()
+                        || deleted.gc.maintenance_record_error.is_some()
+                    {
+                        eprintln!(
+                            "history object cleanup remains pending after drawing delete {}",
+                            record.operation_id
+                        );
+                    }
+                    Ok(())
+                }
+            })
+            .await
+            .map_err(|error| AppError::Internal(format!("history replay task failed: {error}")))?;
+            result
+        })
+    })
+}
 
 #[derive(Clone, Default)]
 pub struct WorkspaceMutationGate {
@@ -85,6 +156,7 @@ impl TrashOperator for SystemTrashOperator {
 pub(crate) enum DerivedStateFault {
     Sqlite,
     Recovery,
+    ParentSync,
 }
 
 #[derive(Clone)]
@@ -94,6 +166,9 @@ pub struct WorkspaceEntryService {
     trash: Arc<dyn TrashOperator>,
     recovery: Arc<RecoveryStore>,
     watcher: Option<crate::watcher::WatcherService>,
+    history_replay: Option<HistoryReplay>,
+    history_store: Option<Arc<HistoryStore>>,
+    history_required: bool,
     #[cfg(test)]
     derived_fault: Arc<std::sync::Mutex<Option<DerivedStateFault>>>,
 }
@@ -136,6 +211,9 @@ impl WorkspaceEntryService {
             trash,
             recovery,
             watcher: None,
+            history_replay: None,
+            history_store: None,
+            history_required: false,
             #[cfg(test)]
             derived_fault: Arc::new(std::sync::Mutex::new(None)),
         }
@@ -143,6 +221,21 @@ impl WorkspaceEntryService {
 
     pub fn with_watcher(mut self, watcher: crate::watcher::WatcherService) -> Self {
         self.watcher = Some(watcher);
+        self
+    }
+
+    pub fn with_history_store(mut self, history_store: Arc<HistoryStore>) -> Self {
+        self.history_replay = Some(history_replay_for_store(Arc::clone(&history_store)));
+        self.history_store = Some(history_store);
+        self.history_required = true;
+        self
+    }
+
+    /// Enable durable history migration even when the history store is
+    /// temporarily unavailable. Pending records remain replayable at the
+    /// next startup instead of being mistaken for completed renames.
+    pub fn with_history_required(mut self, required: bool) -> Self {
+        self.history_required = required;
         self
     }
 
@@ -167,6 +260,20 @@ impl WorkspaceEntryService {
 
     pub fn mutation_gate(&self) -> &WorkspaceMutationGate {
         &self.mutation_gate
+    }
+
+    async fn reconcile_pending(&self) -> Result<(), AppError> {
+        match &self.history_replay {
+            Some(history_replay) => {
+                reconcile_pending_mutations_with_history(
+                    &self.repository,
+                    &self.recovery,
+                    Arc::clone(history_replay),
+                )
+                .await
+            }
+            None => reconcile_pending_mutations(&self.repository, &self.recovery).await,
+        }
     }
 
     #[cfg(test)]
@@ -205,6 +312,15 @@ impl WorkspaceEntryService {
         {
             false
         }
+    }
+
+    #[cfg(test)]
+    fn skip_parent_sync(&self) -> bool {
+        *self
+            .derived_fault
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            == Some(DerivedStateFault::ParentSync)
     }
 
     pub async fn create(
@@ -324,7 +440,7 @@ impl WorkspaceEntryService {
         request: WorkspaceEntryCreateRequest,
     ) -> Result<EntryMutationResult, AppError> {
         let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
-        reconcile_pending_mutations(&self.repository, &self.recovery).await?;
+        self.reconcile_pending().await?;
         let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
         let root = PathBuf::from(&workspace.root_path);
         let base_name = validate_entry_base_name(&request.base_name)?;
@@ -391,7 +507,7 @@ impl WorkspaceEntryService {
         request: WorkspaceEntryRenameRequest,
     ) -> Result<WorkspaceEntryRenameResult, AppError> {
         let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
-        reconcile_pending_mutations(&self.repository, &self.recovery).await?;
+        self.reconcile_pending().await?;
         let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
         let root = PathBuf::from(&workspace.root_path);
         let source = self
@@ -433,6 +549,9 @@ impl WorkspaceEntryService {
             new_relative_path.clone(),
             new_display_name,
         );
+        if self.history_required {
+            record = record.with_history_required(true);
+        }
         save_journal(&self.recovery, &record)?;
         self.note_pending_operation(
             &operation_id,
@@ -462,14 +581,35 @@ impl WorkspaceEntryService {
             return Err(error);
         }
 
-        let _ = apply_committed_record_with_skip(
+        record.filesystem_committed = true;
+        if let Err(error) = save_journal(&self.recovery, &record) {
+            eprintln!(
+                "workspace entry rename committed but filesystem phase could not be persisted for operation {operation_id}: {error}"
+            );
+        }
+
+        #[cfg(test)]
+        if self.skip_parent_sync() {
+            mutation_journal::set_parent_sync_fault(Some(operation_id.clone()));
+        }
+        let replay_result = apply_committed_record_with_history(
             &self.repository,
             &self.recovery,
             &mut record,
             self.skip_sqlite(),
             self.skip_recovery(),
+            self.history_replay.as_ref(),
         )
         .await;
+        #[cfg(test)]
+        if self.skip_parent_sync() {
+            mutation_journal::set_parent_sync_fault(None);
+        }
+        if let Err(error) = replay_result {
+            eprintln!(
+                "workspace entry rename committed; derived state remains pending for operation {operation_id}: {error}"
+            );
+        }
 
         let parent_relative_path = target
             .parent()
@@ -497,7 +637,7 @@ impl WorkspaceEntryService {
         request: WorkspaceEntryPathRequest,
     ) -> Result<WorkspaceEntryDeletePreflightResult, AppError> {
         let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
-        reconcile_pending_mutations(&self.repository, &self.recovery).await?;
+        self.reconcile_pending().await?;
         let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
         let source = self
             .resolve_entry(&workspace, &request.relative_path)
@@ -516,7 +656,7 @@ impl WorkspaceEntryService {
         request: WorkspaceEntryDeleteRequest,
     ) -> Result<WorkspaceEntryDeleteResult, AppError> {
         let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
-        reconcile_pending_mutations(&self.repository, &self.recovery).await?;
+        self.reconcile_pending().await?;
         let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
         let source = self
             .resolve_entry(&workspace, &request.relative_path)
@@ -539,6 +679,32 @@ impl WorkspaceEntryService {
             }
         }
 
+        // Capture the exact document UUID before Trash removes the file. A
+        // later file at the same path must never become the replay target.
+        let history_document_id = if source.kind == WorkspaceEntryKind::Drawing {
+            match self.history_store.as_ref() {
+                Some(store) => {
+                    let identity = store
+                        .load_active_document_identity(&canonical_path)
+                        .map_err(|error| AppError::HistoryUnavailable(error.to_string()))?;
+                    if let Some(identity) = identity.as_ref() {
+                        identity
+                            .verify_current_file(&source.path)
+                            .map_err(|error| AppError::HistoryStaleDocument(error.to_string()))?;
+                    }
+                    identity.map(|identity| identity.document_id)
+                }
+                None if self.history_required => {
+                    return Err(AppError::HistoryUnavailable(
+                        "history identity is unavailable for drawing deletion".to_owned(),
+                    ));
+                }
+                None => None,
+            }
+        } else {
+            None
+        };
+
         let trash = Arc::clone(&self.trash);
         let target = source.path.clone();
         let operation_id = Uuid::new_v4().to_string();
@@ -548,6 +714,12 @@ impl WorkspaceEntryService {
             canonical_path.clone(),
             source.relative_path.clone(),
         );
+        if source.kind == WorkspaceEntryKind::Drawing && self.history_required {
+            record = record.with_history_required(true);
+        }
+        if let Some(document_id) = history_document_id {
+            record = record.with_history_document_id(document_id);
+        }
         save_journal(&self.recovery, &record)?;
         self.note_pending_operation(
             &operation_id,
@@ -570,18 +742,59 @@ impl WorkspaceEntryService {
             self.forget_pending_operation(&operation_id).await;
             return Err(error);
         }
-        let _ = apply_committed_record_with_skip(
+        record.filesystem_committed = true;
+        if let Err(error) = save_journal(&self.recovery, &record) {
+            eprintln!(
+                "workspace entry delete committed but filesystem phase could not be persisted for operation {operation_id}: {error}"
+            );
+        }
+        let replay_result = apply_committed_record_with_history(
             &self.repository,
             &self.recovery,
             &mut record,
             self.skip_sqlite(),
             self.skip_recovery(),
+            self.history_replay.as_ref(),
         )
         .await;
+        if let Err(error) = &replay_result {
+            eprintln!(
+                "workspace entry delete committed; derived state remains pending for operation {operation_id}: {error}"
+            );
+        }
+        let history_maintenance = if replay_result.is_err() || !record.is_complete() {
+            Some(EntryHistoryMaintenance::PendingReplay)
+        } else if let (Some(store), Some(document_id)) = (
+            self.history_store.as_ref(),
+            record.history_document_id.as_ref(),
+        ) {
+            let store = Arc::clone(store);
+            let document_id = document_id.clone();
+            let cleanup_pending = run_blocking(move || {
+                store
+                    .with_connection(|connection| {
+                        connection.query_row(
+                            "SELECT COUNT(*) FROM maintenance_state
+                             WHERE document_id = ?1 AND issue_code = 'HISTORY_GC_FAILED'
+                               AND last_phase = 'document-delete-gc'",
+                            [&document_id],
+                            |row| row.get::<_, i64>(0),
+                        )
+                    })
+                    .map(|count| count > 0)
+                    .map_err(|error| AppError::HistoryUnavailable(error.to_string()))
+            })
+            .await
+            .unwrap_or(true);
+            cleanup_pending.then_some(EntryHistoryMaintenance::CleanupPending)
+        } else {
+            None
+        };
         Ok(WorkspaceEntryDeleteResult {
             operation_id,
             kind: source.kind,
             old_relative_path: source.relative_path,
+            history_maintenance,
         })
     }
 
@@ -590,7 +803,7 @@ impl WorkspaceEntryService {
         request: WorkspaceEntryPathRequest,
     ) -> Result<EmptyResponse, AppError> {
         let _workspace_guard = self.mutation_gate.acquire(&request.workspace_id).await;
-        reconcile_pending_mutations(&self.repository, &self.recovery).await?;
+        self.reconcile_pending().await?;
         let workspace = workspace_by_id(&self.repository, &request.workspace_id).await?;
         let source = self
             .resolve_entry(&workspace, &request.relative_path)

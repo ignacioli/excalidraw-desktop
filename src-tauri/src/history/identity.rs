@@ -377,7 +377,11 @@ impl DocumentIdentity {
             });
         }
         self.canonical_path = new.canonical_path;
-        self.filesystem_identity = new.filesystem_identity;
+        self.filesystem_identity = new.filesystem_identity.clone();
+        self.recent_self_write_identity = self
+            .recent_self_write_hash
+            .as_ref()
+            .map(|_| new.filesystem_identity);
         Ok(())
     }
 
@@ -535,7 +539,8 @@ impl HistoryStore {
                     last_self_written_hash, state
              FROM history_documents
              WHERE canonical_path = ?1 AND {state_clause}
-             ORDER BY created_at DESC, id DESC
+             ORDER BY CASE WHEN state = 'active' THEN 0 ELSE 1 END,
+                      created_at DESC, id DESC
              LIMIT 1"
         );
         let row = self.with_connection(|connection| {
@@ -626,6 +631,121 @@ impl HistoryStore {
                     ],
                 )
                 .map(|_| ())
+        })?;
+        Ok(())
+    }
+
+    /// Migrate every non-deleting identity below an application-owned rename.
+    /// Filesystem evidence is checked before the metadata transaction, so a
+    /// missing target, an external replacement, or an unknown result leaves
+    /// all identities unchanged and lets the mutation journal retry.
+    pub fn migrate_app_rename(
+        &self,
+        old_path: &Path,
+        new_path: &Path,
+    ) -> Result<(), IdentityStoreError> {
+        let old_prefix = canonical_locator(old_path)?;
+        let new_prefix = canonical_locator(new_path)?;
+        let rows = self.with_connection(|connection| {
+            let mut statement = connection.prepare(
+                "SELECT id, canonical_path, filesystem_device, filesystem_inode,
+                        filesystem_file_size, filesystem_modified_seconds,
+                        filesystem_modified_nanos, filesystem_reliable,
+                        last_self_written_hash, state
+                 FROM history_documents
+                 WHERE state = 'active'",
+            )?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<i64>>(2)?,
+                        row.get::<_, Option<i64>>(3)?,
+                        row.get::<_, Option<i64>>(4)?,
+                        row.get::<_, Option<i64>>(5)?,
+                        row.get::<_, Option<i64>>(6)?,
+                        row.get::<_, Option<i64>>(7)?,
+                        row.get::<_, Option<String>>(8)?,
+                        row.get::<_, String>(9)?,
+                    ))
+                })?
+                .collect::<Result<Vec<_>, _>>();
+            rows
+        })?;
+
+        let mut updates = Vec::new();
+        for row in rows {
+            let identity = document_identity_from_row(row)?;
+            let Some(suffix) = path_suffix(Path::new(&identity.canonical_path), &old_prefix) else {
+                continue;
+            };
+            let target = PathBuf::from(&new_prefix).join(suffix);
+            let mut migrated = identity;
+            let previous_path = PathBuf::from(&migrated.canonical_path);
+            migrated.record_app_rename(&previous_path, &target)?;
+            updates.push(migrated);
+        }
+
+        self.with_transaction(|transaction| {
+            for identity in &updates {
+                let filesystem = &identity.filesystem_identity;
+                let device = filesystem
+                    .device
+                    .map(i64::try_from)
+                    .transpose()
+                    .map_err(|_| {
+                        rusqlite::Error::ToSqlConversionFailure(Box::new(
+                            IdentityStoreError::InvalidMetadata(
+                                "filesystem device exceeds SQLite range".to_owned(),
+                            ),
+                        ))
+                    })?;
+                let inode = filesystem
+                    .inode
+                    .map(i64::try_from)
+                    .transpose()
+                    .map_err(|_| {
+                        rusqlite::Error::ToSqlConversionFailure(Box::new(
+                            IdentityStoreError::InvalidMetadata(
+                                "filesystem inode exceeds SQLite range".to_owned(),
+                            ),
+                        ))
+                    })?;
+                let file_size = i64::try_from(filesystem.file_size).map_err(|_| {
+                    rusqlite::Error::ToSqlConversionFailure(Box::new(
+                        IdentityStoreError::InvalidMetadata(
+                            "filesystem file size exceeds SQLite range".to_owned(),
+                        ),
+                    ))
+                })?;
+                transaction.execute(
+                    "UPDATE history_documents
+                     SET canonical_path = ?1,
+                         filesystem_device = ?2,
+                         filesystem_inode = ?3,
+                         filesystem_file_size = ?4,
+                         filesystem_modified_seconds = ?5,
+                         filesystem_modified_nanos = ?6,
+                         filesystem_reliable = ?7,
+                         last_self_written_hash = ?8,
+                         state = ?9
+                     WHERE id = ?10",
+                    rusqlite::params![
+                        identity.canonical_path,
+                        device,
+                        inode,
+                        file_size,
+                        filesystem.modified.seconds,
+                        i64::from(filesystem.modified.nanoseconds),
+                        i64::from(u8::from(filesystem.reliable)),
+                        identity.recent_self_write_hash,
+                        identity_state_name(identity.state),
+                        identity.document_id,
+                    ],
+                )?;
+            }
+            Ok::<_, rusqlite::Error>(())
         })?;
         Ok(())
     }
@@ -832,21 +952,39 @@ fn canonical_locator(path: &Path) -> Result<String, IdentityError> {
             }
         })?));
     }
-    let parent = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    let file_name = path
-        .file_name()
-        .ok_or_else(|| IdentityError::UnexpectedPath {
-            expected: PathBuf::from("<document>"),
-            observed: path.to_path_buf(),
+    let mut missing_components = Vec::new();
+    let mut existing_ancestor = path;
+    while !existing_ancestor.exists() {
+        let component =
+            existing_ancestor
+                .file_name()
+                .ok_or_else(|| IdentityError::UnexpectedPath {
+                    expected: PathBuf::from("<document>"),
+                    observed: path.to_path_buf(),
+                })?;
+        missing_components.push(component.to_os_string());
+        existing_ancestor = existing_ancestor
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+    }
+    let mut canonical =
+        fs::canonicalize(existing_ancestor).map_err(|source| IdentityError::Io {
+            path: existing_ancestor.to_path_buf(),
+            source,
         })?;
-    let canonical_parent = fs::canonicalize(parent).map_err(|source| IdentityError::Io {
-        path: parent.to_path_buf(),
-        source,
-    })?;
-    Ok(path_string(&canonical_parent.join(file_name)))
+    for component in missing_components.iter().rev() {
+        canonical.push(component);
+    }
+    Ok(path_string(&canonical))
+}
+
+fn path_suffix(path: &Path, prefix: &str) -> Option<PathBuf> {
+    let prefix = Path::new(prefix);
+    if path == prefix {
+        return Some(PathBuf::new());
+    }
+    path.strip_prefix(prefix).ok().map(PathBuf::from)
 }
 
 fn path_string(path: &Path) -> String {
@@ -965,6 +1103,85 @@ mod tests {
         fs::copy(&new_path, &save_as_path).expect("copy save-as");
         let save_as = DocumentIdentity::establish(&save_as_path).expect("new identity");
         assert_ne!(save_as.document_id, identity.document_id);
+    }
+
+    #[test]
+    fn persisted_identity_migrates_through_an_ancestor_directory_rename() {
+        let root = std::env::temp_dir().join(format!(
+            "excalidraw-history-identity-ancestor-{}",
+            Uuid::new_v4()
+        ));
+        let old_directory = root.join("old");
+        let new_directory = root.join("new");
+        let old_path = old_directory.join("nested/drawing.excalidraw");
+        let new_path = new_directory.join("nested/drawing.excalidraw");
+        fs::create_dir_all(old_path.parent().expect("nested parent")).expect("create drawing dir");
+        fs::write(&old_path, b"scene-a").expect("write drawing");
+        let store = HistoryStore::open_version_history_root(&root.join("version-history"))
+            .expect("open history store");
+        let original = store
+            .resolve_document_identity_for_open(&old_path, 10)
+            .expect("persist original identity");
+
+        fs::rename(&old_directory, &new_directory).expect("rename ancestor directory");
+        store
+            .migrate_app_rename(&old_directory, &new_directory)
+            .expect("migrate ancestor rename");
+
+        let migrated = store
+            .load_active_document_identity(
+                &new_path
+                    .canonicalize()
+                    .expect("canonical new path")
+                    .display()
+                    .to_string(),
+            )
+            .expect("load migrated identity")
+            .expect("migrated identity");
+        assert_eq!(migrated.document_id, original.document_id);
+        assert_eq!(
+            migrated.canonical_path,
+            new_path
+                .canonicalize()
+                .expect("canonical new path")
+                .display()
+                .to_string()
+        );
+        assert!(migrated
+            .filesystem_identity
+            .refers_to_same_file(&original.filesystem_identity));
+        fs::remove_dir_all(root).expect("remove identity fixture");
+    }
+
+    #[test]
+    fn active_identity_wins_over_detached_row_with_same_creation_time() {
+        let root = std::env::temp_dir().join(format!(
+            "excalidraw-history-identity-active-order-{}",
+            Uuid::new_v4()
+        ));
+        fs::create_dir_all(&root).expect("create identity root");
+        let path = root.join("drawing.excalidraw");
+        fs::write(&path, b"scene-a").expect("write drawing");
+        let store = HistoryStore::open_version_history_root(&root.join("version-history"))
+            .expect("open history store");
+        let detached = store
+            .resolve_document_identity_for_open(&path, 10)
+            .expect("persist detached identity");
+        store
+            .detach_document_identity(&detached.document_id)
+            .expect("detach identity");
+        let active = DocumentIdentity::establish(&path).expect("establish active identity");
+        store
+            .persist_document_identity(&active, 10)
+            .expect("persist active identity");
+
+        let loaded = store
+            .load_non_deleting_document_identity(&active.canonical_path)
+            .expect("load active identity")
+            .expect("active identity");
+        assert_eq!(loaded.document_id, active.document_id);
+        assert_eq!(loaded.state, IdentityState::Active);
+        fs::remove_dir_all(root).expect("remove identity fixture");
     }
 
     #[test]

@@ -16,6 +16,7 @@
 - **应用被中断时：** 崩溃、强制退出或掉电后，恢复快照可以找回尚未写入图纸文件的编辑。
 - **保存图纸时：** 新文件会先经过校验，再替换旧文件；写入中断不会留下半份 `.excalidraw`。
 - **其他程序修改文件时：** 没有本地编辑的文档可以重新加载；有本地编辑时会显示冲突选项，不会静默覆盖任一版本。
+- **需要找回早期状态时：** 本地 Version History 保存 automatic、manual 和操作前保护版本，并为每份文档维护持久身份。改名会保留身份，Save As 会开始独立历史，删除历史条目不会改变当前图纸。
 
 ## 画布优先的桌面工作流
 
@@ -30,6 +31,7 @@ Welcome 页面提供 **New Drawing**、**Open Workspace** 和 **Recent Workspace
 - 通过一棵连续的 Current Workspace 目录树浏览文件夹和图纸
 - 在多个标签中打开图纸；从 Finder 打开文件时复用正在运行的应用实例
 - 感知外部文件变更并明确解决冲突
+- 为 automatic checkpoint、manual 标记以及受保护的 restore/clear/import 操作保留本地 Version History
 - 将图纸导出为 PNG 或 SVG；SVG 输出会内嵌捆绑字体
 - 对图纸内重复图片去重，避免重复粘贴导致存储的资源数据倍增
 

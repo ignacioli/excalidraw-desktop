@@ -13,6 +13,182 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use uuid::Uuid;
 
+fn delete_fixture() -> (std::path::PathBuf, crate::history::store::HistoryStore) {
+    let root = std::env::temp_dir().join(format!("history-delete-{}", Uuid::new_v4()));
+    let store = crate::history::store::HistoryStore::open_version_history_root(&root)
+        .expect("open history store");
+    store
+        .with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO history_documents (id, canonical_path, created_at, state)
+                 VALUES ('doc', '/tmp/delete.excalidraw', 0, 'active')",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("insert history document");
+    (root, store)
+}
+
+fn publish_delete_version(
+    store: &crate::history::store::HistoryStore,
+    version_id: &str,
+    source: crate::history::types::HistoryVersionSource,
+) {
+    crate::history::repository::HistoryRepository::new(store)
+        .publish_scene(crate::history::repository::PublishSceneRequest {
+            version_id: version_id.to_owned(),
+            document_id: "doc".to_owned(),
+            scene_bytes: br#"{"type":"excalidraw","elements":[],"appState":{},"files":{}}"#
+                .to_vec(),
+            schema_version: 1,
+            source,
+            protected_action: (source == crate::history::types::HistoryVersionSource::Protected)
+                .then_some(crate::history::types::HistoryProtectedAction::Clear),
+            recorded_at: 1,
+            sequence: 1,
+        })
+        .expect("publish version");
+}
+
+#[test]
+fn delete_removes_only_selected_version_and_is_idempotent() {
+    let (root, store) = delete_fixture();
+    publish_delete_version(
+        &store,
+        "manual-1",
+        crate::history::types::HistoryVersionSource::Manual,
+    );
+    publish_delete_version(
+        &store,
+        "manual-2",
+        crate::history::types::HistoryVersionSource::Manual,
+    );
+
+    let repository = crate::history::repository::HistoryRepository::new(&store);
+    let deleted = repository
+        .delete_version("delete-1", "doc", "manual-1", 2)
+        .expect("delete selected version");
+    assert_eq!(deleted.version_id, "manual-1");
+    assert_eq!(
+        store
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT COUNT(*) FROM history_versions WHERE document_id = 'doc'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+            })
+            .expect("count versions"),
+        1
+    );
+    assert!(store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM history_versions WHERE id = 'manual-2')",
+                [],
+                |row| row.get::<_, bool>(0),
+            )
+        })
+        .expect("read remaining version"));
+    let retry = repository
+        .delete_version("delete-1", "doc", "manual-1", 3)
+        .expect("retry delete");
+    assert_eq!(retry, deleted);
+    drop(store);
+    fs::remove_dir_all(root).expect("remove fixture");
+}
+
+#[test]
+fn delete_refuses_a_version_referenced_by_an_incomplete_operation() {
+    let (root, store) = delete_fixture();
+    publish_delete_version(
+        &store,
+        "protected-1",
+        crate::history::types::HistoryVersionSource::Protected,
+    );
+    store
+        .with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO history_operations
+                 (idempotency_id, document_id, session_generation, revision, kind,
+                  protection_version_id, target_object_pins_json, state, created_at, updated_at)
+                 VALUES ('replace-1', 'doc', 0, 0, 'replace', 'protected-1', '[]',
+                         'protected', 1, 1)",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("insert active operation");
+
+    let error = crate::history::repository::HistoryRepository::new(&store)
+        .delete_version("delete-1", "doc", "protected-1", 2)
+        .expect_err("active operation must protect version");
+    assert!(matches!(
+        error,
+        crate::history::repository::HistoryRepositoryError::VersionInUse
+    ));
+    assert!(store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM history_versions WHERE id = 'protected-1')",
+                [],
+                |row| row.get::<_, bool>(0),
+            )
+        })
+        .expect("read protected version"));
+    drop(store);
+    fs::remove_dir_all(root).expect("remove fixture");
+}
+
+#[test]
+fn delete_keeps_objects_alive_when_an_operation_pin_still_references_them() {
+    let (root, store) = delete_fixture();
+    publish_delete_version(
+        &store,
+        "manual-1",
+        crate::history::types::HistoryVersionSource::Manual,
+    );
+    let scene_hash = store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT scene_hash FROM history_versions WHERE id = 'manual-1'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+        })
+        .expect("read scene reference");
+    let operation_pin = store
+        .reachability()
+        .acquire_operation_pin(
+            "replace-1",
+            crate::history::gc::ObjectReferences::new(scene_hash.clone(), std::iter::empty())
+                .expect("build operation reference"),
+        )
+        .expect("pin scene object");
+
+    crate::history::repository::HistoryRepository::new(&store)
+        .delete_version("delete-1", "doc", "manual-1", 2)
+        .expect("delete semantic version");
+    let object = crate::history::gc::ObjectKey::scene(scene_hash).expect("scene object key");
+    let report = store
+        .reachability()
+        .collect(
+            [crate::history::gc::GcCandidate::registered(
+                object.clone(),
+                std::time::SystemTime::UNIX_EPOCH,
+            )],
+            std::time::SystemTime::now(),
+            std::time::Duration::ZERO,
+            |_| Ok::<(), String>(()),
+        )
+        .expect("collect pinned object");
+    assert_eq!(report.retained, vec![object]);
+    operation_pin.release().expect("release operation pin");
+    drop(store);
+    fs::remove_dir_all(root).expect("remove fixture");
+}
+
 #[test]
 fn accepted_restore_target_survives_retention_and_releases_its_temporary_pin() {
     use crate::history::{

@@ -13,7 +13,7 @@ v1 的 `dir_list` / `file_create` / `file_rename` / `file_delete` / `thumb_looku
 - 契约版本常量 `IPC_CONTRACT_VERSION = 3`（TS/Rust），随 `app_handshake` 返回；不兼容变更须递增版本并在本文件记录迁移说明。
 - 字段演进规则：新增可选字段 = 兼容；删除/改类型/改语义 = 不兼容。
 - v1 → v2 不兼容变更：删除缩略图命令；用统一 Workspace Entry 命令替换 `dir_list` 与 `file_*`；`doc_close` 改为显式 `mode`（可丢弃失联文档而不再授权已缺失路径）。
-- v3 当前公开 history command 为 `history_list`、`history_preview`、`history_mark`、`history_replace` 和 `history_operation_status`；`history_delete` 仍是 reserved，未注册且不可调用。v2 客户端不兼容此握手版本。
+- v3 当前公开 history command 为 `history_list`、`history_preview`、`history_mark`、`history_replace`、`history_operation_status` 和 `history_delete`。v2 客户端不兼容此握手版本。
 
 ### 信任边界规则（所有命令统一执行）
 
@@ -50,6 +50,11 @@ type ErrorCode =
   | "DISK_FULL"
   | "IO_ERROR"
   | "DB_ERROR"
+  | "HISTORY_UNAVAILABLE"
+  | "HISTORY_RESOURCE_MISSING"
+  | "HISTORY_STALE_DOCUMENT"
+  | "HISTORY_OPERATION_PENDING"
+  | "HISTORY_BUSY"
   | "INTERNAL";
 ```
 
@@ -61,7 +66,7 @@ Rust 侧以 `thiserror` 枚举实现并映射到该形状；`unwrap`/`expect` �
 
 | 命令 | 请求 | 响应 | 说明 |
 |------|------|------|------|
-| `app_handshake` | `{}` | `AppHandshakeResponse` | `contractVersion` 为 2；`abnormalExit=true` 时进入恢复；`pendingOpenPaths` 为本次启动文件关联/单实例转交路径 |
+| `app_handshake` | `{}` | `AppHandshakeResponse` | `contractVersion` 为 3；`abnormalExit=true` 时进入恢复；`pendingOpenPaths` 为本次启动文件关联/单实例转交路径 |
 | `recovery_list` | `{}` | `RecoveryCandidate[]` | 列出可恢复草稿 |
 | `recovery_apply` | `{ documentId; action; saveAsPath? }` | `{ scene?; newPath? }` | `action`: `restore` \| `keepDisk` \| `saveAsNew` \| `discard` |
 
@@ -191,11 +196,11 @@ interface ExportOptions {
 type SceneData = unknown; // 官方 .excalidraw JSON；后端只做结构校验
 ```
 
-### 1.5 v3 版本历史类型（部分可用）
+### 1.5 v3 版本历史类型
 
-以下 DTO、validators、错误码和事件属于 v3 contract。`history_list` 与
-`history_preview`、`history_mark`、`history_replace` 与 `history_operation_status` 已注册并按当前
-文档授权执行；`history_delete` 仍是 reserved，调用会得到 Tauri 的未知 command 错误。
+以下 DTO、validators、错误码和事件属于 v3 contract。所有六个 history command
+均已注册并按当前文档授权执行。请求中的 locator 只能指向当前文档；前端不能提交
+history store 或 object store 路径。
 
 保留的 history error codes 为 `HISTORY_UNAVAILABLE`、`HISTORY_RESOURCE_MISSING`、
 `HISTORY_STALE_DOCUMENT`、`HISTORY_OPERATION_PENDING` 和 `HISTORY_BUSY`；它们当前
@@ -219,7 +224,9 @@ generation/revision 必须是非负整数；hash 必须是 64 位小写 SHA-256 
 | `history_mark` | `{ document; requestId; sessionGeneration; revision; currentSceneJson }` | 持久发布点击时完整场景后返回 `{ versionId; recordedAt; source: "manual"; contentHash }`；manual 记录不进入 automatic/protected 最新 20 条池 |
 | `history_replace` | `{ document; requestId; sessionGeneration; revision; expectedBaseHash; currentSceneJson; target }` | `target` 为 `restore(versionId)`、`clear` 或 `import(candidateSceneJson)`；返回 `completed` 或 `pendingReconciliation` |
 | `history_operation_status` | `{ document; requestId }` | 只查询既有操作；返回 state、`replacementCommitted: boolean \| null` 和完成时的 adoption payload |
-| `history_delete` | reserved（当前未注册） | 调用会得到 Tauri 的未知 command 错误 |
+| `history_delete` | `{ document; requestId; versionId }` | 在文档 history-operation lease 下删除一条语义版本；返回 `{ deletedVersionId }`；同一 `requestId` 重试幂等，活动操作引用的版本返回 `HISTORY_BUSY` |
+
+`history_delete` 只改变 history metadata 和其之后的 best-effort object GC，不改变当前画布、冷文件、draft 或文档身份。版本不存在返回 `HISTORY_RESOURCE_MISSING`；同一 `requestId` 绑定到不同文档或版本返回 `HISTORY_STALE_DOCUMENT`；操作仍未到达终态返回 `HISTORY_OPERATION_PENDING`。共享对象和仍由 operation/hydration pin 引用的对象必须保留。
 
 `history_replace` 完成响应包含 `protectionVersionId`、`adoptedScene`、`newBaseHash` 和
 `newSessionGeneration`。不确定的发布结果必须为 `pendingReconciliation`，其中

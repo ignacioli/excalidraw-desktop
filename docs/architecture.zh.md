@@ -110,6 +110,8 @@ flowchart LR
 
 版本历史是独立的持久化平面。受保护替换先发布不可变场景/资源对象及持久的保护/意图元数据，再复用共享文档锁和受保护的原子 rename，最后修复主草稿/索引状态。因此重启协调会独立观察当前文件、历史 SQLite 和对象存储；`after_rename_before_parent_sync` 的结果必须是 `pendingReconciliation`，不能因为目录同步未知就假定旧文件仍然存在。
 
+每个已保存图纸都有持久的历史 `documentId`，它独立于当前路径、前端 tab UUID 和版本 ID。生产存储位于 Tauri app-data 目录下的 `version-history/history.sqlite3`，旁边保存不可变场景与素材对象。应用内改名或祖先目录改名会迁移同一个身份；Save As 会创建没有历史继承的新身份。后端还记录文件系统身份（macOS 上使用 device/inode 及辅助 metadata），因此后来出现在旧路径的另一个文件不能继承旧历史。删除图纸后会保留 `deleting` 身份墓碑并移除语义版本，避免同路径新文件重新绑定旧文档。
+
 普通历史只由成功完成的冷 checkpoint 驱动。首次成功 checkpoint 建立持久的逐文档基线；至少 30 分钟后第一次包含变化的 checkpoint，使用该次保存的精确不可变场景和图片字节发布版本。手动版本和保护版本不推进这条基线，应用空闲时也没有历史专用 timer 追补。普通历史失败通过独立的 `history-issue` 状态／事件反馈，不能把已经成功的当前文件保存改写成失败。手动标记把点击时场景发布为不受上限影响的 `manual` 记录；相同字节可以复用对象，但不能合并语义记录。`automatic` 与 `protected` 继续共享最新 20 条池。
 
 画布清空与绘图导入复用恢复使用的同一个 `history_replace` 协调器。宿主在 Excalidraw 处理前捕获清空／导入快捷键及可能携带场景的文件拖放。PNG/SVG 拖放先解析：内嵌场景进入受保护替换；普通图片只转交 SDK 插入一次。素材库拖放和文本编辑仍由 SDK 处理。前端仅为当前文档采用后端确认完成的替换；结果不确定时保持该文档只读，等待协调。
@@ -251,7 +253,8 @@ sequenceDiagram
 ## 8. IPC 信任边界
 
 - 契约：命令/事件 Schema + 错误分类 + 输入校验，唯一定义于 `docs/contracts/ipc-contracts.md`；TypeScript 源为 `src/ipc/contracts.ts`，Rust DTO 为 `src-tauri/src/commands/dto.rs`。前端不得绕过。当前 `IPC_CONTRACT_VERSION = 3`。
-- 版本历史命令为 `history_list`、`history_preview`、`history_replace` 和 `history_operation_status`。请求携带文档授权与 request identity，不携带 history-store 路径；`history_replace` 幂等，rename 后不确定结果保持 `pendingReconciliation`。
+- 版本历史命令为 `history_list`、`history_preview`、`history_mark`、`history_replace`、`history_operation_status` 和 `history_delete`。请求携带文档授权与 request identity，不携带 history-store 路径；`history_replace` 幂等，rename 后不确定结果保持 `pendingReconciliation`。
+- `history_delete` 在持有文档 history-operation lease 时删除一条语义版本。重复使用同一 `requestId` 是幂等的；仍被活动替换引用的版本会受到保护并返回结构化 busy 错误。metadata 事务之后的对象 GC 是 best effort，仍被其他文档共享或被操作 pin 的对象会保留。
 - 条目变更授权使用 `workspaceId + relativePath`（及创建/重命名的 `baseName`）。响应中的 `canonicalPath` 供打开与会话迁移使用，**不是**前端可提交的授权证据。
 - 所有路径在后端经 `security/` canonicalize + 工作区白名单校验；越界返回 `PATH_ACCESS_DENIED`。文档 JSON 视为不可信输入（结构校验 + 尺寸上限）。
 - 最小权限：Tauri Capabilities 为 `core:default` + `core:window:allow-destroy` + `dialog:allow-open` + `dialog:allow-save`（`src-tauri/capabilities/default.json`）。该窗口权限仅用于让原生关闭处理器在 app-exit checkpoint 完成后销毁主窗口。路径 ACL 在 Rust，不靠额外 fs capability 放开 WebView 任意文件系统。严格 CSP；asset protocol 仅限 `.excalidraw_assets` 图片。
@@ -278,6 +281,7 @@ sequenceDiagram
 | 冷层   | 文件系统 `*.excalidraw`（原子替换）；支持识别 `.excalidraw.json` | 最终事实来源；新建图纸默认写入 `.excalidraw`                          |
 | 恢复   | `recovery/*.json` 轮换快照 + `session.lock`                      | 崩溃恢复                                                              |
 | 废纸篓 | 操作系统 Trash                                                   | 空 Directory 与干净 Drawing 的删除提交点；无递归/永久删除命令         |
+| 历史   | app-data `version-history/history.sqlite3` + 不可变场景/素材对象    | 持久文档身份、版本 metadata、受保护操作状态与可达性控制的 GC           |
 
 存储层设计细节见 ADR-002（双层持久化）与 ADR-003（SQLite-first 与 redb 触发条件）。热层保持 WAL 草稿，不改回就地覆盖冷文件，也不拆除恢复快照。
 

@@ -6,8 +6,11 @@
 //! filesystem mutation never happened.
 
 use std::{
-    fs, io,
-    path::PathBuf,
+    fs::{self, File},
+    future::Future,
+    io,
+    path::{Path, PathBuf},
+    pin::Pin,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -21,8 +24,19 @@ use crate::{
 };
 
 const JOURNAL_DIRECTORY_NAME: &str = "entry-mutation-journal";
-const JOURNAL_VERSION: u32 = 1;
+const JOURNAL_VERSION: u32 = 2;
 pub(crate) const UNCOMMITTED_JOURNAL_TTL: Duration = Duration::from_secs(60);
+
+#[cfg(test)]
+static PARENT_SYNC_FAULT: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// History owns the replay implementation; the entry journal only owns the
+/// durable phase boundary and retry semantics.
+pub type HistoryReplay = Arc<
+    dyn Fn(MutationJournalRecord) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send>>
+        + Send
+        + Sync,
+>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,8 +57,28 @@ pub struct MutationJournalRecord {
     pub old_relative_path: String,
     pub new_relative_path: Option<String>,
     pub new_display_name: Option<String>,
+    /// Durable post-filesystem-commit marker for v2 journals. v1 records do
+    /// not carry this phase and retain their legacy path inference.
+    #[serde(default)]
+    pub filesystem_committed: bool,
     pub sqlite_applied: bool,
     pub recovery_applied: bool,
+    /// Stable history identity captured before a destructive delete. Rename
+    /// records intentionally leave this unset because identity is located by
+    /// the old path and verified by filesystem evidence.
+    #[serde(default)]
+    pub history_document_id: Option<String>,
+    /// Missing in v1 journals, where it intentionally defaults to false.
+    #[serde(default)]
+    pub history_required: bool,
+    /// Defaults to false so an old or partial record is never assumed done.
+    #[serde(default)]
+    pub history_applied: bool,
+    /// A rename is not durable until both affected parent directories have
+    /// been synced. Missing in older journals, where it remains pending and
+    /// is retried before derived state is repaired.
+    #[serde(default)]
+    pub parent_sync_applied: bool,
 }
 
 impl MutationJournalRecord {
@@ -67,8 +101,13 @@ impl MutationJournalRecord {
             old_relative_path,
             new_relative_path: Some(new_relative_path),
             new_display_name: Some(new_display_name),
+            filesystem_committed: false,
             sqlite_applied: false,
             recovery_applied: false,
+            history_document_id: None,
+            history_required: false,
+            history_applied: false,
+            parent_sync_applied: false,
         }
     }
 
@@ -88,14 +127,53 @@ impl MutationJournalRecord {
             old_relative_path,
             new_relative_path: None,
             new_display_name: None,
+            filesystem_committed: false,
             sqlite_applied: false,
             recovery_applied: false,
+            history_document_id: None,
+            history_required: false,
+            history_applied: false,
+            parent_sync_applied: true,
         }
     }
 
-    pub fn is_complete(&self) -> bool {
-        self.sqlite_applied && self.recovery_applied
+    /// Mark this operation as requiring the history replay phase.
+    pub fn with_history_required(mut self, required: bool) -> Self {
+        self.history_required = required;
+        if !required {
+            self.history_applied = false;
+        }
+        self
     }
+
+    pub fn history_pending(&self) -> bool {
+        self.history_required && !self.history_applied
+    }
+
+    pub fn with_filesystem_committed(mut self, committed: bool) -> Self {
+        self.filesystem_committed = committed;
+        self
+    }
+
+    pub fn with_history_document_id(mut self, document_id: impl Into<String>) -> Self {
+        self.history_document_id = Some(document_id.into());
+        self.history_required = true;
+        self
+    }
+
+    pub fn is_complete(&self) -> bool {
+        self.parent_sync_applied
+            && self.sqlite_applied
+            && self.recovery_applied
+            && (!self.history_required || self.history_applied)
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn set_parent_sync_fault(operation_id: Option<String>) {
+    *PARENT_SYNC_FAULT
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = operation_id;
 }
 
 pub fn journal_directory(recovery: &RecoveryStore) -> PathBuf {
@@ -164,9 +242,27 @@ pub fn load_journals(recovery: &RecoveryStore) -> Result<Vec<MutationJournalReco
                 })
             }
         };
-        if let Ok(record) = serde_json::from_slice::<MutationJournalRecord>(&bytes) {
-            records.push(record);
+        let mut record =
+            serde_json::from_slice::<MutationJournalRecord>(&bytes).map_err(|error| {
+                AppError::Internal(format!(
+                    "failed to deserialize entry mutation journal {}: {error}",
+                    path.display()
+                ))
+            })?;
+        if record.version == 0 || record.version > JOURNAL_VERSION {
+            return Err(AppError::Internal(format!(
+                "unsupported entry mutation journal version {} at {}",
+                record.version,
+                path.display()
+            )));
         }
+        if record.version < JOURNAL_VERSION {
+            // v1 had no history phase. Keep the record durable until a
+            // history owner probes and either migrates the existing identity
+            // or reports a retryable/unavailable result.
+            record.history_required = true;
+        }
+        records.push(record);
     }
     records.sort_by(|left, right| left.operation_id.cmp(&right.operation_id));
     Ok(records)
@@ -178,9 +274,37 @@ pub async fn reconcile_pending_mutations(
     repository: &SqliteRepository,
     recovery: &RecoveryStore,
 ) -> Result<(), AppError> {
+    reconcile_pending_mutations_inner(repository, recovery, None).await
+}
+
+/// Replay pending mutations with the history phase supplied by the history
+/// owner. The callback receives an owned record so it can safely cross an
+/// async or blocking boundary and must be idempotent by operation ID.
+pub async fn reconcile_pending_mutations_with_history(
+    repository: &SqliteRepository,
+    recovery: &RecoveryStore,
+    history_replay: HistoryReplay,
+) -> Result<(), AppError> {
+    reconcile_pending_mutations_inner(repository, recovery, Some(&history_replay)).await
+}
+
+async fn reconcile_pending_mutations_inner(
+    repository: &SqliteRepository,
+    recovery: &RecoveryStore,
+    history_replay: Option<&HistoryReplay>,
+) -> Result<(), AppError> {
     let mut first_error = None;
     for mut record in load_journals(recovery)? {
-        if let Err(error) = apply_committed_record(repository, recovery, &mut record).await {
+        if let Err(error) = apply_committed_record_with_history(
+            repository,
+            recovery,
+            &mut record,
+            false,
+            false,
+            history_replay,
+        )
+        .await
+        {
             first_error = first_error.or(Some(error));
         }
     }
@@ -190,29 +314,44 @@ pub async fn reconcile_pending_mutations(
     }
 }
 
-pub async fn apply_committed_record(
-    repository: &SqliteRepository,
-    recovery: &RecoveryStore,
-    record: &mut MutationJournalRecord,
-) -> Result<(), AppError> {
-    apply_committed_record_with_skip(repository, recovery, record, false, false).await
-}
-
-pub async fn apply_committed_record_with_skip(
+pub async fn apply_committed_record_with_history(
     repository: &SqliteRepository,
     recovery: &RecoveryStore,
     record: &mut MutationJournalRecord,
     skip_sqlite: bool,
     skip_recovery: bool,
+    history_replay: Option<&HistoryReplay>,
 ) -> Result<(), AppError> {
     if !filesystem_commit_observed(record) {
-        if uncommitted_journal_is_stale(recovery, record) {
-            delete_journal(recovery, &record.operation_id)?;
+        if uncommitted_filesystem_state_is_safe_to_drop(record) {
+            if uncommitted_journal_is_stale(recovery, record) {
+                delete_journal(recovery, &record.operation_id)?;
+            }
+            return Ok(());
+        }
+        if record.version >= JOURNAL_VERSION {
+            return Err(AppError::HistoryOperationPending(
+                record.operation_id.clone(),
+            ));
         }
         return Ok(());
     }
 
     let mut apply_error = None;
+    if !record.parent_sync_applied {
+        match sync_rename_parent_directories(record) {
+            Ok(()) => {
+                record.parent_sync_applied = true;
+                save_journal(recovery, record)?;
+            }
+            Err(error) => {
+                // The filesystem mutation is already committed. Keep the
+                // durable record and stop before repairing derived state so a
+                // retry can establish parent-directory durability first.
+                return Err(error);
+            }
+        }
+    }
     if !record.sqlite_applied && !skip_sqlite {
         match apply_sqlite(repository, record).await {
             Ok(()) => {
@@ -231,6 +370,32 @@ pub async fn apply_committed_record_with_skip(
             Err(error) => apply_error = apply_error.or(Some(error)),
         }
     }
+    // v1 records predate the explicit history flags. When a history replay
+    // owner is available, probe them as well so an existing identity is not
+    // stranded behind the legacy two-phase completion path. Without a
+    // history owner, preserve the legacy behavior unless the record explicitly
+    // requires the new phase.
+    let legacy_history_probe = record.version < JOURNAL_VERSION;
+    if record.sqlite_applied
+        && record.recovery_applied
+        && (record.history_pending() || legacy_history_probe)
+    {
+        match history_replay {
+            Some(history_replay) => match history_replay(record.clone()).await {
+                Ok(()) => {
+                    record.history_applied = true;
+                    save_journal(recovery, record)?;
+                }
+                Err(error) => apply_error = apply_error.or(Some(error)),
+            },
+            None if record.history_pending() => {
+                apply_error = apply_error.or(Some(AppError::HistoryOperationPending(
+                    record.operation_id.clone(),
+                )))
+            }
+            None => {}
+        }
+    }
     if record.is_complete() {
         delete_journal(recovery, &record.operation_id)?;
     }
@@ -240,7 +405,54 @@ pub async fn apply_committed_record_with_skip(
     Ok(())
 }
 
+fn sync_rename_parent_directories(record: &MutationJournalRecord) -> Result<(), AppError> {
+    if record.kind != MutationJournalKind::Rename {
+        return Ok(());
+    }
+
+    #[cfg(test)]
+    let injected_failure = PARENT_SYNC_FAULT
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .as_deref()
+        == Some(record.operation_id.as_str());
+    #[cfg(test)]
+    if injected_failure {
+        return Err(AppError::Io {
+            path: None,
+            source: io::Error::other("injected parent directory sync failure"),
+        });
+    }
+
+    let old_parent = Path::new(&record.old_canonical_path)
+        .parent()
+        .ok_or_else(|| AppError::Internal("rename journal is missing the old parent".to_owned()))?;
+    let new_parent = record
+        .new_canonical_path
+        .as_deref()
+        .and_then(|path| Path::new(path).parent())
+        .ok_or_else(|| AppError::Internal("rename journal is missing the new parent".to_owned()))?;
+
+    sync_parent_directory(old_parent)?;
+    if new_parent != old_parent {
+        sync_parent_directory(new_parent)?;
+    }
+    Ok(())
+}
+
+fn sync_parent_directory(parent: &Path) -> Result<(), AppError> {
+    File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|source| AppError::Io {
+            path: Some(parent.to_path_buf()),
+            source,
+        })
+}
+
 pub(crate) fn filesystem_commit_observed(record: &MutationJournalRecord) -> bool {
+    if record.version >= JOURNAL_VERSION {
+        return record.filesystem_committed;
+    }
     let old = PathBuf::from(&record.old_canonical_path);
     match record.kind {
         MutationJournalKind::Rename => {
@@ -251,6 +463,27 @@ pub(crate) fn filesystem_commit_observed(record: &MutationJournalRecord) -> bool
             new.exists() || !old.exists()
         }
         MutationJournalKind::Delete => !old.exists(),
+    }
+}
+
+/// A v2 journal may be removed after TTL only when the filesystem still
+/// proves that the mutation never started. Once the old path disappears, the
+/// process may have committed the mutation immediately before a crash and
+/// before the durable marker was written; retaining the journal is fail-closed
+/// in that ambiguous state.
+fn uncommitted_filesystem_state_is_safe_to_drop(record: &MutationJournalRecord) -> bool {
+    if record.version < JOURNAL_VERSION {
+        return true;
+    }
+    let old = PathBuf::from(&record.old_canonical_path);
+    match record.kind {
+        MutationJournalKind::Rename => {
+            let Some(new_canonical_path) = record.new_canonical_path.as_ref() else {
+                return false;
+            };
+            old.exists() && !PathBuf::from(new_canonical_path).exists()
+        }
+        MutationJournalKind::Delete => old.exists(),
     }
 }
 

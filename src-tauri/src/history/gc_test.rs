@@ -153,6 +153,43 @@ fn gc_retains_target_objects_during_status_hydration() {
 }
 
 #[test]
+fn hydration_read_pin_keeps_scene_and_asset_alive_during_gc() {
+    let gate = ReachabilityGate::new();
+    let target_scene = scene(14);
+    let target_asset = asset(15);
+    let hydration_pin = gate
+        .acquire_hydration_pin(references(target_scene.clone(), [target_asset.clone()]))
+        .expect("acquire read hydration pin");
+    let report = gate
+        .collect(
+            [
+                GcCandidate::registered(target_scene.clone(), SystemTime::UNIX_EPOCH),
+                GcCandidate::registered(target_asset.clone(), SystemTime::UNIX_EPOCH),
+            ],
+            SystemTime::UNIX_EPOCH + Duration::from_secs(3600),
+            Duration::ZERO,
+            |_| Ok::<(), ()>(()),
+        )
+        .expect("collect while read response is buffered");
+    assert!(report.deleted.is_empty());
+    assert_eq!(report.retained.len(), 2);
+
+    hydration_pin.release().expect("release read hydration pin");
+    let report = gate
+        .collect(
+            [
+                GcCandidate::registered(target_scene, SystemTime::UNIX_EPOCH),
+                GcCandidate::registered(target_asset, SystemTime::UNIX_EPOCH),
+            ],
+            SystemTime::UNIX_EPOCH + Duration::from_secs(3600),
+            Duration::ZERO,
+            |_| Ok::<(), ()>(()),
+        )
+        .expect("collect after read response");
+    assert_eq!(report.deleted.len(), 2);
+}
+
+#[test]
 fn operation_pin_keeps_evicted_target_and_assets_alive() {
     let gate = ReachabilityGate::new();
     let target_scene = scene(20);

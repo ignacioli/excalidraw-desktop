@@ -82,7 +82,7 @@ fn count(store: &HistoryStore, source: Option<&str>) -> i64 {
 }
 
 #[test]
-fn retains_nineteen_twenty_and_only_the_newest_twenty_first_record() {
+fn retains_mixed_nineteen_twenty_and_only_the_newest_twenty_first_record() {
     let (root, store) = fixture();
     let repository = HistoryRepository::new(&store);
 
@@ -90,21 +90,25 @@ fn retains_nineteen_twenty_and_only_the_newest_twenty_first_record() {
         publish(
             &repository,
             &format!("automatic-{index:02}"),
-            HistoryVersionSource::Automatic,
+            if index % 2 == 0 {
+                HistoryVersionSource::Protected
+            } else {
+                HistoryVersionSource::Automatic
+            },
             index,
             index as u64,
         );
     }
-    assert_eq!(count(&store, Some("automatic")), 19);
+    assert_eq!(count(&store, None), 19);
 
     publish(
         &repository,
         "automatic-19",
-        HistoryVersionSource::Automatic,
+        HistoryVersionSource::Protected,
         19,
         19,
     );
-    assert_eq!(count(&store, Some("automatic")), 20);
+    assert_eq!(count(&store, None), 20);
 
     let result = repository
         .publish_scene(PublishSceneRequest {
@@ -119,9 +123,9 @@ fn retains_nineteen_twenty_and_only_the_newest_twenty_first_record() {
         })
         .unwrap_or_else(|error| panic!("publish 21st version: {error}"));
 
-    assert_eq!(count(&store, Some("automatic")), RETAINED_VERSION_LIMIT);
+    assert_eq!(count(&store, None), RETAINED_VERSION_LIMIT);
     assert_eq!(result.evicted_version_ids, vec!["automatic-00"]);
-    assert!(!ids(&store, Some("automatic")).contains(&"automatic-00".to_owned()));
+    assert!(!ids(&store, None).contains(&"automatic-00".to_owned()));
     let live = store
         .reachability()
         .live_objects()
@@ -329,6 +333,403 @@ fn old_records_are_not_expired_by_age_and_failed_publication_does_not_evict() {
 
     drop(store);
     fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+#[test]
+fn deleting_document_history_removes_all_semantic_rows_and_is_idempotent() {
+    let (root, store) = fixture();
+    let repository = HistoryRepository::new(&store);
+    publish(
+        &repository,
+        "automatic-to-delete",
+        HistoryVersionSource::Automatic,
+        1,
+        1,
+    );
+    publish(
+        &repository,
+        "manual-to-delete",
+        HistoryVersionSource::Manual,
+        2,
+        2,
+    );
+
+    let deleted = repository
+        .delete_document_history("document-delete-1", "doc", 3)
+        .expect("delete document history");
+    assert_eq!(deleted.deleted_version_ids.len(), 2);
+    assert_eq!(count(&store, None), 0);
+    assert_eq!(
+        store
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT state FROM history_documents WHERE id = 'doc'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
+            })
+            .expect("read document state"),
+        "deleting"
+    );
+    assert_eq!(
+        store
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT state FROM history_operations
+                     WHERE idempotency_id = 'document-delete-1'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
+            })
+            .expect("read delete operation state"),
+        "completed"
+    );
+
+    let retry = repository
+        .delete_document_history("document-delete-1", "doc", 4)
+        .expect("retry document history delete");
+    assert!(retry.deleted_version_ids.is_empty());
+    drop(store);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+#[test]
+fn bulk_delete_refuses_pending_operation_and_restart_rehydrates_its_pin() {
+    let (root, store) = fixture();
+    let repository = HistoryRepository::new(&store);
+    publish(
+        &repository,
+        "pending-protection",
+        HistoryVersionSource::Protected,
+        1,
+        1,
+    );
+    let scene_hash = store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT scene_hash FROM history_versions WHERE id = 'pending-protection'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+        })
+        .expect("read pending protection hash");
+    store
+        .with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO history_operations
+                 (idempotency_id, document_id, session_generation, revision, kind,
+                  protection_version_id, target_object_pins_json, state, created_at, updated_at)
+                 VALUES ('replace-pending', 'doc', 0, 0, 'replace',
+                         'pending-protection', '[]', 'protected', 2, 2)",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("insert pending operation");
+
+    let error = repository
+        .delete_document_history("document-delete-pending", "doc", 3)
+        .expect_err("pending operation must block bulk deletion");
+    assert!(matches!(error, HistoryRepositoryError::DeletePending));
+    assert_eq!(count(&store, None), 1);
+    assert_eq!(
+        store
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT state FROM history_documents WHERE id = 'doc'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
+            })
+            .expect("read document state"),
+        "active"
+    );
+    drop(store);
+
+    // Reopening the same history root proves the semantic row remains the
+    // durable source for rehydrating the pending operation's object pin.
+    let reopened = HistoryStore::open_version_history_root(&root).expect("reopen history store");
+    let scene_key = crate::history::gc::ObjectKey::scene(scene_hash).expect("scene key");
+    assert!(reopened
+        .reachability()
+        .live_objects()
+        .expect("read rehydrated live set")
+        .contains(&scene_key));
+    drop(reopened);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+#[test]
+fn bulk_delete_preserves_shared_objects_and_operation_pins() {
+    let (root, store) = fixture();
+    store
+        .with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO history_documents
+                 (id, canonical_path, created_at, state)
+                 VALUES ('doc-2', '/tmp/doc-2.excalidraw', 0, 'active')",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("insert second document");
+    let scene = br#"{"type":"excalidraw","version":2,"elements":[],"appState":{},"files":{}}"#;
+    let repository = HistoryRepository::new(&store);
+    for (document_id, version_id) in [("doc", "shared-1"), ("doc-2", "shared-2")] {
+        let object = store.put_scene(scene, 1).expect("write shared scene");
+        repository
+            .publish(crate::history::repository::PublishVersionRequest {
+                version_id: version_id.to_owned(),
+                document_id: document_id.to_owned(),
+                scene: object,
+                source: HistoryVersionSource::Manual,
+                protected_action: None,
+                recorded_at: 1,
+                sequence: 1,
+            })
+            .expect("publish shared scene");
+    }
+    let scene_hash = store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT scene_hash FROM history_versions WHERE id = 'shared-1'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+        })
+        .expect("read shared scene hash");
+    let pin = store
+        .reachability()
+        .acquire_operation_pin(
+            "restore-shared",
+            crate::history::gc::ObjectReferences::new(scene_hash.clone(), std::iter::empty())
+                .expect("build shared pin"),
+        )
+        .expect("pin shared scene");
+
+    let deleted = repository
+        .delete_document_history("document-delete-shared", "doc", 2)
+        .expect("delete first document history");
+    assert_eq!(deleted.deleted_version_ids, vec!["shared-1"]);
+    assert!(deleted.gc.retained_objects >= 1);
+    assert!(store
+        .objects()
+        .scene_path(&scene_hash)
+        .expect("shared scene path")
+        .is_file());
+    assert_eq!(count_for_document(&store, "doc-2"), 1);
+    pin.release().expect("release shared pin");
+    drop(store);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+#[test]
+fn bulk_delete_preserves_an_asset_shared_by_another_document() {
+    let (root, store) = fixture();
+    store
+        .with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO history_documents
+                 (id, canonical_path, created_at, state)
+                 VALUES ('doc-2', '/tmp/doc-2.excalidraw', 0, 'active')",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("insert second document");
+    let scene = br#"{"type":"excalidraw","version":2,"elements":[],"appState":{},"files":{}}"#;
+    let repository = HistoryRepository::new(&store);
+    for (document_id, version_id) in [("doc", "asset-shared-1"), ("doc-2", "asset-shared-2")] {
+        repository
+            .publish_scene_with_assets(
+                PublishSceneRequest {
+                    version_id: version_id.to_owned(),
+                    document_id: document_id.to_owned(),
+                    scene_bytes: scene.to_vec(),
+                    schema_version: 1,
+                    source: HistoryVersionSource::Manual,
+                    protected_action: None,
+                    recorded_at: 1,
+                    sequence: 1,
+                },
+                vec![PublishAsset {
+                    file_id: "image".to_owned(),
+                    bytes: b"shared-png".to_vec(),
+                    mime_type: "image/png".to_owned(),
+                }],
+            )
+            .expect("publish shared asset");
+    }
+    let asset_hash = store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT asset_hash FROM version_assets WHERE version_id = 'asset-shared-1'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+        })
+        .expect("read shared asset hash");
+
+    let deleted = repository
+        .delete_document_history("document-delete-assets", "doc", 2)
+        .expect("delete first document history");
+    assert_eq!(deleted.deleted_version_ids, vec!["asset-shared-1"]);
+    assert!(store
+        .objects()
+        .asset_path(&asset_hash)
+        .expect("shared asset path")
+        .is_file());
+    assert_eq!(count_for_document(&store, "doc-2"), 1);
+    let asset_count = store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT COUNT(*) FROM version_assets WHERE version_id = 'asset-shared-2'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+        })
+        .expect("count retained asset reference");
+    assert_eq!(asset_count, 1);
+    drop(store);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+#[test]
+fn deleting_an_unavailable_version_does_not_block_other_versions() {
+    let (root, store) = fixture();
+    let repository = HistoryRepository::new(&store);
+    publish(
+        &repository,
+        "unavailable-version",
+        HistoryVersionSource::Manual,
+        1,
+        1,
+    );
+    publish(
+        &repository,
+        "available-version",
+        HistoryVersionSource::Manual,
+        2,
+        2,
+    );
+    let unavailable_hash = store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT scene_hash FROM history_versions WHERE id = 'unavailable-version'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+        })
+        .expect("read unavailable scene hash");
+    fs::remove_file(
+        store
+            .objects()
+            .scene_path(&unavailable_hash)
+            .expect("unavailable scene path"),
+    )
+    .expect("remove unavailable scene object");
+
+    repository
+        .delete_version("delete-unavailable", "doc", "unavailable-version", 3)
+        .expect("delete unavailable version");
+    assert_eq!(count(&store, None), 1);
+    assert!(store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM history_versions WHERE id = 'available-version')",
+                [],
+                |row| row.get::<_, bool>(0),
+            )
+        })
+        .expect("read available version"));
+    drop(store);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+#[test]
+fn bulk_delete_reports_gc_failure_as_maintenance_debt_after_semantic_commit() {
+    let (root, store) = fixture();
+    let repository = HistoryRepository::new(&store);
+    publish(
+        &repository,
+        "corrupt-object",
+        HistoryVersionSource::Manual,
+        1,
+        1,
+    );
+    let scene_hash = store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT scene_hash FROM history_versions WHERE id = 'corrupt-object'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+        })
+        .expect("read corrupt scene hash");
+    fs::write(
+        store
+            .objects()
+            .scene_path(&scene_hash)
+            .expect("corrupt scene path"),
+        b"corrupt",
+    )
+    .expect("corrupt scene object");
+
+    let deleted = repository
+        .delete_document_history("document-delete-corrupt", "doc", 2)
+        .expect("semantic delete remains successful");
+    assert_eq!(deleted.deleted_version_ids, vec!["corrupt-object"]);
+    assert!(deleted.gc.error.is_some());
+    assert!(deleted.gc.maintenance_record_error.is_none());
+    assert_eq!(count(&store, None), 0);
+    assert_eq!(
+        store
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT issue_code FROM maintenance_state WHERE document_id = 'doc'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
+            })
+            .expect("read GC maintenance issue"),
+        "HISTORY_GC_FAILED"
+    );
+    fs::write(
+        store
+            .objects()
+            .scene_path(&scene_hash)
+            .expect("repair scene path"),
+        b"scene:corrupt-object",
+    )
+    .expect("repair scene object");
+    let retried = repository
+        .delete_document_history("document-delete-corrupt", "doc", 3)
+        .expect("retry cleanup after repair");
+    assert!(retried.gc.error.is_none());
+    let remaining_issues: i64 = store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT COUNT(*) FROM maintenance_state WHERE document_id = 'doc'",
+                [],
+                |row| row.get(0),
+            )
+        })
+        .expect("count cleared GC maintenance issues");
+    assert_eq!(remaining_issues, 0);
+    drop(store);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+fn count_for_document(store: &HistoryStore, document_id: &str) -> i64 {
+    store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT COUNT(*) FROM history_versions WHERE document_id = ?1",
+                [document_id],
+                |row| row.get(0),
+            )
+        })
+        .expect("count document versions")
 }
 
 #[cfg(feature = "e2e-harness")]

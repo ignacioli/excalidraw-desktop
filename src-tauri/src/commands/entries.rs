@@ -5,6 +5,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::{
     database::repository::SqliteRepository,
+    history::store::HistoryStore,
     workspace_entries::{WorkspaceEntryService, WorkspaceMutationGate},
 };
 
@@ -32,8 +33,14 @@ impl WorkspaceEntryState {
     ) -> Self {
         Self {
             service: WorkspaceEntryService::with_recovery(repository, mutation_gate, recovery)
+                .with_history_required(true)
                 .with_watcher(watcher),
         }
+    }
+
+    pub fn with_history_store(mut self, history_store: Arc<HistoryStore>) -> Self {
+        self.service = self.service.with_history_store(history_store);
+        self
     }
 }
 

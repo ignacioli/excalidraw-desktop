@@ -572,6 +572,7 @@ impl DocumentService {
             .draft_get(path_string(&authorized.path))
             .await?
             .and_then(|draft| draft.base_hash);
+        let save_as_new = request.reason == CheckpointReason::SaveAsNew;
         let asset_root = asset_root_for(
             &authorized.path,
             authorized
@@ -601,12 +602,21 @@ impl DocumentService {
         })
         .await?;
 
-        self.persist_history_identity_after_checkpoint(
-            &authorized.path,
-            existing_history_identity,
-            &hash,
-        )
-        .await?;
+        if save_as_new {
+            self.persist_fresh_history_identity_after_save_as(
+                &authorized.path,
+                existing_history_identity,
+                &hash,
+            )
+            .await?;
+        } else {
+            self.persist_history_identity_after_checkpoint(
+                &authorized.path,
+                existing_history_identity,
+                &hash,
+            )
+            .await?;
+        }
 
         let metadata_path = authorized.path.clone();
         let (mtime, file_size) = run_blocking(move || file_metadata(&metadata_path)).await?;
@@ -835,10 +845,28 @@ impl DocumentService {
                     Ok((reembedded, stored_scene, local_hash))
                 })
                 .await?;
+                // Validate an existing destination before replacing it.  The
+                // atomic write refreshes its inode, so doing this check only
+                // after the write would report a false external replacement
+                // after the destination had already changed.
+                let target_history_identity = self
+                    .resolve_history_identity_for_existing_or_new(&target)
+                    .await?;
                 let disk_hash = content_hash(write_scene.as_bytes());
                 run_blocking(move || {
                     atomic_write(&write_path, write_scene.as_bytes()).map_err(AppError::from)
                 })
+                .await?;
+                // Save As creates a new file object.  Resolve and persist its
+                // identity after the atomic write has committed so a new
+                // target receives a fresh UUID and never reuses the source
+                // document's history handle.  An existing target uses the
+                // identity validated immediately before the write.
+                self.persist_fresh_history_identity_after_save_as(
+                    &target,
+                    target_history_identity,
+                    &disk_hash,
+                )
                 .await?;
                 let metadata_path = target.clone();
                 let (mtime, file_size) =
@@ -1178,6 +1206,57 @@ impl DocumentService {
                 Some(identity) => identity,
                 None => DocumentIdentity::establish(&operation_path).map_err(map_identity_error)?,
             };
+            identity
+                .record_self_write(&operation_path, content_hash)
+                .map_err(map_identity_error)?;
+            history_store
+                .persist_document_identity(&identity, checkpoint_time)
+                .map_err(map_history_identity_error)
+        })
+        .await;
+        match result {
+            Ok(()) => {
+                self.clear_history_issue(&path).await;
+                Ok(())
+            }
+            Err(error) if is_history_store_failure(&error) => {
+                self.remember_history_issue(&path, ErrorCode::HistoryUnavailable)
+                    .await;
+                Ok(())
+            }
+            Err(error) => {
+                self.remember_history_issue(&path, history_error_code(&error))
+                    .await;
+                Err(error)
+            }
+        }
+    }
+
+    /// Save As creates a new logical document even when the destination path
+    /// already belonged to another document. Keep the old row and its
+    /// versions detached, then persist a fresh UUID for the newly written
+    /// file.
+    async fn persist_fresh_history_identity_after_save_as(
+        &self,
+        path: &Path,
+        previous: Option<DocumentIdentity>,
+        content_hash: &str,
+    ) -> Result<(), AppError> {
+        let Some(history_store) = self.history_store.clone() else {
+            return Ok(());
+        };
+        let path = path.to_path_buf();
+        let operation_path = path.clone();
+        let content_hash = content_hash.to_owned();
+        let checkpoint_time = unix_timestamp()?;
+        let result = run_blocking(move || {
+            if let Some(previous) = previous {
+                history_store
+                    .detach_document_identity(&previous.document_id)
+                    .map_err(map_history_identity_error)?;
+            }
+            let mut identity =
+                DocumentIdentity::establish(&operation_path).map_err(map_identity_error)?;
             identity
                 .record_self_write(&operation_path, content_hash)
                 .map_err(map_identity_error)?;
@@ -1720,6 +1799,114 @@ mod tests {
             b"external writer after observation"
         );
         drop(lease);
+        fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[tokio::test]
+    async fn conflict_save_as_new_persists_a_fresh_identity_without_detaching_source() {
+        let root = std::env::temp_dir().join(format!(
+            "excalidraw-history-save-as-identity-{}",
+            Uuid::new_v4()
+        ));
+        let workspace = root.join("workspace");
+        fs::create_dir_all(&workspace).expect("create workspace");
+        let workspace = workspace.canonicalize().expect("canonicalize workspace");
+        let source = workspace.join("source.excalidraw");
+        let target = workspace.join("copy.excalidraw");
+        let external_scene =
+            br#"{"type":"excalidraw","version":2,"elements":[],"appState":{},"files":{}}"#;
+        let local_scene =
+            br#"{"type":"excalidraw","version":2,"elements":[{"id":"local","type":"rectangle","x":0,"y":0,"width":10,"height":10}],"appState":{},"files":{}}"#;
+        fs::write(&source, external_scene).expect("write source");
+        fs::write(&target, external_scene).expect("write existing target");
+
+        let repository = Arc::new(
+            SqliteRepository::open(&root.join("documents.sqlite3"))
+                .await
+                .expect("open document repository"),
+        );
+        repository
+            .workspace_upsert(WorkspaceRecord {
+                id: "workspace".to_owned(),
+                name: "workspace".to_owned(),
+                root_path: workspace.display().to_string(),
+                created_at: 1,
+                mounted: true,
+            })
+            .await
+            .expect("register workspace");
+        let history_store = Arc::new(
+            HistoryStore::open_version_history_root(&root.join("version-history"))
+                .expect("open history store"),
+        );
+        let previous_target_identity = history_store
+            .resolve_document_identity_for_open(&target, 1)
+            .expect("persist existing target identity");
+        let mut service = DocumentService::new(Arc::clone(&repository));
+        service.attach_history_store(Arc::clone(&history_store));
+
+        service
+            .doc_open(PathRequest {
+                path: source.display().to_string(),
+            })
+            .await
+            .expect("open source");
+        service
+            .doc_save_draft(SaveDraftRequest {
+                path: source.display().to_string(),
+                scene_json: String::from_utf8(local_scene.to_vec()).expect("local UTF-8"),
+            })
+            .await
+            .expect("save local draft");
+        service.conflicts.mark_conflicted(source.clone()).await;
+
+        service
+            .doc_resolve_conflict(ResolveConflictRequest {
+                path: source.display().to_string(),
+                resolution: ConflictResolution::SaveAsNew,
+                save_as_path: Some(target.display().to_string()),
+            })
+            .await
+            .expect("save conflict as new");
+
+        let source_path = source.display().to_string();
+        let target_path = target.display().to_string();
+        let source_identity = history_store
+            .load_active_document_identity(&source_path)
+            .expect("load source identity")
+            .expect("source identity remains active");
+        let target_identity = history_store
+            .load_active_document_identity(&target_path)
+            .expect("load target identity")
+            .expect("target identity persisted");
+        assert_ne!(source_identity.document_id, target_identity.document_id);
+        assert_ne!(
+            previous_target_identity.document_id,
+            target_identity.document_id
+        );
+        let previous_target_state: String = history_store
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT state FROM history_documents WHERE id = ?1",
+                    [&previous_target_identity.document_id],
+                    |row| row.get(0),
+                )
+            })
+            .expect("read detached target state");
+        assert_eq!(previous_target_state, "detached");
+        assert_eq!(
+            source_identity.state,
+            crate::history::identity::IdentityState::Active
+        );
+        assert_eq!(
+            target_identity.state,
+            crate::history::identity::IdentityState::Active
+        );
+        assert!(target_identity.filesystem_identity.refers_to_same_file(
+            &FileSystemIdentity::from_path(&target).expect("target identity")
+        ));
+
+        drop(history_store);
         fs::remove_dir_all(root).expect("remove test root");
     }
 }

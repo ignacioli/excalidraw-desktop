@@ -735,6 +735,7 @@ describe("DocumentManager", () => {
     const gateway = createGateway();
     const manager = new DocumentManager(gateway);
     const documentId = await manager.open("/tmp/drawing.excalidraw");
+    manager.bindHistoryDocumentId(documentId, "old-history-id");
     manager.beginConflict(documentId, {
       externalMtime: 1,
       localDraftUpdatedAt: 2,
@@ -759,6 +760,7 @@ describe("DocumentManager", () => {
     expect(session?.path).toBe("/tmp/copy.excalidraw");
     expect(session?.title).toBe("copy.excalidraw");
     expect(session?.baseHash).toBe("copy-hash");
+    expect(session?.historyDocumentId).toBeUndefined();
     manager.dispose();
   });
 
@@ -766,6 +768,7 @@ describe("DocumentManager", () => {
     const gateway = createGateway();
     const manager = new DocumentManager(gateway);
     const documentId = await manager.open("/tmp/gone.excalidraw");
+    manager.bindHistoryDocumentId(documentId, "old-history-id");
     manager.handleFileRemoved("/tmp/gone.excalidraw");
     vi.mocked(gateway.checkpoint).mockResolvedValueOnce({
       newBaseHash: "orphan-copy",
@@ -777,7 +780,7 @@ describe("DocumentManager", () => {
     expect(gateway.checkpoint).toHaveBeenCalledWith(
       "/tmp/saved.excalidraw",
       expect.any(String),
-      "manualSave",
+      "saveAsNew",
     );
     expect(gateway.close).toHaveBeenCalledWith(
       "/tmp/gone.excalidraw",
@@ -786,6 +789,7 @@ describe("DocumentManager", () => {
     const session = manager.store.getState().sessionsById[documentId];
     expect(session?.saveState).toBe("clean");
     expect(session?.path).toBe("/tmp/saved.excalidraw");
+    expect(session?.historyDocumentId).toBeUndefined();
     manager.dispose();
   });
 
@@ -955,7 +959,7 @@ describe("DocumentManager", () => {
       expect(gateway.checkpoint).toHaveBeenCalledWith(
         "/tmp/saved.excalidraw",
         expect.any(String),
-        "manualSave",
+        "saveAsNew",
       );
       expect(
         vi

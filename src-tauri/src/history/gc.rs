@@ -140,7 +140,7 @@ impl GcCandidate {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GcReport<E> {
     pub deleted: Vec<ObjectKey>,
     pub retained: Vec<ObjectKey>,

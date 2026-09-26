@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CommandInvoker } from "../ipc/client";
 import type {
   CommandName,
+  HistoryDeleteRequest,
   HistoryOperationStatusResponse,
   HistoryReplaceRequest,
 } from "../ipc/contracts";
@@ -125,6 +126,35 @@ describe("history client", () => {
 
     await expect(client.mark(request)).resolves.toEqual(response);
     expect(invoke).toHaveBeenCalledWith("history_mark", request);
+  });
+
+  it("forwards one explicit version deletion through the typed boundary", async () => {
+    const request: HistoryDeleteRequest = {
+      document,
+      requestId: "delete-1",
+      versionId: "manual-1",
+    };
+    const invoke = vi.fn().mockResolvedValue({ deletedVersionId: "manual-1" });
+    const client = createHistoryClient(createInvoker(invoke));
+
+    await expect(client.delete(request)).resolves.toEqual({
+      deletedVersionId: "manual-1",
+    });
+    expect(invoke).toHaveBeenCalledWith("history_delete", request);
+  });
+
+  it("rejects malformed deletion before crossing the IPC boundary", async () => {
+    const invoke = vi.fn();
+    const client = createHistoryClient(createInvoker(invoke));
+
+    await expect(
+      client.delete({
+        document,
+        requestId: "delete-1",
+        versionId: "",
+      }),
+    ).rejects.toThrow("versionId");
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("recovers a lost replacement response by querying status once, never replaying replace", async () => {

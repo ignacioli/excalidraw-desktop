@@ -8,7 +8,9 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tauri::{
-    menu::{Menu, MenuBuilder, MenuEvent, MenuItem, PredefinedMenuItem, SubmenuBuilder},
+    menu::{
+        Menu, MenuBuilder, MenuEvent, MenuItem, MenuItemKind, PredefinedMenuItem, SubmenuBuilder,
+    },
     AppHandle, Emitter, Listener, Runtime,
 };
 
@@ -25,6 +27,7 @@ static PENDING_NATIVE_MENU_VALIDATIONS: OnceLock<Mutex<HashMap<u64, NativeMenuCo
 
 pub const SAVE_MENU_ID: &str = "native-menu.save";
 pub const EXPORT_IMAGE_MENU_ID: &str = "native-menu.export-image";
+pub const VERSION_HISTORY_MENU_ID: &str = "native-menu.version-history";
 pub const APPEARANCE_SYSTEM_MENU_ID: &str = "native-menu.appearance.system";
 pub const APPEARANCE_LIGHT_MENU_ID: &str = "native-menu.appearance.light";
 pub const APPEARANCE_DARK_MENU_ID: &str = "native-menu.appearance.dark";
@@ -46,6 +49,7 @@ const APPLICATION_SUBMENU_ID: &str = "native-menu.application";
 pub enum NativeMenuCommand {
     Save,
     ExportImage,
+    VersionHistory,
     AppearanceSystem,
     AppearanceLight,
     AppearanceDark,
@@ -56,6 +60,7 @@ impl NativeMenuCommand {
         match id {
             SAVE_MENU_ID => Some(Self::Save),
             EXPORT_IMAGE_MENU_ID => Some(Self::ExportImage),
+            VERSION_HISTORY_MENU_ID => Some(Self::VersionHistory),
             APPEARANCE_SYSTEM_MENU_ID => Some(Self::AppearanceSystem),
             APPEARANCE_LIGHT_MENU_ID => Some(Self::AppearanceLight),
             APPEARANCE_DARK_MENU_ID => Some(Self::AppearanceDark),
@@ -101,6 +106,16 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         true,
         Some(EXPORT_IMAGE_MENU_ACCELERATOR),
     )?;
+    // History is available only after the frontend has an active saved
+    // document. Start disabled so the native menu cannot advertise an
+    // operation before the document authority has been established.
+    let version_history = MenuItem::with_id(
+        app,
+        VERSION_HISTORY_MENU_ID,
+        "Version History…",
+        false,
+        None::<&str>,
+    )?;
 
     let appearance_system =
         MenuItem::with_id(app, APPEARANCE_SYSTEM_MENU_ID, "System", true, None::<&str>)?;
@@ -113,8 +128,11 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .build()?;
 
     #[allow(unused_mut)]
-    let mut file =
-        SubmenuBuilder::with_id(app, FILE_SUBMENU_ID, "File").items(&[&save, &export_image]);
+    let mut file = SubmenuBuilder::with_id(app, FILE_SUBMENU_ID, "File").items(&[
+        &save,
+        &export_image,
+        &version_history,
+    ]);
     #[cfg(not(target_os = "macos"))]
     {
         file = file
@@ -180,6 +198,70 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .item(&window)
         .item(&help);
     menu.build()
+}
+
+/// Synchronize the discoverability state of the history entry with the
+/// frontend's active document authority. This is UX state only; the event
+/// route still rechecks the active document before opening the panel.
+#[tauri::command]
+pub fn set_native_menu_enabled<R: Runtime>(
+    app: AppHandle<R>,
+    command: NativeMenuCommand,
+    enabled: bool,
+) -> tauri::Result<()> {
+    if command != NativeMenuCommand::VersionHistory {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "only Version History supports dynamic menu state",
+        )
+        .into());
+    }
+    let menu = app.menu().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "native menu is not installed")
+    })?;
+    if !set_menu_item_enabled(&menu.items()?, command.menu_id(), enabled)? {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("native menu item is not installed: {}", command.menu_id()),
+        )
+        .into());
+    }
+    Ok(())
+}
+
+impl NativeMenuCommand {
+    fn menu_id(self) -> &'static str {
+        match self {
+            Self::VersionHistory => VERSION_HISTORY_MENU_ID,
+            Self::Save => SAVE_MENU_ID,
+            Self::ExportImage => EXPORT_IMAGE_MENU_ID,
+            Self::AppearanceSystem => APPEARANCE_SYSTEM_MENU_ID,
+            Self::AppearanceLight => APPEARANCE_LIGHT_MENU_ID,
+            Self::AppearanceDark => APPEARANCE_DARK_MENU_ID,
+        }
+    }
+}
+
+fn set_menu_item_enabled<R: Runtime>(
+    items: &[MenuItemKind<R>],
+    id: &str,
+    enabled: bool,
+) -> tauri::Result<bool> {
+    for item in items {
+        if item.id().as_ref() == id {
+            let Some(menu_item) = item.as_menuitem() else {
+                return Ok(false);
+            };
+            menu_item.set_enabled(enabled)?;
+            return Ok(true);
+        }
+        if let Some(submenu) = item.as_submenu() {
+            if set_menu_item_enabled(&submenu.items()?, id, enabled)? {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }
 
 /// Forward a recognized native menu command to the main webview.
@@ -307,6 +389,7 @@ mod tests {
         let cases = [
             (SAVE_MENU_ID, NativeMenuCommand::Save),
             (EXPORT_IMAGE_MENU_ID, NativeMenuCommand::ExportImage),
+            (VERSION_HISTORY_MENU_ID, NativeMenuCommand::VersionHistory),
             (
                 APPEARANCE_SYSTEM_MENU_ID,
                 NativeMenuCommand::AppearanceSystem,

@@ -202,6 +202,15 @@ pub struct WorkspaceEntryDeleteResult {
     pub operation_id: String,
     pub kind: WorkspaceEntryKind,
     pub old_relative_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub history_maintenance: Option<EntryHistoryMaintenance>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EntryHistoryMaintenance {
+    PendingReplay,
+    CleanupPending,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -236,6 +245,7 @@ pub struct SaveDraftResponse {
 #[serde(rename_all = "camelCase")]
 pub enum CheckpointReason {
     ManualSave,
+    SaveAsNew,
     TabSwitch,
     TabClose,
     Idle,
@@ -574,5 +584,8 @@ mod tests {
         let reason = serde_json::to_string(&CheckpointReason::ManualSave)
             .unwrap_or_else(|error| panic!("serialize checkpoint reason: {error}"));
         assert_eq!(reason, "\"manualSave\"");
+        let save_as_reason = serde_json::to_string(&CheckpointReason::SaveAsNew)
+            .unwrap_or_else(|error| panic!("serialize save-as checkpoint reason: {error}"));
+        assert_eq!(save_as_reason, "\"saveAsNew\"");
     }
 }

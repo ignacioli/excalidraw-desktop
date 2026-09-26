@@ -7,6 +7,7 @@ use std::{
 };
 
 use crate::{
+    commands::error::AppError,
     commands::{
         dto::{WorkspaceEntryDeleteRequest, WorkspaceEntryRenameRequest},
         recovery::RecoveryService,
@@ -16,10 +17,16 @@ use crate::{
         WorkspaceRecord, WorkspaceRepository,
     },
     documents::recovery::{document_id_for_path, RecoveryStore},
+    history::{
+        repository::{HistoryRepository, PublishSceneRequest},
+        store::HistoryStore,
+        types::HistoryVersionSource,
+    },
     workspace_entries::{
         mutation_journal::{
-            journal_directory, load_journals, reconcile_pending_mutations, save_journal,
-            MutationJournalRecord, UNCOMMITTED_JOURNAL_TTL,
+            apply_committed_record_with_history, journal_directory, load_journals,
+            reconcile_pending_mutations, save_journal, HistoryReplay, MutationJournalRecord,
+            UNCOMMITTED_JOURNAL_TTL,
         },
         DerivedStateFault, TrashOperator, WorkspaceEntryService, WorkspaceMutationGate,
     },
@@ -168,6 +175,89 @@ fn journal_files(recovery: &RecoveryStore) -> Vec<PathBuf> {
 }
 
 #[tokio::test]
+async fn rename_parent_sync_failure_keeps_committed_journal_until_replay() {
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    fixture
+        .entries
+        .set_derived_fault(Some(DerivedStateFault::ParentSync));
+
+    let result = fixture
+        .entries
+        .rename(WorkspaceEntryRenameRequest {
+            workspace_id: fixture.workspace_id.clone(),
+            relative_path: "source.excalidraw".to_owned(),
+            base_name: "target".to_owned(),
+            expected_open_documents: Vec::new(),
+        })
+        .await
+        .expect("rename result remains successful after a post-commit sync failure");
+    fixture.entries.set_derived_fault(None);
+
+    assert_eq!(result.entry.relative_path, "target.excalidraw");
+    assert!(!source.exists());
+    assert!(target.exists());
+    let pending = load_journals(&fixture.recovery)
+        .expect("load pending parent-sync journal")
+        .pop()
+        .expect("parent sync failure remains durable");
+    assert!(pending.filesystem_committed);
+    assert!(!pending.parent_sync_applied);
+    assert!(!pending.sqlite_applied);
+    assert!(!pending.recovery_applied);
+
+    reconcile_pending_mutations(&fixture.repository, &fixture.recovery)
+        .await
+        .expect("replay retries parent sync before derived state");
+    assert!(load_journals(&fixture.recovery)
+        .expect("load completed journal")
+        .is_empty());
+}
+
+#[tokio::test]
+async fn rename_replay_syncs_distinct_old_and_new_parent_directories() {
+    let fixture = Fixture::new().await;
+    let old_parent = fixture.workspace.join("old");
+    let new_parent = fixture.workspace.join("new");
+    fs::create_dir_all(&old_parent).expect("create old parent");
+    fs::create_dir_all(&new_parent).expect("create new parent");
+    let source = old_parent.join("source.excalidraw");
+    let target = new_parent.join("target.excalidraw");
+    fs::write(&source, scene_json("source")).expect("write source");
+    fs::rename(&source, &target).expect("commit cross-parent rename");
+
+    let mut record = MutationJournalRecord::rename(
+        "distinct-parent-sync".to_owned(),
+        fixture.workspace_id.clone(),
+        source.display().to_string(),
+        target.display().to_string(),
+        "old/source.excalidraw".to_owned(),
+        "new/target.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+    )
+    .with_filesystem_committed(true);
+    record.sqlite_applied = true;
+    record.recovery_applied = true;
+    save_journal(&fixture.recovery, &record).expect("save committed cross-parent journal");
+
+    apply_committed_record_with_history(
+        &fixture.repository,
+        &fixture.recovery,
+        &mut record,
+        true,
+        true,
+        None,
+    )
+    .await
+    .expect("replay syncs both parent directories");
+    assert!(record.parent_sync_applied);
+    assert!(load_journals(&fixture.recovery)
+        .expect("load completed cross-parent journal")
+        .is_empty());
+}
+
+#[tokio::test]
 async fn rename_sqlite_failure_after_filesystem_commit_keeps_new_path_and_journals() {
     let fixture = Fixture::new().await;
     let source = fixture.seed_drawing("source.excalidraw", "source").await;
@@ -291,7 +381,8 @@ async fn rename_reconcile_keeps_sqlite_rows_when_already_migrated_but_journal_fl
             "source.excalidraw".to_owned(),
             "target.excalidraw".to_owned(),
             "target.excalidraw".to_owned(),
-        ),
+        )
+        .with_filesystem_committed(true),
     )
     .expect("journal still claims sqlite is pending");
 
@@ -331,7 +422,7 @@ async fn delete_sqlite_failure_after_trash_journals_then_reconciles() {
         .entries
         .set_derived_fault(Some(DerivedStateFault::Sqlite));
 
-    fixture
+    let result = fixture
         .entries
         .delete(WorkspaceEntryDeleteRequest {
             workspace_id: fixture.workspace_id.clone(),
@@ -340,6 +431,10 @@ async fn delete_sqlite_failure_after_trash_journals_then_reconciles() {
         })
         .await
         .expect("Trash commit must still succeed");
+    assert_eq!(
+        result.history_maintenance,
+        Some(crate::commands::dto::EntryHistoryMaintenance::PendingReplay)
+    );
 
     assert!(!path.exists());
     assert!(fixture
@@ -487,4 +582,356 @@ async fn reconcile_drops_a_stale_uncommitted_journal() {
         .await
         .expect("read source index")
         .is_some());
+}
+
+#[tokio::test]
+async fn v2_post_filesystem_pre_marker_crash_is_retained_for_repair() {
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    fs::rename(&source, &target).expect("commit filesystem rename");
+    let record = MutationJournalRecord::rename(
+        "post-filesystem-pre-marker".to_owned(),
+        fixture.workspace_id.clone(),
+        source.display().to_string(),
+        target.display().to_string(),
+        "source.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+    );
+    save_journal(&fixture.recovery, &record).expect("save pre-marker journal");
+    let journal = journal_directory(&fixture.recovery).join("post-filesystem-pre-marker.json");
+    let file = File::open(&journal).expect("open pre-marker journal");
+    file.set_modified(SystemTime::now() - (UNCOMMITTED_JOURNAL_TTL + Duration::from_secs(5)))
+        .expect("age pre-marker journal");
+
+    let error = reconcile_pending_mutations(&fixture.repository, &fixture.recovery)
+        .await
+        .expect_err("ambiguous v2 marker must remain pending");
+    assert!(
+        matches!(error, crate::commands::error::AppError::HistoryOperationPending(operation) if operation == "post-filesystem-pre-marker")
+    );
+    assert!(journal.exists());
+    assert!(fixture
+        .repository
+        .file_index_get(source.display().to_string())
+        .await
+        .expect("read old index")
+        .is_some());
+}
+
+#[test]
+fn legacy_journal_defaults_history_phase_to_unrequired_and_unapplied() {
+    let record = MutationJournalRecord::delete(
+        "legacy-op".to_owned(),
+        "workspace".to_owned(),
+        "/tmp/legacy.excalidraw".to_owned(),
+        "legacy.excalidraw".to_owned(),
+    );
+    let mut value = serde_json::to_value(record).expect("serialize journal fixture");
+    let object = value.as_object_mut().expect("journal object");
+    object.remove("historyRequired");
+    object.remove("historyApplied");
+    let decoded: MutationJournalRecord =
+        serde_json::from_value(value).expect("decode v1 journal fixture");
+
+    assert!(!decoded.history_required);
+    assert!(!decoded.history_applied);
+    assert!(!decoded.is_complete());
+    assert!(MutationJournalRecord {
+        sqlite_applied: true,
+        recovery_applied: true,
+        ..decoded
+    }
+    .is_complete());
+}
+
+#[tokio::test]
+async fn legacy_journal_is_probed_by_history_replay_when_available() {
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    fs::rename(&source, &target).expect("commit filesystem rename");
+    let mut record = MutationJournalRecord::rename(
+        "legacy-history-op".to_owned(),
+        fixture.workspace_id.clone(),
+        source.display().to_string(),
+        target.display().to_string(),
+        "source.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+    )
+    .with_filesystem_committed(true);
+    record.version = 1;
+    save_journal(&fixture.recovery, &record).expect("save legacy journal");
+    let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let attempts_for_replay = Arc::clone(&attempts);
+    let history_replay: HistoryReplay = Arc::new(move |_record| {
+        attempts_for_replay.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Box::pin(async { Ok(()) })
+    });
+
+    apply_committed_record_with_history(
+        &fixture.repository,
+        &fixture.recovery,
+        &mut record,
+        false,
+        false,
+        Some(&history_replay),
+    )
+    .await
+    .expect("legacy history probe succeeds");
+    assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert!(load_journals(&fixture.recovery)
+        .expect("load completed legacy journal")
+        .is_empty());
+}
+
+#[tokio::test]
+async fn required_history_phase_keeps_journal_until_replay_succeeds() {
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    fs::rename(&source, &target).expect("commit filesystem rename");
+    let mut record = MutationJournalRecord::rename(
+        "history-required-op".to_owned(),
+        fixture.workspace_id.clone(),
+        source.display().to_string(),
+        target.display().to_string(),
+        "source.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+    )
+    .with_filesystem_committed(true)
+    .with_history_required(true);
+    save_journal(&fixture.recovery, &record).expect("save history journal");
+
+    let error = apply_committed_record_with_history(
+        &fixture.repository,
+        &fixture.recovery,
+        &mut record,
+        false,
+        false,
+        None,
+    )
+    .await
+    .expect_err("history phase must remain pending without an owner");
+    assert!(
+        matches!(error, AppError::HistoryOperationPending(operation) if operation == "history-required-op")
+    );
+    let persisted = load_journals(&fixture.recovery)
+        .expect("load pending history journal")
+        .pop()
+        .expect("journal remains");
+    assert!(persisted.sqlite_applied);
+    assert!(persisted.recovery_applied);
+    assert!(!persisted.history_applied);
+    assert_eq!(journal_files(&fixture.recovery).len(), 1);
+
+    let history_replay: HistoryReplay = Arc::new(|record| {
+        Box::pin(async move {
+            assert_eq!(record.operation_id, "history-required-op");
+            Ok(())
+        })
+    });
+    let mut reopened = persisted;
+    apply_committed_record_with_history(
+        &fixture.repository,
+        &fixture.recovery,
+        &mut reopened,
+        false,
+        false,
+        Some(&history_replay),
+    )
+    .await
+    .expect("history replay completes");
+    assert!(reopened.is_complete());
+    assert!(load_journals(&fixture.recovery)
+        .expect("load completed journals")
+        .is_empty());
+}
+
+#[tokio::test]
+async fn committed_trash_replay_targets_captured_identity_after_same_path_reappears() {
+    let fixture = Fixture::new().await;
+    let path = fixture.seed_drawing("drawing.excalidraw", "original").await;
+    let mut record = MutationJournalRecord::delete(
+        "delete-reappeared-op".to_owned(),
+        fixture.workspace_id.clone(),
+        path.display().to_string(),
+        "drawing.excalidraw".to_owned(),
+    )
+    .with_history_document_id("original-document-id")
+    .with_filesystem_committed(true);
+    record.sqlite_applied = true;
+    record.recovery_applied = true;
+    save_journal(&fixture.recovery, &record).expect("save committed delete journal");
+
+    fs::write(&path, scene_json("unrelated-replacement")).expect("recreate same path");
+    let history_replay: HistoryReplay = Arc::new(|record| {
+        Box::pin(async move {
+            assert_eq!(
+                record.history_document_id.as_deref(),
+                Some("original-document-id")
+            );
+            Ok(())
+        })
+    });
+    apply_committed_record_with_history(
+        &fixture.repository,
+        &fixture.recovery,
+        &mut record,
+        true,
+        true,
+        Some(&history_replay),
+    )
+    .await
+    .expect("committed delete replay succeeds");
+    assert!(load_journals(&fixture.recovery)
+        .expect("load completed delete journal")
+        .is_empty());
+}
+
+#[tokio::test]
+async fn failed_history_replay_is_retryable_after_reloading_journal() {
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    fs::rename(&source, &target).expect("commit filesystem rename");
+    let mut record = MutationJournalRecord::rename(
+        "history-retry-op".to_owned(),
+        fixture.workspace_id.clone(),
+        source.display().to_string(),
+        target.display().to_string(),
+        "source.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+    )
+    .with_filesystem_committed(true)
+    .with_history_required(true);
+    save_journal(&fixture.recovery, &record).expect("save history journal");
+
+    let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let attempts_for_replay = Arc::clone(&attempts);
+    let history_replay: HistoryReplay = Arc::new(move |_record| {
+        let attempt = attempts_for_replay.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Box::pin(async move {
+            if attempt == 0 {
+                Err(AppError::HistoryUnavailable("injected failure".to_owned()))
+            } else {
+                Ok(())
+            }
+        })
+    });
+
+    let first_error = apply_committed_record_with_history(
+        &fixture.repository,
+        &fixture.recovery,
+        &mut record,
+        false,
+        false,
+        Some(&history_replay),
+    )
+    .await
+    .expect_err("injected history failure must remain pending");
+    assert!(matches!(first_error, AppError::HistoryUnavailable(_)));
+    let mut reopened = load_journals(&fixture.recovery)
+        .expect("load journal after failed history replay")
+        .pop()
+        .expect("failed replay remains durable");
+    assert!(reopened.sqlite_applied);
+    assert!(reopened.recovery_applied);
+    assert!(!reopened.history_applied);
+
+    apply_committed_record_with_history(
+        &fixture.repository,
+        &fixture.recovery,
+        &mut reopened,
+        false,
+        false,
+        Some(&history_replay),
+    )
+    .await
+    .expect("reloaded history replay succeeds");
+    assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 2);
+    assert!(load_journals(&fixture.recovery)
+        .expect("load completed retry journal")
+        .is_empty());
+}
+
+#[test]
+fn malformed_journal_fails_closed_without_deleting_the_file() {
+    let root = std::env::temp_dir().join(format!(
+        "excalidraw-entry-malformed-journal-{}-{}",
+        std::process::id(),
+        uuid::Uuid::new_v4()
+    ));
+    fs::create_dir_all(&root).expect("create malformed journal root");
+    let recovery = RecoveryStore::with_app_version(&root, "0.1.0");
+    let directory = journal_directory(&recovery);
+    fs::create_dir_all(&directory).expect("create journal directory");
+    let path = directory.join("corrupt.json");
+    fs::write(&path, b"{not-json").expect("write corrupt journal");
+
+    let error = load_journals(&recovery).expect_err("corrupt journal must fail closed");
+    assert!(matches!(error, AppError::Internal(message) if message.contains("corrupt.json")));
+    assert!(path.exists());
+    fs::remove_dir_all(root).expect("remove malformed journal root");
+}
+
+#[tokio::test]
+async fn drawing_delete_removes_history_only_after_trash_commits() {
+    let fixture = Fixture::new().await;
+    let path = fixture.seed_drawing("history.excalidraw", "history").await;
+    let store = Arc::new(HistoryStore::open(&fixture.root.join("data")).expect("open history"));
+    let identity = store
+        .resolve_document_identity_for_open(&path, 1)
+        .expect("establish drawing identity");
+    HistoryRepository::new(&store)
+        .publish_scene(PublishSceneRequest {
+            version_id: "manual-before-delete".to_owned(),
+            document_id: identity.document_id.clone(),
+            scene_bytes: scene_json("history").into_bytes(),
+            schema_version: 1,
+            source: HistoryVersionSource::Manual,
+            protected_action: None,
+            recorded_at: 1,
+            sequence: 1,
+        })
+        .expect("publish manual history");
+
+    let entries = fixture
+        .entries
+        .clone()
+        .with_history_store(Arc::clone(&store));
+    let result = entries
+        .delete(WorkspaceEntryDeleteRequest {
+            workspace_id: fixture.workspace_id.clone(),
+            relative_path: "history.excalidraw".to_owned(),
+            expected_open_document: None,
+        })
+        .await
+        .expect("delete drawing through Trash");
+    assert!(!path.exists());
+    assert!(load_journals(&fixture.recovery)
+        .expect("load entry journal")
+        .is_empty());
+    let (state, version_count): (String, i64) = store
+        .with_connection(|connection| {
+            let state = connection.query_row(
+                "SELECT state FROM history_documents WHERE id = ?1",
+                [&identity.document_id],
+                |row| row.get(0),
+            )?;
+            let version_count = connection.query_row(
+                "SELECT COUNT(*) FROM history_versions WHERE document_id = ?1",
+                [&identity.document_id],
+                |row| row.get(0),
+            )?;
+            Ok((state, version_count))
+        })
+        .expect("inspect deleted document history");
+    assert_eq!(state, "deleting");
+    assert_eq!(version_count, 0);
+    assert!(!result.operation_id.is_empty());
 }

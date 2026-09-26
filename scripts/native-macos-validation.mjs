@@ -117,6 +117,16 @@ export const EXPECTED_MENU_ITEMS = Object.freeze([
     keyboard: null,
   }),
 ]);
+// Version History is a feature-owned native entry.  Keep it out of the
+// existing T023b action graph so the 003 qualification/final route evidence
+// remains stable; the final collector inspects and invokes this item once in
+// its own check.
+export const VERSION_HISTORY_MENU_ITEM = Object.freeze({
+  path: Object.freeze(["File", "Version History…"]),
+  command: "versionHistory",
+  enabled: true,
+  keyboard: null,
+});
 
 export function nativeActionsForScope(scope) {
   if (scope === PROOF_SCOPES.QUALIFICATION) {
@@ -130,7 +140,8 @@ export function nativeActionsForScope(scope) {
 
 export function nativeMenuItemsForScope(scope) {
   if (scope === PROOF_SCOPES.QUALIFICATION) return [EXPECTED_MENU_ITEMS[0]];
-  if (scope === PROOF_SCOPES.FINAL) return [...EXPECTED_MENU_ITEMS];
+  if (scope === PROOF_SCOPES.FINAL)
+    return [...EXPECTED_MENU_ITEMS, VERSION_HISTORY_MENU_ITEM];
   throw new TypeError(`Unsupported native proof scope: ${scope}`);
 }
 
@@ -159,7 +170,10 @@ export function parseCommandSConfirmation(input, expectedLine) {
 }
 
 const VALID_STAGES = new Set(["nativeEntry", "applicationRoute"]);
-const VALID_COMMANDS = new Set(EXPECTED_MENU_ITEMS.map((item) => item.command));
+const VALID_COMMANDS = new Set([
+  ...EXPECTED_MENU_ITEMS.map((item) => item.command),
+  VERSION_HISTORY_MENU_ITEM.command,
+]);
 const ROOT_CAUSE_CLASSES = new Set([
   "PRODUCT",
   "HARNESS",
@@ -708,6 +722,45 @@ export function adaptNativeValidationReport(report, bindingValue) {
     requiredChecks.every((check) => check?.status === "PASS")
       ? "PASS"
       : "BLOCKED";
+  const versionHistoryCheck = report.checks.find(
+    (check) => check.id === "version-history-route",
+  );
+  const versionHistoryTarget = versionHistoryCheck?.targetDocumentBinding;
+  const versionHistoryResult =
+    binding.proofScope !== PROOF_SCOPES.FINAL
+      ? null
+      : versionHistoryCheck?.command === VERSION_HISTORY_MENU_ITEM.command &&
+          Number.isSafeInteger(versionHistoryCheck.validationId) &&
+          versionHistoryCheck.validationId > 0 &&
+          versionHistoryCheck.status === "PASS" &&
+          versionHistoryTarget &&
+          versionHistoryTarget.launchMode === "single-normal-open-argument" &&
+          typeof versionHistoryTarget.path === "string" &&
+          path.isAbsolute(versionHistoryTarget.path) &&
+          versionHistoryTarget.path.endsWith(".excalidraw") &&
+          /^[0-9a-f]{64}$/u.test(versionHistoryTarget.sha256 ?? "") &&
+          Number.isSafeInteger(versionHistoryTarget.byteLength) &&
+          versionHistoryTarget.byteLength >= 0
+        ? "PASS"
+        : "BLOCKED";
+  const versionHistoryEntry =
+    versionHistoryResult === null
+      ? null
+      : {
+          schemaVersion: 1,
+          collectionId: "native-entrypoints",
+          gateId: "T023b",
+          route: "macos-accessibility",
+          binding,
+          action: {
+            checkId: "version-history-route",
+            command: VERSION_HISTORY_MENU_ITEM.command,
+            validationId: versionHistoryCheck?.validationId ?? null,
+            result: versionHistoryResult,
+          },
+          targetDocumentBinding: versionHistoryTarget ?? null,
+          result: versionHistoryResult,
+        };
   const environment = {
     schemaVersion: 1,
     collectionId: "native-entrypoints",
@@ -751,6 +804,7 @@ export function adaptNativeValidationReport(report, bindingValue) {
       actions,
       result: routeResult,
     },
+    versionHistoryEntry,
   };
 }
 
@@ -786,6 +840,9 @@ export async function writeNativeValidationCollection(
     "route-acknowledgements.json": records.routeAcknowledgements,
     "native-report.json": report,
   };
+  if (records.versionHistoryEntry !== null) {
+    payloads["version-history-entry.json"] = records.versionHistoryEntry;
+  }
   for (const [name, value] of Object.entries(payloads)) {
     await fsp.writeFile(
       path.join(collectionDir, name),
@@ -803,6 +860,7 @@ export async function writeNativeValidationCollection(
   const result = aggregateStatus([
     report.status,
     records.routeAcknowledgements.result,
+    records.versionHistoryEntry?.result ?? "PASS",
   ]);
   const attemptRecord = buildAttemptRecord(report, records.environment.binding);
   const attemptRelativePath = path.join(
@@ -843,8 +901,17 @@ export async function writeNativeValidationCollection(
         claimId: "native-menu-entrypoints",
         factClass: "native-menu-action",
         primaryRoute: "macos-accessibility",
-        result: records.routeAcknowledgements.result,
-        artifactRefs: ["native-report.json", "route-acknowledgements.json"],
+        result: aggregateStatus([
+          records.routeAcknowledgements.result,
+          records.versionHistoryEntry?.result ?? "PASS",
+        ]),
+        artifactRefs: [
+          "native-report.json",
+          "route-acknowledgements.json",
+          ...(records.versionHistoryEntry === null
+            ? []
+            : ["version-history-entry.json"]),
+        ],
       },
     ],
     artifactDigests,
@@ -2172,6 +2239,81 @@ async function runNativeChecks(
       );
     }
   }
+
+  // The history entry is validated as a feature-specific route so the
+  // established 003 action graph remains unchanged.  The production process
+  // is launched with exactly one digest-bound drawing argument; requiring that
+  // same snapshot here binds the native route to that target document without
+  // introducing a second command or browser-side proof channel.
+  if (proofScope === PROOF_SCOPES.FINAL) {
+    try {
+      if (
+        launchBefore === null ||
+        typeof launchDocument !== "string" ||
+        !path.isAbsolute(launchDocument) ||
+        path.extname(launchDocument) !== ".excalidraw"
+      ) {
+        throw new NativeValidationBlockedError(
+          "Version History route has no valid digest-bound launch document",
+        );
+      }
+      const before = new Set(events.map((event) => event.validationId));
+      invokeMenuItem(child.pid, VERSION_HISTORY_MENU_ITEM.path);
+      const pair = await waitForValidationPair(
+        events,
+        VERSION_HISTORY_MENU_ITEM.command,
+        new Set([...consumedIds, ...before]),
+        timeoutMs,
+      );
+      consumedIds.add(pair.validationId);
+      await wait(600);
+      const duplicatePair = validationPair(
+        events,
+        VERSION_HISTORY_MENU_ITEM.command,
+        new Set([...consumedIds]),
+      );
+      if (duplicatePair) {
+        throw new NativeValidationBlockedError(
+          "more than one fresh Version History route pair was observed",
+        );
+      }
+      checks.push(
+        makeCheck(
+          "version-history-route",
+          "native Version History menu route for the launched document",
+          "PASS",
+          {
+            command: VERSION_HISTORY_MENU_ITEM.command,
+            validationId: pair.validationId,
+            targetDocumentBinding: {
+              launchMode: "single-normal-open-argument",
+              path: launchBefore.path,
+              sha256: launchBefore.sha256,
+              byteLength: launchBefore.byteLength,
+            },
+          },
+        ),
+      );
+    } catch (error) {
+      checks.push(
+        makeCheck(
+          "version-history-route",
+          "native Version History menu route for the launched document",
+          error instanceof NativeValidationBlockedError ? "BLOCKED" : "FAIL",
+          {
+            command: VERSION_HISTORY_MENU_ITEM.command,
+            targetDocumentBinding: {
+              launchMode: "single-normal-open-argument",
+              path: launchDocument,
+              sha256: launchBefore?.sha256 ?? null,
+              byteLength: launchBefore?.byteLength ?? null,
+            },
+            error: String(error.message ?? error),
+          },
+        ),
+      );
+    }
+  }
   const launchAfter = await validExcalidrawSnapshot(launchDocument);
   const statePrepared =
     launchBefore !== null &&
@@ -2532,7 +2674,7 @@ export async function validateProductionBundle({
 
 function printUsage() {
   console.log(
-    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--capture-plan FINAL_PLAN] [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. A schema-v2 FINAL plan supplies a distinct T023b profile and one digest-bound .excalidraw fixture through the normal launch/open path. Qualification scope proves exact 1280x760 geometry, File > Save, physical Command-S, and unchanged prepared state; final scope proves 5/5 menu facts and seven fresh unique nativeEntry -> routeAccepted pairs. The physical Command-S step requires one nonce-confirmed interactive terminal and one operator keypress while the owned PID is frontmost; menu-click substitution and duplicate observations are rejected. Save/PNG/SVG business filesystem outcomes are owned by deterministic implementation/process-level tests, not this exact-package router probe. Adapter outputs carry separate product, validator, attempt, remediation-epoch, and STOP_REOPEN identities and never contain reviewer or owner decisions.`,
+    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--capture-plan FINAL_PLAN] [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. A schema-v2 FINAL plan supplies a distinct T023b profile and one digest-bound .excalidraw fixture through the normal launch/open path. Qualification scope proves exact 1280x760 geometry, File > Save, physical Command-S, and unchanged prepared state; final scope proves 6/6 menu facts, seven unchanged 003 nativeEntry -> routeAccepted pairs, and one fresh Version History nativeEntry -> routeAccepted pair bound to the launch document. The physical Command-S step requires one nonce-confirmed interactive terminal and one operator keypress while the owned PID is frontmost; menu-click substitution and duplicate observations are rejected. Save/PNG/SVG business filesystem outcomes are owned by deterministic implementation/process-level tests, not this exact-package router probe. Adapter outputs carry separate product, validator, attempt, remediation-epoch, and STOP_REOPEN identities and never contain reviewer or owner decisions.`,
   );
 }
 

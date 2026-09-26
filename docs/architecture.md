@@ -116,6 +116,17 @@ store are therefore observed independently during restart reconciliation; an
 `after_rename_before_parent_sync` result is `pendingReconciliation`, not an
 assumption that the old file survived.
 
+Each saved drawing has a persistent history `documentId` that is independent
+of its current path, frontend tab UUID, and version IDs. The production store
+lives below the Tauri app-data directory at `version-history/history.sqlite3`
+with immutable scene and asset objects beside it. Application-owned file and
+ancestor-directory renames migrate the same identity; Save As creates a new
+identity with no inherited versions. The backend also records filesystem
+identity (on macOS, device/inode plus supporting metadata), so a different
+file later appearing at the old path cannot inherit the old history. A deleted
+drawing leaves a deleting identity tombstone while semantic versions are
+removed, preventing same-path reuse from attaching to the old document.
+
 Ordinary history is driven only by a successfully completed cold checkpoint.
 The first successful checkpoint establishes a durable per-document baseline;
 the first changed checkpoint at least 30 minutes later publishes the exact
@@ -290,7 +301,8 @@ Historical `thumbnails/` and frontend `FileTree` / `useThumbnails` are **not** t
 ## 8. IPC trust boundary
 
 - Contract: command/event schemas + error taxonomy + input validation are defined only in `docs/contracts/ipc-contracts.md`. The TypeScript source is `src/ipc/contracts.ts`; Rust DTOs are `src-tauri/src/commands/dto.rs`. The frontend must not bypass them. Current `IPC_CONTRACT_VERSION = 3`.
-- Version-history commands are `history_list`, `history_preview`, `history_replace`, and `history_operation_status`. They carry document authorization and request identity, never history-store paths; `history_replace` is idempotent and an uncertain post-rename result remains `pendingReconciliation`.
+- Version-history commands are `history_list`, `history_preview`, `history_mark`, `history_replace`, `history_operation_status`, and `history_delete`. They carry document authorization and request identity, never history-store paths; `history_replace` is idempotent and an uncertain post-rename result remains `pendingReconciliation`.
+- `history_delete` removes one semantic version while holding the document history-operation lease. Repeating the same `requestId` is idempotent; a version referenced by an active replacement remains protected and returns a structured busy error. Object garbage collection is best effort after the metadata transaction and preserves objects still shared or pinned by another operation.
 - Entry-mutation authorization uses `workspaceId + relativePath` (plus `baseName` for create/rename). `canonicalPath` in the response is for opening and session migration. It is **not** authorization evidence the frontend may submit.
 - Every path is canonicalized in the backend by `security/` and checked against the workspace allowlist. Escape returns `PATH_ACCESS_DENIED`. Document JSON is untrusted input (structure validation + size cap).
 - Least privilege: Tauri capabilities are `core:default` + `core:window:allow-destroy` + `dialog:allow-open` + `dialog:allow-save` (`src-tauri/capabilities/default.json`). The window permission lets the native close handler destroy the main window only after its app-exit checkpoint completes. Path ACL lives in Rust; extra fs capabilities are not used to give the WebView arbitrary filesystem access. Strict CSP; the asset protocol is limited to `.excalidraw_assets` images.
@@ -317,6 +329,7 @@ Configuration and implementation: `src-tauri/tauri.conf.json` (window `title`) a
 | Cold     | Filesystem `*.excalidraw` (atomic replace); `.excalidraw.json` is recognized | Source of truth; new drawings default to `.excalidraw`                                                     |
 | Recovery | `recovery/*.json` rotating snapshots + `session.lock`                        | Crash recovery                                                                                             |
 | Trash    | OS Trash                                                                     | Commit point for empty Directory and clean Drawing deletes; no recursive / permanent-delete command        |
+| History  | App-data `version-history/history.sqlite3` + immutable scene/asset objects  | Persistent document identity, version metadata, protected operation state, and reachability-controlled GC  |
 
 Storage design detail is in ADR-002 (two-tier persistence) and ADR-003 (SQLite-first and the redb trigger). The hot tier keeps WAL drafts. Do not switch back to in-place cold-file overwrites, and do not remove recovery snapshots.
 

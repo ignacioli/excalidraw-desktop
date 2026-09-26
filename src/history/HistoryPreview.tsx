@@ -16,6 +16,8 @@ export interface HistoryPreviewProps {
   errorMessage?: string;
   content?: ReactNode;
   processing?: boolean;
+  /** Allows callers without a safe rendered preview to fail closed. */
+  restoreEnabled?: boolean;
   onExit(): void;
   onRestore(): void;
   /** Future action menus (Mark/Delete) are caller-owned and optional. */
@@ -30,6 +32,7 @@ export function HistoryPreview({
   errorMessage,
   content,
   processing = false,
+  restoreEnabled = true,
   onExit,
   onRestore,
   moreActions,
@@ -99,7 +102,7 @@ export function HistoryPreview({
       <div className="history-preview-actions">
         <button
           className="primary-action"
-          disabled={processing || state !== "ready"}
+          disabled={processing || state !== "ready" || !restoreEnabled}
           onClick={onRestore}
           ref={restoreButtonRef}
           type="button"

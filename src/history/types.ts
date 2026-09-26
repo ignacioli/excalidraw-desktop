@@ -1,5 +1,7 @@
 import type {
   HistoryChangedEvent,
+  HistoryDeleteRequest,
+  HistoryDeleteResponse,
   HistoryListRequest,
   HistoryListResponse,
   HistoryMarkRequest,
@@ -17,6 +19,8 @@ import type { EventListener } from "../ipc/events";
 
 export type {
   HistoryChangedEvent,
+  HistoryDeleteRequest,
+  HistoryDeleteResponse,
   HistoryDocumentLocator,
   HistoryIssueEvent,
   HistoryListRequest,
@@ -45,6 +49,12 @@ export interface HistoryClient {
   operationStatus(
     request: HistoryOperationStatusRequest,
   ): Promise<HistoryOperationStatusResponse>;
+}
+
+/** Phase 6 deletion surface; kept separate while existing replacement-only
+ * coordinator doubles continue to implement the smaller pre-Phase 6 client. */
+export interface HistoryDeleteClient {
+  delete(request: HistoryDeleteRequest): Promise<HistoryDeleteResponse>;
 }
 
 /**

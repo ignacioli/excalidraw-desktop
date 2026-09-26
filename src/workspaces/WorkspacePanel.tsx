@@ -33,6 +33,7 @@ import type {
   Workspace,
   WorkspaceEntriesChangedEvent,
   WorkspaceEntry,
+  EntryDeleteResult,
 } from "../ipc/contracts";
 import { defaultEventListener } from "../ipc/events";
 import { WorkspaceTree } from "./WorkspaceTree";
@@ -738,18 +739,19 @@ export function WorkspacePanel({
       current === null ? current : { ...current, busy: true, error: null },
     );
     try {
-      await documentManager.coordinateCleanEntryDelete(
-        workspaceRoot,
-        entry.canonicalPath,
-        (expectedOpenDocument) =>
-          invoker.invoke("workspace_entry_delete", {
-            workspaceId,
-            relativePath: entry.relativePath,
-            ...(expectedOpenDocument === undefined
-              ? {}
-              : { expectedOpenDocument }),
-          }),
-      );
+      const deleteResult =
+        await documentManager.coordinateCleanEntryDelete<EntryDeleteResult>(
+          workspaceRoot,
+          entry.canonicalPath,
+          (expectedOpenDocument) =>
+            invoker.invoke("workspace_entry_delete", {
+              workspaceId,
+              relativePath: entry.relativePath,
+              ...(expectedOpenDocument === undefined
+                ? {}
+                : { expectedOpenDocument }),
+            }),
+        );
       forgetEntrySubtree(workspaceId, entry.relativePath);
       await loadEntries(workspaceId, entry.parentRelativePath, true);
       returnFocusRef.current = null;
@@ -759,6 +761,9 @@ export function WorkspacePanel({
           : makeEntryRowKey(workspaceId, entry.parentRelativePath),
       );
       setDeleting(null);
+      if (deleteResult.historyMaintenance !== undefined) {
+        setError(historyMaintenanceMessage(deleteResult.historyMaintenance));
+      }
     } catch (nextError) {
       setDeleting((current) =>
         current === null
@@ -1264,6 +1269,14 @@ function operationError(reason: unknown, fallback: string): string {
     }
   }
   return fallback;
+}
+
+function historyMaintenanceMessage(
+  status: "pendingReplay" | "cleanupPending",
+): string {
+  return status === "pendingReplay"
+    ? "绘图已删除。版本历史清理仍待完成，稍后会重试。"
+    : "绘图已删除。部分版本历史资源暂未清理完成。";
 }
 
 function parentRelativePathOf(relativePath: string): string {

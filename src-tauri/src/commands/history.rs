@@ -21,10 +21,11 @@ use crate::{
     commands::{
         documents::{DirectFileGrant, DocumentService, HistoryOperationLease},
         dto::{
-            HistoryDocumentLocator, HistoryListRequest, HistoryListResponse, HistoryMarkRequest,
-            HistoryMarkResponse, HistoryOperationStatusRequest, HistoryOperationStatusResponse,
-            HistoryPreviewRequest, HistoryPreviewResponse, HistoryReplaceRequest,
-            HistoryReplaceResponse, HistoryReplaceTarget,
+            HistoryDeleteRequest, HistoryDeleteResponse, HistoryDocumentLocator,
+            HistoryListRequest, HistoryListResponse, HistoryMarkRequest, HistoryMarkResponse,
+            HistoryOperationStatusRequest, HistoryOperationStatusResponse, HistoryPreviewRequest,
+            HistoryPreviewResponse, HistoryReplaceRequest, HistoryReplaceResponse,
+            HistoryReplaceTarget,
         },
         error::{AppError, IpcError},
     },
@@ -77,6 +78,14 @@ pub async fn history_mark(
     state: State<'_, HistoryReplacementState>,
 ) -> Result<HistoryMarkResponse, IpcError> {
     state.service.mark(request).await
+}
+
+#[tauri::command]
+pub async fn history_delete(
+    request: HistoryDeleteRequest,
+    state: State<'_, HistoryReplacementState>,
+) -> Result<HistoryDeleteResponse, IpcError> {
+    state.service.delete(request).await
 }
 
 #[derive(Clone)]
@@ -171,6 +180,49 @@ impl HistoryReplacementService {
         })
         .await
         .map_err(|error| AppError::Internal(format!("history mark task failed: {error}")))?
+        .map_err(Into::into)
+    }
+
+    pub async fn delete(
+        &self,
+        request: HistoryDeleteRequest,
+    ) -> Result<HistoryDeleteResponse, IpcError> {
+        request
+            .validate()
+            .map_err(|error| AppError::HistoryStaleDocument(error.to_string()))?;
+        let unresolved = self
+            .resolve_document_without_file_check(&request.document)
+            .await?;
+        // Explicit version deletion shares the document lock with checkpoint,
+        // draft, and replacement operations. It never reads or writes the
+        // current scene, so the canvas remains unchanged.
+        let lease = self
+            .document_service
+            .acquire_history_operation(&unresolved.path)
+            .await?;
+        let store = self.store()?;
+        let request_id = request.request_id;
+        let version_id = request.version_id;
+        tokio::task::spawn_blocking(move || {
+            let _lease = lease;
+            unresolved
+                .identity
+                .verify_current_file(&unresolved.path)
+                .map_err(|error| AppError::HistoryStaleDocument(error.to_string()))?;
+            HistoryRepository::new(&store)
+                .delete_version(
+                    &request_id,
+                    &unresolved.document_id,
+                    &version_id,
+                    RealReplacementBackend::now(),
+                )
+                .map(|deleted| HistoryDeleteResponse {
+                    deleted_version_id: deleted.version_id,
+                })
+                .map_err(map_history_delete_error)
+        })
+        .await
+        .map_err(|error| AppError::Internal(format!("history delete task failed: {error}")))?
         .map_err(Into::into)
     }
 
@@ -585,6 +637,26 @@ fn map_replacement_failure(failure: crate::history::replacement::ReplacementFail
         "replacement failed during {:?}: {}",
         failure.phase, failure.message
     ))
+}
+
+fn map_history_delete_error(error: crate::history::repository::HistoryRepositoryError) -> AppError {
+    use crate::history::repository::HistoryRepositoryError;
+
+    match error {
+        HistoryRepositoryError::VersionNotFound { .. } => {
+            AppError::HistoryResourceMissing("selected history version is unavailable".to_owned())
+        }
+        HistoryRepositoryError::VersionInUse => AppError::HistoryBusy(
+            "selected history version is still referenced by an active operation".to_owned(),
+        ),
+        HistoryRepositoryError::DeleteRequestConflict => AppError::HistoryStaleDocument(
+            "request id is already bound to a different history deletion".to_owned(),
+        ),
+        HistoryRepositoryError::DeletePending => AppError::HistoryOperationPending(
+            "history deletion has not reached a terminal state".to_owned(),
+        ),
+        other => AppError::HistoryUnavailable(other.to_string()),
+    }
 }
 
 fn operation_status_response(
@@ -1661,6 +1733,55 @@ mod asset_grant_lifecycle_tests {
                 "injected asset scope rejection".to_owned(),
             ))
         })
+    }
+
+    #[tokio::test]
+    async fn delete_rejects_same_path_external_replacement_before_metadata_change() {
+        let (root, path, service, request) = fixture().await;
+        let store = service.store().expect("history store");
+        let identity = store
+            .load_active_document_identity(&path.display().to_string())
+            .expect("load history identity")
+            .expect("active document identity");
+        HistoryRepository::new(&store)
+            .publish_scene(PublishSceneRequest {
+                version_id: "version-before-external-replacement".to_owned(),
+                document_id: identity.document_id,
+                scene_bytes: fs::read(&path).expect("read scene"),
+                schema_version: 1,
+                source: crate::history::types::HistoryVersionSource::Manual,
+                protected_action: None,
+                recorded_at: 1,
+                sequence: 1,
+            })
+            .expect("publish history version");
+
+        let replacement = path.with_file_name("replacement.excalidraw");
+        fs::copy(&path, &replacement).expect("copy identical replacement");
+        fs::rename(&replacement, &path).expect("replace original inode");
+        let error = service
+            .delete(HistoryDeleteRequest {
+                document: request.document,
+                request_id: "delete-after-external-replacement".to_owned(),
+                version_id: "version-before-external-replacement".to_owned(),
+            })
+            .await
+            .expect_err("same-path replacement must fail closed");
+        assert_eq!(
+            error.code,
+            crate::commands::error::ErrorCode::HistoryStaleDocument
+        );
+        let version_count: i64 = store
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT COUNT(*) FROM history_versions WHERE id = ?1",
+                    ["version-before-external-replacement"],
+                    |row| row.get(0),
+                )
+            })
+            .expect("count retained history version");
+        assert_eq!(version_count, 1);
+        fs::remove_dir_all(root).expect("remove fixture");
     }
 
     #[tokio::test]

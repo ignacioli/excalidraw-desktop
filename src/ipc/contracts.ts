@@ -45,7 +45,7 @@ export interface IpcError {
 export type SceneData = unknown;
 export type ColorScheme = "light" | "dark";
 export type CheckpointReason =
-  "manualSave" | "tabSwitch" | "tabClose" | "idle" | "appExit" | "maxWait";
+  "manualSave" | "saveAsNew" | "tabSwitch" | "tabClose" | "idle" | "appExit" | "maxWait";
 
 export interface AppHandshakeResponse {
   contractVersion: number;
@@ -126,6 +126,7 @@ export interface EntryDeleteResult {
   operationId: string;
   kind: WorkspaceEntryKind;
   oldRelativePath: string;
+  historyMaintenance?: "pendingReplay" | "cleanupPending";
 }
 
 export interface ExportOptions {
@@ -310,6 +311,10 @@ export interface CommandContract {
 }
 
 export interface IpcCommands {
+  native_menu_set_enabled: {
+    request: { command: NativeMenuCommand; enabled: boolean };
+    response: Record<string, never>;
+  };
   app_handshake: {
     request: Record<string, never>;
     response: AppHandshakeResponse;
@@ -497,6 +502,7 @@ export interface WorkspaceEntriesChangedEvent {
 export type NativeMenuCommand =
   | "save"
   | "exportImage"
+  | "versionHistory"
   | "appearanceSystem"
   | "appearanceLight"
   | "appearanceDark";

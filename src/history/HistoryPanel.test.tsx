@@ -41,10 +41,29 @@ describe("HistoryPanel", () => {
       screen.getByRole("heading", { name: "Version History" }),
     ).toBeInTheDocument();
     expect(screen.getByText("planning.excalidraw")).toBeInTheDocument();
+    expect(
+      screen.getByText(/newest 20 entries.*do not expire by age/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled();
     expect(
       screen.getByRole("button", { name: "Restore this version" }),
     ).toBeEnabled();
+  });
+
+  it("fails closed when the caller cannot provide a rendered preview", () => {
+    render(
+      <HistoryPanel
+        fileName="planning.excalidraw"
+        items={[makeItem()]}
+        onClose={vi.fn()}
+        onRestore={vi.fn()}
+        restoreEnabled={false}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Restore this version" }),
+    ).toBeDisabled();
   });
 
   it.each([
@@ -223,5 +242,106 @@ describe("HistoryPanel", () => {
     expect(
       screen.getByRole("button", { name: "Mark current version" }),
     ).toBeEnabled();
+  });
+
+  it("deletes only the selected version after the durable callback resolves", async () => {
+    const user = userEvent.setup();
+    let resolveDelete: (() => void) | undefined;
+    const onDelete = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveDelete = resolve;
+        }),
+    );
+    render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[makeItem()]}
+        onClose={vi.fn()}
+        onDelete={onDelete}
+      />,
+    );
+
+    const deleteButton = screen.getByRole("button", {
+      name: "Delete this version",
+    });
+    await user.click(deleteButton);
+    expect(onDelete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        versionId: "version-1",
+      }),
+    );
+    expect(deleteButton).toBeDisabled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    resolveDelete?.();
+    await vi.waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Version deleted from history.",
+      );
+    });
+  });
+
+  it("reports a failed deletion without changing the selection", async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn(async () => {
+      throw new Error("Version is in use.");
+    });
+    render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[makeItem()]}
+        onClose={vi.fn()}
+        onDelete={onDelete}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Delete this version" }),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Version is in use.");
+    expect(screen.getByRole("option")).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("keeps an unavailable version from blocking deletion of another selected version", async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn(async () => undefined);
+    render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[
+          makeItem({
+            versionId: "unavailable-version",
+            availability: {
+              status: "unavailable",
+              error: {
+                code: "HISTORY_RESOURCE_MISSING",
+                message: "Missing scene object",
+                retriable: false,
+              },
+            },
+          }),
+          makeItem({ versionId: "available-version", sequence: 2 }),
+        ]}
+        onClose={vi.fn()}
+        onDelete={onDelete}
+      />,
+    );
+
+    const deleteButton = screen.getByRole("button", {
+      name: "Delete this version",
+    });
+    expect(deleteButton).toBeEnabled();
+    await user.click(deleteButton);
+    expect(onDelete).toHaveBeenCalledWith(
+      expect.objectContaining({ versionId: "unavailable-version" }),
+    );
+    const options = screen.getAllByRole("option");
+    await user.click(options[1]);
+    expect(deleteButton).toBeEnabled();
+    await user.click(deleteButton);
+    expect(onDelete).toHaveBeenLastCalledWith(
+      expect.objectContaining({ versionId: "available-version" }),
+    );
   });
 });

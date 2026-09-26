@@ -2,7 +2,7 @@
 
 # 上手与验证指南：Excalidraw Desktop
 
-**Date**: 2026-08-04 | **Last updated**: 2026-09-16 | **架构**: [architecture.zh.md](./architecture.zh.md) | **设计契约**: [../DESIGN.zh.md](../DESIGN.zh.md) | **IPC 契约**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md) | **ADR-009**: [adr/ADR-009-desktop-ui-interactions.md](./adr/ADR-009-desktop-ui-interactions.md)
+**Date**: 2026-08-04 | **Last updated**: 2026-09-25 | **架构**: [architecture.zh.md](./architecture.zh.md) | **设计契约**: [../DESIGN.zh.md](../DESIGN.zh.md) | **IPC 契约**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md) | **ADR-009**: [adr/ADR-009-desktop-ui-interactions.md](./adr/ADR-009-desktop-ui-interactions.md)
 
 本文件说明如何在本机运行 Excalidraw Desktop，以及如何按**产品能力**核对行为。实现细节见源码与 [architecture.zh.md](./architecture.zh.md)，此处不重复。
 
@@ -44,9 +44,26 @@ pnpm tauri build             # 生产打包（dmg / AppImage / deb / rpm）
 pnpm lint && pnpm typecheck && pnpm test          # 前端
 cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml
 APP_E2E=1 pnpm e2e           # Playwright 桌面 E2E（测试专用构建，暴露故障注入 Harness）
+
+# 版本历史定向检查
+pnpm exec vitest run src/history src/documents/documentStore.test.ts src/ipc/contracts.test.ts
+cargo test --manifest-path src-tauri/Cargo.toml --features e2e-harness -q
 ```
 
 进程级用例还要求 `EXCALIDRAW_E2E_BINARY` 指向 `--features e2e-harness` 的测试二进制。生产构建不得注册 Harness，也不得注册 `thumb_lookup` / `thumb_store`。
+
+要执行本地版本历史生命周期场景，请在仓库根目录构建测试专用二进制，再运行定向进程套件：
+
+```bash
+VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness
+APP_E2E=1 \
+EXCALIDRAW_E2E_BINARY="$PWD/src-tauri/target/release/excalidraw-desktop" \
+PLAYWRIGHT_SKIP_WEBSERVER=1 \
+pnpm e2e e2e/tests/local-version-history-lifecycle.spec.ts \
+  --project=browser-ui --workers=1 --retries=0
+```
+
+这是验证入口；本指南不把未执行的本地或生产包运行写成已通过。
 
 相关套件（作为验证入口，本文件不宣称其已通过）：`e2e/tests/ui-sidebar-modes.spec.ts`、`e2e/tests/us3-workspace-files.spec.ts`、`e2e/tests/native-entry-mutations.spec.ts`、`e2e/tests/native-tab-close.spec.ts`、`e2e/tests/native-window-contract.spec.ts`、`e2e/tests/us7-thumbnails.spec.ts`（断言缩略图命令未被调用）。
 
@@ -138,6 +155,25 @@ APP_E2E=1 pnpm e2e           # Playwright 桌面 E2E（测试专用构建，暴�
 
 2. 对未命名绘图重复操作并取消首次保存；再拖入普通 PNG/SVG 和素材库项目，并在文本框中使用相同快捷键。
    - 预期：取消后绘图不变；普通图片和素材库各只插入一次，不替换场景；文本编辑保持正常快捷键行为。
+
+### 版本历史身份、删除与失败反馈
+
+历史 metadata 在 Tauri app-data 目录下本地保存于
+`version-history/history.sqlite3`；不可变场景和素材对象保存在同一目录中。已保存图纸在应用内改名或祖先目录改名后保持同一个持久身份。Save As 会创建新身份，不继承源图纸版本。旧路径后来被另一个文件替换时会被拒绝，必须先解决文档状态；仅凭相同字节不能把旧历史绑定到新文件。
+
+1. 在工作区界面改名一个已打开图纸，再改名它的祖先目录。
+   - 预期：图纸保留版本历史，打开的标签跟随迁移后的路径。
+
+2. 使用 Save As 创建新图纸，再打开它的 Version History。
+   - 预期：新文档拥有独立身份，初始没有从源图纸继承的版本。
+
+3. 在 Version History 中删除一条 manual 或 automatic 版本，并在传输中断后用同一请求重试。
+   - 预期：`history_delete` 只删除指定语义版本，不改变当前画布或文件；同一 `requestId` 重试是幂等的。仍被活动替换引用的版本保持保护并返回结构化 busy 错误。
+
+4. 在保护性 restore、clear 或带内嵌场景的导入过程中制造不确定结果。
+   - 预期：文档保持只读和 pending，直到 `history_operation_status` 确认完成 adoption 或终态失败。历史发布失败通过 `history-issue` 展示，不会把已经成功的当前文件 checkpoint 改写为失败保存。
+
+浏览器定向检查可以证明前端路由和面板行为。文件系统身份、改名迁移、Save As 隔离、Trash 提交、重启重放和对象保留需要测试专用进程构建。精确生产包 WKWebView、原生菜单/视觉审批、性能测量和发布验收属于独立检查。
 
 ### 导出
 

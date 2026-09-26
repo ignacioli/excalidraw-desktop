@@ -41,6 +41,7 @@ import {
   validateStopReopenDecision,
   validatePreparedNativeProfile,
   validationPair,
+  VERSION_HISTORY_MENU_ITEM,
   windowGeometryAppleScript,
   writeNativeValidationCollection,
 } from "./native-macos-validation.mjs";
@@ -105,7 +106,7 @@ describe("native macOS validation helpers", () => {
     ]);
   });
 
-  it("keeps qualification minimal while final preserves all seven actions", () => {
+  it("keeps qualification minimal while final preserves the 003 graph and adds history entry inspection", () => {
     assert.equal(PHYSICAL_COMMAND_S_TIMEOUT_MS, 600_000);
     assert.deepEqual(
       nativeActionsForScope(PROOF_SCOPES.QUALIFICATION).map(({ id }) => id),
@@ -124,7 +125,11 @@ describe("native macOS validation helpers", () => {
       ],
     );
     assert.equal(nativeMenuItemsForScope(PROOF_SCOPES.QUALIFICATION).length, 1);
-    assert.equal(nativeMenuItemsForScope(PROOF_SCOPES.FINAL).length, 5);
+    assert.equal(nativeMenuItemsForScope(PROOF_SCOPES.FINAL).length, 6);
+    assert.deepEqual(
+      nativeMenuItemsForScope(PROOF_SCOPES.FINAL).at(-1),
+      VERSION_HISTORY_MENU_ITEM,
+    );
   });
 
   it("accepts one exact nonce confirmation and rejects mismatch or duplication", () => {
@@ -354,6 +359,7 @@ describe("native macOS validation helpers", () => {
         const scripts = [
           resolveMenuItemAppleScript(123, ["File", "Save"], "click targetItem"),
           inspectMenuItemAppleScript(123, EXPECTED_MENU_ITEMS[0]),
+          inspectMenuItemAppleScript(123, VERSION_HISTORY_MENU_ITEM),
           windowGeometryAppleScript(123),
           completeExportDialogAppleScript(123, "png", "/tmp/out/Test.png"),
           completeExportDialogAppleScript(123, "svg", "/tmp/out/Test.svg"),
@@ -389,6 +395,12 @@ describe("native macOS validation helpers", () => {
         'EXCALIDRAW_NATIVE_MENU_VALIDATION {"stage":"nativeEntry","validationId":0,"command":"save"}',
       ),
       null,
+    );
+    assert.deepEqual(
+      parseNativeValidationLine(
+        'EXCALIDRAW_NATIVE_MENU_VALIDATION {"stage":"applicationRoute","validationId":8,"command":"versionHistory"}',
+      ),
+      { stage: "applicationRoute", validationId: 8, command: "versionHistory" },
     );
   });
 
@@ -447,6 +459,14 @@ describe("native macOS validation helpers", () => {
         keyboard: { character: "e", modifiers: 1 },
       }).pass,
       false,
+    );
+    assert.equal(
+      compareMenuObservation(VERSION_HISTORY_MENU_ITEM, {
+        label: "Version History…",
+        enabled: true,
+        keyboard: { character: "", modifiers: 8 },
+      }).pass,
+      true,
     );
   });
 
@@ -607,6 +627,21 @@ describe("native macOS validation helpers", () => {
         ].map(([id, command, validationId]) =>
           makeCheck(id, id, "PASS", { command, validationId }),
         ),
+        makeCheck(
+          "version-history-route",
+          "native Version History menu route for the launched document",
+          "PASS",
+          {
+            command: "versionHistory",
+            validationId: 8,
+            targetDocumentBinding: {
+              launchMode: "single-normal-open-argument",
+              path: "/tmp/Architecture.excalidraw",
+              sha256: "89".repeat(32),
+              byteLength: 128,
+            },
+          },
+        ),
       ],
     });
     const adapted = adaptNativeValidationReport(report, binding);
@@ -619,6 +654,24 @@ describe("native macOS validation helpers", () => {
     );
     assert.equal("filesystemOutcomes" in adapted, false);
     assert.equal(adapted.routeAcknowledgements.result, "PASS");
+    assert.equal(adapted.versionHistoryEntry.result, "PASS");
+    assert.equal(adapted.versionHistoryEntry.action.validationId, 8);
+    assert.equal(
+      adapted.versionHistoryEntry.targetDocumentBinding.path,
+      "/tmp/Architecture.excalidraw",
+    );
+    const missingTargetBinding = adaptNativeValidationReport(
+      {
+        ...report,
+        checks: report.checks.map((check) =>
+          check.id === "version-history-route"
+            ? { ...check, targetDocumentBinding: undefined }
+            : check,
+        ),
+      },
+      binding,
+    );
+    assert.equal(missingTargetBinding.versionHistoryEntry.result, "BLOCKED");
     assert.equal(
       adapted.environment.statePreparation.sha256Before,
       adapted.environment.statePreparation.sha256After,
@@ -653,6 +706,7 @@ describe("native macOS validation helpers", () => {
       qualificationBinding,
     );
     assert.equal(qualification.routeAcknowledgements.result, "PASS");
+    assert.equal(qualification.versionHistoryEntry, null);
     assert.deepEqual(
       qualification.routeAcknowledgements.actions.map(({ checkId }) => checkId),
       ["save-menu", "save-keyboard"],
@@ -674,6 +728,16 @@ describe("native macOS validation helpers", () => {
           await fs.readFile(path.join(collection, "environment.json"), "utf8"),
         ).productIdentity.packageArtifactSha256,
         binding.productIdentity.packageArtifactSha256,
+      );
+      assert.deepEqual(
+        JSON.parse(
+          await fs.readFile(
+            path.join(collection, "version-history-entry.json"),
+            "utf8",
+          ),
+        ).targetDocumentBinding,
+        report.checks.find((check) => check.id === "version-history-route")
+          .targetDocumentBinding,
       );
       await assert.rejects(
         fs.access(path.join(collection, "filesystem-outcomes.json")),

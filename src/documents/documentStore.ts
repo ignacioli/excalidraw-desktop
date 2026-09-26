@@ -929,6 +929,8 @@ export class DocumentManager {
         baseHash: response.newBaseHash,
         saveState: "clean",
         conflictInfo: null,
+        historyDocumentId: undefined,
+        historyIssue: null,
         errorMessage: null,
       });
     });
@@ -945,7 +947,7 @@ export class DocumentManager {
       const response = await this.gateway.checkpoint(
         newPath,
         serializeScene(current.scene),
-        "manualSave",
+        "saveAsNew",
       );
       if (current.path.length > 0) {
         await this.gateway.close(current.path, "discardOrphan");
@@ -959,6 +961,8 @@ export class DocumentManager {
         baseHash: response.newBaseHash,
         saveState: "clean",
         conflictInfo: null,
+        historyDocumentId: undefined,
+        historyIssue: null,
         errorMessage: null,
       });
     });

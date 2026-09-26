@@ -7,6 +7,8 @@ import {
   type ErrorCode,
   type ExpectedOpenDocument,
   type HistoryChangedEvent,
+  type HistoryDeleteRequest,
+  type HistoryDeleteResponse,
   type HistoryIssueEvent,
   type HistoryListRequest,
   type HistoryReplaceRequest,
@@ -149,6 +151,7 @@ describe("IPC v3 history read contract", () => {
       command:
         | "save"
         | "exportImage"
+        | "versionHistory"
         | "appearanceSystem"
         | "appearanceLight"
         | "appearanceDark";
@@ -180,6 +183,15 @@ describe("IPC v3 history read contract", () => {
         | { kind: "restore"; versionId: string }
         | { kind: "clear" }
         | { kind: "import"; candidateSceneJson: string };
+    }>();
+    expectTypeOf<HistoryDeleteRequest>().toEqualTypeOf<{
+      document:
+        { kind: "path"; path: string } | { kind: "handle"; documentId: string };
+      requestId: string;
+      versionId: string;
+    }>();
+    expectTypeOf<HistoryDeleteResponse>().toEqualTypeOf<{
+      deletedVersionId: string;
     }>();
     expectTypeOf<keyof Pick<
       IpcCommands,
