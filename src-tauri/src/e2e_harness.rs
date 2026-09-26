@@ -3897,10 +3897,17 @@ async fn run_history_restart_seed(root: &Path) -> Result<HistoryRestartSeedEvide
         .map_err(|error| format!("failed to create restart asset directory: {error}"))?;
     fs::write(asset_directory.join(&scene_b.2), &scene_b.1)
         .map_err(|error| format!("failed to materialize restart asset: {error}"))?;
-    let identity = context
+    let mut identity = context
         .store
         .resolve_document_identity_for_open(&target, 1)
         .map_err(|error| format!("failed to persist restart identity: {error}"))?;
+    identity
+        .record_self_write(&target, sha256(scene_a.0.as_bytes()))
+        .map_err(|error| format!("failed to record restart seed write: {error}"))?;
+    context
+        .store
+        .persist_document_identity(&identity, 1)
+        .map_err(|error| format!("failed to persist restart seed write: {error}"))?;
     publish_history_restart_version(
         &context.store,
         &identity.document_id,
@@ -6290,6 +6297,16 @@ mod history_fault_contract_tests {
         assert_eq!(
             super::sha256(&std::fs::read(&seed.target_path).unwrap()),
             seed.scene_a_sha256
+        );
+        let seed_context = super::open_history_restart_context(&root).await.unwrap();
+        let identity = seed_context
+            .store
+            .load_active_document_identity(&seed.target_path)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            identity.recent_self_write_hash.as_deref(),
+            Some(seed.scene_a_sha256.as_str())
         );
         for (target_id, target_hash, previous_label) in [
             (
