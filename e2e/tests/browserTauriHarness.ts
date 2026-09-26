@@ -8,7 +8,7 @@ export async function installBrowserTauriHarness(
   initialSceneJson?: string,
   dialogPaths: readonly string[] = [documentPath],
   checkpointFailureAfter?: number,
-  seedWorkspaceEntries = true,
+  seedWorkspaceEntries?: boolean,
 ): Promise<void> {
   await page.addInitScript(
     ({
@@ -168,7 +168,7 @@ export async function installBrowserTauriHarness(
             command === "workspace_list" ||
             command === "workspace_recent_list"
           ) {
-            return [workspace];
+            return seedEntries === undefined ? [] : [workspace];
           }
           if (command === "workspace_entry_list") {
             const workspaceId = String(args.workspaceId ?? "");

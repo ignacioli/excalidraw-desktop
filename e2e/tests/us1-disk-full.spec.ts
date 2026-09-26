@@ -56,7 +56,14 @@ test("disk-full checkpoint preserves the file and recoverable draft", async () =
 test("disk-full IPC feedback keeps the editor open with its recovery draft", async ({
   page,
 }) => {
-  await installBrowserTauriHarness(page, undefined, undefined, undefined, 1);
+  await installBrowserTauriHarness(
+    page,
+    undefined,
+    undefined,
+    undefined,
+    1,
+    true,
+  );
   await persistPinnedWorkspaceSidebar(page, ["workspace-1"], "workspace-1");
   await page.goto("/");
   await openWorkspaceSidebar(page);

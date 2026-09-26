@@ -63,10 +63,14 @@ test("two visible tabs checkpoint independently without blocking the shell", asy
 }) => {
   const firstPath = "/virtual/first.excalidraw";
   const secondPath = "/virtual/second.excalidraw";
-  await installBrowserTauriHarness(page, firstPath, undefined, [
+  await installBrowserTauriHarness(
+    page,
     firstPath,
-    secondPath,
-  ]);
+    undefined,
+    [firstPath, secondPath],
+    undefined,
+    true,
+  );
   await persistPinnedWorkspaceSidebar(page, ["workspace-1"], "workspace-1");
   await page.goto("/");
 

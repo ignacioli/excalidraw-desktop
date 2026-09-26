@@ -50,7 +50,14 @@ const OFFICIAL_FIXTURE = JSON.stringify({
 test("round-trips an official scene through the locked official loader", async ({
   page,
 }) => {
-  await installBrowserTauriHarness(page, undefined, OFFICIAL_FIXTURE);
+  await installBrowserTauriHarness(
+    page,
+    undefined,
+    OFFICIAL_FIXTURE,
+    undefined,
+    undefined,
+    true,
+  );
   await persistPinnedWorkspaceSidebar(page, ["workspace-1"], "workspace-1");
   await page.goto("/");
   await openWorkspaceSidebar(page);
