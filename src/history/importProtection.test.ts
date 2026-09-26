@@ -101,11 +101,21 @@ describe("importProtection", () => {
   );
 
   it("leaves an ordinary PNG on the normal image insertion path", async () => {
-    loadFromBlob.mockRejectedValueOnce(new Error("no embedded scene"));
+    loadFromBlob.mockRejectedValueOnce(
+      new DOMException("no embedded scene", "EncodingError"),
+    );
 
     await expect(
       prepareImport(file("photo.png", "bytes", "image/png")),
     ).resolves.toMatchObject({ status: "ordinaryImage" });
+  });
+
+  it("reports malformed embedded data instead of inserting it as an ordinary image", async () => {
+    loadFromBlob.mockRejectedValueOnce(new Error("invalid embedded payload"));
+
+    await expect(
+      prepareImport(file("broken.png", "bytes", "image/png")),
+    ).rejects.toThrow("does not contain an Excalidraw scene");
   });
 
   it("adopts embedded import bytes through the shared content-derived asset path", async () => {

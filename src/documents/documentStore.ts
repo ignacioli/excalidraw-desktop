@@ -505,14 +505,18 @@ export class DocumentManager {
       queue: () => {
         queued ??= queueDraft().then((status) => {
           const current = this.store.getState().sessionsById[documentId];
-          const observed = current === undefined
-            ? undefined
-            : {
-                sessionGeneration: current.sessionGeneration ?? 0,
-                revision: current.revision,
-              };
-          const rejection = historyAutosaveProbeRejection(current, captured, scene)
-            ?? (current !== undefined && current.path !== path ? "path" : undefined);
+          const observed =
+            current === undefined
+              ? undefined
+              : {
+                  sessionGeneration: current.sessionGeneration ?? 0,
+                  revision: current.revision,
+                };
+          const rejection =
+            historyAutosaveProbeRejection(current, captured, scene) ??
+            (current !== undefined && current.path !== path
+              ? "path"
+              : undefined);
           return {
             status,
             captured,
@@ -1001,7 +1005,9 @@ export class DocumentManager {
       operationQueue,
       persistDraft: (nextDraft) => this.persistDraft(id, path, nextDraft),
       checkpoint: async (nextDraft, reason) => {
-        if (path.length === 0) {
+        if (
+          (this.store.getState().sessionsById[id]?.path ?? path).length === 0
+        ) {
           return;
         }
         if (
@@ -1054,10 +1060,10 @@ export class DocumentManager {
     fallbackPath: string,
     nextDraft: ScheduledScene,
   ): Promise<"saved" | "rejected"> {
-    if (fallbackPath.length === 0) {
+    const current = this.store.getState().sessionsById[documentId];
+    if ((current?.path ?? fallbackPath).length === 0) {
       return "rejected";
     }
-    const current = this.store.getState().sessionsById[documentId];
     if (
       historyAutosaveProbeRejection(
         current,

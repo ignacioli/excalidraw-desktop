@@ -96,11 +96,15 @@ export function ExcalidrawEditor({
         const removeProtectedInput = adapter.installProtectedInput(
           containerRef.current,
           {
-            onClear: () => protectedInputRef.current?.onClear?.(),
-            onImportShortcut: () =>
-              protectedInputRef.current?.onImportShortcut?.(),
-            onSceneDrop: (drop) =>
-              protectedInputRef.current?.onSceneDrop?.(drop),
+            get onClear() {
+              return protectedInputRef.current?.onClear;
+            },
+            get onImportShortcut() {
+              return protectedInputRef.current?.onImportShortcut;
+            },
+            get onSceneDrop() {
+              return protectedInputRef.current?.onSceneDrop;
+            },
             onError: (error) => protectedInputRef.current?.onError?.(error),
           },
         );

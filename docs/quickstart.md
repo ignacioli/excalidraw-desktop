@@ -131,6 +131,14 @@ The browser can cover dialogs, the tree, and the keyboard. Process-level proof o
 3. Mark the current state, edit again, restart against the same isolated data root, and inspect mixed automatic/protected pools at 19, 20, and 21 records.
    - Expected: the manual version still contains the click-time scene and is not auto-evicted; automatic/protected retain the newest 20 together, while a history failure remains separate from the successful current-file save.
 
+### Protected clear and drawing import
+
+1. Edit a saved drawing, then use Cmd/Ctrl+Backspace or Delete on the canvas, or import a `.excalidraw` drawing or PNG/SVG with an embedded scene.
+   - Expected: a recoverable operation-before version is saved before the current file and canvas change. A protection failure leaves both unchanged.
+
+2. Repeat with an untitled drawing and cancel its first Save dialog; then drop an ordinary PNG/SVG and a library item, and use the shortcut in a text field.
+   - Expected: cancellation leaves the drawing unchanged; ordinary images and library items insert once without replacing the scene; text editing keeps its normal shortcut behavior.
+
 ### Export
 
 1. Export a mixed Chinese/English canvas as PNG (2x / transparent) and SVG → open the SVG in a clean environment with no fonts installed.

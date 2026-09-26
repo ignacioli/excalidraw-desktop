@@ -355,6 +355,8 @@ const HISTORY_FAULT_MODE_ENV: &str = "EXCALIDRAW_E2E_HISTORY_FAULT_MODE";
 const HISTORY_FAULT_ARMED_ENV: &str = "EXCALIDRAW_E2E_HISTORY_FAULT_ARMED";
 #[cfg(any(test, feature = "e2e-harness"))]
 const HISTORY_FAULT_FAILURE_ENV: &str = "EXCALIDRAW_E2E_HISTORY_FAULT_FAILURE";
+const HISTORY_PROTECTED_REPLACEMENT_TARGET_ENV: &str = "EXCALIDRAW_E2E_HISTORY_REPLACE_TARGET";
+const HISTORY_PROTECTED_REPLACEMENT_FAILURE_ENV: &str = "EXCALIDRAW_E2E_HISTORY_REPLACE_FAILURE";
 
 #[cfg(test)]
 type HistoryFaultTestConfig = Option<(HistoryFaultStage, Vec<HistoryFaultStage>)>;
@@ -633,6 +635,15 @@ async fn run_scenario(scenario: &str, root: &Path) -> Result<String, String> {
         }
         "history-operation-concurrency" => {
             serialize_evidence(run_history_operation_concurrency(root).await?)
+        }
+        "history-protected-replacement" => {
+            serialize_evidence(run_history_protected_replacement(root).await?)
+        }
+        "history-protected-replacement-kill" => run_history_protected_replacement(root)
+            .await
+            .map(|_| String::new()),
+        "history-protected-replacement-probe" => {
+            serialize_evidence(run_history_protected_replacement_probe(root).await?)
         }
         "history-restart-seed" => serialize_evidence(run_history_restart_seed(root).await?),
         "history-restart-restore" => serialize_evidence(run_history_restart_restore(root).await?),
@@ -985,6 +996,37 @@ struct HistoryOperationConcurrencyEvidence {
     target_sha256: String,
     target_object_exists: bool,
     target_asset_exists: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryProtectedReplacementEvidence {
+    scenario: &'static str,
+    target_kind: String,
+    failure_mode: String,
+    request_id: String,
+    target_path: String,
+    old_sha256: String,
+    expected_target_sha256: String,
+    persisted_sha256: String,
+    parseable_json: bool,
+    target_unchanged: bool,
+    replacement_invocation_count: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    replacement_committed: Option<bool>,
+    response_state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    operation_status_state: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    protection_version_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    protection_action: Option<String>,
+    protected_version_count: usize,
+    temporary_files: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    response: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 /// Runs the real protected replacement service until a configured History
@@ -1485,6 +1527,272 @@ fn response_committed(response: &HistoryReplaceResponse) -> Option<bool> {
             ..
         } => *replacement_committed,
     }
+}
+
+/// Runs one target-specific protected replacement in a fresh native process.
+/// T025 remains the owner of the shared interruption matrix; this scenario
+/// proves only the clear/import target differences and their preflight errors.
+async fn run_history_protected_replacement(
+    root: &Path,
+) -> Result<HistoryProtectedReplacementEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target_kind =
+        env::var(HISTORY_PROTECTED_REPLACEMENT_TARGET_ENV).unwrap_or_else(|_| "clear".to_owned());
+    if target_kind != "clear" && target_kind != "import" {
+        return Err(format!(
+            "{HISTORY_PROTECTED_REPLACEMENT_TARGET_ENV} must be clear or import"
+        ));
+    }
+    let failure_mode =
+        env::var(HISTORY_PROTECTED_REPLACEMENT_FAILURE_ENV).unwrap_or_else(|_| "none".to_owned());
+    let request_id = env::var(HISTORY_FAULT_OPERATION_ENV)
+        .unwrap_or_else(|_| format!("history-protected-replacement-{target_kind}"));
+    let target = context
+        .workspace
+        .join("history-protected-replacement.excalidraw");
+    let old = history_restart_scene("protected-old", "保护前内容");
+    materialize_history_workspace_asset(&context.workspace, &old.1)?;
+    fs::write(&target, old.0.as_bytes())
+        .map_err(|error| format!("failed to write protected replacement target: {error}"))?;
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize protected replacement target: {error}"))?;
+    let identity = context
+        .store
+        .resolve_document_identity_for_open(&target, 1)
+        .map_err(|error| format!("failed to persist protected replacement identity: {error}"))?;
+
+    let (candidate_scene, expected_target_sha256) = if target_kind == "clear" {
+        let scene = String::from_utf8(crate::commands::history::empty_scene_bytes())
+            .map_err(|error| format!("clear fixture is not UTF-8: {error}"))?;
+        let hash = sha256(scene.as_bytes());
+        (scene, hash)
+    } else {
+        let imported = history_restart_scene("Eprotected-import", "导入后内容");
+        materialize_history_workspace_asset(&context.workspace, &imported.1)?;
+        let mut scene: serde_json::Value = serde_json::from_str(&imported.0)
+            .map_err(|error| format!("failed to decode import fixture: {error}"))?;
+        if failure_mode == "missing-asset" {
+            scene["files"]["history-image"]["dataURL"] =
+                serde_json::Value::String(format!("asset://{}", "0".repeat(64)));
+        }
+        let scene = serde_json::to_string(&scene)
+            .map_err(|error| format!("failed to encode import fixture: {error}"))?;
+        let hash = sha256(scene.as_bytes());
+        (scene, hash)
+    };
+
+    let replacement_invocation_count = 1;
+    let mut replacement_committed = None;
+    let response_state_value;
+    let mut response_json = None;
+    let mut error_message = None;
+
+    let fault = match failure_mode.as_str() {
+        "disk-full" => Some(ObjectStoreFaultKind::DiskFull),
+        "permission-denied" => Some(ObjectStoreFaultKind::PermissionDenied),
+        "none" | "missing-asset" | "response-lost" => None,
+        other => {
+            return Err(format!(
+                "unknown {HISTORY_PROTECTED_REPLACEMENT_FAILURE_ENV} value: {other}"
+            ))
+        }
+    };
+    if let Some(kind) = fault {
+        set_object_fault(ObjectStoreFaultPoint::BeforeTempWrite, kind);
+    }
+    let target_request = if target_kind == "clear" {
+        HistoryReplaceTarget::Clear
+    } else {
+        HistoryReplaceTarget::Import {
+            candidate_scene_json: candidate_scene.clone(),
+        }
+    };
+    let response = context
+        .replacement
+        .e2e_replace(HistoryReplaceRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id: request_id.clone(),
+            session_generation: 1,
+            revision: 1,
+            expected_base_hash: sha256(old.0.as_bytes()),
+            current_scene_json: old.0.clone(),
+            target: target_request,
+        })
+        .await;
+    clear_object_fault();
+    clear_transaction_fault();
+    match response {
+        Ok(response) => {
+            replacement_committed = response_committed(&response);
+            response_state_value = response_state(&response).to_owned();
+            response_json =
+                Some(serde_json::to_value(&response).map_err(|error| {
+                    format!("failed to serialize replacement response: {error}")
+                })?);
+        }
+        Err(error) => {
+            response_state_value = "error".to_owned();
+            error_message = Some(format!("{error:?}"));
+        }
+    }
+    let status = context
+        .replacement
+        .e2e_operation_status(HistoryOperationStatusRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id: request_id.clone(),
+        })
+        .await
+        .ok();
+
+    let persisted = fs::read(&target)
+        .map_err(|error| format!("failed to read protected replacement target: {error}"))?;
+    let persisted_sha256 = sha256(&persisted);
+    let old_sha256 = sha256(old.0.as_bytes());
+    let protection_version_id = status
+        .as_ref()
+        .and_then(|value| value.protection_version_id.clone());
+    let protection_action = if let Some(version_id) = protection_version_id.as_deref() {
+        context
+            .store
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT protected_action FROM history_versions WHERE id=?1",
+                    [version_id],
+                    |row| row.get::<_, String>(0),
+                )
+            })
+            .ok()
+    } else {
+        None
+    };
+    Ok(HistoryProtectedReplacementEvidence {
+        scenario: "history-protected-replacement",
+        target_kind,
+        failure_mode,
+        request_id,
+        target_path: path_string(&target),
+        old_sha256: old_sha256.clone(),
+        expected_target_sha256,
+        persisted_sha256: persisted_sha256.clone(),
+        parseable_json: serde_json::from_slice::<serde_json::Value>(&persisted).is_ok(),
+        target_unchanged: persisted_sha256 == old_sha256,
+        replacement_invocation_count,
+        replacement_committed,
+        response_state: response_state_value,
+        operation_status_state: status.map(|value| format!("{:?}", value.state)),
+        protection_version_id,
+        protection_action,
+        protected_version_count: history_source_count(
+            &context.store,
+            &identity.document_id,
+            "protected",
+        )?,
+        temporary_files: temporary_files(&target)?,
+        response: response_json,
+        error: error_message,
+    })
+}
+
+async fn run_history_protected_replacement_probe(
+    root: &Path,
+) -> Result<HistoryProtectedReplacementEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target_kind = env::var(HISTORY_PROTECTED_REPLACEMENT_TARGET_ENV)
+        .map_err(|_| format!("{HISTORY_PROTECTED_REPLACEMENT_TARGET_ENV} is required"))?;
+    if target_kind != "clear" && target_kind != "import" {
+        return Err(format!(
+            "{HISTORY_PROTECTED_REPLACEMENT_TARGET_ENV} must be clear or import"
+        ));
+    }
+    let request_id = env::var(HISTORY_FAULT_OPERATION_ENV)
+        .map_err(|_| format!("{HISTORY_FAULT_OPERATION_ENV} is required"))?;
+    let target = PathBuf::from(
+        env::var(HISTORY_FAULT_TARGET_ENV)
+            .map_err(|_| format!("{HISTORY_FAULT_TARGET_ENV} is required"))?,
+    );
+    assert_isolated_path(root, &target)?;
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize protected replacement probe: {error}"))?;
+    let operation = OperationStore::new(&context.store)
+        .load(&request_id)
+        .map_err(|error| format!("failed to load protected replacement operation: {error}"))?
+        .ok_or_else(|| format!("protected replacement operation {request_id} is missing"))?;
+    let old_sha256 = operation
+        .expected_old_disk_hash
+        .clone()
+        .ok_or_else(|| "protected replacement operation has no old hash".to_owned())?;
+    let expected_target_sha256 = operation
+        .target_scene_hash
+        .clone()
+        .ok_or_else(|| "protected replacement operation has no target hash".to_owned())?;
+    let persisted = fs::read(&target)
+        .map_err(|error| format!("failed to read protected replacement probe: {error}"))?;
+    let persisted_sha256 = sha256(&persisted);
+    let status = context
+        .replacement
+        .e2e_operation_status(HistoryOperationStatusRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id: request_id.clone(),
+        })
+        .await
+        .map_err(|error| format!("failed to query protected replacement probe: {error:?}"))?;
+    let protection_version_id = status.protection_version_id.clone();
+    let protection_action = if let Some(version_id) = protection_version_id.as_deref() {
+        context
+            .store
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT protected_action FROM history_versions WHERE id=?1",
+                    [version_id],
+                    |row| row.get::<_, String>(0),
+                )
+            })
+            .ok()
+    } else {
+        None
+    };
+    Ok(HistoryProtectedReplacementEvidence {
+        scenario: "history-protected-replacement",
+        target_kind: target_kind.clone(),
+        failure_mode: "response-lost".to_owned(),
+        request_id,
+        target_path: path_string(&target),
+        old_sha256: old_sha256.clone(),
+        expected_target_sha256,
+        persisted_sha256: persisted_sha256.clone(),
+        parseable_json: serde_json::from_slice::<serde_json::Value>(&persisted).is_ok(),
+        target_unchanged: persisted_sha256 == old_sha256,
+        replacement_invocation_count: 1,
+        replacement_committed: status.replacement_committed,
+        response_state: "lost".to_owned(),
+        operation_status_state: Some(format!("{:?}", status.state)),
+        protection_version_id,
+        protection_action,
+        protected_version_count: history_source_count(
+            &context.store,
+            &operation.document_id,
+            "protected",
+        )?,
+        temporary_files: temporary_files(&target)?,
+        response: None,
+        error: None,
+    })
+}
+
+fn materialize_history_workspace_asset(workspace: &Path, bytes: &[u8]) -> Result<(), String> {
+    let directory = workspace.join(".excalidraw_assets");
+    fs::create_dir_all(&directory)
+        .map_err(|error| format!("failed to create history workspace assets: {error}"))?;
+    let path = directory.join(sha256(bytes));
+    fs::write(path, bytes).map_err(|error| format!("failed to materialize history asset: {error}"))
 }
 
 async fn setup_history_fault_operation(

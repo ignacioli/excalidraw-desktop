@@ -68,7 +68,7 @@ export async function prepareImport(
       // A PNG/SVG without Excalidraw metadata is an ordinary image and must
       // remain on the existing single-insert path. It is never a protected
       // replacement candidate.
-      if (error instanceof ImportProtectionError) {
+      if (isMissingEmbeddedScene(error)) {
         return { status: "ordinaryImage", file: file.file };
       }
       throw error;
@@ -99,7 +99,7 @@ export async function parseImportCandidate(
   try {
     return await parseEmbeddedScene(file, format);
   } catch (error) {
-    if (error instanceof ImportProtectionError) {
+    if (isMissingEmbeddedScene(error)) {
       return { status: "ordinaryImage", file };
     }
     throw error;
@@ -179,6 +179,16 @@ async function parseExcalidraw(
     );
   }
   return toCandidate(file, "excalidraw", scene);
+}
+
+function isMissingEmbeddedScene(error: unknown): boolean {
+  return (
+    error instanceof ImportProtectionError &&
+    typeof error.cause === "object" &&
+    error.cause !== null &&
+    "name" in error.cause &&
+    error.cause.name === "EncodingError"
+  );
 }
 
 async function parseEmbeddedScene(

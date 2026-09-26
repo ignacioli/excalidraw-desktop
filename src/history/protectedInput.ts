@@ -13,6 +13,8 @@ export type ProtectedInputAction = "clear" | "import-shortcut";
 export interface ProtectedSceneDrop {
   readonly files: readonly File[];
   readonly event: DragEvent;
+  /** Resume the SDK's ordinary image path once after asynchronous parsing. */
+  forwardOrdinaryImage(): void;
 }
 
 export interface ProtectedInputHandlers {
@@ -20,7 +22,7 @@ export interface ProtectedInputHandlers {
   onClear?: () => void | Promise<void>;
   /** Called for Cmd/Ctrl+O on the canvas. */
   onImportShortcut?: () => void | Promise<void>;
-  /** Called for an explicit .excalidraw scene drop. */
+  /** Called for scene files and PNG/SVG files that may embed a scene. */
   onSceneDrop?: (drop: ProtectedSceneDrop) => void | Promise<void>;
   /** Keeps async host errors visible to the shell instead of unhandled. */
   onError?: (error: unknown) => void;
@@ -35,6 +37,7 @@ export function installProtectedInput(
   root: HTMLElement,
   handlers: ProtectedInputHandlers,
 ): () => void {
+  const forwardedEvents = new WeakSet<DragEvent>();
   const onKeyDown = (event: KeyboardEvent): void => {
     if (
       !isEventInsideRoot(root, event.target) ||
@@ -64,6 +67,7 @@ export function installProtectedInput(
 
   const onDrop = (event: DragEvent): void => {
     if (
+      forwardedEvents.has(event) ||
       handlers.onSceneDrop === undefined ||
       !isEventInsideRoot(root, event.target) ||
       !isProtectedSceneDrop(event)
@@ -71,16 +75,65 @@ export function installProtectedInput(
       return;
     }
 
-    // Library MIME data and ordinary images intentionally do not match this
-    // guard, so the SDK handles those exactly once.
+    // Candidate PNG/SVG files need asynchronous parsing before the SDK sees
+    // them. Other images and library drags continue directly to the SDK.
     event.preventDefault();
     event.stopPropagation();
     const callback = handlers.onSceneDrop;
+    const files = Array.from(event.dataTransfer?.files ?? []);
+    if (files.length === 0) {
+      const sceneMime = Array.from(event.dataTransfer?.types ?? []).find(
+        (type) =>
+          [
+            "application/vnd.excalidraw",
+            "application/vnd.excalidraw+json",
+            "application/x-excalidraw",
+          ].includes(type.toLowerCase()),
+      );
+      const sceneJson = sceneMime
+        ? event.dataTransfer?.getData(sceneMime)
+        : undefined;
+      if (sceneJson) {
+        files.push(
+          new File([sceneJson], "dropped.excalidraw", {
+            type: sceneMime,
+          }),
+        );
+      }
+    }
+    if (files.length === 0) {
+      handlers.onError?.(new Error("拖放内容缺少可读取的绘图数据。"));
+      return;
+    }
+    const target = event.target;
+    const { clientX, clientY } = event;
+    let forwardedOnce = false;
     invokeSafely(
       () =>
         callback({
-          files: Array.from(event.dataTransfer?.files ?? []),
+          files,
           event,
+          forwardOrdinaryImage: () => {
+            if (forwardedOnce) return;
+            const file = files[0];
+            if (!(target instanceof Node) || !root.contains(target) || !file) {
+              throw new Error(
+                "The dropped image's canvas is no longer available.",
+              );
+            }
+            forwardedOnce = true;
+            const transfer = new DataTransfer();
+            transfer.items.add(file);
+            const forwarded = new DragEvent("drop", {
+              bubbles: true,
+              cancelable: true,
+              dataTransfer: transfer,
+              clientX,
+              clientY,
+            });
+            forwardedEvents.add(forwarded);
+            target.dispatchEvent(forwarded);
+          },
         }),
       handlers.onError,
     );
@@ -109,7 +162,7 @@ export function protectedKeyboardAction(
   return event.key.toLowerCase() === "o" ? "import-shortcut" : undefined;
 }
 
-/** Return true for explicit scene drops, excluding the SDK's library MIME. */
+/** Return true for possible scene drops, excluding the SDK's library MIME. */
 export function isProtectedSceneDrop(
   event: Pick<DragEvent, "dataTransfer">,
 ): boolean {
@@ -125,16 +178,21 @@ export function isProtectedSceneDrop(
 
   if (
     types.some((type) =>
-      ["application/vnd.excalidraw", "application/x-excalidraw"].includes(
-        type.toLowerCase(),
-      ),
+      [
+        "application/vnd.excalidraw",
+        "application/vnd.excalidraw+json",
+        "application/x-excalidraw",
+      ].includes(type.toLowerCase()),
     )
   ) {
     return true;
   }
 
-  return Array.from(transfer.files).some((file) =>
-    /\.excalidraw(?:\.json)?$/iu.test(file.name),
+  return Array.from(transfer.files).some(
+    (file) =>
+      /\.(?:excalidraw(?:\.json)?|png|svg)$/iu.test(file.name) ||
+      file.type === "image/png" ||
+      file.type === "image/svg+xml",
   );
 }
 

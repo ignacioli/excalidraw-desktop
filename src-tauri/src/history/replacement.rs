@@ -146,6 +146,16 @@ pub trait ProtectedReplacementBackend {
         request: &ProtectedReplacementRequest,
     ) -> Result<CapturedDocument, Self::Error>;
 
+    /// Validate the selected target and all resources it references before
+    /// publishing the protected snapshot. This boundary must not create a
+    /// durable history record or operation intent.
+    fn validate_target(
+        &mut self,
+        _request: &ProtectedReplacementRequest,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
     /// Publish immutable scene/assets and their protected history metadata.
     /// This must return only after the protection record is durable.
     fn publish_protection(
@@ -264,6 +274,10 @@ where
                 phase: ReplacementPhase::Preparing,
                 message: error.to_string(),
             });
+        }
+
+        if let Err(error) = self.backend.validate_target(&request) {
+            return precommit(ReplacementPhase::Preparing, error);
         }
 
         let protection = match self.backend.publish_protection(&request, &captured) {
@@ -493,6 +507,7 @@ mod tests {
         phases: Vec<&'static str>,
         fail_finalize: bool,
         mutate_before_write: bool,
+        fail_target_validation: bool,
         path: PathBuf,
         old_bytes: Vec<u8>,
     }
@@ -521,6 +536,14 @@ mod tests {
                     mime_type: "image/png".to_owned(),
                 }],
             })
+        }
+
+        fn validate_target(&mut self, _: &ProtectedReplacementRequest) -> Result<(), Self::Error> {
+            self.phases.push("validate");
+            if self.fail_target_validation {
+                return Err("target resource is unavailable".to_owned());
+            }
+            Ok(())
         }
 
         fn publish_protection(
@@ -657,6 +680,7 @@ mod tests {
             [
                 "drain",
                 "capture",
+                "validate",
                 "protect",
                 "intent",
                 "resolve",
@@ -669,6 +693,32 @@ mod tests {
             fs::read(request.target_path).expect("new"),
             br#"{"type":"excalidraw","version":2,"elements":[]}"#
         );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn target_validation_failure_happens_before_protection() {
+        let (root, request) = fixture();
+        let old = fs::read(&request.target_path).expect("old");
+        let backend = FakeBackend {
+            path: request.target_path.clone(),
+            old_bytes: old.clone(),
+            fail_target_validation: true,
+            ..Default::default()
+        };
+        let mut engine = ProtectedReplacementEngine::new(backend);
+
+        let outcome = engine.execute(request.clone());
+
+        assert!(matches!(
+            outcome,
+            ReplacementOutcome::PreCommitFailure(ReplacementFailure {
+                phase: ReplacementPhase::Preparing,
+                ..
+            })
+        ));
+        assert_eq!(fs::read(&request.target_path).expect("old file"), old);
+        assert_eq!(engine.backend().phases, ["drain", "capture", "validate"]);
         fs::remove_dir_all(root).expect("cleanup");
     }
 

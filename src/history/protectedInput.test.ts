@@ -80,7 +80,7 @@ describe("protected input", () => {
     expect(onClear).toHaveBeenCalledTimes(1);
   });
 
-  it("captures explicit scene drops but delegates ordinary images and libraries", () => {
+  it("captures candidate images for classification and delegates library drags", () => {
     const root = document.createElement("div");
     const canvas = document.createElement("div");
     root.append(canvas);
@@ -99,7 +99,7 @@ describe("protected input", () => {
 
     const imageFile = new File(["png"], "photo.png", { type: "image/png" });
     const imageEvent = dispatchDrop(canvas, [imageFile], ["Files"]);
-    expect(imageEvent.defaultPrevented).toBe(false);
+    expect(imageEvent.defaultPrevented).toBe(true);
 
     const libraryEvent = dispatchDrop(
       canvas,
@@ -107,7 +107,7 @@ describe("protected input", () => {
       ["application/vnd.excalidrawlib"],
     );
     expect(libraryEvent.defaultPrevented).toBe(false);
-    expect(onSceneDrop).toHaveBeenCalledTimes(1);
+    expect(onSceneDrop).toHaveBeenCalledTimes(2);
   });
 
   it("does not classify a file without an explicit scene extension as protected", () => {
@@ -119,6 +119,62 @@ describe("protected input", () => {
     expect(isTextEditingTarget(document.createElement("div"))).toBe(false);
   });
 
+  it("captures the SDK scene MIME without a filename", () => {
+    const event = makeDropEvent([], ["application/vnd.excalidraw+json"]);
+    expect(isProtectedSceneDrop(event)).toBe(true);
+  });
+
+  it.each(["application/vnd.excalidraw", "application/x-excalidraw"])(
+    "passes a MIME-only %s scene to the protected handler",
+    async (mime) => {
+      const root = document.createElement("div");
+      const canvas = document.createElement("div");
+      root.append(canvas);
+      document.body.append(root);
+      const onSceneDrop = vi.fn();
+      installProtectedInput(root, { onSceneDrop });
+      const event = makeDropEvent([], [mime]);
+      const getData = vi.fn(() => '{"type":"excalidraw"}');
+      Object.defineProperty(event, "dataTransfer", {
+        configurable: true,
+        value: { files: [], types: [mime], getData },
+      });
+
+      canvas.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(getData).toHaveBeenCalledWith(mime);
+      const drop = onSceneDrop.mock.calls[0]?.[0];
+      expect(drop.files).toHaveLength(1);
+      expect(await drop.files[0].text()).toBe('{"type":"excalidraw"}');
+    },
+  );
+
+  it("reports an empty scene MIME payload without sending it to the SDK", () => {
+    const root = document.createElement("div");
+    const canvas = document.createElement("div");
+    root.append(canvas);
+    document.body.append(root);
+    const onSceneDrop = vi.fn();
+    const onError = vi.fn();
+    installProtectedInput(root, { onSceneDrop, onError });
+    const event = makeDropEvent([], ["application/vnd.excalidraw+json"]);
+    Object.defineProperty(event, "dataTransfer", {
+      configurable: true,
+      value: {
+        files: [],
+        types: ["application/vnd.excalidraw+json"],
+        getData: () => "",
+      },
+    });
+
+    canvas.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(onSceneDrop).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+  });
+
   it("does not swallow protected commands until the host supplies a handler", () => {
     const root = document.createElement("div");
     const canvas = document.createElement("div");
@@ -126,15 +182,12 @@ describe("protected input", () => {
     document.body.append(root);
     installProtectedInput(root, {});
 
-    expect(dispatchKey(canvas, "Delete", { metaKey: true }).defaultPrevented).toBe(
-      false,
-    );
     expect(
-      dispatchDrop(
-        canvas,
-        [new File(["{}"], "drawing.excalidraw")],
-        ["Files"],
-      ).defaultPrevented,
+      dispatchKey(canvas, "Delete", { metaKey: true }).defaultPrevented,
+    ).toBe(false);
+    expect(
+      dispatchDrop(canvas, [new File(["{}"], "drawing.excalidraw")], ["Files"])
+        .defaultPrevented,
     ).toBe(false);
   });
 });

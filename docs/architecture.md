@@ -127,6 +127,14 @@ as failed. Manual marks publish the click-time scene as an uncapped `manual`
 record; equal bytes may reuse objects without collapsing semantic records.
 Automatic and protected records continue to share the newest-20 pool.
 
+Canvas clear and drawing import use the same `history_replace` coordinator as
+restore. The host captures clear/import shortcuts and possible scene-file drops
+before Excalidraw handles them. A dropped PNG/SVG is parsed before dispatch:
+embedded scenes enter protected replacement; ordinary images resume the SDK's
+single-insertion path. Library drops and text editing stay SDK-owned. The
+frontend only adopts a backend-confirmed replacement for the current document;
+an uncertain result keeps that document read-only until reconciliation.
+
 The test-only `e2e-harness` exposes seven process barriers. The parent process
 waits for the exact ready marker, verifies the marker's isolated target path,
 sends `SIGKILL`, and starts a fresh probe with the same isolated root. A

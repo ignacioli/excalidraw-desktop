@@ -112,6 +112,8 @@ flowchart LR
 
 普通历史只由成功完成的冷 checkpoint 驱动。首次成功 checkpoint 建立持久的逐文档基线；至少 30 分钟后第一次包含变化的 checkpoint，使用该次保存的精确不可变场景和图片字节发布版本。手动版本和保护版本不推进这条基线，应用空闲时也没有历史专用 timer 追补。普通历史失败通过独立的 `history-issue` 状态／事件反馈，不能把已经成功的当前文件保存改写成失败。手动标记把点击时场景发布为不受上限影响的 `manual` 记录；相同字节可以复用对象，但不能合并语义记录。`automatic` 与 `protected` 继续共享最新 20 条池。
 
+画布清空与绘图导入复用恢复使用的同一个 `history_replace` 协调器。宿主在 Excalidraw 处理前捕获清空／导入快捷键及可能携带场景的文件拖放。PNG/SVG 拖放先解析：内嵌场景进入受保护替换；普通图片只转交 SDK 插入一次。素材库拖放和文本编辑仍由 SDK 处理。前端仅为当前文档采用后端确认完成的替换；结果不确定时保持该文档只读，等待协调。
+
 仅测试用的 `e2e-harness` 提供七个进程屏障。父进程等待精确 ready marker，验证 marker 中的目标路径仍在隔离根内，发送 `SIGKILL`，然后以同一隔离根启动全新的 probe。超时或 PID 仍存活均为失败。独立 fixture 只验证 marker 协议；事务证据则通过真实受保护替换服务覆盖对象发布、保护、意图、rename／目录同步、metadata／ack 以及 retention 淘汰边界。对象层使用 typed `ENOSPC`／`EACCES`，SQLite 在 commit 前使用 deterministic typed fault；缺失／损坏对象、并发、外部写入、响应丢失与旧排队 autosave 分别由 fresh-process 或精确 frontend driver readback 负责，不能相互替代。
 
 | 屏障                                    | 产品边界                        | 重启必须回答的问题                     |

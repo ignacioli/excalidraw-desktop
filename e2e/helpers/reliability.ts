@@ -185,6 +185,34 @@ export interface HistoryOperationConcurrencyEvidence {
   targetAssetExists: boolean;
 }
 
+export interface HistoryProtectedReplacementEvidence {
+  scenario: "history-protected-replacement";
+  targetKind: "clear" | "import";
+  failureMode:
+    | "none"
+    | "disk-full"
+    | "permission-denied"
+    | "missing-asset"
+    | "response-lost";
+  requestId: string;
+  targetPath: string;
+  oldSha256: string;
+  expectedTargetSha256: string;
+  persistedSha256: string;
+  parseableJson: boolean;
+  targetUnchanged: boolean;
+  replacementInvocationCount: number;
+  replacementCommitted?: boolean;
+  responseState: string;
+  operationStatusState?: string;
+  protectionVersionId?: string;
+  protectionAction?: string;
+  protectedVersionCount: number;
+  temporaryFiles: string[];
+  response?: Record<string, unknown>;
+  error?: string;
+}
+
 export interface HistoryRestartSeedEvidence {
   scenario: "history-restart-seed";
   targetPath: string;
@@ -1053,6 +1081,121 @@ export async function runTauriHistoryOperationConcurrency(): Promise<
   });
 }
 
+export async function runTauriHistoryProtectedReplacement(
+  targetKind: "clear" | "import",
+  failureMode: HistoryProtectedReplacementEvidence["failureMode"] = "none",
+): Promise<ReliabilityRun<HistoryProtectedReplacementEvidence>> {
+  return runHistoryOperationResultProcess("history-protected-replacement", {
+    EXCALIDRAW_E2E_HISTORY_REPLACE_TARGET: targetKind,
+    EXCALIDRAW_E2E_HISTORY_REPLACE_FAILURE: failureMode,
+    EXCALIDRAW_E2E_HISTORY_OPERATION_ID: `history-protected-${targetKind}-${failureMode}`,
+    EXCALIDRAW_E2E_HISTORY_TARGET_PATH: "",
+  });
+}
+
+export async function runTauriHistoryProtectedReplacementResponseLost(
+  targetKind: "clear" | "import",
+): Promise<ReliabilityRun<HistoryProtectedReplacementEvidence>> {
+  const binary = await resolveDesktopBinary();
+  const paths = await createIsolatedDesktopPaths();
+  const targetPath = join(
+    paths.workspace,
+    "history-protected-replacement.excalidraw",
+  );
+  const operationId = `history-protected-${targetKind}-response-lost`;
+  const readyPath = join(
+    paths.runtime,
+    "reliability",
+    "history-fault.ready.json",
+  );
+  const child = spawn(
+    binary,
+    [RELIABILITY_SCENARIO_FLAG, "history-protected-replacement-kill"],
+    {
+      detached: process.platform !== "win32",
+      env: isolatedDesktopEnvironment(paths, {
+        EXCALIDRAW_E2E_HISTORY_REPLACE_TARGET: targetKind,
+        EXCALIDRAW_E2E_HISTORY_REPLACE_FAILURE: "response-lost",
+        ...historyFaultEnvironment({
+          stage: "metadata_complete_before_frontend_ack",
+          seed: `t037-${targetKind}-response-lost`,
+          operationId,
+          documentId: `history-protected-${targetKind}-document`,
+          targetPath,
+        }),
+      }),
+      stdio: ["ignore", "ignore", "pipe"],
+    },
+  );
+  child.stderr?.setEncoding("utf8");
+  let stderr = "";
+  child.stderr?.on("data", (chunk: string) => {
+    stderr = (stderr + chunk).slice(-16_384);
+  });
+  let cleaned = false;
+  const cleanup = async (): Promise<void> => {
+    if (cleaned) return;
+    cleaned = true;
+    await terminateReliabilityChild(child);
+    await cleanupIsolatedDesktopPaths(paths);
+  };
+  try {
+    const ready = await waitForHistoryFaultReady(
+      child,
+      readyPath,
+      "metadata_complete_before_frontend_ack",
+      15_000,
+    );
+    if (ready.context.targetPath !== targetPath) {
+      throw new Error(
+        `Protected replacement response-lost target escaped fixture: ${ready.context.targetPath}`,
+      );
+    }
+    if (child.pid === undefined) {
+      throw new Error("Protected replacement process has no PID.");
+    }
+    if (process.platform !== "win32") process.kill(-child.pid, "SIGKILL");
+    else child.kill("SIGKILL");
+    await waitForChildExit(child, 5_000);
+    if (child.signalCode !== "SIGKILL") {
+      throw new Error(
+        `Protected replacement process did not terminate by SIGKILL: ${child.signalCode}`,
+      );
+    }
+    const evidence = await runHistoryOperationResultProcessWithPaths(
+      binary,
+      paths,
+      "history-protected-replacement-probe",
+      {
+        EXCALIDRAW_E2E_HISTORY_REPLACE_TARGET: targetKind,
+        EXCALIDRAW_E2E_HISTORY_REPLACE_FAILURE: "response-lost",
+        EXCALIDRAW_E2E_HISTORY_OPERATION_ID: operationId,
+        EXCALIDRAW_E2E_HISTORY_TARGET_PATH: targetPath,
+      },
+    );
+    const filesystem = await statfs(paths.workspace);
+    return {
+      evidence,
+      environment: {
+        platform: process.platform,
+        architecture: process.arch,
+        filesystemType: String(filesystem.type),
+        binaryPath: binary,
+        binarySha256: sha256(await readFile(binary)),
+        seed: `t037-${targetKind}-response-lost`,
+      },
+      paths,
+      cleanup,
+    };
+  } catch (error) {
+    await cleanup();
+    throw new Error(
+      `Protected replacement response-lost journey failed: ${error instanceof Error ? error.message : String(error)}${stderr ? `\napp stderr tail:\n${stderr}` : ""}`,
+      { cause: error },
+    );
+  }
+}
+
 export async function runTauriHistoryEvictionFaultKill(): Promise<
   ReliabilityRun<HistoryRestartEvictionFaultEvidence>
 > {
@@ -1182,16 +1325,22 @@ async function runHistoryOperationResultProcess(
   overrides: Readonly<NodeJS.ProcessEnv>,
 ): Promise<ReliabilityRun<HistoryOperationConcurrencyEvidence>>;
 async function runHistoryOperationResultProcess(
+  scenario: "history-protected-replacement",
+  overrides: Readonly<NodeJS.ProcessEnv>,
+): Promise<ReliabilityRun<HistoryProtectedReplacementEvidence>>;
+async function runHistoryOperationResultProcess(
   scenario:
     | "history-operation-failure"
     | "history-operation-external-write"
-    | "history-operation-concurrency",
+    | "history-operation-concurrency"
+    | "history-protected-replacement",
   overrides: Readonly<NodeJS.ProcessEnv>,
 ): Promise<
   ReliabilityRun<
     | HistoryOperationFailureEvidence
     | HistoryExternalWriteEvidence
     | HistoryOperationConcurrencyEvidence
+    | HistoryProtectedReplacementEvidence
   >
 > {
   const binary = await resolveDesktopBinary();
@@ -1261,15 +1410,30 @@ async function runHistoryOperationResultProcessWithPaths(
 async function runHistoryOperationResultProcessWithPaths(
   binary: string,
   paths: IsolatedDesktopPaths,
+  scenario: "history-protected-replacement",
+  overrides: Readonly<NodeJS.ProcessEnv>,
+): Promise<HistoryProtectedReplacementEvidence>;
+async function runHistoryOperationResultProcessWithPaths(
+  binary: string,
+  paths: IsolatedDesktopPaths,
+  scenario: "history-protected-replacement-probe",
+  overrides: Readonly<NodeJS.ProcessEnv>,
+): Promise<HistoryProtectedReplacementEvidence>;
+async function runHistoryOperationResultProcessWithPaths(
+  binary: string,
+  paths: IsolatedDesktopPaths,
   scenario:
     | "history-operation-failure"
     | "history-operation-external-write"
-    | "history-operation-concurrency",
+    | "history-operation-concurrency"
+    | "history-protected-replacement"
+    | "history-protected-replacement-probe",
   overrides: Readonly<NodeJS.ProcessEnv>,
 ): Promise<
   | HistoryOperationFailureEvidence
   | HistoryExternalWriteEvidence
   | HistoryOperationConcurrencyEvidence
+  | HistoryProtectedReplacementEvidence
 >;
 async function runHistoryOperationResultProcessWithPaths(
   binary: string,
@@ -1278,13 +1442,16 @@ async function runHistoryOperationResultProcessWithPaths(
     | "history-operation-fault-probe"
     | "history-operation-failure"
     | "history-operation-external-write"
-    | "history-operation-concurrency",
+    | "history-operation-concurrency"
+    | "history-protected-replacement"
+    | "history-protected-replacement-probe",
   overrides: Readonly<NodeJS.ProcessEnv>,
 ): Promise<
   | HistoryOperationFaultProbeEvidence
   | HistoryOperationFailureEvidence
   | HistoryExternalWriteEvidence
   | HistoryOperationConcurrencyEvidence
+  | HistoryProtectedReplacementEvidence
 > {
   const child = spawn(binary, [RELIABILITY_SCENARIO_FLAG, scenario], {
     env: isolatedDesktopEnvironment(paths, overrides),
@@ -1335,14 +1502,19 @@ async function runHistoryOperationResultProcessWithPaths(
     typeof evidence !== "object" ||
     evidence === null ||
     !("scenario" in evidence) ||
-    evidence.scenario !== scenario
+    (evidence.scenario !== scenario &&
+      !(
+        scenario === "history-protected-replacement-probe" &&
+        evidence.scenario === "history-protected-replacement"
+      ))
   ) {
     throw new Error(`History operation scenario mismatch for ${scenario}.`);
   }
   return evidence as
     | HistoryOperationFaultProbeEvidence
     | HistoryOperationFailureEvidence
-    | HistoryOperationConcurrencyEvidence;
+    | HistoryOperationConcurrencyEvidence
+    | HistoryProtectedReplacementEvidence;
 }
 
 /**

@@ -26,6 +26,21 @@ import {
 import { ExcalidrawEditor } from "../editor/ExcalidrawEditor";
 import type { ExcalidrawAdapter } from "../editor/ExcalidrawAdapter";
 import {
+  HistoryCoordinator,
+  HistoryReplacementCancelledError,
+  type HistoryReplacementResult,
+} from "../history/historyCoordinator";
+import {
+  createHistoryClient,
+  HistoryReplaceResponseLostError,
+  HistoryReplaceStatusError,
+} from "../history/historyClient";
+import {
+  prepareImport,
+  type ImportSelection,
+} from "../history/importProtection";
+import type { ProtectedInputHandlers } from "../history/protectedInput";
+import {
   createTauriCommandInvoker,
   hasTauriCommandRuntime,
   type CommandInvoker,
@@ -98,6 +113,10 @@ export function AppShell({
       }
     | undefined
   >(undefined);
+  const editorAdaptersRef = useRef(new Map<string, ExcalidrawAdapter>());
+  const [historyBusyDocumentIds, setHistoryBusyDocumentIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
   const readyEditorRef = useRef<
     | {
         documentId: string;
@@ -117,6 +136,14 @@ export function AppShell({
     | undefined
   >(undefined);
   const [exportDocumentId, setExportDocumentId] = useState<string | null>(null);
+  const [historyFeedback, setHistoryFeedback] = useState<string | null>(null);
+  const [pendingHistory, setPendingHistory] = useState<
+    Readonly<Record<string, string>>
+  >({});
+  const retryInFlightRef = useRef(new Set<string>());
+  const [retryingHistory, setRetryingHistory] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [orphanCloseId, setOrphanCloseId] = useState<string | null>(null);
   const [preferences] = useState(() => new ShellPreferences());
   const [sidebarWidth, setSidebarWidth] = useState(
@@ -132,6 +159,29 @@ export function AppShell({
   const [workspaceInvoker] = useState(
     () => providedWorkspaceInvoker ?? createTauriCommandInvoker(),
   );
+  const historyCoordinatorRef = useRef<HistoryCoordinator | null>(null);
+  useEffect(() => {
+    historyCoordinatorRef.current = new HistoryCoordinator(
+      documentManager,
+      createHistoryClient(workspaceInvoker),
+      async (scene, context) => {
+        const adapter = editorAdaptersRef.current.get(context.documentId);
+        if (adapter === undefined) return false;
+        await adapter.replaceScene(scene);
+        return context.commit(adapter.readScene());
+      },
+    );
+    return () => {
+      historyCoordinatorRef.current = null;
+    };
+  }, [workspaceInvoker]);
+  const requireHistoryCoordinator = (): HistoryCoordinator => {
+    const coordinator = historyCoordinatorRef.current;
+    if (coordinator === null) {
+      throw new Error("版本历史尚未就绪。");
+    }
+    return coordinator;
+  };
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(
     () => preferences.getSnapshot().currentWorkspaceId,
   );
@@ -237,7 +287,46 @@ export function AppShell({
   const activeDocumentId = useDocumentStore((state) => state.activeDocumentId);
   const activeSession =
     activeDocumentId === null ? undefined : sessionsById[activeDocumentId];
+  useEffect(() => {
+    if (activeDocumentId === null) return;
+    const coordinator = historyCoordinatorRef.current;
+    if (coordinator === null) return;
+    let cancelled = false;
+    void coordinator
+      .adoptDeferred(activeDocumentId)
+      .then((adopted) => {
+        if (!adopted || cancelled) return;
+        setHistoryBusyDocumentIds((current) => {
+          const next = new Set(current);
+          next.delete(activeDocumentId);
+          return next;
+        });
+        setPendingHistory((current) => {
+          const next = { ...current };
+          delete next[activeDocumentId];
+          return next;
+        });
+        const adapter = editorAdaptersRef.current.get(activeDocumentId);
+        const session =
+          documentManager.store.getState().sessionsById[activeDocumentId];
+        adapter?.setReadOnly(session?.saveState === "conflicted");
+        setHistoryFeedback("替换结果已核实，画布已更新。");
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setInteractionError(getErrorMessage(error));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDocumentId]);
   const documentSessions = Object.values(sessionsById);
+  useEffect(() => {
+    for (const documentId of editorAdaptersRef.current.keys()) {
+      if (sessionsById[documentId] === undefined) {
+        editorAdaptersRef.current.delete(documentId);
+      }
+    }
+  }, [sessionsById]);
   const exportReady =
     activeSession !== undefined && readyEditor?.documentId === activeSession.id;
   const startupRoute = deriveStartupRoute({
@@ -504,6 +593,196 @@ export function AppShell({
 
   const saveDocument = () =>
     runAction(() => documentManager.checkpointActive("manualSave"));
+  const prepareUnsavedHistoryDocument = async (capture: {
+    documentId: string;
+  }) => {
+    const session =
+      documentManager.store.getState().sessionsById[capture.documentId];
+    if (session === undefined) {
+      throw new Error("绘图已关闭。");
+    }
+    const path = await chooseSavePath(session.title);
+    if (path === null) return { status: "cancelled" as const };
+    if (
+      documentManager.store.getState().activeDocumentId !== capture.documentId
+    ) {
+      return { status: "cancelled" as const };
+    }
+    await documentManager.saveOrphanedAs(capture.documentId, path);
+    return { status: "saved" as const };
+  };
+  const runProtectedReplacement = async (
+    documentId: string,
+    replace: () => Promise<HistoryReplacementResult>,
+    successMessage: string,
+  ): Promise<void> => {
+    setHistoryFeedback(null);
+    const editor = editorAdaptersRef.current.get(documentId);
+    if (
+      editor === undefined ||
+      documentManager.store.getState().activeDocumentId !== documentId
+    ) {
+      throw new Error("当前绘图尚未就绪。");
+    }
+    setHistoryBusyDocumentIds((current) => new Set(current).add(documentId));
+    editor.setReadOnly(true);
+    try {
+      const result = await replace();
+      if (!result.adopted) {
+        setPendingHistory((current) => ({
+          ...current,
+          [documentId]: result.response.requestId,
+        }));
+        throw new Error("替换结果尚待核实，当前文档已暂停编辑。");
+      }
+      setPendingHistory((current) => {
+        const next = { ...current };
+        delete next[documentId];
+        return next;
+      });
+      setHistoryFeedback(successMessage);
+    } catch (error) {
+      if (error instanceof HistoryReplaceResponseLostError) {
+        setPendingHistory((current) => ({
+          ...current,
+          [documentId]: error.requestId,
+        }));
+      }
+      if (!(error instanceof HistoryReplacementCancelledError)) throw error;
+    } finally {
+      const current = documentManager.store.getState().sessionsById[documentId];
+      if (!documentManager.isHistoryFrozen(documentId)) {
+        setHistoryBusyDocumentIds((current) => {
+          const next = new Set(current);
+          next.delete(documentId);
+          return next;
+        });
+        if (editorAdaptersRef.current.get(documentId) === editor) {
+          editor.setReadOnly(current?.saveState === "conflicted");
+        }
+      }
+    }
+  };
+  const retryPendingHistory = async (): Promise<void> => {
+    const documentId = documentManager.store.getState().activeDocumentId;
+    if (documentId === null) return;
+    const requestId = pendingHistory[documentId];
+    if (requestId === undefined) return;
+    const retryKey = `${documentId}:${requestId}`;
+    if (retryInFlightRef.current.has(retryKey)) return;
+    retryInFlightRef.current.add(retryKey);
+    setRetryingHistory((current) => new Set(current).add(documentId));
+    try {
+      await runAction(async () => {
+        try {
+          const coordinator = requireHistoryCoordinator();
+          const adopted =
+            (await coordinator.adoptDeferred(documentId)) ||
+            (await coordinator.resolvePending(documentId, requestId)).adopted;
+          if (!adopted) {
+            throw new Error("替换结果仍待核实，请稍后重试。");
+          }
+          setPendingHistory((current) => {
+            const next = { ...current };
+            delete next[documentId];
+            return next;
+          });
+          setHistoryFeedback("替换结果已核实，画布已更新。");
+        } catch (error) {
+          if (error instanceof HistoryReplaceStatusError) {
+            setPendingHistory((current) => {
+              const next = { ...current };
+              delete next[documentId];
+              return next;
+            });
+          }
+          throw error;
+        } finally {
+          if (!documentManager.isHistoryFrozen(documentId)) {
+            setHistoryBusyDocumentIds((current) => {
+              const next = new Set(current);
+              next.delete(documentId);
+              return next;
+            });
+            const adapter = editorAdaptersRef.current.get(documentId);
+            const session =
+              documentManager.store.getState().sessionsById[documentId];
+            adapter?.setReadOnly(session?.saveState === "conflicted");
+          }
+        }
+      });
+    } finally {
+      retryInFlightRef.current.delete(retryKey);
+      setRetryingHistory((current) => {
+        const next = new Set(current);
+        next.delete(documentId);
+        return next;
+      });
+    }
+  };
+  const protectedInputFor = (documentId: string): ProtectedInputHandlers => ({
+    onClear: () =>
+      runAction(() =>
+        runProtectedReplacement(
+          documentId,
+          () =>
+            requireHistoryCoordinator().clear(documentId, undefined, {
+              prepareUnsaved: prepareUnsavedHistoryDocument,
+            }),
+          "已保存操作前版本并清空画布。",
+        ),
+      ),
+    onImportShortcut: () =>
+      runAction(async () => {
+        const files = await chooseImportFiles();
+        if (files === null) return;
+        await importIntoDocument(documentId, files);
+      }),
+    onSceneDrop: (drop) =>
+      runAction(async () => {
+        const prepared = await prepareImport(drop.files);
+        if (prepared.status === "ordinaryImage") {
+          if (
+            documentManager.store.getState().activeDocumentId !== documentId
+          ) {
+            throw new Error("图片解析完成前，当前绘图已切换。");
+          }
+          drop.forwardOrdinaryImage();
+          return;
+        }
+        await replacePreparedImport(documentId, prepared);
+      }),
+    onError: (error) => setInteractionError(getErrorMessage(error)),
+  });
+  const importIntoDocument = async (
+    documentId: string,
+    files: ImportSelection,
+  ): Promise<void> => {
+    await replacePreparedImport(documentId, await prepareImport(files));
+  };
+  const replacePreparedImport = async (
+    documentId: string,
+    prepared: Awaited<ReturnType<typeof prepareImport>>,
+  ): Promise<void> => {
+    if (prepared.status === "cancelled") return;
+    if (prepared.status === "multiple") {
+      throw new Error("一次只能导入一份绘图。");
+    }
+    if (prepared.status === "ordinaryImage") {
+      throw new Error("这张图片不含 Excalidraw 绘图。");
+    }
+    await runProtectedReplacement(
+      documentId,
+      () =>
+        requireHistoryCoordinator().replaceImportedScene(
+          documentId,
+          prepared.candidate,
+          undefined,
+          { prepareUnsaved: prepareUnsavedHistoryDocument },
+        ),
+      "已保存操作前版本并导入绘图。",
+    );
+  };
   const openExportDialog = (): void => {
     if (!exportReady || activeSession === undefined) {
       setInteractionError(
@@ -550,6 +829,7 @@ export function AppShell({
         container,
       );
       historyFrontendDriverRef.current?.attachEditor(documentId, adapter);
+      editorAdaptersRef.current.set(documentId, adapter);
       setReadyEditor({ documentId, adapter });
     },
     [],
@@ -851,6 +1131,19 @@ export function AppShell({
           />
         </div>
         <div className="app-commands" aria-live="polite">
+          {historyFeedback !== null ? (
+            <p role="status">{historyFeedback}</p>
+          ) : null}
+          {activeDocumentId !== null &&
+          pendingHistory[activeDocumentId] !== undefined ? (
+            <button
+              disabled={retryingHistory.has(activeDocumentId)}
+              onClick={() => void retryPendingHistory()}
+              type="button"
+            >
+              核实版本替换结果
+            </button>
+          ) : null}
           <p
             className={
               interactionError
@@ -1002,11 +1295,15 @@ export function AppShell({
                 <ExcalidrawEditor
                   documentId={session.id}
                   initialScene={session.scene}
+                  protectedInput={protectedInputFor(session.id)}
                   onSceneChange={(scene) =>
                     documentManager.updateScene(session.id, scene)
                   }
                   onReady={handleEditorReady}
-                  readOnly={session.saveState === "conflicted"}
+                  readOnly={
+                    session.saveState === "conflicted" ||
+                    historyBusyDocumentIds.has(session.id)
+                  }
                   theme={themeSnapshot.resolvedColorScheme}
                 />
               </section>
@@ -1147,6 +1444,37 @@ async function chooseSavePath(defaultTitle: string): Promise<string | null> {
       },
     ],
     title: "Save drawing as",
+  });
+}
+
+function chooseImportFiles(): Promise<readonly File[] | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".excalidraw,.excalidraw.json,.png,.svg";
+    input.multiple = false;
+    input.hidden = true;
+    let settled = false;
+    let focusTimer: number | undefined;
+    const finish = (files: FileList | null) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("focus", onWindowFocus);
+      input.remove();
+      resolve(files === null ? null : Array.from(files));
+    };
+    const onWindowFocus = () => {
+      focusTimer = window.setTimeout(
+        () => finish(input.files?.length ? input.files : null),
+        300,
+      );
+    };
+    input.addEventListener("change", () => finish(input.files), { once: true });
+    input.addEventListener("cancel", () => finish(null), { once: true });
+    window.addEventListener("focus", onWindowFocus, { once: true });
+    document.body.append(input);
+    input.click();
   });
 }
 

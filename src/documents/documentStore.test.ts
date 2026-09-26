@@ -110,6 +110,30 @@ describe("DocumentManager", () => {
     manager.dispose();
   });
 
+  it("continues draft and checkpoint writes after an untitled drawing is first saved", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.createUntitled();
+    const path = "/tmp/first-save.excalidraw";
+
+    await manager.saveOrphanedAs(documentId, path);
+    const initial = manager.store.getState().sessionsById[documentId]?.scene;
+    manager.updateScene(documentId, {
+      ...initial!,
+      elements: [{ version: 1 } as SceneSnapshot["elements"][number]],
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    await manager.checkpoint(documentId);
+
+    expect(gateway.saveDraft).toHaveBeenCalledWith(path, expect.any(String));
+    expect(gateway.checkpoint).toHaveBeenLastCalledWith(
+      path,
+      expect.any(String),
+      "manualSave",
+    );
+    manager.dispose();
+  });
+
   it("checkpoints and closes only documents inside a removed Workspace", async () => {
     const gateway = createGateway();
     const manager = new DocumentManager(gateway);

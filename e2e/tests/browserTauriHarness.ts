@@ -36,6 +36,15 @@ export async function installBrowserTauriHarness(
       const fileKey = `excalidraw-e2e:file:${path}`;
       let nextDialogPath = 0;
       let checkpointCount = 0;
+      const hashScene = async (sceneJson: string): Promise<string> => {
+        const digest = await globalThis.crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(sceneJson),
+        );
+        return Array.from(new Uint8Array(digest), (byte) =>
+          byte.toString(16).padStart(2, "0"),
+        ).join("");
+      };
       let nextCallbackId = 1;
       const callbacks = new Map<
         number,
@@ -98,7 +107,10 @@ export async function installBrowserTauriHarness(
           if (command === "recovery_list") {
             return [];
           }
-          if (command === "workspace_list" || command === "workspace_recent_list") {
+          if (
+            command === "workspace_list" ||
+            command === "workspace_recent_list"
+          ) {
             return [];
           }
           if (
@@ -118,7 +130,7 @@ export async function installBrowserTauriHarness(
               browser.localStorage.getItem(requestedFileKey) ?? emptyScene;
             return {
               scene: JSON.parse(sceneJson),
-              baseHash: `browser-${sceneJson.length}`,
+              baseHash: await hashScene(sceneJson),
               hasNewerDraft: false,
             };
           }
@@ -145,7 +157,7 @@ export async function installBrowserTauriHarness(
             const sceneJson = String(args.sceneJson ?? "");
             browser.localStorage.setItem(requestedFileKey, sceneJson);
             return {
-              newBaseHash: `browser-${sceneJson.length}`,
+              newBaseHash: await hashScene(sceneJson),
               mtime: Date.now(),
             };
           }

@@ -757,6 +757,7 @@ struct RealReplacementBackend {
     protection_version_id: Option<String>,
     protection: Option<ProtectionReceipt>,
     restore_target: Option<PinnedHistoryTarget>,
+    validated_target: Option<(Vec<u8>, Vec<CapturedAsset>)>,
     asset_grant: Option<ResponseAssetGrant>,
 }
 
@@ -778,6 +779,7 @@ impl RealReplacementBackend {
             protection_version_id: None,
             protection: None,
             restore_target: None,
+            validated_target: None,
             asset_grant,
         }
     }
@@ -827,6 +829,13 @@ impl ProtectedReplacementBackend for RealReplacementBackend {
         let (scene_json, assets) =
             normalize_scene(&self.resolved.asset_root, &self.request.current_scene_json)?;
         Ok(CapturedDocument { scene_json, assets })
+    }
+
+    fn validate_target(&mut self, _: &ProtectedReplacementRequest) -> Result<(), Self::Error> {
+        let (scene_json, target_assets) = self.target_scene()?;
+        validate_scene_payload(&scene_json, &target_assets)?;
+        self.validated_target = Some((scene_json, target_assets));
+        Ok(())
     }
 
     fn publish_protection(
@@ -929,8 +938,10 @@ impl ProtectedReplacementBackend for RealReplacementBackend {
         _: &ProtectedReplacementRequest,
         _: &ProtectionReceipt,
     ) -> Result<PreparedTarget, Self::Error> {
-        let (scene_json, target_assets) = self.target_scene()?;
-        validate_scene_payload(&scene_json, &target_assets)?;
+        let (scene_json, target_assets) = self
+            .validated_target
+            .take()
+            .ok_or_else(|| "replacement target was not preflighted".to_owned())?;
         materialize_workspace_assets(&self.resolved.asset_root, &target_assets)?;
         if let Some(grant) = &self.asset_grant {
             let scene = serde_json::from_slice(&scene_json).map_err(|error| error.to_string())?;
