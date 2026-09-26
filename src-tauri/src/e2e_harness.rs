@@ -31,13 +31,14 @@ use crate::{
             ConflictResolution, ExpectedOpenDocument, HistoryDocumentLocator, HistoryListRequest,
             HistoryMarkRequest, HistoryOperationStatusRequest, HistoryPreviewRequest,
             HistoryReplaceRequest, HistoryReplaceTarget, PathRequest, RecoveryAction,
-            RecoveryApplyRequest, ResolveConflictRequest, SaveDraftRequest,
+            RecoveryApplyRequest, ResolveConflictRequest, SaveDraftRequest, WorkspaceAddRequest,
             WorkspaceEntryDeletePreflightResult, WorkspaceEntryDeleteRequest,
-            WorkspaceEntryPathRequest, WorkspaceEntryRenameRequest,
+            WorkspaceEntryPathRequest, WorkspaceEntryRenameRequest, WorkspaceRemoveRequest,
         },
         error::IpcError,
         history::{HistoryReplacementService, HistoryReplacementState},
         recovery::RecoveryService,
+        workspace::WorkspaceService,
     },
     database::repository::{
         DraftRecord, DraftRepository, FileIndexRecord, FileIndexRepository, FileMetaRecord,
@@ -60,7 +61,10 @@ use crate::{
             ObjectStoreFaultKind, ObjectStoreFaultPoint,
         },
         operation::OperationStore,
-        query::HistoryQueryService,
+        query::{
+            set_e2e_preview_hydration_pin_barrier, E2ePreviewHydrationPinBarrier,
+            HistoryQueryService,
+        },
         reconcile::reconcile_incomplete_operations_with_repository,
         repository::{HistoryRepository, PublishSceneRequest, AUTOMATIC_INTERVAL_SECONDS},
         store::{clear_transaction_fault, set_transaction_fault, HistoryStore, HistoryStoreFault},
@@ -73,7 +77,7 @@ use crate::{
             load_journals, reconcile_pending_mutations_with_history, save_journal,
             MutationJournalRecord,
         },
-        TrashOperator, WorkspaceEntryService, WorkspaceMutationGate,
+        SystemTrashOperator, TrashOperator, WorkspaceEntryService, WorkspaceMutationGate,
     },
 };
 
@@ -670,11 +674,26 @@ async fn run_scenario(scenario: &str, root: &Path) -> Result<String, String> {
         "history-lifecycle-journal-parent-sync-probe" => {
             serialize_evidence(run_history_lifecycle_journal_parent_sync_probe(root).await?)
         }
+        "history-lifecycle-remount-seed" => {
+            serialize_evidence(run_history_lifecycle_remount_seed(root).await?)
+        }
+        "history-lifecycle-remount-probe" => {
+            serialize_evidence(run_history_lifecycle_remount_probe(root).await?)
+        }
+        "history-lifecycle-remount-regrant" => {
+            serialize_evidence(run_history_lifecycle_remount_regrant(root).await?)
+        }
         "history-missing-resource-seed" => {
             serialize_evidence(run_history_missing_resource_seed(root).await?)
         }
         "history-missing-resource-probe" => {
             serialize_evidence(run_history_missing_resource_probe(root).await?)
+        }
+        "history-partial-protection-seed" => {
+            serialize_evidence(run_history_partial_protection_seed(root).await?)
+        }
+        "history-partial-protection-probe" => {
+            serialize_evidence(run_history_partial_protection_probe(root).await?)
         }
         "history-gc-hydration-pin" => serialize_evidence(run_history_gc_hydration_pin(root).await?),
         "history-restart-seed" => serialize_evidence(run_history_restart_seed(root).await?),
@@ -697,6 +716,12 @@ async fn run_scenario(scenario: &str, root: &Path) -> Result<String, String> {
         "entry-metadata-cleanup" => serialize_evidence(run_entry_metadata_cleanup(root).await?),
         "entry-descendant-save" => serialize_evidence(run_entry_descendant_save(root).await?),
         "entry-rename-kill" => serialize_evidence(run_entry_rename_kill(root)?),
+        "entry-rename-post-fs-kill" => run_entry_rename_post_fs_kill(root)
+            .await
+            .map(|_| String::new()),
+        "entry-rename-post-fs-probe" => {
+            serialize_evidence(run_entry_rename_post_fs_probe(root).await?)
+        }
         "cmd-w-active" => serialize_evidence(run_tab_close_cmd_w(root).await?),
         "middle-click-inactive" => serialize_evidence(run_tab_close_middle_click(root).await?),
         "duplicate-close" => serialize_evidence(run_tab_close_duplicate(root).await?),
@@ -2023,6 +2048,415 @@ async fn run_history_lifecycle(root: &Path) -> Result<HistoryLifecycleEvidence, 
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct HistoryLifecycleRemountSeedEvidence {
+    scenario: &'static str,
+    phase: &'static str,
+    workspace_path: String,
+    document_path: String,
+    workspace_id: String,
+    workspace_mounted_after_add: bool,
+    workspace_mounted_after_unmount: bool,
+    recent_retained_after_unmount: bool,
+    document_id: String,
+    history_count: usize,
+    scene_sha256: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryLifecycleRemountProbeEvidence {
+    scenario: &'static str,
+    phase: &'static str,
+    workspace_path: String,
+    document_path: String,
+    workspace_id: String,
+    recent_present_before_remount: bool,
+    remounted: bool,
+    workspace_mounted_after_remount: bool,
+    document_id_after_remount: String,
+    history_count_after_remount: usize,
+    unmounted_before_recent_remove: bool,
+    removed_from_recents: bool,
+    recent_present_after_remove: bool,
+    workspace_present_after_remove: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryLifecycleRemountRegrantEvidence {
+    scenario: &'static str,
+    phase: &'static str,
+    workspace_path: String,
+    document_path: String,
+    previous_workspace_id: String,
+    regranted_workspace_id: String,
+    workspace_regranted: bool,
+    original_document_id: String,
+    document_id_after_regrant: String,
+    regrant_preserved_identity: bool,
+    history_count_after_regrant: usize,
+    same_path_replacement_identical_content: bool,
+    replacement_different_filesystem_identity: bool,
+    same_path_replacement_rejected: bool,
+    original_identity_retained_after_rejection: bool,
+    history_count_after_rejection: usize,
+}
+
+struct LifecycleWorkspaceContext {
+    repository: Arc<SqliteRepository>,
+    store: Arc<HistoryStore>,
+    service: WorkspaceService,
+    workspace: PathBuf,
+}
+
+async fn open_lifecycle_workspace_context(
+    root: &Path,
+) -> Result<LifecycleWorkspaceContext, String> {
+    let data = root.join("data");
+    let workspace = root.join("workspace");
+    fs::create_dir_all(&data)
+        .map_err(|error| format!("failed to create lifecycle data directory: {error}"))?;
+    fs::create_dir_all(&workspace)
+        .map_err(|error| format!("failed to create lifecycle workspace directory: {error}"))?;
+    let workspace = workspace
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve lifecycle workspace: {error}"))?;
+    let repository = Arc::new(
+        SqliteRepository::open(&data.join("reliability.sqlite3"))
+            .await
+            .map_err(|error| format!("failed to open lifecycle database: {error}"))?,
+    );
+    let store = Arc::new(
+        HistoryStore::open(&data)
+            .map_err(|error| format!("failed to open lifecycle history store: {error}"))?,
+    );
+    Ok(LifecycleWorkspaceContext {
+        service: WorkspaceService::new(Arc::clone(&repository)),
+        repository,
+        store,
+        workspace,
+    })
+}
+
+fn lifecycle_document_path(workspace: &Path) -> PathBuf {
+    workspace.join("remount/document.excalidraw")
+}
+
+fn lifecycle_document_service(
+    repository: Arc<SqliteRepository>,
+    store: Arc<HistoryStore>,
+    workspace: PathBuf,
+) -> DocumentService {
+    let grant = Arc::new(E2eDirectFileGrant { workspace });
+    let mut service = DocumentService::with_grant_and_scene_limit(
+        repository,
+        grant,
+        DocumentService::DEFAULT_SCENE_LIMIT_BYTES,
+    );
+    service.attach_history_store(store);
+    service
+}
+
+async fn run_history_lifecycle_remount_seed(
+    root: &Path,
+) -> Result<HistoryLifecycleRemountSeedEvidence, String> {
+    let context = open_lifecycle_workspace_context(root).await?;
+    let workspace_record = context
+        .service
+        .add(WorkspaceAddRequest {
+            root_path: context.workspace.display().to_string(),
+            name: Some("Lifecycle Remount".to_owned()),
+        })
+        .await
+        .map_err(|error| format!("lifecycle workspace add failed: {error:?}"))?;
+    let workspace_id = workspace_record.id;
+    let mounted_after_add = context
+        .repository
+        .workspace_get(workspace_id.clone())
+        .await
+        .map_err(|error| format!("failed to inspect mounted lifecycle workspace: {error}"))?
+        .is_some_and(|record| record.mounted);
+
+    let document_path = lifecycle_document_path(&context.workspace);
+    fs::create_dir_all(
+        document_path
+            .parent()
+            .ok_or_else(|| "lifecycle remount document has no parent".to_owned())?,
+    )
+    .map_err(|error| format!("failed to create lifecycle remount directory: {error}"))?;
+    let initial_scene = scene_json("lifecycle-remount-original");
+    fs::write(&document_path, initial_scene.as_bytes())
+        .map_err(|error| format!("failed to write lifecycle remount document: {error}"))?;
+    let service = lifecycle_document_service(
+        Arc::clone(&context.repository),
+        Arc::clone(&context.store),
+        context.workspace.clone(),
+    );
+    service
+        .doc_open(PathRequest {
+            path: path_string(&document_path),
+        })
+        .await
+        .map_err(|error| format!("lifecycle remount document open failed: {error:?}"))?;
+    let saved_scene = scene_json("lifecycle-remount-saved");
+    service
+        .doc_checkpoint(CheckpointRequest {
+            path: path_string(&document_path),
+            scene_json: saved_scene.clone(),
+            reason: CheckpointReason::ManualSave,
+        })
+        .await
+        .map_err(|error| format!("lifecycle remount document checkpoint failed: {error:?}"))?;
+    let identity = context
+        .store
+        .load_active_document_identity(&path_string(&document_path))
+        .map_err(|error| format!("failed to load lifecycle remount identity: {error}"))?
+        .ok_or_else(|| "lifecycle remount identity was not established".to_owned())?;
+    publish_history_restart_version(
+        &context.store,
+        &identity.document_id,
+        "history-lifecycle-remount-v1",
+        &saved_scene,
+        2,
+        &sha256(&history_restart_asset(false)),
+    )?;
+    let history_count = history_document_version_count(&context.store, &identity.document_id)?;
+
+    context
+        .service
+        .remove(WorkspaceRemoveRequest {
+            workspace_id: workspace_id.clone(),
+        })
+        .await
+        .map_err(|error| format!("lifecycle workspace unmount failed: {error:?}"))?;
+    let mounted_after_unmount = context
+        .repository
+        .workspace_get(workspace_id.clone())
+        .await
+        .map_err(|error| format!("failed to inspect unmounted lifecycle workspace: {error}"))?
+        .is_some_and(|record| record.mounted);
+    let recent_retained_after_unmount = context
+        .service
+        .recent_list()
+        .await
+        .map_err(|error| format!("failed to list lifecycle recents: {error:?}"))?
+        .into_iter()
+        .any(|workspace| workspace.id == workspace_id);
+
+    Ok(HistoryLifecycleRemountSeedEvidence {
+        scenario: "history-lifecycle-remount",
+        phase: "seed",
+        workspace_path: path_string(&context.workspace),
+        document_path: path_string(&document_path),
+        workspace_id,
+        workspace_mounted_after_add: mounted_after_add,
+        workspace_mounted_after_unmount: mounted_after_unmount,
+        recent_retained_after_unmount,
+        document_id: identity.document_id,
+        history_count,
+        scene_sha256: sha256(saved_scene.as_bytes()),
+    })
+}
+
+async fn run_history_lifecycle_remount_probe(
+    root: &Path,
+) -> Result<HistoryLifecycleRemountProbeEvidence, String> {
+    let context = open_lifecycle_workspace_context(root).await?;
+    let recent =
+        context.service.recent_list().await.map_err(|error| {
+            format!("failed to read lifecycle recents after restart: {error:?}")
+        })?;
+    let workspace = recent
+        .first()
+        .ok_or_else(|| "lifecycle workspace was not retained after restart".to_owned())?;
+    let workspace_id = workspace.id.clone();
+    let document_path = lifecycle_document_path(&context.workspace);
+    let remounted = context
+        .service
+        .remount(workspace_id.clone())
+        .await
+        .map_err(|error| format!("lifecycle workspace remount failed: {error:?}"))?;
+    let mounted_after_remount = context
+        .repository
+        .workspace_get(workspace_id.clone())
+        .await
+        .map_err(|error| format!("failed to inspect remounted lifecycle workspace: {error}"))?
+        .is_some_and(|record| record.mounted);
+    let service = lifecycle_document_service(
+        Arc::clone(&context.repository),
+        Arc::clone(&context.store),
+        context.workspace.clone(),
+    );
+    service
+        .doc_open(PathRequest {
+            path: path_string(&document_path),
+        })
+        .await
+        .map_err(|error| format!("lifecycle remount document reopen failed: {error:?}"))?;
+    let identity = context
+        .store
+        .load_active_document_identity(&path_string(&document_path))
+        .map_err(|error| format!("failed to load remounted lifecycle identity: {error}"))?
+        .ok_or_else(|| "remounted lifecycle identity disappeared".to_owned())?;
+    let history_count = history_document_version_count(&context.store, &identity.document_id)?;
+
+    context
+        .service
+        .remove(WorkspaceRemoveRequest {
+            workspace_id: workspace_id.clone(),
+        })
+        .await
+        .map_err(|error| format!("lifecycle workspace second unmount failed: {error:?}"))?;
+    let unmounted_before_recent_remove = !context
+        .repository
+        .workspace_get(workspace_id.clone())
+        .await
+        .map_err(|error| format!("failed to inspect lifecycle workspace before remove: {error}"))?
+        .is_some_and(|record| record.mounted);
+    context
+        .service
+        .recent_remove(workspace_id.clone())
+        .await
+        .map_err(|error| format!("lifecycle Remove from Recents failed: {error:?}"))?;
+    let recent_present_after_remove = context
+        .service
+        .recent_list()
+        .await
+        .map_err(|error| format!("failed to inspect lifecycle recents after removal: {error:?}"))?
+        .into_iter()
+        .any(|item| item.id == workspace_id);
+    let workspace_present_after_remove = context
+        .repository
+        .workspace_get(workspace_id.clone())
+        .await
+        .map_err(|error| format!("failed to inspect removed lifecycle workspace: {error}"))?
+        .is_some();
+
+    Ok(HistoryLifecycleRemountProbeEvidence {
+        scenario: "history-lifecycle-remount",
+        phase: "probe",
+        workspace_path: path_string(&context.workspace),
+        document_path: path_string(&document_path),
+        workspace_id,
+        recent_present_before_remount: recent.iter().any(|item| item.id == workspace.id),
+        remounted: remounted.root_path == path_string(&context.workspace),
+        workspace_mounted_after_remount: mounted_after_remount,
+        document_id_after_remount: identity.document_id,
+        history_count_after_remount: history_count,
+        unmounted_before_recent_remove,
+        removed_from_recents: !workspace_present_after_remove,
+        recent_present_after_remove,
+        workspace_present_after_remove,
+    })
+}
+
+async fn run_history_lifecycle_remount_regrant(
+    root: &Path,
+) -> Result<HistoryLifecycleRemountRegrantEvidence, String> {
+    let context = open_lifecycle_workspace_context(root).await?;
+    let document_path = lifecycle_document_path(&context.workspace);
+    let store_identity = context
+        .store
+        .load_active_document_identity(&path_string(&document_path))
+        .map_err(|error| format!("failed to load lifecycle identity before regrant: {error}"))?
+        .ok_or_else(|| "lifecycle identity missing before regrant".to_owned())?;
+    let previous_workspace_id = context
+        .service
+        .recent_list()
+        .await
+        .map_err(|error| format!("failed to inspect lifecycle recent removal: {error:?}"))?
+        .into_iter()
+        .next()
+        .map(|workspace| workspace.id)
+        .unwrap_or_default();
+    let regranted = context
+        .service
+        .add(WorkspaceAddRequest {
+            root_path: context.workspace.display().to_string(),
+            name: Some("Lifecycle Regranted".to_owned()),
+        })
+        .await
+        .map_err(|error| format!("lifecycle workspace regrant failed: {error:?}"))?;
+    let workspace_regranted = context
+        .repository
+        .workspace_get(regranted.id.clone())
+        .await
+        .map_err(|error| format!("failed to inspect regranted lifecycle workspace: {error}"))?
+        .is_some_and(|record| record.mounted);
+    let service = lifecycle_document_service(
+        Arc::clone(&context.repository),
+        Arc::clone(&context.store),
+        context.workspace.clone(),
+    );
+    service
+        .doc_open(PathRequest {
+            path: path_string(&document_path),
+        })
+        .await
+        .map_err(|error| format!("lifecycle regranted document reopen failed: {error:?}"))?;
+    let identity_after_regrant = context
+        .store
+        .load_active_document_identity(&path_string(&document_path))
+        .map_err(|error| format!("failed to load lifecycle identity after regrant: {error}"))?
+        .ok_or_else(|| "lifecycle identity missing after regrant".to_owned())?;
+    let history_count_after_regrant =
+        history_document_version_count(&context.store, &identity_after_regrant.document_id)?;
+
+    let original_bytes = fs::read(&document_path).map_err(|error| {
+        format!("failed to read lifecycle document before replacement: {error}")
+    })?;
+    let replacement_path = document_path.with_extension("replacement.excalidraw");
+    fs::write(&replacement_path, &original_bytes)
+        .map_err(|error| format!("failed to write lifecycle replacement: {error}"))?;
+    fs::rename(&replacement_path, &document_path)
+        .map_err(|error| format!("failed to install lifecycle replacement: {error}"))?;
+    let replacement_identity = crate::history::identity::FileSystemIdentity::from_path(
+        &document_path,
+    )
+    .map_err(|error| format!("failed to inspect lifecycle replacement identity: {error}"))?;
+    let same_path_replacement_rejected = service
+        .doc_open(PathRequest {
+            path: path_string(&document_path),
+        })
+        .await
+        .is_err();
+    let retained_identity = context
+        .store
+        .load_active_document_identity(&path_string(&document_path))
+        .map_err(|error| {
+            format!("failed to inspect identity after replacement rejection: {error}")
+        })?;
+    let history_count_after_rejection =
+        history_document_version_count(&context.store, &store_identity.document_id)?;
+
+    Ok(HistoryLifecycleRemountRegrantEvidence {
+        scenario: "history-lifecycle-remount",
+        phase: "regrant",
+        workspace_path: path_string(&context.workspace),
+        document_path: path_string(&document_path),
+        previous_workspace_id,
+        regranted_workspace_id: regranted.id,
+        workspace_regranted,
+        original_document_id: store_identity.document_id.clone(),
+        document_id_after_regrant: identity_after_regrant.document_id.clone(),
+        regrant_preserved_identity: identity_after_regrant.document_id
+            == store_identity.document_id,
+        history_count_after_regrant,
+        same_path_replacement_identical_content: fs::read(&document_path)
+            .map(|bytes| bytes == original_bytes)
+            .unwrap_or(false),
+        replacement_different_filesystem_identity: !store_identity
+            .filesystem_identity
+            .refers_to_same_file(&replacement_identity),
+        same_path_replacement_rejected,
+        original_identity_retained_after_rejection: retained_identity
+            .is_some_and(|identity| identity.document_id == store_identity.document_id),
+        history_count_after_rejection,
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct HistoryLifecycleJournalEvidence {
     scenario: &'static str,
     phase: &'static str,
@@ -2460,6 +2894,9 @@ struct HistoryMissingResourceEvidence {
     target_parseable: bool,
     resource_exists: bool,
     preview_succeeded: bool,
+    sibling_version_id: String,
+    sibling_preview_succeeded: bool,
+    unavailable_record_stable: bool,
     error: Option<String>,
 }
 
@@ -2501,6 +2938,9 @@ async fn run_history_missing_resource_seed(
         target_parseable: serde_json::from_slice::<serde_json::Value>(&target_bytes).is_ok(),
         resource_exists: resource_path.exists(),
         preview_succeeded: false,
+        sibling_version_id: "history-fault-version-b".to_owned(),
+        sibling_preview_succeeded: false,
+        unavailable_record_stable: false,
         error: None,
     })
 }
@@ -2571,6 +3011,20 @@ async fn run_history_missing_resource_probe(
         other => return Err(format!("unknown missing history resource: {other}")),
     };
     let error = preview.as_ref().err().map(|value| format!("{value:?}"));
+    let sibling_preview_succeeded = context
+        .query
+        .preview(HistoryPreviewRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            version_id: "history-fault-version-b".to_owned(),
+        })
+        .await
+        .is_ok();
+    let unavailable_record_stable = preview.is_err()
+        && error
+            .as_deref()
+            .is_some_and(|value| value.contains("HistoryResourceMissing"));
     Ok(HistoryMissingResourceEvidence {
         scenario: "history-missing-resource-probe",
         resource,
@@ -2580,8 +3034,185 @@ async fn run_history_missing_resource_probe(
         target_parseable: serde_json::from_slice::<serde_json::Value>(&target_bytes).is_ok(),
         resource_exists,
         preview_succeeded: preview.is_ok(),
+        sibling_version_id: "history-fault-version-b".to_owned(),
+        sibling_preview_succeeded,
+        unavailable_record_stable,
         error,
     })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryPartialProtectionEvidence {
+    scenario: &'static str,
+    phase: &'static str,
+    target_path: String,
+    original_sha256: String,
+    target_sha256: String,
+    target_unchanged: bool,
+    target_parseable: bool,
+    fault_scene_hash: String,
+    unregistered_before_gc: Vec<String>,
+    unregistered_after_gc: Vec<String>,
+    gc_deleted_orphan: bool,
+    protected_version_count: usize,
+    operation_row_count: usize,
+    retained_scene_objects: bool,
+    retained_asset_objects: bool,
+}
+
+async fn run_history_partial_protection_seed(
+    root: &Path,
+) -> Result<HistoryPartialProtectionEvidence, String> {
+    let failure = run_history_operation_failure(root).await?;
+    let target = PathBuf::from(&failure.target_path);
+    let persisted = fs::read(&target)
+        .map_err(|error| format!("failed to read partial-protection target: {error}"))?;
+    Ok(HistoryPartialProtectionEvidence {
+        scenario: "history-partial-protection",
+        phase: "seed",
+        target_path: path_string(&target),
+        original_sha256: failure.original_sha256,
+        target_sha256: sha256(&persisted),
+        target_unchanged: failure.target_unchanged,
+        target_parseable: serde_json::from_slice::<serde_json::Value>(&persisted).is_ok(),
+        fault_scene_hash: failure.fault_scene_hash,
+        unregistered_before_gc: failure.unregistered_object_hashes,
+        unregistered_after_gc: Vec::new(),
+        gc_deleted_orphan: false,
+        protected_version_count: failure.protected_version_count,
+        operation_row_count: failure.operation_row_count,
+        retained_scene_objects: false,
+        retained_asset_objects: false,
+    })
+}
+
+async fn run_history_partial_protection_probe(
+    root: &Path,
+) -> Result<HistoryPartialProtectionEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target = context.workspace.join("history-fault-operation.excalidraw");
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize partial-protection target: {error}"))?;
+    let persisted = fs::read(&target)
+        .map_err(|error| format!("failed to read partial-protection target: {error}"))?;
+    let expected_original_sha256 =
+        sha256(history_restart_scene("Efault-B", "历史故障 B").0.as_bytes());
+    let persisted_sha256 = sha256(&persisted);
+    let identity = context
+        .store
+        .load_active_document_identity(&path_string(&target))
+        .map_err(|error| format!("failed to load partial-protection identity: {error}"))?
+        .ok_or_else(|| "partial-protection identity is missing after restart".to_owned())?;
+    let unregistered_before_gc = context
+        .store
+        .enumerate_object_candidates()
+        .map_err(|error| format!("failed to enumerate orphan candidates: {error}"))?
+        .into_iter()
+        .filter(|candidate| !candidate.registered)
+        .map(|candidate| candidate.object.hash)
+        .collect::<Vec<_>>();
+    let gc = context
+        .store
+        .collect_garbage(SystemTime::now(), Duration::ZERO)
+        .map_err(|error| format!("partial-protection GC failed: {error}"))?;
+    let unregistered_after_gc = context
+        .store
+        .enumerate_object_candidates()
+        .map_err(|error| format!("failed to enumerate orphan candidates after GC: {error}"))?
+        .into_iter()
+        .filter(|candidate| !candidate.registered)
+        .map(|candidate| candidate.object.hash)
+        .collect::<Vec<_>>();
+    let fault_scene_hash = unregistered_before_gc
+        .first()
+        .cloned()
+        .ok_or_else(|| "partial-protection fresh probe found no orphan candidate".to_owned())?;
+    let (protected_version_count, operation_row_count) = history_failure_counts(
+        &context.store,
+        &identity.document_id,
+        "history-fault-partial-protection-fresh",
+    )?;
+    let retained_scene_objects = context
+        .store
+        .with_connection(|connection| {
+            let mut statement = connection
+                .prepare("SELECT scene_hash FROM history_versions WHERE document_id=?1")?;
+            let hashes = statement
+                .query_map([&identity.document_id], |row| row.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok::<_, rusqlite::Error>(hashes.into_iter().all(|hash| {
+                context
+                    .store
+                    .objects()
+                    .scene_path(&hash)
+                    .map(|path| path.is_file())
+                    .unwrap_or(false)
+            }))
+        })
+        .map_err(|error| format!("failed to inspect retained scenes: {error}"))?;
+    let retained_asset_objects = context
+        .store
+        .with_connection(|connection| {
+            let mut statement = connection.prepare(
+                "SELECT asset_hash FROM version_assets WHERE version_id IN (SELECT id FROM history_versions WHERE document_id=?1)",
+            )?;
+            let hashes = statement
+                .query_map([&identity.document_id], |row| row.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok::<_, rusqlite::Error>(hashes.into_iter().all(|hash| {
+                context
+                    .store
+                    .objects()
+                    .asset_path(&hash)
+                    .map(|path| path.is_file())
+                    .unwrap_or(false)
+            }))
+        })
+        .map_err(|error| format!("failed to inspect retained assets: {error}"))?;
+    Ok(HistoryPartialProtectionEvidence {
+        scenario: "history-partial-protection",
+        phase: "probe",
+        target_path: path_string(&target),
+        original_sha256: expected_original_sha256.clone(),
+        target_sha256: persisted_sha256.clone(),
+        target_unchanged: persisted_sha256 == expected_original_sha256,
+        target_parseable: serde_json::from_slice::<serde_json::Value>(&persisted).is_ok(),
+        fault_scene_hash: fault_scene_hash.clone(),
+        gc_deleted_orphan: gc
+            .deleted
+            .iter()
+            .any(|object| object.hash == fault_scene_hash),
+        unregistered_before_gc,
+        unregistered_after_gc,
+        protected_version_count,
+        operation_row_count,
+        retained_scene_objects,
+        retained_asset_objects,
+    })
+}
+
+fn history_failure_counts(
+    store: &HistoryStore,
+    document_id: &str,
+    request_id: &str,
+) -> Result<(usize, usize), String> {
+    store
+        .with_connection(|connection| {
+            let protected = connection.query_row(
+                "SELECT COUNT(*) FROM history_versions WHERE document_id=?1 AND source='protected'",
+                [document_id],
+                |row| row.get::<_, i64>(0),
+            )?;
+            let operations = connection.query_row(
+                "SELECT COUNT(*) FROM history_operations WHERE idempotency_id=?1",
+                [request_id],
+                |row| row.get::<_, i64>(0),
+            )?;
+            Ok::<_, rusqlite::Error>((protected as usize, operations as usize))
+        })
+        .map_err(|error| format!("failed to inspect partial-protection terminal state: {error}"))
 }
 
 #[derive(Debug, Serialize)]
@@ -2592,7 +3223,11 @@ struct HistoryGcHydrationPinEvidence {
     asset_hash: String,
     retained_while_hydrating: bool,
     deleted_after_release: bool,
-    hydration_callback_completed: bool,
+    deleted_only_orphaned_objects: bool,
+    preview_completed: bool,
+    preview_scene_complete: bool,
+    preview_asset_complete: bool,
+    current_file_unchanged: bool,
 }
 
 async fn run_history_gc_hydration_pin(
@@ -2620,44 +3255,104 @@ async fn run_history_gc_hydration_pin(
     )?;
     let scene_hash = sha256(scene.0.as_bytes());
     let asset_hash = scene.2;
+    let expected_scene = serde_json::from_str::<serde_json::Value>(&scene.0)
+        .map_err(|error| format!("failed to parse GC hydration fixture scene: {error}"))?;
+    let expected_asset_data_url = format!("data:image/png;base64,{}", BASE64.encode(&scene.1));
+    let initial_target_bytes = fs::read(&target)
+        .map_err(|error| format!("failed to read GC hydration target: {error}"))?;
     context
         .store
         .reachability()
         .remove_committed_version("history-gc-pin-version")
         .map_err(|error| format!("failed to remove semantic reachability root: {error}"))?;
-    let references = ObjectReferences::new(scene_hash.clone(), vec![asset_hash.clone()])
-        .map_err(|error| format!("failed to create GC pin references: {error}"))?;
-    let pin = context
-        .store
-        .reachability()
-        .acquire_hydration_pin(references)
-        .map_err(|error| format!("hydration pin acquisition failed: {error}"))?;
-    let report = context
-        .store
-        .collect_garbage(SystemTime::now(), Duration::ZERO)
-        .map_err(|error| format!("GC while hydration pin is held failed: {error}"))?;
+    let barrier = E2ePreviewHydrationPinBarrier::new();
+    set_e2e_preview_hydration_pin_barrier(Some(Arc::clone(&barrier)));
+    let target_path = path_string(&target);
+    let preview_task = {
+        let query = context.query.clone();
+        let version_id = "history-gc-pin-version".to_owned();
+        tokio::spawn(async move {
+            query
+                .preview(HistoryPreviewRequest {
+                    document: HistoryDocumentLocator::Path { path: target_path },
+                    version_id,
+                })
+                .await
+        })
+    };
+    let reached = tokio::task::spawn_blocking({
+        let barrier = Arc::clone(&barrier);
+        move || barrier.wait_until_reached()
+    })
+    .await
+    .map_err(|error| format!("hydration barrier wait task failed: {error}"))?;
+    if !reached {
+        barrier.release();
+        let _ = preview_task.await;
+        set_e2e_preview_hydration_pin_barrier(None);
+        return Err("history preview did not reach the post-pin barrier".to_owned());
+    }
+    let gc_task = {
+        let store = Arc::clone(&context.store);
+        tokio::task::spawn_blocking(move || {
+            store.collect_garbage(SystemTime::now(), Duration::ZERO)
+        })
+    };
+    let gc_result = gc_task
+        .await
+        .map_err(|error| format!("GC while hydration pin is held task failed: {error}"))?;
+    barrier.release();
+    let preview_result = preview_task
+        .await
+        .map_err(|error| format!("history preview task failed: {error}"))?;
+    set_e2e_preview_hydration_pin_barrier(None);
+    let report =
+        gc_result.map_err(|error| format!("GC while hydration pin is held failed: {error}"))?;
     let scene_key = ObjectKey::scene(scene_hash.clone())
         .map_err(|error| format!("invalid scene hash: {error}"))?;
     let asset_key = ObjectKey::asset(asset_hash.clone())
         .map_err(|error| format!("invalid asset hash: {error}"))?;
     let retained_while_hydrating =
         report.retained.contains(&scene_key) && report.retained.contains(&asset_key);
-    pin.release()
-        .map_err(|error| format!("hydration pin release failed: {error}"))?;
-    let hydration_callback_completed = true;
     let report = context
         .store
         .collect_garbage(SystemTime::now(), Duration::ZERO)
         .map_err(|error| format!("GC after hydration release failed: {error}"))?;
     let deleted_after_release =
         report.deleted.contains(&scene_key) && report.deleted.contains(&asset_key);
+    let deleted_only_orphaned_objects = report
+        .deleted
+        .iter()
+        .all(|object| object == &scene_key || object == &asset_key);
+    let current_file_unchanged = fs::read(&target)
+        .map(|bytes| bytes == initial_target_bytes)
+        .unwrap_or(false);
+    let preview_scene_complete = preview_result.as_ref().is_ok_and(|preview| {
+        preview.scene.get("elements") == expected_scene.get("elements")
+            && preview.scene.get("appState") == expected_scene.get("appState")
+    });
+    let preview_asset_complete = preview_result.as_ref().is_ok_and(|preview| {
+        preview
+            .scene
+            .get("files")
+            .and_then(serde_json::Value::as_object)
+            .and_then(|files| files.get("history-image"))
+            .and_then(serde_json::Value::as_object)
+            .and_then(|file| file.get("dataURL"))
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|data_url| data_url == expected_asset_data_url)
+    });
     Ok(HistoryGcHydrationPinEvidence {
         scenario: "history-gc-hydration-pin",
         scene_hash,
         asset_hash,
         retained_while_hydrating,
         deleted_after_release,
-        hydration_callback_completed,
+        deleted_only_orphaned_objects,
+        preview_completed: preview_result.is_ok(),
+        preview_scene_complete,
+        preview_asset_complete,
+        current_file_unchanged,
     })
 }
 
@@ -3788,6 +4483,22 @@ fn history_source_count(
         .map_err(|error| format!("failed to count {source} history versions: {error}"))
 }
 
+fn history_document_version_count(
+    store: &HistoryStore,
+    document_id: &str,
+) -> Result<usize, String> {
+    store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT COUNT(*) FROM history_versions WHERE document_id=?1",
+                [document_id],
+                |row| row.get::<_, i64>(0),
+            )
+        })
+        .map(|count| count.max(0) as usize)
+        .map_err(|error| format!("failed to count lifecycle history versions: {error}"))
+}
+
 fn history_source_ids(
     store: &HistoryStore,
     document_id: &str,
@@ -4826,6 +5537,150 @@ struct EntryRenameKillReady {
     target_path: String,
     descendant_old_path: String,
     descendant_new_path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EntryRenamePostFsProbeEvidence {
+    scenario: &'static str,
+    target_path: String,
+    old_child_path: String,
+    new_child_path: String,
+    process_signal: String,
+    marker_stage: String,
+    old_child_exists: bool,
+    new_child_exists: bool,
+    journal_pending_before: bool,
+    journal_pending_after: bool,
+    journal_files_after: usize,
+    parent_sync_applied: bool,
+    sqlite_applied: bool,
+    recovery_applied: bool,
+    history_applied: bool,
+    identity_at_new_path: Option<String>,
+    identity_at_old_path: Option<String>,
+    history_version_count: usize,
+    duplicate_history_versions: bool,
+}
+
+/// Seed a real WorkspaceEntryService rename and stop at the exact
+/// post-filesystem/pre-marker barrier. The parent test process owns SIGKILL;
+/// this child must never turn the barrier into a normal success result.
+async fn run_entry_rename_post_fs_kill(root: &Path) -> Result<(), String> {
+    let context = open_history_restart_context(root).await?;
+    let recovery = Arc::new(RecoveryStore::with_app_version(
+        root.join("entry-rename-recovery"),
+        "0.3.0",
+    ));
+    let service = WorkspaceEntryService::with_trash_and_recovery(
+        Arc::clone(&context.repository),
+        WorkspaceMutationGate::default(),
+        Arc::new(SystemTrashOperator),
+        Arc::clone(&recovery),
+    )
+    .with_history_store(Arc::clone(&context.store));
+    let old_directory = context.workspace.join("post-fs-old");
+    let old_child = old_directory.join("drawing.excalidraw");
+    fs::create_dir_all(&old_directory)
+        .map_err(|error| format!("failed to create post-FS rename source: {error}"))?;
+    let scene = history_restart_scene("post-fs-rename", "post-FS rename");
+    materialize_history_workspace_asset(&context.workspace, &scene.1)?;
+    fs::write(&old_child, scene.0.as_bytes())
+        .map_err(|error| format!("failed to create post-FS rename drawing: {error}"))?;
+    let old_child = old_child
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize post-FS rename drawing: {error}"))?;
+    let identity = context
+        .store
+        .resolve_document_identity_for_open(&old_child, 1)
+        .map_err(|error| format!("failed to establish post-FS rename identity: {error}"))?;
+    publish_history_restart_version(
+        &context.store,
+        &identity.document_id,
+        "entry-rename-post-fs-version",
+        &scene.0,
+        1,
+        &scene.2,
+    )?;
+    let old_child_relative = "post-fs-old/drawing.excalidraw".to_owned();
+    let result = service
+        .rename(WorkspaceEntryRenameRequest {
+            workspace_id: E2E_WORKSPACE_ID.to_owned(),
+            relative_path: "post-fs-old".to_owned(),
+            base_name: "post-fs-new".to_owned(),
+            expected_open_documents: vec![ExpectedOpenDocument {
+                relative_path: old_child_relative,
+                base_hash: sha256(scene.0.as_bytes()),
+            }],
+        })
+        .await;
+    Err(format!(
+        "post-FS rename barrier returned before SIGKILL: {result:?}"
+    ))
+}
+
+async fn run_entry_rename_post_fs_probe(
+    root: &Path,
+) -> Result<EntryRenamePostFsProbeEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let recovery = RecoveryStore::with_app_version(root.join("entry-rename-recovery"), "0.3.0");
+    let old_directory = context.workspace.join("post-fs-old");
+    let new_directory = context.workspace.join("post-fs-new");
+    let old_child = old_directory.join("drawing.excalidraw");
+    let new_child = new_directory.join("drawing.excalidraw");
+    let before = load_journals(&recovery).map_err(|error| {
+        format!("failed to load post-FS rename journal before replay: {error:?}")
+    })?;
+    reconcile_pending_mutations_with_history(
+        &context.repository,
+        &recovery,
+        history_replay_for_store(Arc::clone(&context.store)),
+    )
+    .await
+    .map_err(|error| format!("post-FS rename fresh-process replay failed: {error:?}"))?;
+    let after = load_journals(&recovery).map_err(|error| {
+        format!("failed to load post-FS rename journal after replay: {error:?}")
+    })?;
+    let identity_at_new_path = context
+        .store
+        .load_active_document_identity(&path_string(&new_child))
+        .map_err(|error| format!("failed to inspect post-FS new identity: {error}"))?
+        .map(|identity| identity.document_id);
+    let identity_at_old_path = context
+        .store
+        .load_active_document_identity(&path_string(&old_child))
+        .map_err(|error| format!("failed to inspect post-FS old identity: {error}"))?
+        .map(|identity| identity.document_id);
+    let history_version_count = if let Some(document_id) = identity_at_new_path.as_deref() {
+        history_source_count(&context.store, document_id, "automatic")?
+            + history_source_count(&context.store, document_id, "protected")?
+            + history_source_count(&context.store, document_id, "manual")?
+    } else {
+        0
+    };
+    let journal_pending_after = after.iter().any(MutationJournalRecord::history_pending);
+    let journal_files_after = after.len();
+    Ok(EntryRenamePostFsProbeEvidence {
+        scenario: "entry-rename-post-fs-probe",
+        target_path: path_string(&new_directory),
+        old_child_path: path_string(&old_child),
+        new_child_path: path_string(&new_child),
+        process_signal: "SIGKILL".to_owned(),
+        marker_stage: "after_rename_before_parent_sync".to_owned(),
+        old_child_exists: old_child.exists(),
+        new_child_exists: new_child.exists(),
+        journal_pending_before: before.iter().any(MutationJournalRecord::history_pending),
+        journal_pending_after,
+        journal_files_after,
+        parent_sync_applied: !journal_pending_after,
+        sqlite_applied: !journal_pending_after,
+        recovery_applied: !journal_pending_after,
+        history_applied: !journal_pending_after,
+        duplicate_history_versions: history_version_count > 1,
+        history_version_count,
+        identity_at_new_path,
+        identity_at_old_path,
+    })
 }
 
 fn run_entry_rename_kill(root: &Path) -> Result<EntryRenameKillReady, String> {

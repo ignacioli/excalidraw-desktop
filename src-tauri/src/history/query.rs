@@ -7,6 +7,12 @@
 
 use std::{fs, path::PathBuf, sync::Arc};
 
+#[cfg(any(test, feature = "e2e-harness"))]
+use std::{
+    sync::{Condvar, Mutex, OnceLock},
+    time::Duration,
+};
+
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -43,6 +49,101 @@ pub struct HistoryQueryService {
     repository: Arc<SqliteRepository>,
     store: Option<Arc<HistoryStore>>,
     direct_file_grant: Arc<dyn DirectFileGrant>,
+}
+
+/// In-process rendezvous used only by the deterministic e2e harness.  The
+/// barrier is installed by the harness before a preview task is spawned and
+/// is entered immediately after the production hydration pin is acquired.
+/// This lets the harness run real GC against a live preview without relying
+/// on timing or sleeps.  The type and all accessors are absent from a
+/// production build.
+#[cfg(any(test, feature = "e2e-harness"))]
+pub(crate) struct E2ePreviewHydrationPinBarrier {
+    state: Mutex<PreviewHydrationPinBarrierState>,
+    changed: Condvar,
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+#[derive(Default)]
+struct PreviewHydrationPinBarrierState {
+    reached: bool,
+    released: bool,
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+impl E2ePreviewHydrationPinBarrier {
+    pub(crate) fn new() -> Arc<Self> {
+        Arc::new(Self {
+            state: Mutex::new(PreviewHydrationPinBarrierState::default()),
+            changed: Condvar::new(),
+        })
+    }
+
+    pub(crate) fn wait_until_reached(&self) -> bool {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        while !state.reached {
+            let (next_state, result) = self
+                .changed
+                .wait_timeout(state, Duration::from_secs(30))
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state = next_state;
+            if result.timed_out() && !state.reached {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub(crate) fn release(&self) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.released = true;
+        self.changed.notify_all();
+    }
+
+    fn wait_after_pin(&self) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.reached = true;
+        self.changed.notify_all();
+        while !state.released {
+            state = self
+                .changed
+                .wait(state)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+    }
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+static E2E_PREVIEW_HYDRATION_PIN_BARRIER: OnceLock<
+    Mutex<Option<Arc<E2ePreviewHydrationPinBarrier>>>,
+> = OnceLock::new();
+
+#[cfg(any(test, feature = "e2e-harness"))]
+pub(crate) fn set_e2e_preview_hydration_pin_barrier(
+    barrier: Option<Arc<E2ePreviewHydrationPinBarrier>>,
+) {
+    *E2E_PREVIEW_HYDRATION_PIN_BARRIER
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = barrier;
+}
+
+#[cfg(any(test, feature = "e2e-harness"))]
+fn e2e_preview_hydration_pin_barrier() -> Option<Arc<E2ePreviewHydrationPinBarrier>> {
+    E2E_PREVIEW_HYDRATION_PIN_BARRIER
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
 }
 
 impl HistoryQueryService {
@@ -568,6 +669,10 @@ fn hydrate_preview(
         .reachability()
         .acquire_hydration_pin(references)
         .map_err(|error| AppError::HistoryUnavailable(error.to_string()))?;
+    #[cfg(any(test, feature = "e2e-harness"))]
+    if let Some(barrier) = e2e_preview_hydration_pin_barrier() {
+        barrier.wait_after_pin();
+    }
     let scene_bytes = store
         .objects()
         .read_scene(&row.scene_hash)

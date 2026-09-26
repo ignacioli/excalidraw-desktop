@@ -76,6 +76,56 @@ interface HistoryDocumentSaveAsEvidence {
   orphanSourceFileExistsAfterClose: boolean;
 }
 
+interface HistoryLifecycleRemountSeedEvidence {
+  scenario: "history-lifecycle-remount";
+  phase: "seed";
+  workspacePath: string;
+  documentPath: string;
+  workspaceId: string;
+  workspaceMountedAfterAdd: boolean;
+  workspaceMountedAfterUnmount: boolean;
+  recentRetainedAfterUnmount: boolean;
+  documentId: string;
+  historyCount: number;
+  sceneSha256: string;
+}
+
+interface HistoryLifecycleRemountProbeEvidence {
+  scenario: "history-lifecycle-remount";
+  phase: "probe";
+  workspacePath: string;
+  documentPath: string;
+  workspaceId: string;
+  recentPresentBeforeRemount: boolean;
+  remounted: boolean;
+  workspaceMountedAfterRemount: boolean;
+  documentIdAfterRemount: string;
+  historyCountAfterRemount: number;
+  unmountedBeforeRecentRemove: boolean;
+  removedFromRecents: boolean;
+  recentPresentAfterRemove: boolean;
+  workspacePresentAfterRemove: boolean;
+}
+
+interface HistoryLifecycleRemountRegrantEvidence {
+  scenario: "history-lifecycle-remount";
+  phase: "regrant";
+  workspacePath: string;
+  documentPath: string;
+  previousWorkspaceId: string;
+  regrantedWorkspaceId: string;
+  workspaceRegranted: boolean;
+  originalDocumentId: string;
+  documentIdAfterRegrant: string;
+  regrantPreservedIdentity: boolean;
+  historyCountAfterRegrant: number;
+  samePathReplacementIdenticalContent: boolean;
+  replacementDifferentFilesystemIdentity: boolean;
+  samePathReplacementRejected: boolean;
+  originalIdentityRetainedAfterRejection: boolean;
+  historyCountAfterRejection: number;
+}
+
 test("native lifecycle preserves identity across rename/move, isolates Save As, rejects same-path replacement, and deletes history after Trash", async ({
   browserName,
 }, testInfo) => {
@@ -179,6 +229,55 @@ test("native DocumentService conflict and orphan Save As create fresh identities
     expect(run.evidence.orphanTargetHistoryCount).toBe(0);
     expect(run.evidence.orphanSourceDraftExistsAfterClose).toBe(false);
     expect(run.evidence.orphanSourceFileExistsAfterClose).toBe(false);
+  } finally {
+    await cleanupIsolatedDesktopPaths(run.paths);
+  }
+});
+
+test("fresh processes preserve history through workspace remount and reject same-path replacement", async ({
+  browserName,
+}, testInfo) => {
+  void browserName;
+  test.setTimeout(120_000);
+  test.skip(
+    !nativeLifecycleBuildConfigured(),
+    "Native lifecycle tests require APP_E2E=1 and EXCALIDRAW_E2E_BINARY pointing at the e2e-harness Tauri build.",
+  );
+  if (!nativeLifecycleBuildConfigured()) return;
+
+  const run = await runNativeRemountLifecycleScenario();
+  try {
+    await testInfo.attach("native-history-lifecycle-remount-evidence", {
+      body: Buffer.from(JSON.stringify(run, null, 2)),
+      contentType: "application/json",
+    });
+    expect(run.seed.scenario).toBe("history-lifecycle-remount");
+    expect(run.seed.phase).toBe("seed");
+    expect(run.seed.workspaceMountedAfterAdd).toBe(true);
+    expect(run.seed.workspaceMountedAfterUnmount).toBe(false);
+    expect(run.seed.recentRetainedAfterUnmount).toBe(true);
+    expect(run.seed.historyCount).toBeGreaterThan(0);
+    expect(run.probe.phase).toBe("probe");
+    expect(run.probe.recentPresentBeforeRemount).toBe(true);
+    expect(run.probe.remounted).toBe(true);
+    expect(run.probe.workspaceMountedAfterRemount).toBe(true);
+    expect(run.probe.documentIdAfterRemount).toBe(run.seed.documentId);
+    expect(run.probe.historyCountAfterRemount).toBe(run.seed.historyCount);
+    expect(run.probe.unmountedBeforeRecentRemove).toBe(true);
+    expect(run.probe.removedFromRecents).toBe(true);
+    expect(run.probe.recentPresentAfterRemove).toBe(false);
+    expect(run.probe.workspacePresentAfterRemove).toBe(false);
+    expect(run.regrant.phase).toBe("regrant");
+    expect(run.regrant.workspaceRegranted).toBe(true);
+    expect(run.regrant.regrantedWorkspaceId).not.toBe(run.seed.workspaceId);
+    expect(run.regrant.regrantPreservedIdentity).toBe(true);
+    expect(run.regrant.documentIdAfterRegrant).toBe(run.seed.documentId);
+    expect(run.regrant.historyCountAfterRegrant).toBe(run.seed.historyCount);
+    expect(run.regrant.samePathReplacementIdenticalContent).toBe(true);
+    expect(run.regrant.replacementDifferentFilesystemIdentity).toBe(true);
+    expect(run.regrant.samePathReplacementRejected).toBe(true);
+    expect(run.regrant.originalIdentityRetainedAfterRejection).toBe(true);
+    expect(run.regrant.historyCountAfterRejection).toBe(run.seed.historyCount);
   } finally {
     await cleanupIsolatedDesktopPaths(run.paths);
   }
@@ -292,6 +391,38 @@ async function runNativeProductSaveAsScenario(): Promise<{
       "history-document-save-as",
     );
     return { paths, evidence };
+  } catch (error) {
+    await cleanupIsolatedDesktopPaths(paths);
+    throw error;
+  }
+}
+
+async function runNativeRemountLifecycleScenario(): Promise<{
+  paths: Awaited<ReturnType<typeof createIsolatedDesktopPaths>>;
+  seed: HistoryLifecycleRemountSeedEvidence;
+  probe: HistoryLifecycleRemountProbeEvidence;
+  regrant: HistoryLifecycleRemountRegrantEvidence;
+}> {
+  const binary = await resolveDesktopBinary();
+  const paths = await createIsolatedDesktopPaths();
+  try {
+    const seed = await runScenarioChild<HistoryLifecycleRemountSeedEvidence>(
+      binary,
+      paths,
+      "history-lifecycle-remount-seed",
+    );
+    const probe = await runScenarioChild<HistoryLifecycleRemountProbeEvidence>(
+      binary,
+      paths,
+      "history-lifecycle-remount-probe",
+    );
+    const regrant =
+      await runScenarioChild<HistoryLifecycleRemountRegrantEvidence>(
+        binary,
+        paths,
+        "history-lifecycle-remount-regrant",
+      );
+    return { paths, seed, probe, regrant };
   } catch (error) {
     await cleanupIsolatedDesktopPaths(paths);
     throw error;

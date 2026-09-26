@@ -49,6 +49,24 @@ use mutation_journal::{
 const MANAGED_DIRECTORY_NAMES: &[&str] = &[".excalidraw_assets"];
 const EMPTY_SCENE: &[u8] = br#"{"type":"excalidraw","version":2,"source":"excalidraw-desktop","elements":[],"appState":{},"files":{}}"#;
 
+/// Validate a marked rename target without following symlinks. Directory
+/// renames are checked recursively so an externally inserted link cannot make
+/// history identity migration canonicalize outside the application workspace.
+fn rename_target_has_no_symlink(path: &Path) -> io::Result<bool> {
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.file_type().is_symlink() {
+        return Ok(false);
+    }
+    if metadata.is_dir() {
+        for entry in fs::read_dir(path)? {
+            if !rename_target_has_no_symlink(&entry?.path())? {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
+}
+
 /// Build the history-side replay callback for application-owned entry
 /// renames. The callback is blocking because HistoryStore owns a synchronous
 /// SQLite connection; the journal invokes it only after filesystem, main
@@ -64,14 +82,24 @@ pub fn history_replay_for_store(history_store: Arc<HistoryStore>) -> HistoryRepl
                             "rename journal is missing the new path for history replay".to_owned(),
                         )
                     })?;
-                    if !Path::new(&new_path).exists() {
-                        return Err(AppError::HistoryOperationPending(record.operation_id));
+                    let target = Path::new(&new_path);
+                    match rename_target_has_no_symlink(target) {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            return Err(AppError::HistoryOperationPending(record.operation_id));
+                        }
+                        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                            return Err(AppError::HistoryOperationPending(record.operation_id));
+                        }
+                        Err(error) => {
+                            return Err(AppError::HistoryUnavailable(format!(
+                                "cannot inspect renamed history target {}: {error}",
+                                target.display()
+                            )));
+                        }
                     }
                     history_store
-                        .migrate_app_rename(
-                            Path::new(&record.old_canonical_path),
-                            Path::new(&new_path),
-                        )
+                        .migrate_app_rename(Path::new(&record.old_canonical_path), target)
                         .map_err(|error| AppError::HistoryUnavailable(error.to_string()))
                 }
                 mutation_journal::MutationJournalKind::Delete => {
@@ -549,6 +577,8 @@ impl WorkspaceEntryService {
             new_relative_path.clone(),
             new_display_name,
         );
+        record = record
+            .with_filesystem_identity(mutation_journal::filesystem_identity_for_path(&source.path));
         if self.history_required {
             record = record.with_history_required(true);
         }
@@ -579,6 +609,18 @@ impl WorkspaceEntryService {
             delete_journal(&self.recovery, &operation_id)?;
             self.forget_pending_operation(&operation_id).await;
             return Err(error);
+        }
+
+        // This is the precise post-filesystem/pre-marker boundary used by
+        // the test-only process harness.  A SIGKILL here leaves the durable
+        // pre-rename identity available for fail-closed replay.
+        #[cfg(feature = "e2e-harness")]
+        if let Err(error) = crate::e2e_harness::history_fault_barrier_from_environment(
+            crate::e2e_harness::HistoryFaultStage::AfterRenameBeforeParentSync,
+        ) {
+            eprintln!(
+                "workspace entry rename reached post-filesystem barrier with operation {operation_id}: {error}"
+            );
         }
 
         record.filesystem_committed = true;

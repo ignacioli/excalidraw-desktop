@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { chmod, readFile, readdir } from "node:fs/promises";
+import { chmod, readFile, readdir, rm } from "node:fs/promises";
 
 import { expect, test } from "@playwright/test";
 
@@ -505,6 +505,49 @@ test.describe("US1 local version history process fault barriers", () => {
     }
   });
 
+  test("repairs an actual WorkspaceEntryService rename killed after filesystem commit", async ({
+    browserName,
+  }, testInfo) => {
+    void browserName;
+    test.skip(
+      !nativeReliabilityBuildConfigured(),
+      "Native post-filesystem rename tests require the e2e-harness Tauri build.",
+    );
+    if (!nativeReliabilityBuildConfigured()) return;
+
+    const paths = await createIsolatedDesktopPaths();
+    try {
+      const run = await runEntryRenamePostFsKill(paths);
+      await testInfo.attach("native-entry-rename-post-fs-evidence", {
+        body: Buffer.from(JSON.stringify(run, null, 2)),
+        contentType: "application/json",
+      });
+      expect(run.marker.stage).toBe("after_rename_before_parent_sync");
+      expect(run.marker.pid).toBeGreaterThan(0);
+      expect(run.marker.context.targetPath).toBe(
+        `${paths.workspace}/post-fs-new`,
+      );
+      expect(run.probe.scenario).toBe("entry-rename-post-fs-probe");
+      expect(run.probe.processSignal).toBe("SIGKILL");
+      expect(run.probe.markerStage).toBe("after_rename_before_parent_sync");
+      expect(run.probe.oldChildExists).toBe(false);
+      expect(run.probe.newChildExists).toBe(true);
+      expect(run.probe.journalPendingBefore).toBe(true);
+      expect(run.probe.journalPendingAfter).toBe(false);
+      expect(run.probe.journalFilesAfter).toBe(0);
+      expect(run.probe.parentSyncApplied).toBe(true);
+      expect(run.probe.sqliteApplied).toBe(true);
+      expect(run.probe.recoveryApplied).toBe(true);
+      expect(run.probe.historyApplied).toBe(true);
+      expect(run.probe.identityAtNewPath).toBeTruthy();
+      expect(run.probe.identityAtOldPath).toBeNull();
+      expect(run.probe.historyVersionCount).toBe(1);
+      expect(run.probe.duplicateHistoryVersions).toBe(false);
+    } finally {
+      await cleanupIsolatedDesktopPaths(paths);
+    }
+  });
+
   for (const resource of ["scene", "asset"] as const) {
     test(`reports missing history ${resource} after a fresh process restart`, async ({
       browserName,
@@ -547,11 +590,69 @@ test.describe("US1 local version history process fault barriers", () => {
         expect(probe.resourceExists).toBe(false);
         expect(probe.previewSucceeded).toBe(false);
         expect(probe.error).toBeTruthy();
+        expect(probe.siblingVersionId).toBe("history-fault-version-b");
+        expect(probe.siblingPreviewSucceeded).toBe(true);
+        expect(probe.unavailableRecordStable).toBe(true);
       } finally {
         await cleanupIsolatedDesktopPaths(paths);
       }
     });
   }
+
+  test("cleans an unregistered partial-protection object after a fresh process restart", async ({
+    browserName,
+  }, testInfo) => {
+    void browserName;
+    test.skip(
+      !nativeReliabilityBuildConfigured(),
+      "Native partial-protection tests require the e2e-harness Tauri build.",
+    );
+    if (!nativeReliabilityBuildConfigured()) return;
+
+    const paths = await createIsolatedDesktopPaths();
+    const targetPath = `${paths.workspace}/history-fault-operation.excalidraw`;
+    try {
+      const seed = await runScenarioProcess(
+        paths,
+        "history-partial-protection-seed",
+        {
+          EXCALIDRAW_E2E_HISTORY_FAILURE_MODE: "partial-protection",
+          EXCALIDRAW_E2E_HISTORY_OPERATION_ID:
+            "history-fault-partial-protection-fresh",
+          EXCALIDRAW_E2E_HISTORY_TARGET_PATH: targetPath,
+        },
+      );
+      const probe = await runScenarioProcess(
+        paths,
+        "history-partial-protection-probe",
+      );
+      await testInfo.attach(
+        "native-history-partial-protection-fresh-evidence",
+        {
+          body: Buffer.from(JSON.stringify({ seed, probe }, null, 2)),
+          contentType: "application/json",
+        },
+      );
+      expect(seed.scenario).toBe("history-partial-protection");
+      expect(seed.phase).toBe("seed");
+      expect(seed.targetUnchanged).toBe(true);
+      expect(seed.protectedVersionCount).toBe(0);
+      expect(seed.operationRowCount).toBe(0);
+      expect(seed.unregisteredBeforeGc.length).toBeGreaterThan(0);
+      expect(probe.phase).toBe("probe");
+      expect(probe.targetUnchanged).toBe(true);
+      expect(probe.targetParseable).toBe(true);
+      expect(probe.protectedVersionCount).toBe(0);
+      expect(probe.operationRowCount).toBe(0);
+      expect(probe.unregisteredBeforeGc.length).toBeGreaterThan(0);
+      expect(probe.unregisteredAfterGc).toEqual([]);
+      expect(probe.gcDeletedOrphan).toBe(true);
+      expect(probe.retainedSceneObjects).toBe(true);
+      expect(probe.retainedAssetObjects).toBe(true);
+    } finally {
+      await cleanupIsolatedDesktopPaths(paths);
+    }
+  });
 
   test("holds scene and asset objects during a real hydration pin and collects them after release", async ({
     browserName,
@@ -574,8 +675,12 @@ test.describe("US1 local version history process fault barriers", () => {
       });
       expect(evidence.scenario).toBe("history-gc-hydration-pin");
       expect(evidence.retainedWhileHydrating).toBe(true);
-      expect(evidence.hydrationCallbackCompleted).toBe(true);
+      expect(evidence.previewCompleted).toBe(true);
+      expect(evidence.previewSceneComplete).toBe(true);
+      expect(evidence.previewAssetComplete).toBe(true);
+      expect(evidence.currentFileUnchanged).toBe(true);
       expect(evidence.deletedAfterRelease).toBe(true);
+      expect(evidence.deletedOnlyOrphanedObjects).toBe(true);
     } finally {
       await cleanupIsolatedDesktopPaths(paths);
     }
@@ -636,6 +741,129 @@ async function runScenarioProcess(
     throw new Error(`${scenario} produced no evidence.`);
   }
   return JSON.parse(line) as ScenarioEvidence;
+}
+
+interface EntryRenameReadyMarker {
+  stage: string;
+  pid: number;
+  context: { targetPath: string };
+}
+
+async function runEntryRenamePostFsKill(paths: IsolatedDesktopPaths): Promise<{
+  marker: EntryRenameReadyMarker;
+  probe: ScenarioEvidence;
+}> {
+  const binary = await resolveDesktopBinary();
+  const markerPath = `${paths.runtime}/reliability/history-fault.ready.json`;
+  const targetPath = `${paths.workspace}/post-fs-new`;
+  await rm(markerPath, { force: true });
+  const child = spawn(
+    binary,
+    [RELIABILITY_SCENARIO_FLAG, "entry-rename-post-fs-kill"],
+    {
+      detached: process.platform !== "win32",
+      env: isolatedDesktopEnvironment(paths, {
+        EXCALIDRAW_E2E_HISTORY_FAULT_STAGE: "after_rename_before_parent_sync",
+        EXCALIDRAW_E2E_HISTORY_FAULT_ARMED: "1",
+        EXCALIDRAW_E2E_HISTORY_FAULT_MODE: "kill",
+        EXCALIDRAW_E2E_HISTORY_OPERATION_ID: "t043-entry-rename-post-fs",
+        EXCALIDRAW_E2E_HISTORY_DOCUMENT_ID: "t043-entry-rename-document",
+        EXCALIDRAW_E2E_HISTORY_TARGET_PATH: targetPath,
+        EXCALIDRAW_E2E_HISTORY_FAULT_SEED: "t043-entry-rename-post-fs",
+      }),
+      stdio: ["ignore", "ignore", "pipe"],
+    },
+  );
+  child.stderr?.setEncoding("utf8");
+  let stderr = "";
+  child.stderr?.on("data", (chunk: string) => {
+    stderr = (stderr + chunk).slice(-16_384);
+  });
+  try {
+    const marker = await waitForEntryRenameMarker(child, markerPath, 15_000);
+    if (child.pid === undefined) {
+      throw new Error("post-FS rename child has no PID");
+    }
+    if (process.platform !== "win32") process.kill(-child.pid, "SIGKILL");
+    else child.kill("SIGKILL");
+    await waitForChildClose(child, 5_000);
+    if (child.signalCode !== "SIGKILL") {
+      throw new Error(
+        `post-FS rename child was not SIGKILLed: ${child.signalCode}`,
+      );
+    }
+    const probe = await runScenarioProcess(paths, "entry-rename-post-fs-probe");
+    return { marker, probe };
+  } catch (error) {
+    if (
+      child.exitCode === null &&
+      child.signalCode === null &&
+      child.pid !== undefined
+    ) {
+      try {
+        if (process.platform !== "win32") process.kill(-child.pid, "SIGKILL");
+        else child.kill("SIGKILL");
+      } catch {
+        // The child may have already exited while reporting the failure.
+      }
+    }
+    await waitForChildClose(child, 2_000).catch(() => undefined);
+    throw new Error(
+      `post-FS rename process evidence failed: ${error instanceof Error ? error.message : String(error)}${stderr ? `\napp stderr tail:\n${stderr}` : ""}`,
+      { cause: error },
+    );
+  }
+}
+
+async function waitForEntryRenameMarker(
+  child: ReturnType<typeof spawn>,
+  markerPath: string,
+  timeoutMs: number,
+): Promise<EntryRenameReadyMarker> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(
+        `post-FS rename exited before barrier (code=${child.exitCode}, signal=${child.signalCode})`,
+      );
+    }
+    try {
+      const marker = JSON.parse(
+        await readFile(markerPath, "utf8"),
+      ) as EntryRenameReadyMarker;
+      if (
+        marker.stage === "after_rename_before_parent_sync" &&
+        marker.pid > 0 &&
+        marker.context?.targetPath
+      ) {
+        return marker;
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(
+    `post-FS rename barrier did not arrive within ${timeoutMs} ms`,
+  );
+}
+
+async function waitForChildClose(
+  child: ReturnType<typeof spawn>,
+  timeoutMs: number,
+): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error(`child did not close within ${timeoutMs} ms`)),
+      timeoutMs,
+    );
+    child.once("close", () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
 }
 
 function nativeReliabilityBuildConfigured(): boolean {

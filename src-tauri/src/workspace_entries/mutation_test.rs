@@ -23,10 +23,11 @@ use crate::{
         types::HistoryVersionSource,
     },
     workspace_entries::{
+        history_replay_for_store,
         mutation_journal::{
-            apply_committed_record_with_history, journal_directory, load_journals,
-            reconcile_pending_mutations, save_journal, HistoryReplay, MutationJournalRecord,
-            UNCOMMITTED_JOURNAL_TTL,
+            apply_committed_record_with_history, filesystem_identity_for_path, journal_directory,
+            load_journals, reconcile_pending_mutations, save_journal, HistoryReplay,
+            MutationJournalRecord, UNCOMMITTED_JOURNAL_TTL,
         },
         DerivedStateFault, TrashOperator, WorkspaceEntryService, WorkspaceMutationGate,
     },
@@ -618,6 +619,268 @@ async fn v2_post_filesystem_pre_marker_crash_is_retained_for_repair() {
         .await
         .expect("read old index")
         .is_some());
+}
+
+#[tokio::test]
+async fn v3_post_filesystem_pre_marker_replay_promotes_only_matching_identity() {
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    let identity = filesystem_identity_for_path(&source).expect("capture source identity");
+    fs::rename(&source, &target).expect("commit filesystem rename");
+    let record = MutationJournalRecord::rename(
+        "post-filesystem-proven".to_owned(),
+        fixture.workspace_id.clone(),
+        source.display().to_string(),
+        target.display().to_string(),
+        "source.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+    )
+    .with_filesystem_identity(Some(identity));
+    save_journal(&fixture.recovery, &record).expect("save pre-marker journal");
+
+    reconcile_pending_mutations(&fixture.repository, &fixture.recovery)
+        .await
+        .expect("matching target identity must promote the rename");
+
+    assert!(load_journals(&fixture.recovery)
+        .expect("load completed journal")
+        .is_empty());
+    assert!(fixture
+        .repository
+        .file_index_get(target.display().to_string())
+        .await
+        .expect("read target index")
+        .is_some());
+}
+
+#[tokio::test]
+async fn v3_post_filesystem_pre_marker_replay_retains_unrelated_target() {
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    let identity = filesystem_identity_for_path(&source).expect("capture source identity");
+    fs::rename(&source, &target).expect("commit filesystem rename");
+    fs::remove_file(&target).expect("remove committed target");
+    fs::write(&target, scene_json("unrelated")).expect("replace target path independently");
+    let record = MutationJournalRecord::rename(
+        "post-filesystem-unrelated-target".to_owned(),
+        fixture.workspace_id.clone(),
+        source.display().to_string(),
+        target.display().to_string(),
+        "source.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+    )
+    .with_filesystem_identity(Some(identity));
+    save_journal(&fixture.recovery, &record).expect("save ambiguous journal");
+
+    let error = reconcile_pending_mutations(&fixture.repository, &fixture.recovery)
+        .await
+        .expect_err("replacement must remain pending");
+    assert!(matches!(
+        error,
+        crate::commands::error::AppError::HistoryOperationPending(operation)
+            if operation == "post-filesystem-unrelated-target"
+    ));
+    assert_eq!(journal_files(&fixture.recovery).len(), 1);
+}
+
+#[tokio::test]
+async fn v3_post_filesystem_pre_marker_replay_retains_recreated_old_path() {
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    let identity = filesystem_identity_for_path(&source).expect("capture source identity");
+    fs::rename(&source, &target).expect("commit filesystem rename");
+    fs::write(&source, scene_json("unrelated-old-path")).expect("recreate old path");
+    let record = MutationJournalRecord::rename(
+        "post-filesystem-recreated-old-path".to_owned(),
+        fixture.workspace_id.clone(),
+        source.display().to_string(),
+        target.display().to_string(),
+        "source.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+    )
+    .with_filesystem_identity(Some(identity));
+    save_journal(&fixture.recovery, &record).expect("save ambiguous journal");
+
+    let error = reconcile_pending_mutations(&fixture.repository, &fixture.recovery)
+        .await
+        .expect_err("recreated old path must remain pending");
+    assert!(matches!(
+        error,
+        crate::commands::error::AppError::HistoryOperationPending(operation)
+            if operation == "post-filesystem-recreated-old-path"
+    ));
+    assert_eq!(journal_files(&fixture.recovery).len(), 1);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn v3_post_filesystem_pre_marker_replay_retains_symlink_replacement() {
+    use std::os::unix::fs::symlink;
+
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    let identity = filesystem_identity_for_path(&source).expect("capture source identity");
+    fs::rename(&source, &target).expect("commit filesystem rename");
+    symlink(&target, &source).expect("replace old path with symlink");
+    let record = MutationJournalRecord::rename(
+        "post-filesystem-symlink-replacement".to_owned(),
+        fixture.workspace_id.clone(),
+        source.display().to_string(),
+        target.display().to_string(),
+        "source.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+    )
+    .with_filesystem_identity(Some(identity));
+    save_journal(&fixture.recovery, &record).expect("save ambiguous journal");
+
+    let error = reconcile_pending_mutations(&fixture.repository, &fixture.recovery)
+        .await
+        .expect_err("symlink replacement must remain pending");
+    assert!(matches!(
+        error,
+        crate::commands::error::AppError::HistoryOperationPending(operation)
+            if operation == "post-filesystem-symlink-replacement"
+    ));
+    assert_eq!(journal_files(&fixture.recovery).len(), 1);
+}
+
+#[tokio::test]
+async fn v2_post_filesystem_pre_marker_never_uses_path_inference() {
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    fs::rename(&source, &target).expect("commit filesystem rename");
+    let mut record = MutationJournalRecord::rename(
+        "v2-post-filesystem-ambiguous".to_owned(),
+        fixture.workspace_id.clone(),
+        source.display().to_string(),
+        target.display().to_string(),
+        "source.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+    );
+    record.version = 2;
+    save_journal(&fixture.recovery, &record).expect("save legacy v2 journal");
+
+    let error = reconcile_pending_mutations(&fixture.repository, &fixture.recovery)
+        .await
+        .expect_err("legacy v2 ambiguity must remain pending");
+    assert!(matches!(
+        error,
+        crate::commands::error::AppError::HistoryOperationPending(operation)
+            if operation == "v2-post-filesystem-ambiguous"
+    ));
+    assert_eq!(journal_files(&fixture.recovery).len(), 1);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn marked_rename_replay_rejects_target_symlink() {
+    use std::os::unix::fs::symlink;
+
+    let fixture = Fixture::new().await;
+    let source = fixture.seed_drawing("source.excalidraw", "source").await;
+    let target = fixture.drawing_path("target.excalidraw");
+    let outside = fixture.root.join("outside.excalidraw");
+    fs::write(&outside, scene_json("outside")).expect("write outside target");
+    symlink(&outside, &target).expect("create target symlink");
+    let history_store = Arc::new(
+        HistoryStore::open_version_history_root(&fixture.root.join("version-history"))
+            .expect("open history store"),
+    );
+    let mut record = MutationJournalRecord::rename(
+        "marked-target-symlink".to_owned(),
+        fixture.workspace_id.clone(),
+        source.display().to_string(),
+        target.display().to_string(),
+        "source.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+        "target.excalidraw".to_owned(),
+    )
+    .with_filesystem_committed(true)
+    .with_history_required(true);
+    record.parent_sync_applied = true;
+    record.sqlite_applied = true;
+    record.recovery_applied = true;
+    save_journal(&fixture.recovery, &record).expect("save marked journal");
+    let replay = history_replay_for_store(history_store);
+
+    let error = apply_committed_record_with_history(
+        &fixture.repository,
+        &fixture.recovery,
+        &mut record,
+        true,
+        true,
+        Some(&replay),
+    )
+    .await
+    .expect_err("target symlink must not be canonicalized");
+    assert!(matches!(
+        error,
+        crate::commands::error::AppError::HistoryOperationPending(operation)
+            if operation == "marked-target-symlink"
+    ));
+    assert_eq!(journal_files(&fixture.recovery).len(), 1);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn marked_directory_rename_replay_rejects_descendant_symlink() {
+    use std::os::unix::fs::symlink;
+
+    let fixture = Fixture::new().await;
+    let source = fixture.workspace.join("source-directory");
+    let target = fixture.workspace.join("target-directory");
+    let outside = fixture.root.join("outside-descendant.excalidraw");
+    fs::create_dir(&source).expect("create source directory");
+    fs::write(&outside, scene_json("outside")).expect("write outside descendant");
+    fs::rename(&source, &target).expect("commit directory rename");
+    symlink(&outside, target.join("linked.excalidraw")).expect("create descendant symlink");
+    let history_store = Arc::new(
+        HistoryStore::open_version_history_root(&fixture.root.join("version-history-descendant"))
+            .expect("open history store"),
+    );
+    let mut record = MutationJournalRecord::rename(
+        "marked-descendant-symlink".to_owned(),
+        fixture.workspace_id.clone(),
+        source.display().to_string(),
+        target.display().to_string(),
+        "source-directory".to_owned(),
+        "target-directory".to_owned(),
+        "target-directory".to_owned(),
+    )
+    .with_filesystem_committed(true)
+    .with_history_required(true);
+    record.parent_sync_applied = true;
+    record.sqlite_applied = true;
+    record.recovery_applied = true;
+    save_journal(&fixture.recovery, &record).expect("save marked directory journal");
+    let replay = history_replay_for_store(history_store);
+
+    let error = apply_committed_record_with_history(
+        &fixture.repository,
+        &fixture.recovery,
+        &mut record,
+        true,
+        true,
+        Some(&replay),
+    )
+    .await
+    .expect_err("descendant symlink must not be followed");
+    assert!(matches!(
+        error,
+        crate::commands::error::AppError::HistoryOperationPending(operation)
+            if operation == "marked-descendant-symlink"
+    ));
+    assert_eq!(journal_files(&fixture.recovery).len(), 1);
 }
 
 #[test]

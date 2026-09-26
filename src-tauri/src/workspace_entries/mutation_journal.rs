@@ -24,7 +24,8 @@ use crate::{
 };
 
 const JOURNAL_DIRECTORY_NAME: &str = "entry-mutation-journal";
-const JOURNAL_VERSION: u32 = 2;
+const JOURNAL_VERSION: u32 = 3;
+const HISTORY_PHASE_VERSION: u32 = 2;
 pub(crate) const UNCOMMITTED_JOURNAL_TTL: Duration = Duration::from_secs(60);
 
 #[cfg(test)]
@@ -45,6 +46,90 @@ pub enum MutationJournalKind {
     Delete,
 }
 
+/// Stable identity evidence for one filesystem object involved in a rename.
+/// Unix device/inode is the authoritative pair.  `is_directory` keeps a
+/// directory rename from being confused with a regular file, while
+/// `reliable=false` makes unsupported platforms fail closed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MutationFilesystemIdentity {
+    pub device: Option<u64>,
+    pub inode: Option<u64>,
+    pub is_directory: bool,
+    pub reliable: bool,
+}
+
+impl MutationFilesystemIdentity {
+    fn from_path(path: &Path) -> Option<Self> {
+        let metadata = fs::symlink_metadata(path).ok()?;
+        if metadata.file_type().is_symlink()
+            || (!metadata.file_type().is_file() && !metadata.file_type().is_dir())
+        {
+            return None;
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            Some(Self {
+                device: Some(metadata.dev()),
+                inode: Some(metadata.ino()),
+                is_directory: metadata.is_dir(),
+                reliable: true,
+            })
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = metadata;
+            Some(Self {
+                device: None,
+                inode: None,
+                is_directory: false,
+                reliable: false,
+            })
+        }
+    }
+
+    fn matches_path(&self, path: &Path) -> bool {
+        fs::symlink_metadata(path)
+            .ok()
+            .is_some_and(|metadata| self.matches_metadata(&metadata))
+    }
+
+    fn matches_metadata(&self, metadata: &fs::Metadata) -> bool {
+        if metadata.file_type().is_symlink()
+            || (!metadata.file_type().is_file() && !metadata.file_type().is_dir())
+        {
+            return false;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            self.reliable
+                && self.device.is_some()
+                && self.inode.is_some()
+                && self.device == Some(metadata.dev())
+                && self.inode == Some(metadata.ino())
+                && self.is_directory == metadata.is_dir()
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = metadata;
+            false
+        }
+    }
+
+    fn old_path_is_absent(&self, path: &Path) -> bool {
+        // A recreated path, even with a different inode, is ambiguous to the
+        // history path migrator.  Only a proven missing old locator allows
+        // replay to derive the old identity prefix safely.
+        matches!(
+            fs::symlink_metadata(path),
+            Err(error) if error.kind() == io::ErrorKind::NotFound
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MutationJournalRecord {
@@ -61,6 +146,11 @@ pub struct MutationJournalRecord {
     /// not carry this phase and retain their legacy path inference.
     #[serde(default)]
     pub filesystem_committed: bool,
+    /// The source object's identity captured immediately before an
+    /// application-owned rename.  A missing or unreliable value is never
+    /// replaced with path or content inference during replay.
+    #[serde(default)]
+    pub filesystem_identity: Option<MutationFilesystemIdentity>,
     pub sqlite_applied: bool,
     pub recovery_applied: bool,
     /// Stable history identity captured before a destructive delete. Rename
@@ -102,6 +192,7 @@ impl MutationJournalRecord {
             new_relative_path: Some(new_relative_path),
             new_display_name: Some(new_display_name),
             filesystem_committed: false,
+            filesystem_identity: None,
             sqlite_applied: false,
             recovery_applied: false,
             history_document_id: None,
@@ -128,6 +219,7 @@ impl MutationJournalRecord {
             new_relative_path: None,
             new_display_name: None,
             filesystem_committed: false,
+            filesystem_identity: None,
             sqlite_applied: false,
             recovery_applied: false,
             history_document_id: None,
@@ -152,6 +244,14 @@ impl MutationJournalRecord {
 
     pub fn with_filesystem_committed(mut self, committed: bool) -> Self {
         self.filesystem_committed = committed;
+        self
+    }
+
+    pub fn with_filesystem_identity(
+        mut self,
+        identity: Option<MutationFilesystemIdentity>,
+    ) -> Self {
+        self.filesystem_identity = identity;
         self
     }
 
@@ -256,7 +356,7 @@ pub fn load_journals(recovery: &RecoveryStore) -> Result<Vec<MutationJournalReco
                 path.display()
             )));
         }
-        if record.version < JOURNAL_VERSION {
+        if record.version < HISTORY_PHASE_VERSION {
             // v1 had no history phase. Keep the record durable until a
             // history owner probes and either migrates the existing identity
             // or reports a retryable/unavailable result.
@@ -322,6 +422,17 @@ pub async fn apply_committed_record_with_history(
     skip_recovery: bool,
     history_replay: Option<&HistoryReplay>,
 ) -> Result<(), AppError> {
+    if !record.filesystem_committed
+        && record.version >= JOURNAL_VERSION
+        && record.kind == MutationJournalKind::Rename
+        && rename_commit_proven(record)
+    {
+        // The filesystem rename is the user-visible commit.  Persist the
+        // inferred marker before repairing any derived state so a second
+        // replay observes the same phase boundary.
+        record.filesystem_committed = true;
+        save_journal(recovery, record)?;
+    }
     if !filesystem_commit_observed(record) {
         if uncommitted_filesystem_state_is_safe_to_drop(record) {
             if uncommitted_journal_is_stale(recovery, record) {
@@ -329,7 +440,7 @@ pub async fn apply_committed_record_with_history(
             }
             return Ok(());
         }
-        if record.version >= JOURNAL_VERSION {
+        if record.version >= HISTORY_PHASE_VERSION {
             return Err(AppError::HistoryOperationPending(
                 record.operation_id.clone(),
             ));
@@ -375,7 +486,7 @@ pub async fn apply_committed_record_with_history(
     // stranded behind the legacy two-phase completion path. Without a
     // history owner, preserve the legacy behavior unless the record explicitly
     // requires the new phase.
-    let legacy_history_probe = record.version < JOURNAL_VERSION;
+    let legacy_history_probe = record.version < HISTORY_PHASE_VERSION;
     if record.sqlite_applied
         && record.recovery_applied
         && (record.history_pending() || legacy_history_probe)
@@ -453,6 +564,12 @@ pub(crate) fn filesystem_commit_observed(record: &MutationJournalRecord) -> bool
     if record.version >= JOURNAL_VERSION {
         return record.filesystem_committed;
     }
+    if record.version >= HISTORY_PHASE_VERSION {
+        // v2 has an explicit marker but no pre-rename identity.  An
+        // unmarked record is therefore ambiguous and must not use path
+        // existence as a commit proof.
+        return record.filesystem_committed;
+    }
     let old = PathBuf::from(&record.old_canonical_path);
     match record.kind {
         MutationJournalKind::Rename => {
@@ -466,13 +583,33 @@ pub(crate) fn filesystem_commit_observed(record: &MutationJournalRecord) -> bool
     }
 }
 
-/// A v2 journal may be removed after TTL only when the filesystem still
+/// Capture the identity of the object at a rename source before the source
+/// path is changed.  `symlink_metadata` deliberately rejects a symlink itself
+/// as an identity witness; following a replacement symlink would make replay
+/// accept an object merely reachable through the old path.
+pub(crate) fn filesystem_identity_for_path(path: &Path) -> Option<MutationFilesystemIdentity> {
+    MutationFilesystemIdentity::from_path(path)
+}
+
+fn rename_commit_proven(record: &MutationJournalRecord) -> bool {
+    let Some(identity) = record.filesystem_identity.as_ref() else {
+        return false;
+    };
+    let Some(new_path) = record.new_canonical_path.as_deref() else {
+        return false;
+    };
+
+    identity.matches_path(Path::new(new_path))
+        && identity.old_path_is_absent(Path::new(&record.old_canonical_path))
+}
+
+/// A v2/v3 journal may be removed after TTL only when the filesystem still
 /// proves that the mutation never started. Once the old path disappears, the
 /// process may have committed the mutation immediately before a crash and
 /// before the durable marker was written; retaining the journal is fail-closed
 /// in that ambiguous state.
 fn uncommitted_filesystem_state_is_safe_to_drop(record: &MutationJournalRecord) -> bool {
-    if record.version < JOURNAL_VERSION {
+    if record.version < 2 {
         return true;
     }
     let old = PathBuf::from(&record.old_canonical_path);
