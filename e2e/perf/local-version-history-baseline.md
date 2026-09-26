@@ -111,6 +111,8 @@ comparability:
 
 2026-09-26 修正 T024 fixture 时间基准后，以产品提交 `b6fca0d77d2b3e9d06b7f866fbd6ff79eaa56766` 的 test-only binary（SHA-256 `c43012c081fc8d9616194bc61db1eceb9eb693ebaf896419d44353e03acfab49`）运行一次 history 专项工作负载 smoke，1/1 PASS。原始 JSON 为 `/private/tmp/history-t049-smoke-b6fca0d.json`（SHA-256 `4a3801de9054784b5bf29f4d7d34bea72dc4cd410cf5ee9faa19ca902ed38f37`）：20 条池、A→B→A、恢复后场景与图片哈希、资源和 GC 检查均通过；单次旅程耗时 `1913.049167 ms`，仅为描述值。第一次调用遗漏 `PERF_TEST=1`，Playwright 报 `No tests found`，未进入产品旅程；加上该配置开关后才产生上述报告。该报告的 `executionEnvironment.type` 为 `unspecified`，未做基线／候选配对、进程树资源采样或规定 VM 运行，`verdict.overall` 仍为 `not_evaluated`；它只解除先前 smoke 的功能失败，不构成 T049 性能验收。
 
+正式配对前的只读报告审计还发现：`startup-idle.spec.ts`、`canvas-io.spec.ts`、`edit-soak.spec.ts` 当前均未向报告写入本文件要求的 `binary` 路径/完整 SHA-256；`report.schema.json` 为兼容旧报告将该字段设为 optional。有效 T049 报告需要同一口径的可审计补全方法，并分别绑定实际基线与候选 checkout 的 commit 和 binary，不能运行基线 binary 却写候选 commit。此缺口和下述 VM 配置不符均未解决，正式预算仍为 `not_evaluated`。
+
 2026-09-26 T049 候选工作负载 smoke 已启动，但实际 test-only 前端 A→B→A 旅程在 `frontendB` 收到 `HISTORY_UNAVAILABLE`，没有生成可比较的性能 JSON。当前候选 `ab67c3c43ee69ae32a040bb3e6f9c762807d8c3c` 的测试专用二进制 SHA-256 为 `0a24d93a280c7db4c0231a3a244dcdd70928f76b5f998c8b2c64c622a6b654ba`；失败根 `/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-7W21bo` 含 `history-restart-failure.json` 和前端状态。该 smoke 是实际失败，不得计作性能样本；T049 的预算 verdict 仍为 `not_evaluated`。修复旅程后仍须完成物理机基线/候选配对与规定 VM 的测量。
 
 2026-09-25 只读环境审计：本机 `prlctl --version` 返回 `27.0.1 (58670)`；名为 `macOS26.5.2` 的 VM 处于 suspended 状态，`prlctl list -i` 显示 4 vCPU、12288 MB 内存。该名称不证明 guest 的实际 OS/build。Parallels 版本与声明的 `26.4.1`、VM 内存与声明的约 8 GiB 均不符；未恢复或修改 VM，未运行参考测量。当前环境不能进入既定 reference series，也不能把它的结果与旧系列直接配对。

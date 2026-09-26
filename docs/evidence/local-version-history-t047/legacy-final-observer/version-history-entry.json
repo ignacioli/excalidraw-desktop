@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "native-entrypoints",
+  "gateId": "T023b",
+  "route": "macos-accessibility",
+  "binding": {
+    "productCommit": "55458f23e4a50c02bff7d85de550b74dca163c37",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "b1992761c187044223ab05e5c367b65e0b03e276bf1c8a805a323c0af91ef48d",
+    "packageArtifactSha256": "f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f",
+    "nativeEntrypointProfileSha256": "13b35ba878386b033d0587f1794ff44034622563880a686fa3b3ee4c990da972",
+    "productIdentity": {
+      "runtimeInputsSha256": "973e32b052b73f1eae6abd4082f2d43027962f10e7e0bfcf2986e037165fa2e0",
+      "packageArtifactSha256": "f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f",
+      "bundleIdentifier": "excalidraw-desktop",
+      "version": "0.3.0"
+    },
+    "validatorIdentity": {
+      "producer": "native-macos-validation",
+      "version": "4",
+      "sourceSha256": "c6cbe3c867d4c47dccc0e3beec1069d432264562c10d82ec14d169a138ac16f1",
+      "schemaVersion": 3
+    },
+    "attemptIdentity": {
+      "attemptId": "T023b-004-retry-4df09e3",
+      "gate": "T023b",
+      "platform": "macos",
+      "inputSha256": "9ba015533666b5ff75ae39e33e58fee64573085db69ecd83f7ef960c26ac67c1"
+    },
+    "namedChangeSincePreviousAttempt": {
+      "changeId": "T047-early-block-report-repair",
+      "producer": "native-macos-validation",
+      "beforeSha256": "d4e0e1b68c00241b369c65bedf07f058e109d5e65ecd3d60e761243dc8dc2b18",
+      "afterSha256": "c6cbe3c867d4c47dccc0e3beec1069d432264562c10d82ec14d169a138ac16f1"
+    },
+    "rootCauseClass": "HARNESS",
+    "consecutiveFailureCount": 0,
+    "proofScope": "final",
+    "remediationEpoch": 0,
+    "reopenDecision": null,
+    "repairTarget": null
+  },
+  "action": {
+    "checkId": "version-history-route",
+    "command": "versionHistory",
+    "validationId": null,
+    "result": "BLOCKED"
+  },
+  "targetDocumentBinding": {
+    "launchMode": "single-normal-open-argument",
+    "path": "/private/tmp/history-t047-55458f2-run-75xElw/fixture/workspace/flows/Checkout Flow.excalidraw",
+    "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+    "byteLength": 235
+  },
+  "result": "BLOCKED"
+}

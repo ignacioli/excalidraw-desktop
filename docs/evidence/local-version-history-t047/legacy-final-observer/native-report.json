@@ -1,0 +1,395 @@
+{
+  "schemaVersion": 1,
+  "command": "validate",
+  "status": "FAIL",
+  "startedAt": "2026-09-26T09:40:27.129Z",
+  "finishedAt": "2026-09-26T09:51:59.006Z",
+  "manifestPath": "/private/tmp/history-t047-55458f2-manifest.json",
+  "checks": [
+    {
+      "id": "manifest",
+      "label": "read sealed package manifest",
+      "path": "/private/tmp/history-t047-55458f2-manifest.json",
+      "status": "PASS"
+    },
+    {
+      "id": "disposable-profile",
+      "label": "nonce-bound prepared T023b profile",
+      "profileRoot": "/private/tmp/history-t047-55458f2-run-75xElw/profiles/T023b",
+      "launchDocument": "/private/tmp/history-t047-55458f2-run-75xElw/fixture/workspace/flows/Checkout Flow.excalidraw",
+      "nativeEntrypointProfileSha256": "13b35ba878386b033d0587f1794ff44034622563880a686fa3b3ee4c990da972",
+      "status": "PASS"
+    },
+    {
+      "id": "artifact-identity",
+      "label": "manifest and package identity",
+      "observed": {
+        "appPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app",
+        "bundleIdentifier": "excalidraw-desktop",
+        "version": "0.3.0",
+        "buildVersion": "0.3.0",
+        "executable": "excalidraw-desktop",
+        "executablePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app/Contents/MacOS/excalidraw-desktop",
+        "executableSha256": "7ef5956afe65549602bbb05dfdf73f2944d754fad777dcbd4abbcd84b9fdeb35",
+        "packageSha256": "f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f",
+        "artifactSha256": "f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f",
+        "artifacts": [
+          {
+            "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app",
+            "sha256": "f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f",
+            "kind": "app"
+          }
+        ],
+        "repositoryCommit": "4df09e3377838d722e0d61a61f2ce65a65439af6"
+      },
+      "status": "PASS"
+    },
+    {
+      "id": "production-bundle-contract",
+      "label": "canonical package path and tauri.conf.json metadata",
+      "expected": {
+        "appPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app",
+        "bundleIdentifier": "excalidraw-desktop",
+        "version": "0.3.0",
+        "executable": "excalidraw-desktop"
+      },
+      "observed": {
+        "appPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app",
+        "bundleIdentifier": "excalidraw-desktop",
+        "version": "0.3.0",
+        "executable": "excalidraw-desktop"
+      },
+      "mismatches": [],
+      "status": "PASS"
+    },
+    {
+      "id": "product-identity",
+      "label": "runtime product identity across package and validator provenance",
+      "packageProvenanceCommit": "55458f23e4a50c02bff7d85de550b74dca163c37",
+      "validatorProvenanceCommit": "4df09e3377838d722e0d61a61f2ce65a65439af6",
+      "sameCommit": false,
+      "expectedRuntimeInputsSha256": "973e32b052b73f1eae6abd4082f2d43027962f10e7e0bfcf2986e037165fa2e0",
+      "sealedRuntimeInputsSha256": "973e32b052b73f1eae6abd4082f2d43027962f10e7e0bfcf2986e037165fa2e0",
+      "currentRuntimeInputsSha256": "973e32b052b73f1eae6abd4082f2d43027962f10e7e0bfcf2986e037165fa2e0",
+      "status": "PASS"
+    },
+    {
+      "id": "clean-worktree",
+      "label": "clean repository at validation time",
+      "gitStatus": "",
+      "status": "PASS"
+    },
+    {
+      "id": "macOS-environment",
+      "label": "macOS version and architecture",
+      "observed": {
+        "productVersion": "26.6.2",
+        "architecture": "arm64",
+        "displayBackingScale": 2
+      },
+      "status": "PASS"
+    },
+    {
+      "id": "process-safety",
+      "label": "no ambiguous existing app process",
+      "status": "PASS"
+    },
+    {
+      "id": "display-scale",
+      "label": "active display backing scale",
+      "observed": 2,
+      "status": "PASS"
+    },
+    {
+      "id": "native-menu",
+      "label": "native menu hierarchy, labels, enabled state, keyboard equivalents",
+      "items": [
+        {
+          "path": [
+            "File",
+            "Save"
+          ],
+          "pass": true,
+          "labelMatches": true,
+          "enabled": true,
+          "keyboardMatches": true,
+          "expected": {
+            "label": "Save",
+            "enabled": true,
+            "keyboard": {
+              "character": "s",
+              "modifiers": [
+                "command"
+              ]
+            }
+          },
+          "observed": {
+            "label": "Save",
+            "enabled": true,
+            "keyboard": {
+              "character": "s",
+              "modifiers": [
+                "command"
+              ]
+            }
+          }
+        },
+        {
+          "path": [
+            "File",
+            "Export Image"
+          ],
+          "pass": true,
+          "labelMatches": true,
+          "enabled": true,
+          "keyboardMatches": true,
+          "expected": {
+            "label": "Export Image",
+            "enabled": true,
+            "keyboard": {
+              "character": "e",
+              "modifiers": [
+                "command",
+                "option"
+              ]
+            }
+          },
+          "observed": {
+            "label": "Export Image",
+            "enabled": true,
+            "keyboard": {
+              "character": "e",
+              "modifiers": [
+                "command",
+                "option"
+              ]
+            }
+          }
+        },
+        {
+          "path": [
+            "View",
+            "Appearance",
+            "System"
+          ],
+          "pass": true,
+          "labelMatches": true,
+          "enabled": true,
+          "keyboardMatches": true,
+          "expected": {
+            "label": "System",
+            "enabled": true,
+            "keyboard": null
+          },
+          "observed": {
+            "label": "System",
+            "enabled": true,
+            "keyboard": null
+          }
+        },
+        {
+          "path": [
+            "View",
+            "Appearance",
+            "Light"
+          ],
+          "pass": true,
+          "labelMatches": true,
+          "enabled": true,
+          "keyboardMatches": true,
+          "expected": {
+            "label": "Light",
+            "enabled": true,
+            "keyboard": null
+          },
+          "observed": {
+            "label": "Light",
+            "enabled": true,
+            "keyboard": null
+          }
+        },
+        {
+          "path": [
+            "View",
+            "Appearance",
+            "Dark"
+          ],
+          "pass": true,
+          "labelMatches": true,
+          "enabled": true,
+          "keyboardMatches": true,
+          "expected": {
+            "label": "Dark",
+            "enabled": true,
+            "keyboard": null
+          },
+          "observed": {
+            "label": "Dark",
+            "enabled": true,
+            "keyboard": null
+          }
+        },
+        {
+          "path": [
+            "File",
+            "Version History…"
+          ],
+          "pass": false,
+          "labelMatches": true,
+          "enabled": false,
+          "keyboardMatches": true,
+          "expected": {
+            "label": "Version History…",
+            "enabled": true,
+            "keyboard": null
+          },
+          "observed": {
+            "label": "Version History…",
+            "enabled": false,
+            "keyboard": null
+          }
+        }
+      ],
+      "status": "FAIL"
+    },
+    {
+      "id": "window-geometry",
+      "label": "requested native window geometry",
+      "expected": {
+        "width": 1280,
+        "height": 760
+      },
+      "observed": {
+        "launch": {
+          "x": 276,
+          "y": 92,
+          "width": 800,
+          "height": 600
+        },
+        "requested": {
+          "x": 0,
+          "y": 30,
+          "width": 1280,
+          "height": 760
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "id": "save-keyboard",
+      "label": "physical-keyboard invocation: save",
+      "command": "save",
+      "error": "physical Command-S was not observed",
+      "status": "BLOCKED"
+    },
+    {
+      "id": "save-menu",
+      "label": "menu invocation: save",
+      "command": "save",
+      "validationId": 1,
+      "status": "PASS"
+    },
+    {
+      "id": "export-menu",
+      "label": "menu invocation: exportImage",
+      "command": "exportImage",
+      "validationId": 2,
+      "status": "PASS"
+    },
+    {
+      "id": "export-keyboard",
+      "label": "keyboard invocation: exportImage",
+      "command": "exportImage",
+      "validationId": 3,
+      "status": "PASS"
+    },
+    {
+      "id": "appearance-system",
+      "label": "menu invocation: appearanceSystem",
+      "command": "appearanceSystem",
+      "validationId": 4,
+      "status": "PASS"
+    },
+    {
+      "id": "appearance-light",
+      "label": "menu invocation: appearanceLight",
+      "command": "appearanceLight",
+      "validationId": 5,
+      "status": "PASS"
+    },
+    {
+      "id": "appearance-dark",
+      "label": "menu invocation: appearanceDark",
+      "command": "appearanceDark",
+      "validationId": 6,
+      "status": "PASS"
+    },
+    {
+      "id": "version-history-route",
+      "label": "native Version History menu route for the launched document",
+      "command": "versionHistory",
+      "targetDocumentBinding": {
+        "launchMode": "single-normal-open-argument",
+        "path": "/private/tmp/history-t047-55458f2-run-75xElw/fixture/workspace/flows/Checkout Flow.excalidraw",
+        "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+        "byteLength": 235
+      },
+      "error": "Timed out waiting for nativeEntry/applicationRoute probe: versionHistory",
+      "status": "FAIL"
+    },
+    {
+      "id": "state-preparation",
+      "label": "digest-bound normal-open fixture remains unchanged",
+      "launchMode": "normal-open-argument",
+      "path": "/private/tmp/history-t047-55458f2-run-75xElw/fixture/workspace/flows/Checkout Flow.excalidraw",
+      "sha256Before": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "sha256After": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "byteLength": 235,
+      "status": "PASS"
+    }
+  ],
+  "manifest": {
+    "schemaVersion": 1,
+    "gitCommit": "55458f23e4a50c02bff7d85de550b74dca163c37",
+    "buildCommand": [
+      "pnpm",
+      "tauri",
+      "build",
+      "--bundles",
+      "app"
+    ],
+    "builtAt": "2026-09-26T09:33:22.370Z",
+    "repositoryRoot": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history",
+    "expectedWindowSize": {
+      "width": 1280,
+      "height": 760
+    },
+    "buildEnvironment": {
+      "productVersion": "26.6.2",
+      "architecture": "arm64"
+    },
+    "appPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app",
+    "bundleIdentifier": "excalidraw-desktop",
+    "version": "0.3.0",
+    "buildVersion": "0.3.0",
+    "executable": "excalidraw-desktop",
+    "executablePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app/Contents/MacOS/excalidraw-desktop",
+    "executableSha256": "7ef5956afe65549602bbb05dfdf73f2944d754fad777dcbd4abbcd84b9fdeb35",
+    "packageSha256": "f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f",
+    "artifactSha256": "f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f",
+    "artifacts": [
+      {
+        "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app",
+        "sha256": "f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f",
+        "kind": "app"
+      }
+    ],
+    "repositoryCommit": "55458f23e4a50c02bff7d85de550b74dca163c37"
+  },
+  "environment": {
+    "productVersion": "26.6.2",
+    "architecture": "arm64",
+    "displayBackingScale": 2
+  },
+  "nativeEntrypointProfileSha256": "13b35ba878386b033d0587f1794ff44034622563880a686fa3b3ee4c990da972"
+}
