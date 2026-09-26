@@ -40,13 +40,13 @@ The design approvals above are complete. A qualifying visual verdict still
 requires a freshly built exact macOS production `.app`, a stable 1280 × 760
 window, and a human visual review on that package. A production `.app` for
 `66e5b77` has been sealed, but it has no native window collection or human
-visual review. Later product commits require a fresh package binding.
+visual review. The current code checkpoint `01977ec` requires a fresh package binding.
 
 ### Package binding to record before review
 
 | Fact               | Required record                                               | Current status                                                                                                                                                                                                     |
 | ------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Product commit     | Full `git rev-parse HEAD`                                     | `66e5b77e1ab5a38a9c55a1a3a9a0d3622c4bfe07` is the implementation checkpoint; package must be rebuilt from the exact reviewed commit                                                                                |
+| Product commit     | Full `git rev-parse HEAD`                                     | `01977ec` is the current code checkpoint; package must be rebuilt from the exact reviewed commit                                                                                |
 | Production package | Absolute `.app` path, bundle ID, version                      | Intermediate seal for `66e5b77`: `Excalidraw.app`, bundle ID `excalidraw-desktop`, version `0.3.0`, package SHA-256 `336531060a938b10480f5126b1c5fac518abf5a36134de7c16c4e709b408dcea`; no visual collection bound |
 | Executable         | Absolute executable path and SHA-256                          | Intermediate production executable SHA-256 `718347d8ff1e2990e8f6c1c1e6eabd606a011515b1c67c33a22024de838e6701`; no visual collection bound                                                                          |
 | Environment        | macOS version/build, filesystem, display scale                | `BLOCKED`: no package review session recorded                                                                                                                                                                      |

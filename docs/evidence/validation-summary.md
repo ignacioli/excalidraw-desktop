@@ -2,12 +2,12 @@
 
 ## Feature 004 当前最新状态（T048 视觉门控，2026-09-25）
 
-Phase 6 的 T038–T042、T044 已完成局部实现/测试，但 T043 的真实 post-FS/pre-marker SIGKILL、fresh-process 重挂授权与部分失败后修复仍缺证据，用户故事 4 检查点为 **`PENDING`**。Phase 7 已完成 T045/T046 的实现，T047/T048 均未取得最终运行验收。
+Phase 6 的 T038–T044 已完成，用户故事 4 检查点为 **`PASS`（产品实现及真实进程可靠性范围）**。产品代码提交 `01977ec` 的 test-only release binary SHA-256 为 `585ad9ae4731838e480d876d70af2571af9fdd61bc1f02d1e368df134f250496`；故障与生命周期真实进程测试共 36/36 PASS，Rust 205 个库测试及全部 integration suites PASS。具体证明和边界见 [`local-version-history-t038-t044.md`](./local-version-history-t038-t044.md)。Phase 7 已完成 T045/T046 的实现，T047/T048 均未取得最终运行验收。
 
-产品实现已推进到 `66e5b77e1ab5a38a9c55a1a3a9a0d3622c4bfe07`，Phase 7 的
+产品实现已推进到 `01977ec`；Phase 7 的
 T045/T046 已完成，T047 的收集器结构测试已通过；T048 的生产包人工视觉
 验收仍为 **`BLOCKED` / `PENDING`**。低保真和必要高保真设计审批已完成，
-`66e5b77` 的 production `.app` 已 seal（包 SHA-256 `336531060a938b10480f5126b1c5fac518abf5a36134de7c16c4e709b408dcea`），但当前没有与它绑定的 1280 × 760 原生窗口
+先前 `66e5b77` 的 production `.app` 已 seal（包 SHA-256 `336531060a938b10480f5126b1c5fac518abf5a36134de7c16c4e709b408dcea`），但它早于当前产品代码提交，需要重建；当前没有与新提交绑定的 1280 × 760 原生窗口
 记录、独立视觉 reviewer verdict 或 product-owner decision，因此本节不声称
 Light/Dark、列表可读性、当前／预览区分、错误状态、焦点或裁切已经通过。
 
@@ -31,8 +31,8 @@ fidelity，三者不合并为单一验收。
 
 | 项目 | 当前记录 |
 | --- | --- |
-| Reviewed product commit | `66e5b77e1ab5a38a9c55a1a3a9a0d3622c4bfe07` |
-| Production `.app` path / bundle identity | `src-tauri/target/release/bundle/macos/Excalidraw.app` 已针对 `66e5b77` seal；bundle ID `excalidraw-desktop`、版本 `0.3.0`、包 SHA-256 `336531060a938b10480f5126b1c5fac518abf5a36134de7c16c4e709b408dcea`；未绑定视觉 collection，后续产品提交需重建 |
+| Reviewed product commit | `01977ec`（代码检查点；尚无精确 production package） |
+| Production `.app` path / bundle identity | `src-tauri/target/release/bundle/macos/Excalidraw.app` 曾针对 `66e5b77` seal；bundle ID `excalidraw-desktop`、版本 `0.3.0`、包 SHA-256 `336531060a938b10480f5126b1c5fac518abf5a36134de7c16c4e709b408dcea`；该 seal 已过时，当前候选须重建 |
 | Native executable | production `.app` 内可执行文件 SHA-256 `718347d8ff1e2990e8f6c1c1e6eabd606a011515b1c67c33a22024de838e6701`；未运行 T048 视觉 collection |
 | Exact native window | **未记录** 1280 × 760 两次稳定采样 |
 | Independent visual reviewer report | **未记录** |
