@@ -6,12 +6,14 @@ Phase 6 的 T038–T044 已完成，用户故事 4 检查点为 **`PASS`（产�
 
 ### T051 生产 Harness 边界预检
 
-`9ac3135` 的无 `e2e-harness` production `.app` 曾通过封存（包 SHA-256 `1d3ed8785e52064cd0bff2db44eb3b4fca3cc11bd86e6c2e6ed26126967bf676`，可执行文件 SHA-256 `c2d4da17df7c16f9037324258bff54906b756c0741c3b9cc363773106b624f05`）。该可执行文件的故障命令及 History restart driver token 缺席测试 2/2 PASS；实际启动的 production 进程忽略 `EXCALIDRAW_PERF_CONTROL_DIR` 1/1 PASS。首次进程探针受沙箱 `ps` 权限限制而未执行到产品断言，授权后重跑通过。`src-tauri/capabilities/` 相对 `origin/main` 无差异，`e2e_harness` 模块及命令注册受 Cargo feature gate 限制；现有生命周期重挂测试另行覆盖授权路径。后续产品提交仍需重新封存精确候选包，T051 目前不作最终完成声明。
+**T051：PASS（production `.app` 与测试入口隔离范围）。** 产品提交 `a4262f7e45d7840bfdd595b2132fe207b3435a10` 的无 `e2e-harness` production `.app` 以 `pnpm tauri build --bundles app` 封存通过；manifest 位于 `/private/tmp/history-t047-current-uug7DR/final-manifest.json`，包 SHA-256 `1d3ed8785e52064cd0bff2db44eb3b4fca3cc11bd86e6c2e6ed26126967bf676`，可执行文件 SHA-256 `c2d4da17df7c16f9037324258bff54906b756c0741c3b9cc363773106b624f05`。该精确可执行文件的故障命令及 History restart driver token 缺席测试 2/2 PASS；实际启动的 production 进程忽略 `EXCALIDRAW_PERF_CONTROL_DIR` 1/1 PASS。首次进程探针受沙箱 `ps` 权限限制而未执行到产品断言，授权后重跑通过。
 
-产品实现已推进到 `01977ec`；Phase 7 的
+`src-tauri/capabilities/` 相对 `origin/main` 无差异；`e2e_harness` 模块及故障命令注册仅在 Cargo feature 下编译，生产命令仍经过既有后端授权。测试专用 release binary SHA-256 `585ad9ae4731838e480d876d70af2571af9fdd61bc1f02d1e368df134f250496` 已运行生命周期及故障进程测试 36/36 PASS，其中重挂需重新授权且同路径新 inode 被拒绝。未限定 bundle 的 test-only `pnpm tauri build --features e2e-harness` 曾在 DMG 包装阶段失败，但测试二进制已编译并运行；DMG 不参与本 `.app` 边界结论。T047 原生菜单、T048 人工视觉与性能各有独立门控。
+
+产品证据候选已推进到 `a4262f7`；Phase 7 的
 T045/T046 已完成，T047 的收集器结构测试已通过；T048 的生产包人工视觉
 验收仍为 **`BLOCKED` / `PENDING`**。低保真和必要高保真设计审批已完成，
-先前 `66e5b77` 的 production `.app` 已 seal（包 SHA-256 `336531060a938b10480f5126b1c5fac518abf5a36134de7c16c4e709b408dcea`），但它早于当前产品代码提交，需要重建；当前没有与新提交绑定的 1280 × 760 原生窗口
+`a4262f7` 的 production `.app` 已 seal（包 SHA-256 `1d3ed8785e52064cd0bff2db44eb3b4fca3cc11bd86e6c2e6ed26126967bf676`），FINAL 准备计划 PASS；但当前没有与精确包绑定的 1280 × 760 原生窗口
 记录、独立视觉 reviewer verdict 或 product-owner decision，因此本节不声称
 Light/Dark、列表可读性、当前／预览区分、错误状态、焦点或裁切已经通过。
 
@@ -35,9 +37,9 @@ fidelity，三者不合并为单一验收。
 
 | 项目 | 当前记录 |
 | --- | --- |
-| Reviewed product commit | `01977ec`（代码检查点；尚无精确 production package） |
-| Production `.app` path / bundle identity | `src-tauri/target/release/bundle/macos/Excalidraw.app` 曾针对 `66e5b77` seal；bundle ID `excalidraw-desktop`、版本 `0.3.0`、包 SHA-256 `336531060a938b10480f5126b1c5fac518abf5a36134de7c16c4e709b408dcea`；该 seal 已过时，当前候选须重建 |
-| Native executable | production `.app` 内可执行文件 SHA-256 `718347d8ff1e2990e8f6c1c1e6eabd606a011515b1c67c33a22024de838e6701`；未运行 T048 视觉 collection |
+| Reviewed product commit | `a4262f7e45d7840bfdd595b2132fe207b3435a10`（精确 production package 的产品提交） |
+| Production `.app` path / bundle identity | `src-tauri/target/release/bundle/macos/Excalidraw.app` 已 seal；bundle ID `excalidraw-desktop`、版本 `0.3.0`、包 SHA-256 `1d3ed8785e52064cd0bff2db44eb3b4fca3cc11bd86e6c2e6ed26126967bf676`；manifest `/private/tmp/history-t047-current-uug7DR/final-manifest.json` |
+| Native executable | production `.app` 内可执行文件 SHA-256 `c2d4da17df7c16f9037324258bff54906b756c0741c3b9cc363773106b624f05`；未运行 T048 视觉 collection |
 | Exact native window | **未记录** 1280 × 760 两次稳定采样 |
 | Independent visual reviewer report | **未记录** |
 | Product-owner decision | **未记录** |

@@ -2,17 +2,17 @@
 
 ## 当前状态
 
-公共双语文档和 IPC v3 说明已更新；生产 AppShell 已接入唯一 `File → Version History…` 菜单路由、当前文档列表与独立只读预览。T047 的 macOS Accessibility 收集器已扩展，但精确生产包实测尚未执行；因此本文件不声称原生菜单验收通过。
+公共双语文档和 IPC v3 说明已更新；生产 AppShell 已接入唯一 `File → Version History…` 菜单路由、当前文档列表与独立只读预览。T047 的 macOS Accessibility 收集器已扩展，产品提交 `a4262f7e45d7840bfdd595b2132fe207b3435a10` 的 production `.app` 已封存 PASS，包 SHA-256 `1d3ed8785e52064cd0bff2db44eb3b4fca3cc11bd86e6c2e6ed26126967bf676`；FINAL 准备计划 `/private/tmp/history-t047-current-uug7DR/final-run-jcdg88/final-plan.json` 亦 PASS。实体 Command-S 与精确包原生菜单采集尚未执行；因此本文件不声称原生菜单验收通过。
 
 ## 已执行检查
 
-| 检查 | 结果 | 边界 |
-| --- | --- | --- |
-| `pnpm test` | 58 files / 465 tests PASS | AppShell、HistoryPanel、只读预览、IPC 与既有前端回归 |
-| `pnpm lint`、`pnpm build` | PASS | ESLint、严格 TypeScript 与生产前端构建 |
-| `cargo test --manifest-path src-tauri/Cargo.toml native_menu --lib -q` | 6/6 PASS | 原生菜单命令 ID 与事件契约 |
-| `node --test scripts/native-macos-validation.test.mjs` | 23/23 PASS | T047 收集器的结构、菜单探测、路由绑定与 BLOCKED 分支 |
-| `e2e/tests/local-version-history-production-preview.spec.ts` | Chromium browser 2/2 PASS | 生产 AppShell 的菜单事件、独立预览、恢复启用门槛和切换文档后的旧响应丢弃 |
+| 检查                                                                   | 结果                      | 边界                                                                     |
+| ---------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------ |
+| `pnpm test`                                                            | 58 files / 465 tests PASS | AppShell、HistoryPanel、只读预览、IPC 与既有前端回归                     |
+| `pnpm lint`、`pnpm build`                                              | PASS                      | ESLint、严格 TypeScript 与生产前端构建                                   |
+| `cargo test --manifest-path src-tauri/Cargo.toml native_menu --lib -q` | 6/6 PASS                  | 原生菜单命令 ID 与事件契约                                               |
+| `node --test scripts/native-macos-validation.test.mjs`                 | 23/23 PASS                | T047 收集器的结构、菜单探测、路由绑定与 BLOCKED 分支                     |
+| `e2e/tests/local-version-history-production-preview.spec.ts`           | Chromium browser 2/2 PASS | 生产 AppShell 的菜单事件、独立预览、恢复启用门槛和切换文档后的旧响应丢弃 |
 
 浏览器注入的 `native-menu-command` 只证明 WebView 路由，不能证明 macOS 菜单实际层级、可访问性状态或物理点击。T047 仍需把精确生产包、准备计划、唯一打开文档和独立菜单收集报告绑定后运行。
 

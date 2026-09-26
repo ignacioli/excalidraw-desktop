@@ -38,20 +38,20 @@ The approved Penpot page contains six necessary high-fidelity frames. The low-fi
 
 The design approvals above are complete. A qualifying visual verdict still
 requires a freshly built exact macOS production `.app`, a stable 1280 × 760
-window, and a human visual review on that package. A production `.app` for
-`66e5b77` has been sealed, but it has no native window collection or human
-visual review. The current code checkpoint `01977ec` requires a fresh package binding.
+window, and a human visual review on that package. The production `.app` for
+`a4262f7` has been sealed, but it has no native window collection or human
+visual review.
 
 ### Package binding to record before review
 
-| Fact               | Required record                                               | Current status                                                                                                                                                                                                     |
-| ------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Product commit     | Full `git rev-parse HEAD`                                     | `01977ec` is the current code checkpoint; package must be rebuilt from the exact reviewed commit                                                                                |
-| Production package | Absolute `.app` path, bundle ID, version                      | Intermediate seal for `66e5b77`: `Excalidraw.app`, bundle ID `excalidraw-desktop`, version `0.3.0`, package SHA-256 `336531060a938b10480f5126b1c5fac518abf5a36134de7c16c4e709b408dcea`; no visual collection bound |
-| Executable         | Absolute executable path and SHA-256                          | Intermediate production executable SHA-256 `718347d8ff1e2990e8f6c1c1e6eabd606a011515b1c67c33a22024de838e6701`; no visual collection bound                                                                          |
-| Environment        | macOS version/build, filesystem, display scale                | `BLOCKED`: no package review session recorded                                                                                                                                                                      |
-| Window             | Native logical bounds, exactly 1280 × 760, two stable samples | `BLOCKED`: no package review session recorded                                                                                                                                                                      |
-| Review identity    | Reviewer and product-owner decision kept separate             | `PENDING`                                                                                                                                                                                                          |
+| Fact               | Required record                                               | Current status                                                                                                                                                                    |
+| ------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product commit     | Full `git rev-parse HEAD`                                     | Production package sealed from `a4262f7e45d7840bfdd595b2132fe207b3435a10`; later documentation commits do not alter its runtime inputs                                            |
+| Production package | Absolute `.app` path, bundle ID, version                      | `Excalidraw.app`, bundle ID `excalidraw-desktop`, version `0.3.0`, package SHA-256 `1d3ed8785e52064cd0bff2db44eb3b4fca3cc11bd86e6c2e6ed26126967bf676`; no visual collection bound |
+| Executable         | Absolute executable path and SHA-256                          | Production executable SHA-256 `c2d4da17df7c16f9037324258bff54906b756c0741c3b9cc363773106b624f05`; no visual collection bound                                                      |
+| Environment        | macOS version/build, filesystem, display scale                | `BLOCKED`: no package review session recorded                                                                                                                                     |
+| Window             | Native logical bounds, exactly 1280 × 760, two stable samples | `BLOCKED`: no package review session recorded                                                                                                                                     |
+| Review identity    | Reviewer and product-owner decision kept separate             | `PENDING`                                                                                                                                                                         |
 
 ### Human review matrix
 
