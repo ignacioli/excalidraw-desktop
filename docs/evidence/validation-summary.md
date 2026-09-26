@@ -4,6 +4,10 @@
 
 Phase 6 的 T038–T044 已完成，用户故事 4 检查点为 **`PASS`（产品实现及真实进程可靠性范围）**。产品代码提交 `01977ec` 的 test-only release binary SHA-256 为 `585ad9ae4731838e480d876d70af2571af9fdd61bc1f02d1e368df134f250496`；故障与生命周期真实进程测试共 36/36 PASS，Rust 205 个库测试及全部 integration suites PASS。具体证明和边界见 [`local-version-history-t038-t044.md`](./local-version-history-t038-t044.md)。Phase 7 已完成 T045/T046 的实现，T047/T048 均未取得最终运行验收。
 
+### T051 生产 Harness 边界预检
+
+`9ac3135` 的无 `e2e-harness` production `.app` 曾通过封存（包 SHA-256 `1d3ed8785e52064cd0bff2db44eb3b4fca3cc11bd86e6c2e6ed26126967bf676`，可执行文件 SHA-256 `c2d4da17df7c16f9037324258bff54906b756c0741c3b9cc363773106b624f05`）。该可执行文件的故障命令及 History restart driver token 缺席测试 2/2 PASS；实际启动的 production 进程忽略 `EXCALIDRAW_PERF_CONTROL_DIR` 1/1 PASS。首次进程探针受沙箱 `ps` 权限限制而未执行到产品断言，授权后重跑通过。`src-tauri/capabilities/` 相对 `origin/main` 无差异，`e2e_harness` 模块及命令注册受 Cargo feature gate 限制；现有生命周期重挂测试另行覆盖授权路径。后续产品提交仍需重新封存精确候选包，T051 目前不作最终完成声明。
+
 产品实现已推进到 `01977ec`；Phase 7 的
 T045/T046 已完成，T047 的收集器结构测试已通过；T048 的生产包人工视觉
 验收仍为 **`BLOCKED` / `PENDING`**。低保真和必要高保真设计审批已完成，
