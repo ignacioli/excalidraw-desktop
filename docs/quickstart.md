@@ -52,6 +52,12 @@ cargo test --manifest-path src-tauri/Cargo.toml --features e2e-harness -q
 
 Process-level cases also require `EXCALIDRAW_E2E_BINARY` to point at a test binary built with `--features e2e-harness`. Production builds must not register the harness, and must not register `thumb_lookup` / `thumb_store`.
 
+### Long-running verification runs
+
+Before starting a build, performance measurement, soak, or other command expected to take several minutes, announce its estimated duration and the exact completion artifact (for example, the report JSON path and expected verdict). About every five minutes, check an observable health signal such as sample count, a growing report, or an error file, and report progress even if the process is still healthy. A live process by itself is not a health signal.
+
+Keep each command under 30 minutes by default; split independent workloads into separate commands and report at each boundary. If a genuinely indivisible run needs longer, announce its expected duration and obtain acknowledgment before launch while continuing the five-minute checks. At the end, record the command, product commit, binary hash, environment, raw report path, result, and any failure or missing evidence. A missing required artifact is `BLOCKED`; an executed behavior or budget mismatch is `FAIL`.
+
 For the local version-history lifecycle journey, build the test-only binary and run the focused process suite from the repository root:
 
 ```bash
