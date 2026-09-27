@@ -203,7 +203,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 /// Synchronize the discoverability state of the history entry with the
 /// frontend's active document authority. This is UX state only; the event
 /// route still rechecks the active document before opening the panel.
-#[tauri::command]
+#[tauri::command(rename = "native_menu_set_enabled")]
 pub fn set_native_menu_enabled<R: Runtime>(
     app: AppHandle<R>,
     command: NativeMenuCommand,
@@ -383,6 +383,18 @@ fn log_validation_observation(stage: &'static str, validation_id: u64, command: 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn registered_enable_command_matches_frontend_invoke() {
+        // Use the same generated command name that Tauri's handler dispatches,
+        // rather than a mock that accepts an unregistered frontend command.
+        let registered_name = __tauri_command_name_set_native_menu_enabled!();
+        let frontend = include_str!("../../src/app/nativeMenu.ts");
+        assert!(
+            frontend.contains(&format!(".invoke(\"{registered_name}\",")),
+            "frontend invoke must match registered Tauri command {registered_name}"
+        );
+    }
 
     #[test]
     fn maps_only_owned_menu_ids_to_commands() {
