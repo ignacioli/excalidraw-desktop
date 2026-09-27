@@ -1,6 +1,38 @@
 # 本地版本历史公共文档与菜单入口验证（T045–T047）
 
-## 最新 T047 原生结果（2026-09-26）
+## 最新 T047 原生结果（2026-09-26，UTC 2026-09-27）
+
+**T047：PASS（精确 production package 的 History 原生入口范围）**。产品修复提交 `e873aac208e0271641cb2434f49daa4a6d2e01fd`，validator 提交 `0be255df09eec3a076d2e56b9eb64564afece21c`；包 SHA-256 `ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162`。在 macOS 26.6.2 / arm64 / scale 2 上，首次 AX 菜单采样即 enabled；一次 `versionHistory` 路由（validationId 1）、面板标题/唯一目标文件名/关闭按钮各 1 个，以及规范化 fixture 的前后 SHA-256 一致全部通过。[原始报告](local-version-history-t047/history-pass/collection/native-report.json)、[binding](local-version-history-t047/history-pass/binding.json)与[package manifest](local-version-history-t047/history-pass/package-manifest.json)已封存。T048 人工视觉仍 BLOCKED，T049 性能和 T054 负责人接受未在本轮执行。
+
+### 根因与修复
+
+| 分类 | 确认事实 | 修复与判别证据 |
+| --- | --- | --- |
+| 产品 bug | 前端调用 `native_menu_set_enabled`，Tauri 原注册名却是 `set_native_menu_enabled`，enable 请求不能进入 setter，菜单维持初始 disabled。 | 显式 command rename 对齐合同；使用 Tauri 生成的实际命令名对前端 invoke 做回归检查，旧代码 FAIL、修复后 PASS。新生产包首次菜单采样 PASS。 |
+| Harness bug | AppleScript 直接遍历未物化的 `entire contents` specifier，元素 role 读取失败被局部 try 静默忽略，旧 probe 返回 0/0/0。 | 先取得 AX 元素列表再遍历，并让读取错误进入外层限时错误报告。[同包诊断](local-version-history-t047/ipc-registration/diagnostics/corrected-probe.json)得到 1/1/1；AXHeading 另有 AXStaticText 子元素，先前 role 猜测被排除。 |
+| Harness fixture 缺陷 | 默认 73-byte 最小场景缺少 SDK 的持久化默认 appState，正常启动后变成 235 bytes；旧 Save 目标未在 manifest 中，启动文件依赖排序 fallback。 | 新增独立规范化源 fixture 与 FINAL-only `--native-launch-fixture`，明确 launchDocument，准备前绑定字节和 SHA。不改变默认 003 fixtures，不放宽 unchanged 断言；fresh collector 前后均为 `48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009`。 |
+| Specs | T047 要求实际菜单层级/标签/状态、一次路由和目标文档绑定，范围明确且可验证。 | 本轮无须修改验收要求。旧 003 physical-key 图谱误用于 T047 是此前执行范围问题，不是当前 disabled 根因。 |
+
+### 本轮验证与身份
+
+- Rust 菜单测试 7/7、fmt、Clippy PASS；前端相关测试 38/38 PASS；production build（含严格 TypeScript）和 seal PASS。
+- Native collector helper tests 26/26（含 AppleScript 编译）、fixture preparer tests 6/6 PASS；独立 review 无阻断项。
+- 正式 attempt `T047-history-003-ax-fixture-fixed` 的 collector、native report、Version History entry 均 PASS，13/13 checks PASS。source package 与 validator 的 runtime-input digest 均为 `eeb27a1de0ec9f5b001c76aa2640aad79dda4ecda8d4bb12eecd6dd0fb64c446`，因此仅 harness 变更后复用同一精确包。
+- 中间 attempt [ipc-registration](local-version-history-t047/ipc-registration/collection/native-report.json) 保留 BLOCKED：menu 已 PASS，但暴露新的 AX/fixture 问题；其通用失败计数沿用先前尝试，不能当作同一 disabled 根因连续失败。随后按新的 HARNESS 根因及实际变更独立绑定，不改写旧 attempt。诊断运行仅用于定因，未代替正式 PASS collection。
+- Collector 的 1280×760 几何记录不是 T048 的两次稳定截图采样或视觉 verdict；没有执行截图、视觉审批、性能、push、merge 或发布。
+
+### 复验命令
+
+从干净 validator commit，使用新建空 run root 和现存 sealed manifest：
+
+```sh
+pnpm native:screen:prepare -- --checkpoint FINAL --package-manifest /private/tmp/t047-e873aac-package-manifest.json --native-launch-fixture "$PWD/e2e/native/004-history-launch.excalidraw" --run-root /private/tmp/t047-history-harness-fixed --plan /private/tmp/t047-history-harness-fixed/final-plan.json --isolation-mode backend-app-data-home-redirect
+pnpm native:macos:validate -- --manifest /private/tmp/t047-e873aac-package-manifest.json --capture-plan /private/tmp/t047-history-harness-fixed/final-plan.json --collection-dir /private/tmp/t047-history-harness-fixed/collection --binding /private/tmp/t047-history-harness-fixed/binding.json
+```
+
+这些路径记录本次运行；重新执行必须使用新的空 root、重新生成 plan/profile digest 和 binding，不能覆盖本次产物。
+
+## 先前 T047 原生失败（2026-09-26，保留原文）
 
 **T047 保持未完成，当前精确包实测为 `FAIL`。** Production `.app` 的 package SHA-256 为 `f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f`，manifest 绑定产品提交 `55458f23e4a50c02bff7d85de550b74dca163c37`；后续 validator-only 提交 `dd14eeefdb652ea9fe320c4b471ad20b602d2b42` 的 runtime-input digest 与该包来源相同。包身份、干净 worktree、macOS 26.6.2/arm64、隔离 profile 和进程安全检查均 PASS。
 

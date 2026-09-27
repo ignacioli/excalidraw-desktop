@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "native-entrypoints",
+  "gateId": "T023b",
+  "route": "macos-accessibility",
+  "binding": {
+    "productCommit": "e873aac208e0271641cb2434f49daa4a6d2e01fd",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "e9bc22b96b69dbc9db85051cefd04539b76bf91c9b17cfddbaa72a363eb1f44a",
+    "packageArtifactSha256": "ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162",
+    "nativeEntrypointProfileSha256": "05c36a2b9db8e54f8c7b394d345fbbccbf8d51991b0b3c150d31c181d2e7d892",
+    "productIdentity": {
+      "runtimeInputsSha256": "eeb27a1de0ec9f5b001c76aa2640aad79dda4ecda8d4bb12eecd6dd0fb64c446",
+      "packageArtifactSha256": "ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162",
+      "bundleIdentifier": "excalidraw-desktop",
+      "version": "0.3.0"
+    },
+    "validatorIdentity": {
+      "producer": "native-macos-validation",
+      "version": "4",
+      "sourceSha256": "f7755fa62f375ce02c19bff3722043aa5e8d447f7f8161d94b3d1456994e0be6",
+      "schemaVersion": 3
+    },
+    "attemptIdentity": {
+      "attemptId": "T047-history-003-ax-fixture-fixed",
+      "gate": "T023b",
+      "platform": "macos",
+      "inputSha256": "52bb8f038646f1dba0e336f4759bfab2828b4f92ef38d32ddfd557c5eb64bfa0"
+    },
+    "namedChangeSincePreviousAttempt": {
+      "changeId": "T047-materialize-AX-and-normalize-launch-fixture",
+      "producer": "native-macos-validation",
+      "beforeSha256": "78fc272c0a24721ea5a7f1be9a60286f40f61add09c6b300d206b280d8509363",
+      "afterSha256": "f7755fa62f375ce02c19bff3722043aa5e8d447f7f8161d94b3d1456994e0be6"
+    },
+    "rootCauseClass": "HARNESS",
+    "consecutiveFailureCount": 1,
+    "proofScope": "history",
+    "remediationEpoch": 0,
+    "reopenDecision": null,
+    "repairTarget": null
+  },
+  "productIdentity": {
+    "runtimeInputsSha256": "eeb27a1de0ec9f5b001c76aa2640aad79dda4ecda8d4bb12eecd6dd0fb64c446",
+    "packageArtifactSha256": "ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162",
+    "bundleIdentifier": "excalidraw-desktop",
+    "version": "0.3.0"
+  },
+  "validatorIdentity": {
+    "producer": "native-macos-validation",
+    "version": "4",
+    "sourceSha256": "f7755fa62f375ce02c19bff3722043aa5e8d447f7f8161d94b3d1456994e0be6",
+    "schemaVersion": 3
+  },
+  "attemptIdentity": {
+    "attemptId": "T047-history-003-ax-fixture-fixed",
+    "gate": "T023b",
+    "platform": "macos",
+    "inputSha256": "52bb8f038646f1dba0e336f4759bfab2828b4f92ef38d32ddfd557c5eb64bfa0"
+  },
+  "attemptRecord": {
+    "path": "../attempts/T047-history-003-ax-fixture-fixed/attempt.json",
+    "sha256": "a61c73fe2f4e94efd9146eb01ce2c613afd6727c2b6869a899610b9c9dc7e36a"
+  },
+  "collector": {
+    "tool": "native-macos-validation",
+    "version": "4",
+    "runIdentity": "T047-history-003-ax-fixture-fixed"
+  },
+  "environmentPath": "environment.json",
+  "claims": [
+    {
+      "claimId": "native-menu-entrypoints",
+      "factClass": "native-menu-action",
+      "primaryRoute": "macos-accessibility",
+      "result": "PASS",
+      "artifactRefs": [
+        "native-report.json",
+        "route-acknowledgements.json",
+        "version-history-entry.json"
+      ]
+    }
+  ],
+  "artifactDigests": [
+    {
+      "path": "environment.json",
+      "sha256": "033a921aa89fb2a54a6687afc30ca0b95f83d62acdebf8d158cb3b20657bcf25"
+    },
+    {
+      "path": "route-acknowledgements.json",
+      "sha256": "3196d043a7dc392411222d4e65ee231370138910bd9234ed304a0b316dca0a82"
+    },
+    {
+      "path": "native-report.json",
+      "sha256": "035bf80596565ad49d7249526a8da06dc47c5cda9b9d0397ce204678edb9a610"
+    },
+    {
+      "path": "version-history-entry.json",
+      "sha256": "56172f37b1834dacd724d54b77a0a04abbbb2326693fda61bb55606611689674"
+    }
+  ],
+  "collectionDigest": "c6a4a2f771af52eecf4fede3a05c2dc1066b912c6b5787f99e5129cad58e8140",
+  "result": "PASS"
+}

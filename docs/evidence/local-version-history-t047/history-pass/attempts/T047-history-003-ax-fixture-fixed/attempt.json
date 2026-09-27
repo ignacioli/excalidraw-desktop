@@ -1,0 +1,48 @@
+{
+  "attemptId": "T047-history-003-ax-fixture-fixed",
+  "attemptIdentity": {
+    "attemptId": "T047-history-003-ax-fixture-fixed",
+    "gate": "T023b",
+    "platform": "macos",
+    "inputSha256": "52bb8f038646f1dba0e336f4759bfab2828b4f92ef38d32ddfd557c5eb64bfa0"
+  },
+  "gate": "T023b",
+  "platform": "macos",
+  "factClass": "native-entrypoint-router",
+  "mechanism": "native-macos-validation",
+  "assertionReached": true,
+  "observableSignature": "f6f68b8576c5f867d4a578c8751dbc8f9ba1541b96ea03570ace286404e11291",
+  "observation": {
+    "assertionId": "T023b",
+    "reasonCode": "ALL_ASSERTIONS_SATISFIED",
+    "expectedClass": "PASS",
+    "observedClass": "PASS"
+  },
+  "observedSignature": "f6f68b8576c5f867d4a578c8751dbc8f9ba1541b96ea03570ace286404e11291",
+  "repairTarget": null,
+  "rootCauseClass": "HARNESS",
+  "canonicalIssueId": "issue-v1:4fdb48c0d148bf97fcde7afbccc2daced95adf16ade134fb46244571620ec3bd",
+  "productIdentity": {
+    "runtimeInputsSha256": "eeb27a1de0ec9f5b001c76aa2640aad79dda4ecda8d4bb12eecd6dd0fb64c446",
+    "packageArtifactSha256": "ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162",
+    "bundleIdentifier": "excalidraw-desktop",
+    "version": "0.3.0"
+  },
+  "validatorIdentity": {
+    "producer": "native-macos-validation",
+    "version": "4",
+    "sourceSha256": "f7755fa62f375ce02c19bff3722043aa5e8d447f7f8161d94b3d1456994e0be6",
+    "schemaVersion": 3
+  },
+  "remediationEpoch": 0,
+  "reopenDecision": null,
+  "namedChangeSincePreviousAttempt": {
+    "changeId": "T047-materialize-AX-and-normalize-launch-fixture",
+    "producer": "native-macos-validation",
+    "beforeSha256": "78fc272c0a24721ea5a7f1be9a60286f40f61add09c6b300d206b280d8509363",
+    "afterSha256": "f7755fa62f375ce02c19bff3722043aa5e8d447f7f8161d94b3d1456994e0be6"
+  },
+  "verdict": "PASS",
+  "consecutiveFailureCount": 0,
+  "nextAction": "RUN_TRUE_DEPENDENTS"
+}
