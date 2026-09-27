@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 2,
+  "fixtureVersion": "003-native-capture-v4",
+  "fixtureId": "003-native-capture-v4",
+  "workspaceRoot": "/private/tmp/t047-e873aac-ipc-retest/fixture/workspace",
+  "screens": [
+    {
+      "gateId": "HF2-01",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HF2-02",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HF2-03",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HF2-04",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HF2-05",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HF2-06",
+      "preparationMode": "operator-assisted"
+    }
+  ],
+  "files": [
+    {
+      "path": "flows/Checkout Flow.excalidraw",
+      "sha256": "efdd6af0d0bf5cdb2e365fe53f67dca69d705d3e90c9bc1a22cc346fcbce8cd5"
+    },
+    {
+      "path": "流程/Checkout 流程.excalidraw",
+      "sha256": "efdd6af0d0bf5cdb2e365fe53f67dca69d705d3e90c9bc1a22cc346fcbce8cd5"
+    },
+    {
+      "path": "flows/Overview.excalidraw",
+      "sha256": "efdd6af0d0bf5cdb2e365fe53f67dca69d705d3e90c9bc1a22cc346fcbce8cd5"
+    },
+    {
+      "path": "流程/总览.excalidraw",
+      "sha256": "efdd6af0d0bf5cdb2e365fe53f67dca69d705d3e90c9bc1a22cc346fcbce8cd5"
+    }
+  ]
+}

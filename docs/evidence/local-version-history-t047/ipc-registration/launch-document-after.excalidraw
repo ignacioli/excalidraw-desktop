@@ -1,0 +1,13 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "tauri://localhost",
+  "elements": [],
+  "appState": {
+    "gridModeEnabled": false,
+    "gridSize": 20,
+    "gridStep": 5,
+    "viewBackgroundColor": "#ffffff"
+  },
+  "files": {}
+}

@@ -272,6 +272,19 @@ export function validateCapturePlan(value) {
     ) {
       blocked("FINAL capture plan native validation targets are invalid");
     }
+    if (
+      nativeValidation.launchDocument !== undefined &&
+      (!path.isAbsolute(nativeValidation.launchDocument) ||
+        !pathInside(
+          plan.fixture.workspaceRoot,
+          nativeValidation.launchDocument,
+        ) ||
+        !pathInside(plan.isolation.root, nativeValidation.launchDocument))
+    ) {
+      blocked(
+        "FINAL native launch document must be inside the fixture workspace and run root",
+      );
+    }
   }
   return plan;
 }
@@ -303,7 +316,7 @@ function visualTargetForScreen(screen) {
   };
 }
 
-async function provisionFixture(runRoot, screens) {
+async function provisionFixture(runRoot, screens, nativeLaunchFixture) {
   const declaredWorkspaceName =
     screens.length === 1 && typeof screens[0]?.workspaceName === "string"
       ? screens[0].workspaceName
@@ -337,6 +350,16 @@ async function provisionFixture(runRoot, screens) {
       sha256: sha256Bytes(scene),
     });
   }
+  if (nativeLaunchFixture) {
+    const relative = path.join("native-entrypoints", nativeLaunchFixture.name);
+    const absolute = path.join(workspaceRoot, relative);
+    await fsp.mkdir(path.dirname(absolute), { recursive: true });
+    await fsp.writeFile(absolute, nativeLaunchFixture.bytes, { flag: "wx" });
+    files.push({
+      path: relative.split(path.sep).join("/"),
+      sha256: sha256Bytes(nativeLaunchFixture.bytes),
+    });
+  }
   const manifest = {
     schemaVersion: 2,
     fixtureVersion: "003-native-capture-v4",
@@ -362,6 +385,7 @@ export async function prepareNativeScreenPlan({
   checkpoint,
   packageManifestPath,
   semanticCollectionPath,
+  nativeLaunchFixturePath,
   runRoot,
   planPath,
   isolationMode,
@@ -376,6 +400,45 @@ export async function prepareNativeScreenPlan({
   }
   if (!ISOLATION_MODES.has(isolationMode))
     invalid("--isolation-mode is required and invalid");
+  let nativeLaunchFixture;
+  if (nativeLaunchFixturePath !== undefined) {
+    if (
+      checkpoint !== "FINAL" ||
+      !path.isAbsolute(nativeLaunchFixturePath) ||
+      path.extname(nativeLaunchFixturePath) !== ".excalidraw"
+    )
+      invalid(
+        "native launch fixture requires FINAL and an absolute .excalidraw path",
+      );
+    const sourceStats = await fsp
+      .lstat(nativeLaunchFixturePath)
+      .catch(() => null);
+    if (!sourceStats?.isFile() || sourceStats.isSymbolicLink())
+      blocked("native launch fixture must be a real drawing file");
+    const bytes = await fsp.readFile(nativeLaunchFixturePath);
+    let scene;
+    try {
+      scene = JSON.parse(bytes.toString("utf8"));
+    } catch {
+      blocked("native launch fixture must contain valid drawing JSON");
+    }
+    if (
+      scene?.type !== "excalidraw" ||
+      scene.version !== 2 ||
+      !Array.isArray(scene.elements) ||
+      !scene.appState ||
+      typeof scene.appState !== "object" ||
+      Array.isArray(scene.appState) ||
+      !scene.files ||
+      typeof scene.files !== "object" ||
+      Array.isArray(scene.files)
+    )
+      blocked("native launch fixture must contain an Excalidraw v2 drawing");
+    nativeLaunchFixture = {
+      name: path.basename(nativeLaunchFixturePath),
+      bytes,
+    };
+  }
   const runStats = await fsp.lstat(runRoot).catch(() => null);
   if (runStats === null || !runStats.isDirectory() || runStats.isSymbolicLink())
     blocked("run root must be an existing real directory");
@@ -434,7 +497,11 @@ export async function prepareNativeScreenPlan({
     };
   }
 
-  const fixture = await provisionFixture(runRoot, requestedScreens);
+  const fixture = await provisionFixture(
+    runRoot,
+    requestedScreens,
+    nativeLaunchFixture,
+  );
   const profilesRoot = path.join(runRoot, "profiles");
   await fsp.mkdir(profilesRoot, { recursive: true });
   await fsp.mkdir(path.join(profilesRoot, "T023b"));
@@ -490,6 +557,15 @@ export async function prepareNativeScreenPlan({
       ? {
           nativeValidation: {
             profileRoot: path.join(profilesRoot, "T023b"),
+            ...(nativeLaunchFixture
+              ? {
+                  launchDocument: path.join(
+                    fixture.workspaceRoot,
+                    "native-entrypoints",
+                    nativeLaunchFixture.name,
+                  ),
+                }
+              : {}),
             filesystemTargets: {
               save: path.join(
                 fixture.workspaceRoot,
@@ -517,7 +593,7 @@ export async function prepareNativeScreenPlan({
 
 function usage() {
   console.log(
-    "Usage: pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute.json> [--semantic-collection <absolute-T031-collector-report.json> for VSL] --run-root <absolute-empty-dir> --plan <absolute-new.json> --isolation-mode backend-app-data-home-redirect\nPlan schema: v2. VSL binds one PASS semantic collection by file and collection digest. FINAL also binds one empty T023b profile, six untouched capture profiles, and Save/PNG/SVG filesystem targets. Backend app-data only; WebKit filesystem isolation is not claimed. Exit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation.",
+    "Usage: pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute.json> [--semantic-collection <absolute-T031-collector-report.json> for VSL] [--native-launch-fixture <absolute.excalidraw> for FINAL] --run-root <absolute-empty-dir> --plan <absolute-new.json> --isolation-mode backend-app-data-home-redirect\nPlan schema: v2. VSL binds one PASS semantic collection by file and collection digest. FINAL also binds one empty T023b profile, six untouched capture profiles, and Save/PNG/SVG filesystem targets. Backend app-data only; WebKit filesystem isolation is not claimed. Exit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation.",
   );
 }
 
@@ -532,6 +608,7 @@ async function main() {
   const checkpoint = option(args, "--checkpoint");
   const packageManifestPath = option(args, "--package-manifest");
   const semanticCollectionPath = option(args, "--semantic-collection");
+  const nativeLaunchFixturePath = option(args, "--native-launch-fixture");
   const runRoot = option(args, "--run-root");
   const planPath = option(args, "--plan");
   const isolationMode = option(args, "--isolation-mode");
@@ -541,7 +618,8 @@ async function main() {
     (checkpoint === "VSL" && !semanticCollectionPath) ||
     !runRoot ||
     !planPath ||
-    !isolationMode
+    !isolationMode ||
+    (args.includes("--native-launch-fixture") && !nativeLaunchFixturePath)
   ) {
     usage();
     process.exitCode = 64;
@@ -552,6 +630,7 @@ async function main() {
       checkpoint,
       packageManifestPath,
       semanticCollectionPath,
+      nativeLaunchFixturePath,
       runRoot,
       planPath,
       isolationMode,

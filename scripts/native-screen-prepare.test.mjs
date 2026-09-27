@@ -204,6 +204,19 @@ describe("native screen prepare", () => {
       png: path.join(fixture.runRoot, "native-outcomes", "Architecture.png"),
       svg: path.join(fixture.runRoot, "native-outcomes", "Architecture.svg"),
     });
+    assert.equal(plan.nativeValidation.launchDocument, undefined);
+    const manifest = JSON.parse(
+      await fsp.readFile(plan.fixture.manifestPath, "utf8"),
+    );
+    for (const entry of manifest.files) {
+      assert.equal(
+        await fsp.readFile(
+          path.join(plan.fixture.workspaceRoot, entry.path),
+          "utf8",
+        ),
+        `${JSON.stringify({ type: "excalidraw", version: 2, elements: [], appState: {}, files: {} })}\n`,
+      );
+    }
   });
 
   it("rejects schema v1, test-only packages, unsafe paths, and duplicate profiles", async () => {
@@ -286,5 +299,90 @@ describe("native screen prepare", () => {
         }),
       /removed diagnostic/u,
     );
+  });
+
+  it("copies the explicit FINAL launch fixture byte-for-byte without changing screen fixtures", async () => {
+    const fixture = await setup();
+    const nativeLaunchFixturePath = path.resolve(
+      "e2e/native/004-history-launch.excalidraw",
+    );
+    const source = await fsp.readFile(nativeLaunchFixturePath);
+    assert.equal(source.length, 235);
+    assert.notEqual(source.at(-1), 10);
+    const plan = await prepareNativeScreenPlan({
+      ...fixture,
+      checkpoint: "FINAL",
+      nativeLaunchFixturePath,
+      isolationMode: "backend-app-data-home-redirect",
+    });
+    const target = path.join(
+      plan.fixture.workspaceRoot,
+      "native-entrypoints",
+      path.basename(nativeLaunchFixturePath),
+    );
+    assert.equal(plan.nativeValidation.launchDocument, target);
+    assert.deepEqual(await fsp.readFile(target), source);
+    const manifest = JSON.parse(
+      await fsp.readFile(plan.fixture.manifestPath, "utf8"),
+    );
+    assert.equal(
+      manifest.files.find(
+        (entry) =>
+          entry.path === "native-entrypoints/004-history-launch.excalidraw",
+      ).sha256,
+      crypto.createHash("sha256").update(source).digest("hex"),
+    );
+    for (const entry of manifest.files.filter(
+      (entry) => !entry.path.startsWith("native-entrypoints/"),
+    )) {
+      assert.equal(
+        await fsp.readFile(
+          path.join(plan.fixture.workspaceRoot, entry.path),
+          "utf8",
+        ),
+        `${JSON.stringify({ type: "excalidraw", version: 2, elements: [], appState: {}, files: {} })}\n`,
+      );
+    }
+    assert.throws(
+      () =>
+        validateCapturePlan({
+          ...plan,
+          nativeValidation: {
+            ...plan.nativeValidation,
+            launchDocument: path.join(fixture.root, "outside.excalidraw"),
+          },
+        }),
+      /native launch document/u,
+    );
+  });
+
+  it("rejects invalid launch fixture input before provisioning", async () => {
+    const fixture = await setup();
+    const badJson = path.join(fixture.root, "invalid.excalidraw");
+    await fsp.writeFile(badJson, "invalid");
+    const badDrawing = path.join(fixture.root, "not-drawing.excalidraw");
+    await fsp.writeFile(badDrawing, JSON.stringify({ type: "other" }));
+    const link = path.join(fixture.root, "linked.excalidraw");
+    await fsp.symlink(badDrawing, link);
+    for (const [checkpoint, nativeLaunchFixturePath] of [
+      ["VSL", path.resolve("e2e/native/004-history-launch.excalidraw")],
+      ["FINAL", "relative.excalidraw"],
+      ["FINAL", path.join(fixture.root, "missing.excalidraw")],
+      ["FINAL", fixture.packageManifestPath],
+      ["FINAL", badJson],
+      ["FINAL", badDrawing],
+      ["FINAL", link],
+    ]) {
+      await assert.rejects(
+        prepareNativeScreenPlan({
+          ...fixture,
+          checkpoint,
+          nativeLaunchFixturePath,
+          isolationMode: "backend-app-data-home-redirect",
+        }),
+        NativeScreenPrepareError,
+      );
+      assert.deepEqual(await fsp.readdir(fixture.runRoot), []);
+    }
   });
 });

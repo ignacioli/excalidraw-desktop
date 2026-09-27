@@ -1499,16 +1499,18 @@ export function historyPanelObservationAppleScript(pid, fileName) {
     set headingCount to 0
     set fileCount to 0
     set closeCount to 0
-    repeat with elementRef in (entire contents of front window)
-      try
-        if role of elementRef is "AXStaticText" then
-          set elementValue to (value of elementRef) as text
-          if elementValue is "Version History" then set headingCount to headingCount + 1
-          if elementValue is ${appleScriptQuote(fileName)} then set fileCount to fileCount + 1
-        else if role of elementRef is "AXButton" then
-          if name of elementRef is "Close version history" then set closeCount to closeCount + 1
-        end if
-      end try
+    -- Materialize the AX list before iterating. A repeat over the unresolved
+    -- entire-contents specifier produces unreadable element references.
+    set axElements to entire contents of front window
+    repeat with elementRef in axElements
+      set axElement to contents of elementRef
+      if role of axElement is "AXStaticText" then
+        set elementValue to (value of axElement) as text
+        if elementValue is "Version History" then set headingCount to headingCount + 1
+        if elementValue is ${appleScriptQuote(fileName)} then set fileCount to fileCount + 1
+      else if role of axElement is "AXButton" then
+        if name of axElement is "Close version history" then set closeCount to closeCount + 1
+      end if
     end repeat
     return (headingCount as text) & tab & (fileCount as text) & tab & (closeCount as text)
   end tell

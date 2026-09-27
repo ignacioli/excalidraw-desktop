@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 2,
+  "checkpoint": "FINAL",
+  "runId": "0fafa214-461b-4617-a3bc-b6e971f4050f",
+  "productCommit": "e873aac208e0271641cb2434f49daa4a6d2e01fd",
+  "packageManifest": {
+    "path": "/private/tmp/t047-e873aac-package-manifest.json",
+    "sha256": "fffe35b9d7796347da6ad5dbdf30964c56c63053d263b082cdfb375f8ee1eece",
+    "artifactSha256": "ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162"
+  },
+  "hf2Manifest": {
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/design/desktop-shell/hf-2/manifest.json",
+    "sha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1"
+  },
+  "harnessVersion": "003-native-capture-v4",
+  "normalizationAlgorithm": "lanczos3-srgb-v1",
+  "isolation": {
+    "mode": "backend-app-data-home-redirect",
+    "root": "/private/tmp/t047-e873aac-ipc-retest",
+    "expectedAppDataRoot": "/private/tmp/t047-e873aac-ipc-retest/profiles",
+    "evidence": "/private/tmp/t047-e873aac-ipc-retest/isolation.json",
+    "webkitFilesystemIsolationClaimed": false
+  },
+  "fixture": {
+    "id": "003-native-capture-v4",
+    "manifestPath": "/private/tmp/t047-e873aac-ipc-retest/fixture/fixture-manifest.json",
+    "digest": "b0ed8f4e908e4027f072d4f74665c9cdc30b21e8b736cb78c5f5a51e91c77f04",
+    "workspaceRoot": "/private/tmp/t047-e873aac-ipc-retest/fixture/workspace"
+  },
+  "nativeValidation": {
+    "profileRoot": "/private/tmp/t047-e873aac-ipc-retest/profiles/T023b",
+    "filesystemTargets": {
+      "save": "/private/tmp/t047-e873aac-ipc-retest/fixture/workspace/flows/Architecture.excalidraw",
+      "png": "/private/tmp/t047-e873aac-ipc-retest/native-outcomes/Architecture.png",
+      "svg": "/private/tmp/t047-e873aac-ipc-retest/native-outcomes/Architecture.svg"
+    }
+  },
+  "screens": [
+    {
+      "gateId": "HF2-01",
+      "profileRoot": "/private/tmp/t047-e873aac-ipc-retest/profiles/HF2-01",
+      "preparationMode": "operator-assisted",
+      "manifestName": "01 · Welcome · Light",
+      "baselinePath": "screens/welcome-light.png",
+      "baselineSha256": "301e553d0ce94659233eb4683eb6bc018c26757397ecccf42bb162d6e7463cfa",
+      "visualTarget": {
+        "summary": "01 · Welcome · Light",
+        "operatorChecklist": [
+          "Establish the declared 01 · Welcome · Light composition through ordinary UI"
+        ]
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HF2-02",
+      "profileRoot": "/private/tmp/t047-e873aac-ipc-retest/profiles/HF2-02",
+      "preparationMode": "operator-assisted",
+      "manifestName": "02 · Restored · Hidden · Light",
+      "baselinePath": "screens/restored-hidden-light.png",
+      "baselineSha256": "0a8bc3c5ad8052a53225a98f2820b34c1969a936d2fe940b77593d4c135f3a79",
+      "visualTarget": {
+        "summary": "02 · Restored · Hidden · Light",
+        "operatorChecklist": [
+          "Establish the declared 02 · Restored · Hidden · Light composition through ordinary UI"
+        ]
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HF2-03",
+      "profileRoot": "/private/tmp/t047-e873aac-ipc-retest/profiles/HF2-03",
+      "preparationMode": "operator-assisted",
+      "manifestName": "03 · Workspace · Pinned · Light",
+      "baselinePath": "screens/workspace-pinned-light.png",
+      "baselineSha256": "5bfbd5dba0363271192309594304a2291166a65bf91df5c2effb5550e961829a",
+      "visualTarget": {
+        "summary": "03 · Workspace · Pinned · Light",
+        "operatorChecklist": [
+          "Establish the declared 03 · Workspace · Pinned · Light composition through ordinary UI"
+        ]
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [
+        {
+          "maskId": "sdk-canvas",
+          "selectorOrRect": "rect(480,74,506,686)",
+          "surface": "canvas",
+          "reason": "conservative official SDK-owned editor interior beginning after the maximum allowed Sidebar width",
+          "perimeterChecked": true,
+          "approved": true
+        },
+        {
+          "maskId": "sdk-library",
+          "selectorOrRect": "rect(986,74,294,686)",
+          "surface": "library",
+          "reason": "official SDK-owned Library interior below the native titlebar",
+          "perimeterChecked": true,
+          "approved": true
+        }
+      ],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HF2-04",
+      "profileRoot": "/private/tmp/t047-e873aac-ipc-retest/profiles/HF2-04",
+      "preparationMode": "operator-assisted",
+      "manifestName": "04 · Workspace · Overlay · Light",
+      "baselinePath": "screens/workspace-overlay-light.png",
+      "baselineSha256": "ab2c2baf8b7b32e8d78095f29165eb369663389a62aa13e5a672a47d3511a059",
+      "visualTarget": {
+        "summary": "04 · Workspace · Overlay · Light",
+        "operatorChecklist": [
+          "Establish the declared 04 · Workspace · Overlay · Light composition through ordinary UI"
+        ]
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HF2-05",
+      "profileRoot": "/private/tmp/t047-e873aac-ipc-retest/profiles/HF2-05",
+      "preparationMode": "operator-assisted",
+      "manifestName": "05 · Welcome · Dark",
+      "baselinePath": "screens/welcome-dark.png",
+      "baselineSha256": "6801579936067a6905ff7cd0896d6604861b176e5b9d7e56d141cc64434fd567",
+      "visualTarget": {
+        "summary": "05 · Welcome · Dark",
+        "operatorChecklist": [
+          "Establish the declared 05 · Welcome · Dark composition through ordinary UI"
+        ]
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HF2-06",
+      "profileRoot": "/private/tmp/t047-e873aac-ipc-retest/profiles/HF2-06",
+      "preparationMode": "operator-assisted",
+      "manifestName": "06 · Workspace · Pinned · Dark",
+      "baselinePath": "screens/workspace-pinned-dark.png",
+      "baselineSha256": "8b06a988270d4a6d8f7ce00fa32fb422c8bf3dea3c6e8346390b2b77ea9b34d0",
+      "visualTarget": {
+        "summary": "06 · Workspace · Pinned · Dark",
+        "operatorChecklist": [
+          "Establish the declared 06 · Workspace · Pinned · Dark composition through ordinary UI"
+        ]
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    }
+  ]
+}
