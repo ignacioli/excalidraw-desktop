@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "gateId": "HISTORY-01",
+  "reference": {
+    "kind": "approved-high-fi-frame",
+    "shapeId": "87d1db27-904b-80ba-8008-aeb2cb37d1a9",
+    "name": "T004 · 01 · History · Default · Light"
+  },
+  "highFiManifestSha256": "c683e53541a146908a21befec66863516168f6aba0aadb1351cb261a75b8557c",
+  "lowFiManifestSha256": "cf44bbb2d27f79918c70226991875c9851f8e8a5029672679624d8e6ab8c6907",
+  "pixelBaselineAvailable": false,
+  "visualVerdict": "PENDING_REVIEW",
+  "humanLiveObservations": []
+}

@@ -1,23 +1,42 @@
 # Local Version History 交互与高保真决策
 
-**状态**：低保真与必要高保真均已获产品负责人批准；production package 视觉验收待实现后执行
+**当前状态**：T048 交互修订的低保真已获产品负责人批准；对应高保真修订与 production package 视觉验收待完成
 
-**批准日期**：2026-09-23
+**T004 基线批准日期**：2026-09-23
 
-**低保真载体**：OpenDesign Local Codex
+**T048 交互修订批准日期**：2026-09-27
+
+**T004 低保真载体**：OpenDesign Local Codex
+
+**T048 低保真载体**：仓库本地 HTML review candidate（本次修订的特例）
 
 **高保真载体**：Penpot SaaS official hosted Remote MCP
 
 **高保真 Page**：`05 · Local Version History · T004`
 
-**高保真批准版本**：`T004 · Local Version History · High-Fidelity Review Baseline · Compact action menu`
+**T004 历史高保真基线**：`T004 · Local Version History · High-Fidelity Review Baseline · Compact action menu`
+
 **参考视口**：1280 × 760
+
+T004 的高保真批准只适用于当时的交互范围。T048 已批准的交互变更尚未反映到高保真设计；不得将 T004 基线说成 T048 修订已获高保真批准。
+
+## T048 修订原因与验证时间线
+
+T047 最初确实发现过一次原生菜单入口缺陷：`File > Version History` 被禁用。T047 的 `history-only` 原生采集对此记录为 FAIL；随后 `e873aac` 修复了菜单启用 IPC command 的注册名，`ipc-registration` 与之后的 `history-pass` 原生报告均记录菜单已启用。详见 `docs/evidence/local-version-history-t047/history-only/native-report.json`、`docs/evidence/local-version-history-t047/ipc-registration/collection/native-report.json`、`docs/evidence/local-version-history-t047/history-pass/collection/native-report.json`。
+
+T048 最初两次“菜单灰色”发生在采集准备阶段：第一次窗口没有活动的已保存绘图；第二次要求使用产品并不存在的 `File > Open`。后来将已保存夹具作为应用启动参数打开，你确认菜单已启用并成功打开 History。该经历说明了采集指导和初始状态准备的问题，不是 `currentVersionId` 缺失的原因。T048 首次有效截图及其观察记录见 `docs/evidence/local-version-history-t048/README.md` 与 `history-01-pre-remediation/`。
+
+首次有效截图另行暴露了两个实现问题：History drawer 因 `.app-shell-body` 的 grid 仍固定为两列而被排到左侧下一行；时间戳以 Unix 秒传入，却按 JavaScript 毫秒格式化，因而显示为 1970 年。这些应分别按原有右侧 drawer 设计修复，不能归因为需要重画交互。
+
+`Current` 标签问题来自数据语义与界面假设不匹配：History list IPC 没有权威的 `currentVersionId`，`AppShell` 也没有向 `HistoryPanel` 提供该标识。内容哈希只表示快照内容相同，不能证明某条历史记录就是当前可继续编辑的绘图。因此，T048 选择把当前绘图状态独立展示，不将历史快照推断为 Current。这是当前需求下风险和改动范围较小的产品决策，并非所有产品都必须采用的唯一或普遍最优方案。相关契约见 `src/ipc/contracts.ts` 的 `HistoryListResponse`；入口接线见 `src/app/AppShell.tsx` 的 `HistoryPanel` 调用。
+
+长列表中的目标混淆是之后经人工审查提出的独立需求：将 Mark/Unmark/Delete 放到各历史行的三点菜单，并让所选版本身份与 Preview/Restore 固定在一起，以便操作目标和动作始终可见。它改进的是长列表中的目标核对与误操作防护，不是菜单灰色、`currentVersionId` 决策或初始重画的根本原因。T048 低保真现已批准；对应高保真修订和 production package 视觉验收仍待完成。
 
 ## 目标与边界
 
 Local Version History 是应用拥有的桌面文件工作流，不是 Excalidraw SDK 画布的一部分。历史界面必须保持 canvas-first，不复制或依赖 SDK 私有 DOM，也不引入常驻 SaaS dashboard。
 
-低保真源文件位于 `low-fi/local-version-history-t004.html`。Review-only 状态导航器仅供设计验收，不属于 production UI。
+T004 低保真源文件位于 `low-fi/local-version-history-t004.html`；T048 已批准的交互修订载体是 `low-fi/t048-interaction-candidate.html`，其身份与批准状态记录于同目录 manifest。Review-only 状态导航器仅供设计验收，不属于 production UI。
 
 ## 批准的布局
 
@@ -38,10 +57,10 @@ Local Version History 是应用拥有的桌面文件工作流，不是 Excalidra
    - 时间
    - 来源：Automatic / Before restore / Manual
    - 相邻版本粗略摘要；不可靠时使用 `Canvas changed`
-   - CURRENT / READY / MANUAL · MARKED 等非纯颜色状态
+   - READY / MANUAL · MARKED 等非纯颜色状态；历史版本行不推断或显示 `Current`
+   - 每行垂直三点菜单：Mark/Unmark、Delete version；右键可作为同一菜单的可选镜像入口
 3. **Selected version detail**
-   - 始终可见：Preview、Restore this version
-   - `More version actions` 垂直三点菜单：Mark/Unmark、Delete version
+   - 始终显示所选版本的身份、时间和来源，并提供 Preview、Restore
 4. **Readonly preview**
    - 明示 `Preview — read only`
    - Preview write count = 0
@@ -69,19 +88,20 @@ Local Version History 是应用拥有的桌面文件工作流，不是 Excalidra
 - 用户执行 `Unmark` 后，该版本重新受普通保留策略管理；
 - 用户仍可通过 `Delete version` 显式删除这一条历史记录。
 
+T048 补充了重复标记语义：若当前 normalized scene 未变化，Mark current 复用该文档中已有且对应当前 scene 的 marked snapshot，显示反馈并将焦点和列表视口移至该版本；若当前 scene 已变化，则创建新的快照。不得因连续点击 Mark current 为同一内容不断追加重复版本。此语义不改变 `Unmark` 与普通保留策略的既有关系。
+
 ## 操作层级
 
 默认 360 px drawer 中：
 
-- `Preview`：始终可见的次级动作；
-- `Restore this version`：始终可见的主动作；
-- 垂直三点 `More version actions`：Mark/Unmark 与 Delete version；
-- Delete 不直接执行，必须进入统一确认框；
-- 菜单支持键盘、Escape 关闭和焦点返回。
+- 每条历史行均有可见的垂直三点菜单，提供该行的 Mark/Unmark 与 Delete version；
+- 固定的所选版本详情区显示目标身份、时间、来源，并始终提供 `Preview` 与 `Restore`；
+- Restore 与 Delete 的确认步骤都再次标明目标版本；
+- 菜单和确认框支持键盘操作、Escape 关闭与焦点返回；重复 Mark 的反馈将焦点移至已存在版本。
 
-300 px 降级状态保持相同三段动作布局，不产生横向滚动。
+当前绘图状态单独展示，不属于历史版本列表中的一行。长列表滚动时，所选目标详情及 Preview/Restore 仍保持可见，避免用户需要在操作按钮与目标版本之间来回寻找。300 px 降级状态保持可用的行操作和固定详情区，不产生横向滚动。
 
-高保真批准的 More actions menu 使用 180 × 84 px 紧凑浮层、约 40 px 行高和 32 px 三点触发器。三点、bookmark 与 trash 均使用 vector geometry，不使用字体 glyph。Delete version 保持危险色和独立分隔，不扩大为常驻按钮。
+T004 高保真批准的 More actions menu 使用 180 × 84 px 紧凑浮层、约 40 px 行高和 32 px 三点触发器。三点、bookmark 与 trash 均使用 vector geometry，不使用字体 glyph。Delete version 保持危险色和独立分隔，不扩大为常驻按钮。该视觉细节属于 T004 基线；T048 视觉适配待高保真修订后再批准。
 
 ## 完整状态
 

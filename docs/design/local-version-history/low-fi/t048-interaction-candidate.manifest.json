@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "feature": "local-version-history",
+  "task": "T048",
+  "artifactStatus": "APPROVED_LOW_FIDELITY",
+  "approvedAt": "2026-09-27",
+  "ownerDecision": "The product owner confirmed the interaction candidate fully meets expectations; for this T048 refinement the repository-local HTML is the accepted low-fidelity carrier. High-fidelity and production visual acceptance remain pending.",
+  "carrier": "Repository-local HTML prototype",
+  "entryFile": "t048-interaction-candidate.html",
+  "sourceSha256": "7affe82e9154c11573fe8d7d44b06f0073f86643da8b4d9fdd901778f47e50a7",
+  "viewport": {
+    "width": 1280,
+    "height": 760
+  },
+  "drawer": {
+    "defaultWidth": 360,
+    "compactFallbackWidth": 300
+  },
+  "decisionsRepresented": {
+    "versionActions": "Each row has a visible three-dot menu for Mark/Unmark and Delete; Preview and Restore stay in a persistent selected-version detail area.",
+    "repeatedMark": "An unchanged scene reuses its existing marked version, gives live feedback, and focuses/scrolls to that version; a simulated scene change permits a new snapshot.",
+    "currentDrawing": "Shown separately from saved history rows; no row is inferred to be current.",
+    "longList": "Long list button adds 42 rows to exercise scrolling while the selected target and primary actions remain fixed."
+  },
+  "keyboard": "Tab reaches version selection and per-row actions; menu supports ArrowUp/ArrowDown and Escape; confirmation supports Escape, Cancel-default focus, and a two-control focus loop; Ctrl/Cmd+M marks current, Ctrl/Cmd+E simulates a canvas change.",
+  "scope": "Interaction and grayscale layout discussion only. Not production UI, implementation evidence, or high-fidelity approval."
+}

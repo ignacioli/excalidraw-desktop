@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "runId": "45cbd85b-e709-4ff8-afea-d42217cd6347",
+  "pid": 20924,
+  "windowId": 17172,
+  "gateId": "HISTORY-01",
+  "productCommit": "e873aac208e0271641cb2434f49daa4a6d2e01fd",
+  "packageArtifactSha256": "ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162",
+  "isolationEvidenceRef": "isolation.json",
+  "isolationEvidenceSha256": "7eb30aa6b13104d3530a74836d1e6b72455726b3c9860eaea1033ced1b1d49f9",
+  "operatorConfirmation": {
+    "mode": "terminal-exact-line",
+    "challengeSha256": "2c832126c4eb85ae1f2c47d690db70471e236f0cd7467d1c4fc367d5fec7a998",
+    "confirmedAt": "2026-09-27T07:40:09.746Z"
+  },
+  "logicalWindow": {
+    "width": 1280,
+    "height": 760,
+    "frontmost": true,
+    "stableSamples": 2
+  },
+  "backingScale": 2,
+  "rawDimensions": {
+    "width": 2560,
+    "height": 1520
+  },
+  "capturedAt": "2026-09-27T07:40:10.717Z"
+}
