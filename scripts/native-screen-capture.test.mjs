@@ -7,10 +7,12 @@ import path from "node:path";
 import { afterEach, describe, it } from "node:test";
 import {
   NativeScreenCaptureError,
+  captureNativeScreens,
   confirmationDigest,
   confirmationLine,
   confirmationMatches,
   createFailureBudget,
+  launchArgumentsForPlan,
   nativeMasksForScreen,
   normalizationArgs,
   observeBackendIsolation,
@@ -19,8 +21,10 @@ import {
   readPngDimensions,
   recordValidationAttempt,
   validateRawDimensions,
+  validateHistoryLaunchDocument,
   validateSemanticEvidenceBytes,
 } from "./native-screen-capture.mjs";
+import { prepareNativeScreenPlan } from "./native-screen-prepare.mjs";
 
 const roots = [];
 
@@ -68,6 +72,87 @@ const screen = {
 };
 
 describe("native screen capture v4", () => {
+  it("rejects a changed HISTORY design binding before native launch", async () => {
+    const root = await fsp.mkdtemp(
+      path.join(os.tmpdir(), "history-capture-bind-"),
+    );
+    roots.push(root);
+    const runRoot = path.join(root, "run");
+    await fsp.mkdir(runRoot);
+    const appPath = path.join(root, "Excalidraw.app");
+    await fsp.mkdir(appPath);
+    const packageManifestPath = path.join(root, "package.json");
+    await fsp.writeFile(
+      packageManifestPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        gitCommit: "ab".repeat(20),
+        artifactSha256: "cd".repeat(32),
+        appPath,
+        bundleIdentifier: "excalidraw-desktop",
+        expectedWindowSize: { width: 1280, height: 760 },
+      }),
+    );
+    const planPath = path.join(runRoot, "plan.json");
+    const plan = await prepareNativeScreenPlan({
+      checkpoint: "HISTORY",
+      packageManifestPath,
+      runRoot,
+      planPath,
+      isolationMode: "backend-app-data-home-redirect",
+    });
+    assert.deepEqual(launchArgumentsForPlan(plan, plan.screens[0]), [
+      plan.screens[0].launchDocument,
+    ]);
+    const approvedDigest = plan.historyScope.highFi.sha256;
+    plan.historyScope.highFi.sha256 = "ee".repeat(32);
+    await fsp.writeFile(planPath, JSON.stringify(plan));
+    await assert.rejects(
+      captureNativeScreens({
+        planPath,
+        gate: "HISTORY-01",
+        collectionDir: path.join(runRoot, "collection"),
+      }),
+      /HISTORY highFi manifest identity changed/u,
+    );
+    plan.historyScope.highFi.sha256 = approvedDigest;
+    await fsp.writeFile(planPath, JSON.stringify(plan));
+    const fixtureManifest = JSON.parse(
+      await fsp.readFile(plan.fixture.manifestPath, "utf8"),
+    );
+    await fsp.writeFile(plan.screens[0].launchDocument, "changed");
+    assert.equal(
+      await validateHistoryLaunchDocument(
+        plan,
+        plan.screens[1],
+        fixtureManifest,
+        await fsp.realpath(runRoot),
+      ),
+      await fsp.realpath(plan.screens[1].launchDocument),
+    );
+    await assert.rejects(
+      captureNativeScreens({
+        planPath,
+        gate: "HISTORY-01",
+        collectionDir: path.join(runRoot, "collection"),
+      }),
+      /HISTORY launch document fixture digest changed/u,
+    );
+    await fsp.unlink(plan.screens[1].launchDocument);
+    await fsp.symlink(
+      plan.screens[2].launchDocument,
+      plan.screens[1].launchDocument,
+    );
+    await assert.rejects(
+      validateHistoryLaunchDocument(
+        plan,
+        plan.screens[1],
+        fixtureManifest,
+        await fsp.realpath(runRoot),
+      ),
+      /real gate-owned file/u,
+    );
+  });
   it("reads PNG dimensions and derives only an exact backing scale", () => {
     assert.deepEqual(readPngDimensions(png(2560, 1520)), {
       width: 2560,
@@ -162,6 +247,26 @@ describe("native screen capture v4", () => {
     assert.match(message, /Operator actions establish state only/u);
     assert.equal(message.includes("shell-state-v2"), false);
     assert.equal(message.includes("sidebarWidth"), false);
+    const historyMessage = operatorPreparationMessage({
+      ...screen,
+      gateId: "HISTORY-01",
+      launchDocument: "/tmp/fixture/History.excalidraw",
+    });
+    assert.match(
+      historyMessage,
+      /app was launched with the gate-owned saved drawing: \/tmp\/fixture\/History.excalidraw/u,
+    );
+    assert.doesNotMatch(historyMessage, /File > Open/u);
+    assert.match(historyMessage, /Version History is enabled/u);
+    assert.deepEqual(
+      launchArgumentsForPlan(
+        { checkpoint: "HISTORY" },
+        { launchDocument: "/tmp/fixture/History.excalidraw" },
+      ),
+      ["/tmp/fixture/History.excalidraw"],
+    );
+    assert.deepEqual(launchArgumentsForPlan({ checkpoint: "VSL" }), []);
+    assert.deepEqual(launchArgumentsForPlan({ checkpoint: "FINAL" }), []);
     assert.deepEqual(nativeMasksForScreen(screen), screen.nativeMasks);
   });
 

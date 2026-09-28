@@ -6,6 +6,8 @@ import type {
   HistoryListResponse,
   HistoryMarkRequest,
   HistoryMarkResponse,
+  HistorySetMarkedRequest,
+  HistorySetMarkedResponse,
   HistoryOperationStatusRequest,
   HistoryOperationStatusResponse,
   HistoryPreviewRequest,
@@ -32,6 +34,8 @@ export type {
   HistoryReplaceRequest,
   HistoryReplaceResponse,
   HistoryReplaceTarget,
+  HistorySetMarkedRequest,
+  HistorySetMarkedResponse,
   HistoryVersionAvailability,
   HistoryVersionItem,
 } from "../ipc/contracts";
@@ -55,6 +59,13 @@ export interface HistoryClient {
  * coordinator doubles continue to implement the smaller pre-Phase 6 client. */
 export interface HistoryDeleteClient {
   delete(request: HistoryDeleteRequest): Promise<HistoryDeleteResponse>;
+}
+
+/** Selected-version marking is separate from the current-scene mark surface. */
+export interface HistorySetMarkedClient {
+  setMarked(
+    request: HistorySetMarkedRequest,
+  ): Promise<HistorySetMarkedResponse>;
 }
 
 /**

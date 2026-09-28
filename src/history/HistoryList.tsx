@@ -6,8 +6,6 @@ export interface HistoryVersionView extends HistoryVersionItem {
   summary?: string;
   /** False means the caller cannot reliably describe the canvas change. */
   summaryReliable?: boolean;
-  /** Manual versions may be marked for long-term retention. */
-  marked?: boolean;
 }
 
 export interface HistoryListProps {
@@ -205,7 +203,7 @@ function formatHistoryTimestamp(recordedAt: number): string {
 
 function historyDate(recordedAt: number): Date | undefined {
   if (!Number.isFinite(recordedAt)) return undefined;
-  const date = new Date(recordedAt);
+  const date = new Date(recordedAt * 1000);
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 

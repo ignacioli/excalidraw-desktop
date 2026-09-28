@@ -15,6 +15,36 @@ const HF2_MANIFEST_PATH = path.join(
   REPO_ROOT,
   "docs/design/desktop-shell/hf-2/manifest.json",
 );
+const HISTORY_REGISTRY_PATH = path.join(
+  REPO_ROOT,
+  "e2e/native/004-history-capture-fixtures.json",
+);
+const HISTORY_HIGH_FI_PATH = path.join(
+  REPO_ROOT,
+  "docs/design/local-version-history/high-fi/manifest.json",
+);
+const HISTORY_LOW_FI_PATH = path.join(
+  REPO_ROOT,
+  "docs/design/local-version-history/low-fi/manifest.json",
+);
+const HISTORY_LAUNCH_FIXTURE_PATH = path.join(
+  REPO_ROOT,
+  "e2e/native/004-history-launch.excalidraw",
+);
+export const HISTORY_GATES = [
+  "HISTORY-01",
+  "HISTORY-02",
+  "HISTORY-03",
+  "HISTORY-04",
+  "HISTORY-05",
+  "HISTORY-06",
+  "HISTORY-ERROR",
+  "HISTORY-CONFLICT",
+  "HISTORY-PENDING",
+  "HISTORY-UNAVAILABLE",
+  "HISTORY-FOCUS",
+  "HISTORY-REDUCED-MOTION",
+];
 const FINAL_GATES = [
   "HF2-01",
   "HF2-02",
@@ -145,14 +175,22 @@ export function validateSemanticCollectorReport(value, hf2ManifestSha256) {
 
 function validateScreenRequest(
   screen,
+  checkpoint,
   label = `screen ${screen?.gateId ?? "unknown"}`,
 ) {
   if (
     !screen ||
     typeof screen.gateId !== "string" ||
-    typeof screen.manifestName !== "string" ||
-    typeof screen.baselinePath !== "string" ||
-    !HEX.digest.test(screen.baselineSha256 ?? "") ||
+    (checkpoint === "HISTORY"
+      ? typeof (screen.manifestName ?? screen.designReference?.state) !==
+        "string"
+      : typeof screen.manifestName !== "string") ||
+    (checkpoint === "HISTORY"
+      ? screen.designReference?.kind === "approved-high-fi-frame"
+        ? !/^[0-9a-f-]{36}$/u.test(screen.designReference.shapeId ?? "")
+        : screen.designReference?.kind !== "approved-low-fi-state"
+      : typeof screen.baselinePath !== "string" ||
+        !HEX.digest.test(screen.baselineSha256 ?? "")) ||
     !path.isAbsolute(screen.profileRoot ?? "") ||
     !["fixture", "operator-assisted"].includes(screen.preparationMode) ||
     !assertObject(screen.visualTarget, `${label}.visualTarget`).summary ||
@@ -160,6 +198,11 @@ function validateScreenRequest(
     screen.visualTarget.operatorChecklist.some(
       (item) => typeof item !== "string" || item.length === 0,
     ) ||
+    (checkpoint === "HISTORY" &&
+      (!Array.isArray(screen.visualTarget.humanLiveObservations) ||
+        screen.visualTarget.humanLiveObservations.some(
+          (item) => typeof item !== "string" || item.length === 0,
+        ))) ||
     screen.operatorConfirmation?.mode !== "terminal-exact-line" ||
     screen.operatorConfirmation?.timeoutSeconds !== 600 ||
     screen.viewport?.width !== 1280 ||
@@ -189,7 +232,7 @@ export function validateCapturePlan(value) {
   const plan = assertObject(value, "capture plan");
   if (
     plan.schemaVersion !== 2 ||
-    !["VSL", "FINAL"].includes(plan.checkpoint) ||
+    !["VSL", "FINAL", "HISTORY"].includes(plan.checkpoint) ||
     typeof plan.runId !== "string" ||
     !/^[0-9a-f-]{36}$/u.test(plan.runId) ||
     !HEX.commit.test(plan.productCommit ?? "") ||
@@ -197,9 +240,12 @@ export function validateCapturePlan(value) {
     !path.isAbsolute(plan.packageManifest.path) ||
     !HEX.digest.test(plan.packageManifest.sha256 ?? "") ||
     !HEX.digest.test(plan.packageManifest.artifactSha256 ?? "") ||
-    !assertObject(plan.hf2Manifest, "capture plan hf2Manifest").path ||
-    !path.isAbsolute(plan.hf2Manifest.path) ||
-    !HEX.digest.test(plan.hf2Manifest.sha256 ?? "") ||
+    (plan.checkpoint === "HISTORY"
+      ? !plan.historyScope || plan.hf2Manifest !== undefined
+      : !assertObject(plan.hf2Manifest, "capture plan hf2Manifest").path ||
+        !path.isAbsolute(plan.hf2Manifest.path) ||
+        !HEX.digest.test(plan.hf2Manifest.sha256 ?? "") ||
+        plan.historyScope !== undefined) ||
     typeof plan.harnessVersion !== "string" ||
     plan.harnessVersion.length === 0 ||
     plan.normalizationAlgorithm !== "lanczos3-srgb-v1" ||
@@ -246,15 +292,76 @@ export function validateCapturePlan(value) {
       blocked("capture plan semantic evidence binding is invalid");
     }
   }
-  const expectedGates = plan.checkpoint === "VSL" ? ["VSL-001"] : FINAL_GATES;
+  if (plan.checkpoint === "HISTORY") {
+    for (const [name, expected] of [
+      ["registry", HISTORY_REGISTRY_PATH],
+      ["highFi", HISTORY_HIGH_FI_PATH],
+      ["lowFi", HISTORY_LOW_FI_PATH],
+    ]) {
+      const binding = plan.historyScope[name];
+      if (binding?.path !== expected || !HEX.digest.test(binding.sha256 ?? ""))
+        blocked(`HISTORY ${name} binding is invalid`);
+    }
+    if (
+      plan.semanticEvidence !== undefined ||
+      plan.nativeValidation !== undefined ||
+      plan.harnessVersion !== "004-history-capture-v1"
+    )
+      blocked("HISTORY plan contains another checkpoint scope");
+    if (
+      plan.fixture.launchDocument !== undefined ||
+      plan.fixture.launchDocumentSha256 !== undefined
+    )
+      blocked("HISTORY plan contains a shared launch document");
+  }
+  const expectedGates =
+    plan.checkpoint === "VSL"
+      ? ["VSL-001"]
+      : plan.checkpoint === "HISTORY"
+        ? HISTORY_GATES
+        : FINAL_GATES;
   const observedGates = plan.screens.map((screen) => screen.gateId).sort();
   if (
     JSON.stringify(observedGates) !== JSON.stringify([...expectedGates].sort())
   )
     blocked("capture plan has missing or duplicate screen gates");
   const profiles = new Set();
+  const launchDocuments = new Set();
   for (const screen of plan.screens) {
-    validateScreenRequest(screen);
+    validateScreenRequest(screen, plan.checkpoint);
+    if (plan.checkpoint === "HISTORY") {
+      if (
+        screen.profileRoot !==
+        path.join(plan.isolation.expectedAppDataRoot, screen.gateId)
+      )
+        blocked(`HISTORY profile binding is invalid for ${screen.gateId}`);
+      const expected = path.join(
+        plan.fixture.workspaceRoot,
+        "native-entrypoints",
+        screen.gateId,
+        path.basename(HISTORY_LAUNCH_FIXTURE_PATH),
+      );
+      if (
+        screen.launchDocument !== expected ||
+        !pathInside(plan.isolation.root, screen.launchDocument) ||
+        !HEX.digest.test(screen.launchDocumentSha256 ?? "") ||
+        launchDocuments.has(screen.launchDocument)
+      )
+        blocked(
+          `HISTORY launch document binding is invalid for ${screen.gateId}`,
+        );
+      launchDocuments.add(screen.launchDocument);
+    } else if (
+      screen.launchDocument !== undefined ||
+      screen.launchDocumentSha256 !== undefined
+    ) {
+      blocked("003 screen contains HISTORY launch document");
+    }
+    if (
+      plan.checkpoint === "HISTORY" &&
+      (screen.baselinePath !== undefined || screen.baselineSha256 !== undefined)
+    )
+      blocked("HISTORY cannot use a 003 pixel baseline");
     if (profiles.has(screen.profileRoot))
       blocked("each screen must have a distinct profileRoot");
     profiles.add(screen.profileRoot);
@@ -289,6 +396,57 @@ export function validateCapturePlan(value) {
   return plan;
 }
 
+export function validateHistoryPlanScope(plan, registry, highFi) {
+  if (plan.checkpoint !== "HISTORY") blocked("capture plan is not HISTORY");
+  if (
+    registry.fixtureVersion !== "004-history-capture-v1" ||
+    !Array.isArray(registry.screens)
+  )
+    blocked("HISTORY fixture registry is invalid");
+  for (const screen of plan.screens) {
+    const declared = registry.screens.find(
+      (entry) => entry.gateId === screen.gateId,
+    );
+    if (
+      !declared ||
+      JSON.stringify(screen.visualTarget.operatorChecklist) !==
+        JSON.stringify(declared.checklist) ||
+      JSON.stringify(screen.visualTarget.humanLiveObservations) !==
+        JSON.stringify(declared.humanLiveObservations ?? []) ||
+      screen.visualTarget.summary !==
+        (declared.manifestName ?? declared.state) ||
+      screen.preparationMode !== "operator-assisted" ||
+      screen.nativeMasks.length !== 0
+    )
+      blocked(`HISTORY scope mismatch for ${screen.gateId}`);
+    const expectedReference = declared.shapeId
+      ? {
+          kind: "approved-high-fi-frame",
+          shapeId: declared.shapeId,
+          name: declared.manifestName,
+        }
+      : { kind: "approved-low-fi-state", state: declared.state };
+    if (
+      JSON.stringify(screen.designReference) !==
+      JSON.stringify(expectedReference)
+    )
+      blocked(`HISTORY design reference mismatch for ${screen.gateId}`);
+    if (declared.shapeId) {
+      const frame = highFi.frames?.find(
+        (entry) => entry.shapeId === declared.shapeId,
+      );
+      if (
+        !frame ||
+        frame.name !== declared.manifestName ||
+        frame.width !== 1280 ||
+        frame.height !== 760
+      )
+        blocked(`HISTORY high-fi frame mismatch for ${screen.gateId}`);
+    }
+  }
+  return plan;
+}
+
 async function writeJsonExclusive(filePath, value) {
   await fsp.mkdir(path.dirname(filePath), { recursive: true });
   await fsp.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, {
@@ -297,7 +455,13 @@ async function writeJsonExclusive(filePath, value) {
   });
 }
 
-function visualTargetForScreen(screen) {
+function visualTargetForScreen(screen, checkpoint) {
+  if (checkpoint === "HISTORY")
+    return {
+      summary: screen.manifestName ?? screen.state,
+      operatorChecklist: screen.checklist,
+      humanLiveObservations: screen.humanLiveObservations ?? [],
+    };
   const checklist = [
     `Establish the declared ${screen.manifestName} composition through ordinary UI`,
   ];
@@ -316,7 +480,12 @@ function visualTargetForScreen(screen) {
   };
 }
 
-async function provisionFixture(runRoot, screens, nativeLaunchFixture) {
+async function provisionFixture(
+  runRoot,
+  screens,
+  nativeLaunchFixture,
+  checkpoint,
+) {
   const declaredWorkspaceName =
     screens.length === 1 && typeof screens[0]?.workspaceName === "string"
       ? screens[0].workspaceName
@@ -350,7 +519,22 @@ async function provisionFixture(runRoot, screens, nativeLaunchFixture) {
       sha256: sha256Bytes(scene),
     });
   }
-  if (nativeLaunchFixture) {
+  if (nativeLaunchFixture && checkpoint === "HISTORY") {
+    for (const screen of screens) {
+      const relative = path.join(
+        "native-entrypoints",
+        screen.gateId,
+        nativeLaunchFixture.name,
+      );
+      const absolute = path.join(workspaceRoot, relative);
+      await fsp.mkdir(path.dirname(absolute), { recursive: true });
+      await fsp.writeFile(absolute, nativeLaunchFixture.bytes, { flag: "wx" });
+      files.push({
+        path: relative.split(path.sep).join("/"),
+        sha256: sha256Bytes(nativeLaunchFixture.bytes),
+      });
+    }
+  } else if (nativeLaunchFixture) {
     const relative = path.join("native-entrypoints", nativeLaunchFixture.name);
     const absolute = path.join(workspaceRoot, relative);
     await fsp.mkdir(path.dirname(absolute), { recursive: true });
@@ -362,12 +546,19 @@ async function provisionFixture(runRoot, screens, nativeLaunchFixture) {
   }
   const manifest = {
     schemaVersion: 2,
-    fixtureVersion: "003-native-capture-v4",
-    fixtureId: "003-native-capture-v4",
+    fixtureVersion:
+      checkpoint === "HISTORY"
+        ? "004-history-capture-v1"
+        : "003-native-capture-v4",
+    fixtureId:
+      checkpoint === "HISTORY"
+        ? "004-history-capture-v1"
+        : "003-native-capture-v4",
     workspaceRoot,
     screens: screens.map(({ gateId, preparationMode }) => ({
       gateId,
-      preparationMode,
+      preparationMode:
+        checkpoint === "HISTORY" ? "operator-assisted" : preparationMode,
     })),
     files,
   };
@@ -390,6 +581,8 @@ export async function prepareNativeScreenPlan({
   planPath,
   isolationMode,
 }) {
+  if (checkpoint === "HISTORY" && semanticCollectionPath !== undefined)
+    invalid("HISTORY does not accept semantic collection evidence");
   if (
     !path.isAbsolute(packageManifestPath) ||
     (checkpoint === "VSL" && !path.isAbsolute(semanticCollectionPath ?? "")) ||
@@ -401,6 +594,32 @@ export async function prepareNativeScreenPlan({
   if (!ISOLATION_MODES.has(isolationMode))
     invalid("--isolation-mode is required and invalid");
   let nativeLaunchFixture;
+  if (checkpoint === "HISTORY") {
+    const stats = await fsp.lstat(HISTORY_LAUNCH_FIXTURE_PATH);
+    if (!stats.isFile() || stats.isSymbolicLink())
+      blocked("HISTORY launch fixture must be a real drawing file");
+    const bytes = await fsp.readFile(HISTORY_LAUNCH_FIXTURE_PATH);
+    let scene;
+    try {
+      scene = JSON.parse(bytes.toString("utf8"));
+    } catch {
+      blocked("HISTORY launch fixture must contain valid drawing JSON");
+    }
+    if (
+      scene?.type !== "excalidraw" ||
+      scene.version !== 2 ||
+      !Array.isArray(scene.elements) ||
+      !scene.appState ||
+      typeof scene.appState !== "object" ||
+      !scene.files ||
+      typeof scene.files !== "object"
+    )
+      blocked("HISTORY launch fixture must contain an Excalidraw v2 drawing");
+    nativeLaunchFixture = {
+      name: path.basename(HISTORY_LAUNCH_FIXTURE_PATH),
+      bytes,
+    };
+  }
   if (nativeLaunchFixturePath !== undefined) {
     if (
       checkpoint !== "FINAL" ||
@@ -452,32 +671,104 @@ export async function prepareNativeScreenPlan({
     JSON.parse(packageBytes.toString("utf8")),
   );
   const fixtureRegistry = assertObject(
-    JSON.parse(await fsp.readFile(FIXTURE_REGISTRY_PATH, "utf8")),
+    JSON.parse(
+      await fsp.readFile(
+        checkpoint === "HISTORY"
+          ? HISTORY_REGISTRY_PATH
+          : FIXTURE_REGISTRY_PATH,
+        "utf8",
+      ),
+    ),
     "fixture registry",
   );
   if (
-    fixtureRegistry.schemaVersion !== 2 ||
-    fixtureRegistry.fixtureVersion !== "003-native-capture-v4" ||
+    fixtureRegistry.schemaVersion !== (checkpoint === "HISTORY" ? 1 : 2) ||
+    fixtureRegistry.fixtureVersion !==
+      (checkpoint === "HISTORY"
+        ? "004-history-capture-v1"
+        : "003-native-capture-v4") ||
     !Array.isArray(fixtureRegistry.screens)
   ) {
     blocked("fixture registry schema is invalid");
   }
-  const requestedScreens = fixtureRegistry.screens.filter(
-    (screen) => screen.checkpoint === checkpoint,
-  );
-  const expectedGates = checkpoint === "VSL" ? ["VSL-001"] : FINAL_GATES;
+  const requestedScreens =
+    checkpoint === "HISTORY"
+      ? fixtureRegistry.screens
+      : fixtureRegistry.screens.filter(
+          (screen) => screen.checkpoint === checkpoint,
+        );
+  const expectedGates =
+    checkpoint === "VSL"
+      ? ["VSL-001"]
+      : checkpoint === "HISTORY"
+        ? HISTORY_GATES
+        : FINAL_GATES;
   if (
     JSON.stringify(requestedScreens.map((screen) => screen.gateId).sort()) !==
     JSON.stringify([...expectedGates].sort())
   ) {
     blocked("fixture registry does not declare the requested checkpoint");
   }
-  const hf2Bytes = await fsp.readFile(HF2_MANIFEST_PATH);
-  const hf2 = assertObject(
-    JSON.parse(hf2Bytes.toString("utf8")),
-    "HF-2 manifest",
-  );
-  if (!Array.isArray(hf2.screens)) blocked("HF-2 manifest screens are missing");
+  let hf2Bytes, hf2, historyScope, highFi;
+  if (checkpoint === "HISTORY") {
+    const highFiBytes = await fsp.readFile(HISTORY_HIGH_FI_PATH);
+    const lowFiBytes = await fsp.readFile(HISTORY_LOW_FI_PATH);
+    highFi = assertObject(
+      JSON.parse(highFiBytes.toString("utf8")),
+      "History high-fi manifest",
+    );
+    const lowFi = assertObject(
+      JSON.parse(lowFiBytes.toString("utf8")),
+      "History low-fi manifest",
+    );
+    if (
+      highFi.feature !== "local-version-history" ||
+      highFi.status !== "approved" ||
+      highFi.ownerDecision?.highFidelity !== "APPROVED" ||
+      highFi.frames?.length !== 6 ||
+      lowFi.feature !== "local-version-history" ||
+      lowFi.ownerDecision?.lowFidelity !== "APPROVED" ||
+      lowFi.viewport?.width !== 1280 ||
+      lowFi.viewport?.height !== 760
+    )
+      blocked("History design approval or geometry is invalid");
+    historyScope = {
+      registry: {
+        path: HISTORY_REGISTRY_PATH,
+        sha256: await sha256File(HISTORY_REGISTRY_PATH),
+      },
+      highFi: { path: HISTORY_HIGH_FI_PATH, sha256: sha256Bytes(highFiBytes) },
+      lowFi: { path: HISTORY_LOW_FI_PATH, sha256: sha256Bytes(lowFiBytes) },
+    };
+    for (const screen of requestedScreens) {
+      if (
+        !Array.isArray(screen.checklist) ||
+        screen.checklist.length === 0 ||
+        screen.checklist.some(
+          (item) => typeof item !== "string" || item.length === 0,
+        )
+      )
+        blocked(`HISTORY checklist missing for ${screen.gateId}`);
+      if (screen.shapeId) {
+        const frame = highFi.frames.find(
+          (entry) => entry.shapeId === screen.shapeId,
+        );
+        if (
+          !frame ||
+          frame.name !== screen.manifestName ||
+          frame.width !== 1280 ||
+          frame.height !== 760
+        )
+          blocked(`History high-fi frame mismatch for ${screen.gateId}`);
+      } else if (typeof screen.state !== "string" || !screen.state)
+        blocked(`History low-fi state missing for ${screen.gateId}`);
+    }
+  } else {
+    hf2Bytes = await fsp.readFile(HF2_MANIFEST_PATH);
+    hf2 = assertObject(JSON.parse(hf2Bytes.toString("utf8")), "HF-2 manifest");
+    if (!Array.isArray(hf2.screens))
+      blocked("HF-2 manifest screens are missing");
+  }
   let semanticEvidence;
   if (checkpoint === "VSL") {
     const semanticBytes = await fsp.readFile(semanticCollectionPath);
@@ -501,27 +792,55 @@ export async function prepareNativeScreenPlan({
     runRoot,
     requestedScreens,
     nativeLaunchFixture,
+    checkpoint,
   );
   const profilesRoot = path.join(runRoot, "profiles");
   await fsp.mkdir(profilesRoot, { recursive: true });
-  await fsp.mkdir(path.join(profilesRoot, "T023b"));
+  if (checkpoint === "FINAL") await fsp.mkdir(path.join(profilesRoot, "T023b"));
   const screens = [];
   for (const screen of requestedScreens) {
-    const baseline = hf2.screens.find(
+    const baseline = hf2?.screens.find(
       (entry) => entry.path === screen.baselinePath,
     );
-    if (!baseline || baseline.name !== screen.manifestName)
+    if (
+      checkpoint !== "HISTORY" &&
+      (!baseline || baseline.name !== screen.manifestName)
+    )
       blocked(`HF-2 baseline mismatch for ${screen.gateId}`);
     const profileRoot = path.join(profilesRoot, screen.gateId);
     await fsp.mkdir(profileRoot);
     screens.push({
       gateId: screen.gateId,
       profileRoot,
-      preparationMode: screen.preparationMode,
+      preparationMode:
+        checkpoint === "HISTORY" ? "operator-assisted" : screen.preparationMode,
+      ...(checkpoint === "HISTORY"
+        ? {
+            launchDocument: path.join(
+              fixture.workspaceRoot,
+              "native-entrypoints",
+              screen.gateId,
+              nativeLaunchFixture.name,
+            ),
+            launchDocumentSha256: sha256Bytes(nativeLaunchFixture.bytes),
+          }
+        : {}),
       manifestName: screen.manifestName,
-      baselinePath: screen.baselinePath,
-      baselineSha256: baseline.sha256,
-      visualTarget: visualTargetForScreen(screen),
+      ...(checkpoint === "HISTORY"
+        ? {
+            designReference: screen.shapeId
+              ? {
+                  kind: "approved-high-fi-frame",
+                  shapeId: screen.shapeId,
+                  name: screen.manifestName,
+                }
+              : { kind: "approved-low-fi-state", state: screen.state },
+          }
+        : {
+            baselinePath: screen.baselinePath,
+            baselineSha256: baseline.sha256,
+          }),
+      visualTarget: visualTargetForScreen(screen, checkpoint),
       operatorConfirmation: {
         mode: "terminal-exact-line",
         timeoutSeconds: 600,
@@ -541,9 +860,19 @@ export async function prepareNativeScreenPlan({
       artifactSha256:
         packageManifest.artifactSha256 ?? packageManifest.packageSha256,
     },
-    hf2Manifest: { path: HF2_MANIFEST_PATH, sha256: sha256Bytes(hf2Bytes) },
+    ...(checkpoint === "HISTORY"
+      ? { historyScope }
+      : {
+          hf2Manifest: {
+            path: HF2_MANIFEST_PATH,
+            sha256: sha256Bytes(hf2Bytes),
+          },
+        }),
     ...(semanticEvidence ? { semanticEvidence } : {}),
-    harnessVersion: "003-native-capture-v4",
+    harnessVersion:
+      checkpoint === "HISTORY"
+        ? "004-history-capture-v1"
+        : "003-native-capture-v4",
     normalizationAlgorithm: "lanczos3-srgb-v1",
     isolation: {
       mode: isolationMode,
@@ -581,6 +910,8 @@ export async function prepareNativeScreenPlan({
     screens,
   };
   validateCapturePlan(plan);
+  if (checkpoint === "HISTORY")
+    validateHistoryPlanScope(plan, fixtureRegistry, highFi);
   await assertRealPathInside(
     runRoot,
     fixture.workspaceRoot,
@@ -593,7 +924,7 @@ export async function prepareNativeScreenPlan({
 
 function usage() {
   console.log(
-    "Usage: pnpm native:screen:prepare -- --checkpoint VSL|FINAL --package-manifest <absolute.json> [--semantic-collection <absolute-T031-collector-report.json> for VSL] [--native-launch-fixture <absolute.excalidraw> for FINAL] --run-root <absolute-empty-dir> --plan <absolute-new.json> --isolation-mode backend-app-data-home-redirect\nPlan schema: v2. VSL binds one PASS semantic collection by file and collection digest. FINAL also binds one empty T023b profile, six untouched capture profiles, and Save/PNG/SVG filesystem targets. Backend app-data only; WebKit filesystem isolation is not claimed. Exit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation.",
+    "Usage: pnpm native:screen:prepare -- --checkpoint VSL|FINAL|HISTORY --package-manifest <absolute.json> [--semantic-collection <absolute-T031-collector-report.json> for VSL] [--native-launch-fixture <absolute.excalidraw> for FINAL] --run-root <absolute-empty-dir> --plan <absolute-new.json> --isolation-mode backend-app-data-home-redirect\nPlan schema: v2. VSL binds one PASS semantic collection. FINAL binds T023b and six HF2 capture profiles. HISTORY binds twelve History visual targets and approved design manifests without a pixel baseline or menu graph. Operator-assisted preparation is not proof of application state. Backend app-data only; WebKit filesystem isolation is not claimed. Exit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation.",
   );
 }
 
@@ -613,7 +944,7 @@ async function main() {
   const planPath = option(args, "--plan");
   const isolationMode = option(args, "--isolation-mode");
   if (
-    !["VSL", "FINAL"].includes(checkpoint) ||
+    !["VSL", "FINAL", "HISTORY"].includes(checkpoint) ||
     !packageManifestPath ||
     (checkpoint === "VSL" && !semanticCollectionPath) ||
     !runRoot ||

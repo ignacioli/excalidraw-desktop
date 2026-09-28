@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { HistoryList, type HistoryVersionView } from "./HistoryList";
 
-const recordedAt = Date.UTC(2026, 8, 23, 12, 34);
+const recordedAt = Date.UTC(2026, 8, 23, 12, 34) / 1000;
 
 function item(overrides: Partial<HistoryVersionView> = {}): HistoryVersionView {
   return {
@@ -13,6 +13,7 @@ function item(overrides: Partial<HistoryVersionView> = {}): HistoryVersionView {
     sequence: 1,
     contentHash: "hash-1",
     availability: { status: "available" },
+    marked: false,
     ...overrides,
   };
 }
@@ -47,6 +48,11 @@ describe("HistoryList", () => {
     expect(screen.getByText("Manual")).toBeInTheDocument();
     expect(screen.getByText("Manual · Marked")).toBeInTheDocument();
     expect(screen.getByText("Two shapes added")).toBeInTheDocument();
+    const timestamp = screen
+      .getByText("Two shapes added")
+      .parentElement?.querySelector("time");
+    expect(timestamp).toHaveAttribute("datetime", "2026-09-23T12:34:00.000Z");
+    expect(timestamp).toHaveTextContent(/Sep 23, 2026/);
     expect(screen.getAllByText("Canvas changed")).toHaveLength(1);
     expect(screen.getByText("Ready")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /Current/ })).toBeInTheDocument();

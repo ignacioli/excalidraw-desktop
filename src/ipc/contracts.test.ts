@@ -12,6 +12,9 @@ import {
   type HistoryIssueEvent,
   type HistoryListRequest,
   type HistoryReplaceRequest,
+  type HistorySetMarkedRequest,
+  type HistorySetMarkedResponse,
+  type HistoryVersionItem,
   type IpcCommands,
   type IpcEvents,
   type NativeMenuCommandEvent,
@@ -20,7 +23,7 @@ import {
   type WorkspaceEntry,
 } from "./contracts";
 
-describe("IPC v3 history read contract", () => {
+describe("IPC v3 history contract", () => {
   it("defines the complete WorkspaceEntry wire shape", () => {
     expectTypeOf<WorkspaceEntry>().toEqualTypeOf<{
       workspaceId: string;
@@ -162,7 +165,8 @@ describe("IPC v3 history read contract", () => {
     >().toEqualTypeOf<NativeMenuCommandEvent>();
   });
 
-  it("defines the six history commands without exposing store paths", () => {
+  it("defines history commands without exposing store paths", () => {
+    expectTypeOf<HistoryVersionItem>().toMatchTypeOf<{ marked: boolean }>();
     expectTypeOf<HistoryListRequest>().toEqualTypeOf<{
       document:
         { kind: "path"; path: string } | { kind: "handle"; documentId: string };
@@ -191,12 +195,25 @@ describe("IPC v3 history read contract", () => {
     expectTypeOf<HistoryDeleteResponse>().toEqualTypeOf<{
       deletedVersionId: string;
     }>();
+    expectTypeOf<HistorySetMarkedRequest>().toEqualTypeOf<{
+      document:
+        | { kind: "path"; path: string }
+        | { kind: "handle"; documentId: string };
+      requestId: string;
+      versionId: string;
+      marked: boolean;
+    }>();
+    expectTypeOf<HistorySetMarkedResponse>().toEqualTypeOf<{
+      versionId: string;
+      marked: boolean;
+    }>();
     expectTypeOf<
       keyof Pick<
         IpcCommands,
         | "history_list"
         | "history_preview"
         | "history_mark"
+        | "history_set_marked"
         | "history_replace"
         | "history_operation_status"
         | "history_delete"
@@ -205,6 +222,7 @@ describe("IPC v3 history read contract", () => {
       | "history_list"
       | "history_preview"
       | "history_mark"
+      | "history_set_marked"
       | "history_replace"
       | "history_operation_status"
       | "history_delete"

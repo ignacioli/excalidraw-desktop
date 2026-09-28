@@ -720,6 +720,8 @@ describe("AppShell", () => {
   });
 
   it("routes native version history to the active saved document only", async () => {
+    const user = userEvent.setup();
+    seedShellPreferences({ sidebarPinned: true });
     nativeRuntimeHarness.enabled = true;
     setDocumentSessions([
       createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "clean"),
@@ -746,6 +748,28 @@ describe("AppShell", () => {
     expect(
       await screen.findByRole("complementary", { name: "Version History" }),
     ).toBeInTheDocument();
+    const shellBody = screen.getByRole("main", {
+      name: "Drawing canvas",
+    }).parentElement;
+    expect(shellBody).toHaveClass("app-shell-body--history");
+    expect(shellBody).toHaveClass("app-shell-body--pinned");
+    expect(document.getElementById("workspace-sidebar")).toHaveProperty(
+      "hidden",
+      true,
+    );
+    expect(document.querySelector(".app-shell-tabs")).toHaveAttribute(
+      "data-history-open",
+      "true",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Close version history" }),
+    );
+    expect(document.getElementById("workspace-sidebar")).toHaveProperty(
+      "hidden",
+      false,
+    );
+    expect(shellBody).toHaveClass("app-shell-body--pinned");
+    expect(shellBody).not.toHaveClass("app-shell-body--history");
     expect(invoke).toHaveBeenCalledWith("history_list", {
       document: { kind: "path", path: "/tmp/drawing.excalidraw" },
       limit: 50,

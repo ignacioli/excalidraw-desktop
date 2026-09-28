@@ -1,4 +1,5 @@
 use excalidraw_desktop_lib::{
+    commands::dto::{HistorySetMarkedRequest, HistorySetMarkedResponse},
     commands::error::{ErrorCode, IpcError},
     history::types::{
         validate_cursor, validate_hash, validate_identifier, validate_page_limit,
@@ -15,6 +16,44 @@ use serde_json::{json, Value};
 fn serialized<T: serde::Serialize>(value: T) -> Value {
     serde_json::to_value(value)
         .unwrap_or_else(|error| panic!("serialize history contract: {error}"))
+}
+
+#[test]
+fn selected_mark_contract_is_camel_case_and_validated() {
+    let request = HistorySetMarkedRequest {
+        document: HistoryDocumentLocator::Handle {
+            document_id: "document-1".to_owned(),
+        },
+        request_id: "request-1".to_owned(),
+        version_id: "version-1".to_owned(),
+        marked: true,
+    };
+    assert!(request.validate().is_ok());
+    assert_eq!(
+        serialized(request.clone()),
+        json!({
+            "document": {"kind": "handle", "documentId": "document-1"},
+            "requestId": "request-1",
+            "versionId": "version-1",
+            "marked": true
+        })
+    );
+    assert_eq!(
+        serialized(HistorySetMarkedResponse {
+            version_id: "version-1".to_owned(),
+            marked: false,
+            retained: false,
+        }),
+        json!({
+            "versionId": "version-1", "marked": false, "retained": false
+        })
+    );
+    assert!(HistorySetMarkedRequest {
+        request_id: String::new(),
+        ..request
+    }
+    .validate()
+    .is_err());
 }
 
 #[test]
@@ -94,6 +133,7 @@ fn reserved_history_wire_shapes_match_camel_case_typescript_contract() {
         serialized(HistoryVersionItem {
             version_id: "version-1".to_owned(),
             source: HistoryVersionSource::Protected,
+            marked: true,
             protected_action: Some(HistoryProtectedAction::Restore),
             recorded_at: 123,
             sequence: 7,
@@ -103,6 +143,7 @@ fn reserved_history_wire_shapes_match_camel_case_typescript_contract() {
         json!({
             "versionId": "version-1",
             "source": "protected",
+            "marked": true,
             "protectedAction": "restore",
             "recordedAt": 123,
             "sequence": 7,

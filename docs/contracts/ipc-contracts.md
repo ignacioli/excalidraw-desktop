@@ -13,7 +13,7 @@ v1 的 `dir_list` / `file_create` / `file_rename` / `file_delete` / `thumb_looku
 - 契约版本常量 `IPC_CONTRACT_VERSION = 3`（TS/Rust），随 `app_handshake` 返回；不兼容变更须递增版本并在本文件记录迁移说明。
 - 字段演进规则：新增可选字段 = 兼容；删除/改类型/改语义 = 不兼容。
 - v1 → v2 不兼容变更：删除缩略图命令；用统一 Workspace Entry 命令替换 `dir_list` 与 `file_*`；`doc_close` 改为显式 `mode`（可丢弃失联文档而不再授权已缺失路径）。
-- v3 当前公开 history command 为 `history_list`、`history_preview`、`history_mark`、`history_replace`、`history_operation_status` 和 `history_delete`。v2 客户端不兼容此握手版本。
+- v3 当前公开 history command 为 `history_list`、`history_preview`、`history_mark`、`history_set_marked`、`history_replace`、`history_operation_status` 和 `history_delete`。v2 客户端不兼容此握手版本。
 
 ### 信任边界规则（所有命令统一执行）
 
@@ -222,6 +222,7 @@ generation/revision 必须是非负整数；hash 必须是 64 位小写 SHA-256 
 | `history_list` | `{ document; cursor?; limit? }` | `documentId`、不含 scene bytes 的版本 metadata、`nextCursor?`、`listRevision`、`pendingIssue?` |
 | `history_preview` | `{ document; versionId }` | 后端严格 hydration 后返回 `{ versionId; scene }`；不写 current file 或 draft |
 | `history_mark` | `{ document; requestId; sessionGeneration; revision; currentSceneJson }` | 持久发布点击时完整场景后返回 `{ versionId; recordedAt; source: "manual"; contentHash }`；manual 记录不进入 automatic/protected 最新 20 条池 |
+| `history_set_marked` | `{ document; requestId; versionId; marked }` | 幂等设置既有版本的 manual mark 状态；返回 `{ versionId; marked }`。`HistoryVersionItem.marked` 是列表中的权威状态；缺失版本返回 `HISTORY_RESOURCE_MISSING`，同一 requestId 冲突返回 `HISTORY_STALE_DOCUMENT`，保护操作占用时返回 `HISTORY_BUSY`，store 故障返回 `HISTORY_UNAVAILABLE` |
 | `history_replace` | `{ document; requestId; sessionGeneration; revision; expectedBaseHash; currentSceneJson; target }` | `target` 为 `restore(versionId)`、`clear` 或 `import(candidateSceneJson)`；返回 `completed` 或 `pendingReconciliation` |
 | `history_operation_status` | `{ document; requestId }` | 只查询既有操作；返回 state、`replacementCommitted: boolean \| null` 和完成时的 adoption payload |
 | `history_delete` | `{ document; requestId; versionId }` | 在文档 history-operation lease 下删除一条语义版本；返回 `{ deletedVersionId }`；同一 `requestId` 重试幂等，活动操作引用的版本返回 `HISTORY_BUSY` |

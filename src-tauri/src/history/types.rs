@@ -169,6 +169,7 @@ pub enum HistoryReplaceResponse {
 pub struct HistoryVersionItem {
     pub version_id: String,
     pub source: HistoryVersionSource,
+    pub marked: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protected_action: Option<HistoryProtectedAction>,
     pub recorded_at: i64,

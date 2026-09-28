@@ -159,6 +159,7 @@ export type HistoryVersionAvailability =
 export interface HistoryVersionItem {
   versionId: string;
   source: HistoryVersionSource;
+  marked: boolean;
   protectedAction?: HistoryProtectedAction;
   recordedAt: number;
   sequence: number;
@@ -203,6 +204,19 @@ export interface HistoryMarkResponse {
   recordedAt: number;
   source: "manual";
   contentHash: string;
+}
+
+/** Changes whether an existing version is pinned as a manual mark. */
+export interface HistorySetMarkedRequest {
+  document: HistoryDocumentLocator;
+  requestId: string;
+  versionId: string;
+  marked: boolean;
+}
+
+export interface HistorySetMarkedResponse {
+  versionId: string;
+  marked: boolean;
 }
 
 export type HistoryReplaceTarget =
@@ -437,6 +451,10 @@ export interface IpcCommands {
   history_mark: {
     request: HistoryMarkRequest;
     response: HistoryMarkResponse;
+  };
+  history_set_marked: {
+    request: HistorySetMarkedRequest;
+    response: HistorySetMarkedResponse;
   };
   history_replace: {
     request: HistoryReplaceRequest;

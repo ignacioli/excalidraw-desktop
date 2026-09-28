@@ -428,6 +428,31 @@ pub struct HistoryMarkResponse {
     pub content_hash: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistorySetMarkedRequest {
+    pub document: HistoryDocumentLocator,
+    pub request_id: String,
+    pub version_id: String,
+    pub marked: bool,
+}
+
+impl HistorySetMarkedRequest {
+    pub fn validate(&self) -> Result<(), HistoryValidationError> {
+        self.document.validate()?;
+        validate_identifier(&self.request_id, "requestId")?;
+        validate_identifier(&self.version_id, "versionId")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistorySetMarkedResponse {
+    pub version_id: String,
+    pub marked: bool,
+    pub retained: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryReplaceRequest {

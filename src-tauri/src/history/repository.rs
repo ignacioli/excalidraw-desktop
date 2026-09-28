@@ -18,8 +18,7 @@ use super::{
     },
 };
 
-/// The number of automatic and protected semantic records retained per
-/// document. Manual records are outside this pool.
+/// The number of unmarked semantic records retained per document.
 pub const RETAINED_VERSION_LIMIT: i64 = 20;
 
 /// The minimum time between ordinary automatic history records for one
@@ -149,6 +148,8 @@ pub enum HistoryRepositoryError {
     DeleteRequestConflict,
     #[error("history delete operation is still pending")]
     DeletePending,
+    #[error("history mark request conflicts with a previous request")]
+    MarkRequestConflict,
     #[error("history document does not exist: {0}")]
     DocumentNotFound(String),
     #[cfg(feature = "e2e-harness")]
@@ -169,6 +170,90 @@ impl<'store> HistoryRepository<'store> {
 
     pub fn store(&self) -> &'store HistoryStore {
         self.store
+    }
+
+    /// Change retention status without changing a version's historical source.
+    /// The request receipt and any newly eligible retention eviction commit
+    /// together, so retries remain stable even when unmarking prunes the row.
+    pub fn set_marked(
+        &self,
+        request_id: &str,
+        document_id: &str,
+        version_id: &str,
+        marked: bool,
+    ) -> Result<bool, HistoryRepositoryError> {
+        validate_identifier(request_id, "requestId")
+            .map_err(HistoryRepositoryError::InvalidVersionId)?;
+        validate_identifier(document_id, "documentId")
+            .map_err(HistoryRepositoryError::InvalidDocumentId)?;
+        validate_identifier(version_id, "versionId")
+            .map_err(HistoryRepositoryError::InvalidVersionId)?;
+
+        let (exists, in_use, conflict, retained, evicted) = self.store.with_mutation(|mutation| {
+            let result = self.store.with_transaction(|transaction| -> Result<_, rusqlite::Error> {
+                let previous = transaction.query_row(
+                    "SELECT document_id, version_id, marked, retained FROM history_mark_requests WHERE request_id = ?1",
+                    [request_id],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, bool>(2)?, row.get::<_, bool>(3)?)),
+                ).optional()?;
+                if let Some((previous_document, previous_version, previous_marked, previous_retained)) = previous {
+                    return Ok((true, false, previous_document != document_id || previous_version != version_id || previous_marked != marked, previous_retained, Vec::new()));
+                }
+                let exists = transaction.query_row(
+                    "SELECT 1 FROM history_versions WHERE id = ?1 AND document_id = ?2",
+                    rusqlite::params![version_id, document_id],
+                    |_| Ok(()),
+                ).optional()?.is_some();
+                if !exists {
+                    return Ok((false, false, false, false, Vec::new()));
+                }
+                let in_use = transaction.query_row(
+                    "SELECT 1 FROM history_operations WHERE document_id = ?1
+                     AND protection_version_id = ?2
+                     AND state NOT IN ('completed', 'aborted', 'conflict') LIMIT 1",
+                    rusqlite::params![document_id, version_id],
+                    |_| Ok(()),
+                ).optional()?.is_some();
+                if in_use {
+                    return Ok((true, true, false, false, Vec::new()));
+                }
+                transaction.execute(
+                    "UPDATE history_versions SET marked = ?3 WHERE id = ?1 AND document_id = ?2",
+                    rusqlite::params![version_id, document_id, marked],
+                )?;
+                let evicted = if marked { Vec::new() } else { prune_unmarked(transaction, document_id)? };
+                let retained = !evicted.iter().any(|evicted_id| evicted_id == version_id);
+                transaction.execute(
+                    "INSERT INTO history_mark_requests (request_id, document_id, version_id, marked, retained)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    rusqlite::params![request_id, document_id, version_id, marked, retained],
+                )?;
+                Ok((true, false, false, retained, evicted))
+            })?;
+            for version_id in &result.4 {
+                mutation.remove_committed_version(version_id);
+            }
+            Ok::<_, HistoryStoreError>(result)
+        })?;
+        if conflict {
+            return Err(HistoryRepositoryError::MarkRequestConflict);
+        }
+        if !exists {
+            return Err(HistoryRepositoryError::VersionNotFound {
+                document_id: document_id.to_owned(),
+                version_id: version_id.to_owned(),
+            });
+        }
+        if in_use {
+            return Err(HistoryRepositoryError::VersionInUse);
+        }
+        if !evicted.is_empty() {
+            let _ = self.store.collect_garbage(
+                std::time::SystemTime::now(),
+                super::gc::DEFAULT_ORPHAN_GRACE,
+            );
+        }
+        Ok(retained)
     }
 
     /// Return the durable automatic-history baseline. It is separate from the
@@ -656,13 +741,14 @@ impl<'store> HistoryRepository<'store> {
 
                 transaction.execute(
                 "INSERT INTO history_versions
-                 (id, document_id, scene_hash, source, protected_action, recorded_at, sequence)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                 (id, document_id, scene_hash, source, marked, protected_action, recorded_at, sequence)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 rusqlite::params![
                     &request.version_id,
                     &request.document_id,
                     &request.scene.hash,
                     source,
+                    request.source == HistoryVersionSource::Manual,
                     protected_action,
                     request.recorded_at,
                     sequence,
@@ -703,30 +789,7 @@ impl<'store> HistoryRepository<'store> {
                 if request.source == HistoryVersionSource::Manual {
                     return Ok((Vec::new(), references));
                 }
-
-                let mut statement = transaction.prepare(
-                "SELECT id
-                 FROM history_versions
-                 WHERE document_id = ?1 AND source IN ('automatic', 'protected')
-                 ORDER BY recorded_at DESC, sequence DESC, id DESC
-                 LIMIT -1 OFFSET ?2",
-            )?;
-                let evicted = statement
-                .query_map(
-                    rusqlite::params![&request.document_id, RETAINED_VERSION_LIMIT],
-                    |row| row.get::<_, String>(0),
-                )?
-                .collect::<Result<Vec<_>, _>>()?;
-                drop(statement);
-
-                for version_id in &evicted {
-                    transaction.execute(
-                    "DELETE FROM history_versions
-                     WHERE document_id = ?1 AND id = ?2
-                       AND source IN ('automatic', 'protected')",
-                    rusqlite::params![&request.document_id, version_id],
-                    )?;
-                }
+                let evicted = prune_unmarked(transaction, &request.document_id)?;
                 Ok((evicted, references))
             })?;
             mutation.set_committed_version(request.version_id.clone(), references);
@@ -753,6 +816,40 @@ impl<'store> HistoryRepository<'store> {
             evicted_version_ids,
         })
     }
+}
+
+fn prune_unmarked(
+    transaction: &rusqlite::Transaction<'_>,
+    document_id: &str,
+) -> Result<Vec<String>, rusqlite::Error> {
+    let mut statement = transaction.prepare(
+        "SELECT candidate.id FROM (
+             SELECT id, document_id FROM history_versions
+             WHERE document_id = ?1 AND marked = 0
+             ORDER BY recorded_at DESC, sequence DESC, id DESC
+             LIMIT -1 OFFSET ?2
+         ) AS candidate
+         WHERE NOT EXISTS (
+             SELECT 1 FROM history_operations operation
+             WHERE operation.document_id = candidate.document_id
+               AND operation.protection_version_id = candidate.id
+               AND operation.state NOT IN ('completed', 'aborted', 'conflict')
+         )",
+    )?;
+    let evicted = statement
+        .query_map(
+            rusqlite::params![document_id, RETAINED_VERSION_LIMIT],
+            |row| row.get::<_, String>(0),
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+    drop(statement);
+    for version_id in &evicted {
+        transaction.execute(
+            "DELETE FROM history_versions WHERE document_id = ?1 AND id = ?2 AND marked = 0",
+            rusqlite::params![document_id, version_id],
+        )?;
+    }
+    Ok(evicted)
 }
 
 fn validate_request(request: &PublishVersionRequest) -> Result<(), HistoryRepositoryError> {

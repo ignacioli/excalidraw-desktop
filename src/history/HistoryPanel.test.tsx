@@ -11,10 +11,11 @@ function makeItem(
   return {
     versionId: "version-1",
     source: "automatic",
-    recordedAt: Date.UTC(2026, 8, 23, 12, 34),
+    recordedAt: Date.UTC(2026, 8, 23, 12, 34) / 1000,
     sequence: 1,
     contentHash: "hash-1",
     availability: { status: "available" },
+    marked: false,
     summary: "Two shapes added",
     ...overrides,
   };
@@ -161,6 +162,73 @@ describe("HistoryPanel", () => {
     expect(trigger.current).toHaveFocus();
   });
 
+  it("moves focus into More version actions and returns it on Escape", async () => {
+    const user = userEvent.setup();
+    render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[makeItem()]}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    const trigger = screen.getByRole("button", {
+      name: "More version actions",
+    });
+    await user.click(trigger);
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Delete version" }),
+    ).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("marks and unmarks the selected version through caller-owned persistence", async () => {
+    const user = userEvent.setup();
+    const onSetMarked = vi.fn(async () => undefined);
+    const item = makeItem();
+    const { rerender } = render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[item]}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onSetMarked={onSetMarked}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "More version actions" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Mark version" }));
+    await vi.waitFor(() =>
+      expect(onSetMarked).toHaveBeenCalledWith(item, true),
+    );
+
+    onSetMarked.mockClear();
+    rerender(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[{ ...item, marked: true }]}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onSetMarked={onSetMarked}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "More version actions" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Unmark version" }));
+    await vi.waitFor(() =>
+      expect(onSetMarked).toHaveBeenCalledWith(
+        { ...item, marked: true },
+        false,
+      ),
+    );
+  });
+
   it("shows durable mark feedback inline without opening a named dialog", async () => {
     const user = userEvent.setup();
     const onMark = vi.fn(async () => undefined);
@@ -262,16 +330,23 @@ describe("HistoryPanel", () => {
       />,
     );
 
-    const deleteButton = screen.getByRole("button", {
-      name: "Delete this version",
+    const trigger = screen.getByRole("button", {
+      name: "More version actions",
     });
-    await user.click(deleteButton);
+    await user.click(trigger);
+    await user.click(screen.getByRole("menuitem", { name: "Delete version" }));
+    expect(
+      screen.getByRole("dialog", { name: "Delete version?" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    expect(onDelete).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /^Delete$/ }));
     expect(onDelete).toHaveBeenCalledWith(
       expect.objectContaining({
         versionId: "version-1",
       }),
     );
-    expect(deleteButton).toBeDisabled();
+    expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "true");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
 
     resolveDelete?.();
@@ -280,6 +355,7 @@ describe("HistoryPanel", () => {
         "Version deleted from history.",
       );
     });
+    expect(trigger).toHaveFocus();
   });
 
   it("reports a failed deletion without changing the selection", async () => {
@@ -297,9 +373,12 @@ describe("HistoryPanel", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Delete this version" }),
+      screen.getByRole("button", { name: "More version actions" }),
     );
+    await user.click(screen.getByRole("menuitem", { name: "Delete version" }));
+    await user.click(screen.getByRole("button", { name: /^Delete$/ }));
     expect(screen.getByRole("alert")).toHaveTextContent("Version is in use.");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByRole("option")).toHaveAttribute("aria-selected", "true");
   });
 
@@ -328,18 +407,24 @@ describe("HistoryPanel", () => {
       />,
     );
 
-    const deleteButton = screen.getByRole("button", {
-      name: "Delete this version",
-    });
-    expect(deleteButton).toBeEnabled();
-    await user.click(deleteButton);
+    await user.click(
+      screen.getByRole("button", { name: "More version actions" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Delete version" }));
+    await user.click(screen.getByRole("button", { name: /^Delete$/ }));
     expect(onDelete).toHaveBeenCalledWith(
       expect.objectContaining({ versionId: "unavailable-version" }),
     );
+    await user.click(
+      screen.getByRole("button", { name: "More version actions" }),
+    );
     const options = screen.getAllByRole("option");
     await user.click(options[1]);
-    expect(deleteButton).toBeEnabled();
-    await user.click(deleteButton);
+    await user.click(
+      screen.getByRole("button", { name: "More version actions" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Delete version" }));
+    await user.click(screen.getByRole("button", { name: /^Delete$/ }));
     expect(onDelete).toHaveBeenLastCalledWith(
       expect.objectContaining({ versionId: "available-version" }),
     );

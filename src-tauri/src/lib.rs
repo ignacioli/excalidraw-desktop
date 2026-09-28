@@ -35,7 +35,7 @@ use commands::{
     export::{doc_export, ExportService, ExportState},
     history::{
         history_delete, history_list, history_mark, history_operation_status, history_preview,
-        history_replace, HistoryReplacementState,
+        history_replace, history_set_marked, HistoryReplacementState,
     },
     recovery::{
         recovery_apply, recovery_list, RecoveryService, RecoveryState, TauriRecoveryPathGrant,
@@ -242,6 +242,7 @@ pub fn run() {
         history_list,
         history_preview,
         history_mark,
+        history_set_marked,
         history_delete,
         history_replace,
         history_operation_status,
@@ -285,6 +286,7 @@ pub fn run() {
         history_list,
         history_preview,
         history_mark,
+        history_set_marked,
         history_delete,
         history_replace,
         history_operation_status,

@@ -25,7 +25,7 @@ use crate::{
             HistoryListRequest, HistoryListResponse, HistoryMarkRequest, HistoryMarkResponse,
             HistoryOperationStatusRequest, HistoryOperationStatusResponse, HistoryPreviewRequest,
             HistoryPreviewResponse, HistoryReplaceRequest, HistoryReplaceResponse,
-            HistoryReplaceTarget,
+            HistoryReplaceTarget, HistorySetMarkedRequest, HistorySetMarkedResponse,
         },
         error::{AppError, IpcError},
     },
@@ -88,6 +88,14 @@ pub async fn history_delete(
     state.service.delete(request).await
 }
 
+#[tauri::command]
+pub async fn history_set_marked(
+    request: HistorySetMarkedRequest,
+    state: State<'_, HistoryReplacementState>,
+) -> Result<HistorySetMarkedResponse, IpcError> {
+    state.service.set_marked(request).await
+}
+
 #[derive(Clone)]
 pub struct HistoryReplacementState {
     pub service: Arc<HistoryReplacementService>,
@@ -122,6 +130,46 @@ pub struct HistoryReplacementService {
 type ResponseAssetGrant = Arc<dyn Fn(&Path, &Value) -> Result<(), AppError> + Send + Sync>;
 
 impl HistoryReplacementService {
+    pub async fn set_marked(
+        &self,
+        request: HistorySetMarkedRequest,
+    ) -> Result<HistorySetMarkedResponse, IpcError> {
+        request
+            .validate()
+            .map_err(|error| AppError::HistoryStaleDocument(error.to_string()))?;
+        let unresolved = self
+            .resolve_document_without_file_check(&request.document)
+            .await?;
+        let lease = self
+            .document_service
+            .acquire_history_operation(&unresolved.path)
+            .await?;
+        let store = self.store()?;
+        tokio::task::spawn_blocking(move || {
+            let _lease = lease;
+            unresolved
+                .identity
+                .verify_current_file(&unresolved.path)
+                .map_err(|error| AppError::HistoryStaleDocument(error.to_string()))?;
+            let retained = HistoryRepository::new(&store)
+                .set_marked(
+                    &request.request_id,
+                    &unresolved.document_id,
+                    &request.version_id,
+                    request.marked,
+                )
+                .map_err(map_history_mark_error)?;
+            Ok::<_, AppError>(HistorySetMarkedResponse {
+                version_id: request.version_id,
+                marked: request.marked,
+                retained,
+            })
+        })
+        .await
+        .map_err(|error| AppError::Internal(format!("history set-marked task failed: {error}")))?
+        .map_err(Into::into)
+    }
+
     pub async fn mark(&self, request: HistoryMarkRequest) -> Result<HistoryMarkResponse, IpcError> {
         request
             .validate()
@@ -654,6 +702,22 @@ fn map_history_delete_error(error: crate::history::repository::HistoryRepository
         ),
         HistoryRepositoryError::DeletePending => AppError::HistoryOperationPending(
             "history deletion has not reached a terminal state".to_owned(),
+        ),
+        other => AppError::HistoryUnavailable(other.to_string()),
+    }
+}
+
+fn map_history_mark_error(error: crate::history::repository::HistoryRepositoryError) -> AppError {
+    use crate::history::repository::HistoryRepositoryError;
+    match error {
+        HistoryRepositoryError::VersionNotFound { .. } => {
+            AppError::HistoryResourceMissing("selected history version is unavailable".to_owned())
+        }
+        HistoryRepositoryError::VersionInUse => {
+            AppError::HistoryBusy("selected history version is in use".to_owned())
+        }
+        HistoryRepositoryError::MarkRequestConflict => AppError::HistoryStaleDocument(
+            "history mark request conflicts with a previous request".to_owned(),
         ),
         other => AppError::HistoryUnavailable(other.to_string()),
     }

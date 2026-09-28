@@ -128,6 +128,39 @@ describe("history client", () => {
     expect(invoke).toHaveBeenCalledWith("history_mark", request);
   });
 
+  it("forwards selected-version mark and unmark requests", async () => {
+    const invoke = vi
+      .fn()
+      .mockResolvedValueOnce({ versionId: "manual-1", marked: true })
+      .mockResolvedValueOnce({ versionId: "manual-1", marked: false });
+    const client = createHistoryClient(createInvoker(invoke));
+    const baseRequest = {
+      document,
+      requestId: "mark-version-1",
+      versionId: "manual-1",
+    };
+
+    await expect(
+      client.setMarked({ ...baseRequest, marked: true }),
+    ).resolves.toEqual({ versionId: "manual-1", marked: true });
+    await expect(
+      client.setMarked({
+        ...baseRequest,
+        requestId: "unmark-version-1",
+        marked: false,
+      }),
+    ).resolves.toEqual({ versionId: "manual-1", marked: false });
+    expect(invoke).toHaveBeenNthCalledWith(1, "history_set_marked", {
+      ...baseRequest,
+      marked: true,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, "history_set_marked", {
+      ...baseRequest,
+      requestId: "unmark-version-1",
+      marked: false,
+    });
+  });
+
   it("forwards one explicit version deletion through the typed boundary", async () => {
     const request: HistoryDeleteRequest = {
       document,

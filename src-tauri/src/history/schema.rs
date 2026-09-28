@@ -9,7 +9,7 @@ use std::time::Duration;
 use rusqlite::Connection;
 use thiserror::Error;
 
-pub const CURRENT_SCHEMA_VERSION: i64 = 1;
+pub const CURRENT_SCHEMA_VERSION: i64 = 2;
 
 const SCHEMA: &str = r#"
 CREATE TABLE history_documents (
@@ -54,6 +54,7 @@ CREATE TABLE history_versions (
     document_id TEXT NOT NULL REFERENCES history_documents(id) ON DELETE CASCADE,
     scene_hash TEXT NOT NULL REFERENCES scene_objects(hash),
     source TEXT NOT NULL CHECK (source IN ('automatic', 'manual', 'protected')),
+    marked INTEGER NOT NULL DEFAULT 0 CHECK (marked IN (0, 1)),
     protected_action TEXT,
     recorded_at INTEGER NOT NULL,
     sequence INTEGER NOT NULL CHECK (sequence >= 0),
@@ -69,6 +70,14 @@ CREATE INDEX history_versions_document_order_idx
 
 CREATE INDEX history_versions_scene_idx
     ON history_versions (scene_hash);
+
+CREATE TABLE history_mark_requests (
+    request_id TEXT PRIMARY KEY NOT NULL,
+    document_id TEXT NOT NULL REFERENCES history_documents(id) ON DELETE CASCADE,
+    version_id TEXT NOT NULL,
+    marked INTEGER NOT NULL CHECK (marked IN (0, 1)),
+    retained INTEGER NOT NULL CHECK (retained IN (0, 1))
+);
 
 CREATE TABLE version_assets (
     version_id TEXT NOT NULL REFERENCES history_versions(id) ON DELETE CASCADE,
@@ -169,6 +178,25 @@ pub fn initialize(connection: &mut Connection) -> Result<(), SchemaError> {
     if version == 0 {
         let transaction = connection.transaction()?;
         transaction.execute_batch(SCHEMA)?;
+        transaction.execute(
+            "UPDATE history_versions SET marked = 1 WHERE source = 'manual'",
+            [],
+        )?;
+        transaction.pragma_update(None, "user_version", CURRENT_SCHEMA_VERSION)?;
+        transaction.commit()?;
+    } else if version == 1 {
+        let transaction = connection.transaction()?;
+        transaction.execute_batch(
+            "ALTER TABLE history_versions ADD COLUMN marked INTEGER NOT NULL DEFAULT 0 CHECK (marked IN (0, 1));
+             UPDATE history_versions SET marked = 1 WHERE source = 'manual';
+             CREATE TABLE history_mark_requests (
+                 request_id TEXT PRIMARY KEY NOT NULL,
+                 document_id TEXT NOT NULL REFERENCES history_documents(id) ON DELETE CASCADE,
+                 version_id TEXT NOT NULL,
+                 marked INTEGER NOT NULL CHECK (marked IN (0, 1)),
+                 retained INTEGER NOT NULL CHECK (retained IN (0, 1))
+             );",
+        )?;
         transaction.pragma_update(None, "user_version", CURRENT_SCHEMA_VERSION)?;
         transaction.commit()?;
     }
@@ -189,6 +217,54 @@ mod tests {
         ));
         fs::create_dir_all(&directory).unwrap_or_else(|error| panic!("create fixture: {error}"));
         directory.join("history.sqlite3")
+    }
+
+    #[test]
+    fn migrates_v1_manual_versions_as_marked() {
+        let path = temporary_database();
+        let mut connection =
+            Connection::open(&path).unwrap_or_else(|error| panic!("open legacy database: {error}"));
+        let legacy_schema = SCHEMA
+            .replace("    marked INTEGER NOT NULL DEFAULT 0 CHECK (marked IN (0, 1)),\n", "")
+            .replace(
+                "CREATE TABLE history_mark_requests (\n    request_id TEXT PRIMARY KEY NOT NULL,\n    document_id TEXT NOT NULL REFERENCES history_documents(id) ON DELETE CASCADE,\n    version_id TEXT NOT NULL,\n    marked INTEGER NOT NULL CHECK (marked IN (0, 1)),\n    retained INTEGER NOT NULL CHECK (retained IN (0, 1))\n);\n\n",
+                "",
+            );
+        connection
+            .execute_batch(&legacy_schema)
+            .unwrap_or_else(|error| panic!("create legacy schema: {error}"));
+        connection
+            .pragma_update(None, "user_version", 1)
+            .unwrap_or_else(|error| panic!("set legacy version: {error}"));
+        connection.execute("INSERT INTO history_documents (id, canonical_path, created_at, state) VALUES ('doc', '/tmp/doc', 0, 'active')", [])
+            .unwrap_or_else(|error| panic!("insert legacy document: {error}"));
+        connection.execute("INSERT INTO scene_objects (hash, schema_version, codec, raw_length, relative_path, created_at) VALUES ('hash', 1, 'none', 0, 'scene', 0)", [])
+            .unwrap_or_else(|error| panic!("insert legacy scene: {error}"));
+        for (id, source, sequence) in [("manual", "manual", 1), ("automatic", "automatic", 2)] {
+            connection.execute("INSERT INTO history_versions (id, document_id, scene_hash, source, recorded_at, sequence) VALUES (?1, 'doc', 'hash', ?2, 0, ?3)", rusqlite::params![id, source, sequence])
+                .unwrap_or_else(|error| panic!("insert legacy version: {error}"));
+        }
+        initialize(&mut connection)
+            .unwrap_or_else(|error| panic!("migrate legacy schema: {error}"));
+        let marked: Vec<(String, bool)> = {
+            let mut statement = connection
+                .prepare("SELECT id, marked FROM history_versions ORDER BY id")
+                .unwrap_or_else(|error| panic!("prepare migrated query: {error}"));
+            statement
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+                .unwrap_or_else(|error| panic!("query migrated rows: {error}"))
+                .collect::<Result<_, _>>()
+                .unwrap_or_else(|error| panic!("read migrated rows: {error}"))
+        };
+        assert_eq!(
+            marked,
+            vec![("automatic".to_owned(), false), ("manual".to_owned(), true)]
+        );
+        let version: i64 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap_or_else(|error| panic!("read migrated version: {error}"));
+        assert_eq!(version, CURRENT_SCHEMA_VERSION);
+        fs::remove_file(path).unwrap_or_else(|error| panic!("remove fixture: {error}"));
     }
 
     #[test]

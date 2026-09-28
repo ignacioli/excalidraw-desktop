@@ -6,6 +6,8 @@ import {
   type HistoryListRequest,
   type HistoryMarkRequest,
   type HistoryMarkResponse,
+  type HistorySetMarkedRequest,
+  type HistorySetMarkedResponse,
   type HistoryOperationStatusRequest,
   type HistoryOperationStatusResponse,
   type HistoryReplaceRequest,
@@ -16,7 +18,11 @@ import {
   validateHistoryCommandRequest,
   type CommandInvoker,
 } from "../ipc/client";
-import type { HistoryClient, HistoryDeleteClient } from "./types";
+import type {
+  HistoryClient,
+  HistoryDeleteClient,
+  HistorySetMarkedClient,
+} from "./types";
 
 /** Raised when a replacement transport response is lost and no status is available. */
 export class HistoryReplaceResponseLostError extends Error {
@@ -126,6 +132,7 @@ function validateRequest<Name extends Parameters<CommandInvoker["invoke"]>[0]>(
     command === "history_list" ||
     command === "history_preview" ||
     command === "history_mark" ||
+    command === "history_set_marked" ||
     command === "history_replace" ||
     command === "history_operation_status" ||
     command === "history_delete"
@@ -136,7 +143,7 @@ function validateRequest<Name extends Parameters<CommandInvoker["invoke"]>[0]>(
 
 export function createHistoryClient(
   invoker: CommandInvoker,
-): HistoryClient & HistoryDeleteClient {
+): HistoryClient & HistoryDeleteClient & HistorySetMarkedClient {
   const operationStatus = async (
     request: HistoryOperationStatusRequest,
   ): Promise<HistoryOperationStatusResponse> => {
@@ -189,6 +196,12 @@ export function createHistoryClient(
     async mark(request: HistoryMarkRequest): Promise<HistoryMarkResponse> {
       validateRequest("history_mark", request);
       return invoker.invoke("history_mark", request);
+    },
+    async setMarked(
+      request: HistorySetMarkedRequest,
+    ): Promise<HistorySetMarkedResponse> {
+      validateRequest("history_set_marked", request);
+      return invoker.invoke("history_set_marked", request);
     },
     async delete(
       request: HistoryDeleteRequest,

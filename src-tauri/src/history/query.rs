@@ -285,6 +285,7 @@ struct HistoryCursor {
 struct VersionRow {
     version_id: String,
     source: HistoryVersionSource,
+    marked: bool,
     protected_action: Option<HistoryProtectedAction>,
     recorded_at: i64,
     sequence: u64,
@@ -420,7 +421,7 @@ fn query_list(
         .with_connection(|connection| {
             let mut statement = connection.prepare(
                 "SELECT id, source, protected_action, recorded_at, sequence, scene_hash,
-                        so.schema_version, so.codec, so.raw_length, so.relative_path
+                        so.schema_version, so.codec, so.raw_length, so.relative_path, hv.marked
                  FROM history_versions hv
                  LEFT JOIN scene_objects so ON so.hash = hv.scene_hash
                  WHERE hv.document_id = ?1
@@ -460,6 +461,7 @@ fn query_list(
                             row.get::<_, Option<String>>(7)?,
                             row.get::<_, Option<i64>>(8)?,
                             row.get::<_, Option<String>>(9)?,
+                            row.get::<_, bool>(10)?,
                         ))
                     },
                 )?
@@ -476,12 +478,14 @@ fn query_list(
                 codec,
                 raw_length,
                 relative_path,
+                marked,
             ) in rows
             {
                 let assets = load_asset_rows(connection, &version_id)?;
                 result.push(VersionRow {
                     version_id,
                     source: parse_source(&source)?,
+                    marked,
                     protected_action: parse_protected_action(protected_action.as_deref())?,
                     recorded_at,
                     sequence: u64::try_from(sequence)
@@ -557,6 +561,7 @@ fn version_item(store: &HistoryStore, row: &VersionRow) -> HistoryVersionItem {
                     return HistoryVersionItem {
                         version_id: row.version_id.clone(),
                         source: row.source,
+                        marked: row.marked,
                         protected_action: row.protected_action,
                         recorded_at: row.recorded_at,
                         sequence: row.sequence,
@@ -592,6 +597,7 @@ fn version_item(store: &HistoryStore, row: &VersionRow) -> HistoryVersionItem {
     HistoryVersionItem {
         version_id: row.version_id.clone(),
         source: row.source,
+        marked: row.marked,
         protected_action: row.protected_action,
         recorded_at: row.recorded_at,
         sequence: row.sequence,
@@ -769,7 +775,7 @@ fn load_version_row(
 ) -> Result<Option<VersionRow>, rusqlite::Error> {
     let result = rusqlite::OptionalExtension::optional(connection.query_row(
         "SELECT id, source, protected_action, recorded_at, sequence, scene_hash,
-                so.schema_version, so.codec, so.raw_length, so.relative_path
+                so.schema_version, so.codec, so.raw_length, so.relative_path, hv.marked
          FROM history_versions hv
          LEFT JOIN scene_objects so ON so.hash = hv.scene_hash
          WHERE hv.document_id = ?1 AND hv.id = ?2",
@@ -786,6 +792,7 @@ fn load_version_row(
                 row.get::<_, Option<String>>(7)?,
                 row.get::<_, Option<i64>>(8)?,
                 row.get::<_, Option<String>>(9)?,
+                row.get::<_, bool>(10)?,
             ))
         },
     ))?;
@@ -802,10 +809,12 @@ fn load_version_row(
                 codec,
                 raw_length,
                 relative_path,
+                marked,
             )| {
                 Ok(VersionRow {
                     version_id: id,
                     source: parse_source(&source)?,
+                    marked,
                     protected_action: parse_protected_action(protected_action.as_deref())?,
                     recorded_at,
                     sequence: u64::try_from(sequence)

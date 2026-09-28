@@ -992,6 +992,24 @@ export function AppShell({
     [activeDocumentId, historyClient, loadHistoryPanel],
   );
 
+  const setHistoryVersionMarked = useCallback(
+    async (item: HistoryVersionView, marked: boolean): Promise<void> => {
+      const session =
+        activeDocumentId === null
+          ? undefined
+          : documentManager.store.getState().sessionsById[activeDocumentId];
+      if (session === undefined || session.path.length === 0) return;
+      await historyClient.setMarked({
+        document: historyDocumentLocator(session),
+        requestId: createHistoryRequestId(),
+        versionId: item.versionId,
+        marked,
+      });
+      await loadHistoryPanel();
+    },
+    [activeDocumentId, historyClient, loadHistoryPanel],
+  );
+
   useEffect(() => {
     nativeMenuHandlerRef.current = createNativeMenuCommandHandler({
       onSave: () => void saveDocument(),
@@ -1297,6 +1315,7 @@ export function AppShell({
       />
       <header
         className="app-shell-tabs"
+        data-history-open={historyOpen ? "true" : "false"}
         data-sidebar-mode={sidebarSnapshot.mode}
       >
         <div className="shell-left" aria-label="Shell navigation" role="group">
@@ -1393,11 +1412,14 @@ export function AppShell({
       ) : null}
 
       <div
-        className={
-          sidebarSnapshot.mode === "pinned"
-            ? "app-shell-body app-shell-body--pinned"
-            : "app-shell-body"
-        }
+        className={[
+          "app-shell-body",
+          sidebarSnapshot.mode === "pinned" && "app-shell-body--pinned",
+          historyOpen && "app-shell-body--history",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        data-history-open={historyOpen ? "true" : "false"}
         data-sidebar-mode={sidebarSnapshot.mode}
       >
         {sidebarSnapshot.mode === "hidden" ? (
@@ -1412,9 +1434,9 @@ export function AppShell({
         <aside
           aria-label="Files"
           className="file-sidebar"
-          hidden={sidebarSnapshot.mode === "hidden"}
+          hidden={sidebarSnapshot.mode === "hidden" || historyOpen}
           id="workspace-sidebar"
-          inert={sidebarSnapshot.mode === "hidden"}
+          inert={sidebarSnapshot.mode === "hidden" || historyOpen}
           style={
             sidebarSnapshot.mode === "overlay"
               ? { position: "absolute" }
@@ -1538,6 +1560,7 @@ export function AppShell({
               setHistoryPreviewContent(null);
             }}
             onMark={markCurrentHistoryVersion}
+            onSetMarked={setHistoryVersionMarked}
             onPreview={previewHistoryVersion}
             onRestore={restoreHistoryVersion}
             previewContent={historyPreviewContent}

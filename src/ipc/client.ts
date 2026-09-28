@@ -12,8 +12,8 @@ import {
 
 export type HistoryCommandRequest = CommandRequest<HistoryCommandName>;
 
-// History list/preview and protected replacement/status are available on the
-// v3 backend. Manual mark and deletion remain typed but reserved.
+// History commands are available on the v3 backend. Manual mark, selected
+// version marking, and deletion remain distinct operations.
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
 
@@ -127,6 +127,13 @@ export function validateHistoryCommandRequest(
       requireGeneration(value.sessionGeneration, "sessionGeneration");
       requireGeneration(value.revision, "revision");
       requireSceneJson(value.currentSceneJson, "currentSceneJson");
+      return;
+    case "history_set_marked":
+      requireRequestId(value.requestId);
+      requireVersionId(value.versionId);
+      if (typeof value.marked !== "boolean") {
+        throw new TypeError("marked must be a boolean");
+      }
       return;
     case "history_replace": {
       requireRequestId(value.requestId);

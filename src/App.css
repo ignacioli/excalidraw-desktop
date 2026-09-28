@@ -119,6 +119,10 @@ body {
   grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr) auto;
 }
 
+.app-shell-tabs[data-history-open="true"][data-sidebar-mode="pinned"] {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
 .shell-left,
 .shell-center {
   min-width: 0;
@@ -428,6 +432,10 @@ body {
 
 .app-shell-body--pinned {
   grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr);
+}
+
+.app-shell-body--history {
+  grid-template-columns: minmax(0, 1fr) 360px;
 }
 
 .app-shell-body--pinned .canvas-region {

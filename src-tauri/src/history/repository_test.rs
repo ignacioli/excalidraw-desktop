@@ -82,6 +82,175 @@ fn count(store: &HistoryStore, source: Option<&str>) -> i64 {
 }
 
 #[test]
+fn marking_preserves_source_and_unmarking_reenters_retention_pool() {
+    let (root, store) = fixture();
+    let repository = HistoryRepository::new(&store);
+    publish(
+        &repository,
+        "automatic-00",
+        HistoryVersionSource::Automatic,
+        0,
+        0,
+    );
+    assert!(repository
+        .set_marked("mark-1", "doc", "automatic-00", true)
+        .unwrap_or_else(|error| panic!("mark existing version: {error}")));
+    assert!(repository
+        .set_marked("mark-1", "doc", "automatic-00", true)
+        .unwrap_or_else(|error| panic!("retry mark: {error}")));
+    let (source, marked): (String, bool) = store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT source, marked FROM history_versions WHERE id = 'automatic-00'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+        })
+        .unwrap_or_else(|error| panic!("read marked version: {error}"));
+    assert_eq!(source, "automatic");
+    assert!(marked);
+
+    for index in 1..=RETAINED_VERSION_LIMIT {
+        publish(
+            &repository,
+            &format!("automatic-{index:02}"),
+            HistoryVersionSource::Automatic,
+            index,
+            index as u64,
+        );
+    }
+    assert_eq!(count(&store, None), RETAINED_VERSION_LIMIT + 1);
+    assert!(!repository
+        .set_marked("unmark-1", "doc", "automatic-00", false)
+        .unwrap_or_else(|error| panic!("unmark version: {error}")));
+    assert!(!ids(&store, None).contains(&"automatic-00".to_owned()));
+    drop(repository);
+    drop(store);
+    let reopened = HistoryStore::open_version_history_root(&root)
+        .unwrap_or_else(|error| panic!("reopen after lost response: {error}"));
+    assert!(!HistoryRepository::new(&reopened)
+        .set_marked("unmark-1", "doc", "automatic-00", false)
+        .unwrap_or_else(|error| panic!("retry pruned unmark: {error}")));
+    assert_eq!(count(&reopened, None), RETAINED_VERSION_LIMIT);
+    assert!(matches!(
+        HistoryRepository::new(&reopened).set_marked("mark-1", "doc", "automatic-00", false),
+        Err(HistoryRepositoryError::MarkRequestConflict)
+    ));
+    drop(reopened);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+#[test]
+fn manual_unmark_retains_historical_source() {
+    let (root, store) = fixture();
+    let repository = HistoryRepository::new(&store);
+    publish(&repository, "manual-1", HistoryVersionSource::Manual, 1, 1);
+    assert!(repository
+        .set_marked("unmark-manual", "doc", "manual-1", false)
+        .unwrap_or_else(|error| panic!("unmark manual version: {error}")));
+    let (source, marked): (String, bool) = store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT source, marked FROM history_versions WHERE id = 'manual-1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+        })
+        .unwrap_or_else(|error| panic!("read manual version: {error}"));
+    assert_eq!(source, "manual");
+    assert!(!marked);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+#[test]
+fn unmark_pruning_preserves_pending_protection_and_assets_across_reopen() {
+    let (root, store) = fixture();
+    let repository = HistoryRepository::new(&store);
+    repository
+        .publish_scene_with_assets(
+            PublishSceneRequest {
+                version_id: "pending-protection".to_owned(),
+                document_id: "doc".to_owned(),
+                scene_bytes: b"protected scene".to_vec(),
+                schema_version: 1,
+                source: HistoryVersionSource::Protected,
+                protected_action: Some(crate::history::types::HistoryProtectedAction::Restore),
+                recorded_at: 0,
+                sequence: 0,
+            },
+            vec![PublishAsset {
+                file_id: "asset-1".to_owned(),
+                bytes: b"protected asset".to_vec(),
+                mime_type: "image/png".to_owned(),
+            }],
+        )
+        .unwrap_or_else(|error| panic!("publish protected version: {error}"));
+    let (scene_hash, asset_hash): (String, String) = store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT hv.scene_hash, va.asset_hash FROM history_versions hv
+                 JOIN version_assets va ON va.version_id = hv.id
+                 WHERE hv.id = 'pending-protection'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+        })
+        .unwrap_or_else(|error| panic!("read protected hashes: {error}"));
+    store
+        .with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO history_operations
+             (idempotency_id, document_id, session_generation, revision, kind,
+              protection_version_id, target_object_pins_json, state, created_at, updated_at)
+             VALUES ('replace-pending', 'doc', 0, 0, 'replace',
+                     'pending-protection', '[]', 'protected', 1, 1)",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap_or_else(|error| panic!("insert pending operation: {error}"));
+
+    publish(&repository, "manual-1", HistoryVersionSource::Manual, 1, 1);
+    for index in 2..=RETAINED_VERSION_LIMIT + 1 {
+        publish(
+            &repository,
+            &format!("automatic-{index:02}"),
+            HistoryVersionSource::Automatic,
+            index,
+            index as u64,
+        );
+    }
+    assert_eq!(count(&store, None), RETAINED_VERSION_LIMIT + 2);
+    assert!(!repository
+        .set_marked("unmark-manual-pending", "doc", "manual-1", false)
+        .unwrap_or_else(|error| panic!("unmark under pending operation: {error}")));
+    assert_eq!(count(&store, None), RETAINED_VERSION_LIMIT + 1);
+    assert!(ids(&store, None).contains(&"pending-protection".to_owned()));
+    drop(store);
+
+    let reopened = HistoryStore::open_version_history_root(&root)
+        .unwrap_or_else(|error| panic!("reopen pending operation: {error}"));
+    let live = reopened
+        .reachability()
+        .live_objects()
+        .unwrap_or_else(|error| panic!("read rehydrated live set: {error}"));
+    assert!(live.contains(
+        &crate::history::gc::ObjectKey::scene(scene_hash)
+            .unwrap_or_else(|error| panic!("protected scene key: {error}"))
+    ));
+    assert!(live.contains(
+        &crate::history::gc::ObjectKey::asset(asset_hash)
+            .unwrap_or_else(|error| panic!("protected asset key: {error}"))
+    ));
+    assert!(ids(&reopened, None).contains(&"pending-protection".to_owned()));
+    assert!(!HistoryRepository::new(&reopened)
+        .set_marked("unmark-manual-pending", "doc", "manual-1", false)
+        .unwrap_or_else(|error| panic!("retry pruned unmark: {error}")));
+    drop(reopened);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+#[test]
 fn retains_mixed_nineteen_twenty_and_only_the_newest_twenty_first_record() {
     let (root, store) = fixture();
     let repository = HistoryRepository::new(&store);

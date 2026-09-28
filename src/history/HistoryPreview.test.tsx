@@ -7,10 +7,11 @@ import type { HistoryVersionView } from "./HistoryList";
 const previewItem: HistoryVersionView = {
   versionId: "version-1",
   source: "automatic",
-  recordedAt: Date.UTC(2026, 8, 23, 12, 34),
+  recordedAt: Date.UTC(2026, 8, 23, 12, 34) / 1000,
   sequence: 1,
   contentHash: "hash-1",
   availability: { status: "available" },
+  marked: false,
   summary: "Two shapes added",
 };
 

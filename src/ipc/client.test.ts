@@ -29,6 +29,14 @@ describe("IPC v3 history input boundary", () => {
       }),
     ).not.toThrow();
     expect(() =>
+      validateHistoryCommandRequest("history_set_marked", {
+        document,
+        requestId: "mark-version-1",
+        versionId: "version-1",
+        marked: true,
+      }),
+    ).not.toThrow();
+    expect(() =>
       validateHistoryCommandRequest("history_replace", {
         document,
         requestId: "request-2",
@@ -39,6 +47,18 @@ describe("IPC v3 history input boundary", () => {
         target: { kind: "clear" },
       }),
     ).not.toThrow();
+  });
+
+  it("rejects malformed selected-version mark requests", () => {
+    for (const request of [
+      { document, requestId: "", versionId: "version-1", marked: true },
+      { document, requestId: "request-1", versionId: "", marked: false },
+      { document, requestId: "request-1", versionId: "version-1", marked: 1 },
+    ]) {
+      expect(() =>
+        validateHistoryCommandRequest("history_set_marked", request),
+      ).toThrow();
+    }
   });
 
   it("rejects traversal-like malformed locator, paging, hash, and target input", () => {
@@ -97,6 +117,20 @@ describe("Tauri command envelope", () => {
     await createTauriCommandInvoker().invoke("history_list", request);
 
     expect(tauriInvoke).toHaveBeenCalledWith("history_list", { request });
+  });
+
+  it("wraps selected-version mark commands in the Rust request argument", async () => {
+    tauriInvoke.mockResolvedValue({ versionId: "version-1", marked: true });
+    const request = {
+      document: { kind: "handle" as const, documentId: "document-1" },
+      requestId: "mark-version-1",
+      versionId: "version-1",
+      marked: true,
+    };
+
+    await createTauriCommandInvoker().invoke("history_set_marked", request);
+
+    expect(tauriInvoke).toHaveBeenCalledWith("history_set_marked", { request });
   });
 
   it("keeps legacy flat command arguments unchanged", async () => {
