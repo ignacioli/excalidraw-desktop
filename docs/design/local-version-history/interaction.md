@@ -8,7 +8,7 @@
 
 **T004 低保真载体**：OpenDesign Local Codex
 
-**T048 低保真载体**：仓库本地 HTML review candidate（本次修订的特例）
+**T048 低保真载体**：仓库本地 HTML（本次修订的特例）
 
 **高保真载体**：Penpot SaaS official hosted Remote MCP
 
@@ -24,7 +24,7 @@ T004 的高保真批准只适用于当时的交互范围。T048 已批准的交�
 
 T047 最初确实发现过一次原生菜单入口缺陷：`File > Version History` 被禁用。T047 的 `history-only` 原生采集对此记录为 FAIL；随后 `e873aac` 修复了菜单启用 IPC command 的注册名，`ipc-registration` 与之后的 `history-pass` 原生报告均记录菜单已启用。详见 `docs/evidence/local-version-history-t047/history-only/native-report.json`、`docs/evidence/local-version-history-t047/ipc-registration/collection/native-report.json`、`docs/evidence/local-version-history-t047/history-pass/collection/native-report.json`。
 
-T048 最初两次“菜单灰色”发生在采集准备阶段：第一次窗口没有活动的已保存绘图；第二次要求使用产品并不存在的 `File > Open`。后来将已保存夹具作为应用启动参数打开，你确认菜单已启用并成功打开 History。该经历说明了采集指导和初始状态准备的问题，不是 `currentVersionId` 缺失的原因。T048 首次有效截图及其观察记录见 `docs/evidence/local-version-history-t048/README.md` 与 `history-01-pre-remediation/`。
+T048 最初两次“菜单灰色”发生在采集准备阶段：第一次窗口没有活动的已保存绘图；第二次代理给操作员的提示错误地要求使用产品并不存在的 `File > Open`。这句提示不是采集器输出，而是代理未核对产品菜单和 T047 已验证的启动入口便自行写出的操作路径。后来将已保存夹具作为应用启动参数打开，你确认菜单已启用并成功打开 History。该经历说明了采集指导和初始状态准备的问题，不是 `currentVersionId` 缺失的原因。T048 首次有效截图及其观察记录见 `docs/evidence/local-version-history-t048/README.md` 与 `history-01-pre-remediation/`。
 
 首次有效截图另行暴露了两个实现问题：History drawer 因 `.app-shell-body` 的 grid 仍固定为两列而被排到左侧下一行；时间戳以 Unix 秒传入，却按 JavaScript 毫秒格式化，因而显示为 1970 年。这些应分别按原有右侧 drawer 设计修复，不能归因为需要重画交互。
 
@@ -36,7 +36,7 @@ T048 最初两次“菜单灰色”发生在采集准备阶段：第一次窗口
 
 Local Version History 是应用拥有的桌面文件工作流，不是 Excalidraw SDK 画布的一部分。历史界面必须保持 canvas-first，不复制或依赖 SDK 私有 DOM，也不引入常驻 SaaS dashboard。
 
-T004 低保真源文件位于 `low-fi/local-version-history-t004.html`；T048 已批准的交互修订载体是 `low-fi/t048-interaction-candidate.html`，其身份与批准状态记录于同目录 manifest。Review-only 状态导航器仅供设计验收，不属于 production UI。
+T004 低保真源文件位于 `low-fi/local-version-history-t004.html`；T048 已批准的交互修订载体是 `low-fi/t048-interaction.html`，其身份与批准状态记录于同目录 manifest。Review-only 状态导航器仅供设计验收，不属于 production UI。
 
 ## 批准的布局
 

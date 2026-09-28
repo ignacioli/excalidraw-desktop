@@ -4,10 +4,10 @@
   "task": "T048",
   "artifactStatus": "APPROVED_LOW_FIDELITY",
   "approvedAt": "2026-09-27",
-  "ownerDecision": "The product owner confirmed the interaction candidate fully meets expectations; for this T048 refinement the repository-local HTML is the accepted low-fidelity carrier. High-fidelity and production visual acceptance remain pending.",
+  "ownerDecision": "The product owner approved this T048 repository-local HTML as the low-fidelity interaction design. High-fidelity and production visual acceptance remain pending.",
   "carrier": "Repository-local HTML prototype",
-  "entryFile": "t048-interaction-candidate.html",
-  "sourceSha256": "7affe82e9154c11573fe8d7d44b06f0073f86643da8b4d9fdd901778f47e50a7",
+  "entryFile": "t048-interaction.html",
+  "sourceSha256": "890b8e25940eb908fcfdf77a80adbf0ffefa4fa99ca31892a8ec6f9e2cce106f",
   "viewport": {
     "width": 1280,
     "height": 760
