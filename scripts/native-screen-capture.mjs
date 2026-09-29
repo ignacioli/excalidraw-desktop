@@ -373,10 +373,35 @@ function observeOwnedWindow(pid, helper) {
   );
 }
 
-async function waitForStableOwnedWindow(pid, helper) {
+export async function waitForStableOwnedWindow(
+  pid,
+  helper,
+  observe = observeOwnedWindow,
+  pause = (milliseconds) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds)),
+) {
   let previous = null;
+  let lastZeroWindowError = null;
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const current = observeOwnedWindow(pid, helper);
+    let current;
+    try {
+      current = observe(pid, helper);
+    } catch (error) {
+      if (
+        !(error instanceof NativeScreenCaptureError) ||
+        !/^owned-window lookup failed: expected exactly one CoreGraphics owned window \(onscreen=0,/u.test(
+          error.message,
+        )
+      ) {
+        throw error;
+      }
+      // Activation and AX raise can precede CoreGraphics on-screen registration.
+      previous = null;
+      lastZeroWindowError = error;
+      if (attempt < 19) await pause(100);
+      continue;
+    }
+    lastZeroWindowError = null;
     if (
       previous &&
       previous.windowId === current.windowId &&
@@ -389,9 +414,13 @@ async function waitForStableOwnedWindow(pid, helper) {
       return { ...current, stableSamples: 2 };
     }
     previous = current;
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    if (attempt < 19) await pause(100);
   }
-  blocked("owned window did not provide two stable samples");
+  blocked(
+    lastZeroWindowError
+      ? `owned window did not provide two stable samples; last zero-window observation: ${lastZeroWindowError.message}`
+      : "owned window did not provide two stable samples",
+  );
 }
 
 export function launchArgumentsForPlan(plan, screen) {

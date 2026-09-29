@@ -70,9 +70,22 @@ let owned = info.filter {
     ($0[kCGWindowOwnerPID as String] as? Int32) == pid &&
         ($0[kCGWindowLayer as String] as? Int) == 0
 }
-guard owned.count == 1,
-      let windowId = owned[0][kCGWindowNumber as String] as? Int else {
-    stop("expected exactly one CoreGraphics owned window")
+guard owned.count == 1 else {
+    let allInfo = CGWindowListCopyWindowInfo(
+        [.optionAll, .excludeDesktopElements],
+        kCGNullWindowID
+    ) as? [[String: Any]]
+    let allOwnedCount = allInfo?.filter {
+        ($0[kCGWindowOwnerPID as String] as? Int32) == pid &&
+            ($0[kCGWindowLayer as String] as? Int) == 0
+    }.count ?? -1
+    stop(
+        "expected exactly one CoreGraphics owned window " +
+            "(onscreen=\(owned.count), all=\(allOwnedCount), active=\(running.isActive ? 1 : 0))"
+    )
+}
+guard let windowId = owned[0][kCGWindowNumber as String] as? Int else {
+    stop("CoreGraphics owned window has no window ID")
 }
 
 var sizeValue: CFTypeRef?

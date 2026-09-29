@@ -23,6 +23,7 @@ import {
   validateRawDimensions,
   validateHistoryLaunchDocument,
   validateSemanticEvidenceBytes,
+  waitForStableOwnedWindow,
 } from "./native-screen-capture.mjs";
 import { prepareNativeScreenPlan } from "./native-screen-prepare.mjs";
 
@@ -201,6 +202,82 @@ describe("native screen capture v4", () => {
       () => parseAxWindowObservation("123, 1200, 760, 20, 30, 1"),
       /logical geometry/u,
     );
+  });
+
+  it("retries only a transient zero on-screen window and still requires two stable samples", async () => {
+    const observation = {
+      windowId: 123,
+      logicalWidth: 1280,
+      logicalHeight: 760,
+      x: 20,
+      y: 30,
+      frontmost: true,
+    };
+    const samples = [
+      observation,
+      new NativeScreenCaptureError(
+        "owned-window lookup failed: expected exactly one CoreGraphics owned window (onscreen=0, all=1, active=0)",
+      ),
+      observation,
+      observation,
+    ];
+    let calls = 0;
+    const result = await waitForStableOwnedWindow(
+      100,
+      "helper",
+      () => {
+        const next = samples[calls++];
+        if (next instanceof Error) throw next;
+        return next;
+      },
+      async () => {},
+    );
+    assert.deepEqual(result, { ...observation, stableSamples: 2 });
+    assert.equal(calls, 4);
+  });
+
+  it("blocks immediately on multiple windows or invalid geometry", async () => {
+    for (const message of [
+      "owned-window lookup failed: expected exactly one CoreGraphics owned window (onscreen=2, all=2, active=1)",
+      "owned window identity or logical geometry is invalid",
+    ]) {
+      let calls = 0;
+      await assert.rejects(
+        waitForStableOwnedWindow(
+          100,
+          "helper",
+          () => {
+            calls += 1;
+            throw new NativeScreenCaptureError(message);
+          },
+          async () => {},
+        ),
+        (error) => {
+          assert.equal(error.message, message);
+          return true;
+        },
+      );
+      assert.equal(calls, 1);
+    }
+  });
+
+  it("reports the final zero-window observation after bounded retries", async () => {
+    let calls = 0;
+    await assert.rejects(
+      waitForStableOwnedWindow(
+        100,
+        "helper",
+        () => {
+          calls += 1;
+          throw new NativeScreenCaptureError(
+            "owned-window lookup failed: expected exactly one CoreGraphics owned window (onscreen=0, all=0, active=1)",
+          );
+        },
+        async () => {},
+      ),
+      /last zero-window observation:.*onscreen=0, all=0, active=1/u,
+    );
+    assert.equal(calls, 20);
   });
 
   it("accepts only the exact one-time terminal confirmation line", () => {
