@@ -28,7 +28,7 @@ test("lists history with 50/100 pagination and stable semantic metadata", async 
   expect(historyListLimits(state)).toEqual([50, 100]);
 
   await expect(rows.nth(0)).toHaveAttribute("aria-label", /Automatic/);
-  await expect(rows.nth(0)).toHaveAttribute("aria-label", /Current/);
+  await expect(rows.getByText("Current", { exact: true })).toHaveCount(0);
   await expect(rows.nth(1)).toHaveAttribute("aria-label", /Manual/);
   await expect(rows.nth(1)).toHaveAttribute("aria-label", /Added title/);
   await expect(rows.nth(2)).toHaveAttribute("aria-label", /Before restore/);
@@ -106,14 +106,16 @@ test("keeps preview read-only and rejects a late response from another document 
     state.invocations.filter(
       (invocation) =>
         invocation.command === "history_preview" &&
-        invocation.args.versionId === "v-003",
+        historyRequest(invocation.args).versionId === "v-003",
     ),
   ).toHaveLength(1);
   expect(
     state.invocations.some(
       (invocation) =>
         invocation.command === "history_preview" &&
-        JSON.stringify(invocation.args.document).includes("document-b"),
+        JSON.stringify(historyRequest(invocation.args).document).includes(
+          "document-b",
+        ),
     ),
   ).toBe(false);
   await expect(panel).not.toContainText("Read-only scene for v-003");
@@ -179,5 +181,19 @@ function historyListLimits(
 ): number[] {
   return state.invocations
     .filter((invocation) => invocation.command === "history_list")
-    .map((invocation) => Number(invocation.args.limit));
+    .map((invocation) => Number(historyRequest(invocation.args).limit));
+}
+
+function historyRequest(
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  const request = args.request;
+  if (
+    typeof request !== "object" ||
+    request === null ||
+    Array.isArray(request)
+  ) {
+    throw new Error("Missing history request envelope");
+  }
+  return request as Record<string, unknown>;
 }

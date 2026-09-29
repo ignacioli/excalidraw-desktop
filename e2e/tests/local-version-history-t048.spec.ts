@@ -55,6 +55,9 @@ for (const colorScheme of ["light", "dark"] as const) {
     const selectedActions = panel.getByRole("region", {
       name: "Selected version actions",
     });
+    const resizeHandle = panel.getByRole("separator", {
+      name: "Resize version history panel",
+    });
 
     await expect(page.locator("html")).toHaveAttribute(
       "data-color-scheme",
@@ -88,6 +91,44 @@ for (const colorScheme of ["light", "dark"] as const) {
     expect(panelGeometry.borderColor).toBe(
       colorScheme === "light" ? "rgb(233, 236, 239)" : "rgb(54, 53, 65)",
     );
+    await expect(resizeHandle).toHaveAttribute("aria-valuenow", "360");
+
+    const approvedControls = await panel.evaluate((element) => {
+      const mark = element.querySelector<HTMLButtonElement>(
+        ".history-mark-current",
+      );
+      const restore = element.querySelector<HTMLButtonElement>(
+        ".history-selection-actions .primary-action",
+      );
+      if (mark === null || restore === null)
+        throw new Error("Approved History actions are missing.");
+      const resolveTokenColor = (token: string) => {
+        const probe = document.createElement("span");
+        probe.style.color = `var(${token})`;
+        element.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      };
+      return {
+        markHeight: mark.getBoundingClientRect().height,
+        markBorder: getComputedStyle(mark).borderTopColor,
+        markBackground: getComputedStyle(mark).backgroundColor,
+        restoreBackground: getComputedStyle(restore).backgroundColor,
+        restoreText: getComputedStyle(restore).color,
+        panelBackground: getComputedStyle(element).backgroundColor,
+        accent: resolveTokenColor("--accent"),
+        accentContrast: resolveTokenColor("--accent-contrast"),
+        borderStrong: resolveTokenColor("--border-strong"),
+      };
+    });
+    expect(approvedControls.markHeight).toBe(30);
+    expect(approvedControls.markBorder).toBe(approvedControls.borderStrong);
+    expect(approvedControls.markBackground).toBe(
+      approvedControls.panelBackground,
+    );
+    expect(approvedControls.restoreBackground).toBe(approvedControls.accent);
+    expect(approvedControls.restoreText).toBe(approvedControls.accentContrast);
 
     const listLayout = await list.evaluate((element) => {
       const body = element.closest<HTMLElement>(".history-panel-body");
@@ -126,11 +167,46 @@ for (const colorScheme of ["light", "dark"] as const) {
   });
 }
 
-test("uses the 300 px compact drawer at a narrow viewport without clipping actions", async ({
+test("resizes by drag and keyboard without changing the selected version", async ({
+  page,
+}) => {
+  const panel = historyPanel(page);
+  const separator = panel.getByRole("separator", {
+    name: "Resize version history panel",
+  });
+  const selectedActions = panel.getByRole("region", {
+    name: "Selected version actions",
+  });
+  await expect(selectedActions).toContainText("v-000");
+
+  const separatorBox = await separator.boundingBox();
+  if (separatorBox === null) throw new Error("Resize separator has no box.");
+  const dragY = separatorBox.y + 80;
+  await page.mouse.move(separatorBox.x + separatorBox.width / 2, dragY);
+  await page.mouse.down();
+  await page.mouse.move(separatorBox.x + separatorBox.width / 2 + 80, dragY);
+  await page.mouse.up();
+  await expect(separator).toHaveAttribute("aria-valuenow", "300");
+  await expect(panel).toHaveCSS("width", "300px");
+  await expect(selectedActions).toContainText("v-000");
+
+  await separator.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(separator).toHaveAttribute("aria-valuenow", "300");
+  await page.keyboard.press("End");
+  await expect(separator).toHaveAttribute("aria-valuenow", "360");
+  await page.keyboard.press("ArrowLeft");
+  await expect(separator).toHaveAttribute("aria-valuenow", "360");
+  await page.keyboard.press("ArrowRight");
+  await expect(separator).toHaveAttribute("aria-valuenow", "350");
+  await expect(separator).toBeFocused();
+  await expect(selectedActions).toContainText("v-000");
+});
+
+test("keeps the 360 px default drawer inside a narrow viewport", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 760 });
-
   const panel = historyPanel(page);
   const rows = panel.getByRole("option");
   const geometry = await panel.evaluate((element) => {
@@ -145,7 +221,7 @@ test("uses the 300 px compact drawer at a narrow viewport without clipping actio
   });
 
   await expect(rows).toHaveCount(50);
-  expect(geometry.width).toBe(300);
+  expect(geometry.width).toBe(360);
   expect(geometry.left).toBeGreaterThanOrEqual(0);
   expect(geometry.right).toBeLessThanOrEqual(360);
   expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);

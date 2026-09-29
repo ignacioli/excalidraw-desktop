@@ -1,5 +1,6 @@
 .history-panel {
   --history-panel-width: 360px;
+  position: relative;
   display: flex;
   flex: 0 0 var(--history-panel-width);
   flex-direction: column;
@@ -14,8 +15,34 @@
   box-shadow: var(--shadow-floating);
 }
 
-.history-panel.is-compact {
-  --history-panel-width: 300px;
+.history-panel-resize {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.history-panel-resize::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  content: "";
+}
+
+.history-panel-resize:hover::before,
+.history-panel-resize:focus-visible::before {
+  background: var(--accent);
+}
+
+.history-panel-resize:focus-visible {
+  outline: none;
 }
 
 .history-panel-header,
@@ -96,6 +123,20 @@
 
 .history-current-actions button {
   justify-self: start;
+}
+
+.history-current-actions .history-mark-current {
+  min-height: 30px;
+  border: var(--border-default) solid var(--border-strong);
+  border-radius: var(--radius-control);
+  padding: 0 var(--space-3);
+  color: var(--text-primary);
+  background: var(--panel-background);
+  font: inherit;
+}
+
+.history-current-actions .history-mark-current:hover {
+  background: var(--surface-hover);
 }
 
 .history-current-actions p {
@@ -350,6 +391,18 @@
   background: var(--surface-hover);
 }
 
+.history-selection-actions .primary-action,
+.history-preview-actions .primary-action {
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  background: var(--accent);
+}
+
+.history-selection-actions .primary-action:hover,
+.history-preview-actions .primary-action:hover {
+  background: var(--accent-hover);
+}
+
 .history-selection-actions button:disabled,
 .history-preview-actions button:disabled {
   color: var(--text-disabled);
@@ -439,7 +492,8 @@
 }
 
 .history-panel button:focus-visible,
-.history-panel [role="option"]:focus-visible {
+.history-panel [role="option"]:focus-visible,
+.history-panel-resize:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -448,12 +502,6 @@
   width: var(--size-icon, 16px);
   height: var(--size-icon, 16px);
   flex: 0 0 var(--size-icon, 16px);
-}
-
-@media (max-width: 420px) {
-  .history-panel {
-    --history-panel-width: 300px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

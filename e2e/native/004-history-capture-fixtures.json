@@ -56,7 +56,7 @@
       "manifestName": "T048 · 06 · History · Compact 300 · Dark",
       "shapeId": "b48ddf15-5062-8001-8008-b57586ef024c",
       "checklist": [
-        "Show compact 300 px History drawer in Dark mode",
+        "In the 1280 × 760 window, use the History drawer left-edge resize separator to reduce its width from 360 px to 300 px, then show Dark mode",
         "Check contrast, state labels, row/action readability, and horizontal clipping"
       ]
     },

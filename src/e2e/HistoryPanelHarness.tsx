@@ -212,7 +212,6 @@ export function HistoryPanelHarness() {
       </header>
       {open ? (
         <HistoryPanel
-          currentVersionId="v-000"
           fileName={`${tab}.excalidraw`}
           items={items}
           onClose={() => setOpen(false)}
@@ -240,7 +239,7 @@ function itemView(item: {
   versionId: string;
 }): Pick<HistoryVersionView, "summary" | "summaryReliable"> {
   if (item.versionId === "v-000") {
-    return { summary: "Current saved drawing", summaryReliable: true };
+    return { summary: "Saved drawing", summaryReliable: true };
   }
   if (item.versionId === "v-001") {
     return { summary: "Added title", summaryReliable: true };

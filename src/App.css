@@ -435,7 +435,9 @@ body {
 }
 
 .app-shell-body--history {
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, min(var(--history-panel-width, 360px), 100vw));
 }
 
 .app-shell-body--pinned .canvas-region {

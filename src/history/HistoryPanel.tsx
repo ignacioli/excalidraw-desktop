@@ -3,9 +3,11 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefCallback,
   type RefObject,
+  type CSSProperties,
 } from "react";
 import { ApplicationDialog } from "../app/interaction/ApplicationDialog";
 import { HistoryList, type HistoryVersionView } from "./HistoryList";
@@ -24,7 +26,8 @@ export interface HistoryPanelProps {
   /** Stable active document identity, used to bind open row actions. */
   documentId?: string;
   fileName: string;
-  compact?: boolean;
+  width?: number;
+  onWidthChange?: (width: number) => void;
   items?: readonly HistoryVersionView[];
   status?: HistoryPanelStatus;
   statusMessage?: string;
@@ -77,7 +80,8 @@ export interface HistoryPanelProps {
 export function HistoryPanel({
   documentId,
   fileName,
-  compact = false,
+  width,
+  onWidthChange,
   items = [],
   status = "available",
   statusMessage,
@@ -107,6 +111,13 @@ export function HistoryPanel({
   moreActions,
   triggerRef,
 }: HistoryPanelProps) {
+  const [internalWidth, setInternalWidth] = useState(360);
+  const activeWidth = width ?? internalWidth;
+  const resizeStartRef = useRef<{
+    pointerId: number;
+    x: number;
+    width: number;
+  } | null>(null);
   const [internalSelectedId, setInternalSelectedId] = useState<string | null>(
     selectedVersionId ?? items[0]?.versionId ?? null,
   );
@@ -248,6 +259,51 @@ export function HistoryPanel({
   const closePanel = () => {
     triggerRef?.current?.focus();
     onClose();
+  };
+
+  const setPanelWidth = (nextWidth: number) => {
+    const clampedWidth = Math.max(300, Math.min(360, nextWidth));
+    if (width === undefined) setInternalWidth(clampedWidth);
+    onWidthChange?.(clampedWidth);
+  };
+
+  const handleResizeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const step = event.shiftKey ? 20 : 10;
+    let nextWidth: number | null = null;
+    if (event.key === "ArrowLeft") nextWidth = activeWidth + step;
+    if (event.key === "ArrowRight") nextWidth = activeWidth - step;
+    if (event.key === "Home") nextWidth = 300;
+    if (event.key === "End") nextWidth = 360;
+    if (nextWidth === null) return;
+    event.preventDefault();
+    setPanelWidth(nextWidth);
+  };
+
+  const handleResizePointerDown = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    if (event.button !== 0) return;
+    resizeStartRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      width: activeWidth,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  };
+
+  const handleResizePointerMove = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    const start = resizeStartRef.current;
+    if (start === null || start.pointerId !== event.pointerId) return;
+    setPanelWidth(start.width - (event.clientX - start.x));
+  };
+
+  const handleResizePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (resizeStartRef.current?.pointerId !== event.pointerId) return;
+    resizeStartRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
 
   const handleMark = async () => {
@@ -540,13 +596,42 @@ export function HistoryPanel({
   return (
     <aside
       aria-labelledby="history-panel-title"
-      className={`history-panel${compact ? " is-compact" : ""}`}
+      className={`history-panel${activeWidth === 300 ? " is-compact" : ""}`}
       data-history-panel="true"
-      data-compact={compact ? "true" : undefined}
+      data-compact={activeWidth === 300 ? "true" : undefined}
       onKeyDown={handlePanelKeyDown}
       ref={panelRef}
       role="complementary"
+      style={
+        {
+          "--history-panel-width": `${activeWidth}px`,
+        } as CSSProperties & Record<"--history-panel-width", string>
+      }
     >
+      <div
+        aria-describedby="history-panel-resize-help"
+        aria-label="Resize version history panel"
+        aria-orientation="vertical"
+        aria-valuemax={360}
+        aria-valuemin={300}
+        aria-valuenow={activeWidth}
+        className="history-panel-resize"
+        onKeyDown={handleResizeKeyDown}
+        onPointerDown={handleResizePointerDown}
+        onPointerMove={handleResizePointerMove}
+        onPointerUp={handleResizePointerUp}
+        onPointerCancel={handleResizePointerUp}
+        onLostPointerCapture={() => {
+          resizeStartRef.current = null;
+        }}
+        role="separator"
+        tabIndex={0}
+      />
+      <span className="visually-hidden" id="history-panel-resize-help">
+        Left Arrow moves the divider left and increases width by 10 pixels;
+        Right Arrow moves it right and decreases width by 10 pixels. Home sets
+        300 pixels; End sets 360 pixels. Hold Shift to resize by 20 pixels.
+      </span>
       <header className="history-panel-header">
         <div>
           <p className="history-panel-eyebrow">File history</p>
@@ -594,6 +679,7 @@ export function HistoryPanel({
                 <p>Open canvas</p>
               </div>
               <button
+                className="history-mark-current"
                 disabled={processing || markIsProcessing}
                 onClick={() => void handleMark()}
                 type="button"

@@ -144,6 +144,7 @@ export function AppShell({
   const [exportDocumentId, setExportDocumentId] = useState<string | null>(null);
   const [historyFeedback, setHistoryFeedback] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyPanelWidth, setHistoryPanelWidth] = useState(360);
   const [historyItems, setHistoryItems] = useState<HistoryVersionView[]>([]);
   const [historySelectedVersionId, setHistorySelectedVersionId] = useState<
     string | null
@@ -1476,6 +1477,11 @@ export function AppShell({
           .join(" ")}
         data-history-open={historyOpen ? "true" : "false"}
         data-sidebar-mode={sidebarSnapshot.mode}
+        style={
+          {
+            "--history-panel-width": `${historyPanelWidth}px`,
+          } as CSSProperties & Record<"--history-panel-width", string>
+        }
       >
         {sidebarSnapshot.mode === "hidden" && !historyOpen ? (
           <div
@@ -1606,6 +1612,8 @@ export function AppShell({
             documentId={activeSession.id}
             key={activeSession.id}
             fileName={activeSession.title}
+            width={historyPanelWidth}
+            onWidthChange={setHistoryPanelWidth}
             items={historyItems}
             selectedVersionId={historySelectedVersionId}
             onSelect={(item) => setHistorySelectedVersionId(item.versionId)}

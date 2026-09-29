@@ -88,6 +88,29 @@ test("read-only version preview hides the SDK main-menu trigger and actions", as
   await expect(preview.locator('[data-preview-rendered="true"]')).toBeVisible();
   await expect(preview.getByRole("button")).toHaveCount(0);
 
+  const previewRestore = panel.locator(
+    ".history-preview-actions .primary-action",
+  );
+  await expect(previewRestore).toBeEnabled();
+  const previewRestoreColors = await previewRestore.evaluate((element) => {
+    const resolveTokenColor = (token: string) => {
+      const probe = document.createElement("span");
+      probe.style.color = `var(${token})`;
+      element.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    };
+    return {
+      background: getComputedStyle(element).backgroundColor,
+      text: getComputedStyle(element).color,
+      accent: resolveTokenColor("--accent"),
+      accentContrast: resolveTokenColor("--accent-contrast"),
+    };
+  });
+  expect(previewRestoreColors.background).toBe(previewRestoreColors.accent);
+  expect(previewRestoreColors.text).toBe(previewRestoreColors.accentContrast);
+
   await expect(
     preview.getByRole("button", { name: "More options" }),
   ).toHaveCount(0);
@@ -117,8 +140,12 @@ async function installHistoryPreviewFixture(page: Page): Promise<void> {
     }
     const invokeBase = internals.invoke.bind(internals);
     internals.invoke = async (command, args = {}) => {
+      const request =
+        typeof args.request === "object" && args.request !== null
+          ? (args.request as InvokeArgs)
+          : args;
       if (command === "history_list") {
-        const document = args.document as { path?: unknown } | undefined;
+        const document = request.document as { path?: unknown } | undefined;
         return {
           documentId: String(document?.path ?? ""),
           items: [item],
@@ -127,7 +154,7 @@ async function installHistoryPreviewFixture(page: Page): Promise<void> {
       }
       if (command === "history_preview") {
         return {
-          versionId: String(args.versionId ?? ""),
+          versionId: String(request.versionId ?? ""),
           scene: {
             type: "excalidraw",
             version: 2,

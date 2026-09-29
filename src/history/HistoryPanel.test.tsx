@@ -394,16 +394,15 @@ describe("HistoryPanel", () => {
     ).toHaveFocus();
   });
 
-  it("exposes a compact 300px state and uses only a reliable target summary", async () => {
+  it("resizes with keyboard limits while preserving the selected action target", async () => {
     const user = userEvent.setup();
     const target = makeItem({
       sequence: 7,
       summary: "Unreliable raw summary",
       summaryReliable: false,
     });
-    const { rerender } = render(
+    render(
       <HistoryPanel
-        compact
         documentId="document-a"
         fileName="drawing.excalidraw"
         items={[target]}
@@ -413,9 +412,13 @@ describe("HistoryPanel", () => {
       />,
     );
 
+    const panel = screen.getByRole("complementary");
+    const separator = screen.getByRole("separator", {
+      name: "Resize version history panel",
+    });
     expect(screen.getByRole("complementary")).toHaveAttribute(
-      "data-compact",
-      "true",
+      "style",
+      "--history-panel-width: 360px;",
     );
     const trigger = screen.getByRole("button", {
       name: "More actions for v-007 · Canvas changed",
@@ -428,23 +431,23 @@ describe("HistoryPanel", () => {
     expect(
       screen.queryByText(/Unreliable raw summary/),
     ).not.toBeInTheDocument();
+    expect(separator).toHaveAttribute("aria-valuenow", "360");
 
-    rerender(
-      <HistoryPanel
-        compact
-        documentId="document-a"
-        fileName="drawing.excalidraw"
-        items={[target]}
-        onClose={vi.fn()}
-        onDelete={vi.fn()}
-        onSetMarked={vi.fn()}
-      />,
-    );
+    separator.focus();
+    await user.keyboard("{Home}");
+    expect(separator).toHaveAttribute("aria-valuenow", "300");
+    expect(separator).toHaveFocus();
+    expect(panel).toHaveAttribute("data-compact", "true");
     expect(
-      screen.getByRole("button", {
-        name: "More actions for v-007 · Canvas changed",
-      }),
-    ).toBeInTheDocument();
+      screen.getByRole("region", { name: "Selected version actions" }),
+    ).toHaveTextContent("v-007 · Canvas changed");
+
+    await user.keyboard("{ArrowRight}");
+    expect(separator).toHaveAttribute("aria-valuenow", "300");
+    await user.keyboard("{End}");
+    expect(separator).toHaveAttribute("aria-valuenow", "360");
+    await user.keyboard("{ArrowLeft}");
+    expect(separator).toHaveAttribute("aria-valuenow", "360");
   });
 
   it("keeps an open menu bound to its original version and reports when it disappears", async () => {

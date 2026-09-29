@@ -36,7 +36,7 @@ const VERSIONS: SeedVersion[] = Array.from({ length: 100 }, (_, index) => {
       versionId: id,
       source: "protected",
       protectedAction: "restore",
-      recordedAt: Date.UTC(2025, 0, 3, 12, 0),
+      recordedAt: Date.UTC(2025, 0, 3, 12, 0) / 1_000,
       sequence: index,
       contentHash: hashFor(index),
       availability: { status: "available" },
@@ -46,7 +46,7 @@ const VERSIONS: SeedVersion[] = Array.from({ length: 100 }, (_, index) => {
     return {
       versionId: id,
       source: "automatic",
-      recordedAt: Date.UTC(2025, 0, 8, 12, 0),
+      recordedAt: Date.UTC(2025, 0, 8, 12, 0) / 1_000,
       sequence: index,
       contentHash: hashFor(index),
       availability: {
@@ -62,7 +62,7 @@ const VERSIONS: SeedVersion[] = Array.from({ length: 100 }, (_, index) => {
   return {
     versionId: id,
     source: index === 1 ? "manual" : "automatic",
-    recordedAt: Date.UTC(2025, 0, 1 + index, 12, 0),
+    recordedAt: Date.UTC(2025, 0, 1 + index, 12, 0) / 1_000,
     sequence: index,
     contentHash: hashFor(index),
     availability: { status: "available" },
@@ -126,15 +126,19 @@ export async function installLocalVersionHistoryHarness(
           return {};
         }
         if (command === "history_list") {
-          const limit = Number(args.limit ?? 50);
-          const cursor = typeof args.cursor === "string" ? args.cursor : null;
+          const request = args.request as InvokeArgs | undefined;
+          if (request === undefined)
+            throw new Error("Missing history request envelope");
+          const limit = Number(request.limit ?? 50);
+          const cursor =
+            typeof request.cursor === "string" ? request.cursor : null;
           const start =
             cursor === null ? 0 : Number(cursor.replace("cursor-", ""));
           const page = versions.slice(start, start + limit);
           const nextStart = start + page.length;
           return {
             documentId: String(
-              (args.document as { path?: unknown } | undefined)?.path ?? "",
+              (request.document as { path?: unknown } | undefined)?.path ?? "",
             ),
             items: page,
             nextCursor:
@@ -143,7 +147,10 @@ export async function installLocalVersionHistoryHarness(
           };
         }
         if (command === "history_preview") {
-          const versionId = String(args.versionId ?? "");
+          const request = args.request as InvokeArgs | undefined;
+          if (request === undefined)
+            throw new Error("Missing history request envelope");
+          const versionId = String(request.versionId ?? "");
           if (versionId === "v-003") {
             await new Promise((resolve) => window.setTimeout(resolve, 250));
           }
