@@ -12,6 +12,7 @@ import {
   assertReferenceEnvironment,
   collectCommit,
   collectEnvironmentMetadata,
+  collectPerformanceBinaryIdentity,
   collectProcessTreeSample,
   DirectoryWriteObserver,
   executableAssociationTokens,
@@ -103,6 +104,7 @@ test("measures cold start to editable canvas and idle process-tree RSS", async (
     collectCommit(),
     resolveDesktopBinary(),
   ]);
+  const binary = await collectPerformanceBinaryIdentity(executable);
 
   if (referenceRun) {
     try {
@@ -112,6 +114,7 @@ test("measures cold start to editable canvas and idle process-tree RSS", async (
         schemaVersion: PERFORMANCE_REPORT_SCHEMA_VERSION,
         commit,
         ...environment,
+        binary,
         workload: WORKLOAD,
         samples: {},
         statistic: {},
@@ -269,6 +272,7 @@ test("measures cold start to editable canvas and idle process-tree RSS", async (
     schemaVersion: PERFORMANCE_REPORT_SCHEMA_VERSION,
     commit,
     ...environment,
+    binary,
     workload: WORKLOAD,
     processTreeAccounting: processTreeAccounting("excalidraw-desktop"),
     samples: {
