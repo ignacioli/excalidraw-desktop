@@ -27,3 +27,8 @@
 ## 尚未完成
 
 用户因置顶窗口干扰工作，已要求原生工作遇问题先暂停确认。本轮没有在此之后再启动/激活原生应用。新包需单独复核受影响的原生入口、T048 画面及 owner 决定。T049 的[无效 startup 尝试](../local-version-history-t049/physical-startup-20260929/README.md)不构成性能基线；参考 VM 仍不匹配声明系列。Phase 7、T052 完整汇总及 T054 最终接受未因此完成。
+
+
+## 新包准备（不是原生验收）
+
+干净产品提交 `c453f3f68c09cd70bd80c6efc3a8e1c5300ece90` 已通过 production build/seal，包含实现 `a50818e`；[package manifest](package-ready/package-manifest.json) 记录 package SHA-256 `c19071050bc73aa1a09c45e63993bb41d0be9d7db03346623a1549b09164df9d`。Guard seal attempt `6c7519d9-513b-44a0-83ab-1543e91c3866` PASS。新的 [HISTORY plan](package-ready/history-plan.json) 与 fixture manifest 已准备，保留原字节及实际 `/private/tmp/t059-history-ready-20260929` 输入位置。prepare 首次因 run root 尚未建立而 BLOCKED，建立要求的空目录后 PASS。未启动包、未采集任何新包截图、未执行新包 native entry，未获得 visual reviewer 或 owner PASS。用户确认可占用桌面后才继续。
