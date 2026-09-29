@@ -4,27 +4,27 @@
   "screens": [
     {
       "gateId": "HISTORY-01",
-      "manifestName": "T004 · 01 · History · Default · Light",
-      "shapeId": "87d1db27-904b-80ba-8008-aeb2cb37d1a9",
+      "manifestName": "T048 · 01 · History · Default · Light",
+      "shapeId": "da9cf473-5dad-8097-8008-b502ce235a48",
       "checklist": [
         "Open the 360 px right History drawer in Light mode",
-        "Check readable filename, time, source, summary, Current, Ready, and marked labels",
+        "Check the separate Current Drawing card and readable filename, time, source, summary, Ready, and marked labels in saved versions",
         "Check Preview and Restore remain visible without clipping"
       ]
     },
     {
       "gateId": "HISTORY-02",
-      "manifestName": "T004 · 02 · More Actions · Light",
-      "shapeId": "87d1db27-904b-80ba-8008-aeb310646044",
+      "manifestName": "T048 · 02 · Row Actions · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b5753372b7f4",
       "checklist": [
-        "Open More Actions in Light mode",
-        "Check 180 × 84 px menu, 32 px trigger, Mark/Unmark, Delete, separator, and clipping"
+        "Open row actions for a saved History version in Light mode",
+        "Check the 180 × 116 px menu, subtle version title, Mark/Unmark and Delete icon outlines, separator, and clipping"
       ]
     },
     {
       "gateId": "HISTORY-03",
-      "manifestName": "T004 · 03 · Version Preview · Light",
-      "shapeId": "87d1db27-904b-80ba-8008-aeb088a10afb",
+      "manifestName": "T048 · 03 · Version Preview · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b575525aee78",
       "checklist": [
         "Enter read-only version Preview in Light mode",
         "Check preview is distinguishable from current drawing and Exit/Restore remain reachable"
@@ -32,8 +32,8 @@
     },
     {
       "gateId": "HISTORY-04",
-      "manifestName": "T004 · 04 · Restore Confirmation · Light",
-      "shapeId": "87d1db27-904b-80ba-8008-aeb2cb6e7d20",
+      "manifestName": "T048 · 04 · Restore Confirmation · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b5756178feb0",
       "checklist": [
         "Open Restore confirmation in Light mode",
         "Check Cancel has visible initial focus and dialog text/actions are not clipped"
@@ -44,20 +44,17 @@
     },
     {
       "gateId": "HISTORY-05",
-      "manifestName": "T004 · 05 · External Recovery · Light",
-      "shapeId": "87d1db27-904b-80ba-8008-aeb2cb87a721",
+      "manifestName": "T048 · 05 · Repeated Mark · Long List · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b5756dd21737",
       "checklist": [
-        "Show external recovery in Light mode",
-        "Check issue, Preview, Save As, Keep current file, and Discard recovery remain readable"
-      ],
-      "humanLiveObservations": [
-        "Open Discard recovery confirmation and visually check its destructive hierarchy; record a separate reviewer verdict"
+        "Show a long History list after repeated Mark in Light mode",
+        "Check the selected existing version remains the Mark target, long-list scrolling, visible status, and feedback placement without clipping"
       ]
     },
     {
       "gateId": "HISTORY-06",
-      "manifestName": "T004 · 06 · History · Compact 300 · Dark",
-      "shapeId": "87d1db27-904b-80ba-8008-aeb2cb9fc698",
+      "manifestName": "T048 · 06 · History · Compact 300 · Dark",
+      "shapeId": "b48ddf15-5062-8001-8008-b57586ef024c",
       "checklist": [
         "Show compact 300 px History drawer in Dark mode",
         "Check contrast, state labels, row/action readability, and horizontal clipping"

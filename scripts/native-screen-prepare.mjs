@@ -21,7 +21,7 @@ const HISTORY_REGISTRY_PATH = path.join(
 );
 const HISTORY_HIGH_FI_PATH = path.join(
   REPO_ROOT,
-  "docs/design/local-version-history/high-fi/manifest.json",
+  "docs/design/local-version-history/high-fi/t048/manifest.json",
 );
 const HISTORY_LOW_FI_PATH = path.join(
   REPO_ROOT,
@@ -403,6 +403,15 @@ export function validateHistoryPlanScope(plan, registry, highFi) {
     !Array.isArray(registry.screens)
   )
     blocked("HISTORY fixture registry is invalid");
+  if (
+    highFi.schemaVersion !== 1 ||
+    highFi.task !== "T048/T055" ||
+    highFi.status !== "APPROVED_HIGH_FIDELITY" ||
+    highFi.viewport?.width !== 1280 ||
+    highFi.viewport?.height !== 760 ||
+    highFi.frames?.length !== 6
+  )
+    blocked("HISTORY T048 high-fi authority is invalid");
   for (const screen of plan.screens) {
     const declared = registry.screens.find(
       (entry) => entry.gateId === screen.gateId,
@@ -438,8 +447,8 @@ export function validateHistoryPlanScope(plan, registry, highFi) {
       if (
         !frame ||
         frame.name !== declared.manifestName ||
-        frame.width !== 1280 ||
-        frame.height !== 760
+        !/^screens\/[a-z0-9-]+\.png$/u.test(frame.path ?? "") ||
+        !HEX.digest.test(frame.sha256 ?? "")
       )
         blocked(`HISTORY high-fi frame mismatch for ${screen.gateId}`);
     }
@@ -722,9 +731,10 @@ export async function prepareNativeScreenPlan({
       "History low-fi manifest",
     );
     if (
-      highFi.feature !== "local-version-history" ||
-      highFi.status !== "approved" ||
-      highFi.ownerDecision?.highFidelity !== "APPROVED" ||
+      highFi.task !== "T048/T055" ||
+      highFi.status !== "APPROVED_HIGH_FIDELITY" ||
+      highFi.viewport?.width !== 1280 ||
+      highFi.viewport?.height !== 760 ||
       highFi.frames?.length !== 6 ||
       lowFi.feature !== "local-version-history" ||
       lowFi.ownerDecision?.lowFidelity !== "APPROVED" ||
@@ -756,10 +766,16 @@ export async function prepareNativeScreenPlan({
         if (
           !frame ||
           frame.name !== screen.manifestName ||
-          frame.width !== 1280 ||
-          frame.height !== 760
+          !/^screens\/[a-z0-9-]+\.png$/u.test(frame.path ?? "") ||
+          !HEX.digest.test(frame.sha256 ?? "")
         )
           blocked(`History high-fi frame mismatch for ${screen.gateId}`);
+        if (
+          (await sha256File(
+            path.join(path.dirname(HISTORY_HIGH_FI_PATH), frame.path),
+          )) !== frame.sha256
+        )
+          blocked(`History high-fi screen digest changed for ${screen.gateId}`);
       } else if (typeof screen.state !== "string" || !screen.state)
         blocked(`History low-fi state missing for ${screen.gateId}`);
     }

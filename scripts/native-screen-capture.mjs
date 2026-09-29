@@ -27,7 +27,7 @@ const HISTORY_SCOPE_PATHS = {
   ),
   highFi: path.join(
     REPO_ROOT,
-    "docs/design/local-version-history/high-fi/manifest.json",
+    "docs/design/local-version-history/high-fi/t048/manifest.json",
   ),
   lowFi: path.join(
     REPO_ROOT,
@@ -529,6 +529,14 @@ async function loadInputs(planPath, gate) {
       await fsp.readFile(HISTORY_SCOPE_PATHS.highFi, "utf8"),
     );
     validateHistoryPlanScope(plan, registry, highFi);
+    for (const frame of highFi.frames) {
+      const screenPath = path.join(
+        path.dirname(HISTORY_SCOPE_PATHS.highFi),
+        frame.path,
+      );
+      if ((await sha256File(screenPath)) !== frame.sha256)
+        blocked(`HISTORY T048 screen digest changed: ${frame.name}`);
+    }
   } else if (path.resolve(plan.hf2Manifest.path) !== HF2_MANIFEST_PATH)
     blocked("capture plan does not bind the repository HF-2 manifest");
   const packageBytes = await fsp.readFile(plan.packageManifest.path);

@@ -109,12 +109,35 @@ describe("native screen prepare", () => {
       HISTORY_GATES,
     );
     assert.equal(plan.harnessVersion, "004-history-capture-v1");
+    const t048ManifestPath = path.resolve(
+      "docs/design/local-version-history/high-fi/t048/manifest.json",
+    );
+    const t048ManifestBytes = await fsp.readFile(t048ManifestPath);
+    assert.deepEqual(plan.historyScope.highFi, {
+      path: t048ManifestPath,
+      sha256: crypto
+        .createHash("sha256")
+        .update(t048ManifestBytes)
+        .digest("hex"),
+    });
     assert.equal(plan.hf2Manifest, undefined);
     assert.equal(plan.nativeValidation, undefined);
     assert.equal(plan.semanticEvidence, undefined);
     assert.equal(
       plan.screens[0].designReference.kind,
       "approved-high-fi-frame",
+    );
+    assert.equal(
+      plan.screens[1].manifestName,
+      "T048 · 02 · Row Actions · Light",
+    );
+    assert.match(
+      plan.screens[1].visualTarget.operatorChecklist.join(" "),
+      /180 × 116 px menu/u,
+    );
+    assert.equal(
+      plan.screens[4].manifestName,
+      "T048 · 05 · Repeated Mark · Long List · Light",
     );
     assert.equal(plan.screens[6].designReference.state, "generic-error");
     assert.equal(
@@ -123,7 +146,7 @@ describe("native screen prepare", () => {
     );
     assert.equal(plan.screens[10].visualTarget.operatorChecklist.length, 1);
     assert.equal(plan.screens[10].visualTarget.humanLiveObservations.length, 3);
-    assert.equal(plan.screens[4].visualTarget.humanLiveObservations.length, 1);
+    assert.equal(plan.screens[4].visualTarget.humanLiveObservations.length, 0);
     const launchSource = await fsp.readFile(
       "e2e/native/004-history-launch.excalidraw",
     );
@@ -199,13 +222,20 @@ describe("native screen prepare", () => {
         "utf8",
       ),
     );
-    const highFi = JSON.parse(
-      await fsp.readFile(
-        "docs/design/local-version-history/high-fi/manifest.json",
-        "utf8",
-      ),
-    );
+    const highFi = JSON.parse(t048ManifestBytes.toString("utf8"));
     assert.equal(validateHistoryPlanScope(plan, registry, highFi), plan);
+    assert.deepEqual(
+      plan.screens.slice(0, 6).map((screen) => screen.designReference.shapeId),
+      highFi.frames.map((frame) => frame.shapeId),
+    );
+    assert.throws(
+      () =>
+        validateHistoryPlanScope(plan, registry, {
+          ...highFi,
+          status: "PENDING",
+        }),
+      /T048 high-fi authority is invalid/u,
+    );
     assert.throws(
       () =>
         validateHistoryPlanScope(
