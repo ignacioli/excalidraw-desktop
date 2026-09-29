@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "role": "baseline",
+  "commit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+  "binary": {
+    "path": "/private/tmp/t049-20260929-baseline-target/release/excalidraw-desktop",
+    "sha256": "158fc23d122d5595b3950e934da77014b119f0382f393afac95a5628caa50511",
+    "kind": "e2e-harness",
+    "pathScope": "absolute"
+  },
+  "runner": {
+    "checkout": "/Users/liyongqiang/.codex/worktrees/history-perf-baseline/local-version-history",
+    "specSha256": "b4355ae7d54e628fe3fd0e9ecc32147304cec6e31ebc601fc976c1074e96b23b",
+    "workloadsSha256": "53aef4d9712dffd350739e857e0989d520ebb53018d7e50c5c993ddfd17b4375",
+    "processMetricsSha256": "b899213d27c7ce7a645fc91894cd8d01d545e5f2b93cbac55a101602767aef28"
+  },
+  "reportPath": "/private/tmp/t049-20260929-baseline-reports/startup-idle.json",
+  "reportState": "pending",
+  "createdAt": "2026-09-29T09:23:34.934Z"
+}

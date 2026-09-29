@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "HISTORY-01-native-capture",
+  "gateId": "HISTORY-01",
+  "route": "fixed-capture-review",
+  "binding": {
+    "productCommit": "9c1e6a37a10b72ec8213af9d3e45d81667ad73c7",
+    "historyScope": {
+      "registry": "2fb70d02cf4ce2fe771532813081cf3fdd103093e49945a0b2d45285cc9af6e1",
+      "highFi": "7e50c65e24b66df8eb0a2840e2bf7b714a26ebfbb0f6dc8f8e423eeb819dd8dc",
+      "lowFi": "cf44bbb2d27f79918c70226991875c9851f8e8a5029672679624d8e6ab8c6907"
+    },
+    "fixtureDigest": "53f6f5e13615e784ede379912390e2a476ec586ba98af7f7f90e5ee6a1690a31",
+    "harnessVersion": "004-history-capture-v1",
+    "packageArtifactSha256": "2420a8a8f5af8253c7ebcd90747e8e0430c1a7cee9d65585322c7e9e5e6aeae3"
+  },
+  "collector": {
+    "tool": "native-screen-capture",
+    "version": "4",
+    "runIdentity": "e8225101-56a8-44a2-8112-309c56435562:HISTORY-01"
+  },
+  "preparationMode": "operator-assisted",
+  "operatorActionsAreEvidence": false,
+  "applicationStateClaims": [],
+  "environmentPath": "environment.json",
+  "readinessPath": "capture-readiness.json",
+  "isolationPath": "isolation.json",
+  "maskPath": "mask.json",
+  "captureCount": 1,
+  "claims": [
+    {
+      "claimId": "HISTORY-01-capture-integrity",
+      "factClass": "repository-package-identity",
+      "primaryRoute": "shell-filesystem",
+      "result": "PASS",
+      "artifactRefs": [
+        "actual.png",
+        "design-reference.json",
+        "capture-plan.json",
+        "capture-readiness.json",
+        "environment.json",
+        "fixture-manifest.json",
+        "isolation.json",
+        "mask.json",
+        "raw-window.png",
+        "sealed-package-manifest.json"
+      ]
+    }
+  ],
+  "artifactDigests": [
+    {
+      "path": "actual.png",
+      "sha256": "fc16509157d6b55a3212795bed95dbc6420236113757be40606301fd672a6423"
+    },
+    {
+      "path": "design-reference.json",
+      "sha256": "c2f445374106fcb0b2781e2f264385648db02d4ce514bda1dab9669c2b614e4a"
+    },
+    {
+      "path": "capture-plan.json",
+      "sha256": "33acc67e06d8356093aaef762cae6d4b462f7feab04719b64b287929b5b77b6b"
+    },
+    {
+      "path": "capture-readiness.json",
+      "sha256": "c46cec4b6ae1c480d28fe2acb19c77060877483209c68ebdc7a6624ac0a46c35"
+    },
+    {
+      "path": "environment.json",
+      "sha256": "71ce3c980608163d1ebe59e235e1c601242b6980d945bb6e6004dfc4a57c2a26"
+    },
+    {
+      "path": "fixture-manifest.json",
+      "sha256": "53f6f5e13615e784ede379912390e2a476ec586ba98af7f7f90e5ee6a1690a31"
+    },
+    {
+      "path": "isolation.json",
+      "sha256": "be7ac5442d5857c123dc250a21298c42733ff610270071bbe5e098dbbc03a619"
+    },
+    {
+      "path": "mask.json",
+      "sha256": "dc80803491a6fc6a03d6dbda357e0b0f5bba0fcc263445d3524c45bf53190c6d"
+    },
+    {
+      "path": "raw-window.png",
+      "sha256": "94ea359d83e7babb914068bfb4a9efdf8f2cd3f6978b7d7727b7768d82d1021c"
+    },
+    {
+      "path": "sealed-package-manifest.json",
+      "sha256": "c0e716aa14e6dc6c1386f68ecf901435fb0e7b0142a58b5b81e3246a22dd15c9"
+    }
+  ],
+  "collectionDigest": "a4db47bdeb17c503b84ca214a8bd23d41878a22eccf5181ce095e40bf0447620",
+  "result": "PASS"
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "gateId": "HISTORY-01",
+  "reference": {
+    "kind": "approved-high-fi-frame",
+    "shapeId": "da9cf473-5dad-8097-8008-b502ce235a48",
+    "name": "T048 · 01 · History · Default · Light"
+  },
+  "highFiManifestSha256": "7e50c65e24b66df8eb0a2840e2bf7b714a26ebfbb0f6dc8f8e423eeb819dd8dc",
+  "lowFiManifestSha256": "cf44bbb2d27f79918c70226991875c9851f8e8a5029672679624d8e6ab8c6907",
+  "pixelBaselineAvailable": false,
+  "visualVerdict": "PENDING_REVIEW",
+  "humanLiveObservations": []
+}

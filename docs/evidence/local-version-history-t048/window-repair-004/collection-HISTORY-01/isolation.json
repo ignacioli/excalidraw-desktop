@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "mode": "backend-app-data-home-redirect",
+  "scope": "backend-app-data-only",
+  "declaredRoot": "/private/tmp/t048-window-repair-20260929",
+  "expectedAppDataRoot": "/private/tmp/t048-window-repair-20260929/profiles",
+  "profileRoot": "/private/tmp/t048-window-repair-20260929/profiles/HISTORY-01",
+  "resolvedHome": "/private/tmp/t048-window-repair-20260929/profiles/HISTORY-01",
+  "observedBackendAppDataRoot": "/private/tmp/t048-window-repair-20260929/profiles/HISTORY-01/Library/Application Support/excalidraw-desktop",
+  "observedBackendPersistence": [
+    "excalidraw-desktop.sqlite3"
+  ],
+  "actualBackendPathsObservedByCollector": true,
+  "webkitFilesystemIsolationClaimed": false,
+  "webkitStorageBoundary": {
+    "owner": "operator-session-os-managed",
+    "collectorAccess": "prohibited",
+    "collectorMutation": "prohibited",
+    "ordinaryUiPreferencePersistenceIsOperatorControlled": true
+  },
+  "operatorApplicationStateIsNotEvidence": true
+}

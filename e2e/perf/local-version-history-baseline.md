@@ -1,8 +1,10 @@
 # Local version history performance baseline
 
-状态（2026-09-28）：**T049 正式配对测量尚未执行**。History 专项 workload 已准备为 1 次预热和 3 次独立测量；共同三项性能报告现会写入实际 binary `realpath` 和 SHA-256。旧 smoke 保留为历史诊断，所有当前预算仍为 `not_evaluated`。候选实现尚有未提交并行修改，不能用当前 HEAD 伪装成测量提交。
+**最新状态（2026-09-29）：T049 仍为 `not_evaluated`。** 固定基线 `babc027d64c2c50e6922482b416ef1099ea9d07e` 的独立 `e2e-harness` binary 已构建，SHA-256 为 `158fc23d122d5595b3950e934da77014b119f0382f393afac95a5628caa50511`。一次物理 macOS `startup-idle` 尝试在第 5 次冷启动等待 `ready.json` 15 秒后失败；只有 4/10 次 editable-canvas 样本。操作员最小化了挡住工作的窗口，精确时点未知，无法归因。本次整体 **INVALID**，原始报告及运行前 binary/runner binding 见[物理基线尝试](../../docs/evidence/local-version-history-t049/physical-startup-20260929/README.md)。没有重试、有效物理配对、参考 VM 报告或速度／回归结论。候选 UI 正在修改；先前构建的候选 binary 不预支修改后的候选身份。
 
-本文件定义功能 004 的可比较性能证据格式。它不是测量结果，也不把计划中的二进制、环境或预算写成已经执行的事实。
+**先前状态（2026-09-28，保留历史）：** T049 正式配对测量尚未执行。History 专项 workload 已准备为 1 次预热和 3 次独立测量；共同三项性能报告现会写入实际 binary `realpath` 和 SHA-256。旧 smoke 保留为历史诊断，所有当时预算仍为 `not_evaluated`。当时的候选实现尚有未提交并行修改，不能用当时 HEAD 伪装成测量提交。
+
+本文件定义功能 004 的可比较性能证据格式，并记录实际尝试的有效性；计划中的二进制、环境或预算不得写成已经执行的事实。
 
 ## 基线身份
 
@@ -23,7 +25,7 @@ babc027d64c2c50e6922482b416ef1099ea9d07e
 | `binary.kind`      | `e2e-harness` 或 `production`。T090/T108 性能负载必须明确记录测试专用 harness；生产包行为不能由 harness 结果冒充。                                                                 |
 | `binary.pathScope` | `absolute` 表示原始 runner 路径；`workspace-relative` 仅用于去除工作区根目录后的机器报告。若采用后者，配套证据仍须能还原并核对原始绝对路径。                                       |
 
-当前只记录基线 commit，尚未构建或测量该 commit 的二进制，因此不填入路径和 hash。候选版本必须另有提交、路径和 hash；不能把基线 hash 复制给候选版本。
+基线 binary 已在独立 target 中构建：`/private/tmp/t049-20260929-baseline-target/release/excalidraw-desktop`，SHA-256 `158fc23d122d5595b3950e934da77014b119f0382f393afac95a5628caa50511`。2026-09-29 首次物理运行未形成有效样本；旧基线 runner 的原始 JSON 没有 `binary` 字段，运行前 binding 单独保留路径、hash 和 runner 文件 hash。候选版本必须另有提交、路径和 hash；不能把基线 hash 复制给候选版本。
 
 ## 比较环境
 
@@ -124,14 +126,17 @@ comparability:
 
 ## 当前证据边界
 
+2026-09-29 物理 macOS 基线 `startup-idle` 首次尝试的 Playwright 命令失败，原始报告 `verdict.overall=not_evaluated`：4/10 次 editable-canvas ready，第 5 次未在 15 秒内发布 `ready.json`；空闲窗口虽有 60 个进程树样本，整次运行仍因启动窗口不完整且操作员最小化时间未知而标记 **INVALID**。没有原样重跑。原始 JSON、SHA-256、独立 binary/runner binding 和停止检查归档在[物理基线尝试](../../docs/evidence/local-version-history-t049/physical-startup-20260929/README.md)。候选 `startup-idle`、其余共同负载、History 专项正式测量以及参考 VM 均未执行。
+
 2026-09-26 修正 T024 fixture 时间基准后，以产品提交 `b6fca0d77d2b3e9d06b7f866fbd6ff79eaa56766` 的 test-only binary（SHA-256 `c43012c081fc8d9616194bc61db1eceb9eb693ebaf896419d44353e03acfab49`）运行一次 history 专项工作负载 smoke，1/1 PASS。原始 JSON 为 `/private/tmp/history-t049-smoke-b6fca0d.json`（SHA-256 `4a3801de9054784b5bf29f4d7d34bea72dc4cd410cf5ee9faa19ca902ed38f37`）：20 条池、A→B→A、恢复后场景与图片哈希、资源和 GC 检查均通过；单次旅程耗时 `1913.049167 ms`，仅为描述值。第一次调用遗漏 `PERF_TEST=1`，Playwright 报 `No tests found`，未进入产品旅程；加上该配置开关后才产生上述报告。该报告的 `executionEnvironment.type` 为 `unspecified`，未做基线／候选配对、进程树资源采样或规定 VM 运行，`verdict.overall` 仍为 `not_evaluated`；它只解除先前 smoke 的功能失败，不构成 T049 性能验收。
 
 正式配对前的 2026-09-26 只读报告审计曾发现：`startup-idle.spec.ts`、`canvas-io.spec.ts`、`edit-soak.spec.ts` 当时均未向报告写入本文件要求的 `binary` 路径/完整 SHA-256；2026-09-28 已在三项 spec 补齐，尚未以原生测量验证。`report.schema.json` 为兼容旧报告将该字段设为 optional。有效 T049 报告仍需分别绑定实际基线与候选 checkout 的 commit 和 binary，不能运行基线 binary 却写候选 commit。下述 VM 配置不符尚未解决，正式预算仍为 `not_evaluated`。
 
 2026-09-26 T049 候选工作负载 smoke 已启动，但实际 test-only 前端 A→B→A 旅程在 `frontendB` 收到 `HISTORY_UNAVAILABLE`，没有生成可比较的性能 JSON。当前候选 `ab67c3c43ee69ae32a040bb3e6f9c762807d8c3c` 的测试专用二进制 SHA-256 为 `0a24d93a280c7db4c0231a3a244dcdd70928f76b5f998c8b2c64c622a6b654ba`；失败根 `/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-7W21bo` 含 `history-restart-failure.json` 和前端状态。该 smoke 是实际失败，不得计作性能样本；T049 的预算 verdict 仍为 `not_evaluated`。修复旅程后仍须完成物理机基线/候选配对与规定 VM 的测量。
 
-2026-09-25 只读环境审计：本机 `prlctl --version` 返回 `27.0.1 (58670)`；名为 `macOS26.5.2` 的 VM 处于 suspended 状态，`prlctl list -i` 显示 4 vCPU、12288 MB 内存。该名称不证明 guest 的实际 OS/build。Parallels 版本与声明的 `26.4.1`、VM 内存与声明的约 8 GiB 均不符；未恢复或修改 VM，未运行参考测量。当前环境不能进入既定 reference series，也不能把它的结果与旧系列直接配对。
+2026-09-25 只读环境审计：本机 `prlctl --version` 返回 `27.0.1 (58670)`；名为 `macOS26.5.2` 的 VM 处于 suspended 状态，`prlctl list -i` 显示 4 vCPU、12288 MB 内存。该名称不证明 guest 的实际 OS/build。2026-09-29 安装的 Parallels app `Info.plist` 仍报告 `27.0.1`；本次 sandbox 中 `prlctl` 因 `/bin/ps` 权限失败，无法重新核对 VM 实际资源或 guest。已确认的 Parallels 版本与声明的 `26.4.1` 不符，旧 VM 内存记录也与约 8 GiB 不符；未恢复或修改 VM，未运行参考测量。当前环境不能进入既定 reference series，也不能把它的结果与旧系列直接配对。
 
 - 已确认并固定：基线 commit、比较字段、物理 macOS 诊断→Parallels reference VM 的顺序、参考 VM 预算、环境分代规则、进程树计量边界及二进制占位规则。
-- 尚未执行：同一物理 macOS 配对诊断、Parallels Desktop Pro 26.4.1 VM 测量、候选版本测量、任何 T090/T108 原始报告生成。
-- 因此当前状态是 `not_evaluated`，不是 `pass`、`fail` 或 speedup/regression 结论。
+- 已尝试但无效：物理 macOS 基线 `startup-idle`，原始失败报告如上；未形成完整 T090 冷启动样本。
+- 尚未执行：同一物理 macOS 有效配对诊断、Parallels Desktop Pro 26.4.1 VM 测量、候选版本测量及其他 T090/T108 原始报告。
+- 因此当前总体状态是 `not_evaluated`，不是预算 `pass`、预算 `fail` 或 speedup/regression 结论。

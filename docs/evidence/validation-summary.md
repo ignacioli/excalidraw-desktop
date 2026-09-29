@@ -1,10 +1,19 @@
 # 验证证据汇总（004 实施中；003 已完成；001/002 历史）
 
-## Feature 004 当前最新状态（2026-09-28，UTC 2026-09-29）
+**最新实现（2026-09-29）**：`a50818ea8a8721a508fd306cef0c3ccc93081b32` 已实现负责人批准的 360→300 px drawer 拖动/键盘调整，并修复 Mark/Restore 样式。HistoryPanel 26/26、T027 5/5、T023 5/5、T048 browser 5/5 与 regression 2/2，以及 lint/typecheck/build 和 20 项 capture/prepare tests PASS；原始报告与边界见 [T059](local-version-history-t059/README.md)。production `.app` 已构建，但新包原生/视觉尚未执行；下述 `9c1e6a3` 原生 PASS 与视觉 FAIL 均属于旧候选，不能转移到新实现。所有原生启动/激活已按用户要求暂停。
 
-T055 已归档产品负责人批准的 T048 六屏高保真与 token 映射；T056/T057 实现及针对性自动验证见产品提交 `7b7ddc8`。T058 对产品提交 `28854d5ef75c87f4aafb778ea03586f026061a7b` 的新 production `.app` 完成 History 原生入口复核，包 SHA-256 `82fc45410b871b5142cc9a8e70dd76a7d7fd22c56cfcba23d8e5de9b10febfb0`，13/13 检查 PASS：菜单可用、一次路由、唯一目标文件名、请求窗口几何和启动 fixture 字节不变。原始报告、binding、包清单、早期失败诊断与 12 项 HISTORY 采集计划分别归档在 [`local-version-history-t058/`](./local-version-history-t058/README.md)。旧包 T047 PASS 保持其原身份，不能替代新包结果。
 
-**T048 人工视觉仍为 `BLOCKED` / `PENDING`**：HISTORY 计划已准备，但尚无新包截图 collection、独立 reviewer verdict 或产品负责人决定。T049 正式物理机/参考 VM 配对性能、T052 汇总及 T054 最终接受也未完成。上述 T058 原生 PASS 不证明视觉或性能。
+## Feature 004 当前最新状态（2026-09-29）
+
+T055 已归档产品负责人批准的 T048 六屏高保真与 token 映射；T056/T057 实现及针对性自动验证见产品提交 `7b7ddc8`。当前 production `.app` 绑定产品提交 `9c1e6a37a10b72ec8213af9d3e45d81667ad73c7`，package SHA-256 `2420a8a8f5af8253c7ebcd90747e8e0430c1a7cee9d65585322c7e9e5e6aeae3`；T058 原生入口检查 13/13 PASS。HISTORY-01 capture integrity PASS，collection digest `a4db47bdeb17c503b84ca214a8bd23d41878a22eccf5181ce095e40bf0447620`；采集、包绑定和截图见 [window-repair-004](./local-version-history-t048/window-repair-004/README.md)。
+
+T023 完整 `local-version-history-preview.spec.ts` 最终 5/5 PASS；JSON 当前位于 `/private/tmp/history-t023-20260929/final-report.json`，首轮、复测及最终报告的仓库归档与提交 binding 待补到 `local-version-history-t059/t023/`。该 browser semantic 结果不依赖 native package/process 身份。
+
+**T048 当前画面 `FAIL`**：独立 reviewer 在 HISTORY-01 发现两项 HIGH 样式偏差：Mark current 按钮的几何和视觉层级偏离已批准 token，Restore 主按钮丢失 accent 层级。详见[独立审查报告](./local-version-history-t048/window-repair-004/history01-review.md)；此前窗口查询 BLOCKED 及其修复过程见[harness incident report](./local-version-history-t048-harness-incident.md)。UI 修复已进入 `a50818e`，新包复审仍未执行。History drawer 默认 360 px，产品负责人已决定允许拖动边缘缩至 300 px，任何视口下均不依赖 breakpoint；此交互决定记录于[批准的 interaction contract](../design/local-version-history/interaction.md)。
+
+T048 总体尚未通过：其余所需状态仍待采集和独立评审，修复后的精确包需重新绑定，产品负责人最终接受也未记录。T049 正式物理机/参考 VM 配对性能仍未完成；T052 索引继续按各事实适用性绑定证据；T054 最终接受待定。T058 原生入口 PASS、capture integrity PASS 和当前 reviewer FAIL 分别保留其自身范围，不能合并为产品视觉通过。
+
+T049 物理 `startup-idle` 首次基线尝试为 **INVALID / `not_evaluated`**，原始报告、binding 和观察边界见[归档记录](./local-version-history-t049/physical-startup-20260929/README.md)。10 次冷启动要求中只取得 4 个 ready，第 5 次超时；操作员曾最小化挡住工作的应用窗口，但事件时间无法对应到样本，不能把超时归因于该动作或记为产品性能失败。该尝试不进入基线／候选配对。
 
 ## Feature 004 先前状态（2026-09-26，保留历史）
 

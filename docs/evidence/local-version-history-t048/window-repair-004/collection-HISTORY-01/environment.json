@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "HISTORY-01-native-capture",
+  "gateId": "HISTORY-01",
+  "route": "fixed-capture-review",
+  "binding": {
+    "productCommit": "9c1e6a37a10b72ec8213af9d3e45d81667ad73c7",
+    "historyScope": {
+      "registry": "2fb70d02cf4ce2fe771532813081cf3fdd103093e49945a0b2d45285cc9af6e1",
+      "highFi": "7e50c65e24b66df8eb0a2840e2bf7b714a26ebfbb0f6dc8f8e423eeb819dd8dc",
+      "lowFi": "cf44bbb2d27f79918c70226991875c9851f8e8a5029672679624d8e6ab8c6907"
+    },
+    "fixtureDigest": "53f6f5e13615e784ede379912390e2a476ec586ba98af7f7f90e5ee6a1690a31",
+    "harnessVersion": "004-history-capture-v1",
+    "packageArtifactSha256": "2420a8a8f5af8253c7ebcd90747e8e0430c1a7cee9d65585322c7e9e5e6aeae3"
+  },
+  "os": "darwin",
+  "viewport": {
+    "width": 1280,
+    "height": 760
+  },
+  "browserOrAppBuild": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app",
+  "fixture": "004-history-capture-v1",
+  "preparationMode": "operator-assisted",
+  "operatorActionsAreEvidence": false,
+  "collector": {
+    "tool": "native-screen-capture",
+    "version": "4",
+    "runIdentity": "e8225101-56a8-44a2-8112-309c56435562:HISTORY-01"
+  },
+  "pid": 14579,
+  "windowId": 5502,
+  "backingScale": 2,
+  "normalizationAlgorithm": "lanczos3-srgb-v1"
+}
