@@ -6,7 +6,7 @@
 
 六个状态依次展示：默认 Light、行级操作菜单、历史预览、恢复确认、未变化内容重复 Mark 的反馈与长列表目标、300 px compact Dark。画板均为 1280×760；默认 drawer 为 360 px。当前绘图独立于历史行，所选历史版本与 Preview/Restore 固定在 drawer 底部。
 
-T048-02 的行级菜单按审阅反馈保持 180 px 宽、约 40 px 的操作行；浅灰色小标题再次显示 `v-050 · Canvas spacing pass`，使菜单自身也能说明操作目标。包含标题时高度为 116 px。Mark 使用 16 × 16、1 px 描边的空心书签，Delete 使用同规格的空心垃圾桶；旧实心色块已隐藏。8 px 圆角、浅边框与轻阴影承接既有 shell 规范，Delete 保持独立分隔与危险色。此设计仍待产品负责人批准。
+T048-02 的行级菜单按审阅反馈保持 180 px 宽、约 40 px 的操作行；浅灰色小标题再次显示 `v-050 · Canvas spacing pass`，使菜单自身也能说明操作目标。包含标题时高度为 116 px。Mark 使用 16 × 16、1 px 描边的空心书签，Delete 使用同规格的空心垃圾桶；旧实心色块已隐藏。8 px 圆角、浅边框与轻阴影承接既有 shell 规范，Delete 保持独立分隔与危险色。
 
 `manifest.json` 保存精确 file/page/shape ID、PNG 与源文件 SHA-256、尺寸和校验边界。`tokens.json` 保存从批准画板和 Penpot token 集提取的 T048 组件角色与几何，引用而不复制 HF-2 的共有 token 数值。Light 关键形状绑定 Penpot 语义 token；Dark 画板在 Light 为文件全局活动主题时以批准的 Dark token 数值静态呈现，不能把这点写成 Dark 形状已有活动主题绑定。
 

@@ -1,8 +1,9 @@
 # Local Version History visual checklist
 
-**Current gate**: T004 low/high-fidelity baseline APPROVED; T048 revised low-fidelity APPROVED, revised high-fidelity PENDING; production visual acceptance PENDING
+**Current gate**: T004 low/high-fidelity baseline APPROVED; T048 revised low/high-fidelity APPROVED; production visual acceptance PENDING
 **T004 low/high-fidelity owner approval date**: 2026-09-23
 **T048 revised low-fidelity owner approval date**: 2026-09-27
+**T048 revised high-fidelity owner approval date**: 2026-09-28; approved screens and token roles: [`docs/design/local-version-history/high-fi/t048/`](../design/local-version-history/high-fi/t048/README.md)
 
 ## T004 low-fidelity decision record (historical baseline)
 
@@ -30,13 +31,13 @@
 - [x] More actions menu, focus behavior, destructive hierarchy, and vector icon treatment approved; final menu is 180 × 84 px.
 - [x] High-fidelity Penpot archive frozen locally with manifest and SHA-256.
 
-The approved T004 Penpot page contains six high-fidelity frames. T048's revised interaction is approved in `docs/design/local-version-history/low-fi/t048-interaction.html`; its corresponding high-fidelity screens remain pending. The low-fidelity prototype remains the exhaustive interaction-state reference for loading, empty, permission, unavailable-resource, conflict, generic-error, delete-confirmation, focus-return, and reduced-motion behavior. Production rendering remains in the package-level gate below.
+The T004 baseline and T048 refinement each have six independently approved high-fidelity frames. T048's approved source, screen digests and token-role mapping are in `docs/design/local-version-history/high-fi/t048/`. The low-fidelity prototype remains the exhaustive interaction-state reference for loading, empty, permission, unavailable-resource, conflict, generic-error, delete-confirmation, focus-return, and reduced-motion behavior. Production rendering remains in the package-level gate below.
 
 ## Production visual acceptance
 
 **Verdict at the current product checkpoint:** `BLOCKED` / `PENDING`.
 
-The T004 design approvals above are complete; T048 high-fidelity approval is pending. A qualifying visual verdict still
+The T004 and T048 design approvals above are complete. A qualifying visual verdict still
 requires a freshly built exact macOS production `.app`, a stable 1280 × 760
 window, and a human visual review on that package. The production `.app` for
 `e873aac` was sealed and passed the separate T047 native-menu check. Its
@@ -46,14 +47,14 @@ requires a new exact package and new visual review.
 
 ### Package binding to record before review
 
-| Fact               | Required record                                               | Current status                                                                                                                                                                                                                                                                  |
-| ------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Product commit     | Full package source commit                                    | Candidate package sealed from `e873aac208e0271641cb2434f49daa4a6d2e01fd`                                                                                                                                                                                                        |
+| Fact               | Required record                                               | Current status                                                                                                                                                                                                                                                                                                                    |
+| ------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product commit     | Full package source commit                                    | Candidate package sealed from `e873aac208e0271641cb2434f49daa4a6d2e01fd`                                                                                                                                                                                                                                                          |
 | Production package | Absolute `.app` path, bundle ID, version                      | [Sealed T047 manifest](./local-version-history-t047/history-pass/package-manifest.json): `Excalidraw.app`, bundle ID `excalidraw-desktop`, version `0.3.0`, package SHA-256 `ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162`; one old-package `HISTORY-01` pre-remediation collection, no revised package bound |
-| Executable         | Absolute executable path and SHA-256                          | Old production executable SHA-256 `8e1772087bf27ac277d96b1a44a0f816650edaf0ff8822e06d38babdc03d2787`; revised package pending |
-| Environment        | macOS version/build, filesystem, display scale                | Old `HISTORY-01` environment recorded in [collection](./local-version-history-t048/history-01-pre-remediation/environment.json); revised package pending |
-| Window             | Native logical bounds, exactly 1280 × 760, two stable samples | Old `HISTORY-01` readiness recorded in [collection](./local-version-history-t048/history-01-pre-remediation/capture-readiness.json); revised package pending |
-| Review identity    | Reviewer and product-owner decision kept separate             | `PENDING`                                                                                                                                                                                                                                                                       |
+| Executable         | Absolute executable path and SHA-256                          | Old production executable SHA-256 `8e1772087bf27ac277d96b1a44a0f816650edaf0ff8822e06d38babdc03d2787`; revised package pending                                                                                                                                                                                                     |
+| Environment        | macOS version/build, filesystem, display scale                | Old `HISTORY-01` environment recorded in [collection](./local-version-history-t048/history-01-pre-remediation/environment.json); revised package pending                                                                                                                                                                          |
+| Window             | Native logical bounds, exactly 1280 × 760, two stable samples | Old `HISTORY-01` readiness recorded in [collection](./local-version-history-t048/history-01-pre-remediation/capture-readiness.json); revised package pending                                                                                                                                                                      |
+| Review identity    | Reviewer and product-owner decision kept separate             | `PENDING`                                                                                                                                                                                                                                                                                                                         |
 
 ### Human review matrix
 
@@ -62,17 +63,18 @@ Review the following states on the exact package. Record `PASS`, `FAIL`, or
 Do not infer a visual result from a browser screenshot, a unit test, the native
 menu collector, or the approved design archive.
 
-| State                                    | Required visual facts                                                                                                                                                                                                              |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Default History · Light · 360 px         | The drawer is right aligned; the canvas remains primary; filename, time, source, and summary are readable; the current drawing is separate from history rows, and Ready/marked status remains understandable without color alone; Preview and Restore remain visible.    |
-| More Actions · Light                     | The 180 × 84 px menu and 32 px trigger fit without clipping; Mark/Unmark and Delete are readable; the destructive action hierarchy and separator are clear.                                                                        |
-| Version Preview · Light                  | `Preview — read only` is visible; the preview surface is visibly separate from the current drawing; Exit and Restore remain reachable; no current-canvas action is obscured.                                                       |
-| Restore Confirmation · Light             | The confirmation hierarchy is clear; Cancel is visibly available and initially focused; the modal has no clipped text or action; closing returns focus to the triggering control.                                                  |
-| External Recovery · Light                | The recovery issue, Preview, Save As…, Keep current file, and Discard recovery actions are readable; the destructive confirmation is distinct; no recovery artifact is implied to disappear without explicit action.               |
-| Compact History · Dark · 300 px fallback | The dark treatment preserves contrast and state labels; list rows and actions remain readable at the cramped width; no horizontal overflow or clipped essential action appears.                                                    |
-| Error / conflict / pending / unavailable | The state title and recovery guidance are readable and visually distinct; the current drawing remains identifiable; retry or safe exit actions are not clipped; pending does not look like success.                                |
-| Keyboard focus and focus return          | The focused row, modal, More Actions menu, Preview, and Close controls have a visible focus indicator; Escape/close returns focus to the triggering control. This is a visual spot check only; keyboard behavior is owned by T023. |
-| Reduced motion                           | The required state remains understandable without relying on animation; no transition hides status or focus.                                                                                                                       |
+| State                                    | Required visual facts                                                                                                                                                                                                                                                 |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Default History · Light · 360 px         | The drawer is right aligned; the canvas remains primary; filename, time, source, and summary are readable; the current drawing is separate from history rows, and Ready/marked status remains understandable without color alone; Preview and Restore remain visible. |
+| More Actions · Light                     | The T048 180 × 116 px menu and 32 px trigger fit without clipping; the muted target heading, Mark/Unmark and Delete are readable; outline icons, destructive hierarchy and separator are clear.                                                                       |
+| Version Preview · Light                  | `Preview — read only` is visible; the preview surface is visibly separate from the current drawing; Exit and Restore remain reachable; no current-canvas action is obscured.                                                                                          |
+| Restore Confirmation · Light             | The confirmation hierarchy is clear; Cancel is visibly available and initially focused; the modal has no clipped text or action; closing returns focus to the triggering control.                                                                                     |
+| Repeated Mark · Long List · Light        | The existing version receives clear reuse feedback; the selected target and Preview/Restore remain visible while a 50-row list scrolls; the canvas and history target remain distinct.                                                                                |
+| External Recovery · Light                | The recovery issue, Preview, Save As…, Keep current file, and Discard recovery actions are readable; the destructive confirmation is distinct; no recovery artifact is implied to disappear without explicit action.                                                  |
+| Compact History · Dark · 300 px fallback | The dark treatment preserves contrast and state labels; list rows and actions remain readable at the cramped width; no horizontal overflow or clipped essential action appears.                                                                                       |
+| Error / conflict / pending / unavailable | The state title and recovery guidance are readable and visually distinct; the current drawing remains identifiable; retry or safe exit actions are not clipped; pending does not look like success.                                                                   |
+| Keyboard focus and focus return          | The focused row, modal, More Actions menu, Preview, and Close controls have a visible focus indicator; Escape/close returns focus to the triggering control. This is a visual spot check only; keyboard behavior is owned by T023.                                    |
+| Reduced motion                           | The required state remains understandable without relying on animation; no transition hides status or focus.                                                                                                                                                          |
 
 ### T048 采集范围
 
@@ -96,7 +98,7 @@ menu collector, or the approved design archive.
 
 - `HISTORY` 是独立于 003 `VSL` / `FINAL` 的采集计划；它只含上表 12 个 History gate，不带 HF2 六屏、T023b 原生菜单图谱或虚构的 PNG pixel baseline。六个 high-fi 画面绑定 frame ID，补充状态绑定获批 low-fi manifest；plan 同时绑定 registry、fixture、精确 production package 和各自 SHA-256。
 - 聚焦的 prepare/capture 测试 **17/17 PASS**，ESLint、Prettier 和 `git diff --check` PASS；T047 封存包的 `HISTORY` prepare 及 capture 入口身份预检 PASS。此结论只覆盖范围与采集入口，不是 production 视觉 verdict。
-- 首次正式采集没有已保存图纸，Version History 为 disabled；第二次虽有图纸，代理提示却引用产品中不存在的 `File > Open`。两次均在截图前停止，保留各自计划与空 collection。适配器现将 digest-bound 图纸作为 production executable 的启动参数，沿用 T047 已验证的打开路径。第三次 `HISTORY-01` capture integrity PASS，修复前截图及观察见 `docs/evidence/local-version-history-t048/`；这不是 T048 人工视觉结论。T048 高保真和新包视觉审查仍待完成。
+- 首次正式采集没有已保存图纸，Version History 为 disabled；第二次虽有图纸，代理提示却引用产品中不存在的 `File > Open`。两次均在截图前停止，保留各自计划与空 collection。适配器现将 digest-bound 图纸作为 production executable 的启动参数，沿用 T047 已验证的打开路径。第三次 `HISTORY-01` capture integrity PASS，修复前截图及观察见 `docs/evidence/local-version-history-t048/`；这不是 T048 人工视觉结论。T048 高保真已获批，新包视觉审查仍待完成。
 
 ### Separate evidence owners for SC-008
 

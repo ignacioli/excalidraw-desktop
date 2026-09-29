@@ -24,14 +24,14 @@ T045/T046 已完成；T047 已在 `e873aac` production package 上取得原生�
 
 | 事实 | 主要证据 | 当前结果 | 边界 |
 | --- | --- | --- | --- |
-| 低保真与必要高保真审批 | [`docs/design/local-version-history/interaction.md`](../design/local-version-history/interaction.md)、[`low-fi/manifest.json`](../design/local-version-history/low-fi/manifest.json)、[`high-fi/manifest.json`](../design/local-version-history/high-fi/manifest.json) | **PASS — design approval** | 审批解除界面实现门控，不是 production rendering 验收 |
+| 低保真与必要高保真审批 | [`docs/design/local-version-history/interaction.md`](../design/local-version-history/interaction.md)、[`low-fi/manifest.json`](../design/local-version-history/low-fi/manifest.json)、[`T048 high-fi/manifest.json`](../design/local-version-history/high-fi/t048/manifest.json) | **PASS — design approval** | 审批解除界面实现门控，不是 production rendering 验收 |
 | History 列表、键盘、焦点、预览退出和 reduced motion | [`e2e/tests/local-version-history-preview.spec.ts`](../../e2e/tests/local-version-history-preview.spec.ts)（T023） | 由 browser semantic tests 负责 | Chromium/WebView 语义证据不证明 macOS package 的视觉结果 |
 | `File → Version History…` 原生菜单层级、标签、状态和路由 | [`docs/evidence/local-version-history-t045-t047.md`](./local-version-history-t045-t047.md)（T047） | 精确 package 菜单 enabled、一次路由、唯一目标文档与字节保持不变均 **PASS** | 不以 browser event 注入或人工视觉替代 Accessibility/System Events |
 | Light/Dark、1280 × 760、可读性、当前／预览、错误、焦点、裁切 | [`docs/evidence/local-version-history-visual-checklist.md`](./local-version-history-visual-checklist.md)（T048） | **BLOCKED / PENDING** | 必须由 exact production package 上的人类视觉 reviewer 记录 |
 
 T048 的 checklist 已固定六个必要高保真状态：Light 默认列表、Light
 More Actions、Light readonly preview、Light restore confirmation、Light
-external recovery，以及 Dark 300 px compact fallback；同时要求检查
+repeated Mark / long list，以及 Dark 300 px compact fallback；T004 基线与低保真仍覆盖 external recovery，同时要求检查
 error/conflict/pending/unavailable、焦点返回和 reduced motion。T047、T023
 和 T048 分别负责 native entry、semantic keyboard behavior 和 visual
 fidelity，三者不合并为单一验收。
