@@ -35,26 +35,20 @@ The T004 baseline and T048 refinement each have six independently approved high-
 
 ## Production visual acceptance
 
-**Verdict at the current product checkpoint:** `BLOCKED` / `PENDING`.
+**Verdict at the current product checkpoint:** `BLOCKED` / `PENDING` — new-package native entry PASS; required human visual evidence is missing.
 
-The T004 and T048 design approvals above are complete. A qualifying visual verdict still
-requires a freshly built exact macOS production `.app`, a stable 1280 × 760
-window, and a human visual review on that package. The production `.app` for
-`e873aac` was sealed and passed the separate T047 native-menu check. Its
-`HISTORY-01` pre-remediation capture integrity passed, while the image shows
-layout defects and has no independent human visual verdict. Revised T048 UI
-requires a new exact package and new visual review.
+The T004 and T048 design approvals are complete. The old `e873aac` package passed T047 native entry; its pre-remediation `HISTORY-01` image showed layout defects and has no independent human visual verdict. The new T048 package passed the separate T058 native entry check, but its 12 declared History states still require exact-package capture and human visual review.
 
-### Package binding to record before review
+### Package binding for review
 
-| Fact               | Required record                                               | Current status                                                                                                                                                                                                                                                                                                                    |
-| ------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Product commit     | Full package source commit                                    | Candidate package sealed from `e873aac208e0271641cb2434f49daa4a6d2e01fd`                                                                                                                                                                                                                                                          |
-| Production package | Absolute `.app` path, bundle ID, version                      | [Sealed T047 manifest](./local-version-history-t047/history-pass/package-manifest.json): `Excalidraw.app`, bundle ID `excalidraw-desktop`, version `0.3.0`, package SHA-256 `ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162`; one old-package `HISTORY-01` pre-remediation collection, no revised package bound |
-| Executable         | Absolute executable path and SHA-256                          | Old production executable SHA-256 `8e1772087bf27ac277d96b1a44a0f816650edaf0ff8822e06d38babdc03d2787`; revised package pending                                                                                                                                                                                                     |
-| Environment        | macOS version/build, filesystem, display scale                | Old `HISTORY-01` environment recorded in [collection](./local-version-history-t048/history-01-pre-remediation/environment.json); revised package pending                                                                                                                                                                          |
-| Window             | Native logical bounds, exactly 1280 × 760, two stable samples | Old `HISTORY-01` readiness recorded in [collection](./local-version-history-t048/history-01-pre-remediation/capture-readiness.json); revised package pending                                                                                                                                                                      |
-| Review identity    | Reviewer and product-owner decision kept separate             | `PENDING`                                                                                                                                                                                                                                                                                                                         |
+| Fact | Required record | Current status |
+| --- | --- | --- |
+| Product commit | Full package source commit | `28854d5ef75c87f4aafb778ea03586f026061a7b` |
+| Production package | Absolute `.app` path, bundle ID, version, hash | [T058 package manifest](./local-version-history-t058/package-manifest.json): `Excalidraw.app`, bundle ID `excalidraw-desktop`, version `0.3.0`, artifact SHA-256 `82fc45410b871b5142cc9a8e70dd76a7d7fd22c56cfcba23d8e5de9b10febfb0` |
+| Executable | Absolute path and SHA-256 | [T058 package manifest](./local-version-history-t058/package-manifest.json): SHA-256 `8914c4e8df3bc14a95a2af104e5d8705b0b806f988d52092b432af480b3b2f7f` |
+| Environment | macOS version/build, filesystem, display scale | [T058 native collection](./local-version-history-t058/final-pass-002/collection/environment.json): macOS 26.6.2, arm64, backing scale 2; T048 capture environment remains pending |
+| Window | Native logical bounds, exactly 1280 × 760, two stable samples | T058 native [window-geometry check](./local-version-history-t058/final-pass-002/collection/native-report.json) PASS; T048 stable capture samples pending |
+| Review identity | Independent reviewer and product-owner decision | `PENDING` |
 
 ### Human review matrix
 
@@ -86,7 +80,8 @@ menu collector, or the approved design archive.
 | More Actions · Light                     | `HISTORY-02`                                                                  | —                                                                                             |
 | Version Preview · Light                  | `HISTORY-03`                                                                  | —                                                                                             |
 | Restore Confirmation · Light             | `HISTORY-04`                                                                  | 关闭后焦点返回触发控制                                                                        |
-| External Recovery · Light                | `HISTORY-05`                                                                  | Discard recovery 二次确认的视觉层级                                                           |
+| Repeated Mark · Long List · Light        | `HISTORY-05`                                                                  | —                                                                                             |
+| External Recovery · Light                | —                                                                             | 按 T004 基线现场单独核对 recovery 与 Discard 二次确认；`HISTORY-05` 不代表此状态              |
 | Compact History · Dark · 300 px fallback | `HISTORY-06`                                                                  | —                                                                                             |
 | Error / conflict / pending / unavailable | `HISTORY-ERROR`、`HISTORY-CONFLICT`、`HISTORY-PENDING`、`HISTORY-UNAVAILABLE` | 四个状态分别给出结论                                                                          |
 | Keyboard focus and focus return          | `HISTORY-FOCUS`（焦点行）                                                     | More Actions、Preview、modal Cancel、Close 的焦点外观及关闭后的焦点返回；键盘行为由 T023 负责 |
@@ -104,8 +99,8 @@ menu collector, or the approved design archive.
 
 - [T047 native menu evidence](./local-version-history-t045-t047.md) owns the
   exact-package macOS menu hierarchy, label, enabled state, and route facts.
-  Its sealed production-package collection is 13/13 PASS; this does not prove
-  the visual facts below.
+  The old package and [T058 revised-package collection](./local-version-history-t058/final-pass-002/collection/native-report.json)
+  each have a separate 13/13 PASS; neither proves the visual facts below.
 - [T023 browser semantic test](../../e2e/tests/local-version-history-preview.spec.ts)
   owns list metadata, keyboard traversal, visible focus, preview exit, focus
   return, state roles, and reduced-motion assertions. Browser evidence is not

@@ -1,6 +1,12 @@
 # 验证证据汇总（004 实施中；003 已完成；001/002 历史）
 
-## Feature 004 当前最新状态（2026-09-26）
+## Feature 004 当前最新状态（2026-09-28，UTC 2026-09-29）
+
+T055 已归档产品负责人批准的 T048 六屏高保真与 token 映射；T056/T057 实现及针对性自动验证见产品提交 `7b7ddc8`。T058 对产品提交 `28854d5ef75c87f4aafb778ea03586f026061a7b` 的新 production `.app` 完成 History 原生入口复核，包 SHA-256 `82fc45410b871b5142cc9a8e70dd76a7d7fd22c56cfcba23d8e5de9b10febfb0`，13/13 检查 PASS：菜单可用、一次路由、唯一目标文件名、请求窗口几何和启动 fixture 字节不变。原始报告、binding、包清单、早期失败诊断与 12 项 HISTORY 采集计划分别归档在 [`local-version-history-t058/`](./local-version-history-t058/README.md)。旧包 T047 PASS 保持其原身份，不能替代新包结果。
+
+**T048 人工视觉仍为 `BLOCKED` / `PENDING`**：HISTORY 计划已准备，但尚无新包截图 collection、独立 reviewer verdict 或产品负责人决定。T049 正式物理机/参考 VM 配对性能、T052 汇总及 T054 最终接受也未完成。上述 T058 原生 PASS 不证明视觉或性能。
+
+## Feature 004 先前状态（2026-09-26，保留历史）
 
 Phase 6 的 T038–T044 已完成，用户故事 4 检查点为 **`PASS`（产品实现及真实进程可靠性范围）**。产品代码提交 `01977ec` 的 test-only release binary SHA-256 为 `585ad9ae4731838e480d876d70af2571af9fdd61bc1f02d1e368df134f250496`；故障与生命周期真实进程测试共 36/36 PASS，Rust 205 个库测试及全部 integration suites PASS。具体证明和边界见 [`local-version-history-t038-t044.md`](./local-version-history-t038-t044.md)。Phase 7 已完成 T045/T046 的实现，T047 已通过精确包原生入口验收，T048 尚未取得人工视觉验收。
 
@@ -26,7 +32,7 @@ T045/T046 已完成；T047 已在 `e873aac` production package 上取得原生�
 | --- | --- | --- | --- |
 | 低保真与必要高保真审批 | [`docs/design/local-version-history/interaction.md`](../design/local-version-history/interaction.md)、[`low-fi/manifest.json`](../design/local-version-history/low-fi/manifest.json)、[`T048 high-fi/manifest.json`](../design/local-version-history/high-fi/t048/manifest.json) | **PASS — design approval** | 审批解除界面实现门控，不是 production rendering 验收 |
 | History 列表、键盘、焦点、预览退出和 reduced motion | [`e2e/tests/local-version-history-preview.spec.ts`](../../e2e/tests/local-version-history-preview.spec.ts)（T023） | 由 browser semantic tests 负责 | Chromium/WebView 语义证据不证明 macOS package 的视觉结果 |
-| `File → Version History…` 原生菜单层级、标签、状态和路由 | [`docs/evidence/local-version-history-t045-t047.md`](./local-version-history-t045-t047.md)（T047） | 精确 package 菜单 enabled、一次路由、唯一目标文档与字节保持不变均 **PASS** | 不以 browser event 注入或人工视觉替代 Accessibility/System Events |
+| `File → Version History…` 原生菜单层级、标签、状态和路由 | [旧包 T047](./local-version-history-t045-t047.md)；[新包 T058](./local-version-history-t058/README.md) | 两个不同精确包各自取得菜单 enabled、一次路由、唯一目标文档及字节保持不变 **PASS** | 不以 browser event 注入或人工视觉替代 Accessibility/System Events；旧包结果不代替新包 |
 | Light/Dark、1280 × 760、可读性、当前／预览、错误、焦点、裁切 | [`docs/evidence/local-version-history-visual-checklist.md`](./local-version-history-visual-checklist.md)（T048） | **BLOCKED / PENDING** | 必须由 exact production package 上的人类视觉 reviewer 记录 |
 
 T048 的 checklist 已固定六个必要高保真状态：Light 默认列表、Light
