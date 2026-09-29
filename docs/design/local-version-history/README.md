@@ -1,6 +1,6 @@
 # Local Version History design assets
 
-This directory contains the approved Local Version History interaction contracts and design artifacts. T004 is the approved historical low/high-fidelity baseline. For the T048 interaction refinement, the product owner approved the repository-local HTML as the low-fidelity carrier; its high-fidelity adaptation and production visual acceptance remain pending.
+This directory contains the approved Local Version History interaction contracts and design artifacts. T004 is the approved historical low/high-fidelity baseline. For the T048 interaction refinement, the product owner approved both the repository-local low-fidelity HTML and the six Penpot high-fidelity screens. Production visual acceptance remains pending.
 
 - `interaction.md`: approved layout, semantics, actions, states, and accessibility behavior.
 - `low-fi/local-version-history-t004.html` and `low-fi/manifest.json`: T004 OpenDesign prototype and its identity/approval record.
@@ -8,6 +8,7 @@ This directory contains the approved Local Version History interaction contracts
 - `high-fi/README.md`: approved Penpot baseline, scope, and implementation-reading policy.
 - `high-fi/manifest.json`: Penpot file/page/frame identity, validation, approval, and archive integrity.
 - `high-fi/source/excalidraw-desktop-uxui-redesign.penpot`: offline recovery snapshot of the approved editable source.
+- `high-fi/t048/`: approved T048 screens, token-role mapping, digest manifest, and editable-source archive. Read this directory for T048 implementation and specs; shared token values resolve through `docs/design/desktop-shell/hf-2/tokens.json`.
 - `../../evidence/local-version-history-visual-checklist.md`: staged owner-review checklist.
 
-The Penpot page and archive preserve the T004 high-fidelity baseline. They do not establish approval of the T048 visual adaptation. The local archive is a recovery artifact and should not be decoded for ordinary implementation. Design approval does not substitute for exact-package production visual acceptance after the corresponding UI is implemented.
+The T004 archive remains a historical baseline. The T048 directory is the approved refinement. Archives are recovery artifacts and should not be decoded for ordinary implementation. Design approval does not substitute for exact-package production visual acceptance after the corresponding UI is implemented.

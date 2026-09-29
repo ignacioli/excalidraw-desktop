@@ -1,10 +1,12 @@
 # Local Version History 交互与高保真决策
 
-**当前状态**：T048 交互修订的低保真已获产品负责人批准；对应高保真修订与 production package 视觉验收待完成
+**当前状态**：T048 交互修订的低保真与六张 Penpot 高保真画板均已获产品负责人批准；对应实现与 production package 视觉验收待完成
 
 **T004 基线批准日期**：2026-09-23
 
 **T048 交互修订批准日期**：2026-09-27
+
+**T048 高保真批准日期**：2026-09-28
 
 **T004 低保真载体**：OpenDesign Local Codex
 
@@ -18,7 +20,7 @@
 
 **参考视口**：1280 × 760
 
-T004 的高保真批准只适用于当时的交互范围。T048 已批准的交互变更尚未反映到高保真设计；不得将 T004 基线说成 T048 修订已获高保真批准。
+T004 的高保真批准只适用于当时的交互范围。T048 修订独立批准并冻结于 `high-fi/t048/`，其画板、token 映射与可编辑源是后续实现和 specs 的设计依据；不能把设计批准写成 production UI 或精确包视觉验收。
 
 ## T048 修订原因与验证时间线
 
@@ -30,7 +32,7 @@ T048 最初两次“菜单灰色”发生在采集准备阶段：第一次窗口
 
 `Current` 标签问题来自数据语义与界面假设不匹配：History list IPC 没有权威的 `currentVersionId`，`AppShell` 也没有向 `HistoryPanel` 提供该标识。内容哈希只表示快照内容相同，不能证明某条历史记录就是当前可继续编辑的绘图。因此，T048 选择把当前绘图状态独立展示，不将历史快照推断为 Current。这是当前需求下风险和改动范围较小的产品决策，并非所有产品都必须采用的唯一或普遍最优方案。相关契约见 `src/ipc/contracts.ts` 的 `HistoryListResponse`；入口接线见 `src/app/AppShell.tsx` 的 `HistoryPanel` 调用。
 
-长列表中的目标混淆是之后经人工审查提出的独立需求：将 Mark/Unmark/Delete 放到各历史行的三点菜单，并让所选版本身份与 Preview/Restore 固定在一起，以便操作目标和动作始终可见。它改进的是长列表中的目标核对与误操作防护，不是菜单灰色、`currentVersionId` 决策或初始重画的根本原因。T048 低保真现已批准；对应高保真修订和 production package 视觉验收仍待完成。
+长列表中的目标混淆是之后经人工审查提出的独立需求：将 Mark/Unmark/Delete 放到各历史行的三点菜单，并让所选版本身份与 Preview/Restore 固定在一起，以便操作目标和动作始终可见。它改进的是长列表中的目标核对与误操作防护，不是菜单灰色、`currentVersionId` 决策或初始重画的根本原因。T048 低保真与高保真现均已批准；production package 视觉验收仍待完成。
 
 ## 目标与边界
 
@@ -101,7 +103,7 @@ T048 补充了重复标记语义：若当前 normalized scene 未变化，Mark c
 
 当前绘图状态单独展示，不属于历史版本列表中的一行。长列表滚动时，所选目标详情及 Preview/Restore 仍保持可见，避免用户需要在操作按钮与目标版本之间来回寻找。300 px 降级状态保持可用的行操作和固定详情区，不产生横向滚动。
 
-T004 高保真批准的 More actions menu 使用 180 × 84 px 紧凑浮层、约 40 px 行高和 32 px 三点触发器。三点、bookmark 与 trash 均使用 vector geometry，不使用字体 glyph。Delete version 保持危险色和独立分隔，不扩大为常驻按钮。该视觉细节属于 T004 基线；T048 视觉适配待高保真修订后再批准。
+T004 高保真批准的 More actions menu 使用 180 × 84 px 紧凑浮层。T048 已批准的行级菜单保留浅灰色目标标题，因此是 180 × 116 px；两项操作约 40 px 行高，三点触发器 32 px。三点、空心 bookmark 与 trash 均使用 16 × 16 vector geometry，不使用字体 glyph。Delete version 保持危险色和独立分隔，不扩大为常驻按钮。精确尺寸与语义 token 角色见 `high-fi/t048/tokens.json`。
 
 ## 完整状态
 
