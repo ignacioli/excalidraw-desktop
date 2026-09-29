@@ -507,8 +507,11 @@ fn query_list(
     for row in rows.iter().take(limit) {
         items.push(version_item(store, row));
     }
+    // The cursor identifies the last emitted row. The SQL query uses `<`
+    // when loading the next page, so using the first unseen row would skip it.
     let next_cursor = rows
         .get(limit)
+        .and_then(|_| limit.checked_sub(1).and_then(|last| rows.get(last)))
         .map(|row| {
             encode_cursor(HistoryCursor {
                 document_id: document_id.to_owned(),
@@ -880,4 +883,68 @@ fn parse_protected_action(
 
 fn resource_error(error: impl std::fmt::Display) -> AppError {
     AppError::HistoryResourceMissing(error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{env, fs};
+
+    use uuid::Uuid;
+
+    use super::{decode_cursor, query_list};
+    use crate::history::{
+        repository::{HistoryRepository, PublishSceneRequest},
+        store::HistoryStore,
+        types::HistoryVersionSource,
+        validation::HISTORY_OBJECT_SCHEMA_VERSION,
+    };
+
+    #[test]
+    fn cursor_pages_include_every_version_at_the_same_timestamp() {
+        let root = env::temp_dir().join(format!("history-query-cursor-{}", Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let file = root.join("drawing.excalidraw");
+        fs::write(&file, br#"{"type":"excalidraw","version":2,"elements":[]}"#).unwrap();
+        let store = HistoryStore::open(&root).unwrap();
+        let identity = store.resolve_document_identity_for_open(&file, 1).unwrap();
+        let history = HistoryRepository::new(&store);
+        for sequence in 1..=5 {
+            history
+                .publish_scene(PublishSceneRequest {
+                    version_id: format!("version-{sequence}"),
+                    document_id: identity.document_id.clone(),
+                    scene_bytes: format!(
+                        r#"{{"type":"excalidraw","version":2,"elements":[{{"id":"element-{sequence}"}}]}}"#
+                    )
+                    .into_bytes(),
+                    schema_version: i64::from(HISTORY_OBJECT_SCHEMA_VERSION),
+                    source: HistoryVersionSource::Manual,
+                    protected_action: None,
+                    recorded_at: 1_000,
+                    sequence,
+                })
+                .unwrap();
+        }
+
+        let mut cursor = None;
+        let mut seen = Vec::new();
+        loop {
+            let page = query_list(&store, &identity.document_id, cursor, 2).unwrap();
+            seen.extend(page.items.into_iter().map(|item| item.version_id));
+            let Some(next) = page.next_cursor else { break };
+            cursor = decode_cursor(Some(&next), &identity.document_id).unwrap();
+        }
+        assert_eq!(
+            seen,
+            [
+                "version-5",
+                "version-4",
+                "version-3",
+                "version-2",
+                "version-1"
+            ]
+        );
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
 }

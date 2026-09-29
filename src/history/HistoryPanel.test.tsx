@@ -67,6 +67,120 @@ describe("HistoryPanel", () => {
     ).toBeDisabled();
   });
 
+  it.each(["selected action", "preview"] as const)(
+    "%s Restore requires confirmation, and cancel or Escape never calls restore",
+    async (entryPoint) => {
+      const user = userEvent.setup();
+      const onRestore = vi.fn();
+      render(
+        <HistoryPanel
+          documentId="document-a"
+          fileName="drawing.excalidraw"
+          items={[makeItem()]}
+          onClose={vi.fn()}
+          onRestore={onRestore}
+        />,
+      );
+
+      if (entryPoint === "preview") {
+        await user.click(screen.getByRole("button", { name: "Preview" }));
+      }
+      await user.click(
+        screen.getByRole("button", { name: "Restore this version" }),
+      );
+
+      const dialog = screen.getByRole("dialog", {
+        name: "Restore this version?",
+      });
+      expect(dialog).toHaveTextContent("Target: v-001 · Two shapes added");
+      expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+      expect(onRestore).not.toHaveBeenCalled();
+
+      if (entryPoint === "preview") {
+        await user.keyboard("{Escape}");
+      } else {
+        await user.click(screen.getByRole("button", { name: "Cancel" }));
+      }
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Restore this version" }),
+      ).toHaveFocus();
+      expect(onRestore).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps the confirmed Restore bound to its original document and version", async () => {
+    const user = userEvent.setup();
+    const onRestore = vi.fn(async () => undefined);
+    const first = makeItem();
+    const second = makeItem({
+      versionId: "version-2",
+      sequence: 2,
+      summary: "A later change",
+    });
+    const { rerender } = render(
+      <HistoryPanel
+        documentId="document-a"
+        fileName="drawing.excalidraw"
+        items={[first, second]}
+        onClose={vi.fn()}
+        onRestore={onRestore}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Restore this version" }),
+    );
+    await user.click(screen.getByRole("option", { name: /v-002/ }));
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "Target: v-001 · Two shapes added",
+    );
+    await user.click(screen.getByRole("button", { name: "Restore version" }));
+    expect(onRestore).toHaveBeenCalledExactlyOnceWith(first);
+
+    rerender(
+      <HistoryPanel
+        documentId="document-a"
+        fileName="drawing.excalidraw"
+        items={[second]}
+        onClose={vi.fn()}
+        onRestore={onRestore}
+      />,
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(onRestore).toHaveBeenCalledExactlyOnceWith(first);
+  });
+
+  it("blocks a pending confirmation if its document changes", async () => {
+    const user = userEvent.setup();
+    const onRestore = vi.fn();
+    const item = makeItem();
+    const { rerender } = render(
+      <HistoryPanel
+        documentId="document-a"
+        fileName="drawing.excalidraw"
+        items={[item]}
+        onClose={vi.fn()}
+        onRestore={onRestore}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Restore this version" }),
+    );
+    rerender(
+      <HistoryPanel
+        documentId="document-b"
+        fileName="other.excalidraw"
+        items={[item]}
+        onClose={vi.fn()}
+        onRestore={onRestore}
+      />,
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(onRestore).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["loading", "Loading version history"],
     ["empty", "No saved versions"],

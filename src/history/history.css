@@ -251,6 +251,31 @@
   font-size: var(--font-size-label, 12px);
 }
 
+.history-panel .conflict-dialog:has(.history-restore-target) {
+  display: flex;
+  width: min(410px, 100%);
+  min-height: 276px;
+  flex-direction: column;
+  border-radius: var(--radius-panel, calc(var(--radius-control) * 2));
+}
+
+.history-restore-target {
+  border: var(--border-default) solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  padding: var(--space-3);
+  background: var(--surface-background);
+  color: var(--text-primary);
+}
+
+.history-panel .history-restore-target + .application-dialog-actions {
+  margin-top: auto;
+}
+
+.history-panel .history-restore-target + .application-dialog-actions button {
+  min-height: 40px;
+  border-radius: var(--radius-control);
+}
+
 .history-selection-eyebrow {
   text-transform: uppercase;
 }

@@ -8,6 +8,45 @@
 **T048 revised low-fidelity owner approval date**: 2026-09-27
 **T048 revised high-fidelity owner approval date**: 2026-09-28; approved screens and token roles: [`docs/design/local-version-history/high-fi/t048/`](../design/local-version-history/high-fi/t048/README.md)
 
+## Current execution contract: one owner walkthrough
+
+Use this section for the next production-package visual acceptance. The policy decision and evidence split are recorded in the [native visual validation contract](local-version-history-acceptance-contract.md). The per-screen collection matrix below is retained as the historical T048 plan; it is not a requirement to create a separate capture, collection, or AI review for every row.
+
+The walkthrough uses one identified production package and one owner session. Keep the approved visual scope: Light and Dark, native 1280 × 760 window geometry, the 360 px default History drawer and its user-resizable 300 px width, long-list behavior, recovery/error states, visible focus treatment, and reduced-motion presentation. Combine states into the small number of sessions below when they can be reached from the same package and setup. The owner records one result for each check. Screenshots are optional diagnostic attachments when a visual issue needs to be located; they are not per-row completion artifacts.
+
+Do not launch or activate the packaged app until the operator has confirmed that the desktop is available, as required by the decision record. Complete package preparation and state preparation before arranging the walkthrough. If a required state cannot be established or inspected, record `BLOCKED`, the reason, and the next preparation step; do not infer `PASS`. Record an observed mismatch as `FAIL` with a concise description. A browser result may inform preparation but cannot fill in a native-package result.
+
+### Fillable walkthrough record
+
+Record package and environment details once, then complete each row during the same owner walkthrough. Add rows only when an observed issue requires a focused recheck; do not expand the session into a new full per-screen review by default.
+
+| Session record (once) | Result |
+| --- | --- |
+| Product commit |  |
+| Production `.app` path, bundle ID, version, package SHA-256 |  |
+| macOS version/build, architecture, filesystem, display/backing scale |  |
+| Native window logical bounds (must be 1280 × 760), display arrangement |  |
+| Walkthrough date/time and owner |  |
+| Package launch confirmation / desktop availability |  |
+
+| Check (same package; group into one walkthrough) | Required observation | Result (`PASS` / `FAIL` / `BLOCKED`) | Issue, blocked reason, or follow-up |
+| --- | --- | --- | --- |
+| Light baseline · 360 px | At 1280 × 760, drawer is right aligned and canvas remains primary; filename/time/source/summary and Ready/marked state are readable without color alone; current drawing is distinct from history; Preview and Restore are visible. |  |  |
+| Light actions and preview | More Actions menu fits without clipping and preserves readable target, Mark/Unmark, Delete, icon and destructive hierarchy; readonly Preview is identified and distinct from the current drawing; Exit and Restore remain reachable. |  |  |
+| Restore confirmation and focus | Confirmation hierarchy and Cancel are clear; initial focus is visible; closing returns focus to the triggering control; focused row, menu, Preview, and Close have visible focus treatment. T023 remains the owner of keyboard behavior. |  |  |
+| Resized drawer · 300 px | At the same 1280 × 760 native geometry, drag the drawer edge to 300 px. Essential row content and actions remain readable and reachable, with no horizontal overflow or clipping; the 360 px default remains the initial state. |  |  |
+| Long list and repeated Mark | In a 50-row list, repeated Mark gives clear reuse feedback; the selected target and Preview/Restore stay understandable while scrolling; canvas and history target remain distinct. |  |  |
+| External recovery | Recovery issue and Preview, Save As…, Keep current file, and Discard actions are readable; destructive confirmation is distinct; the display does not imply recovery data disappears without an explicit choice. |  |  |
+| Dark · 300 px | Dark treatment preserves contrast and state labels at 300 px; rows and actions remain readable without horizontal overflow or clipped essential actions. |  |  |
+| Error state | Error title and recovery guidance are distinct and readable; drawing identity remains clear; safe or retry actions are reachable. |  |  |
+| Conflict state | Conflict and recovery guidance are distinct and readable; drawing identity remains clear; safe resolution actions are reachable. |  |  |
+| Pending state | Pending state and guidance are readable; it does not look successful and does not hide the drawing identity or safe actions. |  |  |
+| Unavailable-resource state | Resource-unavailable guidance is distinct and readable; drawing identity remains clear; safe or retry actions are reachable. |  |  |
+| Reduced motion | With reduced motion enabled, status and focus remain understandable without animation; transitions do not hide either. |  |  |
+| Walkthrough issues / focused recheck | Link any diagnostic screenshot or issue note if useful; state which affected check was re-opened and its result. No screenshot is required when there is no issue to diagnose. |  |  |
+
+**Walkthrough outcome:** `PENDING` until every required row has a recorded result; any required `BLOCKED` row leaves the visual gate blocked, and any `FAIL` row leaves it failed pending a focused correction and recheck. Record the owner's acceptance decision separately; this checklist does not convert an implementation, browser, capture-integrity, or T047/T058 result into owner acceptance.
+
 ## T004 low-fidelity decision record (historical baseline)
 
 - [x] 360 px right-side History drawer approved.
@@ -115,7 +154,12 @@ menu collector, or the approved design archive.
   records two HIGH style mismatches. The product-owner decision remains
   separate and pending.
 
-The production visual gate cannot be marked `PASS` until the package binding,
-human matrix, independent visual-review verdict, and product-owner decision
-are all recorded. Missing package or reviewer evidence remains `BLOCKED`;
-observed mismatches remain `FAIL`.
+The former gate definition above required an independent visual-review verdict
+for the per-screen matrix. Under the current execution contract at the top of
+this document, a new production visual gate can be marked `PASS` after the
+package binding and all required walkthrough checks are recorded and the
+product owner records acceptance. A separate AI reviewer report is not a
+required artifact. Missing package identity or an unestablished required state
+remains `BLOCKED`; an observed mismatch remains `FAIL`. The old package's
+reviewer `FAIL` remains an immutable historical result and does not decide the
+new package's verdict.

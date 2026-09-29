@@ -151,8 +151,19 @@ export function HistoryPanel({
     documentId: string;
     item: HistoryVersionView;
   } | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<{
+    documentId: string;
+    item: HistoryVersionView;
+  } | null>(null);
   const actionsTriggerRefs = useRef(new Map<string, HTMLButtonElement>());
   const deleteReturnFocusRef = useRef<HTMLButtonElement>(null);
+  const restoreCancelRef = useRef<HTMLButtonElement>(null);
+  const restoreReturnFocusRef = useRef<HTMLElement | null>(null);
+  const selectedRestoreRef = useRef<HTMLButtonElement>(null);
+  const previewRestoreRef = useRef<HTMLButtonElement>(null);
+  const restoreInFlightRef = useRef(false);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
   const deleteCancelRef = useRef<HTMLButtonElement>(null);
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -191,6 +202,14 @@ export function HistoryPanel({
   const deleteDocumentChanged =
     deleteTarget !== null && deleteTarget.documentId !== activeDocumentKey;
   const visibleDeleteTarget = deleteDocumentChanged ? null : deleteTarget;
+  const visibleRestoreTarget =
+    restoreTarget !== null &&
+    restoreTarget.documentId === activeDocumentKey &&
+    restoreEnabled &&
+    status === "available" &&
+    items.some((item) => item.versionId === restoreTarget.item.versionId)
+      ? restoreTarget
+      : null;
   const openTargetUnavailableMessage =
     openActionsTarget === null
       ? null
@@ -409,6 +428,56 @@ export function HistoryPanel({
       setDeleteFeedback({ status: "error", message });
     } finally {
       setDeleteBusy(false);
+    }
+  };
+
+  const requestRestore = (
+    item: HistoryVersionView,
+    trigger: HTMLButtonElement | null,
+  ) => {
+    if (
+      onRestore === undefined ||
+      processing ||
+      restoreBusy ||
+      !restoreEnabled ||
+      status !== "available" ||
+      item.availability.status !== "available" ||
+      !items.some((candidate) => candidate.versionId === item.versionId)
+    ) {
+      return;
+    }
+    setRestoreError(null);
+    restoreReturnFocusRef.current = trigger;
+    setRestoreTarget({ documentId: activeDocumentKey, item });
+  };
+
+  const handleRestore = async () => {
+    const target = visibleRestoreTarget;
+    if (
+      target === null ||
+      onRestore === undefined ||
+      processing ||
+      restoreInFlightRef.current ||
+      target.documentId !== activeDocumentKey ||
+      target.item.availability.status !== "available" ||
+      !items.some((item) => item.versionId === target.item.versionId)
+    ) {
+      return;
+    }
+    restoreInFlightRef.current = true;
+    setRestoreBusy(true);
+    try {
+      await onRestore(target.item);
+      setRestoreTarget(null);
+    } catch (error) {
+      setRestoreError(
+        error instanceof Error
+          ? error.message
+          : "The selected version could not be restored.",
+      );
+    } finally {
+      restoreInFlightRef.current = false;
+      setRestoreBusy(false);
     }
   };
 
@@ -708,9 +777,12 @@ export function HistoryPanel({
                 item={previewItem}
                 moreActions={actionsFor(previewItem)}
                 onExit={exitPreview}
-                onRestore={() => onRestore?.(previewItem)}
+                onRestore={() =>
+                  requestRestore(previewItem, previewRestoreRef.current)
+                }
                 processing={processing}
                 restoreEnabled={restoreEnabled}
+                restoreButtonRef={previewRestoreRef}
                 state={previewState}
               />
               {deleteFeedback?.status === "success" ? (
@@ -792,7 +864,10 @@ export function HistoryPanel({
                 selectedItem.availability.status !== "available" ||
                 !restoreEnabled
               }
-              onClick={() => onRestore?.(selectedItem)}
+              onClick={(event) =>
+                requestRestore(selectedItem, event.currentTarget)
+              }
+              ref={selectedRestoreRef}
               type="button"
             >
               Restore this version
@@ -843,8 +918,53 @@ export function HistoryPanel({
           </div>
         </ApplicationDialog>
       ) : null}
+      {visibleRestoreTarget !== null ? (
+        <ApplicationDialog
+          busy={restoreBusy}
+          description="The current drawing will be replaced after a protected snapshot is created."
+          errorMessage={restoreError}
+          initialFocusRef={restoreCancelRef}
+          onDismiss={() => {
+            if (!restoreBusy) setRestoreTarget(null);
+          }}
+          returnFocusRef={restoreReturnFocusRef}
+          title="Restore this version?"
+        >
+          <p className="history-restore-target">
+            Target: v-
+            {String(visibleRestoreTarget.item.sequence).padStart(3, "0")} ·{" "}
+            {historyTargetSummary(visibleRestoreTarget.item)}
+          </p>
+          <div className="application-dialog-actions conflict-dialog-actions">
+            <button
+              disabled={restoreBusy}
+              onClick={() => setRestoreTarget(null)}
+              ref={restoreCancelRef}
+              type="button"
+            >
+              Cancel
+            </button>
+            <button
+              className="primary-action"
+              disabled={restoreBusy || processing}
+              onClick={() => void handleRestore()}
+              type="button"
+            >
+              {restoreBusy ? "Restoring…" : "Restore version"}
+            </button>
+          </div>
+        </ApplicationDialog>
+      ) : null}
     </aside>
   );
+}
+
+function historyTargetSummary(item: HistoryVersionView): string {
+  return item.summary !== undefined &&
+    item.summary !== "" &&
+    item.summaryReliable !== false
+    ? item.summary
+    : "Canvas changed";
 }
 
 function sourceLabel(item: HistoryVersionView): string {

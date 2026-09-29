@@ -122,6 +122,39 @@ test("read-only version preview hides the SDK main-menu trigger and actions", as
   ).toHaveCount(0);
 });
 
+test("production AppShell asks before replacing the selected history version", async ({
+  page,
+}) => {
+  const panel = historyPanel(page);
+  const preview = panel.getByRole("button", { name: "Preview" });
+  await preview.click();
+  await expect(
+    panel.getByRole("region", { name: "Read-only canvas preview" }),
+  ).toBeVisible();
+
+  await panel.getByRole("button", { name: "Restore this version" }).click();
+  const dialog = page.getByRole("dialog", { name: "Restore this version?" });
+  await expect(dialog).toContainText("Target: v-001 · Canvas changed");
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+  expect(await readHistoryRestoreCalls(page)).toEqual([]);
+
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(await readHistoryRestoreCalls(page)).toEqual([]);
+
+  await panel.getByRole("button", { name: "Restore this version" }).click();
+  const confirmation = page.getByRole("dialog", {
+    name: "Restore this version?",
+  });
+  await confirmation.getByRole("button", { name: "Restore version" }).click();
+  await expect(confirmation.getByRole("alert")).toHaveText(
+    "fixture restore should not commit",
+  );
+  expect(await readHistoryRestoreCalls(page)).toEqual([
+    { documentPath: DOCUMENT_PATH, versionId: "v-001" },
+  ]);
+});
+
 function historyPanel(page: Page) {
   return page.getByRole("complementary", { name: "Version History" });
 }
@@ -132,18 +165,32 @@ async function installHistoryPreviewFixture(page: Page): Promise<void> {
     type Invoke = (command: string, args?: InvokeArgs) => Promise<unknown>;
     type HarnessWindow = Window & {
       __TAURI_INTERNALS__?: { invoke: Invoke };
+      __historyRestoreCalls?: Array<{
+        documentPath: string;
+        versionId: string;
+      }>;
     };
     const browser = globalThis as HarnessWindow;
     const internals = browser.__TAURI_INTERNALS__;
     if (internals === undefined) {
       throw new Error("Browser Tauri harness was not installed first.");
     }
+    browser.__historyRestoreCalls = [];
     const invokeBase = internals.invoke.bind(internals);
     internals.invoke = async (command, args = {}) => {
       const request =
         typeof args.request === "object" && args.request !== null
           ? (args.request as InvokeArgs)
           : args;
+      if (command === "history_replace") {
+        const document = request.document as { path?: unknown } | undefined;
+        const target = request.target as { versionId?: unknown } | undefined;
+        browser.__historyRestoreCalls?.push({
+          documentPath: String(document?.path ?? ""),
+          versionId: String(target?.versionId ?? ""),
+        });
+        throw new Error("fixture restore should not commit");
+      }
       if (command === "history_list") {
         const document = request.document as { path?: unknown } | undefined;
         return {
@@ -167,4 +214,20 @@ async function installHistoryPreviewFixture(page: Page): Promise<void> {
       return invokeBase(command, args);
     };
   }, HISTORY_VERSION);
+}
+
+async function readHistoryRestoreCalls(
+  page: Page,
+): Promise<Array<{ documentPath: string; versionId: string }>> {
+  return page.evaluate(
+    () =>
+      (
+        globalThis as typeof globalThis & {
+          __historyRestoreCalls?: Array<{
+            documentPath: string;
+            versionId: string;
+          }>;
+        }
+      ).__historyRestoreCalls ?? [],
+  );
 }

@@ -1,0 +1,352 @@
+//! Prepare synthetic History data without starting Tauri or touching a user profile.
+
+use std::{
+    env, fs, io,
+    path::{Component, Path, PathBuf},
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
+
+use excalidraw_desktop_lib::{
+    commands::{
+        documents::DocumentService,
+        dto::{HistoryListRequest, HistoryPreviewRequest, PathRequest, WorkspaceAddRequest},
+        workspace::WorkspaceService,
+    },
+    database::repository::SqliteRepository,
+    history::{
+        query::HistoryQueryService,
+        repository::{HistoryRepository, PublishSceneRequest},
+        store::HistoryStore,
+        types::{HistoryDocumentLocator, HistoryVersionAvailability, HistoryVersionSource},
+        validation::HISTORY_OBJECT_SCHEMA_VERSION,
+    },
+};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use uuid::Uuid;
+
+const VERSION_COUNT: usize = 50;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut args = env::args_os();
+    let _program = args.next();
+    let requested_root = args.next().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "usage: prepare_history_visual_fixture <new-absolute-temp-root>",
+        )
+    })?;
+    if args.next().is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "expected exactly one root argument",
+        )
+        .into());
+    }
+    let root = validate_new_root(Path::new(&requested_root))?;
+    fs::create_dir(&root)?;
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    let manifest = runtime.block_on(prepare(&root))?;
+    println!("{}", serde_json::to_string_pretty(&manifest)?);
+    Ok(())
+}
+
+fn validate_new_root(requested: &Path) -> io::Result<PathBuf> {
+    if !requested.is_absolute()
+        || requested
+            .components()
+            .any(|component| matches!(component, Component::CurDir | Component::ParentDir))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "root must be an absolute path without . or ..",
+        ));
+    }
+    let parent = requested.parent().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "root must have a parent directory",
+        )
+    })?;
+    let canonical_parent = parent.canonicalize()?;
+    let canonical_temp = env::temp_dir().canonicalize()?;
+    if !canonical_parent.starts_with(&canonical_temp) {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "root must be beneath the system temporary directory",
+        ));
+    }
+    // A caller-provided symlink (including an empty symlinked directory) must
+    // never redirect fixture writes into another profile.
+    let mut checked = canonical_temp.clone();
+    for component in canonical_parent
+        .strip_prefix(&canonical_temp)
+        .map_err(io::Error::other)?
+        .components()
+    {
+        checked.push(component);
+        if fs::symlink_metadata(&checked)?.file_type().is_symlink() {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "root parent contains a symbolic link",
+            ));
+        }
+    }
+    match fs::symlink_metadata(requested) {
+        Ok(_) => Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "root already exists; choose a new path",
+        )),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            let name = requested.file_name().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidInput, "root must have a name")
+            })?;
+            Ok(canonical_parent.join(name))
+        }
+        Err(error) => Err(error),
+    }
+}
+
+async fn prepare(root: &Path) -> Result<Value, Box<dyn std::error::Error>> {
+    let home = root.join("home");
+    let app_data = home.join("Library/Application Support/excalidraw-desktop");
+    let workspace = root.join("workspace");
+    fs::create_dir_all(&app_data)?;
+    fs::create_dir(&workspace)?;
+    let database = app_data.join("excalidraw-desktop.sqlite3");
+    let repository = Arc::new(SqliteRepository::open(&database).await?);
+    let store = Arc::new(HistoryStore::open(&app_data)?);
+    let workspace_record = WorkspaceService::new(Arc::clone(&repository))
+        .add(WorkspaceAddRequest {
+            root_path: workspace.display().to_string(),
+            name: Some("Synthetic History Fixture".to_owned()),
+        })
+        .await
+        .map_err(ipc_error)?;
+
+    let current_file = workspace.join("History long list.excalidraw");
+    let current_bytes = scene_bytes(VERSION_COUNT)?;
+    fs::write(&current_file, &current_bytes)?;
+    let mut documents = DocumentService::new(Arc::clone(&repository));
+    documents.attach_history_store(Arc::clone(&store));
+    documents
+        .doc_open(PathRequest {
+            path: current_file.display().to_string(),
+        })
+        .await
+        .map_err(ipc_error)?;
+    let current_path = current_file.canonicalize()?.display().to_string();
+    let identity = store
+        .load_active_document_identity(&current_path)?
+        .ok_or_else(|| io::Error::other("document open did not establish History identity"))?;
+    let recorded_at = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
+    let history = HistoryRepository::new(&store);
+    for number in 1..=VERSION_COUNT {
+        let scene_bytes = scene_bytes(number)?;
+        let (published, reused) = history.mark_current_scene_with_assets(
+            PublishSceneRequest {
+                version_id: Uuid::new_v4().to_string(),
+                document_id: identity.document_id.clone(),
+                scene_bytes,
+                schema_version: i64::from(HISTORY_OBJECT_SCHEMA_VERSION),
+                source: HistoryVersionSource::Manual,
+                protected_action: None,
+                recorded_at: recorded_at - (VERSION_COUNT - number) as i64,
+                sequence: number as u64,
+            },
+            Vec::new(),
+        )?;
+        if reused || !published.evicted_version_ids.is_empty() {
+            return Err(
+                io::Error::other("manual marked History version was reused or evicted").into(),
+            );
+        }
+    }
+
+    let query = HistoryQueryService::new(Arc::clone(&repository), Some(Arc::clone(&store)));
+    let locator = HistoryDocumentLocator::Path {
+        path: current_path.clone(),
+    };
+    let first = query
+        .list(HistoryListRequest {
+            document: locator.clone(),
+            cursor: None,
+            limit: Some(25),
+        })
+        .await
+        .map_err(ipc_error)?;
+    let second = query
+        .list(HistoryListRequest {
+            document: locator.clone(),
+            cursor: first.next_cursor.clone(),
+            limit: Some(25),
+        })
+        .await
+        .map_err(ipc_error)?;
+    if first.document_id != identity.document_id
+        || first.items.len() != 25
+        || second.items.len() != 25
+        || first.next_cursor.is_none()
+        || second.next_cursor.is_some()
+        || first.pending_issue.is_some()
+        || second.pending_issue.is_some()
+    {
+        return Err(io::Error::other(
+            "History pagination did not return exactly 50 healthy versions",
+        )
+        .into());
+    }
+    let items = first.items.iter().chain(&second.items).collect::<Vec<_>>();
+    let mut hashes = std::collections::HashSet::new();
+    for item in &items {
+        if item.source != HistoryVersionSource::Manual
+            || !item.marked
+            || !matches!(item.availability, HistoryVersionAvailability::Available)
+            || !hashes.insert(&item.content_hash)
+        {
+            return Err(io::Error::other(
+                "History list contains an unavailable, unmarked, or duplicate version",
+            )
+            .into());
+        }
+    }
+    for index in [0, VERSION_COUNT / 2, VERSION_COUNT - 1] {
+        let preview = query
+            .preview(HistoryPreviewRequest {
+                document: locator.clone(),
+                version_id: items[index].version_id.clone(),
+            })
+            .await
+            .map_err(ipc_error)?;
+        if preview
+            .scene
+            .get("elements")
+            .and_then(Value::as_array)
+            .is_none_or(Vec::is_empty)
+        {
+            return Err(
+                io::Error::other("History preview did not hydrate a readable scene").into(),
+            );
+        }
+    }
+
+    Ok(json!({
+        "scenario": "history-long-list-and-preview",
+        "root": root,
+        "profileHome": home,
+        "appDataDirectory": app_data,
+        "database": database,
+        "historyDatabase": store.database_path(),
+        "workspaceId": workspace_record.id,
+        "workspace": workspace,
+        "currentFile": current_path,
+        "currentFileSha256": format!("{:x}", Sha256::digest(&current_bytes)),
+        "documentId": identity.document_id,
+        "versionCount": items.len(),
+        "markedVersionCount": items.len(),
+        "previewReadbackCount": 3,
+        "nativeVerified": false
+    }))
+}
+
+fn scene_bytes(number: usize) -> Result<Vec<u8>, serde_json::Error> {
+    let label = format!("历史版本 {number:02}");
+    serde_json::to_vec(&json!({
+        "type": "excalidraw",
+        "version": 2,
+        "elements": [{
+            "id": format!("history-text-{number:02}"),
+            "type": "text",
+            "x": 80,
+            "y": 100,
+            "width": 260,
+            "height": 36,
+            "angle": 0,
+            "strokeColor": "#1e1e1e",
+            "backgroundColor": "transparent",
+            "fillStyle": "solid",
+            "strokeWidth": 1,
+            "strokeStyle": "solid",
+            "roughness": 0,
+            "opacity": 100,
+            "groupIds": [],
+            "frameId": null,
+            "roundness": null,
+            "seed": number,
+            "version": 1,
+            "versionNonce": number,
+            "isDeleted": false,
+            "boundElements": null,
+            "updated": 1,
+            "link": null,
+            "locked": false,
+            "text": label,
+            "originalText": label,
+            "fontSize": 24,
+            "fontFamily": 1,
+            "textAlign": "left",
+            "verticalAlign": "top",
+            "containerId": null,
+            "autoResize": false,
+            "lineHeight": 1.25
+        }],
+        "appState": { "viewBackgroundColor": "#ffffff" },
+        "files": {}
+    }))
+}
+
+fn ipc_error(error: excalidraw_desktop_lib::commands::error::IpcError) -> io::Error {
+    io::Error::other(format!("History API rejected synthetic fixture: {error:?}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_new_root;
+    use std::{fs, io, path::PathBuf};
+    use uuid::Uuid;
+
+    fn test_path() -> PathBuf {
+        std::env::temp_dir().join(format!("history-fixture-root-test-{}", Uuid::new_v4()))
+    }
+
+    #[test]
+    fn refuses_existing_nonempty_root() -> io::Result<()> {
+        let root = test_path();
+        fs::create_dir(&root)?;
+        fs::write(root.join("owned-marker"), b"owned")?;
+        assert_eq!(
+            validate_new_root(&root).unwrap_err().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        fs::remove_file(root.join("owned-marker"))?;
+        fs::remove_dir(root)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_symlinked_root() -> io::Result<()> {
+        use std::os::unix::fs::symlink;
+        let target = test_path();
+        let link = test_path();
+        fs::create_dir(&target)?;
+        symlink(&target, &link)?;
+        assert_eq!(
+            validate_new_root(&link).unwrap_err().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        fs::remove_file(link)?;
+        fs::remove_dir(target)
+    }
+
+    #[test]
+    fn refuses_path_outside_system_temp() {
+        let outside = PathBuf::from("/Users/history-fixture-must-not-write");
+        assert_eq!(
+            validate_new_root(&outside).unwrap_err().kind(),
+            io::ErrorKind::PermissionDenied
+        );
+    }
+}
