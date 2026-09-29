@@ -4,10 +4,16 @@ import {
   useState,
   type KeyboardEvent,
   type ReactNode,
+  type RefCallback,
   type RefObject,
 } from "react";
 import { ApplicationDialog } from "../app/interaction/ApplicationDialog";
 import { HistoryList, type HistoryVersionView } from "./HistoryList";
+import {
+  formatHistoryTimestamp,
+  historyDateTime,
+  historySourceLabel,
+} from "./historyFormat";
 import { HistoryPreview, type HistoryPreviewState } from "./HistoryPreview";
 import { HistoryStateView, type HistoryStateKind } from "./HistoryStates";
 import "./history.css";
@@ -15,7 +21,10 @@ import "./history.css";
 export type HistoryPanelStatus = HistoryStateKind | "available";
 
 export interface HistoryPanelProps {
+  /** Stable active document identity, used to bind open row actions. */
+  documentId?: string;
   fileName: string;
+  compact?: boolean;
   items?: readonly HistoryVersionView[];
   status?: HistoryPanelStatus;
   statusMessage?: string;
@@ -36,12 +45,19 @@ export interface HistoryPanelProps {
   onRestore?: (item: HistoryVersionView) => void | Promise<void>;
   onDelete?: (item: HistoryVersionView) => void | Promise<void>;
   /** Marks the live canvas; the caller resolves only after durable publish. */
-  onMark?: () => void | Promise<void>;
+  onMark?: () => void | Promise<void | null | {
+    versionId: string;
+    reused: boolean;
+  }>;
   /** Persists the selected version's mark state. */
   onSetMarked?: (
     item: HistoryVersionView,
     marked: boolean,
-  ) => void | Promise<void>;
+  ) => void | Promise<void | {
+    versionId: string;
+    marked: boolean;
+    retained: boolean;
+  }>;
   markProcessing?: boolean;
   markSuccessMessage?: string;
   markErrorMessage?: string;
@@ -59,7 +75,9 @@ export interface HistoryPanelProps {
  * focus transitions between list and read-only preview.
  */
 export function HistoryPanel({
+  documentId,
   fileName,
+  compact = false,
   items = [],
   status = "available",
   statusMessage,
@@ -110,19 +128,29 @@ export function HistoryPanel({
   >(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const deleteIsProcessing = deleteProcessing || deleteBusy;
-  const [actionsOpen, setActionsOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<HistoryVersionView | null>(
+  const [openActionsTarget, setOpenActionsTarget] = useState<{
+    documentId: string;
+    item: HistoryVersionView;
+    upward: boolean;
+  } | null>(null);
+  const [actionsTargetError, setActionsTargetError] = useState<string | null>(
     null,
   );
-  const actionsTriggerRef = useRef<HTMLButtonElement>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    documentId: string;
+    item: HistoryVersionView;
+  } | null>(null);
+  const actionsTriggerRefs = useRef(new Map<string, HTMLButtonElement>());
+  const deleteReturnFocusRef = useRef<HTMLButtonElement>(null);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
   const deleteCancelRef = useRef<HTMLButtonElement>(null);
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
   const previewReturnIdRef = useRef<string | null>(null);
   const panelRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!actionsOpen) return;
+    if (openActionsTarget === null) return;
     const firstAction = actionsMenuRef.current?.querySelector<HTMLElement>(
       '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])',
     );
@@ -131,9 +159,11 @@ export function HistoryPanel({
       if (
         event.target instanceof Node &&
         !actionsMenuRef.current?.contains(event.target) &&
-        !actionsTriggerRef.current?.contains(event.target)
+        ![...actionsTriggerRefs.current.values()].some((trigger) =>
+          trigger.contains(event.target as Node),
+        )
       ) {
-        setActionsOpen(false);
+        setOpenActionsTarget(null);
       }
     };
     document.addEventListener("pointerdown", dismissOnOutsidePointer, true);
@@ -144,7 +174,22 @@ export function HistoryPanel({
         true,
       );
     };
-  }, [actionsOpen]);
+  }, [openActionsTarget]);
+
+  const activeDocumentKey = documentId ?? fileName;
+  const deleteDocumentChanged =
+    deleteTarget !== null && deleteTarget.documentId !== activeDocumentKey;
+  const visibleDeleteTarget = deleteDocumentChanged ? null : deleteTarget;
+  const openTargetUnavailableMessage =
+    openActionsTarget === null
+      ? null
+      : openActionsTarget.documentId !== activeDocumentKey
+        ? "The history document changed. Reopen the version menu before acting."
+        : items.some(
+              (item) => item.versionId === openActionsTarget.item.versionId,
+            )
+          ? null
+          : "This version is no longer available. Reopen the history menu to choose an available version.";
 
   const activeSelectedId =
     selectedVersionId ??
@@ -154,7 +199,8 @@ export function HistoryPanel({
       : (items[0]?.versionId ?? null));
   const activePreviewId = previewVersionId ?? internalPreviewId;
   const selectedItem =
-    items.find((item) => item.versionId === activeSelectedId) ?? items[0];
+    items.find((item) => item.versionId === activeSelectedId) ??
+    (activeSelectedId === null ? items[0] : undefined);
   const previewItem = items.find((item) => item.versionId === activePreviewId);
 
   useEffect(() => {
@@ -163,6 +209,22 @@ export function HistoryPanel({
     previewReturnIdRef.current = null;
     rowRefs.current.get(returnId)?.focus();
   }, [activePreviewId]);
+
+  const previousControlledSelectionRef = useRef<string | null | undefined>(
+    undefined,
+  );
+  useEffect(() => {
+    if (selectedVersionId === undefined || selectedVersionId === null) return;
+    if (!items.some((item) => item.versionId === selectedVersionId)) return;
+    const selectionChanged =
+      previousControlledSelectionRef.current !== selectedVersionId;
+    previousControlledSelectionRef.current = selectedVersionId;
+    const row = rowRefs.current.get(selectedVersionId);
+    if (row === undefined) return;
+    row.scrollIntoView?.({ block: "nearest" });
+    if (selectionChanged || document.activeElement === document.body)
+      row.focus();
+  }, [items, selectedVersionId]);
 
   const selectItem = (item: HistoryVersionView) => {
     if (selectedVersionId === undefined) setInternalSelectedId(item.versionId);
@@ -193,8 +255,17 @@ export function HistoryPanel({
     setMarkFeedback(null);
     setMarkBusy(true);
     try {
-      await onMark();
-      setMarkFeedback({ status: "success", message: markSuccessMessage });
+      const result = await onMark();
+      if (result != null && selectedVersionId === undefined) {
+        setInternalSelectedId(result.versionId);
+      }
+      if (result === null) return;
+      setMarkFeedback({
+        status: "success",
+        message: result?.reused
+          ? "Already marked. Selected the existing version."
+          : markSuccessMessage,
+      });
     } catch (error) {
       const message =
         markErrorMessage ??
@@ -214,10 +285,14 @@ export function HistoryPanel({
     setMarkFeedback(null);
     setSetMarkedBusy(true);
     try {
-      await onSetMarked(item, marked);
+      const result = await onSetMarked(item, marked);
       setMarkFeedback({
         status: "success",
-        message: marked ? "Version marked." : "Version unmarked.",
+        message: marked
+          ? "Version marked."
+          : result?.retained === false
+            ? "Version unmarked and removed by the retention policy."
+            : "Version unmarked.",
       });
     } catch (error) {
       const message =
@@ -237,9 +312,9 @@ export function HistoryPanel({
     }
     if (event.key !== "Escape") return;
     event.preventDefault();
-    if (actionsOpen) {
-      setActionsOpen(false);
-      actionsTriggerRef.current?.focus();
+    if (openActionsTarget !== null) {
+      setOpenActionsTarget(null);
+      actionsTriggerRefs.current.get(openActionsTarget.item.versionId)?.focus();
       return;
     }
     if (activePreviewId !== null) {
@@ -251,10 +326,22 @@ export function HistoryPanel({
 
   const handleDelete = async (item: HistoryVersionView) => {
     if (onDelete === undefined || processing || deleteIsProcessing) return;
+    if (
+      deleteTarget?.documentId !== activeDocumentKey ||
+      deleteTarget.item.versionId !== item.versionId ||
+      !items.some((candidate) => candidate.versionId === item.versionId)
+    ) {
+      setDeleteTarget(null);
+      setActionsTargetError(
+        "This version is no longer available. Reopen the history menu to choose an available version.",
+      );
+      return;
+    }
     setDeleteFeedback(null);
     setDeleteBusy(true);
     try {
       await onDelete(item);
+      deleteReturnFocusRef.current = closeButtonRef.current;
       setDeleteFeedback({ status: "success", message: deleteSuccessMessage });
       setDeleteTarget(null);
     } catch (error) {
@@ -281,8 +368,12 @@ export function HistoryPanel({
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      setActionsOpen(false);
-      actionsTriggerRef.current?.focus();
+      setOpenActionsTarget(null);
+      if (openActionsTarget !== null) {
+        actionsTriggerRefs.current
+          .get(openActionsTarget.item.versionId)
+          ?.focus();
+      }
       return;
     }
     let nextIndex: number | undefined;
@@ -301,96 +392,157 @@ export function HistoryPanel({
     }
   };
 
-  const actionsFor = (item: HistoryVersionView) => (
-    <div className="history-actions-anchor">
-      <button
-        aria-expanded={actionsOpen}
-        aria-haspopup="menu"
-        aria-label="More version actions"
-        className="history-actions-trigger"
-        disabled={processing || deleteIsProcessing || markIsProcessing}
-        onClick={() => setActionsOpen((open) => !open)}
-        ref={actionsTriggerRef}
-        type="button"
-      >
-        <MoreIcon />
-      </button>
-      {actionsOpen ? (
-        <div
-          aria-label="More version actions"
-          className="history-actions-menu"
-          onKeyDown={handleActionsMenuKeyDown}
-          ref={actionsMenuRef}
-          role="menu"
+  const handleActionsMenuClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const action = (event.target as HTMLElement).closest<HTMLButtonElement>(
+      "[data-history-action]",
+    );
+    if (action === null || openActionsTarget === null) return;
+    const targetItem = openActionsTarget.item;
+    const targetExists = items.some(
+      (candidate) => candidate.versionId === targetItem.versionId,
+    );
+    if (openActionsTarget.documentId !== activeDocumentKey || !targetExists) {
+      setActionsTargetError(
+        "This version is no longer available. Reopen the history menu to choose an available version.",
+      );
+      setOpenActionsTarget(null);
+      return;
+    }
+    const actionName = action.dataset.historyAction;
+    if (actionName === "mark" || actionName === "unmark") {
+      void handleSetMarked(targetItem, actionName === "mark");
+      setOpenActionsTarget(null);
+      actionsTriggerRefs.current.get(targetItem.versionId)?.focus();
+    } else if (actionName === "delete") {
+      if (processing || deleteIsProcessing) return;
+      setOpenActionsTarget(null);
+      deleteReturnFocusRef.current =
+        actionsTriggerRefs.current.get(targetItem.versionId) ?? null;
+      setDeleteFeedback(null);
+      setDeleteTarget({ documentId: activeDocumentKey, item: targetItem });
+    }
+  };
+
+  const toggleActionsMenu = (
+    item: HistoryVersionView,
+    isTargetOpen: boolean,
+    trigger: HTMLButtonElement,
+  ) => {
+    setActionsTargetError(null);
+    const scrollport = trigger.closest(".history-panel-body");
+    const upward =
+      scrollport !== null &&
+      scrollport.getBoundingClientRect().bottom -
+        trigger.getBoundingClientRect().top <
+        116;
+    setOpenActionsTarget(
+      isTargetOpen ? null : { documentId: activeDocumentKey, item, upward },
+    );
+  };
+
+  const registerActionsTrigger = (
+    versionId: string,
+  ): RefCallback<HTMLButtonElement> => {
+    return (element) => {
+      if (element === null) actionsTriggerRefs.current.delete(versionId);
+      else actionsTriggerRefs.current.set(versionId, element);
+    };
+  };
+
+  const actionsFor = (item: HistoryVersionView) => {
+    const isTargetOpen =
+      openActionsTarget?.documentId === activeDocumentKey &&
+      openActionsTarget.item.versionId === item.versionId;
+    const menuTarget = isTargetOpen ? openActionsTarget.item : null;
+    if (onSetMarked === undefined && onDelete === undefined) return null;
+    return (
+      <div className="history-actions-anchor" key={item.versionId}>
+        <button
+          aria-expanded={isTargetOpen}
+          aria-haspopup="menu"
+          aria-label={`More actions for ${historyTargetLabel(item)}`}
+          className="history-actions-trigger"
+          disabled={processing || deleteIsProcessing || markIsProcessing}
+          onClick={(event) =>
+            toggleActionsMenu(item, isTargetOpen, event.currentTarget)
+          }
+          ref={registerActionsTrigger(item.versionId)}
+          type="button"
         >
-          {item.marked ? (
-            <button
-              className="history-actions-menu-item"
-              disabled={
-                onSetMarked === undefined || processing || setMarkedBusy
-              }
-              onClick={() => {
-                void handleSetMarked(item, false);
-                setActionsOpen(false);
-                actionsTriggerRef.current?.focus();
-              }}
-              role="menuitem"
-              type="button"
+          <MoreIcon />
+        </button>
+        {menuTarget !== null ? (
+          <div
+            aria-label="More version actions"
+            className={`history-actions-menu${openActionsTarget?.upward ? " is-upward" : ""}`}
+            onClick={handleActionsMenuClick}
+            onKeyDown={handleActionsMenuKeyDown}
+            ref={actionsMenuRef}
+            role="menu"
+          >
+            <div
+              className="history-actions-menu-title"
+              title={historyTargetLabel(menuTarget)}
             >
-              <BookmarkIcon />
-              Unmark version
-            </button>
-          ) : onSetMarked !== undefined ? (
-            <button
-              className="history-actions-menu-item"
-              disabled={processing || markIsProcessing}
-              onClick={() => {
-                void handleSetMarked(item, true);
-                setActionsOpen(false);
-                actionsTriggerRef.current?.focus();
-              }}
-              role="menuitem"
-              type="button"
-            >
-              <BookmarkIcon />
-              Mark version
-            </button>
-          ) : null}
-          {moreActions}
-          {onDelete !== undefined ? (
-            <>
-              <div
-                aria-hidden="true"
-                className="history-actions-separator"
-                role="separator"
-              />
+              {historyTargetLabel(menuTarget)}
+            </div>
+            {menuTarget.marked ? (
               <button
-                className="history-actions-menu-item is-destructive"
-                disabled={processing || deleteIsProcessing}
-                onClick={() => {
-                  if (processing || deleteIsProcessing) return;
-                  setActionsOpen(false);
-                  setDeleteFeedback(null);
-                  setDeleteTarget(item);
-                }}
+                className="history-actions-menu-item"
+                disabled={
+                  onSetMarked === undefined || processing || setMarkedBusy
+                }
+                data-history-action="unmark"
                 role="menuitem"
                 type="button"
               >
-                <TrashIcon />
-                Delete version
+                <BookmarkIcon />
+                Unmark version
               </button>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
+            ) : onSetMarked !== undefined ? (
+              <button
+                className="history-actions-menu-item"
+                disabled={processing || markIsProcessing}
+                data-history-action="mark"
+                role="menuitem"
+                type="button"
+              >
+                <BookmarkIcon />
+                Mark version
+              </button>
+            ) : null}
+            {moreActions}
+            {onDelete !== undefined ? (
+              <>
+                <div
+                  aria-hidden="true"
+                  className="history-actions-separator"
+                  role="separator"
+                />
+                <button
+                  className="history-actions-menu-item is-destructive"
+                  disabled={processing || deleteIsProcessing}
+                  data-history-action="delete"
+                  role="menuitem"
+                  type="button"
+                >
+                  <TrashIcon />
+                  Delete version
+                </button>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <aside
       aria-labelledby="history-panel-title"
-      className="history-panel"
+      className={`history-panel${compact ? " is-compact" : ""}`}
       data-history-panel="true"
+      data-compact={compact ? "true" : undefined}
       onKeyDown={handlePanelKeyDown}
       ref={panelRef}
       role="complementary"
@@ -407,6 +559,7 @@ export function HistoryPanel({
           aria-label="Close version history"
           className="icon-button"
           onClick={closePanel}
+          ref={closeButtonRef}
           type="button"
         >
           <CloseIcon />
@@ -414,142 +567,167 @@ export function HistoryPanel({
         </button>
       </header>
 
-      <div className="history-panel-body">
-        <p className="history-retention-policy">
-          Automatic and before-operation versions share the newest 20 entries.
-          They do not expire by age. Manual marks stay until you delete them.
-        </p>
-        {onMark !== undefined ? (
-          <section
-            aria-label="Current version actions"
-            className="history-current-actions"
-          >
+      <div className="history-panel-main">
+        <div className="history-panel-body">
+          {(actionsTargetError ??
+          openTargetUnavailableMessage ??
+          (deleteDocumentChanged
+            ? "The history document changed. Reopen the version menu before acting."
+            : null)) ? (
+            <p role="alert">
+              {actionsTargetError ??
+                openTargetUnavailableMessage ??
+                "The history document changed. Reopen the version menu before acting."}
+            </p>
+          ) : null}
+          <p className="history-retention-policy">
+            Automatic and before-operation versions share the newest 20 entries.
+            They do not expire by age. Manual marks stay until you delete them.
+          </p>
+          {onMark !== undefined ? (
+            <section
+              aria-label="Current drawing"
+              className="history-current-actions"
+            >
+              <div className="history-current-card">
+                <span>Current drawing</span>
+                <p>Open canvas</p>
+              </div>
+              <button
+                disabled={processing || markIsProcessing}
+                onClick={() => void handleMark()}
+                type="button"
+              >
+                {markIsProcessing
+                  ? "Marking current version…"
+                  : "Mark current version"}
+              </button>
+            </section>
+          ) : null}
+          {markFeedback?.status === "success" ? (
+            <p aria-live="polite" role="status">
+              {markFeedback.message}
+            </p>
+          ) : null}
+          {markFeedback?.status === "error" ? (
+            <p aria-live="assertive" role="alert">
+              {markFeedback.message}
+            </p>
+          ) : null}
+          {previewItem !== undefined ? (
+            <>
+              <HistoryPreview
+                content={previewContent}
+                errorMessage={previewErrorMessage}
+                item={previewItem}
+                moreActions={actionsFor(previewItem)}
+                onExit={exitPreview}
+                onRestore={() => onRestore?.(previewItem)}
+                processing={processing}
+                restoreEnabled={restoreEnabled}
+                state={previewState}
+              />
+              {deleteFeedback?.status === "success" ? (
+                <p aria-live="polite" role="status">
+                  {deleteFeedback.message}
+                </p>
+              ) : null}
+              {deleteFeedback?.status === "error" && deleteTarget === null ? (
+                <p aria-live="assertive" role="alert">
+                  {deleteFeedback.message}
+                </p>
+              ) : null}
+            </>
+          ) : status === "available" ? (
+            <>
+              {items.length === 0 ? (
+                <HistoryStateView state="empty" />
+              ) : (
+                <>
+                  <HistoryList
+                    currentVersionId={currentVersionId}
+                    items={items}
+                    onPreview={openPreview}
+                    onRegisterRow={(versionId, element) => {
+                      if (element === null) rowRefs.current.delete(versionId);
+                      else rowRefs.current.set(versionId, element);
+                    }}
+                    onSelect={selectItem}
+                    previewVersionId={activePreviewId}
+                    renderRowActions={actionsFor}
+                    selectedVersionId={activeSelectedId}
+                  />
+                </>
+              )}
+            </>
+          ) : (
+            <HistoryStateView
+              message={statusMessage}
+              onRetry={onRetry}
+              state={status}
+            />
+          )}
+        </div>
+      </div>
+      {previewItem === undefined &&
+      selectedItem !== undefined &&
+      status === "available" ? (
+        <section
+          aria-label="Selected version actions"
+          className="history-selection-actions"
+        >
+          <p className="history-selection-eyebrow">
+            Selected version · action target
+          </p>
+          <strong className="history-selection-title">
+            {historyTargetLabel(selectedItem)}
+          </strong>
+          <p className="history-selection-metadata">
+            <time dateTime={historyDateTime(selectedItem.recordedAt)}>
+              {formatHistoryTimestamp(selectedItem.recordedAt)}
+            </time>
+            {" · "}
+            {historySourceLabel(selectedItem)}
+          </p>
+          <div>
             <button
-              disabled={processing || markIsProcessing}
-              onClick={() => void handleMark()}
+              disabled={
+                processing || selectedItem.availability.status !== "available"
+              }
+              onClick={() => openPreview(selectedItem)}
               type="button"
             >
-              {markIsProcessing
-                ? "Marking current version…"
-                : "Mark current version"}
+              Preview
             </button>
-            {markFeedback?.status === "success" ? (
-              <p aria-live="polite" role="status">
-                {markFeedback.message}
-              </p>
-            ) : null}
-            {markFeedback?.status === "error" ? (
-              <p aria-live="assertive" role="alert">
-                {markFeedback.message}
-              </p>
-            ) : null}
-          </section>
-        ) : null}
-        {previewItem !== undefined ? (
-          <>
-            <HistoryPreview
-              content={previewContent}
-              errorMessage={previewErrorMessage}
-              item={previewItem}
-              moreActions={actionsFor(previewItem)}
-              onExit={exitPreview}
-              onRestore={() => onRestore?.(previewItem)}
-              processing={processing}
-              restoreEnabled={restoreEnabled}
-              state={previewState}
-            />
-            {deleteFeedback?.status === "success" ? (
-              <p aria-live="polite" role="status">
-                {deleteFeedback.message}
-              </p>
-            ) : null}
-            {deleteFeedback?.status === "error" && deleteTarget === null ? (
-              <p aria-live="assertive" role="alert">
-                {deleteFeedback.message}
-              </p>
-            ) : null}
-          </>
-        ) : status === "available" ? (
-          <>
-            {items.length === 0 ? (
-              <HistoryStateView state="empty" />
-            ) : (
-              <>
-                <HistoryList
-                  currentVersionId={currentVersionId}
-                  items={items}
-                  onPreview={openPreview}
-                  onRegisterRow={(versionId, element) => {
-                    if (element === null) rowRefs.current.delete(versionId);
-                    else rowRefs.current.set(versionId, element);
-                  }}
-                  onSelect={selectItem}
-                  previewVersionId={activePreviewId}
-                  selectedVersionId={activeSelectedId}
-                />
-                {selectedItem !== undefined ? (
-                  <section
-                    aria-label="Selected version actions"
-                    className="history-selection-actions"
-                  >
-                    <p>
-                      {selectedItem.versionId === currentVersionId
-                        ? "Current version"
-                        : "Selected version"}
-                    </p>
-                    <div>
-                      <button
-                        disabled={
-                          processing ||
-                          selectedItem.availability.status !== "available"
-                        }
-                        onClick={() => openPreview(selectedItem)}
-                        type="button"
-                      >
-                        Preview
-                      </button>
-                      <button
-                        className="primary-action"
-                        disabled={
-                          processing ||
-                          selectedItem.availability.status !== "available" ||
-                          !restoreEnabled
-                        }
-                        onClick={() => onRestore?.(selectedItem)}
-                        type="button"
-                      >
-                        Restore this version
-                      </button>
-                      {actionsFor(selectedItem)}
-                    </div>
-                    {deleteFeedback?.status === "success" ? (
-                      <p aria-live="polite" role="status">
-                        {deleteFeedback.message}
-                      </p>
-                    ) : null}
-                    {deleteFeedback?.status === "error" &&
-                    deleteTarget === null ? (
-                      <p aria-live="assertive" role="alert">
-                        {deleteFeedback.message}
-                      </p>
-                    ) : null}
-                  </section>
-                ) : null}
-              </>
-            )}
-          </>
-        ) : (
-          <HistoryStateView
-            message={statusMessage}
-            onRetry={onRetry}
-            state={status}
-          />
-        )}
-      </div>
-      {deleteTarget !== null ? (
+            <button
+              className="primary-action"
+              disabled={
+                processing ||
+                selectedItem.availability.status !== "available" ||
+                !restoreEnabled
+              }
+              onClick={() => onRestore?.(selectedItem)}
+              type="button"
+            >
+              Restore this version
+            </button>
+          </div>
+          {deleteFeedback?.status === "success" ? (
+            <p aria-live="polite" role="status">
+              {deleteFeedback.message}
+            </p>
+          ) : null}
+          {deleteFeedback?.status === "error" && deleteTarget === null ? (
+            <p aria-live="assertive" role="alert">
+              {deleteFeedback.message}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+      {visibleDeleteTarget !== null ? (
         <ApplicationDialog
           busy={deleteIsProcessing}
-          description={`Delete the ${sourceLabel(deleteTarget)} version from history? This cannot be undone.`}
+          description={`Delete the ${sourceLabel(visibleDeleteTarget.item)} version from history? This cannot be undone.`}
           errorMessage={
             deleteFeedback?.status === "error" ? deleteFeedback.message : null
           }
@@ -557,8 +735,8 @@ export function HistoryPanel({
           onDismiss={() => {
             if (!deleteIsProcessing) setDeleteTarget(null);
           }}
-          returnFocusRef={actionsTriggerRef}
-          title="Delete version?"
+          returnFocusRef={deleteReturnFocusRef}
+          title={`Delete v-${String(visibleDeleteTarget.item.sequence).padStart(3, "0")}?`}
         >
           <div className="application-dialog-actions conflict-dialog-actions">
             <button
@@ -571,7 +749,7 @@ export function HistoryPanel({
             </button>
             <button
               disabled={deleteIsProcessing}
-              onClick={() => void handleDelete(deleteTarget)}
+              onClick={() => void handleDelete(visibleDeleteTarget.item)}
               type="button"
             >
               {deleteIsProcessing ? "Deleting…" : "Delete"}
@@ -594,6 +772,14 @@ function sourceLabel(item: HistoryVersionView): string {
   return item.source === "manual" ? "manual" : "automatic";
 }
 
+function historyTargetLabel(item: HistoryVersionView): string {
+  const summary =
+    item.summaryReliable === false || !item.summary
+      ? "Canvas changed"
+      : item.summary;
+  return `v-${String(item.sequence).padStart(3, "0")} · ${summary}`;
+}
+
 function MoreIcon() {
   return (
     <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16">
@@ -612,7 +798,7 @@ function BookmarkIcon() {
         fill="none"
         stroke="currentColor"
         strokeLinejoin="round"
-        strokeWidth="1.4"
+        strokeWidth="1"
       />
     </svg>
   );
@@ -627,7 +813,7 @@ function TrashIcon() {
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.3"
+        strokeWidth="1"
       />
     </svg>
   );

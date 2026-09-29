@@ -197,8 +197,8 @@ impl HistoryReplacementService {
             let sequence = u64::try_from(sequence).map_err(|_| {
                 AppError::HistoryUnavailable("history sequence overflow".to_owned())
             })?;
-            let published = HistoryRepository::new(&store)
-                .publish_scene_with_assets(
+            let (published, reused) = HistoryRepository::new(&store)
+                .mark_current_scene_with_assets(
                     PublishSceneRequest {
                         version_id: format!("manual-{}", Uuid::new_v4()),
                         document_id,
@@ -224,6 +224,7 @@ impl HistoryReplacementService {
                 recorded_at: published.recorded_at,
                 source: published.source,
                 content_hash: published.scene_hash,
+                reused,
             })
         })
         .await

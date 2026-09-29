@@ -81,6 +81,234 @@ fn count(store: &HistoryStore, source: Option<&str>) -> i64 {
         .unwrap_or_else(|error| panic!("count versions: {error}"))
 }
 
+fn mark_current(
+    repository: &HistoryRepository<'_>,
+    version_id: &str,
+    document_id: &str,
+    scene: &[u8],
+    assets: Vec<PublishAsset>,
+) -> (super::repository::PublishedVersion, bool) {
+    repository
+        .mark_current_scene_with_assets(
+            PublishSceneRequest {
+                version_id: version_id.to_owned(),
+                document_id: document_id.to_owned(),
+                scene_bytes: scene.to_vec(),
+                schema_version: 1,
+                source: HistoryVersionSource::Manual,
+                protected_action: None,
+                recorded_at: 100,
+                sequence: 1,
+            },
+            assets,
+        )
+        .unwrap_or_else(|error| panic!("mark current {version_id}: {error}"))
+}
+
+#[test]
+fn mark_current_reuses_complete_snapshot_sequentially_concurrently_and_after_restart() {
+    let (root, store) = fixture();
+    let repository = HistoryRepository::new(&store);
+    let asset = || PublishAsset {
+        file_id: "image-1".to_owned(),
+        bytes: b"image bytes".to_vec(),
+        mime_type: "image/png".to_owned(),
+    };
+    let (original, reused) = mark_current(
+        &repository,
+        "manual-original",
+        "doc",
+        b"complete scene",
+        vec![asset()],
+    );
+    assert!(!reused);
+    for index in 0..10 {
+        let (same, reused) = mark_current(
+            &repository,
+            &format!("manual-repeat-{index}"),
+            "doc",
+            b"complete scene",
+            vec![asset()],
+        );
+        assert!(reused);
+        assert_eq!(same, original);
+    }
+    let simultaneous = std::thread::scope(|scope| {
+        let first = scope.spawn(|| {
+            mark_current(
+                &HistoryRepository::new(&store),
+                "manual-concurrent-1",
+                "doc",
+                b"complete scene",
+                vec![asset()],
+            )
+        });
+        let second = scope.spawn(|| {
+            mark_current(
+                &HistoryRepository::new(&store),
+                "manual-concurrent-2",
+                "doc",
+                b"complete scene",
+                vec![asset()],
+            )
+        });
+        (first.join().unwrap(), second.join().unwrap())
+    });
+    for (same, reused) in [simultaneous.0, simultaneous.1] {
+        assert!(reused);
+        assert_eq!(same, original);
+    }
+    assert_eq!(count(&store, Some("manual")), 1);
+    drop(store);
+    let reopened = HistoryStore::open_version_history_root(&root)
+        .unwrap_or_else(|error| panic!("reopen history store: {error}"));
+    let (same, reused) = mark_current(
+        &HistoryRepository::new(&reopened),
+        "manual-after-restart",
+        "doc",
+        b"complete scene",
+        vec![asset()],
+    );
+    assert!(reused);
+    assert_eq!(same, original);
+    assert_eq!(count(&reopened, Some("manual")), 1);
+    drop(reopened);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+#[test]
+fn simultaneous_first_marks_publish_one_row() {
+    let (root, store) = fixture();
+    let (first, second) = std::thread::scope(|scope| {
+        let first = scope.spawn(|| {
+            mark_current(
+                &HistoryRepository::new(&store),
+                "manual-first-1",
+                "doc",
+                b"same initial scene",
+                Vec::new(),
+            )
+        });
+        let second = scope.spawn(|| {
+            mark_current(
+                &HistoryRepository::new(&store),
+                "manual-first-2",
+                "doc",
+                b"same initial scene",
+                Vec::new(),
+            )
+        });
+        (first.join().unwrap(), second.join().unwrap())
+    });
+    assert_eq!(first.0, second.0);
+    assert_ne!(first.1, second.1);
+    assert_eq!(count(&store, Some("manual")), 1);
+    drop(store);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+#[test]
+fn mark_current_reuses_a_row_marked_automatic_version_without_changing_source() {
+    let (root, store) = fixture();
+    let repository = HistoryRepository::new(&store);
+    repository
+        .publish_scene(PublishSceneRequest {
+            version_id: "automatic-existing".to_owned(),
+            document_id: "doc".to_owned(),
+            scene_bytes: b"same scene".to_vec(),
+            schema_version: 1,
+            source: HistoryVersionSource::Automatic,
+            protected_action: None,
+            recorded_at: 42,
+            sequence: 1,
+        })
+        .unwrap_or_else(|error| panic!("publish automatic version: {error}"));
+    assert!(repository
+        .set_marked("mark-automatic", "doc", "automatic-existing", true)
+        .unwrap_or_else(|error| panic!("mark automatic version: {error}")));
+    let (version, reused) = mark_current(
+        &repository,
+        "new-manual-candidate",
+        "doc",
+        b"same scene",
+        Vec::new(),
+    );
+    assert!(reused);
+    assert_eq!(version.version_id, "automatic-existing");
+    assert_eq!(version.source, HistoryVersionSource::Automatic);
+    assert_eq!(version.recorded_at, 42);
+    assert_eq!(count(&store, None), 1);
+    drop(store);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
+#[test]
+fn mark_current_compares_assets_and_document_and_row_mark_preserves_snapshot() {
+    let (root, store) = fixture();
+    store
+        .with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO history_documents (id, canonical_path, created_at, state)
+                 VALUES ('other-doc', '/tmp/other.excalidraw', 0, 'active')",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap_or_else(|error| panic!("insert second document: {error}"));
+    let repository = HistoryRepository::new(&store);
+    let asset = |bytes: &[u8]| PublishAsset {
+        file_id: "image-1".to_owned(),
+        bytes: bytes.to_vec(),
+        mime_type: "image/png".to_owned(),
+    };
+    let (first, _) = mark_current(&repository, "first", "doc", b"scene", vec![asset(b"A")]);
+    let (different_asset, reused) =
+        mark_current(&repository, "second", "doc", b"scene", vec![asset(b"B")]);
+    assert!(!reused);
+    assert_ne!(different_asset.version_id, first.version_id);
+    let (different_scene, reused) = mark_current(
+        &repository,
+        "third",
+        "doc",
+        b"changed scene",
+        vec![asset(b"A")],
+    );
+    assert!(!reused);
+    assert_ne!(different_scene.version_id, first.version_id);
+    let (other_doc, reused) = mark_current(
+        &repository,
+        "fourth",
+        "other-doc",
+        b"scene",
+        vec![asset(b"A")],
+    );
+    assert!(!reused);
+    assert_ne!(other_doc.version_id, first.version_id);
+
+    assert!(repository
+        .set_marked("unmark-first", "doc", "first", false)
+        .unwrap_or_else(|error| panic!("unmark first row: {error}")));
+    let (remarked, reused) = mark_current(&repository, "fifth", "doc", b"scene", vec![asset(b"A")]);
+    assert!(!reused);
+    assert_ne!(remarked.version_id, first.version_id);
+    assert!(repository
+        .set_marked("mark-first", "doc", "first", true)
+        .unwrap_or_else(|error| panic!("remark first row: {error}")));
+    let (source, scene_hash, recorded_at): (String, String, i64) = store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT source, scene_hash, recorded_at FROM history_versions WHERE id = 'first'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+        })
+        .unwrap_or_else(|error| panic!("read remarked row: {error}"));
+    assert_eq!(source, "manual");
+    assert_eq!(scene_hash, first.scene_hash);
+    assert_eq!(recorded_at, first.recorded_at);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
+}
+
 #[test]
 fn marking_preserves_source_and_unmarking_reenters_retention_pool() {
     let (root, store) = fixture();
@@ -124,7 +352,6 @@ fn marking_preserves_source_and_unmarking_reenters_retention_pool() {
         .set_marked("unmark-1", "doc", "automatic-00", false)
         .unwrap_or_else(|error| panic!("unmark version: {error}")));
     assert!(!ids(&store, None).contains(&"automatic-00".to_owned()));
-    drop(repository);
     drop(store);
     let reopened = HistoryStore::open_version_history_root(&root)
         .unwrap_or_else(|error| panic!("reopen after lost response: {error}"));
@@ -951,4 +1178,51 @@ fn e2e_history_repository_hooks_reach_object_and_eviction_gc_boundaries() {
         drop(store);
         fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
     }
+}
+
+#[cfg(feature = "e2e-harness")]
+#[test]
+fn reused_manual_mark_skips_post_commit_fault_boundary() {
+    use crate::e2e_harness::{
+        history_fault_test_hits, history_fault_test_scope, HistoryFaultStage,
+    };
+
+    let (root, store) = fixture();
+    let repository = HistoryRepository::new(&store);
+    let (original, reused) = mark_current(
+        &repository,
+        "manual-original",
+        "doc",
+        b"same scene",
+        Vec::new(),
+    );
+    assert!(!reused);
+
+    let scope = history_fault_test_scope(HistoryFaultStage::EvictionDeleteGc);
+    let (same, reused) = mark_current(
+        &repository,
+        "manual-repeat",
+        "doc",
+        b"same scene",
+        Vec::new(),
+    );
+    assert!(reused);
+    assert_eq!(same, original);
+    assert!(history_fault_test_hits().is_empty());
+
+    let (_, reused) = mark_current(
+        &repository,
+        "manual-new",
+        "doc",
+        b"changed scene",
+        Vec::new(),
+    );
+    assert!(!reused);
+    assert_eq!(
+        history_fault_test_hits(),
+        vec![HistoryFaultStage::EvictionDeleteGc]
+    );
+    drop(scope);
+    drop(store);
+    fs::remove_dir_all(root).unwrap_or_else(|error| panic!("remove fixture: {error}"));
 }

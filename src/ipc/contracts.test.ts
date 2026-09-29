@@ -11,6 +11,7 @@ import {
   type HistoryDeleteResponse,
   type HistoryIssueEvent,
   type HistoryListRequest,
+  type HistoryMarkResponse,
   type HistoryReplaceRequest,
   type HistorySetMarkedRequest,
   type HistorySetMarkedResponse,
@@ -197,8 +198,7 @@ describe("IPC v3 history contract", () => {
     }>();
     expectTypeOf<HistorySetMarkedRequest>().toEqualTypeOf<{
       document:
-        | { kind: "path"; path: string }
-        | { kind: "handle"; documentId: string };
+        { kind: "path"; path: string } | { kind: "handle"; documentId: string };
       requestId: string;
       versionId: string;
       marked: boolean;
@@ -206,6 +206,14 @@ describe("IPC v3 history contract", () => {
     expectTypeOf<HistorySetMarkedResponse>().toEqualTypeOf<{
       versionId: string;
       marked: boolean;
+      retained: boolean;
+    }>();
+    expectTypeOf<HistoryMarkResponse>().toEqualTypeOf<{
+      versionId: string;
+      recordedAt: number;
+      source: "automatic" | "manual" | "protected";
+      contentHash: string;
+      reused: boolean;
     }>();
     expectTypeOf<
       keyof Pick<

@@ -1,5 +1,15 @@
-import { useRef, type KeyboardEvent, type RefCallback } from "react";
+import {
+  useRef,
+  type KeyboardEvent,
+  type RefCallback,
+  type ReactNode,
+} from "react";
 import type { HistoryVersionItem } from "./types";
+import {
+  formatHistoryTimestamp,
+  historyDateTime,
+  historySourceLabel,
+} from "./historyFormat";
 
 export interface HistoryVersionView extends HistoryVersionItem {
   /** A caller-owned coarse description of the adjacent canvas change. */
@@ -19,22 +29,8 @@ export interface HistoryListProps {
     versionId: string,
     element: HTMLButtonElement | null,
   ) => void;
+  renderRowActions?: (item: HistoryVersionView) => ReactNode;
 }
-
-const SOURCE_LABELS: Record<HistoryVersionView["source"], string> = {
-  automatic: "Automatic",
-  manual: "Manual",
-  protected: "Protected",
-};
-
-const PROTECTED_ACTION_LABELS: Record<
-  NonNullable<HistoryVersionView["protectedAction"]>,
-  string
-> = {
-  restore: "Before restore",
-  clear: "Before clear",
-  import: "Before import",
-};
 
 /**
  * A roving-tabindex history list. Arrow navigation changes selection only;
@@ -48,6 +44,7 @@ export function HistoryList({
   onSelect,
   onPreview,
   onRegisterRow,
+  renderRowActions,
 }: HistoryListProps) {
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
 
@@ -110,7 +107,7 @@ export function HistoryList({
         const current = item.versionId === currentVersionId;
         const preview = item.versionId === previewVersionId;
         const unavailable = item.availability.status === "unavailable";
-        const source = sourceLabel(item);
+        const source = historySourceLabel(item);
         const dateTime = historyDateTime(item.recordedAt);
         const summary =
           item.summaryReliable === false ||
@@ -134,79 +131,60 @@ export function HistoryList({
 
         return (
           <li className="history-list-item" key={item.versionId}>
-            <button
-              aria-label={accessibleLabel}
-              aria-selected={selected}
-              aria-disabled={unavailable}
+            <div
               className={`history-list-row${selected ? " is-selected" : ""}${
                 current ? " is-current" : ""
               }${preview ? " is-preview" : ""}${unavailable ? " is-unavailable" : ""}`}
-              onClick={() => onSelect?.(item)}
-              onKeyDown={(event) => handleKeyDown(event, index, item)}
-              ref={registerRow(item.versionId)}
-              role="option"
-              tabIndex={
-                selected || (selectedVersionId === null && index === 0) ? 0 : -1
-              }
-              type="button"
             >
-              <span className="history-list-row-main">
-                <time dateTime={dateTime}>
-                  {formatHistoryTimestamp(item.recordedAt)}
-                </time>
-                <span className="history-list-source">{source}</span>
-                <span className="history-list-summary">{summary}</span>
-              </span>
-              <span
-                aria-label={statusLabels.join(", ") || undefined}
-                className="history-list-statuses"
+              <button
+                aria-label={accessibleLabel}
+                aria-selected={selected}
+                aria-disabled={unavailable}
+                className="history-list-row-select"
+                onClick={() => onSelect?.(item)}
+                onKeyDown={(event) => handleKeyDown(event, index, item)}
+                ref={registerRow(item.versionId)}
+                role="option"
+                tabIndex={
+                  selected || (selectedVersionId === null && index === 0)
+                    ? 0
+                    : -1
+                }
+                type="button"
               >
-                {current ? (
-                  <span className="history-list-status">Current</span>
-                ) : null}
-                {preview ? (
-                  <span className="history-list-status">Preview</span>
-                ) : null}
-                {!current && !preview && !unavailable ? (
-                  <span className="history-list-status">Ready</span>
-                ) : null}
-                {item.marked ? (
-                  <span className="history-list-status">Manual · Marked</span>
-                ) : null}
-                {unavailable ? (
-                  <span className="history-list-status">Unavailable</span>
-                ) : null}
-              </span>
-            </button>
+                <span className="history-list-row-main">
+                  <time dateTime={dateTime}>
+                    {formatHistoryTimestamp(item.recordedAt)}
+                  </time>
+                  <span className="history-list-source">{source}</span>
+                  <span className="history-list-summary">{summary}</span>
+                </span>
+                <span
+                  aria-label={statusLabels.join(", ") || undefined}
+                  className="history-list-statuses"
+                >
+                  {current ? (
+                    <span className="history-list-status">Current</span>
+                  ) : null}
+                  {preview ? (
+                    <span className="history-list-status">Preview</span>
+                  ) : null}
+                  {!current && !preview && !unavailable ? (
+                    <span className="history-list-status">Ready</span>
+                  ) : null}
+                  {item.marked ? (
+                    <span className="history-list-status">Manual · Marked</span>
+                  ) : null}
+                  {unavailable ? (
+                    <span className="history-list-status">Unavailable</span>
+                  ) : null}
+                </span>
+              </button>
+              {renderRowActions?.(item)}
+            </div>
           </li>
         );
       })}
     </ul>
   );
-}
-
-function sourceLabel(item: HistoryVersionView): string {
-  if (item.source === "protected" && item.protectedAction !== undefined) {
-    return PROTECTED_ACTION_LABELS[item.protectedAction];
-  }
-  return SOURCE_LABELS[item.source];
-}
-
-function formatHistoryTimestamp(recordedAt: number): string {
-  const date = historyDate(recordedAt);
-  if (date === undefined) return "Unknown time";
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function historyDate(recordedAt: number): Date | undefined {
-  if (!Number.isFinite(recordedAt)) return undefined;
-  const date = new Date(recordedAt * 1000);
-  return Number.isNaN(date.getTime()) ? undefined : date;
-}
-
-function historyDateTime(recordedAt: number): string | undefined {
-  return historyDate(recordedAt)?.toISOString();
 }

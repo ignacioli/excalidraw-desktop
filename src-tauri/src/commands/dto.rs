@@ -426,6 +426,7 @@ pub struct HistoryMarkResponse {
     pub recorded_at: i64,
     pub source: HistoryVersionSource,
     pub content_hash: String,
+    pub reused: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

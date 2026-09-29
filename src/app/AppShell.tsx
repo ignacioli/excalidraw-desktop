@@ -145,6 +145,9 @@ export function AppShell({
   const [historyFeedback, setHistoryFeedback] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState<HistoryVersionView[]>([]);
+  const [historySelectedVersionId, setHistorySelectedVersionId] = useState<
+    string | null
+  >(null);
   const [historyPanelStatus, setHistoryPanelStatus] =
     useState<HistoryPanelStatus>("empty");
   const [historyPanelMessage, setHistoryPanelMessage] = useState<string>();
@@ -159,6 +162,8 @@ export function AppShell({
   const [historyPreviewContent, setHistoryPreviewContent] =
     useState<ReactNode>(null);
   const historyPanelRequestRef = useRef(0);
+  const historyOpenRef = useRef(historyOpen);
+  historyOpenRef.current = historyOpen;
   const [pendingHistory, setPendingHistory] = useState<
     Readonly<Record<string, string>>
   >({});
@@ -821,6 +826,11 @@ export function AppShell({
   };
 
   const loadHistoryPanel = useCallback(async (): Promise<void> => {
+    if (
+      !historyOpenRef.current ||
+      documentManager.store.getState().activeDocumentId !== activeDocumentId
+    )
+      return;
     const session =
       activeDocumentId === null
         ? undefined
@@ -838,7 +848,12 @@ export function AppShell({
       const response = await historyClient.list({
         document: historyDocumentLocator(session),
       });
-      if (request !== historyPanelRequestRef.current) return;
+      if (
+        request !== historyPanelRequestRef.current ||
+        !historyOpenRef.current ||
+        documentManager.store.getState().activeDocumentId !== session.id
+      )
+        return;
       setHistoryItems(
         response.items.map((item) => ({
           ...item,
@@ -855,7 +870,12 @@ export function AppShell({
         );
       }
     } catch (error) {
-      if (request !== historyPanelRequestRef.current) return;
+      if (
+        request !== historyPanelRequestRef.current ||
+        !historyOpenRef.current ||
+        documentManager.store.getState().activeDocumentId !== session.id
+      )
+        return;
       setHistoryPanelStatus("error");
       setHistoryPanelMessage(getErrorMessage(error));
     }
@@ -879,6 +899,7 @@ export function AppShell({
   const closeVersionHistory = useCallback((): void => {
     historyPanelRequestRef.current += 1;
     setHistoryOpen(false);
+    setHistorySelectedVersionId(null);
     setHistoryPreviewVersionId(null);
     setHistoryPreviewState("ready");
     setHistoryPreviewRenderedVersionId(null);
@@ -887,6 +908,7 @@ export function AppShell({
 
   useEffect(() => {
     if (!historyOpen) return;
+    setHistorySelectedVersionId(null);
     setHistoryPreviewVersionId(null);
     setHistoryPreviewState("ready");
     setHistoryPreviewRenderedVersionId(null);
@@ -964,14 +986,21 @@ export function AppShell({
     [loadHistoryPanel],
   );
 
-  const markCurrentHistoryVersion = useCallback(async (): Promise<void> => {
+  const markCurrentHistoryVersion = useCallback(async () => {
     const documentId = documentManager.store.getState().activeDocumentId;
-    if (documentId === null) return;
-    await requireHistoryCoordinator().mark(documentId, {
+    if (documentId === null) return null;
+    const outcome = await requireHistoryCoordinator().mark(documentId, {
       prepareUnsaved: prepareUnsavedHistoryDocument,
     });
-    setHistoryFeedback("当前版本已标记并保存到历史。");
+    if (outcome.status === "cancelled") return null;
+    if (documentManager.store.getState().activeDocumentId !== documentId)
+      return null;
+    setHistorySelectedVersionId(outcome.response.versionId);
     await loadHistoryPanel();
+    return {
+      versionId: outcome.response.versionId,
+      reused: outcome.response.reused,
+    };
   }, [loadHistoryPanel]);
 
   const deleteHistoryVersion = useCallback(
@@ -986,26 +1015,45 @@ export function AppShell({
         requestId: createHistoryRequestId(),
         versionId: item.versionId,
       });
+      if (
+        !historyOpenRef.current ||
+        documentManager.store.getState().activeDocumentId !== session.id
+      )
+        return;
       setHistoryPreviewVersionId(null);
+      setHistorySelectedVersionId((selected) =>
+        selected === item.versionId ? null : selected,
+      );
       await loadHistoryPanel();
     },
     [activeDocumentId, historyClient, loadHistoryPanel],
   );
 
   const setHistoryVersionMarked = useCallback(
-    async (item: HistoryVersionView, marked: boolean): Promise<void> => {
+    async (item: HistoryVersionView, marked: boolean) => {
       const session =
         activeDocumentId === null
           ? undefined
           : documentManager.store.getState().sessionsById[activeDocumentId];
       if (session === undefined || session.path.length === 0) return;
-      await historyClient.setMarked({
+      const response = await historyClient.setMarked({
         document: historyDocumentLocator(session),
         requestId: createHistoryRequestId(),
         versionId: item.versionId,
         marked,
       });
+      if (
+        !historyOpenRef.current ||
+        documentManager.store.getState().activeDocumentId !== session.id
+      )
+        return response;
+      if (!response.retained) {
+        setHistorySelectedVersionId((selected) =>
+          selected === item.versionId ? null : selected,
+        );
+      }
       await loadHistoryPanel();
+      return response;
     },
     [activeDocumentId, historyClient, loadHistoryPanel],
   );
@@ -1548,8 +1596,12 @@ export function AppShell({
         </main>
         {historyOpen && activeSession !== undefined ? (
           <HistoryPanel
+            documentId={activeSession.id}
+            key={activeSession.id}
             fileName={activeSession.title}
             items={historyItems}
+            selectedVersionId={historySelectedVersionId}
+            onSelect={(item) => setHistorySelectedVersionId(item.versionId)}
             onClose={closeVersionHistory}
             onDelete={deleteHistoryVersion}
             onExitPreview={() => {

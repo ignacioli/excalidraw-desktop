@@ -1,5 +1,5 @@
 import { createRef } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { HistoryPanel } from "./HistoryPanel";
@@ -173,7 +173,7 @@ describe("HistoryPanel", () => {
       />,
     );
     const trigger = screen.getByRole("button", {
-      name: "More version actions",
+      name: /More actions for v-001/,
     });
     await user.click(trigger);
     expect(screen.getByRole("menu")).toBeInTheDocument();
@@ -200,7 +200,7 @@ describe("HistoryPanel", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "More version actions" }),
+      screen.getByRole("button", { name: /More actions for v-001/ }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Mark version" }));
     await vi.waitFor(() =>
@@ -218,7 +218,7 @@ describe("HistoryPanel", () => {
       />,
     );
     await user.click(
-      screen.getByRole("button", { name: "More version actions" }),
+      screen.getByRole("button", { name: /More actions for v-001/ }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Unmark version" }));
     await vi.waitFor(() =>
@@ -287,6 +287,255 @@ describe("HistoryPanel", () => {
     expect(markButton).toBeEnabled();
   });
 
+  it("announces when a saved current mark reuses an existing version and stays quiet on cancellation", async () => {
+    const user = userEvent.setup();
+    const onMark = vi
+      .fn<() => Promise<{ versionId: string; reused: boolean } | null>>()
+      .mockResolvedValueOnce({ versionId: "existing-mark", reused: true })
+      .mockResolvedValueOnce(null);
+    const { rerender } = render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        onClose={vi.fn()}
+        onMark={onMark}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Mark current version" }),
+    );
+    expect(
+      screen.getByText("Already marked. Selected the existing version."),
+    ).toBeInTheDocument();
+
+    rerender(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        onClose={vi.fn()}
+        onMark={onMark}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Mark current version" }),
+    );
+    expect(
+      screen.queryByText("Already marked. Selected the existing version."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("explains when unmarking lets the retention policy remove the version", async () => {
+    const user = userEvent.setup();
+    render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[makeItem({ marked: true })]}
+        onClose={vi.fn()}
+        onSetMarked={vi.fn(async () => ({
+          versionId: "version-1",
+          marked: false,
+          retained: false,
+        }))}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: /More actions for v-001/ }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Unmark version" }));
+    expect(
+      await screen.findByText(/removed by the retention policy/),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the selected target and per-row menu usable in a 50-version list", async () => {
+    const user = userEvent.setup();
+    const items = Array.from({ length: 50 }, (_, index) =>
+      makeItem({
+        versionId: "version-" + (index + 1),
+        sequence: index + 1,
+        summary: "Canvas change " + (index + 1),
+      }),
+    );
+    render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={items}
+        onClose={vi.fn()}
+        onSetMarked={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(screen.getAllByRole("option")).toHaveLength(50);
+    screen.getAllByRole("option")[0]?.focus();
+    await user.keyboard("{End}");
+    const lastRow = screen.getAllByRole("option")[49];
+    expect(lastRow).toHaveFocus();
+    expect(lastRow).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.getByRole("region", { name: "Selected version actions" }),
+    ).toHaveTextContent("v-050 · Canvas change 50");
+    const details = within(
+      screen.getByRole("region", { name: "Selected version actions" }),
+    );
+    expect(details.getByRole("time")).toHaveAttribute(
+      "dateTime",
+      new Date(items[49]!.recordedAt * 1000).toISOString(),
+    );
+    expect(details.getByText(/Automatic/)).toBeInTheDocument();
+
+    await user.click(
+      screen.getAllByRole("button", { name: /More actions for/ })[49]!,
+    );
+    expect(screen.getByRole("menu")).toHaveTextContent(
+      "v-050 · Canvas change 50",
+    );
+    await user.keyboard("{Escape}");
+    expect(
+      screen.getAllByRole("button", { name: /More actions for/ })[49],
+    ).toHaveFocus();
+  });
+
+  it("exposes a compact 300px state and uses only a reliable target summary", async () => {
+    const user = userEvent.setup();
+    const target = makeItem({
+      sequence: 7,
+      summary: "Unreliable raw summary",
+      summaryReliable: false,
+    });
+    const { rerender } = render(
+      <HistoryPanel
+        compact
+        documentId="document-a"
+        fileName="drawing.excalidraw"
+        items={[target]}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onSetMarked={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("complementary")).toHaveAttribute(
+      "data-compact",
+      "true",
+    );
+    const trigger = screen.getByRole("button", {
+      name: "More actions for v-007 · Canvas changed",
+    });
+    await user.click(trigger);
+    const title = within(screen.getByRole("menu")).getByText(
+      "v-007 · Canvas changed",
+    );
+    expect(title).toHaveAttribute("title", "v-007 · Canvas changed");
+    expect(
+      screen.queryByText(/Unreliable raw summary/),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <HistoryPanel
+        compact
+        documentId="document-a"
+        fileName="drawing.excalidraw"
+        items={[target]}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onSetMarked={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", {
+        name: "More actions for v-007 · Canvas changed",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps an open menu bound to its original version and reports when it disappears", async () => {
+    const user = userEvent.setup();
+    const first = makeItem({ versionId: "version-1", sequence: 1 });
+    const second = makeItem({ versionId: "version-2", sequence: 2 });
+    const onSetMarked = vi.fn(async () => undefined);
+    const props = {
+      documentId: "document-a",
+      fileName: "drawing.excalidraw",
+      items: [first, second],
+      onClose: vi.fn(),
+      onSetMarked,
+    };
+    const { rerender } = render(
+      <HistoryPanel {...props} selectedVersionId="version-1" />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /More actions for v-001/ }),
+    );
+    rerender(<HistoryPanel {...props} selectedVersionId="version-2" />);
+    await user.click(screen.getByRole("menuitem", { name: "Mark version" }));
+    expect(onSetMarked).toHaveBeenCalledWith(first, true);
+
+    rerender(
+      <HistoryPanel
+        {...props}
+        items={[second]}
+        selectedVersionId="version-2"
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: /More actions for v-002/ }),
+    );
+    rerender(<HistoryPanel {...props} selectedVersionId="version-2" />);
+    await user.click(
+      screen.getByRole("button", { name: /More actions for v-001/ }),
+    );
+    rerender(
+      <HistoryPanel
+        {...props}
+        items={[second]}
+        selectedVersionId="version-2"
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "This version is no longer available",
+    );
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /More actions for v-002/ }),
+    );
+    rerender(
+      <HistoryPanel
+        {...props}
+        documentId="document-b"
+        items={[second]}
+        selectedVersionId="version-2"
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The history document changed",
+    );
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("focuses a controlled target when its version arrives after the initial load", () => {
+    const item = makeItem({ versionId: "selected-late", sequence: 9 });
+    const { rerender } = render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[]}
+        onClose={vi.fn()}
+        selectedVersionId="selected-late"
+      />,
+    );
+
+    rerender(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[item]}
+        onClose={vi.fn()}
+        selectedVersionId="selected-late"
+      />,
+    );
+
+    expect(screen.getByRole("option")).toHaveFocus();
+  });
+
   it("keeps the panel usable and reports a failed mark inline", async () => {
     const user = userEvent.setup();
     const onMark = vi.fn(async () => {
@@ -331,13 +580,13 @@ describe("HistoryPanel", () => {
     );
 
     const trigger = screen.getByRole("button", {
-      name: "More version actions",
+      name: /More actions for v-001/,
     });
     await user.click(trigger);
     await user.click(screen.getByRole("menuitem", { name: "Delete version" }));
     expect(
-      screen.getByRole("dialog", { name: "Delete version?" }),
-    ).toBeInTheDocument();
+      screen.getByRole("dialog", { name: "Delete v-001?" }),
+    ).toHaveTextContent("Delete the automatic version from history?");
     expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
     expect(onDelete).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: /^Delete$/ }));
@@ -355,7 +604,47 @@ describe("HistoryPanel", () => {
         "Version deleted from history.",
       );
     });
-    expect(trigger).toHaveFocus();
+    expect(
+      screen.getByRole("button", { name: "Close version history" }),
+    ).toHaveFocus();
+  });
+
+  it("closes delete confirmation when the active document changes", async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn(async () => undefined);
+    const first = makeItem();
+    const second = makeItem({ versionId: "version-2", sequence: 2 });
+    const { rerender } = render(
+      <HistoryPanel
+        documentId="document-a"
+        fileName="a.excalidraw"
+        items={[first]}
+        onClose={vi.fn()}
+        onDelete={onDelete}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: /More actions for v-001/ }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Delete version" }));
+    expect(
+      screen.getByRole("dialog", { name: "Delete v-001?" }),
+    ).toBeInTheDocument();
+
+    rerender(
+      <HistoryPanel
+        documentId="document-b"
+        fileName="b.excalidraw"
+        items={[second]}
+        onClose={vi.fn()}
+        onDelete={onDelete}
+      />,
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The history document changed",
+    );
+    expect(onDelete).not.toHaveBeenCalled();
   });
 
   it("reports a failed deletion without changing the selection", async () => {
@@ -373,7 +662,7 @@ describe("HistoryPanel", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "More version actions" }),
+      screen.getAllByRole("button", { name: /More actions for/ })[0]!,
     );
     await user.click(screen.getByRole("menuitem", { name: "Delete version" }));
     await user.click(screen.getByRole("button", { name: /^Delete$/ }));
@@ -408,20 +697,17 @@ describe("HistoryPanel", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "More version actions" }),
+      screen.getAllByRole("button", { name: /More actions for/ })[0]!,
     );
     await user.click(screen.getByRole("menuitem", { name: "Delete version" }));
     await user.click(screen.getByRole("button", { name: /^Delete$/ }));
     expect(onDelete).toHaveBeenCalledWith(
       expect.objectContaining({ versionId: "unavailable-version" }),
     );
-    await user.click(
-      screen.getByRole("button", { name: "More version actions" }),
-    );
     const options = screen.getAllByRole("option");
     await user.click(options[1]);
     await user.click(
-      screen.getByRole("button", { name: "More version actions" }),
+      screen.getAllByRole("button", { name: /More actions for/ })[1]!,
     );
     await user.click(screen.getByRole("menuitem", { name: "Delete version" }));
     await user.click(screen.getByRole("button", { name: /^Delete$/ }));

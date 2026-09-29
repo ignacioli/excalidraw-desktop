@@ -1,5 +1,5 @@
 use excalidraw_desktop_lib::{
-    commands::dto::{HistorySetMarkedRequest, HistorySetMarkedResponse},
+    commands::dto::{HistoryMarkResponse, HistorySetMarkedRequest, HistorySetMarkedResponse},
     commands::error::{ErrorCode, IpcError},
     history::types::{
         validate_cursor, validate_hash, validate_identifier, validate_page_limit,
@@ -20,6 +20,22 @@ fn serialized<T: serde::Serialize>(value: T) -> Value {
 
 #[test]
 fn selected_mark_contract_is_camel_case_and_validated() {
+    assert_eq!(
+        serialized(HistoryMarkResponse {
+            version_id: "version-1".to_owned(),
+            recorded_at: 123,
+            source: HistoryVersionSource::Manual,
+            content_hash: "0".repeat(64),
+            reused: true,
+        }),
+        json!({
+            "versionId": "version-1",
+            "recordedAt": 123,
+            "source": "manual",
+            "contentHash": "0".repeat(64),
+            "reused": true
+        })
+    );
     let request = HistorySetMarkedRequest {
         document: HistoryDocumentLocator::Handle {
             document_id: "document-1".to_owned(),

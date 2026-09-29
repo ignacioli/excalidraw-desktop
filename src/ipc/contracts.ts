@@ -202,8 +202,10 @@ export interface HistoryMarkRequest {
 export interface HistoryMarkResponse {
   versionId: string;
   recordedAt: number;
-  source: "manual";
+  source: HistoryVersionSource;
   contentHash: string;
+  /** True when this document already retained the same complete marked scene. */
+  reused: boolean;
 }
 
 /** Changes whether an existing version is pinned as a manual mark. */
@@ -217,6 +219,8 @@ export interface HistorySetMarkedRequest {
 export interface HistorySetMarkedResponse {
   versionId: string;
   marked: boolean;
+  /** False when unmarking immediately prunes the target from the ordinary pool. */
+  retained: boolean;
 }
 
 export type HistoryReplaceTarget =

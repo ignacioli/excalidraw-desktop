@@ -653,6 +653,30 @@ impl<'store> HistoryRepository<'store> {
         request: PublishSceneRequest,
         assets: Vec<PublishAsset>,
     ) -> Result<PublishedVersion, HistoryRepositoryError> {
+        self.write_scene_with_assets(request, assets, false)
+            .map(|(version, _)| version)
+    }
+
+    /// Mark the complete current scene once per document and content. The
+    /// lookup and insert share a transaction, so concurrent requests cannot
+    /// create two marked rows for the same scene and asset manifest.
+    pub fn mark_current_scene_with_assets(
+        &self,
+        request: PublishSceneRequest,
+        assets: Vec<PublishAsset>,
+    ) -> Result<(PublishedVersion, bool), HistoryRepositoryError> {
+        if request.source != HistoryVersionSource::Manual {
+            return Err(HistoryRepositoryError::UnexpectedProtectedAction);
+        }
+        self.write_scene_with_assets(request, assets, true)
+    }
+
+    fn write_scene_with_assets(
+        &self,
+        request: PublishSceneRequest,
+        assets: Vec<PublishAsset>,
+        reuse_marked: bool,
+    ) -> Result<(PublishedVersion, bool), HistoryRepositoryError> {
         let scene = self
             .store
             .put_scene(&request.scene_bytes, request.schema_version)?;
@@ -664,7 +688,11 @@ impl<'store> HistoryRepository<'store> {
                     .map(|object| (asset.file_id.clone(), object))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        self.publish_with_assets(request.into_version_request(scene), asset_objects)
+        self.publish_with_assets(
+            request.into_version_request(scene),
+            asset_objects,
+            reuse_marked,
+        )
     }
 
     /// Publish metadata for an already-written immutable scene object.
@@ -672,26 +700,38 @@ impl<'store> HistoryRepository<'store> {
         &self,
         request: PublishVersionRequest,
     ) -> Result<PublishedVersion, HistoryRepositoryError> {
-        self.publish_with_assets(request, Vec::new())
+        self.publish_with_assets(request, Vec::new(), false)
+            .map(|(version, _)| version)
     }
 
     fn publish_with_assets(
         &self,
         request: PublishVersionRequest,
         asset_objects: Vec<(String, super::objects::StoredAssetObject)>,
-    ) -> Result<PublishedVersion, HistoryRepositoryError> {
+        reuse_marked: bool,
+    ) -> Result<(PublishedVersion, bool), HistoryRepositoryError> {
         validate_request(&request)?;
         let sequence = i64::try_from(request.sequence)
             .map_err(|_| HistoryRepositoryError::SequenceOverflow(request.sequence))?;
         let source = source_sql(request.source);
         let protected_action = request.protected_action.map(protected_action_sql);
 
-        let evicted_version_ids = self.store.with_mutation(|mutation| {
+        let (evicted_version_ids, reused_version) = self.store.with_mutation(|mutation| {
             self.store
                 .objects()
                 .verify_scene(&request.scene)
                 .map_err(HistoryStoreError::from)?;
-            let (evicted_version_ids, references) = self.store.with_transaction(|transaction| {
+            let (evicted_version_ids, references, reused_version) = self.store.with_transaction(|transaction| {
+                if reuse_marked {
+                    if let Some(existing) = reusable_marked_version(
+                        transaction,
+                        &request.document_id,
+                        &request.scene.hash,
+                        &asset_objects,
+                    )? {
+                        return Ok((Vec::new(), None, Some(existing)));
+                    }
+                }
                 transaction.execute(
                 "INSERT INTO scene_objects
                  (hash, schema_version, codec, raw_length, relative_path, created_at)
@@ -787,17 +827,23 @@ impl<'store> HistoryRepository<'store> {
                 let references = ObjectReferences::from_objects(objects);
 
                 if request.source == HistoryVersionSource::Manual {
-                    return Ok((Vec::new(), references));
+                    return Ok((Vec::new(), Some(references), None));
                 }
                 let evicted = prune_unmarked(transaction, &request.document_id)?;
-                Ok((evicted, references))
+                Ok((evicted, Some(references), None))
             })?;
-            mutation.set_committed_version(request.version_id.clone(), references);
+            if let Some(references) = references {
+                mutation.set_committed_version(request.version_id.clone(), references);
+            }
             for version_id in &evicted_version_ids {
                 mutation.remove_committed_version(version_id);
             }
-            Ok(evicted_version_ids)
+            Ok((evicted_version_ids, reused_version))
         })?;
+
+        if let Some(version) = reused_version {
+            return Ok((version, true));
+        }
 
         #[cfg(feature = "e2e-harness")]
         crate::e2e_harness::history_fault_barrier_from_environment(
@@ -805,17 +851,96 @@ impl<'store> HistoryRepository<'store> {
         )
         .map_err(HistoryRepositoryError::FaultInjected)?;
 
-        Ok(PublishedVersion {
-            version_id: request.version_id,
-            document_id: request.document_id,
-            scene_hash: request.scene.hash,
-            source: request.source,
-            protected_action: request.protected_action,
-            recorded_at: request.recorded_at,
-            sequence: request.sequence,
-            evicted_version_ids,
-        })
+        Ok((
+            PublishedVersion {
+                version_id: request.version_id,
+                document_id: request.document_id,
+                scene_hash: request.scene.hash,
+                source: request.source,
+                protected_action: request.protected_action,
+                recorded_at: request.recorded_at,
+                sequence: request.sequence,
+                evicted_version_ids,
+            },
+            false,
+        ))
     }
+}
+
+fn reusable_marked_version(
+    transaction: &rusqlite::Transaction<'_>,
+    document_id: &str,
+    scene_hash: &str,
+    assets: &[(String, super::objects::StoredAssetObject)],
+) -> Result<Option<PublishedVersion>, rusqlite::Error> {
+    let mut candidates = transaction.prepare(
+        "SELECT id, source, protected_action, recorded_at, sequence
+         FROM history_versions
+         WHERE document_id = ?1 AND scene_hash = ?2 AND marked = 1
+         ORDER BY recorded_at, sequence, id",
+    )?;
+    let candidates = candidates
+        .query_map(rusqlite::params![document_id, scene_hash], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(4)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut expected = assets
+        .iter()
+        .map(|(file_id, asset)| {
+            (
+                file_id.clone(),
+                asset.hash.clone(),
+                asset.mime_type.clone(),
+                asset.byte_length,
+            )
+        })
+        .collect::<Vec<_>>();
+    expected.sort_unstable();
+    for (version_id, source, action, recorded_at, sequence) in candidates {
+        let mut statement = transaction.prepare(
+            "SELECT sdk_file_id, asset_hash, mime_type, byte_length
+             FROM version_assets WHERE version_id = ?1 ORDER BY sdk_file_id",
+        )?;
+        let actual = statement
+            .query_map([&version_id], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })?
+            .collect::<Result<Vec<(String, String, String, i64)>, _>>()?;
+        if actual != expected {
+            continue;
+        }
+        let source = match source.as_str() {
+            "automatic" => HistoryVersionSource::Automatic,
+            "manual" => HistoryVersionSource::Manual,
+            "protected" => HistoryVersionSource::Protected,
+            _ => return Err(rusqlite::Error::InvalidQuery),
+        };
+        let protected_action = match action.as_deref() {
+            None => None,
+            Some("restore") => Some(HistoryProtectedAction::Restore),
+            Some("clear") => Some(HistoryProtectedAction::Clear),
+            Some("import") => Some(HistoryProtectedAction::Import),
+            _ => return Err(rusqlite::Error::InvalidQuery),
+        };
+        let sequence = u64::try_from(sequence).map_err(|_| rusqlite::Error::InvalidQuery)?;
+        return Ok(Some(PublishedVersion {
+            version_id,
+            document_id: document_id.to_owned(),
+            scene_hash: scene_hash.to_owned(),
+            source,
+            protected_action,
+            recorded_at,
+            sequence,
+            evicted_version_ids: Vec::new(),
+        }));
+    }
+    Ok(None)
 }
 
 fn prune_unmarked(

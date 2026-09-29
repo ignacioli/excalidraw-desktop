@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -778,6 +784,151 @@ describe("AppShell", () => {
       command: "versionHistory",
       enabled: true,
     });
+  });
+
+  it("ignores a history list response from the previously active drawing", async () => {
+    nativeRuntimeHarness.enabled = true;
+    const drawingB = createSession(
+      "drawing-b",
+      "B",
+      "/tmp/b.excalidraw",
+      "clean",
+    );
+    const drawingA = createSession(
+      "drawing-a",
+      "A",
+      "/tmp/a.excalidraw",
+      "clean",
+    );
+    setDocumentSessions([drawingB, drawingA]);
+    let resolveA: ((value: unknown) => void) | undefined;
+    const invoker = vi.fn(async (command: string, args?: unknown) => {
+      if (command === "workspace_list" || command === "workspace_recent_list")
+        return [];
+      if (command === "native_menu_set_enabled") return {};
+      if (command === "history_list") {
+        const path = (args as { document: { path: string } }).document.path;
+        if (path === "/tmp/a.excalidraw") {
+          return await new Promise<unknown>((resolve) => {
+            resolveA = resolve;
+          });
+        }
+        return {
+          documentId: "drawing-b",
+          items: [
+            {
+              versionId: "b-version",
+              source: "automatic",
+              marked: false,
+              recordedAt: 1,
+              sequence: 2,
+              contentHash: "b".repeat(64),
+              availability: { status: "available" },
+            },
+          ],
+          listRevision: 1,
+        };
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    render(<AppShell workspaceInvoker={{ invoke: invoker }} />);
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+    nativeMenuHarness.handler?.("versionHistory");
+    await waitFor(() => expect(resolveA).toBeDefined());
+
+    documentManager.store.setState({ activeDocumentId: "drawing-b" });
+    expect(
+      await screen.findByRole("button", { name: /More actions for v-002/ }),
+    ).toBeInTheDocument();
+    await act(async () => {
+      resolveA?.({
+        documentId: "drawing-a",
+        items: [
+          {
+            versionId: "a-version",
+            source: "automatic",
+            marked: false,
+            recordedAt: 1,
+            sequence: 1,
+            contentHash: "a".repeat(64),
+            availability: { status: "available" },
+          },
+        ],
+        listRevision: 1,
+      });
+    });
+    expect(
+      screen.getByRole("button", { name: /More actions for v-002/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /More actions for v-001/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("selects and focuses the existing version returned by a repeated mark", async () => {
+    nativeRuntimeHarness.enabled = true;
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "clean"),
+    ]);
+    vi.spyOn(documentManager, "runDocumentOperation").mockImplementation(
+      async (_documentId, operation) =>
+        operation({
+          documentId: "drawing",
+          path: "/tmp/drawing.excalidraw",
+          baseHash: "drawing-base",
+          sessionGeneration: 0,
+          revision: 0,
+          isCurrent: () => true,
+        }),
+    );
+    const existing = {
+      versionId: "manual-1",
+      source: "manual",
+      marked: true,
+      recordedAt: 1,
+      sequence: 1,
+      contentHash: "a".repeat(64),
+      availability: { status: "available" },
+    };
+    const invoker = vi.fn(async (command: string) => {
+      if (command === "workspace_list" || command === "workspace_recent_list")
+        return [];
+      if (command === "native_menu_set_enabled") return {};
+      if (command === "history_list") {
+        return { documentId: "drawing", items: [existing], listRevision: 1 };
+      }
+      if (command === "history_mark") {
+        return {
+          versionId: existing.versionId,
+          recordedAt: existing.recordedAt,
+          source: existing.source,
+          contentHash: existing.contentHash,
+          reused: true,
+        };
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+
+    const user = userEvent.setup();
+    render(<AppShell workspaceInvoker={{ invoke: invoker }} />);
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+    nativeMenuHarness.handler?.("versionHistory");
+    await screen.findByRole("complementary", { name: "Version History" });
+    await user.click(
+      screen.getByRole("button", { name: "Mark current version" }),
+    );
+
+    expect(
+      await screen.findByText("Already marked. Selected the existing version."),
+    ).toBeInTheDocument();
+    expect(invoker).toHaveBeenCalledWith(
+      "history_mark",
+      expect.objectContaining({
+        document: { kind: "path", path: "/tmp/drawing.excalidraw" },
+      }),
+    );
+    const selected = screen.getByRole("option", { selected: true });
+    expect(selected).toHaveFocus();
   });
 
   it("keeps restore disabled until the selected preview reports a rendered canvas", async () => {

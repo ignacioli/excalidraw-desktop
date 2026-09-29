@@ -285,6 +285,65 @@ export interface HistoryAutomaticJourneyEvidence {
   verify: HistoryAutomaticVerifyEvidence;
 }
 
+export interface HistoryMarkResponseEvidence {
+  versionId: string;
+  recordedAt: number;
+  source: "manual";
+  contentHash: string;
+  reused: boolean;
+}
+
+export interface HistorySetMarkedResponseEvidence {
+  versionId: string;
+  marked: boolean;
+  retained: boolean;
+}
+
+export interface HistoryMarkReuseSeedEvidence {
+  scenario: "history-mark-reuse-seed";
+  processId: number;
+  targetPath: string;
+  documentId: string;
+  historyDatabasePath: string;
+  original: HistoryMarkResponseEvidence;
+  beforeCount: number;
+  afterOriginalCount: number;
+  afterSerialCount: number;
+  afterConcurrentCount: number;
+  serialResponses: HistoryMarkResponseEvidence[];
+  concurrentResponses: HistoryMarkResponseEvidence[];
+  assetSha256: string;
+}
+
+export interface HistoryMarkReuseVerifyEvidence {
+  scenario: "history-mark-reuse-verify";
+  processId: number;
+  targetPath: string;
+  documentId: string;
+  historyDatabasePath: string;
+  originalVersionId: string;
+  originalContentHash: string;
+  originalRecordedAt: number;
+  originalPreviewAssetSha256: string;
+  beforeCount: number;
+  restartResponse: HistoryMarkResponseEvidence;
+  afterRestartCount: number;
+  changedResponse: HistoryMarkResponseEvidence;
+  afterChangedCount: number;
+  otherDocumentId: string;
+  otherTargetPath: string;
+  otherBeforeCount: number;
+  crossDocumentResponse: HistoryMarkResponseEvidence;
+  otherAfterCount: number;
+  unmarkResponse: HistorySetMarkedResponseEvidence;
+  remarkResponse: HistorySetMarkedResponseEvidence;
+}
+
+export interface HistoryMarkReuseJourneyEvidence {
+  seed: HistoryMarkReuseSeedEvidence;
+  verify: HistoryMarkReuseVerifyEvidence;
+}
+
 export interface HistoryRestartRestoreEvidence {
   scenario: "history-restart-restore";
   requestId: string;
@@ -424,6 +483,21 @@ export class HistoryRestartJourneyError extends Error {
       { cause },
     );
     this.name = "HistoryRestartJourneyError";
+  }
+}
+
+export class HistoryMarkReuseJourneyError extends Error {
+  constructor(
+    readonly paths: IsolatedDesktopPaths,
+    readonly evidence: Partial<HistoryMarkReuseJourneyEvidence>,
+    readonly stage: string,
+    cause: unknown,
+  ) {
+    super(
+      `History Mark reuse failed at ${stage}: ${cause instanceof Error ? cause.message : String(cause)}. Evidence retained at ${paths.root}`,
+      { cause },
+    );
+    this.name = "HistoryMarkReuseJourneyError";
   }
 }
 
@@ -1683,6 +1757,72 @@ export async function runTauriHistoryAutomaticJourney(
   }
 }
 
+/** Reopen one isolated HistoryStore in a second native process to verify Mark reuse. */
+export async function runTauriHistoryMarkReuseJourney(): Promise<
+  ReliabilityRun<HistoryMarkReuseJourneyEvidence>
+> {
+  const binary = await resolveDesktopBinary();
+  const paths = await createIsolatedDesktopPaths();
+  let cleaned = false;
+  const cleanup = async (): Promise<void> => {
+    if (cleaned) return;
+    cleaned = true;
+    await cleanupIsolatedDesktopPaths(paths);
+  };
+  const evidence: Partial<HistoryMarkReuseJourneyEvidence> = {};
+  let stage = "seed";
+  try {
+    const seed = await runHistoryRestartProcess(
+      binary,
+      paths,
+      "history-mark-reuse-seed",
+    );
+    evidence.seed = seed;
+    stage = "verify";
+    const verify = await runHistoryRestartProcess(
+      binary,
+      paths,
+      "history-mark-reuse-verify",
+    );
+    evidence.verify = verify;
+    stage = "environment";
+    const filesystem = await statfs(paths.workspace);
+    return {
+      evidence: { seed, verify },
+      environment: {
+        platform: process.platform,
+        architecture: process.arch,
+        filesystemType: String(filesystem.type),
+        binaryPath: binary,
+        binarySha256: sha256(await readFile(binary)),
+        seed: "t056-mark-reuse",
+      },
+      paths,
+      cleanup,
+    };
+  } catch (error) {
+    const failure = new HistoryMarkReuseJourneyError(
+      paths,
+      evidence,
+      stage,
+      error,
+    );
+    try {
+      await writeFile(
+        join(paths.root, "history-mark-reuse-failure.json"),
+        JSON.stringify(
+          { stage, paths, evidence, error: failure.message },
+          null,
+          2,
+        ),
+      );
+    } catch (artifactError) {
+      failure.message += ` (Failure report write also failed: ${String(artifactError)})`;
+    }
+    throw failure;
+  }
+}
+
 /**
  * Run a recovery acceptance scenario implemented by the test-only native
  * harness. The helper reports native process errors directly instead of
@@ -1791,6 +1931,8 @@ async function runScenarioProcess(
 }
 
 type HistoryRestartProcessScenario =
+  | "history-mark-reuse-seed"
+  | "history-mark-reuse-verify"
   | "history-automatic-seed"
   | "history-automatic-verify"
   | "history-restart-seed"
@@ -1799,6 +1941,18 @@ type HistoryRestartProcessScenario =
   | "history-restart-evict"
   | "history-restart-eviction-fault-probe";
 
+async function runHistoryRestartProcess(
+  binary: string,
+  paths: IsolatedDesktopPaths,
+  scenario: "history-mark-reuse-seed",
+  overrides?: Readonly<NodeJS.ProcessEnv>,
+): Promise<HistoryMarkReuseSeedEvidence>;
+async function runHistoryRestartProcess(
+  binary: string,
+  paths: IsolatedDesktopPaths,
+  scenario: "history-mark-reuse-verify",
+  overrides?: Readonly<NodeJS.ProcessEnv>,
+): Promise<HistoryMarkReuseVerifyEvidence>;
 async function runHistoryRestartProcess(
   binary: string,
   paths: IsolatedDesktopPaths,
@@ -1854,6 +2008,8 @@ async function runHistoryRestartProcess(
   | HistoryRestartVerifyEvidence
   | HistoryRestartEvictEvidence
   | HistoryRestartEvictionFaultEvidence
+  | HistoryMarkReuseSeedEvidence
+  | HistoryMarkReuseVerifyEvidence
 > {
   const child = spawn(binary, [RELIABILITY_SCENARIO_FLAG, scenario], {
     env: isolatedDesktopEnvironment(paths, overrides),
@@ -1918,7 +2074,9 @@ async function runHistoryRestartProcess(
     | HistoryRestartSeedEvidence
     | HistoryRestartRestoreEvidence
     | HistoryRestartVerifyEvidence
-    | HistoryRestartEvictEvidence;
+    | HistoryRestartEvictEvidence
+    | HistoryMarkReuseSeedEvidence
+    | HistoryMarkReuseVerifyEvidence;
 }
 
 async function waitForHistoryFaultReady(

@@ -29,8 +29,9 @@ use crate::{
         dto::{
             CheckpointReason, CheckpointRequest, CloseDocumentMode, CloseDocumentRequest,
             ConflictResolution, ExpectedOpenDocument, HistoryDocumentLocator, HistoryListRequest,
-            HistoryMarkRequest, HistoryOperationStatusRequest, HistoryPreviewRequest,
-            HistoryReplaceRequest, HistoryReplaceTarget, PathRequest, RecoveryAction,
+            HistoryMarkRequest, HistoryMarkResponse, HistoryOperationStatusRequest,
+            HistoryPreviewRequest, HistoryReplaceRequest, HistoryReplaceTarget,
+            HistorySetMarkedRequest, HistorySetMarkedResponse, PathRequest, RecoveryAction,
             RecoveryApplyRequest, ResolveConflictRequest, SaveDraftRequest, WorkspaceAddRequest,
             WorkspaceEntryDeletePreflightResult, WorkspaceEntryDeleteRequest,
             WorkspaceEntryPathRequest, WorkspaceEntryRenameRequest, WorkspaceRemoveRequest,
@@ -705,6 +706,10 @@ async fn run_scenario(scenario: &str, root: &Path) -> Result<String, String> {
         }
         "history-automatic-seed" => serialize_evidence(run_history_automatic_seed(root).await?),
         "history-automatic-verify" => serialize_evidence(run_history_automatic_verify(root).await?),
+        "history-mark-reuse-seed" => serialize_evidence(run_history_mark_reuse_seed(root).await?),
+        "history-mark-reuse-verify" => {
+            serialize_evidence(run_history_mark_reuse_verify(root).await?)
+        }
         "concurrent-checkpoints" => serialize_evidence(run_concurrent_checkpoints(root).await?),
         "disk-full-checkpoint" => serialize_evidence(run_disk_full_checkpoint(root).await?),
         "atomic-write-kill" => serialize_evidence(run_atomic_write_kill(root)?),
@@ -3558,6 +3563,378 @@ async fn open_history_restart_context(root: &Path) -> Result<HistoryRestartConte
         query,
         replacement,
         workspace,
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryMarkReuseSeedEvidence {
+    scenario: &'static str,
+    process_id: u32,
+    target_path: String,
+    document_id: String,
+    history_database_path: String,
+    original: HistoryMarkResponse,
+    before_count: usize,
+    after_original_count: usize,
+    after_serial_count: usize,
+    after_concurrent_count: usize,
+    serial_responses: Vec<HistoryMarkResponse>,
+    concurrent_responses: Vec<HistoryMarkResponse>,
+    asset_sha256: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryMarkReuseVerifyEvidence {
+    scenario: &'static str,
+    process_id: u32,
+    target_path: String,
+    document_id: String,
+    history_database_path: String,
+    original_version_id: String,
+    original_content_hash: String,
+    original_recorded_at: i64,
+    original_preview_asset_sha256: String,
+    before_count: usize,
+    restart_response: HistoryMarkResponse,
+    after_restart_count: usize,
+    changed_response: HistoryMarkResponse,
+    after_changed_count: usize,
+    other_document_id: String,
+    other_target_path: String,
+    other_before_count: usize,
+    cross_document_response: HistoryMarkResponse,
+    other_after_count: usize,
+    unmark_response: HistorySetMarkedResponse,
+    remark_response: HistorySetMarkedResponse,
+}
+
+async fn mark_reuse_current(
+    context: &HistoryRestartContext,
+    target: &Path,
+    request_id: &str,
+    scene_json: &str,
+) -> Result<HistoryMarkResponse, String> {
+    context
+        .replacement
+        .mark(HistoryMarkRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(target),
+            },
+            request_id: request_id.to_owned(),
+            session_generation: 1,
+            revision: 1,
+            current_scene_json: scene_json.to_owned(),
+        })
+        .await
+        .map_err(|error| format!("history mark {request_id} failed: {error:?}"))
+}
+
+fn require_reused_mark(
+    response: &HistoryMarkResponse,
+    original: &HistoryMarkResponse,
+    phase: &str,
+) -> Result<(), String> {
+    if !response.reused
+        || response.version_id != original.version_id
+        || response.content_hash != original.content_hash
+        || response.recorded_at != original.recorded_at
+        || response.source != original.source
+    {
+        return Err(format!(
+            "{phase} did not reuse the original complete marked version"
+        ));
+    }
+    Ok(())
+}
+
+async fn run_history_mark_reuse_seed(root: &Path) -> Result<HistoryMarkReuseSeedEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target = context.workspace.join("history-mark-reuse.excalidraw");
+    let (scene_json, asset, asset_sha256) = history_restart_scene("M", "标记原版");
+    fs::write(&target, &scene_json)
+        .map_err(|error| format!("failed to write mark-reuse target: {error}"))?;
+    let target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to canonicalize mark-reuse target: {error}"))?;
+    let asset_directory = context.workspace.join(".excalidraw_assets");
+    fs::create_dir_all(&asset_directory)
+        .map_err(|error| format!("failed to create mark-reuse asset directory: {error}"))?;
+    fs::write(asset_directory.join(&asset_sha256), &asset)
+        .map_err(|error| format!("failed to write mark-reuse asset: {error}"))?;
+    let identity = context
+        .store
+        .resolve_document_identity_for_open(&target, 1)
+        .map_err(|error| format!("failed to persist mark-reuse identity: {error}"))?;
+    let before_count = history_document_version_count(&context.store, &identity.document_id)?;
+    if before_count != 0 {
+        return Err(format!(
+            "mark-reuse seed root is not empty: {before_count} versions"
+        ));
+    }
+
+    let original =
+        mark_reuse_current(&context, &target, "mark-reuse-original", &scene_json).await?;
+    let after_original_count =
+        history_document_version_count(&context.store, &identity.document_id)?;
+    if original.reused || after_original_count != 1 {
+        return Err("first Mark current did not publish exactly one version".to_owned());
+    }
+    let mut serial_responses = Vec::with_capacity(10);
+    for index in 0..10 {
+        let response = mark_reuse_current(
+            &context,
+            &target,
+            &format!("mark-reuse-serial-{index:02}"),
+            &scene_json,
+        )
+        .await?;
+        require_reused_mark(&response, &original, "serial Mark current")?;
+        serial_responses.push(response);
+    }
+    let after_serial_count = history_document_version_count(&context.store, &identity.document_id)?;
+    if after_serial_count != 1 {
+        return Err(format!(
+            "serial reuse added history rows: {after_serial_count}"
+        ));
+    }
+    let (first, second) = tokio::join!(
+        mark_reuse_current(&context, &target, "mark-reuse-concurrent-1", &scene_json),
+        mark_reuse_current(&context, &target, "mark-reuse-concurrent-2", &scene_json),
+    );
+    let concurrent_responses = vec![first?, second?];
+    for response in &concurrent_responses {
+        require_reused_mark(response, &original, "concurrent Mark current")?;
+    }
+    let after_concurrent_count =
+        history_document_version_count(&context.store, &identity.document_id)?;
+    if after_concurrent_count != 1 {
+        return Err(format!(
+            "concurrent reuse added history rows: {after_concurrent_count}"
+        ));
+    }
+    Ok(HistoryMarkReuseSeedEvidence {
+        scenario: "history-mark-reuse-seed",
+        process_id: std::process::id(),
+        target_path: path_string(&target),
+        document_id: identity.document_id,
+        history_database_path: path_string(context.store.database_path()),
+        original,
+        before_count,
+        after_original_count,
+        after_serial_count,
+        after_concurrent_count,
+        serial_responses,
+        concurrent_responses,
+        asset_sha256,
+    })
+}
+
+async fn run_history_mark_reuse_verify(
+    root: &Path,
+) -> Result<HistoryMarkReuseVerifyEvidence, String> {
+    let context = open_history_restart_context(root).await?;
+    let target = context
+        .workspace
+        .join("history-mark-reuse.excalidraw")
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve mark-reuse verify target: {error}"))?;
+    let identity = context
+        .store
+        .load_active_document_identity(&path_string(&target))
+        .map_err(|error| format!("failed to load mark-reuse identity: {error}"))?
+        .ok_or_else(|| "mark-reuse document identity is missing after restart".to_owned())?;
+    let (scene_json, _, asset_sha256) = history_restart_scene("M", "标记原版");
+    let asset_path = context
+        .workspace
+        .join(".excalidraw_assets")
+        .join(asset_sha256);
+    if !asset_path.is_file() {
+        return Err("mark-reuse source image is missing after restart".to_owned());
+    }
+    let (original_version_id, original_content_hash, original_recorded_at) = context
+        .store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT id, scene_hash, recorded_at FROM history_versions
+                 WHERE document_id = ?1 AND source = 'manual' AND marked = 1
+                 ORDER BY recorded_at, sequence, id LIMIT 1",
+                [&identity.document_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
+                },
+            )
+        })
+        .map_err(|error| format!("failed to read original marked version: {error}"))?;
+    let before_count = history_document_version_count(&context.store, &identity.document_id)?;
+    if before_count != 1 {
+        return Err(format!(
+            "fresh-process mark-reuse count drifted: {before_count}"
+        ));
+    }
+    let restart_response =
+        mark_reuse_current(&context, &target, "mark-reuse-after-restart", &scene_json).await?;
+    if !restart_response.reused
+        || restart_response.version_id != original_version_id
+        || restart_response.content_hash != original_content_hash
+        || restart_response.recorded_at != original_recorded_at
+    {
+        return Err("fresh-process Mark current changed original version identity".to_owned());
+    }
+    let after_restart_count =
+        history_document_version_count(&context.store, &identity.document_id)?;
+    if after_restart_count != before_count {
+        return Err("fresh-process Mark current added a duplicate version".to_owned());
+    }
+    let preview = context
+        .query
+        .preview(HistoryPreviewRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            version_id: original_version_id.clone(),
+        })
+        .await
+        .map_err(|error| format!("original mark preview after restart failed: {error:?}"))?;
+    let original_preview_asset_sha256 = scene_asset_hash(&preview.scene)?;
+    if original_preview_asset_sha256 != sha256(&history_restart_asset(false)) {
+        return Err("original marked image changed across process restart".to_owned());
+    }
+
+    let (changed_scene, _, _) = history_restart_scene("N", "变更后的内容");
+    let changed_response =
+        mark_reuse_current(&context, &target, "mark-reuse-changed", &changed_scene).await?;
+    let after_changed_count =
+        history_document_version_count(&context.store, &identity.document_id)?;
+    if changed_response.reused
+        || changed_response.version_id == original_version_id
+        || after_changed_count != before_count + 1
+    {
+        return Err("changed scene did not publish exactly one new manual version".to_owned());
+    }
+
+    let other_target = context
+        .workspace
+        .join("history-mark-reuse-other.excalidraw");
+    fs::write(&other_target, &scene_json)
+        .map_err(|error| format!("failed to write second mark-reuse document: {error}"))?;
+    let other_target = other_target
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve second mark-reuse document: {error}"))?;
+    let other_identity = context
+        .store
+        .resolve_document_identity_for_open(&other_target, 1)
+        .map_err(|error| format!("failed to persist second document identity: {error}"))?;
+    if other_identity.document_id == identity.document_id {
+        return Err("second document inherited first document identity".to_owned());
+    }
+    let other_before_count =
+        history_document_version_count(&context.store, &other_identity.document_id)?;
+    let cross_document_response = mark_reuse_current(
+        &context,
+        &other_target,
+        "mark-reuse-other-document",
+        &scene_json,
+    )
+    .await?;
+    let other_after_count =
+        history_document_version_count(&context.store, &other_identity.document_id)?;
+    if other_before_count != 0
+        || cross_document_response.reused
+        || cross_document_response.version_id == original_version_id
+        || other_after_count != 1
+    {
+        return Err("same content in another document was incorrectly reused".to_owned());
+    }
+
+    let unmark_response = context
+        .replacement
+        .set_marked(HistorySetMarkedRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id: "mark-reuse-row-unmark".to_owned(),
+            version_id: original_version_id.clone(),
+            marked: false,
+        })
+        .await
+        .map_err(|error| format!("row Unmark after restart failed: {error:?}"))?;
+    if unmark_response.version_id != original_version_id
+        || unmark_response.marked
+        || !unmark_response.retained
+    {
+        return Err("row Unmark response did not retain the target version".to_owned());
+    }
+    let remark_response = context
+        .replacement
+        .set_marked(HistorySetMarkedRequest {
+            document: HistoryDocumentLocator::Path {
+                path: path_string(&target),
+            },
+            request_id: "mark-reuse-row-remark".to_owned(),
+            version_id: original_version_id.clone(),
+            marked: true,
+        })
+        .await
+        .map_err(|error| format!("row Mark after restart failed: {error:?}"))?;
+    if remark_response.version_id != original_version_id
+        || !remark_response.marked
+        || !remark_response.retained
+    {
+        return Err("row Mark response did not retain the target version".to_owned());
+    }
+    let (persisted_hash, persisted_at, persisted_source, persisted_marked) = context
+        .store
+        .with_connection(|connection| {
+            connection.query_row(
+                "SELECT scene_hash, recorded_at, source, marked FROM history_versions
+                 WHERE id = ?1 AND document_id = ?2",
+                rusqlite::params![&original_version_id, &identity.document_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, bool>(3)?,
+                    ))
+                },
+            )
+        })
+        .map_err(|error| format!("failed to read row Mark result: {error}"))?;
+    if persisted_hash != original_content_hash
+        || persisted_at != original_recorded_at
+        || persisted_source != "manual"
+        || !persisted_marked
+    {
+        return Err("row Mark/Unmark changed historical content or source".to_owned());
+    }
+    Ok(HistoryMarkReuseVerifyEvidence {
+        scenario: "history-mark-reuse-verify",
+        process_id: std::process::id(),
+        target_path: path_string(&target),
+        document_id: identity.document_id,
+        history_database_path: path_string(context.store.database_path()),
+        original_version_id,
+        original_content_hash,
+        original_recorded_at,
+        original_preview_asset_sha256,
+        before_count,
+        restart_response,
+        after_restart_count,
+        changed_response,
+        after_changed_count,
+        other_document_id: other_identity.document_id,
+        other_target_path: path_string(&other_target),
+        other_before_count,
+        cross_document_response,
+        other_after_count,
+        unmark_response,
+        remark_response,
     })
 }
 

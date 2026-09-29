@@ -221,8 +221,8 @@ generation/revision 必须是非负整数；hash 必须是 64 位小写 SHA-256 
 |------|------|------|
 | `history_list` | `{ document; cursor?; limit? }` | `documentId`、不含 scene bytes 的版本 metadata、`nextCursor?`、`listRevision`、`pendingIssue?` |
 | `history_preview` | `{ document; versionId }` | 后端严格 hydration 后返回 `{ versionId; scene }`；不写 current file 或 draft |
-| `history_mark` | `{ document; requestId; sessionGeneration; revision; currentSceneJson }` | 持久发布点击时完整场景后返回 `{ versionId; recordedAt; source: "manual"; contentHash }`；manual 记录不进入 automatic/protected 最新 20 条池 |
-| `history_set_marked` | `{ document; requestId; versionId; marked }` | 幂等设置既有版本的 manual mark 状态；返回 `{ versionId; marked }`。`HistoryVersionItem.marked` 是列表中的权威状态；缺失版本返回 `HISTORY_RESOURCE_MISSING`，同一 requestId 冲突返回 `HISTORY_STALE_DOCUMENT`，保护操作占用时返回 `HISTORY_BUSY`，store 故障返回 `HISTORY_UNAVAILABLE` |
+| `history_mark` | `{ document; requestId; sessionGeneration; revision; currentSceneJson }` | 同文档已有完整场景及图片映射相同的 marked 版本时复用它，否则持久发布新 manual 记录；返回 `{ versionId; recordedAt; source: "automatic" \| "manual" \| "protected"; contentHash; reused }`，复用时保留原版本身份、来源与时间。manual mark 不进入非手动最新 20 条池 |
+| `history_set_marked` | `{ document; requestId; versionId; marked }` | 幂等设置既有版本的 manual mark 状态；返回 `{ versionId; marked; retained }`。`retained=false` 表示 Unmark 后目标已按普通保留规则清理，前端不得继续指向它。`HistoryVersionItem.marked` 是列表中的权威状态；缺失版本返回 `HISTORY_RESOURCE_MISSING`，同一 requestId 冲突返回 `HISTORY_STALE_DOCUMENT`，保护操作占用时返回 `HISTORY_BUSY`，store 故障返回 `HISTORY_UNAVAILABLE` |
 | `history_replace` | `{ document; requestId; sessionGeneration; revision; expectedBaseHash; currentSceneJson; target }` | `target` 为 `restore(versionId)`、`clear` 或 `import(candidateSceneJson)`；返回 `completed` 或 `pendingReconciliation` |
 | `history_operation_status` | `{ document; requestId }` | 只查询既有操作；返回 state、`replacementCommitted: boolean \| null` 和完成时的 adoption payload |
 | `history_delete` | `{ document; requestId; versionId }` | 在文档 history-operation lease 下删除一条语义版本；返回 `{ deletedVersionId }`；同一 `requestId` 重试幂等，活动操作引用的版本返回 `HISTORY_BUSY` |
