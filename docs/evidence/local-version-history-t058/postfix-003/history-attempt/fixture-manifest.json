@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 2,
+  "fixtureVersion": "004-history-capture-v1",
+  "fixtureId": "004-history-capture-v1",
+  "workspaceRoot": "/private/tmp/t048-postfix.z0H7yJ/history-run/fixture/workspace",
+  "screens": [
+    {
+      "gateId": "HISTORY-01",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HISTORY-02",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HISTORY-03",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HISTORY-04",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HISTORY-05",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HISTORY-06",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HISTORY-ERROR",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HISTORY-CONFLICT",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HISTORY-PENDING",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HISTORY-UNAVAILABLE",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HISTORY-FOCUS",
+      "preparationMode": "operator-assisted"
+    },
+    {
+      "gateId": "HISTORY-REDUCED-MOTION",
+      "preparationMode": "operator-assisted"
+    }
+  ],
+  "files": [
+    {
+      "path": "native-entrypoints/HISTORY-01/004-history-launch.excalidraw",
+      "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009"
+    },
+    {
+      "path": "native-entrypoints/HISTORY-02/004-history-launch.excalidraw",
+      "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009"
+    },
+    {
+      "path": "native-entrypoints/HISTORY-03/004-history-launch.excalidraw",
+      "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009"
+    },
+    {
+      "path": "native-entrypoints/HISTORY-04/004-history-launch.excalidraw",
+      "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009"
+    },
+    {
+      "path": "native-entrypoints/HISTORY-05/004-history-launch.excalidraw",
+      "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009"
+    },
+    {
+      "path": "native-entrypoints/HISTORY-06/004-history-launch.excalidraw",
+      "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009"
+    },
+    {
+      "path": "native-entrypoints/HISTORY-ERROR/004-history-launch.excalidraw",
+      "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009"
+    },
+    {
+      "path": "native-entrypoints/HISTORY-CONFLICT/004-history-launch.excalidraw",
+      "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009"
+    },
+    {
+      "path": "native-entrypoints/HISTORY-PENDING/004-history-launch.excalidraw",
+      "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009"
+    },
+    {
+      "path": "native-entrypoints/HISTORY-UNAVAILABLE/004-history-launch.excalidraw",
+      "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009"
+    },
+    {
+      "path": "native-entrypoints/HISTORY-FOCUS/004-history-launch.excalidraw",
+      "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009"
+    },
+    {
+      "path": "native-entrypoints/HISTORY-REDUCED-MOTION/004-history-launch.excalidraw",
+      "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009"
+    }
+  ]
+}

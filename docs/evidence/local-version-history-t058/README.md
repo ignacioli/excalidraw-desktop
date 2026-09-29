@@ -1,5 +1,9 @@
 # T058 原生入口验证
 
+## 最新状态：修复后新包入口 PASS，T048 视觉仍 BLOCKED（2026-09-29）
+
+History Sidebar 与只读 Preview 修复后的精确包复核见 [`postfix-003/`](postfix-003/README.md)：产品 `9c1e6a3` 的新 production `.app` 原生入口 13/13 PASS。随后的 HISTORY-01 窗口采集在操作员确认后因 CoreGraphics 唯一窗口查找失败而 BLOCKED，没有截图或人工视觉 verdict。下文 `final-pass-002/` 是前一包的独立历史结果。
+
 ## 最新状态：PASS（2026-09-28）
 
 最终 collection `final-pass-002/` 绑定产品提交 `28854d5ef75c87f4aafb778ea03586f026061a7b`，macOS 原生入口验证 13/13 项 PASS。环境为 macOS 26.6.2、arm64、显示 backing scale 2。验证覆盖归档的 package manifest、候选 `.app` 身份与来源、T023b 隔离 profile、原生 Version History 菜单层级/文案/可用状态、1280×760 窗口、菜单路由，以及正常打开 fixture 未改变。manifest 由构建后包检查生成，本轮没有运行独立的 `seal` 命令。
