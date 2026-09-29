@@ -1,6 +1,9 @@
-import { Excalidraw } from "@excalidraw/excalidraw";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { exportToSvg } from "@excalidraw/excalidraw";
+import type {
+  ExcalidrawElement,
+  NonDeletedExcalidrawElement,
+} from "@excalidraw/excalidraw/element/types";
+import { useEffect, useRef, useState } from "react";
 import type { ResolvedColorScheme } from "../app/theme/types";
 import type { SceneSnapshot } from "../editor/sceneSerializer";
 import { createReadonlyPreviewInitialData } from "./previewAdapter";
@@ -17,10 +20,15 @@ type PreparedPreview = {
   data: Awaited<ReturnType<typeof createReadonlyPreviewInitialData>>;
 };
 
+type RenderedPreview = {
+  source: SceneSnapshot;
+  url: string;
+};
+
 /**
- * Render a history scene in its own Excalidraw instance. The component does
- * not subscribe to scene changes and deliberately does not expose an editor
- * adapter, save path, or destructive SDK action.
+ * Render a history scene as a static SVG using Excalidraw's public export API.
+ * It deliberately does not mount a second interactive SDK editor, which
+ * would also bring its own MainMenu into the narrow history drawer.
  */
 export function ReadonlyPreviewCanvas({
   scene,
@@ -29,25 +37,23 @@ export function ReadonlyPreviewCanvas({
   onError,
 }: ReadonlyPreviewCanvasProps) {
   const [prepared, setPrepared] = useState<PreparedPreview | null>(null);
-  const [preparationError, setPreparationError] = useState<{
+  const [renderError, setRenderError] = useState<{
     source: SceneSnapshot;
     error: unknown;
   } | null>(null);
-  const activeSceneRef = useRef(scene);
-  const onRenderedRef = useRef(onRendered);
-  const onErrorRef = useRef(onError);
+  const [preview, setPreview] = useState<RenderedPreview | null>(null);
   const [renderedScene, setRenderedScene] = useState<SceneSnapshot | null>(
     null,
   );
-
-  useEffect(() => {
-    onRenderedRef.current = onRendered;
-    onErrorRef.current = onError;
-  }, [onError, onRendered]);
+  const activeSceneRef = useRef(scene);
+  const onRenderedRef = useRef(onRendered);
+  const onErrorRef = useRef(onError);
 
   useEffect(() => {
     activeSceneRef.current = scene;
-  }, [scene]);
+    onRenderedRef.current = onRendered;
+    onErrorRef.current = onError;
+  }, [onError, onRendered, scene]);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,12 +61,13 @@ export function ReadonlyPreviewCanvas({
     void createReadonlyPreviewInitialData(scene)
       .then((data) => {
         if (cancelled) return;
+        setRenderError(null);
         setPrepared({ source: scene, data });
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setPrepared(null);
-        setPreparationError({ source: scene, error });
+        setPreview(null);
+        setRenderError({ source: scene, error });
         onErrorRef.current?.(error);
       });
 
@@ -69,34 +76,52 @@ export function ReadonlyPreviewCanvas({
     };
   }, [scene]);
 
-  const handleApiReady = useCallback(
-    (api: ExcalidrawImperativeAPI) => {
-      void api;
-      const complete = () => {
-        if (activeSceneRef.current !== scene) return;
-        setRenderedScene(scene);
-        onRenderedRef.current?.();
-      };
-      if (typeof requestAnimationFrame === "function") {
-        requestAnimationFrame(complete);
-      } else {
-        setTimeout(complete, 0);
-      }
-    },
-    [scene],
-  );
+  useEffect(() => {
+    if (prepared?.source !== scene) return;
 
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    void exportToSvg({
+      elements: prepared.data.elements.filter(isNonDeletedElement),
+      appState: { ...prepared.data.appState, theme },
+      files: prepared.data.files,
+      renderEmbeddables: false,
+      exportPadding: 0,
+    })
+      .then((svg: SVGSVGElement) => {
+        if (cancelled || activeSceneRef.current !== scene) return;
+        objectUrl = URL.createObjectURL(
+          new Blob([svg.outerHTML], { type: "image/svg+xml;charset=utf-8" }),
+        );
+        setPreview({ source: scene, url: objectUrl });
+      })
+      .catch((error: unknown) => {
+        if (cancelled || activeSceneRef.current !== scene) return;
+        setPreview(null);
+        setRenderError({ source: scene, error });
+        onErrorRef.current?.(error);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl !== null) URL.revokeObjectURL(objectUrl);
+    };
+  }, [prepared, scene, theme]);
+
+  const sceneRenderError =
+    renderError?.source === scene ? renderError.error : null;
   const isPreparedForScene = prepared?.source === scene;
-  const scenePreparationError =
-    preparationError?.source === scene ? preparationError.error : null;
-  if (scenePreparationError !== null && !isPreparedForScene) {
+  const previewUrl = preview?.source === scene ? preview.url : null;
+
+  if (sceneRenderError !== null) {
     return (
       <p className="history-preview-placeholder" role="alert">
         This version could not be rendered safely.
       </p>
     );
   }
-  if (!isPreparedForScene || prepared === null) {
+  if (!isPreparedForScene || previewUrl === null) {
     return (
       <p className="history-preview-placeholder" role="status">
         Preparing version preview…
@@ -106,33 +131,37 @@ export function ReadonlyPreviewCanvas({
 
   return (
     <div
-      aria-label="Read-only version canvas"
       className="readonly-preview-canvas"
       data-preview-rendered={renderedScene === scene ? "true" : "false"}
       style={{ height: "100%", width: "100%" }}
     >
-      <Excalidraw
-        aiEnabled={false}
-        autoFocus={false}
-        excalidrawAPI={handleApiReady}
-        initialData={prepared.data}
-        theme={theme}
-        viewModeEnabled
-        handleKeyboardGlobally={false}
-        UIOptions={{
-          canvasActions: {
-            changeViewBackgroundColor: false,
-            clearCanvas: false,
-            export: false,
-            loadScene: false,
-            saveAsImage: false,
-            saveToActiveFile: false,
-            toggleTheme: false,
-          },
-          tools: { image: false },
+      <img
+        alt="Read-only version canvas"
+        onError={() => {
+          if (activeSceneRef.current !== scene || preview?.source !== scene) {
+            return;
+          }
+          const error = new Error("The static version preview could not load.");
+          URL.revokeObjectURL(previewUrl);
+          setPreview(null);
+          setRenderError({ source: scene, error });
+          onErrorRef.current?.(error);
         }}
-        validateEmbeddable={false}
+        onLoad={() => {
+          if (activeSceneRef.current !== scene || preview?.source !== scene) {
+            return;
+          }
+          setRenderedScene(scene);
+          onRenderedRef.current?.();
+        }}
+        src={previewUrl}
       />
     </div>
   );
+}
+
+function isNonDeletedElement(
+  element: ExcalidrawElement,
+): element is NonDeletedExcalidrawElement {
+  return !element.isDeleted;
 }

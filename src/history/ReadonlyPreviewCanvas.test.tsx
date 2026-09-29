@@ -1,84 +1,63 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { BinaryFileData } from "@excalidraw/excalidraw/types";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SceneSnapshot } from "../editor/sceneSerializer";
 import { ReadonlyPreviewCanvas } from "./ReadonlyPreviewCanvas";
 
-vi.mock("@excalidraw/excalidraw", () => ({
-  Excalidraw: (props: {
-    initialData: { appState?: { viewModeEnabled?: boolean } };
-    viewModeEnabled?: boolean;
-    onChange?: unknown;
-    excalidrawAPI?: (api: ExcalidrawImperativeAPI) => void;
-    UIOptions?: {
-      canvasActions?: Record<string, unknown>;
-      tools?: Record<string, unknown>;
-    };
-  }) => {
-    props.excalidrawAPI?.({} as ExcalidrawImperativeAPI);
-    return (
-      <div
-        data-testid="readonly-excalidraw"
-        data-clear={String(props.UIOptions?.canvasActions?.clearCanvas)}
-        data-export={String(props.UIOptions?.canvasActions?.export)}
-        data-load={String(props.UIOptions?.canvasActions?.loadScene)}
-        data-on-change={String(props.onChange !== undefined)}
-        data-save={String(props.UIOptions?.canvasActions?.saveToActiveFile)}
-        data-view-mode={String(
-          props.viewModeEnabled && props.initialData.appState?.viewModeEnabled,
-        )}
-      />
-    );
-  },
-}));
+const { exportToSvg } = vi.hoisted(() => ({ exportToSvg: vi.fn() }));
+
+vi.mock("@excalidraw/excalidraw", () => ({ exportToSvg }));
 
 describe("ReadonlyPreviewCanvas", () => {
-  it("hydrates assets before mounting a separate read-only Excalidraw instance", async () => {
-    const onRendered = vi.fn();
+  beforeEach(() => {
+    exportToSvg.mockReset();
+    exportToSvg.mockImplementation(async () => {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 120 100");
+      return svg;
+    });
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:history-preview");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+  });
 
-    render(
+  it("renders a static read-only image without mounting an interactive SDK editor", async () => {
+    const onRendered = vi.fn();
+    const source = scene();
+
+    const view = render(
       <ReadonlyPreviewCanvas
         onRendered={onRendered}
-        scene={scene()}
-        theme="light"
+        scene={source}
+        theme="dark"
       />,
     );
 
     expect(screen.getByRole("status")).toHaveTextContent(
       "Preparing version preview",
     );
-    await waitFor(() =>
-      expect(screen.getByTestId("readonly-excalidraw")).toBeInTheDocument(),
+    const image = await screen.findByRole("img", {
+      name: "Read-only version canvas",
+    });
+    expect(image).toHaveAttribute("src", "blob:history-preview");
+    expect(view.container.querySelector(".excalidraw")).not.toBeInTheDocument();
+    expect(view.container.querySelector("[role=menu]")).not.toBeInTheDocument();
+    expect(exportToSvg).toHaveBeenCalledWith(
+      expect.objectContaining({
+        elements: source.elements,
+        appState: expect.objectContaining({ theme: "dark" }),
+        files: {},
+        renderEmbeddables: false,
+        exportPadding: 0,
+      }),
     );
-    expect(screen.getByTestId("readonly-excalidraw")).toHaveAttribute(
-      "data-view-mode",
+
+    fireEvent.load(image);
+    await waitFor(() => expect(onRendered).toHaveBeenCalledTimes(1));
+    expect(image.parentElement).toHaveAttribute(
+      "data-preview-rendered",
       "true",
     );
-    expect(screen.getByTestId("readonly-excalidraw")).toHaveAttribute(
-      "data-on-change",
-      "false",
-    );
-    expect(screen.getByTestId("readonly-excalidraw")).toHaveAttribute(
-      "data-clear",
-      "false",
-    );
-    expect(screen.getByTestId("readonly-excalidraw")).toHaveAttribute(
-      "data-export",
-      "false",
-    );
-    expect(screen.getByTestId("readonly-excalidraw")).toHaveAttribute(
-      "data-load",
-      "false",
-    );
-    expect(screen.getByTestId("readonly-excalidraw")).toHaveAttribute(
-      "data-save",
-      "false",
-    );
-    await waitFor(() => expect(onRendered).toHaveBeenCalled());
-    expect(
-      screen.getByTestId("readonly-excalidraw").parentElement,
-    ).toHaveAttribute("data-preview-rendered", "true");
   });
 
   it("ignores a stale preparation when the selected version changes", async () => {
@@ -101,10 +80,14 @@ describe("ReadonlyPreviewCanvas", () => {
       />,
     );
 
-    await waitFor(() =>
-      expect(screen.getByTestId("readonly-excalidraw")).toBeInTheDocument(),
-    );
+    const image = await screen.findByRole("img", {
+      name: "Read-only version canvas",
+    });
+    fireEvent.load(image);
     await waitFor(() => expect(onRendered).toHaveBeenCalledTimes(1));
+    expect(exportToSvg).toHaveBeenLastCalledWith(
+      expect.objectContaining({ elements: second.elements }),
+    );
   });
 
   it("fails closed when an asset cannot be hydrated", async () => {
@@ -130,7 +113,24 @@ describe("ReadonlyPreviewCanvas", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "This version could not be rendered safely",
     );
-    expect(screen.queryByTestId("readonly-excalidraw")).not.toBeInTheDocument();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(exportToSvg).not.toHaveBeenCalled();
+  });
+
+  it("reports export failures without leaving a partial preview", async () => {
+    const onError = vi.fn();
+    const error = new Error("export failed");
+    exportToSvg.mockRejectedValueOnce(error);
+
+    render(
+      <ReadonlyPreviewCanvas onError={onError} scene={scene()} theme="light" />,
+    );
+
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(error));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "This version could not be rendered safely",
+    );
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 });
 
@@ -144,7 +144,8 @@ function scene(): SceneSnapshot {
         y: 10,
         width: 100,
         height: 80,
-      } as SceneSnapshot["elements"][number],
+        isDeleted: false,
+      } as ExcalidrawElement,
     ],
     appState: {},
     files: {},

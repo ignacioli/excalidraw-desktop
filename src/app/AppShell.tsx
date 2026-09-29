@@ -1373,6 +1373,13 @@ export function AppShell({
             aria-label="Toggle workspace sidebar"
             className="icon-button shell-sidebar-toggle"
             onClick={() => {
+              if (historyOpen) {
+                closeVersionHistory();
+                if (sidebarSnapshot.mode === "hidden") {
+                  sidebarController.openOverlay();
+                }
+                return;
+              }
               if (sidebarSnapshot.mode === "hidden") {
                 sidebarController.openOverlay();
               } else if (sidebarSnapshot.mode === "overlay") {
@@ -1470,7 +1477,7 @@ export function AppShell({
         data-history-open={historyOpen ? "true" : "false"}
         data-sidebar-mode={sidebarSnapshot.mode}
       >
-        {sidebarSnapshot.mode === "hidden" ? (
+        {sidebarSnapshot.mode === "hidden" && !historyOpen ? (
           <div
             aria-hidden="true"
             className="sidebar-reveal-zone"

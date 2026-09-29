@@ -414,6 +414,21 @@
   color: var(--text-secondary);
 }
 
+.readonly-preview-canvas {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  place-items: center;
+  overflow: hidden;
+}
+
+.readonly-preview-canvas img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
 .history-preview-actions {
   border-top: var(--border-default) solid var(--border-subtle);
   padding: var(--space-3) var(--space-4) var(--space-4);
