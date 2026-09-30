@@ -55,6 +55,6 @@
 
 ### 原生反馈后的定点修复
 
-Mark mutation 后保留已显示的列表，避免 loading 状态卸载；相同 selection 的数据刷新不再强制 scroll/focus，延迟到达的新 selection 仍定位。More Actions 在 Mark busy 时保留可聚焦性并使用 aria-disabled，菜单与回调继续阻止重复操作。新增 [首轮失败报告](resume-20260929/mark-refresh-first.json) 保留 disabled trigger 失焦证据；[定点复验](resume-20260929/mark-refresh-retest.json) 1/1 PASS。最终相关 HistoryPanel/HistoryList/HistoryStates/TabBar 共 66/66 PASS，typecheck、针对性 ESLint 通过。
+Mark mutation 后保留已显示的列表，避免 loading 状态卸载；相同 selection 的数据刷新不再强制 scroll/focus，延迟到达的新 selection 仍定位。More Actions 在 Mark busy 时保留可聚焦性并使用 aria-disabled，菜单与回调继续阻止重复操作。新增 [首轮失败报告](resume-20260929/mark-refresh-first.json.txt) 保留 disabled trigger 失焦证据；[定点复验](resume-20260929/mark-refresh-retest.json) 1/1 PASS。最终相关 HistoryPanel/HistoryList/HistoryStates/TabBar 共 66/66 PASS，typecheck、针对性 ESLint 通过。
 
 Unavailable 使用实线卡片、danger token 警示图标与文字；History Retry 纳入现有按钮基础/primary/hover/disabled 样式，正常 empty 不显示重试；Tab 增加完整文件名标准 title 提示（旧 TabBar 提交已缺失，非 History 引入）。这些新改动的原生呈现尚待定点复查，未覆盖原包的历史 FAIL。
