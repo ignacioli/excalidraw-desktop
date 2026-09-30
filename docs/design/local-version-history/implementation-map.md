@@ -1,6 +1,6 @@
 # History component anatomy 与实现映射
 
-状态：2026-09-30 H0目录及H1文字规范/在线设计回填已完成；可编辑source已通过Web UI同步，H4 owner发现反馈生命周期/位置、滚动条与hover缺口，正在定向修复；此前H2/H3结果保留为历史。当前七屏高保真已获负责人批准；组件实现验收待执行，不能继承设计批准为产品PASS。
+状态：2026-09-30 H0–H3及本轮反馈修复已完成。产品894228a本轮提示位置/生命周期、滚动条、History info hover已获owner定向复查通过；当前通知外观可接受，行内短提示为非阻塞后续优化。H4其余观察与H5未完成，不代表T048整体PASS。
 
 ## 权威与实施入口
 
@@ -97,13 +97,13 @@ Anatomy：画布侧覆盖层 → toolbar（Preview · v-NNN · summary、只读�
 
 本轮先执行组件定向unit/结构样式断言，再看一个包含上述组件的代表渲染；不能先打包交owner找错。组合抽检：默认Light完整drawer、300px Dark、Unavailable；Preview/confirmation检查新容器边界。必要平台范围见[acceptance contract](../../evidence/local-version-history-acceptance-contract.md)，不照搬003历史逐屏签字链。
 
-| 批次 | 当前状态             | 完成信号                                                |
-| ---- | -------------------- | ------------------------------------------------------- |
-| H0   | DONE                 | 共享目录映射实际代码/来源                               |
-| H1   | DONE                 | 本anatomy+设计元数据回填；保留策略入口决定              |
+| 批次 | 当前状态               | 完成信号                                                |
+| ---- | ---------------------- | ------------------------------------------------------- |
+| H0   | DONE                   | 共享目录映射实际代码/来源                               |
+| H1   | DONE                   | 本anatomy+设计元数据回填；保留策略入口决定              |
 | H2   | PASS（含本轮定向修复） | 相关formatter/lint/typecheck/unit通过，代表组件视觉符合 |
 | H3   | PASS（含本轮定向修复） | 受影响页面组合抽检通过                                  |
-| H4   | 未执行               | exact-package集中owner观察覆盖现行合同                  |
+| H4   | 未执行                 | exact-package集中owner观察覆盖现行合同                  |
 
 历史WIP记录：此前typecheck及5项unit失败，本轮尚未重跑。初始“等宽按钮”assertion已确认是错误oracle，不计产品缺陷。Tab tooltip已owner确认；Mark轻微肉眼弹跳不确定且owner停止调查，本轮不重开。
 

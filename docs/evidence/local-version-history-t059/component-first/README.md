@@ -58,3 +58,5 @@
 ## 当前修复包（owner复查中）
 
 `894228a76e062597dad80c4180a91aaff59c7ee7` 已完成一次 production seal，package SHA-256 `031c50e6029c3ec660e7914a633d68da47bfaf06e0e7a397dfa7dc76b3568e8f`。见 [manifest](feedback-fixes-package-manifest.json)、[native entry](feedback-fixes-native-entry/)、[owner session](feedback-fixes-owner-session.json)。入口collector退出0；用户已授权继续复查，PID17298普通窗口打开合成长列表。当前等待owner四项修复反馈，H4/H5未完成。
+
+负责人后续确认（2026-09-30）：894228a 的本轮定向复查通过，提示位置正常，当前大色块可以接受，其余修复无问题。行内短提示登记为非阻塞优化，本轮不实施；其后若实施需先同步第05画板/anatomy。H4其余必要观察和H5仍未完成，不能将此反馈外推为T048全范围PASS。

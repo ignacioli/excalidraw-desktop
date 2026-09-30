@@ -113,6 +113,10 @@ Validation must be proportional to risk. Once the required relevant checks for t
 - Playwright CLI flows for browser-visible UI behavior.
 - Manual macOS/Tauri checks for windows, menus, dialogs, permissions, filesystem behavior, Gatekeeper user override, and packaging that browser tests cannot prove. A recorded target-OS VM or physical machine is acceptable evidence; never claim unexecuted physical-device coverage.
 
+### Component-first visual implementation
+
+Before implementing or reviewing app-owned UI, read `DESIGN.md` and `docs/design/components.md`. For History changes, also read `docs/design/local-version-history/implementation-map.md` and the current `high-fi/manifest.json`, `tokens.json`, and affected screenshots in that feature directory. The implementation map defines component anatomy, content hierarchy, states, reuse boundaries, and verification ownership; tokens alone do not define the layout. Record the affected component IDs and representative states before edits, validate components first, then sample affected page compositions. Resolve conflicts with approved design before implementation; do not change design to legitimize drift. Browser/component PASS does not establish native or owner acceptance.
+
 ### UI debugging and visual-evidence efficiency
 
 - Computer Use is prohibited unless the human explicitly authorizes it for the current task. A visual gate, screenshot requirement, tool failure, or browser timeout does not grant that authorization. This restriction applies to every Computer Use tool and overrides any conditional allowance below.
