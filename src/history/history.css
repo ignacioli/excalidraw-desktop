@@ -68,7 +68,6 @@
   line-height: 1.2;
 }
 
-.history-panel-eyebrow,
 .history-preview-eyebrow {
   margin: 0 0 var(--space-1);
   color: var(--text-secondary);

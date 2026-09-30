@@ -29,5 +29,16 @@
     },
     "browserAfterAlignment": "NOT_RUN",
     "nativeAfterAlignment": "NOT_RUN"
+  },
+  "headerCorrection": {
+    "date": "2026-09-30",
+    "ownerRequest": "Remove duplicate VERSION HISTORY eyebrow; retain main title, filename and Close.",
+    "updatedBoards": 7,
+    "visibleEyebrows": 0,
+    "fileValidationErrors": 0,
+    "revisionAtCheck": 100,
+    "savedVersionLabel": "004 remove redundant History eyebrow · 2026-09-30",
+    "visualSpotCheck": "Default Light export inspected",
+    "implementation": "Matching JSX/CSS and design assertion updated; no new app build or broader validation."
   }
 }

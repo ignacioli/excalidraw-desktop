@@ -730,7 +730,6 @@ export function HistoryPanel({
       </span>
       <header className="history-panel-header">
         <div>
-          <p className="history-panel-eyebrow">Version history</p>
           <h1 id="history-panel-title">Version History</h1>
           <p className="history-panel-file-name" title={fileName}>
             {fileName}

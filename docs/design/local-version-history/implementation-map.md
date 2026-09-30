@@ -12,7 +12,7 @@
 
 | 区域 | 必须落实的批准设计 | 实现位置 |
 | --- | --- | --- |
-| Header | `VERSION HISTORY` eyebrow；标题 20px / 600；文件名 12px / 400；紧凑间距 | HistoryPanel / history.css |
+| Header | 仅保留 `Version History` 标题 20px / 600、文件名 12px / 400 和关闭按钮；2026-09-30 负责人要求移除重复 eyebrow | HistoryPanel / history.css |
 | Current drawing | 59px 卡片；Light app.background、Dark surface.background；随后计数与 30px Mark 按钮同行 | HistoryPanel / history.css |
 | 历史行 | 摘要 14px / 600 在上；时间与来源 12px / 400 在下；状态徽标第三层；82px 行高、6px 圆角 | HistoryList / historyFormat / history.css |
 | 状态 | Ready 与 Marked 不重复作为同一行的并列主状态；Unavailable 保留警示图标和明确文字 | HistoryList / history.css |

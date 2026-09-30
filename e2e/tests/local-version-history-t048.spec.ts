@@ -327,7 +327,8 @@ test("matches approved History hierarchy and typography before native packaging"
     const mark = required(".history-mark-current");
     const count = panel.querySelector<HTMLElement>(".history-version-count");
     return {
-      eyebrow: required(".history-panel-eyebrow").textContent?.trim(),
+      redundantEyebrowCount: panel.querySelectorAll(".history-panel-eyebrow")
+        .length,
       fontFamilies: getComputedStyle(heading)
         .fontFamily.split(",")
         .map((family) => family.trim().replaceAll('"', "")),
@@ -351,12 +352,19 @@ test("matches approved History hierarchy and typography before native packaging"
       actionHeights: actions.map((button) =>
         Math.round(button.getBoundingClientRect().height),
       ),
-      actionWidthRatio: actions.length === 2 ? Math.round(actions[0].getBoundingClientRect().width / actions[1].getBoundingClientRect().width * 100) / 100 : null,
+      actionWidthRatio:
+        actions.length === 2
+          ? Math.round(
+              (actions[0].getBoundingClientRect().width /
+                actions[1].getBoundingClientRect().width) *
+                100,
+            ) / 100
+          : null,
       fontsReady: document.fonts.status === "loaded",
     };
   });
   const expected = {
-    eyebrow: "VERSION HISTORY",
+    redundantEyebrowCount: 0,
     fontFamilies: [
       "-apple-system",
       "BlinkMacSystemFont",
@@ -379,7 +387,7 @@ test("matches approved History hierarchy and typography before native packaging"
       historyDesign.components.selectedVersionActions.height,
       historyDesign.components.selectedVersionActions.height,
     ],
-    actionWidthRatio: Math.round(146 / 174 * 100) / 100,
+    actionWidthRatio: Math.round((146 / 174) * 100) / 100,
     fontsReady: true,
   };
   await testInfo.attach("design-contract-comparison", {
