@@ -315,3 +315,88 @@ async function readHistoryRestoreCalls(
       ).__historyRestoreCalls ?? [],
   );
 }
+
+test("Mark feedback is single, canvas-anchored and expires after Unmark", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const browser = globalThis as typeof globalThis & {
+      __TAURI_INTERNALS__: {
+        invoke: (
+          command: string,
+          args?: Record<string, unknown>,
+        ) => Promise<unknown>;
+      };
+    };
+    const invoke = browser.__TAURI_INTERNALS__.invoke.bind(
+      browser.__TAURI_INTERNALS__,
+    );
+    let marked = true;
+    browser.__TAURI_INTERNALS__.invoke = async (command, args) => {
+      if (command === "history_mark")
+        return {
+          versionId: "v-001",
+          recordedAt: 1,
+          source: "manual",
+          contentHash: "1".repeat(64),
+          reused: true,
+        };
+      if (command === "history_set_marked") {
+        const request = (args?.request ?? args) as { marked?: boolean };
+        marked = request.marked === true;
+        return { versionId: "v-001", marked, retained: true };
+      }
+      const result = await invoke(command, args);
+      if (command !== "history_list") return result;
+      const response = result as { items: Record<string, unknown>[] };
+      return {
+        ...response,
+        items: response.items.map((item) => ({ ...item, marked })),
+      };
+    };
+  });
+  const panel = historyPanel(page);
+  await panel
+    .getByRole("button", { name: "Mark current version", exact: true })
+    .click();
+  const notice = page.locator(".history-action-notice");
+  await expect(notice).toContainText("Already marked");
+  const canvasBox = await page
+    .getByRole("main", { name: "Drawing canvas" })
+    .boundingBox();
+  const noticeBox = await notice.boundingBox();
+  if (!canvasBox || !noticeBox)
+    throw new Error("Missing canvas feedback geometry");
+  expect(
+    Math.round(canvasBox.x + canvasBox.width - noticeBox.x - noticeBox.width),
+  ).toBe(24);
+  expect(
+    Math.round(canvasBox.y + canvasBox.height - noticeBox.y - noticeBox.height),
+  ).toBe(64);
+  await panel.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(page.locator(".history-preview")).toBeVisible();
+  await panel.getByRole("button", { name: /More actions for/ }).click();
+  await panel
+    .getByRole("menuitem", { name: "Unmark version", exact: true })
+    .click();
+  await expect(notice).toContainText("Version unmarked");
+  expect(
+    await notice.evaluate((node) => {
+      const box = node.getBoundingClientRect();
+      return (
+        !node.closest("[inert]") &&
+        node.contains(
+          document.elementFromPoint(
+            box.x + box.width / 2,
+            box.y + box.height / 2,
+          ),
+        )
+      );
+    }),
+  ).toBe(true);
+  await expect(page.getByText(/Already marked/)).toHaveCount(0);
+  await expect(panel.locator(".history-mark-feedback.is-success")).toHaveCount(
+    0,
+  );
+  await expect(notice).toHaveCount(0, { timeout: 6500 });
+});

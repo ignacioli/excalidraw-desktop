@@ -11,7 +11,7 @@
     "pageName": "05 · Local Version History · T004",
     "liveRevisionBeforeExport": 102,
     "liveRevisionAfterExport": 102,
-    "archiveInternalRevision": 104,
+    "archiveInternalRevision": 105,
     "revisionNote": "Live MCP revision and exported archive revision recorded independently."
   },
   "viewport": {
@@ -20,9 +20,9 @@
   },
   "source": {
     "path": "source/excalidraw-desktop-uxui-redesign.penpot",
-    "sha256": "8a62fbe836c328747596978180d6a294489a81fd8beea15f97155d7454444277",
-    "bytes": 2653046,
-    "exportMethod": "Penpot Web UI File > Download Penpot file (.penpot), existing Chrome Ignacio tab via Computer Use",
+    "sha256": "1565e8a4f5f704b0aed05bf3343dd32fa214e0abef38c369c16ad81b9efed8b4",
+    "bytes": 2654193,
+    "exportMethod": "Official Playwright MCP extension; existing Chrome Penpot tab, Main menu > File > Download Penpot file (.penpot)",
     "archiveIntegrity": "PASS",
     "filePageAndSevenBoardIds": "PASS",
     "hiddenDuplicateEyebrows": 7,
@@ -72,7 +72,7 @@
       "name": "T048 · 05 · Repeated Mark · Long List · Light",
       "shapeId": "b48ddf15-5062-8001-8008-b5756dd21737",
       "path": "screens/05-repeated-mark-long-list-light.png",
-      "sha256": "cd48f3cc2b75d0821d724a91a8b520a77780bbe2f1618a6ccd9445e23d026f38",
+      "sha256": "2516544c824f08c0680b8fe43bbe09fe533594c2ba3c2497a9b16864b9a2b21a",
       "width": 1280,
       "height": 760
     },
@@ -97,7 +97,9 @@
     "typography": "Use shared platform-native fonts from DESIGN.md. Penpot Inter remains an explicitly documented rendering proxy; body/label/badge roles bind shared tokens.",
     "header": "Main title, filename, owner-approved History info button and Close; duplicate eyebrow removed.",
     "selectedActionWidthRatio": "146:174",
-    "unavailable": "Seventh state approved by this owner review; Draft suffix preserved from the exported source name."
+    "unavailable": "Seventh state approved by this owner review; Draft suffix preserved from the exported source name.",
+    "feedback": "Owner-approved: canvas bottom-right near History, right 24px / bottom 64px; newest success only, 4000ms expiry; later actions replace prior feedback.",
+    "historyInfo": "Hover opens without moving focus; entering popover keeps it open; click/keyboard and Escape remain available."
   },
   "validation": {
     "pngCount": 7,
@@ -113,7 +115,7 @@
   },
   "tokens": {
     "path": "tokens.json",
-    "sha256": "eb9c1274002863a15eea353de8429bf5f3921624664f43067596f2e00242b7d1",
+    "sha256": "83eb85e289c869e6e9cd56538a377028075750ff2d45fde29f1c79f2ea260f73",
     "basePath": "docs/design/desktop-shell/hf-2/tokens.json",
     "baseSha256": "151826bbcea894cb64e59899ee85651ff13f2205df0b65768d048bf12c37b184"
   },

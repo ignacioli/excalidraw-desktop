@@ -1,5 +1,5 @@
 import { createRef } from "react";
-import { render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { HistoryPanel } from "./HistoryPanel";
@@ -77,6 +77,95 @@ describe("HistoryPanel", () => {
     await user.keyboard("{Escape}");
     expect(info).toHaveAttribute("aria-expanded", "false");
     expect(info).toHaveFocus();
+  });
+
+  it("opens retention info on hover without stealing focus and delays pointer-leave close", async () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <HistoryPanel
+          fileName="planning.excalidraw"
+          items={[makeItem()]}
+          onClose={vi.fn()}
+        />,
+      );
+      const info = screen.getByRole("button", { name: "History info" });
+      fireEvent.pointerEnter(info);
+      expect(info).toHaveAttribute("aria-expanded", "true");
+      expect(info).not.toHaveFocus();
+
+      const popover = screen.getByRole("region", { name: "Version retention" });
+      fireEvent.pointerLeave(info);
+      fireEvent.pointerEnter(popover);
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(info).toHaveAttribute("aria-expanded", "true");
+      expect(popover).toBeVisible();
+
+      fireEvent.pointerLeave(popover);
+      act(() => {
+        vi.advanceTimersByTime(159);
+      });
+      expect(info).toHaveAttribute("aria-expanded", "true");
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(info).toHaveAttribute("aria-expanded", "false");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("routes Mark and Unmark success through one notice and clears an old notice on action", async () => {
+    const item = makeItem({ versionId: "version-1", marked: true });
+    const onSuccessNotice = vi.fn();
+    const onClearSuccessNotice = vi.fn();
+    render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[item]}
+        onClose={vi.fn()}
+        onMark={vi.fn(async () => ({
+          versionId: item.versionId,
+          reused: true,
+        }))}
+        onSetMarked={vi.fn(async () => ({
+          versionId: item.versionId,
+          marked: false,
+          retained: true,
+        }))}
+        onSuccessNotice={onSuccessNotice}
+        onClearSuccessNotice={onClearSuccessNotice}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Mark current version" }),
+      );
+      await Promise.resolve();
+    });
+    expect(onSuccessNotice).toHaveBeenLastCalledWith({
+      title: "Already marked · v-001",
+      message: "No new version. Focus moved to the saved version.",
+    });
+    expect(
+      screen.queryByText("Already marked. Selected the existing version."),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /More actions for v-001/ }),
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "Unmark version" }));
+      await Promise.resolve();
+    });
+    expect(onClearSuccessNotice).toHaveBeenCalledTimes(2);
+    expect(onSuccessNotice).toHaveBeenLastCalledWith({
+      title: "Version unmarked",
+      message: "Version unmarked.",
+    });
   });
 
   it("fails closed when the caller cannot provide a rendered preview", () => {

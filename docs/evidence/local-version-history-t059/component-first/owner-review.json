@@ -1,0 +1,16 @@
+{
+  "productCommit": "7562954f3f85e93c30345ceb237d56debf15b48a",
+  "pid": 73056,
+  "status": "FAIL",
+  "scope": "H4 first owner group",
+  "findings": [
+    "Already marked position and stale persistence after Unmark",
+    "Separate Version unmarked notice persists",
+    "History scrollbar too wide compared with shared sidebar"
+  ],
+  "approvedChanges": [
+    "Success feedback anchored near History at canvas bottom-right, auto-dismiss ~4 seconds and replace old feedback",
+    "History info hover, retaining click/keyboard"
+  ],
+  "otherGroups": "PENDING"
+}

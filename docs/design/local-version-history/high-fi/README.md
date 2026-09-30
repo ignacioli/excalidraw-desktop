@@ -34,3 +34,5 @@
 负责人追加选择标题旁 `History info` 按钮，七张当前PNG已同步；Penpot画板及入口附有指向 implementation-map 的组件元数据。默认画面只增加低强调入口，保留规则按需展开。已抽查默认Light，确认标题、入口和Close没有重叠。
 
 API失败后已使用Web UI下载完成source同步，manifest的 `currentBackfillIncluded: true` 绑定本次入口和元数据。Computer Use已退出，未关闭负责人原有tab。
+
+2026-09-30 H4反馈修正：通过官方 Playwright MCP 扩展，使用现有已登录 Chrome 标签页的 Main menu → File → Download Penpot file 下载 revision105，替换唯一 source。已核对提示位于画布右下（right24/bottom64）、4秒生命周期元数据及7处 hover 说明；05 PNG同步更新。下载后断开MCP连接，保留原有标签页。

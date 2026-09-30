@@ -151,6 +151,10 @@ describe("AppShell", () => {
     nativeMenuHarness.cleanup.mockReset();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("renders the desktop shell and actionable workspace empty state", async () => {
     const user = userEvent.setup();
     const onCreateDocument = vi.fn();
@@ -866,7 +870,27 @@ describe("AppShell", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("selects and focuses the existing version returned by a repeated mark", async () => {
+  it("selects the reused version and refreshes its single success notice timer", async () => {
+    const activeNoticeTimers = new Map<number, () => void>();
+    let timerSequence = 0;
+    const realSetTimeout = globalThis.setTimeout;
+    const realClearTimeout = globalThis.clearTimeout;
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+      handler: TimerHandler,
+      timeout?: number,
+      ...args: unknown[]
+    ) => {
+      if (timeout === 4000 && typeof handler === "function") {
+        const id = ++timerSequence;
+        activeNoticeTimers.set(id, handler as () => void);
+        return id as unknown as ReturnType<typeof setTimeout>;
+      }
+      return realSetTimeout(handler, timeout, ...args);
+    }) as typeof globalThis.setTimeout);
+    vi.spyOn(globalThis, "clearTimeout").mockImplementation((timer) => {
+      activeNoticeTimers.delete(Number(timer));
+      realClearTimeout(timer);
+    });
     nativeRuntimeHarness.enabled = true;
     setDocumentSessions([
       createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "clean"),
@@ -912,14 +936,25 @@ describe("AppShell", () => {
 
     const user = userEvent.setup();
     render(<AppShell workspaceInvoker={{ invoke: invoker }} />);
-    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
-    nativeMenuHarness.handler?.("versionHistory");
-    await screen.findByRole("complementary", { name: "Version History" });
+    await act(async () => {
+      for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+    });
+    expect(nativeMenuHarness.handler).toBeDefined();
+    await act(async () => {
+      nativeMenuHarness.handler?.("versionHistory");
+      for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+    });
+    expect(
+      screen.getByRole("complementary", { name: "Version History" }),
+    ).toBeInTheDocument();
     await user.click(
       screen.getByRole("button", { name: "Mark current version" }),
     );
+    await act(async () => {
+      for (let turn = 0; turn < 12; turn += 1) await Promise.resolve();
+    });
 
-    const reuseMessage = await screen.findByText("Already marked · v-001");
+    const reuseMessage = screen.getByText("Already marked · v-001");
     const reuseNotice = reuseMessage.closest('[role="status"]');
     expect(reuseNotice).not.toBeNull();
     expect(reuseNotice).toHaveTextContent("Already marked · v-001");
@@ -932,6 +967,25 @@ describe("AppShell", () => {
     );
     const selected = screen.getByRole("option", { selected: true });
     expect(selected).toHaveFocus();
+
+    const firstNoticeTimer = [...activeNoticeTimers.values()][0];
+    expect(firstNoticeTimer).toBeDefined();
+    await user.click(
+      screen.getByRole("button", { name: "Mark current version" }),
+    );
+    await act(async () => {
+      for (let turn = 0; turn < 12; turn += 1) await Promise.resolve();
+    });
+    expect(screen.getByText("Already marked · v-001")).toBeInTheDocument();
+    const secondNoticeTimer = [...activeNoticeTimers.values()][0];
+    expect(secondNoticeTimer).toBeDefined();
+    expect(secondNoticeTimer).not.toBe(firstNoticeTimer);
+    act(() => firstNoticeTimer?.());
+    expect(screen.getByText("Already marked · v-001")).toBeInTheDocument();
+    act(() => secondNoticeTimer?.());
+    expect(
+      screen.queryByText("Already marked · v-001"),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps restore disabled until the selected preview reports a rendered canvas", async () => {

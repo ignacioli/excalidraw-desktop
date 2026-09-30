@@ -722,3 +722,32 @@ test("unavailable selection explains the failure and prevents preview and restor
     path: testInfo.outputPath("history-unavailable-light.png"),
   });
 });
+
+test("History info hover preserves focus and shared thin scrollbar styling", async ({
+  page,
+}) => {
+  const panel = historyPanel(page);
+  const row = panel.getByRole("option").first();
+  await row.focus();
+  const info = panel.getByRole("button", { name: "History info", exact: true });
+  await info.hover();
+  const popover = panel.getByRole("region", { name: "Version retention" });
+  await expect(popover).toBeVisible();
+  await expect(row).toBeFocused();
+  await popover.hover();
+  await expect(popover).toBeVisible();
+  await page.mouse.move(400, 300);
+  await expect(popover).toBeHidden();
+  await info.focus();
+  await page.keyboard.press("Enter");
+  await expect(popover).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(popover).toBeHidden();
+  const scrollbar = await panel
+    .locator(".history-panel-body")
+    .evaluate((el) => ({
+      width: getComputedStyle(el).scrollbarWidth,
+      webkit: getComputedStyle(el, "::-webkit-scrollbar").width,
+    }));
+  expect(scrollbar).toEqual({ width: "thin", webkit: "6px" });
+});

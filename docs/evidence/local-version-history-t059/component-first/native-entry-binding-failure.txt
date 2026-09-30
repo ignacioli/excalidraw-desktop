@@ -1,0 +1,18 @@
+$ node scripts/native-macos-validation.mjs validate -- --manifest /tmp/history-component-package-manifest.json --capture-plan /private/tmp/history-component-entry-20260930/plan.json --collection-dir /private/tmp/history-component-entry-20260930/collection --binding /private/tmp/history-component-entry-20260930/binding.json
+file:///Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/scripts/native-macos-validation.mjs:704
+    throw new NativeValidationBlockedError(
+          ^
+
+NativeValidationBlockedError: native validation report identity does not match its binding
+    at adaptNativeValidationReport (file:///Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/scripts/native-macos-validation.mjs:704:11)
+    at writeNativeValidationCollection (file:///Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/scripts/native-macos-validation.mjs:850:19)
+    at finish (file:///Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/scripts/native-macos-validation.mjs:2601:13)
+    at validateProductionBundle (file:///Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/scripts/native-macos-validation.mjs:2879:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async main (file:///Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/scripts/native-macos-validation.mjs:2906:14)
+    at async file:///Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/scripts/native-macos-validation.mjs:2925:3 {
+  [cause]: undefined
+}
+
+Node.js v26.8.2
+[ELIFECYCLE] Command failed with exit code 1.

@@ -155,6 +155,25 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   flex: 1 1 auto;
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+}
+
+.history-panel-body:hover {
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.history-panel-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.history-panel-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.history-panel-body:hover::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
 }
 
 .history-panel-main {
@@ -646,30 +665,30 @@
   opacity: 0.72;
 }
 
-.history-mark-reuse-notice {
+.history-action-notice {
   position: absolute;
-  z-index: 2;
-  top: 65%;
-  left: var(--space-6);
+  z-index: 6;
+  right: 24px;
+  bottom: 64px;
   display: grid;
   width: min(328px, calc(100% - 48px));
   min-height: 77px;
   align-content: center;
   gap: var(--space-1);
-  border: var(--border-default) solid var(--border-subtle);
+  border: var(--border-default) solid var(--accent);
   border-radius: var(--radius-control);
   padding: var(--space-3);
   color: var(--text-primary);
-  background: var(--surface-background);
+  background: var(--surface-hover);
   box-shadow: var(--shadow-popover, 0 4px 16px rgb(0 0 0 / 12%));
 }
 
-.history-mark-reuse-notice strong {
+.history-action-notice strong {
   font-size: var(--font-size-body, 14px);
   font-weight: var(--font-weight-semibold, 600);
 }
 
-.history-mark-reuse-notice span {
+.history-action-notice span {
   color: var(--text-secondary);
   font-size: var(--font-size-label, 12px);
 }

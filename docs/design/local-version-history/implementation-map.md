@@ -1,6 +1,6 @@
 # History component anatomy 与实现映射
 
-状态：2026-09-30 H0目录及H1文字规范/在线设计回填已完成；可编辑source已通过Web UI同步，H2/H3组件与browser组合验收已完成，native待验。当前七屏高保真已获负责人批准；组件实现验收待执行，不能继承设计批准为产品PASS。
+状态：2026-09-30 H0目录及H1文字规范/在线设计回填已完成；可编辑source已通过Web UI同步，H4 owner发现反馈生命周期/位置、滚动条与hover缺口，正在定向修复；此前H2/H3结果保留为历史。当前七屏高保真已获负责人批准；组件实现验收待执行，不能继承设计批准为产品PASS。
 
 ## 权威与实施入口
 
@@ -87,26 +87,30 @@ Anatomy：画布侧覆盖层 → toolbar（Preview · v-NNN · summary、只读�
 
 ## HISTORY-FEEDBACK：状态和提示
 
-- 重复Mark：画布侧328×77参考notice，标题`Already marked · v-NNN`，正文`No new version. Focus moved to the saved version.`；无列表内长段落或永久空白占位。id绑定当前文档/版本，切换或关闭清理，避免陈旧提示。
-- 新mark/row mark/unmark：复用同类非模态可见反馈与live announcement，不仅screen-reader-only；error在操作上下文可读，不用成功提示覆盖error。
+- Mark/Unmark成功反馈：复用单一画布侧328×77参考notice，owner本轮决定锚定画布右下角，right24px/bottom64px（避开SDK底部控件），不使用百分比top。最新提示替换旧提示，4秒自动消失；下一操作、选择/文档/关闭等context变化立即清旧提示，迟到结果不得复活。重复Mark标题`Already marked · v-NNN`，正文`No new version. Focus moved to the saved version.`；无列表内长段落或永久空白占位。id绑定当前文档/版本，切换或关闭清理，避免陈旧提示。
+- 新mark/row mark/unmark：成功反馈交同一个canvas notice，不另在列表上放成功浮层；live announcement不抢焦点。error仍在操作上下文可读，不随成功TTL自动隐藏。
 - Loading/empty/processing/permissionDenied/conflict/resourceUnavailable/error复用HistoryStateView。title、body、可选Retry按统一text/button角色；没有retry回调不虚构操作，empty不出现Retry。processing避免断言尚未确认的磁盘结果。
-- **保留策略已由owner选择标题旁信息按钮**：Header标题行右侧、Close左侧放32px低强调共享IconButton，accessible name/tooltip为`History info`。点击打开锚定信息popover，标题`Version retention`，正文解释最新20条automatic/before-operation共享池、无按年龄过期、manual不自动删除。默认关闭，不挤占列表；按钮aria-expanded/aria-controls，Escape或再次点击关闭，键盘焦点返回入口；点击外部可关闭。Popover内容可选择/阅读，长文案在drawer内换行，不用hover-only tooltip承载完整规则。
+- **保留策略已由owner选择标题旁信息按钮**：Header标题行右侧、Close左侧放32px低强调共享IconButton，accessible name/tooltip为`History info`。悬停显示锚定信息popover，鼠标移入popover保持，移出短暂延迟后关闭；保留点击/键盘打开（纯hover不抢焦点）。弹层标题`Version retention`，正文解释最新20条automatic/before-operation共享池、无按年龄过期、manual不自动删除。默认关闭，不挤占列表；按钮aria-expanded/aria-controls，Escape或再次点击关闭，键盘焦点返回入口；点击外部可关闭。Popover内容可选择/阅读，长文案在drawer内换行，不用hover-only tooltip承载完整规则。
 - 状态与错误按实际数据，不为像素一致修改业务语义。Recovery仅复用现有异常退出草稿流程。
 
 ## 组件与组合验证记录
 
 本轮先执行组件定向unit/结构样式断言，再看一个包含上述组件的代表渲染；不能先打包交owner找错。组合抽检：默认Light完整drawer、300px Dark、Unavailable；Preview/confirmation检查新容器边界。必要平台范围见[acceptance contract](../../evidence/local-version-history-acceptance-contract.md)，不照搬003历史逐屏签字链。
 
-| 批次 | 当前状态 | 完成信号                                                |
-| ---- | -------- | ------------------------------------------------------- |
-| H0   | DONE     | 共享目录映射实际代码/来源                               |
-| H1   | DONE     | 本anatomy+设计元数据回填；保留策略入口决定              |
-| H2   | PASS     | 相关formatter/lint/typecheck/unit通过，代表组件视觉符合 |
-| H3   | PASS     | 受影响页面组合抽检通过                                  |
-| H4   | 未执行   | exact-package集中owner观察覆盖现行合同                  |
+| 批次 | 当前状态             | 完成信号                                                |
+| ---- | -------------------- | ------------------------------------------------------- |
+| H0   | DONE                 | 共享目录映射实际代码/来源                               |
+| H1   | DONE                 | 本anatomy+设计元数据回填；保留策略入口决定              |
+| H2   | PASS（含本轮定向修复） | 相关formatter/lint/typecheck/unit通过，代表组件视觉符合 |
+| H3   | PASS（含本轮定向修复） | 受影响页面组合抽检通过                                  |
+| H4   | 未执行               | exact-package集中owner观察覆盖现行合同                  |
 
 历史WIP记录：此前typecheck及5项unit失败，本轮尚未重跑。初始“等宽按钮”assertion已确认是错误oracle，不计产品缺陷。Tab tooltip已owner确认；Mark轻微肉眼弹跳不确定且owner停止调查，本轮不重开。
 
 本轮在线回填：7画板均有History info入口及规范链接，425个相关节点附组件anatomy ID。七屏PNG已保存并更新digest；source API导出失败后已通过Web UI同步，核对7个入口和425处元数据，详见high-fi manifest；不冒称组件或原生验证通过。
 
 H2/H3结果：[component-first记录](../../evidence/local-version-history-t059/component-first/README.md)。测试、primary渲染抽检与native owner验收分别记录，H4未完成。
+
+## H4 owner反馈后的定向修复（2026-09-30）
+
+owner报告两处成功提示同时常驻、Already marked位置不合适、原生粗滚动条，并要求History info支持hover。以上记录为本轮FAIL/变更，不将此前browser通过外推为native通过。滚动区复用左侧Workspace的thin及6px WebKit thumb/theme/hover/focus规则，不改系统滚动条偏好。修复完成后只复查提示生命周期/锚点、info hover/keyboard及细滚动条，继续保留未完成native项。

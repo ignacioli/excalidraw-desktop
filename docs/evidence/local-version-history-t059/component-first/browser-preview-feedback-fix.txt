@@ -1,0 +1,9 @@
+$ playwright test --config e2e/playwright.config.ts e2e/tests/local-version-history-t048-regression.spec.ts --project=browser-ui --workers=1 '--grep=Mark feedback is single' --reporter=list
+
+Running 1 test using 1 worker
+
+(node:14823) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [browser-ui] › e2e/tests/local-version-history-t048-regression.spec.ts:319:1 › Mark feedback is single, canvas-anchored and expires after Unmark (5.3s)
+
+  1 passed (5.7s)

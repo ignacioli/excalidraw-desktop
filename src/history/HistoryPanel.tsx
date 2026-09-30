@@ -24,6 +24,11 @@ import "./history.css";
 
 export type HistoryPanelStatus = HistoryStateKind | "available";
 
+export interface HistorySuccessNotice {
+  title: string;
+  message: string;
+}
+
 export interface HistoryPanelProps {
   /** Stable active document identity, used to bind open row actions. */
   documentId?: string;
@@ -56,7 +61,8 @@ export interface HistoryPanelProps {
     versionId: string;
     reused: boolean;
   }>;
-  onMarkReuse?: (versionId: string) => void;
+  onSuccessNotice?: (notice: HistorySuccessNotice) => void;
+  onClearSuccessNotice?: () => void;
   /** Persists the selected version's mark state. */
   onSetMarked?: (
     item: HistoryVersionView,
@@ -107,7 +113,8 @@ export function HistoryPanel({
   onRestore,
   onDelete,
   onMark,
-  onMarkReuse,
+  onSuccessNotice,
+  onClearSuccessNotice,
   onSetMarked,
   markProcessing = false,
   markSuccessMessage = "Version marked and saved to history.",
@@ -140,11 +147,10 @@ export function HistoryPanel({
   const [markBusy, setMarkBusy] = useState(false);
   const [setMarkedBusy, setSetMarkedBusy] = useState(false);
   const markIsProcessing = markProcessing || markBusy || setMarkedBusy;
-  const [deleteFeedback, setDeleteFeedback] = useState<
-    | { status: "success"; message: string }
-    | { status: "error"; message: string }
-    | null
-  >(null);
+  const [deleteFeedback, setDeleteFeedback] = useState<{
+    status: "error";
+    message: string;
+  } | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const deleteIsProcessing = deleteProcessing || deleteBusy;
   const [openActionsTarget, setOpenActionsTarget] = useState<{
@@ -180,16 +186,53 @@ export function HistoryPanel({
   const infoButtonRef = useRef<HTMLButtonElement>(null);
   const infoPopoverRef = useRef<HTMLDivElement>(null);
   const [retentionInfoOpen, setRetentionInfoOpen] = useState(false);
+  const [retentionInfoPinned, setRetentionInfoPinned] = useState(false);
+  const retentionInfoCloseTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const focusRetentionInfoOnOpenRef = useRef(false);
+  const suppressRetentionInfoFocusOpenRef = useRef(false);
+  const actionNoticeGenerationRef = useRef(0);
+  const localSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  const cancelRetentionInfoClose = () => {
+    if (retentionInfoCloseTimerRef.current !== null) {
+      clearTimeout(retentionInfoCloseTimerRef.current);
+      retentionInfoCloseTimerRef.current = null;
+    }
+  };
+
+  const scheduleRetentionInfoClose = () => {
+    cancelRetentionInfoClose();
+    retentionInfoCloseTimerRef.current = setTimeout(() => {
+      retentionInfoCloseTimerRef.current = null;
+      if (retentionInfoPinned) return;
+      if (
+        infoButtonRef.current?.contains(document.activeElement) ||
+        infoPopoverRef.current?.contains(document.activeElement)
+      ) {
+        return;
+      }
+      setRetentionInfoOpen(false);
+    }, 160);
+  };
 
   useEffect(() => {
     if (!retentionInfoOpen) return;
-    infoPopoverRef.current?.focus();
+    if (focusRetentionInfoOnOpenRef.current) {
+      focusRetentionInfoOnOpenRef.current = false;
+      infoPopoverRef.current?.focus();
+    }
     const dismissOnOutsidePointer = (event: PointerEvent) => {
       if (
         event.target instanceof Node &&
         !infoPopoverRef.current?.contains(event.target) &&
         !infoButtonRef.current?.contains(event.target)
       ) {
+        cancelRetentionInfoClose();
+        setRetentionInfoPinned(false);
         setRetentionInfoOpen(false);
       }
     };
@@ -201,6 +244,57 @@ export function HistoryPanel({
         true,
       );
   }, [retentionInfoOpen]);
+
+  useEffect(
+    () => () => {
+      actionNoticeGenerationRef.current += 1;
+      if (retentionInfoCloseTimerRef.current !== null) {
+        clearTimeout(retentionInfoCloseTimerRef.current);
+      }
+      if (localSuccessTimerRef.current !== null) {
+        clearTimeout(localSuccessTimerRef.current);
+      }
+      onClearSuccessNotice?.();
+    },
+    [documentId, fileName, onClearSuccessNotice],
+  );
+
+  const clearActionSuccessNotice = () => {
+    actionNoticeGenerationRef.current += 1;
+    if (localSuccessTimerRef.current !== null) {
+      clearTimeout(localSuccessTimerRef.current);
+      localSuccessTimerRef.current = null;
+    }
+    setMarkFeedback((current) =>
+      current?.status === "success" ? null : current,
+    );
+    setReusedTargetId(null);
+    onClearSuccessNotice?.();
+    return actionNoticeGenerationRef.current;
+  };
+
+  const showActionSuccessNotice = (
+    generation: number,
+    notice: HistorySuccessNotice,
+    fallbackMessage: string,
+  ) => {
+    if (generation !== actionNoticeGenerationRef.current) return;
+    if (onSuccessNotice !== undefined) {
+      onSuccessNotice(notice);
+      return;
+    }
+    setMarkFeedback({ status: "success", message: fallbackMessage });
+    if (localSuccessTimerRef.current !== null) {
+      clearTimeout(localSuccessTimerRef.current);
+    }
+    localSuccessTimerRef.current = setTimeout(() => {
+      localSuccessTimerRef.current = null;
+      if (generation !== actionNoticeGenerationRef.current) return;
+      setMarkFeedback((current) =>
+        current?.status === "success" ? null : current,
+      );
+    }, 4000);
+  };
 
   useEffect(() => {
     if (openActionsTarget === null) return;
@@ -319,6 +413,7 @@ export function HistoryPanel({
   }, [activePreviewId, items, selectedVersionId]);
 
   const selectItem = (item: HistoryVersionView) => {
+    clearActionSuccessNotice();
     if (item.versionId !== reusedTargetId) setReusedTargetId(null);
     if (selectedVersionId === undefined) setInternalSelectedId(item.versionId);
     onSelect?.(item);
@@ -345,6 +440,7 @@ export function HistoryPanel({
   }, [onExitPreview, previewTargetMissing, requestedPreviewId]);
 
   const closePanel = () => {
+    clearActionSuccessNotice();
     triggerRef?.current?.focus();
     onClose();
   };
@@ -401,11 +497,12 @@ export function HistoryPanel({
 
   const handleMark = async () => {
     if (onMark === undefined || processing || markIsProcessing) return;
+    const noticeGeneration = clearActionSuccessNotice();
     setMarkFeedback(null);
-    setReusedTargetId(null);
     setMarkBusy(true);
     try {
       const result = await onMark();
+      if (noticeGeneration !== actionNoticeGenerationRef.current) return;
       const outcome = result ?? undefined;
       if (outcome !== undefined && selectedVersionId === undefined) {
         setInternalSelectedId(outcome.versionId);
@@ -413,19 +510,27 @@ export function HistoryPanel({
       if (result === null) return;
       if (outcome?.reused) {
         setReusedTargetId(outcome.versionId);
-        onMarkReuse?.(outcome.versionId);
       }
-      if (outcome?.reused && onMarkReuse !== undefined) {
-        setMarkFeedback(null);
-        return;
-      }
-      setMarkFeedback({
-        status: "success",
-        message: outcome?.reused
+      const reusedItem = outcome?.reused
+        ? items.find((item) => item.versionId === outcome.versionId)
+        : undefined;
+      showActionSuccessNotice(
+        noticeGeneration,
+        outcome?.reused
+          ? {
+              title:
+                reusedItem === undefined
+                  ? "Already marked"
+                  : `Already marked · v-${String(reusedItem.sequence).padStart(3, "0")}`,
+              message: "No new version. Focus moved to the saved version.",
+            }
+          : { title: "Version marked", message: markSuccessMessage },
+        outcome?.reused
           ? "Already marked. Selected the existing version."
           : markSuccessMessage,
-      });
+      );
     } catch (error) {
+      if (noticeGeneration !== actionNoticeGenerationRef.current) return;
       const message =
         markErrorMessage ??
         (error instanceof Error
@@ -441,11 +546,12 @@ export function HistoryPanel({
     if (processing || setMarkedBusy || onSetMarked === undefined) {
       return;
     }
+    const noticeGeneration = clearActionSuccessNotice();
     setMarkFeedback(null);
-    setReusedTargetId(null);
     setSetMarkedBusy(true);
     try {
       const result = await onSetMarked(item, marked);
+      if (noticeGeneration !== actionNoticeGenerationRef.current) return;
       if (
         !marked &&
         result !== undefined &&
@@ -454,15 +560,21 @@ export function HistoryPanel({
       ) {
         exitPreview();
       }
-      setMarkFeedback({
-        status: "success",
-        message: marked
-          ? "Version marked."
-          : result !== undefined && result.retained === false
-            ? "Version unmarked and removed by the retention policy."
-            : "Version unmarked.",
-      });
+      const message = marked
+        ? "Version marked."
+        : result !== undefined && result.retained === false
+          ? "Version unmarked and removed by the retention policy."
+          : "Version unmarked.";
+      showActionSuccessNotice(
+        noticeGeneration,
+        {
+          title: marked ? "Version marked" : "Version unmarked",
+          message,
+        },
+        message,
+      );
     } catch (error) {
+      if (noticeGeneration !== actionNoticeGenerationRef.current) return;
       const message =
         markErrorMessage ??
         (error instanceof Error
@@ -481,8 +593,13 @@ export function HistoryPanel({
     if (event.key !== "Escape") return;
     event.preventDefault();
     if (retentionInfoOpen) {
+      cancelRetentionInfoClose();
+      setRetentionInfoPinned(false);
       setRetentionInfoOpen(false);
-      infoButtonRef.current?.focus();
+      if (infoPopoverRef.current?.contains(document.activeElement)) {
+        suppressRetentionInfoFocusOpenRef.current = true;
+        infoButtonRef.current?.focus();
+      }
       return;
     }
     if (openActionsTarget !== null) {
@@ -499,6 +616,7 @@ export function HistoryPanel({
 
   const handleDelete = async (item: HistoryVersionView) => {
     if (onDelete === undefined || processing || deleteIsProcessing) return;
+    const noticeGeneration = clearActionSuccessNotice();
     if (
       deleteTarget?.documentId !== activeDocumentKey ||
       deleteTarget.item.versionId !== item.versionId ||
@@ -514,11 +632,17 @@ export function HistoryPanel({
     setDeleteBusy(true);
     try {
       await onDelete(item);
+      if (noticeGeneration !== actionNoticeGenerationRef.current) return;
       if (activePreviewId === item.versionId) exitPreview();
       deleteReturnFocusRef.current = closeButtonRef.current;
-      setDeleteFeedback({ status: "success", message: deleteSuccessMessage });
+      showActionSuccessNotice(
+        noticeGeneration,
+        { title: "Version deleted", message: deleteSuccessMessage },
+        deleteSuccessMessage,
+      );
       setDeleteTarget(null);
     } catch (error) {
+      if (noticeGeneration !== actionNoticeGenerationRef.current) return;
       const message =
         deleteErrorMessage ??
         (error instanceof Error
@@ -534,6 +658,7 @@ export function HistoryPanel({
     item: HistoryVersionView,
     trigger: HTMLButtonElement | null,
   ) => {
+    clearActionSuccessNotice();
     if (
       onRestore === undefined ||
       processing ||
@@ -832,7 +957,36 @@ export function HistoryPanel({
             aria-expanded={retentionInfoOpen}
             aria-label="History info"
             className="history-info-trigger"
-            onClick={() => setRetentionInfoOpen((open) => !open)}
+            onPointerEnter={() => {
+              cancelRetentionInfoClose();
+              setRetentionInfoOpen(true);
+            }}
+            onPointerLeave={scheduleRetentionInfoClose}
+            onFocus={() => {
+              if (suppressRetentionInfoFocusOpenRef.current) {
+                suppressRetentionInfoFocusOpenRef.current = false;
+                return;
+              }
+              cancelRetentionInfoClose();
+              setRetentionInfoOpen(true);
+            }}
+            onBlur={scheduleRetentionInfoClose}
+            onClick={() => {
+              cancelRetentionInfoClose();
+              if (retentionInfoPinned) {
+                setRetentionInfoPinned(false);
+                setRetentionInfoOpen(false);
+                if (document.activeElement !== infoButtonRef.current) {
+                  suppressRetentionInfoFocusOpenRef.current = true;
+                  infoButtonRef.current?.focus();
+                }
+              } else {
+                focusRetentionInfoOnOpenRef.current = !retentionInfoOpen;
+                setRetentionInfoPinned(true);
+                setRetentionInfoOpen(true);
+                if (retentionInfoOpen) infoPopoverRef.current?.focus();
+              }
+            }}
             ref={infoButtonRef}
             title="History info"
             type="button"
@@ -859,6 +1013,8 @@ export function HistoryPanel({
         hidden={!retentionInfoOpen}
         id="history-retention-info"
         ref={infoPopoverRef}
+        onPointerEnter={cancelRetentionInfoClose}
+        onPointerLeave={scheduleRetentionInfoClose}
         role="region"
         tabIndex={-1}
       >
@@ -923,11 +1079,6 @@ export function HistoryPanel({
           {previewItem !== undefined && previewPortalContainer === undefined ? (
             <>
               {previewElement}
-              {deleteFeedback?.status === "success" ? (
-                <p aria-live="polite" role="status">
-                  {deleteFeedback.message}
-                </p>
-              ) : null}
               {deleteFeedback?.status === "error" && deleteTarget === null ? (
                 <p aria-live="assertive" role="alert">
                   {deleteFeedback.message}
@@ -1028,11 +1179,6 @@ export function HistoryPanel({
               Restore
             </button>
           </div>
-          {deleteFeedback?.status === "success" ? (
-            <p aria-live="polite" role="status">
-              {deleteFeedback.message}
-            </p>
-          ) : null}
           {deleteFeedback?.status === "error" && deleteTarget === null ? (
             <p aria-live="assertive" role="alert">
               {deleteFeedback.message}
