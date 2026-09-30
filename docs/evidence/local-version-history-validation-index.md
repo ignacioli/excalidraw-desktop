@@ -1,6 +1,6 @@
 # 本地版本历史验证索引
 
-**最新状态（2026-09-29，真实原生验收）**：production `1997de467b7fbd32d0f2421019f01caa528842be` 的 History 原生入口 13/13 PASS。Owner 确认列表滚动、Preview、Restore 确认/Cancel、Light/Dark 紧凑宽度、菜单和 Tab 焦点正常；点击 Mark version 时 History 边栏高频跳跃，记为实际产品 FAIL，正在定点修复。异常状态验收仍在进行；T048 未完成，T049/T054 未完成。证据见 [本轮 owner 记录](local-version-history-t059/resume-20260929/owner-walkthrough.json)与[原生入口报告](local-version-history-t059/resume-20260929/native-entry-report.json)。以下旧包记录保留其历史身份，不覆盖本轮结果。
+**最新状态（2026-09-29，真实原生验收）**：production `1997de467b7fbd32d0f2421019f01caa528842be` 的 History 原生入口 13/13 PASS。Owner 确认列表滚动、Preview、Restore 确认/Cancel、Light/Dark 紧凑宽度、菜单和 Tab 焦点正常；点击 Mark version 时 History 边栏高频跳跃，记为实际产品 FAIL；修复已进入 `6da6e01`，后续包 `ce6e746` build/seal PASS（[manifest](local-version-history-t059/resume-20260929/fixed-package-manifest.json)），等待原生定点复验。Pending/error 与 unavailable 提示已获正常反馈，冲突及 Reduce Motion 观察仍待完成；T048 未完成，T049/T054 未完成。证据见 [本轮 owner 记录](local-version-history-t059/resume-20260929/owner-walkthrough.json)与[原生入口报告](local-version-history-t059/resume-20260929/native-entry-report.json)。以下旧包记录保留其历史身份，不覆盖本轮结果。
 
 
 **此前状态快照（2026-09-29，本轮恢复验收前）**：本文按验收事实指向主要证据及其身份，不把实现、测试、设计审批、精确生产包运行、人工视觉和产品负责人接受合并成一个 verdict。当前四个用户故事的既有实现检查点已完成；T048 低保真与六屏高保真已批准。修订后精确生产包原生入口 13/13 PASS，`HISTORY-01` capture integrity PASS，但该状态的独立视觉评审为 **FAIL（2 项 HIGH 样式偏差）**；其他视觉状态、修复后新包评审、T049 性能和 T054 最终接受仍待完成。

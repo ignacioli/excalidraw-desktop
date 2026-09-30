@@ -58,3 +58,5 @@
 Mark mutation 后保留已显示的列表，避免 loading 状态卸载；相同 selection 的数据刷新不再强制 scroll/focus，延迟到达的新 selection 仍定位。More Actions 在 Mark busy 时保留可聚焦性并使用 aria-disabled，菜单与回调继续阻止重复操作。新增 [首轮失败报告](resume-20260929/mark-refresh-first.json.txt) 保留 disabled trigger 失焦证据；[定点复验](resume-20260929/mark-refresh-retest.json) 1/1 PASS。最终相关 HistoryPanel/HistoryList/HistoryStates/TabBar 共 66/66 PASS，typecheck、针对性 ESLint 通过。
 
 Unavailable 使用实线卡片、danger token 警示图标与文字；History Retry 纳入现有按钮基础/primary/hover/disabled 样式，正常 empty 不显示重试；Tab 增加完整文件名标准 title 提示（旧 TabBar 提交已缺失，非 History 引入）。这些新改动的原生呈现尚待定点复查，未覆盖原包的历史 FAIL。
+
+修复后新包从干净提交 `ce6e746d4d12cde55a498da83f45b3563c556e71` build/seal PASS：[manifest](resume-20260929/fixed-package-manifest.json)，package SHA-256 `fbdf374efd0bb9ff3b60ac1485dcc0b35c9d8d87bcd6bd5e8b2e6d983fe412cc`，Guard attempt `70020bae-3cb8-491e-ae11-7ff2b11a20a8`。未自动启动新包；需定点复查 Mark 稳定性、Unavailable/Retry 样式与 Tab hover。生产 build 的既有 chunk size warning 保留，不影响成功退出。
