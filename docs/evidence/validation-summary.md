@@ -1,6 +1,6 @@
 # 验证证据汇总（004 实施中；003 已完成；001/002 历史）
 
-**最新状态（2026-09-29，真实原生验收）**：production `1997de467b7fbd32d0f2421019f01caa528842be` 的 History 原生入口 13/13 PASS。Owner 确认列表滚动、Preview、Restore 确认/Cancel、Light/Dark 紧凑宽度、菜单和 Tab 焦点正常；点击 Mark version 时 History 边栏高频跳跃，记为实际产品 FAIL；修复已进入 `6da6e01`，后续包 `ce6e746` build/seal PASS（[manifest](local-version-history-t059/resume-20260929/fixed-package-manifest.json)），等待原生定点复验。Pending/error 与 unavailable 提示已获正常反馈，冲突及 Reduce Motion 观察仍待完成；T048 未完成，T049/T054 未完成。证据见 [本轮 owner 记录](local-version-history-t059/resume-20260929/owner-walkthrough.json)与[原生入口报告](local-version-history-t059/resume-20260929/native-entry-report.json)。以下旧包记录保留其历史身份，不覆盖本轮结果。
+**最新状态（2026-09-29，暂停等待 Penpot Review）**：负责人确认 `70132eb` 包的 Tab tooltip 正常；Mark 区域轻微肉眼弹跳真实性未确定，负责人要求停止修复。History 整体设计一致性另行纠正：共享系统字体标准已确认，Penpot 回填至 quick-check revision 98，新增 07 Unavailable 草稿，140 个文字角色绑定检查无差异、文件校验 0 错误。负责人要求完成回填与一次抽查后停止；代码对齐保持 WIP，typecheck 和 5 项定向测试失败，未进行修后浏览器/原生验证。详见 [Penpot Review 记录](local-version-history-t059/resume-20260929/penpot-backfill-review.json)。T048/Phase 7 未完成。
 
 
 ## Feature 004 当前最新状态（2026-09-29）

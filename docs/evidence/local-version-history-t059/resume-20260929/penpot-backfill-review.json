@@ -1,0 +1,33 @@
+{
+  "status": "PENDING_OWNER_REVIEW",
+  "fileId": "a5ac146a-5787-80fa-8008-b3c2d0b30bae",
+  "pageId": "87d1db27-904b-80ba-8008-aeafe0fb388d",
+  "revisionAtQuickCheck": 98,
+  "unavailableBoardId": "b48ddf15-5062-8001-8008-b7699546bf4b",
+  "unavailableBoardName": "T048 · 07 · Unavailable Version · Light · Draft",
+  "savedVersionLabel": "004 backfill ready for owner review · 2026-09-29",
+  "sharedFontPolicy": "Existing platform-native UI/mono stacks apply to History and future features; Penpot font families remain rendering proxies because SF Pro/system-ui are unavailable.",
+  "quickCheck": {
+    "sampledScreens": [
+      "01 Light",
+      "06 compact Dark",
+      "07 unavailable"
+    ],
+    "boards": 7,
+    "textRoles": 140,
+    "bindingViolations": 0,
+    "fileValidationErrors": 0
+  },
+  "historicalArtifacts": "Existing frozen PNG and Penpot archive bytes preserved.",
+  "implementation": {
+    "status": "PAUSED_WIP",
+    "eslint": "PASS",
+    "typecheck": "FAIL: Mark result union includes void",
+    "focusedUnitTests": {
+      "pass": 35,
+      "fail": 5
+    },
+    "browserAfterAlignment": "NOT_RUN",
+    "nativeAfterAlignment": "NOT_RUN"
+  }
+}

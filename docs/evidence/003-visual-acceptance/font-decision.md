@@ -1,5 +1,7 @@
 # 003 HF-2 shell typography decision record
 
+**最新适用范围决定（2026-09-29）**：负责人明确要求以既有桌面 shell 的系统字体为整个应用及后续功能的统一标准，包括 Local Version History；不为每个功能建立独立字体风格。该决定将下文历史记录的 `003-only` 范围提升为共享设计规范，见 [DESIGN](../../../DESIGN.md) / [中文](../../../DESIGN.zh.md)。只扩展字体家族的适用范围，不改变字号、字重、布局和组件几何要求；冻结导出与旧验收证据原样保留。
+
 **Recorded:** 2026-09-03
 **Scope:** Phase 2 task T019 governance. This record preserves frozen HF-2 tokens and records the explicit product-owner exception that governs 003 implementation and visual review.
 

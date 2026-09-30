@@ -91,6 +91,10 @@ Saved preferences must be applied before the first user-visible UI. Startup must
 
 ## Semantic tokens
 
+The application uses one shared design system across existing and future features. UI typography uses `-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`; monospace roles use `ui-monospace, SFMono-Regular, Menlo, monospace`. These platform-native families also govern Local Version History and supersede the Inter/IBM Plex Mono family names in historical design exports. This does not change approved font sizes, weights, line heights, spacing, or component geometry. A feature must not introduce a separate typography or visual style; correct a shared design-system conflict before implementing it.
+
+Before changing a UI, map its component roles, states, and layout to the approved shared tokens and component contract. Resolve missing or conflicting roles before writing dependent code, and establish focused checks whose expected values come from that design source, not from the current implementation. Render comparison remains a final check, not a substitute for these implementation constraints.
+
 Application components consume semantic tokens and must not use palette literals directly. The approved desktop-shell values are frozen in `docs/design/desktop-shell/hf-2/tokens.json`. At implementation time, reconcile shared roles with the locked Excalidraw package and record its version; SDK-owned editor styling continues to use documented upstream variables, while approved shell roles must not be silently replaced by screenshot-picked values or private SDK internals.
 
 | Canonical token ID | Purpose |

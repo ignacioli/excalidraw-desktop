@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import historyDesign from "../../docs/design/local-version-history/high-fi/t048/tokens.json" with { type: "json" };
+import shellDesign from "../../docs/design/desktop-shell/hf-2/tokens.json" with { type: "json" };
 import {
   emitBrowserTauriEvent,
   installBrowserTauriHarness,
@@ -89,7 +91,7 @@ for (const colorScheme of ["light", "dark"] as const) {
       colorScheme === "light" ? "rgb(255, 255, 255)" : "rgb(35, 35, 41)",
     );
     expect(panelGeometry.borderColor).toBe(
-      colorScheme === "light" ? "rgb(233, 236, 239)" : "rgb(54, 53, 65)",
+      colorScheme === "light" ? "rgb(206, 212, 218)" : "rgb(92, 92, 92)",
     );
     await expect(resizeHandle).toHaveAttribute("aria-valuenow", "360");
 
@@ -102,33 +104,29 @@ for (const colorScheme of ["light", "dark"] as const) {
       );
       if (mark === null || restore === null)
         throw new Error("Approved History actions are missing.");
-      const resolveTokenColor = (token: string) => {
-        const probe = document.createElement("span");
-        probe.style.color = `var(${token})`;
-        element.append(probe);
-        const color = getComputedStyle(probe).color;
-        probe.remove();
-        return color;
-      };
       return {
         markHeight: mark.getBoundingClientRect().height,
         markBorder: getComputedStyle(mark).borderTopColor,
         markBackground: getComputedStyle(mark).backgroundColor,
         restoreBackground: getComputedStyle(restore).backgroundColor,
         restoreText: getComputedStyle(restore).color,
-        panelBackground: getComputedStyle(element).backgroundColor,
-        accent: resolveTokenColor("--accent"),
-        accentContrast: resolveTokenColor("--accent-contrast"),
-        borderStrong: resolveTokenColor("--border-strong"),
       };
     });
-    expect(approvedControls.markHeight).toBe(30);
-    expect(approvedControls.markBorder).toBe(approvedControls.borderStrong);
-    expect(approvedControls.markBackground).toBe(
-      approvedControls.panelBackground,
+    expect(approvedControls.markHeight).toBe(
+      historyDesign.components.markCurrentButton.height,
     );
-    expect(approvedControls.restoreBackground).toBe(approvedControls.accent);
-    expect(approvedControls.restoreText).toBe(approvedControls.accentContrast);
+    expect(approvedControls.markBorder).toBe(
+      designColor(colorScheme, "color.border.strong"),
+    );
+    expect(approvedControls.markBackground).toBe(
+      designColor(colorScheme, "color.panel.background"),
+    );
+    expect(approvedControls.restoreBackground).toBe(
+      designColor(colorScheme, "color.accent.base"),
+    );
+    expect(approvedControls.restoreText).toBe(
+      designColor(colorScheme, "color.accent.contrast"),
+    );
 
     const listLayout = await list.evaluate((element) => {
       const body = element.closest<HTMLElement>(".history-panel-body");
@@ -300,6 +298,95 @@ test("honors reduced motion and keeps row focus visible with 50 versions", async
   ).toBeLessThanOrEqual(0.01);
   expect(computed.outlineStyle).toBe("solid");
   expect(computed.outlineWidth).toBe("2px");
+});
+
+test("matches approved History hierarchy and typography before native packaging", async ({
+  page,
+}, testInfo) => {
+  await page.evaluate(() => document.fonts.ready);
+  const actual = await historyPanel(page).evaluate((panel) => {
+    const required = (selector: string) => {
+      const element = panel.querySelector<HTMLElement>(selector);
+      if (element === null)
+        throw new Error(`Missing History design role: ${selector}`);
+      return element;
+    };
+    const heading = required(".history-panel-header h1");
+    const filename = required(".history-panel-file-name");
+    const row = required(".history-list-row");
+    const summary = required(".history-list-summary");
+    const time = required(".history-list-row time");
+    const current = required(".history-current-card");
+    const target = required(".history-selection-title");
+    const actions = [
+      ...panel.querySelectorAll<HTMLElement>(
+        ".history-selection-actions button",
+      ),
+    ];
+    const policy = required(".history-retention-policy");
+    const mark = required(".history-mark-current");
+    const count = panel.querySelector<HTMLElement>(".history-version-count");
+    return {
+      eyebrow: required(".history-panel-eyebrow").textContent?.trim(),
+      fontFamilies: getComputedStyle(heading)
+        .fontFamily.split(",")
+        .map((family) => family.trim().replaceAll('"', "")),
+      headingSize: Number.parseFloat(getComputedStyle(heading).fontSize),
+      headingWeight: Number(getComputedStyle(heading).fontWeight),
+      filenameSize: Number.parseFloat(getComputedStyle(filename).fontSize),
+      rowHeight: Math.round(row.getBoundingClientRect().height),
+      rowRadius: Number.parseFloat(getComputedStyle(row).borderRadius),
+      summarySize: Number.parseFloat(getComputedStyle(summary).fontSize),
+      summaryWeight: Number(getComputedStyle(summary).fontWeight),
+      summaryBeforeMetadata:
+        summary.getBoundingClientRect().top < time.getBoundingClientRect().top,
+      currentCardHeight: Math.round(current.getBoundingClientRect().height),
+      targetWeight: Number(getComputedStyle(target).fontWeight),
+      policyOutsideVisualFlow: policy.getBoundingClientRect().width <= 1,
+      countAndMarkInline:
+        count !== null &&
+        Math.abs(
+          count.getBoundingClientRect().top - mark.getBoundingClientRect().top,
+        ) < 12,
+      actionHeights: actions.map((button) =>
+        Math.round(button.getBoundingClientRect().height),
+      ),
+      actionWidthRatio: actions.length === 2 ? Math.round(actions[0].getBoundingClientRect().width / actions[1].getBoundingClientRect().width * 100) / 100 : null,
+      fontsReady: document.fonts.status === "loaded",
+    };
+  });
+  const expected = {
+    eyebrow: "VERSION HISTORY",
+    fontFamilies: [
+      "-apple-system",
+      "BlinkMacSystemFont",
+      "Segoe UI",
+      "sans-serif",
+    ],
+    headingSize: shellDesign.primitives["font.size.section"].value,
+    headingWeight: shellDesign.primitives["font.weight.semibold"].value,
+    filenameSize: shellDesign.primitives["font.size.label"].value,
+    rowHeight: historyDesign.components.selectedHistoryRow.height,
+    rowRadius: historyDesign.components.selectedHistoryRow.radiusPx,
+    summarySize: shellDesign.primitives["font.size.body"].value,
+    summaryWeight: shellDesign.primitives["font.weight.semibold"].value,
+    summaryBeforeMetadata: true,
+    currentCardHeight: historyDesign.components.currentDrawingCard.height,
+    targetWeight: shellDesign.primitives["font.weight.semibold"].value,
+    policyOutsideVisualFlow: true,
+    countAndMarkInline: true,
+    actionHeights: [
+      historyDesign.components.selectedVersionActions.height,
+      historyDesign.components.selectedVersionActions.height,
+    ],
+    actionWidthRatio: Math.round(146 / 174 * 100) / 100,
+    fontsReady: true,
+  };
+  await testInfo.attach("design-contract-comparison", {
+    body: JSON.stringify({ actual, expected }, null, 2),
+    contentType: "application/json",
+  });
+  expect(actual).toEqual(expected);
 });
 
 test("keeps populated History geometry stable through both Mark paths", async ({
@@ -506,6 +593,14 @@ async function installHistoryListFixture(page: Page): Promise<void> {
       };
     };
   }, HISTORY_VERSIONS);
+}
+
+function designColor(
+  scheme: "light" | "dark",
+  token: keyof typeof shellDesign.semantics.light,
+): string {
+  const hex = shellDesign.semantics[scheme][token].value.slice(1);
+  return `rgb(${[0, 2, 4].map((index) => Number.parseInt(hex.slice(index, index + 2), 16)).join(", ")})`;
 }
 
 function durationInMilliseconds(value: string): number {

@@ -152,6 +152,9 @@ export function AppShell({
   const [historyPanelStatus, setHistoryPanelStatus] =
     useState<HistoryPanelStatus>("empty");
   const [historyPanelMessage, setHistoryPanelMessage] = useState<string>();
+  const [historyMarkReuseVersionId, setHistoryMarkReuseVersionId] = useState<
+    string | null
+  >(null);
   const [historyPreviewVersionId, setHistoryPreviewVersionId] = useState<
     string | null
   >(null);
@@ -162,6 +165,12 @@ export function AppShell({
     useState<string | null>(null);
   const [historyPreviewContent, setHistoryPreviewContent] =
     useState<ReactNode>(null);
+  const historyMarkReuseItem =
+    historyMarkReuseVersionId === null
+      ? undefined
+      : historyItems.find(
+          (item) => item.versionId === historyMarkReuseVersionId,
+        );
   const historyPanelRequestRef = useRef(0);
   const historyOpenRef = useRef(historyOpen);
   historyOpenRef.current = historyOpen;
@@ -899,12 +908,14 @@ export function AppShell({
       return;
     }
     setInteractionError(null);
+    setHistoryMarkReuseVersionId(null);
     setHistoryOpen(true);
   }, [activeDocumentId]);
 
   const closeVersionHistory = useCallback((): void => {
     historyPanelRequestRef.current += 1;
     setHistoryOpen(false);
+    setHistoryMarkReuseVersionId(null);
     setHistorySelectedVersionId(null);
     setHistoryPreviewVersionId(null);
     setHistoryPreviewState("ready");
@@ -1001,6 +1012,9 @@ export function AppShell({
     if (outcome.status === "cancelled") return null;
     if (documentManager.store.getState().activeDocumentId !== documentId)
       return null;
+    setHistoryMarkReuseVersionId(
+      outcome.response.reused ? outcome.response.versionId : null,
+    );
     setHistorySelectedVersionId(outcome.response.versionId);
     await loadHistoryPanel(true);
     return {
@@ -1611,6 +1625,21 @@ export function AppShell({
               <p>Select a drawing to begin.</p>
             </div>
           )}
+          {historyOpen &&
+          historyMarkReuseItem !== undefined &&
+          activeSession !== undefined ? (
+            <div
+              aria-live="polite"
+              className="history-mark-reuse-notice"
+              role="status"
+            >
+              <strong>
+                Already marked · v-
+                {String(historyMarkReuseItem.sequence).padStart(3, "0")}
+              </strong>
+              <span>No new version. Focus moved to the saved version.</span>
+            </div>
+          ) : null}
         </main>
         {historyOpen && activeSession !== undefined ? (
           <HistoryPanel
@@ -1632,6 +1661,7 @@ export function AppShell({
               setHistoryPreviewContent(null);
             }}
             onMark={markCurrentHistoryVersion}
+            onMarkReuse={setHistoryMarkReuseVersionId}
             onSetMarked={setHistoryVersionMarked}
             onPreview={previewHistoryVersion}
             onRestore={restoreHistoryVersion}

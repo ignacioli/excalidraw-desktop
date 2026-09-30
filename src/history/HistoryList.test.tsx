@@ -46,7 +46,7 @@ describe("HistoryList", () => {
     expect(screen.getByText("Automatic")).toBeInTheDocument();
     expect(screen.getByText("Before restore")).toBeInTheDocument();
     expect(screen.getByText("Manual")).toBeInTheDocument();
-    expect(screen.getByText("Manual · Marked")).toBeInTheDocument();
+    expect(screen.getByText("Marked")).toBeInTheDocument();
     expect(screen.getByText("Two shapes added")).toBeInTheDocument();
     const timestamp = screen
       .getByText("Two shapes added")

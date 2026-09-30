@@ -1,0 +1,79 @@
+
+Running 1 test using 1 worker
+
+(node:88790) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:307:1 › matches approved History hierarchy and typography before native packaging (1.1s)
+
+
+  1) [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:307:1 › matches approved History hierarchy and typography before native packaging 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 13
+    + Received  + 13
+
+      Object {
+        "actionHeights": Array [
+    -     38,
+    -     38,
+    +     44,
+    +     44,
+        ],
+    -   "countAndMarkInline": true,
+    +   "countAndMarkInline": false,
+        "currentCardHeight": 59,
+    -   "equalActionWidths": true,
+    -   "eyebrow": "VERSION HISTORY",
+    -   "filenameSize": 12,
+    +   "equalActionWidths": false,
+    +   "eyebrow": "File history",
+    +   "filenameSize": 14,
+        "fontsReady": true,
+        "headingSize": 20,
+    -   "headingWeight": 600,
+    -   "policyOutsideVisualFlow": true,
+    -   "rowHeight": 82,
+    -   "rowRadius": 6,
+    -   "summaryBeforeMetadata": true,
+    +   "headingWeight": 700,
+    +   "policyOutsideVisualFlow": false,
+    +   "rowHeight": 87,
+    +   "rowRadius": 8,
+    +   "summaryBeforeMetadata": false,
+        "summarySize": 14,
+    -   "summaryWeight": 600,
+    -   "targetWeight": 600,
+    +   "summaryWeight": 400,
+    +   "targetWeight": 700,
+      }
+
+      387 |     contentType: "application/json",
+      388 |   });
+    > 389 |   expect(actual).toEqual(expected);
+          |                  ^
+      390 | });
+      391 |
+      392 | test("keeps populated History geometry stable through both Mark paths", async ({
+        at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts:389:18
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-48a2d-phy-before-native-packaging-browser-ui/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: video (video/webm) ──────────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-48a2d-phy-before-native-packaging-browser-ui/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e/test-results/tests-local-version-histor-48a2d-phy-before-native-packaging-browser-ui/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-48a2d-phy-before-native-packaging-browser-ui/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace e2e/test-results/tests-local-version-histor-48a2d-phy-before-native-packaging-browser-ui/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:307:1 › matches approved History hierarchy and typography before native packaging 

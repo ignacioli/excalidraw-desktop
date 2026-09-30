@@ -115,18 +115,20 @@ export function HistoryList({
           item.summary === ""
             ? "Canvas changed"
             : item.summary;
-        const statusLabels = [
-          current ? "Current" : null,
-          preview ? "Preview" : null,
-          !current && !preview && !unavailable ? "Ready" : null,
-          unavailable ? "Unavailable" : null,
-          item.marked ? "Marked" : null,
-        ].filter((label): label is string => label !== null);
+        const statusLabel = unavailable
+          ? "Unavailable"
+          : current
+            ? "Current"
+            : preview
+              ? "Preview"
+              : item.marked
+                ? "Marked"
+                : "Ready";
         const accessibleLabel = [
           source,
           formatHistoryTimestamp(item.recordedAt),
           summary,
-          ...statusLabels,
+          statusLabel,
         ].join(" · ");
 
         return (
@@ -153,28 +155,16 @@ export function HistoryList({
                 type="button"
               >
                 <span className="history-list-row-main">
-                  <time dateTime={dateTime}>
-                    {formatHistoryTimestamp(item.recordedAt)}
-                  </time>
-                  <span className="history-list-source">{source}</span>
                   <span className="history-list-summary">{summary}</span>
+                  <span className="history-list-metadata">
+                    <time dateTime={dateTime}>
+                      {formatHistoryTimestamp(item.recordedAt)}
+                    </time>
+                    <span aria-hidden="true">·</span>
+                    <span className="history-list-source">{source}</span>
+                  </span>
                 </span>
-                <span
-                  aria-label={statusLabels.join(", ") || undefined}
-                  className="history-list-statuses"
-                >
-                  {current ? (
-                    <span className="history-list-status">Current</span>
-                  ) : null}
-                  {preview ? (
-                    <span className="history-list-status">Preview</span>
-                  ) : null}
-                  {!current && !preview && !unavailable ? (
-                    <span className="history-list-status">Ready</span>
-                  ) : null}
-                  {item.marked ? (
-                    <span className="history-list-status">Manual · Marked</span>
-                  ) : null}
+                <span className="history-list-statuses">
                   {unavailable ? (
                     <span className="history-list-status history-list-status--unavailable">
                       <svg
@@ -192,7 +182,18 @@ export function HistoryList({
                       </svg>
                       Unavailable
                     </span>
-                  ) : null}
+                  ) : (
+                    <span
+                      className={[
+                        "history-list-status",
+                        item.marked && !current && !preview
+                          ? "history-list-status--marked"
+                          : "history-list-status--ready",
+                      ].join(" ")}
+                    >
+                      {statusLabel}
+                    </span>
+                  )}
                 </span>
               </button>
               {renderRowActions?.(item)}

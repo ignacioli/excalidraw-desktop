@@ -91,6 +91,10 @@ accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍�
 
 ## 语义 Token
 
+既有与后续功能使用同一套共享 design system。UI 字体统一为 `-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`；等宽角色统一为 `ui-monospace, SFMono-Regular, Menlo, monospace`。这一系统字体标准同样适用于本地版本历史，并覆盖历史设计导出中的 Inter / IBM Plex Mono 字体名称；批准的字号、字重、行高、间距和组件几何保持有效。不得为单个功能另建字体或视觉风格；共享规范有冲突时，先修正共享规范再实现。
+
+修改 UI 前，先把组件角色、状态与布局映射到批准的共享 token 和组件契约；在编写依赖代码前解决缺失或冲突，并建立预期值直接来自设计来源的聚焦检查，不能以当前实现作为正确答案。渲染对照是最后检查，不替代这些开发约束。
+
 应用组件消费语义 Token，不直接使用调色板字面值。已批准的桌面壳层数值冻结在 `docs/design/desktop-shell/hf-2/tokens.json`。实现时必须将共享角色与锁定版本的 Excalidraw 包对齐并记录包版本；SDK 所有的编辑器样式继续使用上游公开变量，已批准的壳层角色不得被截图取色值或私有 SDK 内部样式静默替换。
 
 | Canonical token ID | 用途 |

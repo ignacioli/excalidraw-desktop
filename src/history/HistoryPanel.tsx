@@ -52,6 +52,7 @@ export interface HistoryPanelProps {
     versionId: string;
     reused: boolean;
   }>;
+  onMarkReuse?: (versionId: string) => void;
   /** Persists the selected version's mark state. */
   onSetMarked?: (
     item: HistoryVersionView,
@@ -101,6 +102,7 @@ export function HistoryPanel({
   onRestore,
   onDelete,
   onMark,
+  onMarkReuse,
   onSetMarked,
   markProcessing = false,
   markSuccessMessage = "Version marked and saved to history.",
@@ -349,6 +351,11 @@ export function HistoryPanel({
         setInternalSelectedId(result.versionId);
       }
       if (result === null) return;
+      if (result.reused) onMarkReuse?.(result.versionId);
+      if (result.reused && onMarkReuse !== undefined) {
+        setMarkFeedback(null);
+        return;
+      }
       setMarkFeedback({
         status: "success",
         message: result?.reused
@@ -723,7 +730,7 @@ export function HistoryPanel({
       </span>
       <header className="history-panel-header">
         <div>
-          <p className="history-panel-eyebrow">File history</p>
+          <p className="history-panel-eyebrow">Version history</p>
           <h1 id="history-panel-title">Version History</h1>
           <p className="history-panel-file-name" title={fileName}>
             {fileName}
@@ -754,7 +761,7 @@ export function HistoryPanel({
                 "The history document changed. Reopen the version menu before acting."}
             </p>
           ) : null}
-          <p className="history-retention-policy">
+          <p className="history-retention-policy visually-hidden">
             Automatic and before-operation versions share the newest 20 entries.
             They do not expire by age. Manual marks stay until you delete them.
           </p>
@@ -767,31 +774,38 @@ export function HistoryPanel({
                 <span>Current drawing</span>
                 <p>Open canvas</p>
               </div>
-              <button
-                className="history-mark-current"
-                disabled={processing || markIsProcessing}
-                onClick={() => void handleMark()}
-                type="button"
-              >
-                {markIsProcessing
-                  ? "Marking current version…"
-                  : "Mark current version"}
-              </button>
+              <div className="history-version-toolbar">
+                <span className="history-version-count">
+                  {items.length} {items.length === 1 ? "version" : "versions"}{" "}
+                  loaded
+                </span>
+                <button
+                  className="history-mark-current"
+                  disabled={processing || markIsProcessing}
+                  onClick={() => void handleMark()}
+                  type="button"
+                >
+                  {markIsProcessing
+                    ? "Marking current version…"
+                    : "Mark current version"}
+                </button>
+              </div>
             </section>
           ) : null}
-          {onMark !== undefined || onSetMarked !== undefined ? (
-            <div className="history-mark-feedback">
-              {markFeedback !== null ? (
-                <p
-                  aria-live={
-                    markFeedback.status === "error" ? "assertive" : "polite"
-                  }
-                  role={markFeedback.status === "error" ? "alert" : "status"}
-                >
-                  {markFeedback.message}
-                </p>
-              ) : null}
-            </div>
+          {markFeedback !== null ? (
+            <p
+              aria-live={
+                markFeedback.status === "error" ? "assertive" : "polite"
+              }
+              className={
+                markFeedback.status === "success"
+                  ? "history-mark-feedback visually-hidden"
+                  : "history-mark-feedback"
+              }
+              role={markFeedback.status === "error" ? "alert" : "status"}
+            >
+              {markFeedback.message}
+            </p>
           ) : null}
           {previewItem !== undefined ? (
             <>
@@ -861,10 +875,12 @@ export function HistoryPanel({
           <p className="history-selection-eyebrow">
             Selected version · action target
           </p>
-          <strong className="history-selection-title">
-            {historyTargetLabel(selectedItem)}
-          </strong>
+          <h2 className="history-selection-title">
+            {historySummaryLabel(selectedItem)}
+          </h2>
           <p className="history-selection-metadata">
+            v-{String(selectedItem.sequence).padStart(3, "0")}
+            {" · "}
             <time dateTime={historyDateTime(selectedItem.recordedAt)}>
               {formatHistoryTimestamp(selectedItem.recordedAt)}
             </time>
@@ -883,6 +899,7 @@ export function HistoryPanel({
             </button>
             <button
               className="primary-action"
+              aria-label="Restore this version"
               disabled={
                 processing ||
                 selectedItem.availability.status !== "available" ||
@@ -894,7 +911,7 @@ export function HistoryPanel({
               ref={selectedRestoreRef}
               type="button"
             >
-              Restore this version
+              Restore
             </button>
           </div>
           {deleteFeedback?.status === "success" ? (
@@ -1016,6 +1033,12 @@ function historyTargetLabel(item: HistoryVersionView): string {
       ? "Canvas changed"
       : item.summary;
   return `v-${String(item.sequence).padStart(3, "0")} · ${summary}`;
+}
+
+function historySummaryLabel(item: HistoryVersionView): string {
+  return item.summaryReliable === false || !item.summary
+    ? "Canvas changed"
+    : item.summary;
 }
 
 function MoreIcon() {

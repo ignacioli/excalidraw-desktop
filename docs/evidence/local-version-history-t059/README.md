@@ -1,5 +1,7 @@
 # T059 drawer 调整与验收 fixture 修复
 
+**最新：2026-09-29 暂停等待 Penpot Review。** 共享系统字体决定及 004 回填已完成，revision 98；新增 Unavailable 草稿、快速抽查结果及未完成代码验证见 [Review 记录](resume-20260929/penpot-backfill-review.json)。
+
 **当前实现：`a50818e`，headless 与 unit 范围 PASS；新 production 包原生/视觉仍 PENDING。** 用户于 2026-09-29 明确选择默认 360 px、拖动左边缘可缩至 300 px。大窗口也可使用，删除 420 px 自动触发；键盘左右箭头与边缘移动方向一致，Home/End 到达宽度边界。AppShell grid 同步调整，不改文档内容、历史选择或操作目标，不新增持久化设置。
 
 同时修复已批准 token 的两项偏差：Mark current 30 px 控件样式，以及 Restore 主按钮被更具体 CSS 覆盖。旧精确包的[独立视觉 FAIL](../local-version-history-t048/window-repair-004/history01-review.md)保留，不能把本轮 browser 结果移作新包视觉 PASS。
@@ -66,3 +68,9 @@ Unavailable 使用实线卡片、danger token 警示图标与文字；History Re
 [原生复查记录](resume-20260929/focused-native-recheck.json)：owner确认顶部及行菜单两种 Mark 均跳跃、Tab title仍不显示。核对仅有 PID83748，启动20:44:16、二进制SHA与 `ce6e746` 包一致；旧77399已退出，排除旧实例接管。AX静置/单次AXPress各30/50坐标样本未捕捉到变化，owner未留意自动点击；这不能推翻真实鼠标反馈。
 
 限定调查未找到重复请求消费者。随后50行浏览器[诊断](resume-20260929/mark-geometry-before.txt)测出反馈插拔使列表移动47.59px，每入口仅1次mutation和1次list，无请求循环；Chromium未复现原生高频跳动。修复为持久反馈区域预留两行空间；[复验](resume-20260929/mark-geometry-after.txt)对两次顶部Mark和一次行操作的scrollTop、按钮及首行top采样均稳定，1个针对性用例PASS。HistoryPanel33/33、TabBar22/22与针对性ESLint通过。Tab改为portal DOM tooltip，支持hover/focus/Escape，避免依赖本次原生无效的title属性。原生高频弹跳是否消失仍待确认，不能从Chromium结果推出PASS。
+
+### 负责人停止 Mark 弹跳修复，优先设计一致性
+
+`70132eb` 原生复查：Tab tooltip 获负责人明确正常反馈；Mark 区域仍被肉眼观察到轻微弹跳，但负责人明确“不一定真实，有可能是错觉”，要求不再修复。该观察保留为 OWNER_DEFERRED_UNCONFIRMED_MOTION，不写成已修复或已确认持续故障。
+
+负责人随后提供批准高保真与当前原生栏截图，要求优先修复显著文字/布局/字重差异，并把design-system约束前移到开发之前。实现前[设计映射](../../design/local-version-history/implementation-map.md)已建立；新检查直接引用批准token JSON，其[首次设计对照](resume-20260929/design-contract-before.txt)在UI尚未改动时失败，明确列出字号/字重、行高/圆角、层级、按钮几何等偏差。字体family因003-only例外与T048基线存在范围冲突待owner决定；未擅改全局family。其它结构按设计映射实施，不新增全面spec review或逐屏审批链。
