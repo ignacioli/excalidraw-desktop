@@ -1,8 +1,10 @@
 # Local Version History visual checklist
 
+**最新状态（2026-09-30，component-first H0–H3完成）**：共享组件目录、History anatomy、信息入口与Penpot源/七屏已同步；组件82项、定向browser及原有5项语义检查通过，primary完成代表组合渲染抽检。详见[执行记录](local-version-history-t059/component-first/README.md)。新原生候选包待构建/复查，T048与Phase7未完成，Mark微动仍owner-deferred。下文保留历史快照。
+
 **当前设计入口（2026-09-30）**：[唯一高保真目录](../design/local-version-history/high-fi/README.md)包含本轮已批准的7张画板。旧 task/revision 路径仅是下文历史证据的原始记录，可在 Git `45630f81c429ba30effe12118c200f193e713745` 中恢复。本轮只整理资产与引用，不新增实现或原生验收结论。
 
-**最新状态（2026-09-29，暂停等待 Penpot Review）**：负责人确认 `70132eb` 包的 Tab tooltip 正常；Mark 区域轻微肉眼弹跳真实性未确定，负责人要求停止修复。History 整体设计一致性另行纠正：共享系统字体标准已确认，Penpot 回填至 quick-check revision 98，新增 07 Unavailable 草稿，140 个文字角色绑定检查无差异、文件校验 0 错误。负责人要求完成回填与一次抽查后停止；代码对齐保持 WIP，typecheck 和 5 项定向测试失败，未进行修后浏览器/原生验证。详见 [Penpot Review 记录](local-version-history-t059/resume-20260929/penpot-backfill-review.json)。T048/Phase 7 未完成。
+**历史状态（2026-09-29，暂停等待 Penpot Review）**：负责人确认 `70132eb` 包的 Tab tooltip 正常；Mark 区域轻微肉眼弹跳真实性未确定，负责人要求停止修复。History 整体设计一致性另行纠正：共享系统字体标准已确认，Penpot 回填至 quick-check revision 98，新增 07 Unavailable 草稿，140 个文字角色绑定检查无差异、文件校验 0 错误。负责人要求完成回填与一次抽查后停止；代码对齐保持 WIP，typecheck 和 5 项定向测试失败，未进行修后浏览器/原生验证。详见 [Penpot Review 记录](local-version-history-t059/resume-20260929/penpot-backfill-review.json)。T048/Phase 7 未完成。
 
 
 **Current gate**: T004 low/high-fidelity baseline APPROVED; T048 revised low/high-fidelity APPROVED; production visual acceptance FAIL pending focused Mark fix

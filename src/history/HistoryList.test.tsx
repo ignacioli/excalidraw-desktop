@@ -37,13 +37,18 @@ describe("HistoryList", () => {
             marked: true,
             summary: "A title changed",
           }),
+          item({
+            versionId: "version-4",
+            sequence: 4,
+            summary: "Unmarked saved version",
+          }),
         ]}
         previewVersionId="version-2"
         selectedVersionId="version-2"
       />,
     );
 
-    expect(screen.getByText("Automatic")).toBeInTheDocument();
+    expect(screen.getAllByText("Automatic")).toHaveLength(2);
     expect(screen.getByText("Before restore")).toBeInTheDocument();
     expect(screen.getByText("Manual")).toBeInTheDocument();
     expect(screen.getByText("Marked")).toBeInTheDocument();

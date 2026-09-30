@@ -165,6 +165,8 @@ export function AppShell({
     useState<string | null>(null);
   const [historyPreviewContent, setHistoryPreviewContent] =
     useState<ReactNode>(null);
+  const [historyPreviewHost, setHistoryPreviewHost] =
+    useState<HTMLDivElement | null>(null);
   const historyMarkReuseItem =
     historyMarkReuseVersionId === null
       ? undefined
@@ -1575,71 +1577,77 @@ export function AppShell({
               : "canvas-region"
           }
         >
-          {startupState.status === "ready" &&
-          startupState.recoveredCount > 0 ? (
-            <RecoveryNotice count={startupState.recoveredCount} />
-          ) : null}
-          {showWelcome ? (
-            <WelcomeScreen
-              busy={welcomeBusy}
-              error={welcomeError}
-              errorVisuallyHidden={welcomeErrorVisuallyHidden}
-              unavailableWorkspaceId={unavailableWorkspaceId}
-              onNewDrawing={createWelcomeDrawing}
-              onOpenRecentWorkspace={openRecentWorkspace}
-              onOpenWorkspace={openWorkspace}
-              onRemoveRecentWorkspace={removeRecentWorkspace}
-              mountedWorkspaceIds={
-                new Set(mountedWorkspaces.map((workspace) => workspace.id))
-              }
-              workspaces={welcomeWorkspaces}
-            />
-          ) : documentSessions.length > 0 ? (
-            documentSessions.map((session) => (
-              <section
-                aria-labelledby={`tab-${session.id}`}
-                className="canvas-document"
-                hidden={session.id !== activeDocumentId}
-                id={`document-${session.id}`}
-                key={session.id}
-                role="tabpanel"
+          <div
+            className="canvas-current-content"
+            inert={historyPreviewVersionId !== null}
+          >
+            {startupState.status === "ready" &&
+            startupState.recoveredCount > 0 ? (
+              <RecoveryNotice count={startupState.recoveredCount} />
+            ) : null}
+            {showWelcome ? (
+              <WelcomeScreen
+                busy={welcomeBusy}
+                error={welcomeError}
+                errorVisuallyHidden={welcomeErrorVisuallyHidden}
+                unavailableWorkspaceId={unavailableWorkspaceId}
+                onNewDrawing={createWelcomeDrawing}
+                onOpenRecentWorkspace={openRecentWorkspace}
+                onOpenWorkspace={openWorkspace}
+                onRemoveRecentWorkspace={removeRecentWorkspace}
+                mountedWorkspaceIds={
+                  new Set(mountedWorkspaces.map((workspace) => workspace.id))
+                }
+                workspaces={welcomeWorkspaces}
+              />
+            ) : documentSessions.length > 0 ? (
+              documentSessions.map((session) => (
+                <section
+                  aria-labelledby={`tab-${session.id}`}
+                  className="canvas-document"
+                  hidden={session.id !== activeDocumentId}
+                  id={`document-${session.id}`}
+                  key={session.id}
+                  role="tabpanel"
+                >
+                  <ExcalidrawEditor
+                    documentId={session.id}
+                    initialScene={session.scene}
+                    protectedInput={protectedInputFor(session.id)}
+                    onSceneChange={(scene) =>
+                      documentManager.updateScene(session.id, scene)
+                    }
+                    onReady={handleEditorReady}
+                    readOnly={
+                      session.saveState === "conflicted" ||
+                      historyBusyDocumentIds.has(session.id)
+                    }
+                    theme={themeSnapshot.resolvedColorScheme}
+                  />
+                </section>
+              ))
+            ) : (
+              <div className="canvas-empty-state">
+                <p>Select a drawing to begin.</p>
+              </div>
+            )}
+            {historyOpen &&
+            historyMarkReuseItem !== undefined &&
+            activeSession !== undefined ? (
+              <div
+                aria-live="polite"
+                className="history-mark-reuse-notice"
+                role="status"
               >
-                <ExcalidrawEditor
-                  documentId={session.id}
-                  initialScene={session.scene}
-                  protectedInput={protectedInputFor(session.id)}
-                  onSceneChange={(scene) =>
-                    documentManager.updateScene(session.id, scene)
-                  }
-                  onReady={handleEditorReady}
-                  readOnly={
-                    session.saveState === "conflicted" ||
-                    historyBusyDocumentIds.has(session.id)
-                  }
-                  theme={themeSnapshot.resolvedColorScheme}
-                />
-              </section>
-            ))
-          ) : (
-            <div className="canvas-empty-state">
-              <p>Select a drawing to begin.</p>
-            </div>
-          )}
-          {historyOpen &&
-          historyMarkReuseItem !== undefined &&
-          activeSession !== undefined ? (
-            <div
-              aria-live="polite"
-              className="history-mark-reuse-notice"
-              role="status"
-            >
-              <strong>
-                Already marked · v-
-                {String(historyMarkReuseItem.sequence).padStart(3, "0")}
-              </strong>
-              <span>No new version. Focus moved to the saved version.</span>
-            </div>
-          ) : null}
+                <strong>
+                  Already marked · v-
+                  {String(historyMarkReuseItem.sequence).padStart(3, "0")}
+                </strong>
+                <span>No new version. Focus moved to the saved version.</span>
+              </div>
+            ) : null}
+          </div>
+          <div className="history-preview-root" ref={setHistoryPreviewHost} />
         </main>
         {historyOpen && activeSession !== undefined ? (
           <HistoryPanel
@@ -1666,6 +1674,7 @@ export function AppShell({
             onPreview={previewHistoryVersion}
             onRestore={restoreHistoryVersion}
             previewContent={historyPreviewContent}
+            previewPortalContainer={historyPreviewHost}
             previewErrorMessage={historyPanelMessage}
             restoreEnabled={
               historyPreviewRenderedVersionId === historyPreviewVersionId

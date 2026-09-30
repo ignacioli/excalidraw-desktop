@@ -1299,6 +1299,11 @@ body {
   background: var(--app-background);
 }
 
+.canvas-current-content {
+  position: absolute;
+  inset: 0;
+}
+
 .canvas-document,
 .excalidraw-editor {
   width: 100%;

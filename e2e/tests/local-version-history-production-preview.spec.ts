@@ -21,7 +21,7 @@ const EMPTY_SCENE = JSON.stringify({
 test.describe("production HistoryPanel preview", () => {
   test("opens from the saved active document and keeps the current draft unchanged", async ({
     page,
-  }) => {
+  }, testInfo) => {
     await openSavedDrawing(page, DOCUMENT_A, 500);
     await drawRectangle(page);
     const draftBeforePreview = await waitForDraft(page, DOCUMENT_A);
@@ -41,17 +41,19 @@ test.describe("production HistoryPanel preview", () => {
     });
     await panel.getByRole("option").first().press("Enter");
     await expect(
-      panel.getByRole("region", { name: "Read-only canvas preview" }),
+      page.getByRole("region", { name: "Read-only canvas preview" }),
     ).toBeVisible();
     await expect(restore).toBeDisabled();
 
     await expect(
-      panel.locator('[aria-label="Read-only version canvas"]'),
+      page
+        .getByRole("region", { name: "Read-only canvas preview" })
+        .locator("[data-preview-rendered]"),
     ).toHaveAttribute("data-preview-rendered", "true", { timeout: 15_000 });
     await expect(restore).toBeEnabled();
-    await expect(panel).toContainText(
-      "The current drawing remains separate and unchanged.",
-    );
+    await expect(
+      page.getByRole("region", { name: "Version preview", exact: true }),
+    ).toContainText("The current drawing remains separate and unchanged.");
     await expect
       .poll(async () => readHarnessDraft(page, DOCUMENT_A))
       .toBe(draftBeforePreview);
@@ -62,6 +64,14 @@ test.describe("production HistoryPanel preview", () => {
       { documentPath: DOCUMENT_A, versionId: "version-a" },
     ]);
     expect(state.writeCommands).toEqual([]);
+    await expect(page.locator(".history-preview-header")).toHaveCSS(
+      "height",
+      "56px",
+    );
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({
+      path: testInfo.outputPath("history-preview-canvas.png"),
+    });
   });
 
   test("ignores a stale preview response after switching the active document", async ({
@@ -78,7 +88,7 @@ test.describe("production HistoryPanel preview", () => {
     await expect(panel).toBeVisible();
     await panel.getByRole("option").first().press("Enter");
     await expect(
-      panel.getByRole("region", { name: "Read-only canvas preview" }),
+      page.getByRole("region", { name: "Read-only canvas preview" }),
     ).toBeVisible();
     await expect(
       panel.getByRole("button", { name: "Restore this version" }),
@@ -93,11 +103,11 @@ test.describe("production HistoryPanel preview", () => {
     await expect(panel).toContainText("history-preview-b.excalidraw");
     await expect(panel.getByRole("option").first()).toBeVisible();
     await expect(
-      panel.getByRole("region", { name: "Version preview" }),
+      page.getByRole("region", { name: "Version preview" }),
     ).toHaveCount(0);
     await page.waitForTimeout(900);
     await expect(
-      panel.getByRole("region", { name: "Version preview" }),
+      page.getByRole("region", { name: "Version preview" }),
     ).toHaveCount(0);
 
     const state = await readProductionHistoryState(page);
@@ -226,7 +236,8 @@ async function installProductionHistoryHarness(
               {
                 versionId: `version-${suffix}`,
                 source: "automatic",
-                recordedAt: Date.UTC(2025, 0, suffix === "a" ? 2 : 3, 12),
+                recordedAt:
+                  Date.UTC(2025, 0, suffix === "a" ? 2 : 3, 12) / 1000,
                 sequence: 1,
                 contentHash: "a".repeat(64),
                 availability: { status: "available" },

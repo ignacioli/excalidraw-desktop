@@ -22,62 +22,56 @@ describe("HistoryPreview", () => {
         content={<p>Independent scene</p>}
         item={previewItem}
         onExit={vi.fn()}
-        onRestore={vi.fn()}
       />,
     );
 
     expect(
       screen.getByRole("region", { name: "Version preview" }),
     ).toHaveAttribute("aria-readonly", "true");
-    expect(screen.getByText("Preview — read only")).toBeInTheDocument();
     expect(
-      screen.getByText("The current drawing remains separate and unchanged."),
+      screen.getByRole("heading", {
+        name: "Preview · v-001 · Two shapes added",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Read-only snapshot. The current drawing remains separate and unchanged.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("Independent scene")).toBeInTheDocument();
   });
 
-  it("calls exit, restore, and exposes the future actions slot", async () => {
+  it("calls exit and exposes the preview toolbar summary", async () => {
     const user = userEvent.setup();
     const onExit = vi.fn();
-    const onRestore = vi.fn();
-    render(
-      <HistoryPreview
-        item={previewItem}
-        moreActions={<button type="button">More version actions</button>}
-        onExit={onExit}
-        onRestore={onRestore}
-      />,
-    );
+    render(<HistoryPreview item={previewItem} onExit={onExit} />);
 
-    await user.click(
-      screen.getByRole("button", { name: "Restore this version" }),
-    );
     await user.click(
       screen.getByRole("button", { name: "Exit version preview" }),
     );
-    expect(onRestore).toHaveBeenCalledOnce();
     expect(onExit).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("button", { name: "More version actions" }),
+      screen.getByRole("heading", {
+        name: "Preview · v-001 · Two shapes added",
+      }),
     ).toBeInTheDocument();
   });
 
-  it("returns Escape to the caller and disables restore while loading or processing", async () => {
+  it("returns Escape to the caller and exposes loading state", async () => {
     const user = userEvent.setup();
     const onExit = vi.fn();
     render(
       <HistoryPreview
         item={previewItem}
         onExit={onExit}
-        onRestore={vi.fn()}
         processing
         state="loading"
       />,
     );
 
     expect(
-      screen.getByRole("button", { name: "Restore this version" }),
-    ).toBeDisabled();
+      screen.getByRole("region", { name: "Read-only canvas preview" }),
+    ).toHaveAttribute("aria-busy", "true");
     await user.keyboard("{Escape}");
     expect(onExit).toHaveBeenCalledOnce();
   });

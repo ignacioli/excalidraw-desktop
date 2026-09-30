@@ -25,10 +25,39 @@ export function historySourceLabel(item: HistoryVersionItem): string {
 export function formatHistoryTimestamp(recordedAt: number): string {
   const date = historyDate(recordedAt);
   if (date === undefined) return "Unknown time";
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
+  const today = new Date();
+  const dayDifference = calendarDayDifference(today, date);
+  const time = new Intl.DateTimeFormat(undefined, {
     timeStyle: "short",
   }).format(date);
+  if (dayDifference === 0) return `Today · ${time}`;
+  if (dayDifference === 1) return `Yesterday · ${time}`;
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
+    date,
+  );
+}
+
+export function historyAccessibleTimestamp(recordedAt: number): string {
+  const date = historyDate(recordedAt);
+  if (date === undefined) return "Unknown time";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "full",
+    timeStyle: "long",
+  }).format(date);
+}
+
+function calendarDayDifference(today: Date, date: Date): number {
+  const todayStart = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  const dateStart = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  );
+  return Math.round((todayStart.getTime() - dateStart.getTime()) / 86_400_000);
 }
 
 function historyDate(recordedAt: number): Date | undefined {

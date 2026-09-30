@@ -167,7 +167,7 @@ for (const colorScheme of ["light", "dark"] as const) {
 
 test("resizes by drag and keyboard without changing the selected version", async ({
   page,
-}) => {
+}, testInfo) => {
   const panel = historyPanel(page);
   const separator = panel.getByRole("separator", {
     name: "Resize version history panel",
@@ -186,6 +186,12 @@ test("resizes by drag and keyboard without changing the selected version", async
   await page.mouse.up();
   await expect(separator).toHaveAttribute("aria-valuenow", "300");
   await expect(panel).toHaveCSS("width", "300px");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.evaluate(() => document.fonts.ready);
+  await page.screenshot({
+    path: testInfo.outputPath("history-compact-dark.png"),
+  });
+  await page.emulateMedia({ colorScheme: "light" });
   await expect(selectedActions).toContainText("v-000");
 
   await separator.focus();
@@ -323,7 +329,7 @@ test("matches approved History hierarchy and typography before native packaging"
         ".history-selection-actions button",
       ),
     ];
-    const policy = required(".history-retention-policy");
+    const info = required('button[aria-label="History info"]');
     const mark = required(".history-mark-current");
     const count = panel.querySelector<HTMLElement>(".history-version-count");
     return {
@@ -331,7 +337,11 @@ test("matches approved History hierarchy and typography before native packaging"
         .length,
       fontFamilies: getComputedStyle(heading)
         .fontFamily.split(",")
-        .map((family) => family.trim().replaceAll('"', "")),
+        .map((family) => family.trim().replaceAll('"', ""))
+        // Chromium serializes this native alias as system-ui.
+        .map((family) =>
+          family === "BlinkMacSystemFont" ? "system-ui" : family,
+        ),
       headingSize: Number.parseFloat(getComputedStyle(heading).fontSize),
       headingWeight: Number(getComputedStyle(heading).fontWeight),
       filenameSize: Number.parseFloat(getComputedStyle(filename).fontSize),
@@ -343,12 +353,16 @@ test("matches approved History hierarchy and typography before native packaging"
         summary.getBoundingClientRect().top < time.getBoundingClientRect().top,
       currentCardHeight: Math.round(current.getBoundingClientRect().height),
       targetWeight: Number(getComputedStyle(target).fontWeight),
-      policyOutsideVisualFlow: policy.getBoundingClientRect().width <= 1,
+      policyOutsideVisualFlow: info.getAttribute("aria-expanded") === "false",
       countAndMarkInline:
         count !== null &&
         Math.abs(
           count.getBoundingClientRect().top - mark.getBoundingClientRect().top,
         ) < 12,
+      actionTextAlignment: actions.map(
+        (button) => getComputedStyle(button).textAlign,
+      ),
+      secondaryBackground: getComputedStyle(actions[0]).backgroundColor,
       actionHeights: actions.map((button) =>
         Math.round(button.getBoundingClientRect().height),
       ),
@@ -365,12 +379,7 @@ test("matches approved History hierarchy and typography before native packaging"
   });
   const expected = {
     redundantEyebrowCount: 0,
-    fontFamilies: [
-      "-apple-system",
-      "BlinkMacSystemFont",
-      "Segoe UI",
-      "sans-serif",
-    ],
+    fontFamilies: ["-apple-system", "system-ui", "Segoe UI", "sans-serif"],
     headingSize: shellDesign.primitives["font.size.section"].value,
     headingWeight: shellDesign.primitives["font.weight.semibold"].value,
     filenameSize: shellDesign.primitives["font.size.label"].value,
@@ -383,6 +392,8 @@ test("matches approved History hierarchy and typography before native packaging"
     targetWeight: shellDesign.primitives["font.weight.semibold"].value,
     policyOutsideVisualFlow: true,
     countAndMarkInline: true,
+    actionTextAlignment: ["left", "left"],
+    secondaryBackground: designColor("light", "color.panel.background"),
     actionHeights: [
       historyDesign.components.selectedVersionActions.height,
       historyDesign.components.selectedVersionActions.height,
@@ -395,6 +406,9 @@ test("matches approved History hierarchy and typography before native packaging"
     contentType: "application/json",
   });
   expect(actual).toEqual(expected);
+  await page.screenshot({
+    path: testInfo.outputPath("history-default-light.png"),
+  });
 });
 
 test("keeps populated History geometry stable through both Mark paths", async ({
@@ -617,3 +631,94 @@ function durationInMilliseconds(value: string): number {
     ? numeric * 1_000
     : numeric;
 }
+
+test("History info explains retention without displacing the version list", async ({
+  page,
+}) => {
+  const panel = historyPanel(page);
+  const row = panel.getByRole("option").first();
+  const before = await row.boundingBox();
+  const info = panel.getByRole("button", { name: "History info", exact: true });
+  await info.click();
+  await expect(info).toHaveAttribute("aria-expanded", "true");
+  await expect(
+    panel.getByText("Version retention", { exact: true }),
+  ).toBeVisible();
+  await expect(panel.getByText(/They do not expire by age/)).toBeVisible();
+  const after = await row.boundingBox();
+  expect(after?.y).toBe(before?.y);
+  await page.keyboard.press("Escape");
+  await expect(info).toHaveAttribute("aria-expanded", "false");
+  await expect(info).toBeFocused();
+  await expect(panel).toBeVisible();
+});
+
+test("unavailable selection explains the failure and prevents preview and restore", async ({
+  page,
+}, testInfo) => {
+  await historyPanel(page)
+    .getByRole("button", { name: "Close version history" })
+    .click();
+  await page.evaluate(() => {
+    const browser = globalThis as typeof globalThis & {
+      __TAURI_INTERNALS__: {
+        invoke: (
+          command: string,
+          args?: Record<string, unknown>,
+        ) => Promise<unknown>;
+      };
+    };
+    const invoke = browser.__TAURI_INTERNALS__.invoke.bind(
+      browser.__TAURI_INTERNALS__,
+    );
+    browser.__TAURI_INTERNALS__.invoke = async (command, args) => {
+      const result = await invoke(command, args);
+      if (command !== "history_list") return result;
+      const response = result as { items: Array<{ versionId: string }> };
+      return {
+        ...response,
+        items: response.items.map((item, index) =>
+          index === 0
+            ? {
+                ...item,
+                availability: {
+                  status: "unavailable",
+                  error: {
+                    code: "HISTORY_RESOURCE_MISSING",
+                    message: "Image bytes are missing.",
+                    retriable: false,
+                  },
+                },
+              }
+            : item,
+        ),
+      };
+    };
+  });
+  await emitBrowserTauriEvent(page, "native-menu-command", {
+    command: "versionHistory",
+  });
+  const panel = historyPanel(page);
+  await expect(panel.getByRole("option").first()).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const detail = panel.getByRole("region", {
+    name: "Selected version actions",
+  });
+  await expect(detail).toContainText("Image bytes are missing.");
+  await expect(detail.locator(".history-selection-eyebrow")).toContainText(
+    /unavailable/i,
+  );
+  await expect(detail).toContainText("Your current drawing is unchanged.");
+  await expect(
+    detail.getByRole("button", { name: "Preview", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    detail.getByRole("button", { name: "Restore this version", exact: true }),
+  ).toBeDisabled();
+  await page.evaluate(() => document.fonts.ready);
+  await page.screenshot({
+    path: testInfo.outputPath("history-unavailable-light.png"),
+  });
+});

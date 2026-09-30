@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
   waitFor,
 } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -918,9 +919,11 @@ describe("AppShell", () => {
       screen.getByRole("button", { name: "Mark current version" }),
     );
 
-    expect(
-      await screen.findByText("Already marked. Selected the existing version."),
-    ).toBeInTheDocument();
+    const reuseMessage = await screen.findByText("Already marked · v-001");
+    const reuseNotice = reuseMessage.closest('[role="status"]');
+    expect(reuseNotice).not.toBeNull();
+    expect(reuseNotice).toHaveTextContent("Already marked · v-001");
+    expect(reuseNotice).toHaveTextContent("No new version.");
     expect(invoker).toHaveBeenCalledWith(
       "history_mark",
       expect.objectContaining({
@@ -979,6 +982,18 @@ describe("AppShell", () => {
 
     await screen.findByRole("complementary", { name: "Version History" });
     await user.click(await screen.findByRole("button", { name: "Preview" }));
+    const previewRoot = screen.getByRole("main", { name: "Drawing canvas" });
+    expect(
+      within(previewRoot).getByRole("region", { name: "Version preview" }),
+    ).toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole("complementary", { name: "Version History" }),
+      ).getByRole("listbox", { name: "Version history" }),
+    ).toBeInTheDocument();
+    expect(document.querySelector(".canvas-current-content")).toHaveAttribute(
+      "inert",
+    );
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("history_preview", {
         document: { kind: "path", path: "/tmp/drawing.excalidraw" },

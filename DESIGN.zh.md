@@ -138,6 +138,8 @@ accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍�
 
 ## 验证契约
 
+以下六屏合同记录初始 desktop-shell 重设计的验收。后续视觉 feature 遵循[共享组件目录](docs/design/components.md)：实现前定义 component anatomy，先验收变更组件，再按风险抽检代表页面组合。未变组件复用适用证据；功能、平台与 owner 接受仍遵守各自 feature 合同。该流程不重开或改写历史 shell gate 结果。
+
 初始实现必须提供以下证据：
 
 - 浅色、深色与跟随系统行为；

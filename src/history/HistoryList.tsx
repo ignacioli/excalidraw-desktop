@@ -7,6 +7,7 @@ import {
 import type { HistoryVersionItem } from "./types";
 import {
   formatHistoryTimestamp,
+  historyAccessibleTimestamp,
   historyDateTime,
   historySourceLabel,
 } from "./historyFormat";
@@ -155,9 +156,14 @@ export function HistoryList({
                 type="button"
               >
                 <span className="history-list-row-main">
-                  <span className="history-list-summary">{summary}</span>
+                  <span className="history-list-summary" title={summary}>
+                    {summary}
+                  </span>
                   <span className="history-list-metadata">
-                    <time dateTime={dateTime}>
+                    <time
+                      dateTime={dateTime}
+                      title={historyAccessibleTimestamp(item.recordedAt)}
+                    >
                       {formatHistoryTimestamp(item.recordedAt)}
                     </time>
                     <span aria-hidden="true">·</span>

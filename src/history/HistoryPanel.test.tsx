@@ -43,12 +43,40 @@ describe("HistoryPanel", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("planning.excalidraw")).toBeInTheDocument();
     expect(
-      screen.getByText(/newest 20 entries.*do not expire by age/i),
-    ).toBeInTheDocument();
+      screen.getByRole("button", { name: "History info" }),
+    ).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled();
     expect(
       screen.getByRole("button", { name: "Restore this version" }),
     ).toBeEnabled();
+  });
+
+  it("opens retention information from the header and closes it with Escape", async () => {
+    const user = userEvent.setup();
+    render(
+      <HistoryPanel
+        fileName="planning.excalidraw"
+        items={[makeItem()]}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const info = screen.getByRole("button", { name: "History info" });
+    await user.click(info);
+    expect(info).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getByRole("region", { name: "Version retention" }),
+    ).toHaveTextContent(
+      "Automatic and before-operation versions share the newest 20 entries. They do not expire by age. Manual marks stay until you delete them.",
+    );
+    expect(screen.getByRole("option")).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Version retention" }),
+    ).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(info).toHaveAttribute("aria-expanded", "false");
+    expect(info).toHaveFocus();
   });
 
   it("fails closed when the caller cannot provide a rendered preview", () => {
@@ -65,6 +93,61 @@ describe("HistoryPanel", () => {
     expect(
       screen.getByRole("button", { name: "Restore this version" }),
     ).toBeDisabled();
+  });
+
+  it("binds Preview-time Restore readiness to the selected rendered version", () => {
+    const first = makeItem({ versionId: "version-a", sequence: 1 });
+    const second = makeItem({ versionId: "version-b", sequence: 2 });
+    const props = {
+      fileName: "drawing.excalidraw",
+      items: [first, second],
+      onClose: vi.fn(),
+      onRestore: vi.fn(),
+    };
+    const { rerender } = render(
+      <HistoryPanel
+        {...props}
+        previewVersionId="version-a"
+        restoreEnabled
+        selectedVersionId="version-a"
+      />,
+    );
+    const restore = screen.getByRole("button", {
+      name: "Restore this version",
+    });
+    expect(restore).toBeEnabled();
+
+    rerender(
+      <HistoryPanel
+        {...props}
+        previewVersionId="version-a"
+        restoreEnabled
+        selectedVersionId="version-b"
+      />,
+    );
+    expect(restore).toBeDisabled();
+
+    rerender(
+      <HistoryPanel
+        {...props}
+        previewState="loading"
+        previewVersionId="version-b"
+        restoreEnabled={false}
+        selectedVersionId="version-b"
+      />,
+    );
+    expect(restore).toBeDisabled();
+
+    rerender(
+      <HistoryPanel
+        {...props}
+        previewState="ready"
+        previewVersionId="version-b"
+        restoreEnabled
+        selectedVersionId="version-b"
+      />,
+    );
+    expect(restore).toBeEnabled();
   });
 
   it.each(["selected action", "preview"] as const)(
@@ -308,15 +391,71 @@ describe("HistoryPanel", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Preview" }));
-    expect(screen.getByText("Preview — read only")).toBeInTheDocument();
     expect(
-      screen.getByText("The current drawing remains separate and unchanged."),
+      screen.getByRole("heading", {
+        name: "Preview · v-001 · Two shapes added",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Read-only snapshot. The current drawing remains separate and unchanged.",
+      ),
     ).toBeInTheDocument();
     await user.keyboard("{Escape}");
     expect(onExitPreview).toHaveBeenCalledOnce();
     expect(screen.getByRole("option")).toHaveFocus();
     expect(onClose).not.toHaveBeenCalled();
     trigger.remove();
+  });
+
+  it("exits preview when a completed list refresh removes its target", () => {
+    const onExitPreview = vi.fn();
+    const item = makeItem({ versionId: "preview-target" });
+    const { rerender } = render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[item]}
+        onClose={vi.fn()}
+        onExitPreview={onExitPreview}
+        previewVersionId={item.versionId}
+        selectedVersionId={item.versionId}
+      />,
+    );
+    expect(
+      screen.getByRole("region", { name: "Version preview" }),
+    ).toBeInTheDocument();
+
+    rerender(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[]}
+        onClose={vi.fn()}
+        onExitPreview={onExitPreview}
+        previewVersionId={item.versionId}
+        selectedVersionId={item.versionId}
+        status="empty"
+      />,
+    );
+    expect(onExitPreview).toHaveBeenCalledOnce();
+    expect(onExitPreview).toHaveBeenCalledWith();
+    expect(
+      screen.queryByRole("region", { name: "Version preview" }),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[]}
+        onClose={vi.fn()}
+        onExitPreview={onExitPreview}
+        previewVersionId={null}
+        selectedVersionId={item.versionId}
+        status="empty"
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Close version history" }),
+    ).toHaveFocus();
   });
 
   it("returns drawer Escape to the trigger and disables actions for unavailable or processing items", async () => {
@@ -350,6 +489,12 @@ describe("HistoryPanel", () => {
     );
 
     expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
+    expect(
+      screen.getByRole("region", { name: "Selected version actions" }),
+    ).toHaveTextContent("Missing resource Your current drawing is unchanged.");
+    expect(
+      screen.getByRole("region", { name: "Selected version actions" }),
+    ).toHaveTextContent("Selected version · unavailable");
     expect(
       screen.getByRole("button", { name: "Restore this version" }),
     ).toBeDisabled();
@@ -493,6 +638,7 @@ describe("HistoryPanel", () => {
     const { rerender } = render(
       <HistoryPanel
         fileName="drawing.excalidraw"
+        items={[makeItem({ versionId: "existing-mark", sequence: 2 })]}
         onClose={vi.fn()}
         onMark={onMark}
       />,
@@ -504,10 +650,14 @@ describe("HistoryPanel", () => {
     expect(
       screen.getByText("Already marked. Selected the existing version."),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Selected version actions" }),
+    ).toHaveTextContent("Selected version · reused target");
 
     rerender(
       <HistoryPanel
         fileName="drawing.excalidraw"
+        items={[makeItem({ versionId: "existing-mark", sequence: 2 })]}
         onClose={vi.fn()}
         onMark={onMark}
       />,
@@ -567,9 +717,11 @@ describe("HistoryPanel", () => {
     const lastRow = screen.getAllByRole("option")[49];
     expect(lastRow).toHaveFocus();
     expect(lastRow).toHaveAttribute("aria-selected", "true");
-    expect(
-      screen.getByRole("region", { name: "Selected version actions" }),
-    ).toHaveTextContent("v-050 · Canvas change 50");
+    const selectedDetails = screen.getByRole("region", {
+      name: "Selected version actions",
+    });
+    expect(selectedDetails).toHaveTextContent("Canvas change 50");
+    expect(selectedDetails).toHaveTextContent(/v-050/);
     const details = within(
       screen.getByRole("region", { name: "Selected version actions" }),
     );
@@ -635,9 +787,11 @@ describe("HistoryPanel", () => {
     expect(separator).toHaveAttribute("aria-valuenow", "300");
     expect(separator).toHaveFocus();
     expect(panel).toHaveAttribute("data-compact", "true");
-    expect(
-      screen.getByRole("region", { name: "Selected version actions" }),
-    ).toHaveTextContent("v-007 · Canvas changed");
+    const selectedDetails = screen.getByRole("region", {
+      name: "Selected version actions",
+    });
+    expect(selectedDetails).toHaveTextContent("Canvas changed");
+    expect(selectedDetails).toHaveTextContent(/v-007/);
 
     await user.keyboard("{ArrowRight}");
     expect(separator).toHaveAttribute("aria-valuenow", "300");

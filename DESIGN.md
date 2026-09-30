@@ -138,6 +138,8 @@ Later built-in themes and user-defined themes extend the system through validate
 
 ## Verification contract
 
+The following six-screen contract records the initial desktop-shell redesign. Subsequent visual feature work follows the [shared component catalog](docs/design/components.md): define component anatomy before implementation, validate changed components first, then sample representative page compositions by risk. Reuse applicable evidence for unchanged components; retain feature-specific functional, platform and owner acceptance requirements. This does not reopen or rewrite historical shell gate results.
+
 The initial implementation must provide evidence for:
 
 - Light, dark, and follow-system behavior;

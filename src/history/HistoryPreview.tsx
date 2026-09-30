@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  type KeyboardEvent,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { HistoryStateView } from "./HistoryStates";
 import type { HistoryVersionView } from "./HistoryList";
 
@@ -16,13 +10,7 @@ export interface HistoryPreviewProps {
   errorMessage?: string;
   content?: ReactNode;
   processing?: boolean;
-  /** Allows callers without a safe rendered preview to fail closed. */
-  restoreEnabled?: boolean;
   onExit(): void;
-  onRestore(): void;
-  /** Future action menus (Mark/Delete) are caller-owned and optional. */
-  moreActions?: ReactNode;
-  restoreButtonRef?: RefObject<HTMLButtonElement | null>;
 }
 
 /** Independent read-only preview surface; it never owns the current canvas. */
@@ -32,11 +20,7 @@ export function HistoryPreview({
   errorMessage,
   content,
   processing = false,
-  restoreEnabled = true,
   onExit,
-  onRestore,
-  moreActions,
-  restoreButtonRef,
 }: HistoryPreviewProps) {
   const exitButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -61,8 +45,14 @@ export function HistoryPreview({
     >
       <div className="history-preview-header">
         <div>
-          <p className="history-preview-eyebrow">Preview — read only</p>
-          <h2>{formatPreviewTitle(item)}</h2>
+          <h2>
+            Preview · v-{String(item.sequence).padStart(3, "0")} ·{" "}
+            {formatPreviewTitle(item)}
+          </h2>
+          <p className="history-preview-separation">
+            Read-only snapshot. The current drawing remains separate and
+            unchanged.
+          </p>
         </div>
         <button
           aria-label="Exit version preview"
@@ -75,10 +65,6 @@ export function HistoryPreview({
           <span className="visually-hidden">Exit preview</span>
         </button>
       </div>
-
-      <p className="history-preview-separation" role="status">
-        The current drawing remains separate and unchanged.
-      </p>
 
       <div
         aria-busy={state === "loading" || processing}
@@ -97,26 +83,6 @@ export function HistoryPreview({
             </p>
           ))
         )}
-      </div>
-
-      <div className="history-preview-actions">
-        <button
-          className="primary-action"
-          disabled={processing || state !== "ready" || !restoreEnabled}
-          onClick={onRestore}
-          ref={restoreButtonRef}
-          type="button"
-        >
-          Restore this version
-        </button>
-        {moreActions !== undefined ? (
-          <div
-            aria-label="More version actions"
-            className="history-preview-more-actions"
-          >
-            {moreActions}
-          </div>
-        ) : null}
       </div>
     </section>
   );

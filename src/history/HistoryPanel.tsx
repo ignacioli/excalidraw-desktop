@@ -9,11 +9,13 @@ import {
   type RefObject,
   type CSSProperties,
 } from "react";
+import { createPortal } from "react-dom";
 import { ApplicationDialog } from "../app/interaction/ApplicationDialog";
 import { HistoryList, type HistoryVersionView } from "./HistoryList";
 import {
   formatHistoryTimestamp,
   historyDateTime,
+  historyAccessibleTimestamp,
   historySourceLabel,
 } from "./historyFormat";
 import { HistoryPreview, type HistoryPreviewState } from "./HistoryPreview";
@@ -37,6 +39,8 @@ export interface HistoryPanelProps {
   previewState?: HistoryPreviewState;
   previewErrorMessage?: string;
   previewContent?: ReactNode;
+  /** AppShell canvas-region host for the independent preview surface. */
+  previewPortalContainer?: HTMLElement | null;
   /** Callers without a safe rendered preview must keep restore disabled. */
   restoreEnabled?: boolean;
   processing?: boolean;
@@ -44,7 +48,7 @@ export interface HistoryPanelProps {
   onRetry?: () => void;
   onSelect?: (item: HistoryVersionView) => void;
   onPreview?: (item: HistoryVersionView) => void;
-  onExitPreview?: (item: HistoryVersionView) => void;
+  onExitPreview?: (item?: HistoryVersionView) => void;
   onRestore?: (item: HistoryVersionView) => void | Promise<void>;
   onDelete?: (item: HistoryVersionView) => void | Promise<void>;
   /** Marks the live canvas; the caller resolves only after durable publish. */
@@ -92,6 +96,7 @@ export function HistoryPanel({
   previewState = "ready",
   previewErrorMessage,
   previewContent,
+  previewPortalContainer,
   restoreEnabled = true,
   processing = false,
   onClose,
@@ -131,6 +136,7 @@ export function HistoryPanel({
     | { status: "error"; message: string }
     | null
   >(null);
+  const [reusedTargetId, setReusedTargetId] = useState<string | null>(null);
   const [markBusy, setMarkBusy] = useState(false);
   const [setMarkedBusy, setSetMarkedBusy] = useState(false);
   const markIsProcessing = markProcessing || markBusy || setMarkedBusy;
@@ -162,7 +168,6 @@ export function HistoryPanel({
   const restoreCancelRef = useRef<HTMLButtonElement>(null);
   const restoreReturnFocusRef = useRef<HTMLElement | null>(null);
   const selectedRestoreRef = useRef<HTMLButtonElement>(null);
-  const previewRestoreRef = useRef<HTMLButtonElement>(null);
   const restoreInFlightRef = useRef(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
@@ -172,6 +177,30 @@ export function HistoryPanel({
   const previewReturnIdRef = useRef<string | null>(null);
   const panelRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const infoButtonRef = useRef<HTMLButtonElement>(null);
+  const infoPopoverRef = useRef<HTMLDivElement>(null);
+  const [retentionInfoOpen, setRetentionInfoOpen] = useState(false);
+
+  useEffect(() => {
+    if (!retentionInfoOpen) return;
+    infoPopoverRef.current?.focus();
+    const dismissOnOutsidePointer = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !infoPopoverRef.current?.contains(event.target) &&
+        !infoButtonRef.current?.contains(event.target)
+      ) {
+        setRetentionInfoOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", dismissOnOutsidePointer, true);
+    return () =>
+      document.removeEventListener(
+        "pointerdown",
+        dismissOnOutsidePointer,
+        true,
+      );
+  }, [retentionInfoOpen]);
 
   useEffect(() => {
     if (openActionsTarget === null) return;
@@ -206,13 +235,39 @@ export function HistoryPanel({
   const visibleDeleteTarget = deleteDocumentChanged ? null : deleteTarget;
   const visibleRestoreTarget =
     restoreTarget?.documentId === activeDocumentKey ? restoreTarget : null;
+  const activeSelectedId =
+    selectedVersionId ??
+    (internalSelectedId !== null &&
+    items.some((item) => item.versionId === internalSelectedId)
+      ? internalSelectedId
+      : (items[0]?.versionId ?? null));
+  const requestedPreviewId =
+    previewVersionId === undefined ? internalPreviewId : previewVersionId;
+  const previewTargetMissing =
+    requestedPreviewId !== null &&
+    (status === "available" || status === "empty") &&
+    !items.some((item) => item.versionId === requestedPreviewId);
+  const activePreviewId = previewTargetMissing ? null : requestedPreviewId;
+  const selectedItem =
+    items.find((item) => item.versionId === activeSelectedId) ??
+    (activeSelectedId === null ? items[0] : undefined);
+  const previewItem = items.find((item) => item.versionId === activePreviewId);
+  const selectedRestoreReady =
+    selectedItem !== undefined &&
+    restoreEnabled &&
+    (activePreviewId === null ||
+      (selectedItem.versionId === activePreviewId && previewState === "ready"));
   const restoreTargetInvalidMessage =
     visibleRestoreTarget === null
       ? null
       : status !== "available"
         ? "Version history is changing. Cancel and reopen Restore when the list is ready."
-        : !restoreEnabled
-          ? "A safe preview is no longer available. Cancel and reopen Restore."
+        : !restoreEnabled ||
+            (activePreviewId !== null &&
+              (selectedItem?.versionId !== activePreviewId ||
+                visibleRestoreTarget.item.versionId !== activePreviewId ||
+                previewState !== "ready"))
+          ? "A safe preview of this version is no longer available. Cancel and preview it again before restoring."
           : items.some(
                 (item) =>
                   item.versionId === visibleRestoreTarget.item.versionId &&
@@ -232,23 +287,14 @@ export function HistoryPanel({
           ? null
           : "This version is no longer available. Reopen the history menu to choose an available version.";
 
-  const activeSelectedId =
-    selectedVersionId ??
-    (internalSelectedId !== null &&
-    items.some((item) => item.versionId === internalSelectedId)
-      ? internalSelectedId
-      : (items[0]?.versionId ?? null));
-  const activePreviewId = previewVersionId ?? internalPreviewId;
-  const selectedItem =
-    items.find((item) => item.versionId === activeSelectedId) ??
-    (activeSelectedId === null ? items[0] : undefined);
-  const previewItem = items.find((item) => item.versionId === activePreviewId);
-
   useEffect(() => {
-    if (activePreviewId !== null || previewReturnIdRef.current === null) return;
-    const returnId = previewReturnIdRef.current;
-    previewReturnIdRef.current = null;
-    rowRefs.current.get(returnId)?.focus();
+    if (activePreviewId === null && previewReturnIdRef.current !== null) {
+      const returnId = previewReturnIdRef.current;
+      previewReturnIdRef.current = null;
+      const row = rowRefs.current.get(returnId);
+      if (row !== undefined) row.focus();
+      else closeButtonRef.current?.focus();
+    }
   }, [activePreviewId]);
 
   const previousControlledSelectionRef = useRef<string | null | undefined>(
@@ -266,13 +312,14 @@ export function HistoryPanel({
     const selectionChanged =
       previousControlledSelectionRef.current !== selectedVersionId;
     previousControlledSelectionRef.current = selectedVersionId;
-    if (selectionChanged) {
+    if (selectionChanged && activePreviewId === null) {
       row.scrollIntoView?.({ block: "nearest" });
       row.focus();
     }
-  }, [items, selectedVersionId]);
+  }, [activePreviewId, items, selectedVersionId]);
 
   const selectItem = (item: HistoryVersionView) => {
+    if (item.versionId !== reusedTargetId) setReusedTargetId(null);
     if (selectedVersionId === undefined) setInternalSelectedId(item.versionId);
     onSelect?.(item);
   };
@@ -285,16 +332,27 @@ export function HistoryPanel({
   };
 
   const exitPreview = () => {
-    if (previewItem === undefined) return;
-    previewReturnIdRef.current = previewItem.versionId;
+    if (activePreviewId === null) return;
+    previewReturnIdRef.current = activePreviewId;
     if (previewVersionId === undefined) setInternalPreviewId(null);
     onExitPreview?.(previewItem);
   };
+
+  useEffect(() => {
+    if (!previewTargetMissing || requestedPreviewId === null) return;
+    closeButtonRef.current?.focus();
+    onExitPreview?.();
+  }, [onExitPreview, previewTargetMissing, requestedPreviewId]);
 
   const closePanel = () => {
     triggerRef?.current?.focus();
     onClose();
   };
+
+  /*
+   * Keep these callbacks below the preview identity calculation so removal
+   * events can dismiss a preview even after its list item has disappeared.
+   */
 
   const setPanelWidth = (nextWidth: number) => {
     const clampedWidth = Math.max(300, Math.min(360, nextWidth));
@@ -344,21 +402,26 @@ export function HistoryPanel({
   const handleMark = async () => {
     if (onMark === undefined || processing || markIsProcessing) return;
     setMarkFeedback(null);
+    setReusedTargetId(null);
     setMarkBusy(true);
     try {
       const result = await onMark();
-      if (result != null && selectedVersionId === undefined) {
-        setInternalSelectedId(result.versionId);
+      const outcome = result ?? undefined;
+      if (outcome !== undefined && selectedVersionId === undefined) {
+        setInternalSelectedId(outcome.versionId);
       }
       if (result === null) return;
-      if (result.reused) onMarkReuse?.(result.versionId);
-      if (result.reused && onMarkReuse !== undefined) {
+      if (outcome?.reused) {
+        setReusedTargetId(outcome.versionId);
+        onMarkReuse?.(outcome.versionId);
+      }
+      if (outcome?.reused && onMarkReuse !== undefined) {
         setMarkFeedback(null);
         return;
       }
       setMarkFeedback({
         status: "success",
-        message: result?.reused
+        message: outcome?.reused
           ? "Already marked. Selected the existing version."
           : markSuccessMessage,
       });
@@ -379,14 +442,23 @@ export function HistoryPanel({
       return;
     }
     setMarkFeedback(null);
+    setReusedTargetId(null);
     setSetMarkedBusy(true);
     try {
       const result = await onSetMarked(item, marked);
+      if (
+        !marked &&
+        result !== undefined &&
+        result.retained === false &&
+        activePreviewId === item.versionId
+      ) {
+        exitPreview();
+      }
       setMarkFeedback({
         status: "success",
         message: marked
           ? "Version marked."
-          : result?.retained === false
+          : result !== undefined && result.retained === false
             ? "Version unmarked and removed by the retention policy."
             : "Version unmarked.",
       });
@@ -408,6 +480,11 @@ export function HistoryPanel({
     }
     if (event.key !== "Escape") return;
     event.preventDefault();
+    if (retentionInfoOpen) {
+      setRetentionInfoOpen(false);
+      infoButtonRef.current?.focus();
+      return;
+    }
     if (openActionsTarget !== null) {
       setOpenActionsTarget(null);
       actionsTriggerRefs.current.get(openActionsTarget.item.versionId)?.focus();
@@ -437,6 +514,7 @@ export function HistoryPanel({
     setDeleteBusy(true);
     try {
       await onDelete(item);
+      if (activePreviewId === item.versionId) exitPreview();
       deleteReturnFocusRef.current = closeButtonRef.current;
       setDeleteFeedback({ status: "success", message: deleteSuccessMessage });
       setDeleteTarget(null);
@@ -460,7 +538,8 @@ export function HistoryPanel({
       onRestore === undefined ||
       processing ||
       restoreBusy ||
-      !restoreEnabled ||
+      !selectedRestoreReady ||
+      selectedItem?.versionId !== item.versionId ||
       status !== "available" ||
       item.availability.status !== "available" ||
       !items.some((candidate) => candidate.versionId === item.versionId)
@@ -689,6 +768,18 @@ export function HistoryPanel({
     );
   };
 
+  const previewElement =
+    previewItem === undefined ? null : (
+      <HistoryPreview
+        content={previewContent}
+        errorMessage={previewErrorMessage}
+        item={previewItem}
+        onExit={exitPreview}
+        processing={processing}
+        state={previewState}
+      />
+    );
+
   return (
     <aside
       aria-labelledby="history-panel-title"
@@ -735,17 +826,48 @@ export function HistoryPanel({
             {fileName}
           </p>
         </div>
-        <button
-          aria-label="Close version history"
-          className="icon-button"
-          onClick={closePanel}
-          ref={closeButtonRef}
-          type="button"
-        >
-          <CloseIcon />
-          <span className="visually-hidden">Close</span>
-        </button>
+        <div className="history-panel-header-actions">
+          <button
+            aria-controls="history-retention-info"
+            aria-expanded={retentionInfoOpen}
+            aria-label="History info"
+            className="history-info-trigger"
+            onClick={() => setRetentionInfoOpen((open) => !open)}
+            ref={infoButtonRef}
+            title="History info"
+            type="button"
+          >
+            <InfoIcon />
+          </button>
+          <div className="history-close-anchor">
+            <button
+              aria-label="Close version history"
+              className="icon-button"
+              onClick={closePanel}
+              ref={closeButtonRef}
+              type="button"
+            >
+              <CloseIcon />
+              <span className="visually-hidden">Close</span>
+            </button>
+          </div>
+        </div>
       </header>
+      <div
+        aria-labelledby="history-retention-heading"
+        className="history-retention-popover"
+        hidden={!retentionInfoOpen}
+        id="history-retention-info"
+        ref={infoPopoverRef}
+        role="region"
+        tabIndex={-1}
+      >
+        <h2 id="history-retention-heading">Version retention</h2>
+        <p>
+          Automatic and before-operation versions share the newest 20 entries.
+          They do not expire by age. Manual marks stay until you delete them.
+        </p>
+      </div>
 
       <div className="history-panel-main">
         <div className="history-panel-body">
@@ -760,10 +882,6 @@ export function HistoryPanel({
                 "The history document changed. Reopen the version menu before acting."}
             </p>
           ) : null}
-          <p className="history-retention-policy visually-hidden">
-            Automatic and before-operation versions share the newest 20 entries.
-            They do not expire by age. Manual marks stay until you delete them.
-          </p>
           {onMark !== undefined ? (
             <section
               aria-label="Current drawing"
@@ -776,7 +894,7 @@ export function HistoryPanel({
               <div className="history-version-toolbar">
                 <span className="history-version-count">
                   {items.length} {items.length === 1 ? "version" : "versions"}{" "}
-                  loaded
+                  shown
                 </span>
                 <button
                   className="history-mark-current"
@@ -796,32 +914,15 @@ export function HistoryPanel({
               aria-live={
                 markFeedback.status === "error" ? "assertive" : "polite"
               }
-              className={
-                markFeedback.status === "success"
-                  ? "history-mark-feedback visually-hidden"
-                  : "history-mark-feedback"
-              }
+              className={`history-mark-feedback is-${markFeedback.status}`}
               role={markFeedback.status === "error" ? "alert" : "status"}
             >
               {markFeedback.message}
             </p>
           ) : null}
-          {previewItem !== undefined ? (
+          {previewItem !== undefined && previewPortalContainer === undefined ? (
             <>
-              <HistoryPreview
-                content={previewContent}
-                errorMessage={previewErrorMessage}
-                item={previewItem}
-                moreActions={actionsFor(previewItem)}
-                onExit={exitPreview}
-                onRestore={() =>
-                  requestRestore(previewItem, previewRestoreRef.current)
-                }
-                processing={processing}
-                restoreEnabled={restoreEnabled}
-                restoreButtonRef={previewRestoreRef}
-                state={previewState}
-              />
+              {previewElement}
               {deleteFeedback?.status === "success" ? (
                 <p aria-live="polite" role="status">
                   {deleteFeedback.message}
@@ -864,28 +965,42 @@ export function HistoryPanel({
           )}
         </div>
       </div>
-      {previewItem === undefined &&
-      selectedItem !== undefined &&
-      status === "available" ? (
+      {selectedItem !== undefined && status === "available" ? (
         <section
           aria-label="Selected version actions"
           className="history-selection-actions"
         >
           <p className="history-selection-eyebrow">
-            Selected version · action target
+            {selectedItem.availability.status === "unavailable"
+              ? "Selected version · unavailable"
+              : selectedItem.versionId === reusedTargetId
+                ? "Selected version · reused target"
+                : "Selected version · action target"}
           </p>
-          <h2 className="history-selection-title">
+          <h2
+            className="history-selection-title"
+            title={historySummaryLabel(selectedItem)}
+          >
             {historySummaryLabel(selectedItem)}
           </h2>
           <p className="history-selection-metadata">
             v-{String(selectedItem.sequence).padStart(3, "0")}
             {" · "}
-            <time dateTime={historyDateTime(selectedItem.recordedAt)}>
+            <time
+              dateTime={historyDateTime(selectedItem.recordedAt)}
+              title={historyAccessibleTimestamp(selectedItem.recordedAt)}
+            >
               {formatHistoryTimestamp(selectedItem.recordedAt)}
             </time>
             {" · "}
             {historySourceLabel(selectedItem)}
           </p>
+          {selectedItem.availability.status === "unavailable" ? (
+            <p className="history-selection-unavailable-reason">
+              {selectedItem.availability.error.message} Your current drawing is
+              unchanged.
+            </p>
+          ) : null}
           <div>
             <button
               disabled={
@@ -902,7 +1017,7 @@ export function HistoryPanel({
               disabled={
                 processing ||
                 selectedItem.availability.status !== "available" ||
-                !restoreEnabled
+                !selectedRestoreReady
               }
               onClick={(event) =>
                 requestRestore(selectedItem, event.currentTarget)
@@ -1003,6 +1118,9 @@ export function HistoryPanel({
           </div>
         </ApplicationDialog>
       ) : null}
+      {previewElement !== null && previewPortalContainer != null
+        ? createPortal(previewElement, previewPortalContainer)
+        : null}
     </aside>
   );
 }
@@ -1046,6 +1164,20 @@ function MoreIcon() {
       <circle cx="8" cy="3" r="1" fill="currentColor" />
       <circle cx="8" cy="8" r="1" fill="currentColor" />
       <circle cx="8" cy="13" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M8 7.2v3.6M8 5.2h.01"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

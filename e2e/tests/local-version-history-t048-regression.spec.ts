@@ -79,18 +79,29 @@ test("read-only version preview hides the SDK main-menu trigger and actions", as
   page,
 }) => {
   const panel = historyPanel(page);
-  const preview = panel.getByRole("region", {
+  const preview = page.getByRole("region", {
     name: "Read-only canvas preview",
   });
 
   await panel.getByRole("button", { name: "Preview" }).click();
   await expect(preview).toBeVisible();
+  await expect(
+    panel.getByRole("listbox", { name: "Version history" }),
+  ).toBeVisible();
+  expect(
+    await preview.evaluate((el) => el.closest(".history-panel") === null),
+  ).toBe(true);
+  await expect(page.locator(".canvas-current-content")).toHaveAttribute(
+    "inert",
+    "",
+  );
   await expect(preview.locator('[data-preview-rendered="true"]')).toBeVisible();
   await expect(preview.getByRole("button")).toHaveCount(0);
 
-  const previewRestore = panel.locator(
-    ".history-preview-actions .primary-action",
-  );
+  const previewRestore = panel.getByRole("button", {
+    name: "Restore this version",
+    exact: true,
+  });
   await expect(previewRestore).toBeEnabled();
   const previewRestoreColors = await previewRestore.evaluate((element) => {
     const resolveTokenColor = (token: string) => {
@@ -143,7 +154,8 @@ test("Mark version preserves the action focus while History refreshes", async ({
     .poll(async () => (await readHistoryMarkProbe(page)).listRefreshPending)
     .toBe(false);
   await expect(actionTrigger).toBeFocused();
-  await expect(panel.getByRole("option")).toContainText("Manual · Marked");
+  await expect(panel.getByRole("option")).toContainText("Manual");
+  await expect(panel.locator(".history-list-status")).toContainText("Marked");
   expect((await readHistoryMarkProbe(page)).calls).toEqual([
     { versionId: "v-001", marked: true },
   ]);
@@ -156,7 +168,7 @@ test("production AppShell asks before replacing the selected history version", a
   const preview = panel.getByRole("button", { name: "Preview" });
   await preview.click();
   await expect(
-    panel.getByRole("region", { name: "Read-only canvas preview" }),
+    page.getByRole("region", { name: "Read-only canvas preview" }),
   ).toBeVisible();
 
   await panel.getByRole("button", { name: "Restore this version" }).click();
