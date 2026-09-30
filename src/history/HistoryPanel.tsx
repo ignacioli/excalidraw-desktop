@@ -779,15 +779,19 @@ export function HistoryPanel({
               </button>
             </section>
           ) : null}
-          {markFeedback?.status === "success" ? (
-            <p aria-live="polite" role="status">
-              {markFeedback.message}
-            </p>
-          ) : null}
-          {markFeedback?.status === "error" ? (
-            <p aria-live="assertive" role="alert">
-              {markFeedback.message}
-            </p>
+          {onMark !== undefined || onSetMarked !== undefined ? (
+            <div className="history-mark-feedback">
+              {markFeedback !== null ? (
+                <p
+                  aria-live={
+                    markFeedback.status === "error" ? "assertive" : "polite"
+                  }
+                  role={markFeedback.status === "error" ? "alert" : "status"}
+                >
+                  {markFeedback.message}
+                </p>
+              ) : null}
+            </div>
           ) : null}
           {previewItem !== undefined ? (
             <>

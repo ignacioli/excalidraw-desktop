@@ -1,0 +1,26 @@
+{
+  "pid": 83748,
+  "productCommit": "ce6e746d4d12cde55a498da83f45b3563c556e71",
+  "packageSha256": "fbdf374efd0bb9ff3b60ac1485dcc0b35c9d8d87bcd6bd5e8b2e6d983fe412cc",
+  "fixtureManifest": "/private/tmp/history-native-feedback-fixture-20260929.json",
+  "startedAt": "2026-09-30T03:44:16.630Z",
+  "status": "FAIL",
+  "ownerAuthorization": "现在复查",
+  "checks": {
+    "markStability": "FAIL",
+    "tabFilenameTooltip": "FAIL",
+    "unavailableStyling": "PENDING",
+    "retryStyling": "PENDING"
+  },
+  "scope": "Focused recheck only; remaining conflict/reduced-motion and T054 not included.",
+  "ownerFeedback": "没改善，还是以前的问题，mark version 跳跃 + tab 标题不显示。",
+  "markTriggerClarification": "两者都会：顶部 Mark current version 和行菜单 Mark version",
+  "processVerification": {
+    "pid": 83748,
+    "startedAtLocal": "2026-09-29 20:44:16",
+    "oldPid77399": "not running",
+    "matchingAppWindowCount": 1,
+    "executableSha256": "c5551d70b607e8adf88fb83d3916f17a4c633bee5d493dcdd48661bac79861c1",
+    "conclusion": "New package confirmed; not old-instance handoff"
+  }
+}

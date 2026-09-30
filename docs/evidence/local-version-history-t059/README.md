@@ -60,3 +60,9 @@ Mark mutation 后保留已显示的列表，避免 loading 状态卸载；相同
 Unavailable 使用实线卡片、danger token 警示图标与文字；History Retry 纳入现有按钮基础/primary/hover/disabled 样式，正常 empty 不显示重试；Tab 增加完整文件名标准 title 提示（旧 TabBar 提交已缺失，非 History 引入）。这些新改动的原生呈现尚待定点复查，未覆盖原包的历史 FAIL。
 
 修复后新包从干净提交 `ce6e746d4d12cde55a498da83f45b3563c556e71` build/seal PASS：[manifest](resume-20260929/fixed-package-manifest.json)，package SHA-256 `fbdf374efd0bb9ff3b60ac1485dcc0b35c9d8d87bcd6bd5e8b2e6d983fe412cc`，Guard attempt `70020bae-3cb8-491e-ae11-7ff2b11a20a8`。未自动启动新包；需定点复查 Mark 稳定性、Unavailable/Retry 样式与 Tab hover。生产 build 的既有 chunk size warning 保留，不影响成功退出。
+
+### 修复包第一次原生复查仍失败
+
+[原生复查记录](resume-20260929/focused-native-recheck.json)：owner确认顶部及行菜单两种 Mark 均跳跃、Tab title仍不显示。核对仅有 PID83748，启动20:44:16、二进制SHA与 `ce6e746` 包一致；旧77399已退出，排除旧实例接管。AX静置/单次AXPress各30/50坐标样本未捕捉到变化，owner未留意自动点击；这不能推翻真实鼠标反馈。
+
+限定调查未找到重复请求消费者。随后50行浏览器[诊断](resume-20260929/mark-geometry-before.txt)测出反馈插拔使列表移动47.59px，每入口仅1次mutation和1次list，无请求循环；Chromium未复现原生高频跳动。修复为持久反馈区域预留两行空间；[复验](resume-20260929/mark-geometry-after.txt)对两次顶部Mark和一次行操作的scrollTop、按钮及首行top采样均稳定，1个针对性用例PASS。HistoryPanel33/33、TabBar22/22与针对性ESLint通过。Tab改为portal DOM tooltip，支持hover/focus/Escape，避免依赖本次原生无效的title属性。原生高频弹跳是否消失仍待确认，不能从Chromium结果推出PASS。

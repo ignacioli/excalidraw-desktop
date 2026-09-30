@@ -233,6 +233,21 @@ body {
   white-space: nowrap;
 }
 
+.tab-filename-tooltip {
+  position: fixed;
+  z-index: 100;
+  width: max-content;
+  border: var(--border-default) solid var(--border-strong);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-primary);
+  background: var(--panel-background);
+  box-shadow: var(--shadow-floating);
+  font-size: var(--font-size-label, 12px);
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
 .tab-close {
   flex: 0 0 1.5rem;
   width: 1.5rem;

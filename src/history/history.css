@@ -143,6 +143,16 @@
   margin: 0;
 }
 
+.history-mark-feedback {
+  min-height: calc(2lh + 2 * var(--space-2));
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-3);
+}
+
+.history-mark-feedback p {
+  margin: 0;
+}
+
 .history-list,
 .history-state {
   margin: 0;

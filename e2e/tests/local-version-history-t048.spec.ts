@@ -302,6 +302,175 @@ test("honors reduced motion and keeps row focus visible with 50 versions", async
   expect(computed.outlineWidth).toBe("2px");
 });
 
+test("keeps populated History geometry stable through both Mark paths", async ({
+  page,
+}, testInfo) => {
+  const panel = historyPanel(page);
+  await expect(panel.getByRole("option")).toHaveCount(50);
+  await page.evaluate(() => {
+    type ProbeWindow = typeof globalThis & {
+      __TAURI_INTERNALS__: {
+        invoke: (
+          command: string,
+          args?: Record<string, unknown>,
+        ) => Promise<unknown>;
+      };
+      __markGeometry: {
+        calls: string[];
+        scrolls: number;
+        samples: number[][];
+        done: boolean;
+      };
+    };
+    const browser = globalThis as ProbeWindow;
+    const invoke = browser.__TAURI_INTERNALS__.invoke.bind(
+      browser.__TAURI_INTERNALS__,
+    );
+    browser.__markGeometry = {
+      calls: [],
+      scrolls: 0,
+      samples: [],
+      done: false,
+    };
+    let marked = false;
+    browser.__TAURI_INTERNALS__.invoke = async (command, args = {}) => {
+      if (command.startsWith("history_"))
+        browser.__markGeometry.calls.push(command);
+      if (command === "history_mark" || command === "history_set_marked") {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        const request = args.request as { marked?: boolean } | undefined;
+        marked = command === "history_mark" || request?.marked === true;
+        return command === "history_mark"
+          ? {
+              versionId: "v-000",
+              recordedAt: 1,
+              source: "manual",
+              contentHash: "0".repeat(64),
+              reused: true,
+            }
+          : { versionId: "v-000", marked, retained: true };
+      }
+      if (command === "history_list") {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        const response = (await invoke(command, args)) as {
+          items: Array<{ versionId: string }>;
+        };
+        return {
+          ...response,
+          items: response.items.map((item) =>
+            item.versionId === "v-000" ? { ...item, marked } : item,
+          ),
+        };
+      }
+      return invoke(command, args);
+    };
+    const scrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (...args) {
+      browser.__markGeometry.scrolls += 1;
+      return scrollIntoView.apply(this, args);
+    };
+  });
+
+  const observations = [];
+  for (const action of ["current", "current", "row"] as const) {
+    await panel.locator(".history-panel-body").evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    if (action === "row") {
+      await panel
+        .getByRole("button", { name: /More actions for v-000/ })
+        .click();
+    }
+    await page.evaluate(() => {
+      const browser = globalThis as typeof globalThis & {
+        __markGeometry: {
+          calls: string[];
+          scrolls: number;
+          samples: number[][];
+          done: boolean;
+        };
+      };
+      const probe = browser.__markGeometry;
+      probe.calls = [];
+      probe.scrolls = 0;
+      probe.samples = [];
+      probe.done = false;
+      const body = document.querySelector<HTMLElement>(".history-panel-body")!;
+      const button = document.querySelector<HTMLElement>(
+        ".history-mark-current",
+      )!;
+      const row = document.querySelector<HTMLElement>(".history-list-row")!;
+      const started = performance.now();
+      const sample = () => {
+        probe.samples.push([
+          Math.round(performance.now() - started),
+          body.scrollTop,
+          button.getBoundingClientRect().top,
+          row.getBoundingClientRect().top,
+          body.clientHeight,
+          body.scrollHeight,
+        ]);
+        if (performance.now() - started < 1200) requestAnimationFrame(sample);
+        else probe.done = true;
+      };
+      sample();
+    });
+    if (action === "current") {
+      await panel
+        .getByRole("button", { name: "Mark current version", exact: true })
+        .click();
+    } else {
+      await panel
+        .getByRole("menuitem", { name: /^(Mark|Unmark) version$/ })
+        .click();
+    }
+    await page.waitForFunction(
+      () =>
+        (
+          globalThis as typeof globalThis & {
+            __markGeometry: { done: boolean };
+          }
+        ).__markGeometry.done,
+    );
+    const observation = await page.evaluate(() => {
+      const probe = (
+        globalThis as typeof globalThis & {
+          __markGeometry: {
+            calls: string[];
+            scrolls: number;
+            samples: number[][];
+          };
+        }
+      ).__markGeometry;
+      return {
+        ...probe,
+        samples: probe.samples.filter(
+          (sample, index, all) =>
+            index === 0 ||
+            sample
+              .slice(1)
+              .some((value, column) => value !== all[index - 1][column + 1]),
+        ),
+      };
+    });
+    observations.push({ action, ...observation });
+    expect(observation.calls).toEqual([
+      action === "current" ? "history_mark" : "history_set_marked",
+      "history_list",
+    ]);
+    expect(observation.scrolls).toBeLessThanOrEqual(1);
+    for (const column of [1, 2, 3]) {
+      const values = observation.samples.map((sample) => sample[column]);
+      expect(Math.max(...values) - Math.min(...values)).toBeLessThanOrEqual(1);
+    }
+  }
+  console.log("MARK_GEOMETRY", JSON.stringify(observations));
+  await testInfo.attach("mark-geometry", {
+    body: JSON.stringify(observations, null, 2),
+    contentType: "application/json",
+  });
+});
+
 function historyPanel(page: Page) {
   return page.getByRole("complementary", { name: "Version History" });
 }
