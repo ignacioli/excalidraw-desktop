@@ -54,3 +54,7 @@
 - 本轮独立静态 review 发现 Preview 期间成功提示位于 inert/遮挡层；已移至 canvas 可见 sibling。加强原有同一 browser 用例后 [1/1 PASS](browser-preview-feedback-fix.txt)，直接检查无 inert 祖先及命中测试，未用截图猜测。其余 timer/error 保留和 hover/keyboard 路径未发现 P1/P2。
 - 修复过程中新增 unit 的 fake-timer/userEvent 组合曾超时，另捕捉到 Escape 回焦触发弹层重开；修复测试驱动和焦点抑制后，相关两文件 75/75 PASS。Primary 全局 lint PASS；格式检查首次仅 AppShell.tsx 未格式化，待收口复验。
 - 最终 UI agent 两文件 75/75 PASS、strict typecheck PASS；Primary 全局 lint、最终 format 与 diff check PASS。本次 H2/H3 受影响路径已收口，修复包 H4 仍未验收。
+
+## 当前修复包（owner复查中）
+
+`894228a76e062597dad80c4180a91aaff59c7ee7` 已完成一次 production seal，package SHA-256 `031c50e6029c3ec660e7914a633d68da47bfaf06e0e7a397dfa7dc76b3568e8f`。见 [manifest](feedback-fixes-package-manifest.json)、[native entry](feedback-fixes-native-entry/)、[owner session](feedback-fixes-owner-session.json)。入口collector退出0；用户已授权继续复查，PID17298普通窗口打开合成长列表。当前等待owner四项修复反馈，H4/H5未完成。
