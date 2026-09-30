@@ -4,8 +4,8 @@
 
 ## 权威与约束
 
-- 组件几何：[T048 tokens](high-fi/t048/tokens.json)；共同颜色、字号、字重：[HF-2 tokens](../desktop-shell/hf-2/tokens.json)。
-- 结构与角色：[默认 Light](high-fi/t048/screens/01-history-default-light.png)、[重复 Mark](high-fi/t048/screens/05-repeated-mark-long-list-light.png)、[compact Dark](high-fi/t048/screens/06-history-compact-dark.png)。不修改批准图片来适配实现。
+- 组件几何：[T048 tokens](high-fi/tokens.json)；共同颜色、字号、字重：[HF-2 tokens](../desktop-shell/hf-2/tokens.json)。
+- 结构与角色：[默认 Light](high-fi/screens/01-history-default-light.png)、[重复 Mark](high-fi/screens/05-repeated-mark-long-list-light.png)、[compact Dark](high-fi/screens/06-history-compact-dark.png)。不修改批准图片来适配实现。
 - 字体家族按负责人本轮决定统一继承既有系统字体；[共享 DESIGN](../../../DESIGN.md) / [中文](../../../DESIGN.zh.md) 为当前权威，[HF2-FONT-001](../../evidence/003-visual-acceptance/font-decision.md) 保留历史及范围更新。不引入 Inter，不新增字体资源；冻结导出中的家族名不覆盖此共享决定。
 
 ## 组件映射

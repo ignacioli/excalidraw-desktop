@@ -20,7 +20,7 @@
 
 **参考视口**：1280 × 760
 
-T004 的高保真批准只适用于当时的交互范围。T048 修订独立批准并冻结于 `high-fi/t048/`，其画板、token 映射与可编辑源是后续实现和 specs 的设计依据；不能把设计批准写成 production UI 或精确包视觉验收。
+本 feature 只保留 `high-fi/` 一份当前权威高保真，最新批准日期为 2026-09-30、共 7 张画板。旧批准版本由 Git 历史保存；画板、token 映射与可编辑源是后续实现和 specs 的设计依据，设计批准不等于 production UI 或精确包视觉验收。
 
 ## T048 修订原因与验证时间线
 
@@ -100,7 +100,7 @@ T048 补充了重复标记语义：若当前 normalized scene 未变化，Mark c
 
 当前绘图状态单独展示，不属于历史版本列表中的一行。长列表滚动时，所选目标详情及 Preview/Restore 仍保持可见，避免用户需要在操作按钮与目标版本之间来回寻找。用户调整到 300 px 时保持可用的行操作和固定详情区，不产生横向滚动。旧原型中的自动 compact breakpoint 仅保留为历史设计实现，不再定义生产触发方式。
 
-T004 高保真批准的 More actions menu 使用 180 × 84 px 紧凑浮层。T048 已批准的行级菜单保留浅灰色目标标题，因此是 180 × 116 px；两项操作约 40 px 行高，三点触发器 32 px。三点、空心 bookmark 与 trash 均使用 16 × 16 vector geometry，不使用字体 glyph。Delete version 保持危险色和独立分隔，不扩大为常驻按钮。精确尺寸与语义 token 角色见 `high-fi/t048/tokens.json`。
+T004 高保真批准的 More actions menu 使用 180 × 84 px 紧凑浮层。T048 已批准的行级菜单保留浅灰色目标标题，因此是 180 × 116 px；两项操作约 40 px 行高，三点触发器 32 px。三点、空心 bookmark 与 trash 均使用 16 × 16 vector geometry，不使用字体 glyph。Delete version 保持危险色和独立分隔，不扩大为常驻按钮。精确尺寸与语义 token 角色见 `high-fi/tokens.json`。
 
 ## 完整状态
 

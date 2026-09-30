@@ -21,7 +21,7 @@ const HISTORY_REGISTRY_PATH = path.join(
 );
 const HISTORY_HIGH_FI_PATH = path.join(
   REPO_ROOT,
-  "docs/design/local-version-history/high-fi/t048/manifest.json",
+  "docs/design/local-version-history/high-fi/manifest.json",
 );
 const HISTORY_LOW_FI_PATH = path.join(
   REPO_ROOT,
@@ -409,7 +409,7 @@ export function validateHistoryPlanScope(plan, registry, highFi) {
     highFi.status !== "APPROVED_HIGH_FIDELITY" ||
     highFi.viewport?.width !== 1280 ||
     highFi.viewport?.height !== 760 ||
-    highFi.frames?.length !== 6
+    highFi.frames?.length !== 7
   )
     blocked("HISTORY T048 high-fi authority is invalid");
   for (const screen of plan.screens) {
@@ -735,7 +735,7 @@ export async function prepareNativeScreenPlan({
       highFi.status !== "APPROVED_HIGH_FIDELITY" ||
       highFi.viewport?.width !== 1280 ||
       highFi.viewport?.height !== 760 ||
-      highFi.frames?.length !== 6 ||
+      highFi.frames?.length !== 7 ||
       lowFi.feature !== "local-version-history" ||
       lowFi.ownerDecision?.lowFidelity !== "APPROVED" ||
       lowFi.viewport?.width !== 1280 ||
@@ -750,6 +750,19 @@ export async function prepareNativeScreenPlan({
       highFi: { path: HISTORY_HIGH_FI_PATH, sha256: sha256Bytes(highFiBytes) },
       lowFi: { path: HISTORY_LOW_FI_PATH, sha256: sha256Bytes(lowFiBytes) },
     };
+    for (const frame of highFi.frames) {
+      if (
+        !/^screens\/[a-z0-9-]+\.png$/u.test(frame.path ?? "") ||
+        !HEX.digest.test(frame.sha256 ?? "")
+      )
+        blocked(`History high-fi frame is invalid: ${frame.name}`);
+      if (
+        (await sha256File(
+          path.join(path.dirname(HISTORY_HIGH_FI_PATH), frame.path),
+        )) !== frame.sha256
+      )
+        blocked(`History high-fi screen digest changed: ${frame.name}`);
+    }
     for (const screen of requestedScreens) {
       if (
         !Array.isArray(screen.checklist) ||
@@ -770,12 +783,6 @@ export async function prepareNativeScreenPlan({
           !HEX.digest.test(frame.sha256 ?? "")
         )
           blocked(`History high-fi frame mismatch for ${screen.gateId}`);
-        if (
-          (await sha256File(
-            path.join(path.dirname(HISTORY_HIGH_FI_PATH), frame.path),
-          )) !== frame.sha256
-        )
-          blocked(`History high-fi screen digest changed for ${screen.gateId}`);
       } else if (typeof screen.state !== "string" || !screen.state)
         blocked(`History low-fi state missing for ${screen.gateId}`);
     }

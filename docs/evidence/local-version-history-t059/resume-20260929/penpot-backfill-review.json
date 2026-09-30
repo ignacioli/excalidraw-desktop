@@ -44,8 +44,10 @@
   "ownerApproval": {
     "date": "2026-09-30",
     "decision": "Review通过，请保存并持久化screenshots到本地仓库。",
-    "archive": "docs/design/local-version-history/high-fi/t048/revisions/2026-09-30-approved/manifest.json",
+    "archive": "docs/design/local-version-history/high-fi/manifest.json",
     "implementationAcceptance": false,
-    "nextAction": "Stop after local commit; await user-led incident Review."
+    "nextAction": "Stop after local commit; await user-led incident Review.",
+    "archiveBeforeConsolidation": "docs/design/local-version-history/high-fi/t048/revisions/2026-09-30-approved/manifest.json",
+    "historicalArchiveCommit": "45630f81c429ba30effe12118c200f193e713745"
   }
 }

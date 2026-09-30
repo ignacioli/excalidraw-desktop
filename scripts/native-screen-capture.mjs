@@ -27,7 +27,7 @@ const HISTORY_SCOPE_PATHS = {
   ),
   highFi: path.join(
     REPO_ROOT,
-    "docs/design/local-version-history/high-fi/t048/manifest.json",
+    "docs/design/local-version-history/high-fi/manifest.json",
   ),
   lowFi: path.join(
     REPO_ROOT,

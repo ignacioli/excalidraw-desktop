@@ -1,75 +1,117 @@
 {
   "schemaVersion": 1,
-  "feature": "local-version-history",
-  "task": "T004",
-  "status": "approved",
-  "approvedAt": "2026-09-23",
+  "status": "APPROVED_HIGH_FIDELITY",
+  "approvedAt": "2026-09-30",
+  "ownerDecision": "Review通过，请保存并持久化screenshots到本地仓库。",
+  "scope": "Design approval only; implementation, native acceptance and incident review remain separate.",
   "penpot": {
-    "organization": "Ignacio",
-    "project": "Excalidraw",
-    "fileId": "40e06342-8830-80d6-8008-98d2d723d49b",
+    "fileId": "a5ac146a-5787-80fa-8008-b3c2d0b30bae",
     "fileName": "excalidraw-desktop-uxui-redesign",
-    "revisionAtHandoff": 73,
-    "versionLabel": "T004 · Local Version History · High-Fidelity Review Baseline · Compact action menu",
     "pageId": "87d1db27-904b-80ba-8008-aeafe0fb388d",
-    "pageName": "05 · Local Version History · T004"
+    "pageName": "05 · Local Version History · T004",
+    "liveRevisionBeforeExport": 101,
+    "liveRevisionAfterExport": 101,
+    "archiveInternalRevision": 102,
+    "revisionNote": "Live MCP and downloaded archive revisions are recorded separately; no cause inferred for their difference."
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 760
   },
   "source": {
     "path": "source/excalidraw-desktop-uxui-redesign.penpot",
-    "sha256": "4135f5eb3fb46d9dcf78b1258744ca7030f6e707b1e912c224daee7ed4f9f996",
-    "bytes": 1942239,
-    "exportMethod": "Penpot Web native file download"
+    "sha256": "9a8a6424fc54af528a310e816e6bb4684f02e662528fb88e799b0c87ba6e2c9f",
+    "bytes": 2585656,
+    "exportMethod": "Owner-provided Penpot download",
+    "archiveIntegrity": "PASS",
+    "filePageAndSevenBoardIds": "PASS",
+    "hiddenDuplicateEyebrows": 7,
+    "directExportAttempt": {
+      "result": "FAILED",
+      "error": "No matching clause: ",
+      "fallback": "Owner-provided file, already validated and archived."
+    }
   },
   "frames": [
     {
-      "name": "T004 · 01 · History · Default · Light",
-      "shapeId": "87d1db27-904b-80ba-8008-aeb2cb37d1a9",
+      "name": "T048 · 01 · History · Default · Light",
+      "shapeId": "da9cf473-5dad-8097-8008-b502ce235a48",
+      "path": "screens/01-history-default-light.png",
+      "sha256": "20439c5afd4f66b1a5cc4965f6c0e1695c84367d0958341348a206d483c66a32",
       "width": 1280,
       "height": 760
     },
     {
-      "name": "T004 · 02 · More Actions · Light",
-      "shapeId": "87d1db27-904b-80ba-8008-aeb310646044",
+      "name": "T048 · 02 · Row Actions · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b5753372b7f4",
+      "path": "screens/02-row-actions-light.png",
+      "sha256": "cbcf6662986fa9c734f74ed76ceefbf01596834228138a87e4a75e95491a6096",
       "width": 1280,
       "height": 760
     },
     {
-      "name": "T004 · 03 · Version Preview · Light",
-      "shapeId": "87d1db27-904b-80ba-8008-aeb088a10afb",
+      "name": "T048 · 03 · Version Preview · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b575525aee78",
+      "path": "screens/03-version-preview-light.png",
+      "sha256": "6000ed91cc5826ed79e15398dc99764c81667d3f83b499ff18906aa1d181e293",
       "width": 1280,
       "height": 760
     },
     {
-      "name": "T004 · 04 · Restore Confirmation · Light",
-      "shapeId": "87d1db27-904b-80ba-8008-aeb2cb6e7d20",
+      "name": "T048 · 04 · Restore Confirmation · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b5756178feb0",
+      "path": "screens/04-restore-confirmation-light.png",
+      "sha256": "5fee14ea9360400c819d2365479a8b9d88b930e7bd72d906487f121a41cdda38",
       "width": 1280,
       "height": 760
     },
     {
-      "name": "T004 · 05 · External Recovery · Light",
-      "shapeId": "87d1db27-904b-80ba-8008-aeb2cb87a721",
+      "name": "T048 · 05 · Repeated Mark · Long List · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b5756dd21737",
+      "path": "screens/05-repeated-mark-long-list-light.png",
+      "sha256": "52c932b4c9ddcd6231eb3926e795043f387036bcb530ee52d1bc0ae1498670df",
       "width": 1280,
       "height": 760
     },
     {
-      "name": "T004 · 06 · History · Compact 300 · Dark",
-      "shapeId": "87d1db27-904b-80ba-8008-aeb2cb9fc698",
+      "name": "T048 · 06 · History · Compact 300 · Dark",
+      "shapeId": "b48ddf15-5062-8001-8008-b57586ef024c",
+      "path": "screens/06-history-compact-dark.png",
+      "sha256": "4b7f6b6ce47a3f64b80428cf6775f9db451dcb7d76c134f5e0db693b68a184c3",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "T048 · 07 · Unavailable Version · Light · Draft",
+      "shapeId": "b48ddf15-5062-8001-8008-b7699546bf4b",
+      "path": "screens/07-unavailable-version-light.png",
+      "sha256": "88e81901bf6982d19fcbe1f35509b6a8b63f05c323e0eabdf266cc29d2770d1d",
       "width": 1280,
       "height": 760
     }
   ],
-  "validation": {
-    "penpotApiVersion": "2.18.0",
-    "penpotFileErrors": 0,
-    "frameCount": 6,
-    "missingFrames": 0,
-    "duplicateFrameNames": 0,
-    "invalidFrameBounds": 0,
-    "remoteExportVisualQa": "PASS"
+  "designDecisions": {
+    "typography": "Use shared platform-native fonts from DESIGN.md. Penpot Inter remains an explicitly documented rendering proxy; body/label/badge roles bind shared tokens.",
+    "header": "Main title, filename and Close only; duplicate eyebrow removed.",
+    "selectedActionWidthRatio": "146:174",
+    "unavailable": "Seventh state approved by this owner review; Draft suffix preserved from the exported source name."
   },
-  "ownerDecision": {
-    "lowFidelity": "APPROVED",
-    "highFidelity": "APPROVED",
-    "productionVisualAcceptance": "PENDING"
+  "validation": {
+    "pngCount": 7,
+    "pngDimensions": "7/7 are 1280x760",
+    "sha256": "Recorded per file",
+    "productionVisualAcceptance": "NOT_CLAIMED"
+  },
+  "feature": "local-version-history",
+  "task": "T048/T055",
+  "history": {
+    "storage": "Git history only",
+    "previousLayoutCommit": "45630f81c429ba30effe12118c200f193e713745"
+  },
+  "tokens": {
+    "path": "tokens.json",
+    "sha256": "c43c6321d37baf4564543f2d8c47bb8c4b4b563445d8100ae0d492455c837212",
+    "basePath": "docs/design/desktop-shell/hf-2/tokens.json",
+    "baseSha256": "151826bbcea894cb64e59899ee85651ff13f2205df0b65768d048bf12c37b184"
   }
 }

@@ -110,7 +110,7 @@ describe("native screen prepare", () => {
     );
     assert.equal(plan.harnessVersion, "004-history-capture-v1");
     const t048ManifestPath = path.resolve(
-      "docs/design/local-version-history/high-fi/t048/manifest.json",
+      "docs/design/local-version-history/high-fi/manifest.json",
     );
     const t048ManifestBytes = await fsp.readFile(t048ManifestPath);
     assert.deepEqual(plan.historyScope.highFi, {
@@ -223,10 +223,11 @@ describe("native screen prepare", () => {
       ),
     );
     const highFi = JSON.parse(t048ManifestBytes.toString("utf8"));
+    assert.equal(highFi.frames.length, 7);
     assert.equal(validateHistoryPlanScope(plan, registry, highFi), plan);
     assert.deepEqual(
       plan.screens.slice(0, 6).map((screen) => screen.designReference.shapeId),
-      highFi.frames.map((frame) => frame.shapeId),
+      highFi.frames.slice(0, 6).map((frame) => frame.shapeId),
     );
     assert.throws(
       () =>

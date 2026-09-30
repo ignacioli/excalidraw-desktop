@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import historyDesign from "../../docs/design/local-version-history/high-fi/t048/tokens.json" with { type: "json" };
+import historyDesign from "../../docs/design/local-version-history/high-fi/tokens.json" with { type: "json" };
 import shellDesign from "../../docs/design/desktop-shell/hf-2/tokens.json" with { type: "json" };
 import {
   emitBrowserTauriEvent,

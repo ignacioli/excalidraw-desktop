@@ -1,5 +1,7 @@
 # Local Version History visual checklist
 
+**当前设计入口（2026-09-30）**：[唯一高保真目录](../design/local-version-history/high-fi/README.md)包含本轮已批准的7张画板。旧 task/revision 路径仅是下文历史证据的原始记录，可在 Git `45630f81c429ba30effe12118c200f193e713745` 中恢复。本轮只整理资产与引用，不新增实现或原生验收结论。
+
 **最新状态（2026-09-29，暂停等待 Penpot Review）**：负责人确认 `70132eb` 包的 Tab tooltip 正常；Mark 区域轻微肉眼弹跳真实性未确定，负责人要求停止修复。History 整体设计一致性另行纠正：共享系统字体标准已确认，Penpot 回填至 quick-check revision 98，新增 07 Unavailable 草稿，140 个文字角色绑定检查无差异、文件校验 0 错误。负责人要求完成回填与一次抽查后停止；代码对齐保持 WIP，typecheck 和 5 项定向测试失败，未进行修后浏览器/原生验证。详见 [Penpot Review 记录](local-version-history-t059/resume-20260929/penpot-backfill-review.json)。T048/Phase 7 未完成。
 
 
