@@ -32,3 +32,14 @@
 ## 新包准备（不是原生验收）
 
 干净产品提交 `c453f3f68c09cd70bd80c6efc3a8e1c5300ece90` 已通过 production build/seal，包含实现 `a50818e`；[package manifest](package-ready/package-manifest.json) 记录 package SHA-256 `c19071050bc73aa1a09c45e63993bb41d0be9d7db03346623a1549b09164df9d`。Guard seal attempt `6c7519d9-513b-44a0-83ab-1543e91c3866` PASS。新的 [HISTORY plan](package-ready/history-plan.json) 与 fixture manifest 已准备，保留原字节及实际 `/private/tmp/t059-history-ready-20260929` 输入位置。prepare 首次因 run root 尚未建立而 BLOCKED，建立要求的空目录后 PASS。未启动包、未采集任何新包截图、未执行新包 native entry，未获得 visual reviewer 或 owner PASS。用户确认可占用桌面后才继续。
+
+
+## 暂停后恢复：实现与离线准备已完成（2026-09-29）
+
+产品 `1997de467b7fbd32d0f2421019f01caa528842be` 已完成 Restore 确认与暂停时的分页 cursor 修复：Cancel 默认聚焦、取消零调用、确认绑定原目标、当前目标失效时保留说明并禁用确认；document 切换关闭确认。同时间戳跨页不再漏条目。HistoryPanel 32/32、typecheck、ESLint、Prettier、Rust fmt、分页回归 1/1、query integration 2/2、example 3/3 及适用 Clippy PASS。AppShell 首轮 2 PASS/1 FAIL 是新增错误文案断言与上层不确定结果提示不符；修正后仅重跑失败用例 1/1 PASS，次数和目标断言保留。
+
+原始 [首轮输出](resume-20260929/restore-first-run.txt) 保留 pnpm 尾部日志，未冒充合法纯 JSON；[修后报告](resume-20260929/restore-retest.json)独立保留。所有这些均为自动/离线范围，不是 T048。
+
+[Fixture manifest](resume-20260929/fixture-manifest.json)包含同一 profile 的正常 50 条 marked versions（25+25、3次 preview hydration）、独立 pending issue、单行 unavailable；被隔离的合成 scene bytes 保留在 quarantine，正常版本再查询仍完整。`nativeVerified:false` 表示 production 尚未实际读取/呈现该 profile。
+
+[新 package manifest](resume-20260929/package-manifest.json)：production build/seal PASS，package SHA-256 `e3eab810dccb576ef7c4e31b08873e23ae6599db78bc77f7fa1d590d49717f59`，Guard attempt `82c051d1-2f0a-4992-a2ae-1cb5fa213f45`。该包含上述修复；旧 `c453f3f` 包不再是本轮候选。等待操作员同意桌面占用后执行真实原生验收。没有执行 adversarial review、VM/物理性能复跑；私有 specs 保持未提交。
