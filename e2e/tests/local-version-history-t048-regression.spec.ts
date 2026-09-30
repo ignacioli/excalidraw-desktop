@@ -122,6 +122,33 @@ test("read-only version preview hides the SDK main-menu trigger and actions", as
   ).toHaveCount(0);
 });
 
+test("Mark version preserves the action focus while History refreshes", async ({
+  page,
+}) => {
+  const panel = historyPanel(page);
+  const actionTrigger = panel.getByRole("button", {
+    name: /More actions for v-001/,
+  });
+  await actionTrigger.click();
+  await panel.getByRole("menuitem", { name: "Mark version" }).click();
+
+  await expect
+    .poll(async () => (await readHistoryMarkProbe(page)).listRefreshPending)
+    .toBe(true);
+  await expect(panel.getByRole("option")).toBeVisible();
+  await expect(panel).not.toContainText("Loading version history");
+  await expect(actionTrigger).toBeFocused();
+
+  await expect
+    .poll(async () => (await readHistoryMarkProbe(page)).listRefreshPending)
+    .toBe(false);
+  await expect(actionTrigger).toBeFocused();
+  await expect(panel.getByRole("option")).toContainText("Manual · Marked");
+  expect((await readHistoryMarkProbe(page)).calls).toEqual([
+    { versionId: "v-001", marked: true },
+  ]);
+});
+
 test("production AppShell asks before replacing the selected history version", async ({
   page,
 }) => {
@@ -169,6 +196,10 @@ async function installHistoryPreviewFixture(page: Page): Promise<void> {
         documentPath: string;
         versionId: string;
       }>;
+      __historyMarkProbe?: {
+        calls: Array<{ versionId: string; marked: boolean }>;
+        listRefreshPending: boolean;
+      };
     };
     const browser = globalThis as HarnessWindow;
     const internals = browser.__TAURI_INTERNALS__;
@@ -176,6 +207,11 @@ async function installHistoryPreviewFixture(page: Page): Promise<void> {
       throw new Error("Browser Tauri harness was not installed first.");
     }
     browser.__historyRestoreCalls = [];
+    browser.__historyMarkProbe = {
+      calls: [],
+      listRefreshPending: false,
+    };
+    let marked = false;
     const invokeBase = internals.invoke.bind(internals);
     internals.invoke = async (command, args = {}) => {
       const request =
@@ -191,11 +227,27 @@ async function installHistoryPreviewFixture(page: Page): Promise<void> {
         });
         throw new Error("fixture restore should not commit");
       }
+      if (command === "history_set_marked") {
+        const markedRequest = request as {
+          versionId?: unknown;
+          marked?: unknown;
+        };
+        const versionId = String(markedRequest.versionId ?? "");
+        marked = markedRequest.marked === true;
+        browser.__historyMarkProbe?.calls.push({ versionId, marked });
+        return { versionId, marked, retained: true };
+      }
       if (command === "history_list") {
         const document = request.document as { path?: unknown } | undefined;
+        const probe = browser.__historyMarkProbe;
+        if (probe?.calls.length) {
+          probe.listRefreshPending = true;
+          await new Promise((resolve) => globalThis.setTimeout(resolve, 400));
+          probe.listRefreshPending = false;
+        }
         return {
           documentId: String(document?.path ?? ""),
-          items: [item],
+          items: [{ ...item, marked }],
           listRevision: 1,
         };
       }
@@ -214,6 +266,26 @@ async function installHistoryPreviewFixture(page: Page): Promise<void> {
       return invokeBase(command, args);
     };
   }, HISTORY_VERSION);
+}
+
+async function readHistoryMarkProbe(page: Page): Promise<{
+  calls: Array<{ versionId: string; marked: boolean }>;
+  listRefreshPending: boolean;
+}> {
+  return page.evaluate(() => {
+    const probe = (
+      globalThis as typeof globalThis & {
+        __historyMarkProbe?: {
+          calls: Array<{ versionId: string; marked: boolean }>;
+          listRefreshPending: boolean;
+        };
+      }
+    ).__historyMarkProbe;
+    return {
+      calls: probe?.calls ?? [],
+      listRefreshPending: probe?.listRefreshPending ?? false,
+    };
+  });
 }
 
 async function readHistoryRestoreCalls(

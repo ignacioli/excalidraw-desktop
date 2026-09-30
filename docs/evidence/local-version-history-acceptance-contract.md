@@ -1,6 +1,6 @@
 # 本地版本历史：原生与视觉验收执行合同
 
-**状态（2026-09-29）：执行方式已按负责人批准的轻量验收决策对齐；实际原生/视觉仍未完成。** 本合同落实 `.handoff/native-vision-validation-contract.md` 及随后“按计划推进”的授权；产品行为和已批准设计不变。新候选包见 [package manifest](local-version-history-t059/package-ready/package-manifest.json)。旧 capture 和 review 记录保留为历史证据，不移植其结论。
+**状态（2026-09-29）：执行方式已按负责人批准的轻量验收决策对齐；实际原生/视觉仍未完成。** 本合同落实 `.handoff/native-vision-validation-contract.md` 及随后“按计划推进”的授权；产品行为和已批准设计不变。新候选包见 [package manifest](local-version-history-t059/resume-20260929/package-manifest.json)。旧 capture 和 review 记录保留为历史证据，不移植其结论。
 
 ## 事实分工与完成信号
 
@@ -34,7 +34,7 @@
 - 当前 production 包、提交、路径/hash 已明确；代码未变时复用已封存包。文档和验收合同变化不自动要求重建。原生入口证据继续按实际包身份记录。
 - 每组有合成数据、可执行步骤和可辨认目标状态；不能只写 `operator-assisted`。状态准备必须复用隔离的测试目录，不读写用户日常 profile，不把测试故障入口加入 production。
 - 邀请 owner 前列出已经准备的组和仍然 BLOCKED 的组。不让 owner 在现场承担 50 次造数、随机碰撞错误或等待瞬态的工作。准备缺口单独处理，不能靠点击确认跳过。
-- 预计一次 owner session 为 15–30 分钟；超过预算时说明未完成项与原因并重新安排，不超时判 PASS，也不重复全套。原生启动、焦点占用或 OS 设置变化均先与用户协调。本轮暂停仍有效。
+- 预计一次 owner session 为 15–30 分钟；超过预算时说明未完成项与原因并重新安排，不超时判 PASS，也不重复全套。原生启动、焦点占用或 OS 设置变化均先与用户协调。负责人已于 2026-09-29 明确授权本轮原生验收，之前的暂停已解除。
 - 状态准备的静态/离线检查不等于 production 中可达；未执行的实机确认明确写“未验证”，不能升级为 ready/PASS。
 
 ## 结果、失败和复验

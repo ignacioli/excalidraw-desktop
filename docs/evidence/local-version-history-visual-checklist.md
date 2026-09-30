@@ -1,9 +1,9 @@
 # Local Version History visual checklist
 
-**最新实现（2026-09-29）**：`a50818ea8a8721a508fd306cef0c3ccc93081b32` 已实现负责人批准的 360→300 px drawer 拖动/键盘调整，并修复 Mark/Restore 样式。HistoryPanel 26/26、T027 5/5、T023 5/5、T048 browser 5/5 与 regression 2/2，以及 lint/typecheck/build 和 20 项 capture/prepare tests PASS；原始报告与边界见 [T059](local-version-history-t059/README.md)。production `.app` 已构建，但新包原生/视觉尚未执行；下述 `9c1e6a3` 原生 PASS 与视觉 FAIL 均属于旧候选，不能转移到新实现。所有原生启动/激活已按用户要求暂停。
+**最新状态（2026-09-29，真实原生验收）**：production `1997de467b7fbd32d0f2421019f01caa528842be` 的 History 原生入口 13/13 PASS。Owner 确认列表滚动、Preview、Restore 确认/Cancel、Light/Dark 紧凑宽度、菜单和 Tab 焦点正常；点击 Mark version 时 History 边栏高频跳跃，记为实际产品 FAIL，正在定点修复。异常状态验收仍在进行；T048 未完成，T049/T054 未完成。证据见 [本轮 owner 记录](local-version-history-t059/resume-20260929/owner-walkthrough.json)与[原生入口报告](local-version-history-t059/resume-20260929/native-entry-report.json)。以下旧包记录保留其历史身份，不覆盖本轮结果。
 
 
-**Current gate**: T004 low/high-fidelity baseline APPROVED; T048 revised low/high-fidelity APPROVED; production visual acceptance PENDING
+**Current gate**: T004 low/high-fidelity baseline APPROVED; T048 revised low/high-fidelity APPROVED; production visual acceptance FAIL pending focused Mark fix
 **T004 low/high-fidelity owner approval date**: 2026-09-23
 **T048 revised low-fidelity owner approval date**: 2026-09-27
 **T048 revised high-fidelity owner approval date**: 2026-09-28; approved screens and token roles: [`docs/design/local-version-history/high-fi/t048/`](../design/local-version-history/high-fi/t048/README.md)
@@ -22,30 +22,30 @@ Record package and environment details once, then complete each row during the s
 
 | Session record (once) | Result |
 | --- | --- |
-| Product commit |  |
-| Production `.app` path, bundle ID, version, package SHA-256 |  |
+| Product commit | `1997de467b7fbd32d0f2421019f01caa528842be` |
+| Production `.app` path, bundle ID, version, package SHA-256 | [Package manifest](local-version-history-t059/resume-20260929/package-manifest.json); `excalidraw-desktop` / `0.3.0` / `e3eab810dccb576ef7c4e31b08873e23ae6599db78bc77f7fa1d590d49717f59` |
 | macOS version/build, architecture, filesystem, display/backing scale |  |
 | Native window logical bounds (must be 1280 × 760), display arrangement |  |
-| Walkthrough date/time and owner |  |
-| Package launch confirmation / desktop availability |  |
+| Walkthrough date/time and owner | 2026-09-29; product owner in this chat; [逐项原始反馈](local-version-history-t059/resume-20260929/owner-walkthrough.json) |
+| Package launch confirmation / desktop availability | Owner: “现在开始原生验收”; normal window, no always-on-top |
 
 | Check (same package; group into one walkthrough) | Required observation | Result (`PASS` / `FAIL` / `BLOCKED`) | Issue, blocked reason, or follow-up |
 | --- | --- | --- | --- |
 | Light baseline · 360 px | At 1280 × 760, drawer is right aligned and canvas remains primary; filename/time/source/summary and Ready/marked state are readable without color alone; current drawing is distinct from history; Preview and Restore are visible. |  |  |
 | Light actions and preview | More Actions menu fits without clipping and preserves readable target, Mark/Unmark, Delete, icon and destructive hierarchy; readonly Preview is identified and distinct from the current drawing; Exit and Restore remain reachable. |  |  |
 | Restore confirmation and focus | Confirmation hierarchy and Cancel are clear; initial focus is visible; closing returns focus to the triggering control; focused row, menu, Preview, and Close have visible focus treatment. T023 remains the owner of keyboard behavior. |  |  |
-| Resized drawer · 300 px | At the same 1280 × 760 native geometry, drag the drawer edge to 300 px. Essential row content and actions remain readable and reachable, with no horizontal overflow or clipping; the 360 px default remains the initial state. |  |  |
-| Long list and repeated Mark | In a 50-row list, repeated Mark gives clear reuse feedback; the selected target and Preview/Restore stay understandable while scrolling; canvas and history target remain distinct. |  |  |
+| Resized drawer · 300 px | At the same 1280 × 760 native geometry, drag the drawer edge to 300 px. Essential row content and actions remain readable and reachable, with no horizontal overflow or clipping; the 360 px default remains the initial state. | PASS | Owner confirmed readable, usable, no clipping in Light/Dark at minimum drawer width. |
+| Long list and repeated Mark | In a 50-row list, repeated Mark gives clear reuse feedback; the selected target and Preview/Restore stay understandable while scrolling; canvas and history target remain distinct. | FAIL | List and scrolling normal; Mark causes high-frequency sidebar jumping. Focused fix and native recheck required. |
 | Existing crash Recovery | Preserve existing recovery/conflict safety evidence. The owner withdrew the extra History-specific recovery flow on 2026-09-29. Recheck native presentation only when this change materially affects the existing Recovery UI; record the impact decision rather than inventing a new screen. |  |  |
-| Dark · 300 px | Dark treatment preserves contrast and state labels at 300 px; rows and actions remain readable without horizontal overflow or clipped essential actions. |  |  |
+| Dark · 300 px | Dark treatment preserves contrast and state labels at 300 px; rows and actions remain readable without horizontal overflow or clipped essential actions. | PASS | Owner confirmed readable, usable, no clipping in Light/Dark at minimum drawer width. |
 | Error state | Error title and recovery guidance are distinct and readable; drawing identity remains clear; safe or retry actions are reachable. |  |  |
 | Conflict state | Conflict and recovery guidance are distinct and readable; drawing identity remains clear; safe resolution actions are reachable. |  |  |
-| Pending state | Pending state and guidance are readable; it does not look successful and does not hide the drawing identity or safe actions. |  |  |
-| Unavailable-resource state | Resource-unavailable guidance is distinct and readable; drawing identity remains clear; safe or retry actions are reachable. |  |  |
+| Pending state | Pending state and guidance are readable; it does not look successful and does not hide the drawing identity or safe actions. | PASS | Pending reconciliation renders as explicit error guidance; owner confirmed readable filename, message and actions. |
+| Unavailable-resource state | Resource-unavailable guidance is distinct and readable; drawing identity remains clear; safe or retry actions are reachable. | PASS | Owner confirmed clear state and safe action availability; separately requested solid-border warning styling refinement. |
 | Reduced motion | With reduced motion enabled, status and focus remain understandable without animation; transitions do not hide either. |  |  |
 | Walkthrough issues / focused recheck | Link any diagnostic screenshot or issue note if useful; state which affected check was re-opened and its result. No screenshot is required when there is no issue to diagnose. |  |  |
 
-**Walkthrough outcome:** `PENDING` until every required row has a recorded result; any required `BLOCKED` row leaves the visual gate blocked, and any `FAIL` row leaves it failed pending a focused correction and recheck. Record the owner's acceptance decision separately; this checklist does not convert an implementation, browser, capture-integrity, or T047/T058 result into owner acceptance.
+**Walkthrough outcome:** `FAIL` for Mark-induced sidebar jumping; other unrecorded observations remain pending. See the owner record for passed subsets. Completion requires every required row to have a recorded result; any required `BLOCKED` row leaves the visual gate blocked, and any `FAIL` row leaves it failed pending a focused correction and recheck. Record the owner's acceptance decision separately; this checklist does not convert an implementation, browser, capture-integrity, or T047/T058 result into owner acceptance.
 
 **2026-09-29 owner decision:** existing crash-draft Recovery remains authoritative. Historical External recovery artifact designs below are not new implementation or native-acceptance requirements. Recovery and conflict safety checks remain required.
 

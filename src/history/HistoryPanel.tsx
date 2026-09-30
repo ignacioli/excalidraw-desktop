@@ -253,16 +253,21 @@ export function HistoryPanel({
     undefined,
   );
   useEffect(() => {
-    if (selectedVersionId === undefined || selectedVersionId === null) return;
+    if (selectedVersionId === undefined) return;
+    if (selectedVersionId === null) {
+      previousControlledSelectionRef.current = null;
+      return;
+    }
     if (!items.some((item) => item.versionId === selectedVersionId)) return;
+    const row = rowRefs.current.get(selectedVersionId);
+    if (row === undefined) return;
     const selectionChanged =
       previousControlledSelectionRef.current !== selectedVersionId;
     previousControlledSelectionRef.current = selectedVersionId;
-    const row = rowRefs.current.get(selectedVersionId);
-    if (row === undefined) return;
-    row.scrollIntoView?.({ block: "nearest" });
-    if (selectionChanged || document.activeElement === document.body)
+    if (selectionChanged) {
+      row.scrollIntoView?.({ block: "nearest" });
       row.focus();
+    }
   }, [items, selectedVersionId]);
 
   const selectItem = (item: HistoryVersionView) => {
@@ -545,11 +550,12 @@ export function HistoryPanel({
     }
     const actionName = action.dataset.historyAction;
     if (actionName === "mark" || actionName === "unmark") {
+      if (markIsProcessing) return;
       void handleSetMarked(targetItem, actionName === "mark");
       setOpenActionsTarget(null);
       actionsTriggerRefs.current.get(targetItem.versionId)?.focus();
     } else if (actionName === "delete") {
-      if (processing || deleteIsProcessing) return;
+      if (processing || deleteIsProcessing || markIsProcessing) return;
       setOpenActionsTarget(null);
       deleteReturnFocusRef.current =
         actionsTriggerRefs.current.get(targetItem.versionId) ?? null;
@@ -595,12 +601,14 @@ export function HistoryPanel({
         <button
           aria-expanded={isTargetOpen}
           aria-haspopup="menu"
+          aria-disabled={markIsProcessing || undefined}
           aria-label={`More actions for ${historyTargetLabel(item)}`}
           className="history-actions-trigger"
-          disabled={processing || deleteIsProcessing || markIsProcessing}
-          onClick={(event) =>
-            toggleActionsMenu(item, isTargetOpen, event.currentTarget)
-          }
+          disabled={processing || deleteIsProcessing}
+          onClick={(event) => {
+            if (markIsProcessing) return;
+            toggleActionsMenu(item, isTargetOpen, event.currentTarget);
+          }}
           ref={registerActionsTrigger(item.versionId)}
           type="button"
         >
@@ -625,7 +633,7 @@ export function HistoryPanel({
               <button
                 className="history-actions-menu-item"
                 disabled={
-                  onSetMarked === undefined || processing || setMarkedBusy
+                  onSetMarked === undefined || processing || markIsProcessing
                 }
                 data-history-action="unmark"
                 role="menuitem"
@@ -656,7 +664,9 @@ export function HistoryPanel({
                 />
                 <button
                   className="history-actions-menu-item is-destructive"
-                  disabled={processing || deleteIsProcessing}
+                  disabled={
+                    processing || deleteIsProcessing || markIsProcessing
+                  }
                   data-history-action="delete"
                   role="menuitem"
                   type="button"

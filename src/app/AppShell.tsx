@@ -826,61 +826,66 @@ export function AppShell({
     setExportDocumentId(null);
   };
 
-  const loadHistoryPanel = useCallback(async (): Promise<void> => {
-    if (
-      !historyOpenRef.current ||
-      documentManager.store.getState().activeDocumentId !== activeDocumentId
-    )
-      return;
-    const session =
-      activeDocumentId === null
-        ? undefined
-        : documentManager.store.getState().sessionsById[activeDocumentId];
-    if (session === undefined || session.path.length === 0) {
-      setHistoryItems([]);
-      setHistoryPanelStatus("empty");
-      setHistoryPanelMessage(undefined);
-      return;
-    }
-    const request = ++historyPanelRequestRef.current;
-    setHistoryPanelStatus("loading");
-    setHistoryPanelMessage(undefined);
-    try {
-      const response = await historyClient.list({
-        document: historyDocumentLocator(session),
-      });
+  const loadHistoryPanel = useCallback(
+    async (preserveAvailableRows = false): Promise<void> => {
       if (
-        request !== historyPanelRequestRef.current ||
         !historyOpenRef.current ||
-        documentManager.store.getState().activeDocumentId !== session.id
+        documentManager.store.getState().activeDocumentId !== activeDocumentId
       )
         return;
-      setHistoryItems(
-        response.items.map((item) => ({
-          ...item,
-          summary: historySourceSummary(item.source, item.protectedAction),
-          summaryReliable: false,
-        })),
-      );
-      if (response.pendingIssue !== undefined) {
-        setHistoryPanelStatus("error");
-        setHistoryPanelMessage(response.pendingIssue.message);
-      } else {
-        setHistoryPanelStatus(
-          response.items.length === 0 ? "empty" : "available",
-        );
+      const session =
+        activeDocumentId === null
+          ? undefined
+          : documentManager.store.getState().sessionsById[activeDocumentId];
+      if (session === undefined || session.path.length === 0) {
+        setHistoryItems([]);
+        setHistoryPanelStatus("empty");
+        setHistoryPanelMessage(undefined);
+        return;
       }
-    } catch (error) {
-      if (
-        request !== historyPanelRequestRef.current ||
-        !historyOpenRef.current ||
-        documentManager.store.getState().activeDocumentId !== session.id
-      )
-        return;
-      setHistoryPanelStatus("error");
-      setHistoryPanelMessage(getErrorMessage(error));
-    }
-  }, [activeDocumentId, historyClient]);
+      const request = ++historyPanelRequestRef.current;
+      setHistoryPanelStatus((current) =>
+        preserveAvailableRows && current === "available" ? current : "loading",
+      );
+      setHistoryPanelMessage(undefined);
+      try {
+        const response = await historyClient.list({
+          document: historyDocumentLocator(session),
+        });
+        if (
+          request !== historyPanelRequestRef.current ||
+          !historyOpenRef.current ||
+          documentManager.store.getState().activeDocumentId !== session.id
+        )
+          return;
+        setHistoryItems(
+          response.items.map((item) => ({
+            ...item,
+            summary: historySourceSummary(item.source, item.protectedAction),
+            summaryReliable: false,
+          })),
+        );
+        if (response.pendingIssue !== undefined) {
+          setHistoryPanelStatus("error");
+          setHistoryPanelMessage(response.pendingIssue.message);
+        } else {
+          setHistoryPanelStatus(
+            response.items.length === 0 ? "empty" : "available",
+          );
+        }
+      } catch (error) {
+        if (
+          request !== historyPanelRequestRef.current ||
+          !historyOpenRef.current ||
+          documentManager.store.getState().activeDocumentId !== session.id
+        )
+          return;
+        setHistoryPanelStatus("error");
+        setHistoryPanelMessage(getErrorMessage(error));
+      }
+    },
+    [activeDocumentId, historyClient],
+  );
 
   const openVersionHistory = useCallback((): void => {
     const session =
@@ -997,7 +1002,7 @@ export function AppShell({
     if (documentManager.store.getState().activeDocumentId !== documentId)
       return null;
     setHistorySelectedVersionId(outcome.response.versionId);
-    await loadHistoryPanel();
+    await loadHistoryPanel(true);
     return {
       versionId: outcome.response.versionId,
       reused: outcome.response.reused,
@@ -1053,7 +1058,7 @@ export function AppShell({
           selected === item.versionId ? null : selected,
         );
       }
-      await loadHistoryPanel();
+      await loadHistoryPanel(true);
       return response;
     },
     [activeDocumentId, historyClient, loadHistoryPanel],

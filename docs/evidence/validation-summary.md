@@ -1,6 +1,6 @@
 # 验证证据汇总（004 实施中；003 已完成；001/002 历史）
 
-**最新实现（2026-09-29）**：`a50818ea8a8721a508fd306cef0c3ccc93081b32` 已实现负责人批准的 360→300 px drawer 拖动/键盘调整，并修复 Mark/Restore 样式。HistoryPanel 26/26、T027 5/5、T023 5/5、T048 browser 5/5 与 regression 2/2，以及 lint/typecheck/build 和 20 项 capture/prepare tests PASS；原始报告与边界见 [T059](local-version-history-t059/README.md)。production `.app` 已构建，但新包原生/视觉尚未执行；下述 `9c1e6a3` 原生 PASS 与视觉 FAIL 均属于旧候选，不能转移到新实现。所有原生启动/激活已按用户要求暂停。
+**最新状态（2026-09-29，真实原生验收）**：production `1997de467b7fbd32d0f2421019f01caa528842be` 的 History 原生入口 13/13 PASS。Owner 确认列表滚动、Preview、Restore 确认/Cancel、Light/Dark 紧凑宽度、菜单和 Tab 焦点正常；点击 Mark version 时 History 边栏高频跳跃，记为实际产品 FAIL，正在定点修复。异常状态验收仍在进行；T048 未完成，T049/T054 未完成。证据见 [本轮 owner 记录](local-version-history-t059/resume-20260929/owner-walkthrough.json)与[原生入口报告](local-version-history-t059/resume-20260929/native-entry-report.json)。以下旧包记录保留其历史身份，不覆盖本轮结果。
 
 
 ## Feature 004 当前最新状态（2026-09-29）

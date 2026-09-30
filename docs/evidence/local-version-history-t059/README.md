@@ -43,3 +43,18 @@
 [Fixture manifest](resume-20260929/fixture-manifest.json)包含同一 profile 的正常 50 条 marked versions（25+25、3次 preview hydration）、独立 pending issue、单行 unavailable；被隔离的合成 scene bytes 保留在 quarantine，正常版本再查询仍完整。`nativeVerified:false` 表示 production 尚未实际读取/呈现该 profile。
 
 [新 package manifest](resume-20260929/package-manifest.json)：production build/seal PASS，package SHA-256 `e3eab810dccb576ef7c4e31b08873e23ae6599db78bc77f7fa1d590d49717f59`，Guard attempt `82c051d1-2f0a-4992-a2ae-1cb5fa213f45`。该包含上述修复；旧 `c453f3f` 包不再是本轮候选。等待操作员同意桌面占用后执行真实原生验收。没有执行 adversarial review、VM/物理性能复跑；私有 specs 保持未提交。
+
+
+## 本轮真实原生验收（2026-09-29）
+
+当前 `1997de4` 包的 [History 原生入口报告](resume-20260929/native-entry-report.json) 13/13 PASS，Guard attempt `8fd5e94d-3dc3-45e5-a55f-b147e445c7f3`。首次 preflight 因证据未提交及 profile 摘要选择错误在启动前失败，修正后通过；不是产品失败。
+
+[Owner walkthrough](resume-20260929/owner-walkthrough.json) 已明确确认列表/滚动、Preview、Restore 确认/Cancel、Light/Dark 紧凑宽度、菜单、Tab 焦点、pending/error 与 unavailable 提示正常。点击 Mark version 导致边栏高频跳跃是实际产品缺陷，正在针对性修复；owner 另要求优化 unavailable 虚线样式。Workspace 按钮不可用时，改用既有 single-instance 参数路由切换合成文件，pending 文件名/提示经真实 AX 确认。没有把准备器的离线结果当作原生结果。
+
+本轮人工会话结束，合成数据和应用窗口保留；冲突、Reduce Motion 及修复后的定点观察尚未完成。T048/T054 未通过，性能不在本轮运行范围。
+
+### 原生反馈后的定点修复
+
+Mark mutation 后保留已显示的列表，避免 loading 状态卸载；相同 selection 的数据刷新不再强制 scroll/focus，延迟到达的新 selection 仍定位。More Actions 在 Mark busy 时保留可聚焦性并使用 aria-disabled，菜单与回调继续阻止重复操作。新增 [首轮失败报告](resume-20260929/mark-refresh-first.json) 保留 disabled trigger 失焦证据；[定点复验](resume-20260929/mark-refresh-retest.json) 1/1 PASS。最终相关 HistoryPanel/HistoryList/HistoryStates/TabBar 共 66/66 PASS，typecheck、针对性 ESLint 通过。
+
+Unavailable 使用实线卡片、danger token 警示图标与文字；History Retry 纳入现有按钮基础/primary/hover/disabled 样式，正常 empty 不显示重试；Tab 增加完整文件名标准 title 提示（旧 TabBar 提交已缺失，非 History 引入）。这些新改动的原生呈现尚待定点复查，未覆盖原包的历史 FAIL。

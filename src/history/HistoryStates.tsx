@@ -91,7 +91,7 @@ export function HistoryStateView({
       <h2>{copy.title}</h2>
       <p>{announcement}</p>
       {children}
-      {onRetry !== undefined ? (
+      {onRetry !== undefined && state !== "empty" ? (
         <button className="primary-action" onClick={onRetry} type="button">
           {retryLabel}
         </button>

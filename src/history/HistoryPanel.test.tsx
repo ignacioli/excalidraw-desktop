@@ -736,6 +736,64 @@ describe("HistoryPanel", () => {
     expect(screen.getByRole("option")).toHaveFocus();
   });
 
+  it("keeps Mark action focus and scroll stable when the selected item refreshes", async () => {
+    const previousScrollIntoView = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "scrollIntoView",
+    );
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    try {
+      const user = userEvent.setup();
+      const item = makeItem();
+      const onSetMarked = vi.fn(async () => undefined);
+      const { rerender } = render(
+        <HistoryPanel
+          fileName="drawing.excalidraw"
+          items={[item]}
+          onClose={vi.fn()}
+          onSetMarked={onSetMarked}
+          selectedVersionId={item.versionId}
+        />,
+      );
+      scrollIntoView.mockClear();
+
+      const actionsTrigger = screen.getByRole("button", {
+        name: /More actions for v-001/,
+      });
+      await user.click(actionsTrigger);
+      await user.click(screen.getByRole("menuitem", { name: "Mark version" }));
+      await vi.waitFor(() => expect(actionsTrigger).toHaveFocus());
+      expect(onSetMarked).toHaveBeenCalledOnce();
+
+      rerender(
+        <HistoryPanel
+          fileName="drawing.excalidraw"
+          items={[makeItem({ marked: true })]}
+          onClose={vi.fn()}
+          onSetMarked={onSetMarked}
+          selectedVersionId={item.versionId}
+        />,
+      );
+
+      expect(scrollIntoView).not.toHaveBeenCalled();
+      expect(actionsTrigger).toHaveFocus();
+    } finally {
+      if (previousScrollIntoView === undefined) {
+        Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+      } else {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          "scrollIntoView",
+          previousScrollIntoView,
+        );
+      }
+    }
+  });
+
   it("keeps the panel usable and reports a failed mark inline", async () => {
     const user = userEvent.setup();
     const onMark = vi.fn(async () => {

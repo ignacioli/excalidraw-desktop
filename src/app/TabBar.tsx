@@ -282,6 +282,7 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
                 onKeyDown={(event) => handleKeyDown(event, index)}
                 role="tab"
                 tabIndex={isActive ? 0 : -1}
+                title={session.title}
               >
                 <span className="tab-title">{session.title}</span>
                 {isDirty ? (

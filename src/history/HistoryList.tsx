@@ -176,7 +176,22 @@ export function HistoryList({
                     <span className="history-list-status">Manual · Marked</span>
                   ) : null}
                   {unavailable ? (
-                    <span className="history-list-status">Unavailable</span>
+                    <span className="history-list-status history-list-status--unavailable">
+                      <svg
+                        aria-hidden="true"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      >
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 7v6m0 4h.01" />
+                      </svg>
+                      Unavailable
+                    </span>
                   ) : null}
                 </span>
               </button>

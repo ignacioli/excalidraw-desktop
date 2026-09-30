@@ -15,7 +15,7 @@ describe("HistoryStateView", () => {
   ] as const)(
     "renders the %s state with an accessible announcement",
     (state, title, role) => {
-      render(<HistoryStateView state={state} />);
+      render(<HistoryStateView state={state} onRetry={vi.fn()} />);
 
       const region = screen.getByRole(role);
       expect(region).toHaveTextContent(title);
@@ -23,6 +23,9 @@ describe("HistoryStateView", () => {
         "aria-live",
         role === "alert" ? "assertive" : "polite",
       );
+      if (state === "empty") {
+        expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+      }
     },
   );
 

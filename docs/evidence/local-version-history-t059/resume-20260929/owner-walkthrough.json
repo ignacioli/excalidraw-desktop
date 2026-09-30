@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "productCommit": "1997de467b7fbd32d0f2421019f01caa528842be",
+  "packageSha256": "e3eab810dccb576ef7c4e31b08873e23ae6599db78bc77f7fa1d590d49717f59",
+  "owner": "user",
+  "status": "FIX_IMPLEMENTED_NATIVE_RECHECK_PENDING",
+  "observations": [
+    {
+      "group": "W1-W3 subset",
+      "checks": [
+        "History list displays and scrolls",
+        "Preview opens",
+        "Restore confirmation appears",
+        "Cancel returns normally"
+      ],
+      "result": "PASS",
+      "source": "explicit user reply: 三项均正常",
+      "recordedAt": "2026-09-30T03:12:55.588Z"
+    },
+    {
+      "group": "W4 and focus subset",
+      "checks": [
+        "Light and Dark compact drawer readability",
+        "More Actions menu and Preview/Restore reachable",
+        "Tab focus visible"
+      ],
+      "result": "PASS",
+      "source": "explicit user reply: 都正常",
+      "recordedAt": "2026-09-30T03:16:02.039Z"
+    },
+    {
+      "group": "W3 Mark feedback",
+      "checks": [
+        "Sidebar stays stable when marking version"
+      ],
+      "result": "FAIL",
+      "source": "explicit user reply: 点击“mark version”，右侧history边栏会高频跳跃。",
+      "recordedAt": "2026-09-30T03:16:02.040Z"
+    },
+    {
+      "group": "W5 pending/error",
+      "checks": [
+        "Pending reconciliation message, filename and available actions readable without clipping"
+      ],
+      "result": "PASS",
+      "source": "explicit user reply: 清楚正常",
+      "nativeAxText": [
+        "History pending issue.excalidraw",
+        "Version history could not be loaded",
+        "The history operation is pending reconciliation."
+      ],
+      "recordedAt": "2026-09-30T03:25:07.371Z"
+    },
+    {
+      "group": "W5 unavailable",
+      "checks": [
+        "Unavailable indication clear",
+        "Preview/Restore do not imply successful availability",
+        "Filename and content not clipped"
+      ],
+      "result": "PASS",
+      "source": "explicit user reply: 正常，状态清楚",
+      "recordedAt": "2026-09-30T03:28:07.623Z"
+    }
+  ],
+  "remaining": "Mark jumping defect fix and focused native recheck; unavailable styling refinement; conflict and reduced-motion observations; complete remaining checklist detail and separate T054 owner decision. No full visual pass claimed.",
+  "preparationIssues": [
+    {
+      "issue": "Workspace sidebar button disabled; operator could not find scenario files",
+      "resolution": "Use existing single-instance executable argument route to open declared fixture files; successful pending filename confirmed by native AX."
+    },
+    {
+      "issue": "macOS open -a file event did not switch the current drawing",
+      "resolution": "Use verified executable argument route."
+    },
+    {
+      "issue": "Read-only AX approval timed out",
+      "resolution": "One permitted retry completed successfully."
+    }
+  ],
+  "requestedRefinements": [
+    {
+      "request": "Replace dashed unavailable row border with clearer professional error indication",
+      "decision": "Solid border, existing red warning icon and Unavailable label; neutral card background, keep explicit text."
+    },
+    {
+      "request": "Hovering a truncated document tab should show full filename",
+      "finding": "Pre-existing omission also present in TabBar commit 0b64b8f; standard title attribute added.",
+      "implementation": "TabBar standard title attribute now exposes full filename; native hover recheck pending."
+    },
+    {
+      "request": "History Try again button has default raised border inconsistent with design system",
+      "finding": "User screenshot provided; targeted History button styling correction in progress.",
+      "implementation": "Retry button now reuses History primary action base styles; empty state no longer offers retry; native recheck pending."
+    }
+  ],
+  "sessionEndedAt": "2026-09-30T03:28:07.623Z",
+  "focusedValidation": {
+    "componentTests": "66/66 PASS",
+    "browserMarkRetest": "1/1 PASS",
+    "typecheck": "PASS",
+    "targetedEslint": "PASS",
+    "nativeAfterFix": "NOT_RUN"
+  }
+}
