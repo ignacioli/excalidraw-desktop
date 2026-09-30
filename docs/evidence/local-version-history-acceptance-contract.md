@@ -24,7 +24,7 @@
 | W2：Preview 与恢复确认 | 只读预览和当前画布的视觉区分；Exit/Restore；Cancel 初始可见焦点与关闭后焦点外观；只在合成 fixture 上操作 | HISTORY-03、04 |
 | W3：长列表与目标 | 至少 50 行列表顶部/中部/底部；重复 Mark 后目标可辨、固定详情与操作不裁切 | HISTORY-05；业务去重与写入次数仍归自动测试 |
 | W4：Dark 与紧凑宽度 | 同一 1280×760 窗口的 Dark；左边缘拖至批准的紧凑宽度，核对对比、文字及操作；保留 Light/Dark 两种主题观察 | HISTORY-06 |
-| W5：异常与 Recovery | error、conflict、pending/processing、resource-unavailable，以及既有 Recovery/Discard 确认分别可辨且可读 | 四个异常 gate 及原 checklist 的 Recovery 行；不得用其中一个替代其余状态 |
+| W5：异常与 Recovery | error、conflict、pending/processing、resource-unavailable，以及实际受影响的既有异常退出草稿 Recovery 分别可辨且可读 | 异常观察分别记录；Recovery 沿用已有回归，只有共享 UI 变更实际影响时才追加原生复查，不新增 History 专属恢复流程 |
 | W6：焦点与 reduced motion | 在上述路径中顺便观察行、菜单、Preview、Cancel、Close 的焦点及返回；系统 Reduce Motion 下状态仍可理解 | HISTORY-FOCUS、HISTORY-REDUCED-MOTION |
 
 完整结果填写 [visual checklist](local-version-history-visual-checklist.md)。截图在有缺陷或明确需要图像佐证时采集；它是可选诊断材料，不再要求 12 份 capture collection，也不要求每屏独立 AI reviewer 签字。若选择运行既有 collector，仍遵守其 PID/window、ready 和隔离安全检查，不削弱 collector 本身。Owner 可以同时承担 T048 视觉判断与 T054 最终决定，但两种结论分别记录。
@@ -44,3 +44,7 @@
 同一阻塞不原样重跑；先区分 product/harness/environment/specification。修复后的复验范围由实际影响决定：样式局部修复检查相应组件，公共 theme/font/layout 改动扩大到受影响状态，后端数据路径改动回到其可靠性 owner。任何 required 自动失败仍保留，人工意见不能覆盖。
 
 本轮先完成合同对齐与状态准备。没有立即执行 adversarial review；后续确有无法解决的 proof-owner、依赖、状态可达或证据合同矛盾时，依据具体 delta/incident 对最小范围使用 `spec-adversarial-review`，不为获得“零发现”反复 review。
+
+## Recovery 范围决定已落实
+
+负责人于 2026-09-29 明确选择沿用既有异常退出草稿 Recovery，修正设计/验收中多出的 History 专属恢复流程；恢复与外部冲突的自动/进程安全检查完整保留。旧批准画板和历史报告原样保留，不因此要求新增 production API、artifact 存储或专属 Preview/Keep current/Discard UI。

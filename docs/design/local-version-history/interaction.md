@@ -70,14 +70,11 @@ T004 低保真源文件位于 `low-fi/local-version-history-t004.html`；T048 �
 5. **Confirmations**
    - Restore confirmation
    - Delete confirmation
-   - Discard recovery 二次确认
    - Cancel 默认聚焦；关闭后焦点返回触发控制
-6. **External recovery issue**
-   - Preview recovery
-   - Save As…
-   - Keep current file（不清除 recovery issue）
-   - Discard recovery（二次确认）
-   - 未显式确认前不得自动删除
+6. **既有 Recovery**
+   - 2026-09-29 负责人决定沿用既有异常退出草稿 Recovery，不新增 History 专属 recovery artifact 或 Preview recovery/Keep current file/Discard recovery 流程。
+   - 既有恢复、冲突、资源与安全检查保持原职责；History 不重新定义其操作语义。
+   - 旧低/高保真中的 External recovery issue 保留为历史设计记录，不再是本功能新增生产界面的要求。
 
 ## Mark version 语义
 
@@ -122,7 +119,7 @@ T004 高保真批准的 More actions menu 使用 180 × 84 px 紧凑浮层。T04
 11. Generic history error + safe read retry
 12. Manual marked
 13. Delete confirmation
-14. External recovery artifact
+14. 既有异常退出 Recovery（保留原职责，不新增 History 专属流程）
 15. Dark structure
 16. 1280 × 760 cramped / 300 px fallback
 17. Reduced motion
@@ -148,7 +145,7 @@ T004 高保真批准的 More actions menu 使用 180 × 84 px 紧凑浮层。T04
 - More actions menu 及紧凑间距、vector icons 和危险操作层级；
 - 独立 readonly version preview；
 - Restore confirmation；
-- External recovery issue；
+- External recovery issue（历史批准画面；其新增流程已由 2026-09-29 负责人决定撤销，改为沿用既有 Recovery）；
 - 300 px compact Dark fallback；
 - 既有 Excalidraw semantic tokens、排版、边框、阴影和 Light/Dark 方向。
 

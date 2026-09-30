@@ -11,6 +11,7 @@ use excalidraw_desktop_lib::{
     commands::{
         documents::DocumentService,
         dto::{HistoryListRequest, HistoryPreviewRequest, PathRequest, WorkspaceAddRequest},
+        error::ErrorCode,
         workspace::WorkspaceService,
     },
     database::repository::SqliteRepository,
@@ -73,6 +74,15 @@ fn validate_new_root(requested: &Path) -> io::Result<PathBuf> {
     })?;
     let canonical_parent = parent.canonicalize()?;
     let canonical_temp = env::temp_dir().canonicalize()?;
+    #[cfg(target_os = "macos")]
+    if !canonical_temp.starts_with("/private/var/folders")
+        && !canonical_temp.starts_with("/private/tmp")
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "TMPDIR must resolve inside a macOS system temporary directory",
+        ));
+    }
     if !canonical_parent.starts_with(&canonical_temp) {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
@@ -205,7 +215,7 @@ async fn prepare(root: &Path) -> Result<Value, Box<dyn std::error::Error>> {
         if item.source != HistoryVersionSource::Manual
             || !item.marked
             || !matches!(item.availability, HistoryVersionAvailability::Available)
-            || !hashes.insert(&item.content_hash)
+            || !hashes.insert(item.content_hash.clone())
         {
             return Err(io::Error::other(
                 "History list contains an unavailable, unmarked, or duplicate version",
@@ -233,8 +243,133 @@ async fn prepare(root: &Path) -> Result<Value, Box<dyn std::error::Error>> {
         }
     }
 
+    let pending_file = workspace.join("History pending issue.excalidraw");
+    fs::write(&pending_file, scene_bytes(VERSION_COUNT + 1)?)?;
+    documents
+        .doc_open(PathRequest {
+            path: pending_file.display().to_string(),
+        })
+        .await
+        .map_err(ipc_error)?;
+    let pending_path = pending_file.canonicalize()?.display().to_string();
+    let pending_identity = store
+        .load_active_document_identity(&pending_path)?
+        .ok_or_else(|| io::Error::other("pending document has no History identity"))?;
+    store.record_maintenance_issue(
+        &pending_identity.document_id,
+        "fixture_pending",
+        "fixture_preparation",
+        recorded_at,
+    )?;
+    let pending_list = query
+        .list(HistoryListRequest {
+            document: HistoryDocumentLocator::Path {
+                path: pending_path.clone(),
+            },
+            cursor: None,
+            limit: Some(25),
+        })
+        .await
+        .map_err(ipc_error)?;
+    let pending_issue = pending_list
+        .pending_issue
+        .ok_or_else(|| io::Error::other("maintenance issue is absent from History list"))?;
+    if pending_list.document_id != pending_identity.document_id
+        || !pending_list.items.is_empty()
+        || pending_issue.code != ErrorCode::HistoryOperationPending
+    {
+        return Err(io::Error::other("pending issue document did not query as expected").into());
+    }
+
+    let unavailable_file = workspace.join("History unavailable version.excalidraw");
+    let unavailable_bytes = scene_bytes(VERSION_COUNT + 2)?;
+    fs::write(&unavailable_file, &unavailable_bytes)?;
+    documents
+        .doc_open(PathRequest {
+            path: unavailable_file.display().to_string(),
+        })
+        .await
+        .map_err(ipc_error)?;
+    let unavailable_path = unavailable_file.canonicalize()?.display().to_string();
+    let unavailable_identity = store
+        .load_active_document_identity(&unavailable_path)?
+        .ok_or_else(|| io::Error::other("unavailable document has no History identity"))?;
+    let unavailable_version = history.publish_scene(PublishSceneRequest {
+        version_id: Uuid::new_v4().to_string(),
+        document_id: unavailable_identity.document_id.clone(),
+        scene_bytes: unavailable_bytes,
+        schema_version: i64::from(HISTORY_OBJECT_SCHEMA_VERSION),
+        source: HistoryVersionSource::Manual,
+        protected_action: None,
+        recorded_at,
+        sequence: 1,
+    })?;
+    if hashes.contains(&unavailable_version.scene_hash) {
+        return Err(
+            io::Error::other("unavailable scene shares an object with the healthy list").into(),
+        );
+    }
+    let scene_object = store
+        .objects()
+        .scene_path(&unavailable_version.scene_hash)?;
+    let quarantine = root.join("quarantine");
+    fs::create_dir(&quarantine)?;
+    let quarantined_scene = quarantine.join(format!("{}.scene", unavailable_version.scene_hash));
+    fs::rename(&scene_object, &quarantined_scene)?;
+    let unavailable_locator = HistoryDocumentLocator::Path {
+        path: unavailable_path.clone(),
+    };
+    let unavailable_list = query
+        .list(HistoryListRequest {
+            document: unavailable_locator.clone(),
+            cursor: None,
+            limit: Some(25),
+        })
+        .await
+        .map_err(ipc_error)?;
+    if unavailable_list.document_id != unavailable_identity.document_id
+        || unavailable_list.items.len() != 1
+        || unavailable_list.items[0].version_id != unavailable_version.version_id
+        || !matches!(
+            &unavailable_list.items[0].availability,
+            HistoryVersionAvailability::Unavailable { .. }
+        )
+        || unavailable_list.pending_issue.is_some()
+    {
+        return Err(io::Error::other("quarantined version did not query as unavailable").into());
+    }
+    let preview_error = match query
+        .preview(HistoryPreviewRequest {
+            document: unavailable_locator,
+            version_id: unavailable_version.version_id.clone(),
+        })
+        .await
+    {
+        Ok(_) => return Err(io::Error::other("quarantined scene unexpectedly hydrated").into()),
+        Err(error) => error,
+    };
+    if preview_error.code != ErrorCode::HistoryResourceMissing {
+        return Err(io::Error::other("quarantined preview returned the wrong error").into());
+    }
+    let healthy_after_quarantine = query
+        .list(HistoryListRequest {
+            document: locator,
+            cursor: None,
+            limit: Some(VERSION_COUNT as u16),
+        })
+        .await
+        .map_err(ipc_error)?;
+    if healthy_after_quarantine.items.len() != VERSION_COUNT
+        || healthy_after_quarantine
+            .items
+            .iter()
+            .any(|item| !matches!(item.availability, HistoryVersionAvailability::Available))
+    {
+        return Err(io::Error::other("quarantine affected the healthy History list").into());
+    }
+
     Ok(json!({
-        "scenario": "history-long-list-and-preview",
+        "scenarios": ["history-long-list-and-preview", "history-pending-issue", "history-unavailable-version"],
         "root": root,
         "profileHome": home,
         "appDataDirectory": app_data,
@@ -248,6 +383,11 @@ async fn prepare(root: &Path) -> Result<Value, Box<dyn std::error::Error>> {
         "versionCount": items.len(),
         "markedVersionCount": items.len(),
         "previewReadbackCount": 3,
+        "documents": {
+            "longList": {"documentId": identity.document_id, "currentFile": current_path, "versionCount": items.len(), "markedVersionCount": items.len()},
+            "pendingIssue": {"documentId": pending_identity.document_id, "currentFile": pending_path, "versionCount": 0, "pendingIssueCode": pending_issue.code},
+            "unavailable": {"documentId": unavailable_identity.document_id, "currentFile": unavailable_path, "versionCount": 1, "versionId": unavailable_version.version_id, "sceneHash": unavailable_version.scene_hash, "availability": "unavailable", "previewErrorCode": preview_error.code, "quarantinedScene": quarantined_scene}
+        },
         "nativeVerified": false
     }))
 }

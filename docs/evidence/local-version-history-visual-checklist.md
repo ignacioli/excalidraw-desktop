@@ -36,7 +36,7 @@ Record package and environment details once, then complete each row during the s
 | Restore confirmation and focus | Confirmation hierarchy and Cancel are clear; initial focus is visible; closing returns focus to the triggering control; focused row, menu, Preview, and Close have visible focus treatment. T023 remains the owner of keyboard behavior. |  |  |
 | Resized drawer · 300 px | At the same 1280 × 760 native geometry, drag the drawer edge to 300 px. Essential row content and actions remain readable and reachable, with no horizontal overflow or clipping; the 360 px default remains the initial state. |  |  |
 | Long list and repeated Mark | In a 50-row list, repeated Mark gives clear reuse feedback; the selected target and Preview/Restore stay understandable while scrolling; canvas and history target remain distinct. |  |  |
-| External recovery | Recovery issue and Preview, Save As…, Keep current file, and Discard actions are readable; destructive confirmation is distinct; the display does not imply recovery data disappears without an explicit choice. |  |  |
+| Existing crash Recovery | Preserve existing recovery/conflict safety evidence. The owner withdrew the extra History-specific recovery flow on 2026-09-29. Recheck native presentation only when this change materially affects the existing Recovery UI; record the impact decision rather than inventing a new screen. |  |  |
 | Dark · 300 px | Dark treatment preserves contrast and state labels at 300 px; rows and actions remain readable without horizontal overflow or clipped essential actions. |  |  |
 | Error state | Error title and recovery guidance are distinct and readable; drawing identity remains clear; safe or retry actions are reachable. |  |  |
 | Conflict state | Conflict and recovery guidance are distinct and readable; drawing identity remains clear; safe resolution actions are reachable. |  |  |
@@ -46,6 +46,8 @@ Record package and environment details once, then complete each row during the s
 | Walkthrough issues / focused recheck | Link any diagnostic screenshot or issue note if useful; state which affected check was re-opened and its result. No screenshot is required when there is no issue to diagnose. |  |  |
 
 **Walkthrough outcome:** `PENDING` until every required row has a recorded result; any required `BLOCKED` row leaves the visual gate blocked, and any `FAIL` row leaves it failed pending a focused correction and recheck. Record the owner's acceptance decision separately; this checklist does not convert an implementation, browser, capture-integrity, or T047/T058 result into owner acceptance.
+
+**2026-09-29 owner decision:** existing crash-draft Recovery remains authoritative. Historical External recovery artifact designs below are not new implementation or native-acceptance requirements. Recovery and conflict safety checks remain required.
 
 ## T004 low-fidelity decision record (historical baseline)
 

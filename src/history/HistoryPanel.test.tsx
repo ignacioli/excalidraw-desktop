@@ -131,7 +131,7 @@ describe("HistoryPanel", () => {
     await user.click(
       screen.getByRole("button", { name: "Restore this version" }),
     );
-    await user.click(screen.getByRole("option", { name: /v-002/ }));
+    await user.click(screen.getByRole("option", { name: /A later change/ }));
     expect(screen.getByRole("dialog")).toHaveTextContent(
       "Target: v-001 · Two shapes added",
     );
@@ -180,6 +180,89 @@ describe("HistoryPanel", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(onRestore).not.toHaveBeenCalled();
   });
+
+  it.each(["unavailable", "loading"] as const)(
+    "keeps an invalidated Restore confirmation blocked after %s",
+    async (invalidatedBy) => {
+      const user = userEvent.setup();
+      const onRestore = vi.fn();
+      const available = makeItem();
+      const { rerender } = render(
+        <HistoryPanel
+          documentId="document-a"
+          fileName="drawing.excalidraw"
+          items={[available]}
+          onClose={vi.fn()}
+          onRestore={onRestore}
+        />,
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Restore this version" }),
+      );
+      rerender(
+        <HistoryPanel
+          documentId="document-a"
+          fileName="drawing.excalidraw"
+          items={
+            invalidatedBy === "unavailable"
+              ? [
+                  makeItem({
+                    availability: {
+                      status: "unavailable",
+                      error: {
+                        code: "HISTORY_RESOURCE_MISSING",
+                        message: "The stored resource is missing.",
+                        retriable: false,
+                      },
+                    },
+                  }),
+                ]
+              : [available]
+          }
+          onClose={vi.fn()}
+          onRestore={onRestore}
+          status={invalidatedBy === "loading" ? "loading" : "available"}
+        />,
+      );
+
+      const dialog = screen.getByRole("dialog", {
+        name: "Restore this version?",
+      });
+      expect(within(dialog).getByRole("alert")).toHaveTextContent(
+        invalidatedBy === "loading"
+          ? "Version history is changing"
+          : "This version is no longer available",
+      );
+      expect(
+        within(dialog).getByRole("button", { name: "Restore version" }),
+      ).toBeDisabled();
+      expect(
+        within(dialog).getByRole("button", { name: "Cancel" }),
+      ).toBeEnabled();
+
+      if (invalidatedBy === "loading") {
+        rerender(
+          <HistoryPanel
+            documentId="document-a"
+            fileName="drawing.excalidraw"
+            items={[available]}
+            onClose={vi.fn()}
+            onRestore={onRestore}
+            status="available"
+          />,
+        );
+        expect(screen.getByRole("dialog")).toBe(dialog);
+        expect(
+          within(dialog).getByRole("button", { name: "Restore version" }),
+        ).toBeEnabled();
+      }
+      expect(onRestore).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    },
+  );
 
   it.each([
     ["loading", "Loading version history"],

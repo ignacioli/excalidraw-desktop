@@ -203,13 +203,22 @@ export function HistoryPanel({
     deleteTarget !== null && deleteTarget.documentId !== activeDocumentKey;
   const visibleDeleteTarget = deleteDocumentChanged ? null : deleteTarget;
   const visibleRestoreTarget =
-    restoreTarget !== null &&
-    restoreTarget.documentId === activeDocumentKey &&
-    restoreEnabled &&
-    status === "available" &&
-    items.some((item) => item.versionId === restoreTarget.item.versionId)
-      ? restoreTarget
-      : null;
+    restoreTarget?.documentId === activeDocumentKey ? restoreTarget : null;
+  const restoreTargetInvalidMessage =
+    visibleRestoreTarget === null
+      ? null
+      : status !== "available"
+        ? "Version history is changing. Cancel and reopen Restore when the list is ready."
+        : !restoreEnabled
+          ? "A safe preview is no longer available. Cancel and reopen Restore."
+          : items.some(
+                (item) =>
+                  item.versionId === visibleRestoreTarget.item.versionId &&
+                  item.availability.status === "available",
+              )
+            ? null
+            : "This version is no longer available. Cancel and choose an available version.";
+  const restoreDialogError = restoreTargetInvalidMessage ?? restoreError;
   const openTargetUnavailableMessage =
     openActionsTarget === null
       ? null
@@ -458,10 +467,11 @@ export function HistoryPanel({
       onRestore === undefined ||
       processing ||
       restoreInFlightRef.current ||
-      target.documentId !== activeDocumentKey ||
-      target.item.availability.status !== "available" ||
-      !items.some((item) => item.versionId === target.item.versionId)
+      target.documentId !== activeDocumentKey
     ) {
+      return;
+    }
+    if (restoreTargetInvalidMessage !== null) {
       return;
     }
     restoreInFlightRef.current = true;
@@ -922,10 +932,12 @@ export function HistoryPanel({
         <ApplicationDialog
           busy={restoreBusy}
           description="The current drawing will be replaced after a protected snapshot is created."
-          errorMessage={restoreError}
+          errorMessage={restoreDialogError}
           initialFocusRef={restoreCancelRef}
           onDismiss={() => {
-            if (!restoreBusy) setRestoreTarget(null);
+            if (!restoreBusy) {
+              setRestoreTarget(null);
+            }
           }}
           returnFocusRef={restoreReturnFocusRef}
           title="Restore this version?"
@@ -938,7 +950,9 @@ export function HistoryPanel({
           <div className="application-dialog-actions conflict-dialog-actions">
             <button
               disabled={restoreBusy}
-              onClick={() => setRestoreTarget(null)}
+              onClick={() => {
+                setRestoreTarget(null);
+              }}
               ref={restoreCancelRef}
               type="button"
             >
@@ -946,7 +960,11 @@ export function HistoryPanel({
             </button>
             <button
               className="primary-action"
-              disabled={restoreBusy || processing}
+              disabled={
+                restoreBusy ||
+                processing ||
+                restoreTargetInvalidMessage !== null
+              }
               onClick={() => void handleRestore()}
               type="button"
             >
