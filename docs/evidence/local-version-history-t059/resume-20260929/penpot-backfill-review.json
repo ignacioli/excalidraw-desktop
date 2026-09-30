@@ -1,5 +1,5 @@
 {
-  "status": "PENDING_OWNER_REVIEW",
+  "status": "APPROVED_DESIGN",
   "fileId": "a5ac146a-5787-80fa-8008-b3c2d0b30bae",
   "pageId": "87d1db27-904b-80ba-8008-aeafe0fb388d",
   "revisionAtQuickCheck": 98,
@@ -40,5 +40,12 @@
     "savedVersionLabel": "004 remove redundant History eyebrow · 2026-09-30",
     "visualSpotCheck": "Default Light export inspected",
     "implementation": "Matching JSX/CSS and design assertion updated; no new app build or broader validation."
+  },
+  "ownerApproval": {
+    "date": "2026-09-30",
+    "decision": "Review通过，请保存并持久化screenshots到本地仓库。",
+    "archive": "docs/design/local-version-history/high-fi/t048/revisions/2026-09-30-approved/manifest.json",
+    "implementationAcceptance": false,
+    "nextAction": "Stop after local commit; await user-led incident Review."
   }
 }
