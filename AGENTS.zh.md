@@ -115,6 +115,7 @@
 
 ### UI 调试与视觉证据效率
 
+- 除非人类明确授权当前 task 使用 Computer Use，否则禁止使用。视觉门禁、截图要求、工具失败或浏览器超时均不构成授权。此限制适用于所有 Computer Use 工具，并优先于下文任何条件性允许。
 - 原生证据不等于视觉证据。按以下顺序选择证据来源：
   1. shell、文件系统、安装包元数据及其他构件检查；
   2. 面向 WebView 自有 UI 的语义化浏览器自动化；
@@ -132,6 +133,10 @@
 - 证据必须绑定精确产品 commit、安装包身份与已记录环境。自动化结果、独立视觉 reviewer verdict 与产品负责人决定相互独立，不能彼此替代。
 
 除非检查确实成功跑过，否则不得声称它通过。若验证需要不可用的服务、目标操作系统，或声明 VM 配置细节，报告确切缺口，而不削弱代码或测试。
+
+### Penpot 文件下载
+
+使用 Playwright MCP 和官方 browser extension，连接用户指定且已登录的 Chrome tab，通过 `Main menu → File → Download Penpot file (.penpot)` 下载完整 `.penpot` 文件并保存到./docs/designs合适的路径。
 
 ## 长时间运行的任务
 

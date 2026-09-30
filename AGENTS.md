@@ -115,6 +115,7 @@ Validation must be proportional to risk. Once the required relevant checks for t
 
 ### UI debugging and visual-evidence efficiency
 
+- Computer Use is prohibited unless the human explicitly authorizes it for the current task. A visual gate, screenshot requirement, tool failure, or browser timeout does not grant that authorization. This restriction applies to every Computer Use tool and overrides any conditional allowance below.
 - Native evidence does not imply visual evidence. Use this evidence precedence, in order:
   1. shell, filesystem, package metadata, and other artifact inspection;
   2. semantic browser automation for WebView-owned UI;
@@ -132,6 +133,10 @@ Validation must be proportional to risk. Once the required relevant checks for t
 - Bind evidence to the exact product commit, package identity, and recorded environment. Keep automated results, independent visual-review verdicts, and product-owner decisions distinct; none substitutes for another.
 
 Never claim a check passed unless it actually ran successfully. If validation requires unavailable services, target operating systems, or declared VM configuration details, report the exact gap without weakening code or tests.
+
+### Penpot file downloads
+
+Use Playwright MCP with the official browser extension to download the whole `.penpot` file from the user-specified, logged-in Chrome tab via `Main menu → File → Download Penpot file (.penpot)` and save it to `./docs/designs` directory.
 
 ## Long-Running Tasks
 
