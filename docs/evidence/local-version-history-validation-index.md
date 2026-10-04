@@ -6,11 +6,11 @@
 - **H5 / T058：PASS。** 状态准备、精确包身份与窄原生入口均有记录；“0 窗口”旧 BLOCKED 和 pending fixture 准备失败保留在原始记录中，不推翻之后实际观察结果。
 - **T049：完成（测量完整性；diagnostic FAIL保留）。** 仅M5 Pro物理机的startup/canvas/完整15分钟soak配对与候选History 1预热＋3旅程均完成。候选startup P95 2112.38 ms、10k RSS P95 1366.77 MB／编辑最大间隔413 ms超预算；baseline soak增长148.39 MB／22.01%，candidate增长544.64 MB／90.07%，双方增长预算FAIL，静置CPU／零写入通过。预算失败仍非自动发布硬门槛，实际风险须交T054决定。所有无效／中断尝试保留，详见[本轮配对记录](local-version-history-t049/physical-paired-20261004/README.md)。Harness `8ec98ca`修复临时防休眠及及时失败，8项模拟测试通过；最终候选运行完整60/90/60样本，assertion已核实释放。VM按owner决定跳过。
 - **T052：完成（证据聚合范围）。** 下方事实表为每项 FR/SC 指定主要 evidence owner，记录各层结果、适用身份和已知原始记录缺口。T052 任务明确要求把缺失如实记录；这些历史字段缺口不要求补造或重跑，也不依赖 T049 完成。其完成范围与 T054 owner 接受分开维护。
-- **T054：等待owner最终接受。** T049现已完整测量，但保留上述诊断性能FAIL及T030/T031、T025、T043、T056/T057的适用process原始记录字段缺口。H4/H5与T052完成不自动授予最终接受；owner决定前Phase 7不全闭、不发布。
+- **T054：ACCEPTED（2026-10-04），Phase 7已关闭。** owner在明确获知T049诊断性能FAIL、未完成根因归属，以及T030/T031、T025、T043、T056/T057历史原始记录字段缺口后回复“接受”。接受当前交付及这些限制，授权继续本地准备0.4.0 release；不包含push、merge、tag或发布，也不将性能FAIL改写为PASS。
 
 旧包 reviewer FAIL、旧窗口 BLOCKED、首次性能 INVALID 均保留其原始包/运行身份；它们是历史证据，不代表当前 H4/T048 verdict。流程细节及过往验证快照见[验证摘要](validation-summary.md)和[视觉检查表](local-version-history-visual-checklist.md)，两者不另行维护当前状态。
 
-**T047：PASS（精确 production package 的 History 原生入口范围）**。产品修复提交 `e873aac208e0271641cb2434f49daa4a6d2e01fd`，validator 提交 `0be255df09eec3a076d2e56b9eb64564afece21c`；包 SHA-256 `ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162`。在 macOS 26.6.2 / arm64 / scale 2 上，首次 AX 菜单采样即 enabled；一次 `versionHistory` 路由（validationId 1）、面板标题/唯一目标文件名/关闭按钮各 1 个，以及规范化 fixture 的前后 SHA-256 一致全部通过。[原始报告](local-version-history-t047/history-pass/collection/native-report.json)、[binding](local-version-history-t047/history-pass/binding.json)与[package manifest](local-version-history-t047/history-pass/package-manifest.json)已封存。该旧 package 的 T047 PASS 保留原身份；T048 随后单独验收，当前 verdict 见下方 SC-008 行。T049测量现已完成并保留诊断FAIL；T054负责人接受仍待决定。
+**T047：PASS（精确 production package 的 History 原生入口范围）**。产品修复提交 `e873aac208e0271641cb2434f49daa4a6d2e01fd`，validator 提交 `0be255df09eec3a076d2e56b9eb64564afece21c`；包 SHA-256 `ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162`。在 macOS 26.6.2 / arm64 / scale 2 上，首次 AX 菜单采样即 enabled；一次 `versionHistory` 路由（validationId 1）、面板标题/唯一目标文件名/关闭按钮各 1 个，以及规范化 fixture 的前后 SHA-256 一致全部通过。[原始报告](local-version-history-t047/history-pass/collection/native-report.json)、[binding](local-version-history-t047/history-pass/binding.json)与[package manifest](local-version-history-t047/history-pass/package-manifest.json)已封存。该旧 package 的 T047 PASS 保留原身份；T048 随后单独验收，当前 verdict 见下方 SC-008 行。T049测量现已完成并保留诊断FAIL；T054已由owner明确接受当前交付及列明限制。
 
 ## 判定与绑定规则
 
@@ -35,7 +35,7 @@
 | T051 生产包隔离    | [验证摘要](validation-summary.md)；原 manifest 路径 `/private/tmp/history-t047-current-uug7DR/post-t050-manifest.json`                                                                  | 记录为 `PASS`：产品 `ab67c3c43ee69ae32a040bb3e6f9c762807d8c3c`；production package SHA-256 `f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f`；executable SHA-256 `7ef5956afe65549602bbb05dfdf73f2944d754fad777dcbd4abbcd84b9fdeb35`；测试 2/2，production process 检查 1/1 | 该原 manifest 路径当前不存在；T051 task 未要求仓库内 sealed manifest，保留验证摘要中的 PASS，不据此增加完成门槛 |
 | T049 性能 | [物理配对与原始报告](local-version-history-t049/physical-paired-20261004/README.md) | **完成测量**：共同三项完整配对＋History 1预热／3样本，真实diagnostic FAIL保留 | 原始失败、中断和修复分别归档；性能风险不等于自动发布阻断，也不冒充全部预算PASS。VM跳过 |
 | 人工视觉 T048      | T058/H4 owner walkthrough 与 pending-copy 定点复验；[owner 原始记录](local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json) | **PASS（owner 完成的 H4/T048 范围）**；pending 文案修订包 `eb961ca` 仅定点接受，不扩大为新包全量复验 | 原包 `2c13f50` 集中体验与修订包 `eb961ca` 定点复验是不同身份；旧 reviewer FAIL 仍绑定 package `2420a8a8...`，见其[历史报告](local-version-history-t048/window-repair-004/history01-review.md) |
-| 产品负责人接受 | H4/H5、T052与T049测量完成；性能FAIL和历史证据缺口仍明确列出 | **T054 PENDING，待owner单独决定** | 本地证据/提交不等于push、merge、tag或发布 |
+| 产品负责人接受 | H4/H5、T052、T049完成；性能FAIL及历史证据字段缺口已向owner明确披露 | **T054 ACCEPTED：2026-10-04 owner回复“接受”** | Phase 7关闭，仅继续本地release准备，不代表全部预算PASS或已发布 |
 
 ## 验收事实索引
 
@@ -69,4 +69,4 @@
 2. T047 原生菜单入口与 T051 production/harness 隔离均保留各自旧包身份和 PASS 范围，不传递为 T048、T049 或 T054 结论。
 3. **已记录的适用 raw-record 缺口：** T030/T031 的 `local-version-history-t031.md` 有二进制 SHA、命令与汇总结果，但没有产品完整 commit、原始报告 digest、逐次操作/version ID 或前后文件/场景哈希；T025 的 `local-version-history-t025.md` 有二进制身份和场景矩阵，但未归档逐场景操作/request ID、前后文件/对象哈希、信号与重启原始输出及报告 digest；T043 的 `local-version-history-t038-t044.md` 有测试范围/结果和二进制身份，但逐次操作 ID、前后哈希及原始 Playwright 产物的持久 binding 仍缺；T056/T057 的 task completion notes 有结果和部分身份/场景数据，但无独立逐次 raw report/binding。以上只列 process 记录适用字段；T027 unit、T023 browser、T048 owner visual 不要求 PID、进程重启字段或生产包身份。T050 不要求独立 aggregate；T051 不要求仓库内 sealed manifest，旧 `/private/tmp` manifest 不存在不构成新增门槛。这些缺口已进入 T052 汇总，不要求在本次聚合中补造。
 4. **T049完整测量已完成，diagnostic FAIL不改写。** History首次oracle/type错位由`91c5d7b`修复并完整通过；首次candidate soak由系统20分钟自动屏保导致hidden，第二次因owner要求incident审查中断。Owner批准两项Harness修复后，`8ec98ca`的最终candidate soak完成全部窗口；运行前后已核实临时assertion建立／释放，未修改系统设置。只补受影响测量，原始记录和适用数据全部保留。
-5. **T054待产品负责人明确接受。** owner此前要求等T049完成后再决定，该测量前置条件现已满足。接受材料必须保留候选startup/canvas和双方soak增长预算FAIL，以及上方适用process证据字段缺口；不能把接受写成全部性能PASS或发布。接受后才推进0.4.0 release准备。
+5. **T054 ACCEPTED／Phase 7关闭。** 2026-10-04向owner明确列出：候选启动2112ms（基线1770ms）、10k RSS1367MB（基线614MB）及编辑413ms间隔、soak增长545MB／90.1%（基线148MB／22.0%）、上述历史原始记录缺口；owner明确回复“接受”。保留全部原始verdict与未归因风险，继续本地准备0.4.0，不push／merge／tag／发布。
