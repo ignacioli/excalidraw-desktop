@@ -1,0 +1,10 @@
+{
+  "recordedAt": "2026-10-04T16:26:57.766Z",
+  "classification": "INVALID_OPERATOR_INTERFERENCE",
+  "ownerStatement": "确实点击、拖拽或滚动过",
+  "exactActionAndTime": "not recorded",
+  "effect": "not attributable from existing telemetry",
+  "pairedComparisonEligible": false,
+  "runnerVerdictPreserved": true,
+  "retryScope": "baseline edit-soak only"
+}

@@ -1,0 +1,119 @@
+{
+  "schemaVersion": "2.0.0",
+  "commit": "91c5d7b36266935c64bd855a9956e8ae0526d73d",
+  "hardware": "Mac17,9 (Apple M5 Pro)",
+  "memory": {
+    "bytes": 51539607552,
+    "gibibytes": 48
+  },
+  "architecture": "arm64",
+  "logicalCores": 15,
+  "osVersion": "macOS 26.6.2 (25G83)",
+  "webviewVersion": "WebKit 21624.5.1.11.3",
+  "executionEnvironment": {
+    "type": "physical",
+    "hostHardware": "Mac17,9 (Apple M5 Pro)",
+    "virtualization": null
+  },
+  "binary": {
+    "path": "/private/tmp/t049-20261004-candidate-QF5bUb/corrected/excalidraw-desktop",
+    "sha256": "3b641885ffa43a439f99ca16ad8c424830fb2a16f2ec16cbcc932bd66d95fe99",
+    "kind": "e2e-harness",
+    "pathScope": "absolute"
+  },
+  "workload": {
+    "name": "phase-3-edit-soak",
+    "fixture": "deterministic 10,000-element scene",
+    "warmUpMs": 30000,
+    "warmedBaseline": {
+      "sampleWindowMs": 60000,
+      "sampleIntervalMs": 1000,
+      "statistic": "process-tree RSS nearest-rank p95"
+    },
+    "editing": {
+      "requiredDurationMs": 900000,
+      "actualDurationMs": 900000,
+      "seed": 40000,
+      "processTreeSampleIntervalMs": 10000
+    },
+    "quiescent": {
+      "durationMs": 60000,
+      "settleMs": 5000,
+      "sampleIntervalMs": 1000,
+      "statistics": [
+        "process-tree RSS p95",
+        "process-tree CPU p95"
+      ],
+      "writeObservation": "application-managed data/config/cache/runtime roots and mounted workspace after crash-safety flush"
+    },
+    "expectedVariance": {
+      "rss": "up to 10 percent run-to-run before investigation; both absolute and relative caps remain mandatory",
+      "cpu": "one-second samples may spike; nearest-rank p95 is authoritative",
+      "writes": "fs.watch may coalesce events; before/after metadata snapshots also detect persistent changes"
+    }
+  },
+  "processTreeAccounting": {
+    "rootProcessName": "excalidraw-desktop",
+    "associationMethod": "recursive parent PID closure, plus WebView/GPU/Network auxiliary processes carrying an explicit app association token, plus launch-time-window attribution of WebKit-role processes re-parented to launchd (PID 1) that appeared after the app launch and were absent from the pre-launch snapshot",
+    "includedClasses": [
+      "Tauri main",
+      "descendants",
+      "associated WebView",
+      "GPU",
+      "Network"
+    ],
+    "exclusions": [
+      "unrelated system WebView/GPU processes",
+      "WebKit-role processes that already existed before the app launch"
+    ],
+    "platformLimitations": [
+      "macOS re-parents WKWebView auxiliary processes to launchd with no app token; launch-time-window attribution assumes no other same-user WebKit app is launched during the measurement window",
+      "ps etime has one-second granularity; a two-second slack is applied to the launch window",
+      "ps RSS can include shared pages charged independently to more than one process",
+      "ps CPU is an OS interval estimate normalized so 100 percent equals one logical core"
+    ]
+  },
+  "samples": {
+    "warmedBaseline": [],
+    "soak": [],
+    "quiescent": []
+  },
+  "statistic": {
+    "warmedRssP95": null,
+    "postSoakRssP95": null,
+    "rssGrowthBytes": null,
+    "rssGrowthPercent": null,
+    "idleCpuP95": null,
+    "editEventCount": null,
+    "observedQuiescentWriteEvents": null,
+    "changedPathCount": null
+  },
+  "budget": {
+    "rssGrowthAbsolute": {
+      "value": 50000000,
+      "unit": "bytes (50 decimal MB)",
+      "statistic": "post-soak quiescent RSS p95 minus warmed RSS p95"
+    },
+    "rssGrowthRelative": {
+      "value": 15,
+      "unit": "percent",
+      "statistic": "RSS p95 delta divided by warmed RSS p95"
+    },
+    "idleCpu": {
+      "value": 35,
+      "unit": "percent of one logical core",
+      "statistic": "nearest-rank p95 over 60 seconds"
+    },
+    "quiescentWrites": {
+      "value": 0,
+      "unit": "observed filesystem events and persistently changed paths",
+      "statistic": "60 second quiescent window"
+    }
+  },
+  "verdict": {
+    "overall": "not_evaluated",
+    "scope": "diagnostic T108 soak",
+    "reason": "The 15-minute native editing contract was unavailable or incomplete. Tauri root process 79895 is not running.",
+    "comparisons": null
+  }
+}

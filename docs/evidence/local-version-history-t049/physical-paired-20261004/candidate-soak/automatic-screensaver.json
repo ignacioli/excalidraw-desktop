@@ -1,0 +1,26 @@
+{
+  "classification": "INVALID_AUTOMATIC_SCREEN_SAVER",
+  "ownerStatement": "没有上述操作。我一直没动电脑。",
+  "source": "macOS unified log; loginwindow only; failure window; three relevant events",
+  "events": [
+    {
+      "originalTimestamp": "2026-10-05 01:35:47.162591+0800",
+      "timestampUtc": "2026-10-04T17:35:47.162Z",
+      "message": "-[ScreenSaverDaemon _checkUserIdleDuringReset:] |           actualUserIdle = 1200.0, targetUserIdle = 1200.0)"
+    },
+    {
+      "originalTimestamp": "2026-10-05 01:35:47.163049+0800",
+      "timestampUtc": "2026-10-04T17:35:47.163Z",
+      "message": "PMDisplaySleepIsBlocked | PMDisplaySleepIsBlocked is NOT blocked"
+    },
+    {
+      "originalTimestamp": "2026-10-05 01:35:47.163053+0800",
+      "timestampUtc": "2026-10-04T17:35:47.163Z",
+      "message": "-[ScreenSaverDaemon _checkUserIdleDuringReset:] |      starting screen saver due to user idle"
+    }
+  ],
+  "redaction": "Removed account name from idle timer event; no broad loginwindow log archived",
+  "mechanism": "1200 seconds idle triggered screen saver with no PreventUserIdleDisplaySleep assertion; driver subsequently observed hidden and stopped producing frames",
+  "remediation": "Run only candidate soak retry under caffeinate -di utility-scoped assertion; no persistent system setting change",
+  "baselineScope": "Previously completed visible baseline remains valid; no workload or sampling change"
+}

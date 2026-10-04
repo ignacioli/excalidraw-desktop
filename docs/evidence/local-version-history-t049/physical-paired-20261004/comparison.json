@@ -1,0 +1,732 @@
+{
+  "series": "local-version-history-physical-diagnostic-20261004",
+  "status": "complete-measurements",
+  "scope": "T049 physical-only; no owner acceptance or release verdict",
+  "rawReportSchemaVersion": "2.0.0",
+  "environment": {
+    "hardware": "Mac17,9 (Apple M5 Pro)",
+    "memory": {
+      "bytes": 51539607552,
+      "gibibytes": 48
+    },
+    "architecture": "arm64",
+    "logicalCores": 15,
+    "osVersion": "macOS 26.6.2 (25G83)",
+    "webviewVersion": "WebKit 21624.5.1.11.3",
+    "type": "physical",
+    "virtualization": null
+  },
+  "referenceVm": {
+    "status": "skipped-by-owner",
+    "decisionDate": "2026-10-04",
+    "reason": "Parallels Desktop unavailable; current T049 scope uses M5 Pro physical only"
+  },
+  "artifacts": {
+    "baselineStartup": {
+      "report": "../physical-startup-20261004/corrected/startup-idle.json",
+      "reportSha256": "57208d410380280552e0475996261ca1976688f533127f342025b965085a68c6",
+      "binding": "../physical-startup-20261004/corrected/binding.json",
+      "bindingSha256": "cc41db68d7169607c94c9f2f7c0612e516a003a3fb059049cad959242581cf2e",
+      "runnerCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+      "productSourceCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+      "buildCheckoutCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+      "binary": {
+        "path": "/private/tmp/t049-20261004-baseline-Oe9293/corrected/excalidraw-desktop",
+        "sha256": "c5e6cd8ed502a0a2b9f002bfb71441833d2d049607fb6a445af22a16eb0cee8b"
+      },
+      "binaryIdentitySource": "external-binding-original-report-preserved",
+      "exitCode": 0,
+      "rawVerdict": {
+        "overall": "pass",
+        "scope": "diagnostic T090 startup and idle RSS",
+        "reason": "All evaluated T090 startup and idle RSS budgets passed.",
+        "comparisons": {
+          "coldStartToEditable": true,
+          "idleProcessTreeRss": true
+        }
+      },
+      "sampleCounts": {
+        "coldStartToEditableMs": 10,
+        "coldStartProcessAliveMs": 10,
+        "idleProcessTree": 61
+      },
+      "digestChecks": {
+        "report": "pass",
+        "uncompressedRunnerLog": "pass"
+      }
+    },
+    "candidateStartup": {
+      "report": "candidate-startup/startup-idle.json",
+      "reportSha256": "3d6b7dca7570faee56a57ab513dfd06ad6f51a305f987971a7c447b0e4609799",
+      "binding": "candidate-startup/binding.json",
+      "bindingSha256": "1cc1af689600c131d4e96f966ba685e31f3faa71ac6f939f894d44d61abd0e5f",
+      "runnerCommit": "849b1ffcff908146f288ed9ac4330153d925ce11",
+      "productSourceCommit": "eb961ca8c8b221c34a11989d5e4d37e9a9e8f537",
+      "buildCheckoutCommit": "711ce26ff94976e91d48ad39970b7ca46e22152a",
+      "binary": {
+        "path": "/private/tmp/t049-20261004-candidate-QF5bUb/corrected/excalidraw-desktop",
+        "sha256": "3b641885ffa43a439f99ca16ad8c424830fb2a16f2ec16cbcc932bd66d95fe99",
+        "sizeBytes": 35820000
+      },
+      "binaryIdentitySource": "raw-report-and-binding",
+      "exitCode": 0,
+      "rawVerdict": {
+        "overall": "fail",
+        "scope": "diagnostic T090 startup and idle RSS",
+        "reason": "At least one evaluated T090 startup or idle RSS budget failed.",
+        "comparisons": {
+          "coldStartToEditable": false,
+          "idleProcessTreeRss": true
+        }
+      },
+      "sampleCounts": {
+        "coldStartToEditableMs": 10,
+        "coldStartProcessAliveMs": 10,
+        "idleProcessTree": 60
+      },
+      "digestChecks": {
+        "report": "pass",
+        "uncompressedRunnerLog": "pass"
+      }
+    },
+    "baselineCanvas": {
+      "report": "baseline-canvas/canvas-io.json",
+      "reportSha256": "e37e13645a73d477fe74dd95bb78526c11762b55bc94bd8bc78b1b896d0975e3",
+      "binding": "baseline-canvas/binding.json",
+      "bindingSha256": "aa10b603ed20590ad867559df0d1065ac1151f5ce89b62f6d9f2224fad6d79fc",
+      "runnerCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+      "productSourceCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+      "buildCheckoutCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+      "binary": {
+        "path": "/private/tmp/t049-20261004-baseline-Oe9293/corrected/excalidraw-desktop",
+        "sha256": "c5e6cd8ed502a0a2b9f002bfb71441833d2d049607fb6a445af22a16eb0cee8b",
+        "sizeBytes": 34695136
+      },
+      "binaryIdentitySource": "external-binding-original-report-preserved",
+      "exitCode": 0,
+      "rawVerdict": {
+        "overall": "pass",
+        "scope": "diagnostic T090 canvas and I/O",
+        "reason": "All evaluated T090 10k canvas and write-coalescing budgets passed.",
+        "comparisons": {
+          "stable10kSceneRss": true,
+          "panZoomFps": true,
+          "noPanZoomFreeze": true,
+          "noEditingFreeze": true,
+          "writeCoalescing": true
+        }
+      },
+      "sampleCounts": {
+        "sceneRssSamples": 30
+      },
+      "digestChecks": {
+        "report": "pass",
+        "uncompressedRunnerLog": "pass"
+      }
+    },
+    "candidateCanvas": {
+      "report": "candidate-canvas/canvas-io.json",
+      "reportSha256": "b57ae10f62a7f392e8054568c8c89a611b4174601dcd29554dd138856cb99fc1",
+      "binding": "candidate-canvas/binding.json",
+      "bindingSha256": "79720b1a5ed6ae9585e3a2a0d75a713ba0c0017bc432aced0d46f83b3cef992d",
+      "runnerCommit": "849b1ffcff908146f288ed9ac4330153d925ce11",
+      "productSourceCommit": "eb961ca8c8b221c34a11989d5e4d37e9a9e8f537",
+      "buildCheckoutCommit": "711ce26ff94976e91d48ad39970b7ca46e22152a",
+      "binary": {
+        "path": "/private/tmp/t049-20261004-candidate-QF5bUb/corrected/excalidraw-desktop",
+        "sha256": "3b641885ffa43a439f99ca16ad8c424830fb2a16f2ec16cbcc932bd66d95fe99",
+        "sizeBytes": 35820000
+      },
+      "binaryIdentitySource": "raw-report-and-binding",
+      "exitCode": 0,
+      "rawVerdict": {
+        "overall": "fail",
+        "scope": "diagnostic T090 canvas and I/O",
+        "reason": "At least one evaluated T090 10k canvas or write-coalescing budget failed.",
+        "comparisons": {
+          "stable10kSceneRss": false,
+          "panZoomFps": true,
+          "noPanZoomFreeze": true,
+          "noEditingFreeze": false,
+          "writeCoalescing": true
+        }
+      },
+      "sampleCounts": {
+        "sceneRssSamples": 30
+      },
+      "digestChecks": {
+        "report": "pass",
+        "uncompressedRunnerLog": "pass"
+      }
+    },
+    "baselineSoak": {
+      "report": "baseline-soak-002/edit-soak.json",
+      "reportSha256": "e914166562d407c1ddf6778302acf84299e8fa722c46155d720676b31a02ac3c",
+      "binding": "baseline-soak-002/binding.json",
+      "bindingSha256": "def9a0d9dd751813f5d3360077b308f97d9aece2af2fbbfd370bd1c09afd4abb",
+      "runnerCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+      "productSourceCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+      "buildCheckoutCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+      "binary": {
+        "path": "/private/tmp/t049-20261004-baseline-Oe9293/corrected/excalidraw-desktop",
+        "sha256": "c5e6cd8ed502a0a2b9f002bfb71441833d2d049607fb6a445af22a16eb0cee8b",
+        "sizeBytes": 34695136
+      },
+      "binaryIdentitySource": "external-binding-original-report-preserved",
+      "exitCode": 0,
+      "rawVerdict": {
+        "overall": "fail",
+        "scope": "diagnostic T108 soak",
+        "reason": "At least one evaluated T108 resource budget failed.",
+        "comparisons": {
+          "rssGrowthAbsolute": false,
+          "rssGrowthRelative": false,
+          "idleCpu": true,
+          "zeroQuiescentWrites": true
+        }
+      },
+      "sampleCounts": {
+        "warmedBaseline": 60,
+        "soak": 90,
+        "quiescent": 60
+      },
+      "digestChecks": {
+        "report": "pass",
+        "uncompressedRunnerLog": "pass",
+        "health": "pass"
+      }
+    },
+    "candidateHistory": {
+      "report": "candidate-history-002/local-version-history.json",
+      "reportSha256": "bcc1bfe8f022ad475e55c965f01a5bf5e3bae12a17d578fcb036775aa8613f69",
+      "binding": "candidate-history-002/binding.json",
+      "bindingSha256": "98c82d8ed3bfdb9819a04767dc42c54f9018f1eb86b5c6ced151f11d1eb8944e",
+      "runnerCommit": "91c5d7b36266935c64bd855a9956e8ae0526d73d",
+      "productSourceCommit": "eb961ca8c8b221c34a11989d5e4d37e9a9e8f537",
+      "buildCheckoutCommit": "849b1ffcff908146f288ed9ac4330153d925ce11",
+      "binary": {
+        "path": "/private/tmp/t049-20261004-history-target-849b1ff/release/excalidraw-desktop",
+        "sha256": "e8e703560193ef907a6922eeceb311f0e13773535d84615932c8bc1d474534cd",
+        "sizeBytes": 35836512
+      },
+      "buildReport": "../history-build-20261004/build-report.json",
+      "buildReportSha256": "a8a2ebefdfbabcea7834c7526499feb7c9654adb5a1ae323ba3714630fc6f54b",
+      "buildLogUncompressedSha256": "7c3952ebaf8668ac196d1815746d496adecf3f36f43c98a30c15a48eb53f8c06",
+      "binaryIdentitySource": "raw-report-and-binding-and-build-report-and-live-artifact-digest",
+      "exitCode": 0,
+      "rawVerdict": {
+        "overall": "not_evaluated",
+        "scope": "history-specific absolute facts and descriptive timing",
+        "reason": "No standalone local-version-history timing or memory budget is approved; T090/T108 own generic performance verdicts."
+      },
+      "sampleCounts": {
+        "warmupJourneys": 1,
+        "measuredJourneys": 3
+      },
+      "digestChecks": {
+        "report": "pass",
+        "uncompressedRunnerLog": "pass",
+        "buildIdentity": "pass",
+        "binaryArtifact": "pass"
+      }
+    },
+    "candidateSoak": {
+      "report": "candidate-soak-003/edit-soak.json",
+      "reportSha256": "52f1d6508d9ef94d75533b0bb3996c7d19a751ae470e15fdb18d1f831d221b40",
+      "binding": "candidate-soak-003/binding.json",
+      "bindingSha256": "12dfa17bc2d9f02295a1aaa64a525dd4a130492f78d4aeec872122e366f731fd",
+      "runnerCommit": "8ec98ca3d9cc840fefe5682699d01d7bd838464c",
+      "productSourceCommit": "eb961ca8c8b221c34a11989d5e4d37e9a9e8f537",
+      "buildCheckoutCommit": "711ce26ff94976e91d48ad39970b7ca46e22152a",
+      "binary": {
+        "path": "/private/tmp/t049-20261004-candidate-QF5bUb/corrected/excalidraw-desktop",
+        "sha256": "3b641885ffa43a439f99ca16ad8c424830fb2a16f2ec16cbcc932bd66d95fe99",
+        "sizeBytes": 35820000
+      },
+      "binaryIdentitySource": "raw-report-and-binding-and-live-artifact-digest",
+      "exitCode": 0,
+      "measurementValidity": "VALID_COMPLETE",
+      "rawVerdict": {
+        "overall": "fail",
+        "scope": "diagnostic T108 soak",
+        "reason": "At least one evaluated T108 resource budget failed.",
+        "comparisons": {
+          "rssGrowthAbsolute": false,
+          "rssGrowthRelative": false,
+          "idleCpu": true,
+          "zeroQuiescentWrites": true
+        }
+      },
+      "sampleCounts": {
+        "warmedBaseline": 60,
+        "soak": 90,
+        "quiescent": 60
+      },
+      "actualDriverDurationMs": 900003,
+      "digestChecks": {
+        "report": "pass",
+        "uncompressedRunnerLog": "pass",
+        "health": "pass",
+        "binaryArtifact": "pass"
+      },
+      "harnessFix": "8ec98ca: utility-scoped caffeinate assertion, fatal signal sampling checks and retained partial samples; workload/seed/budgets/statistics unchanged",
+      "awakeAssertion": {
+        "during": "awake-assertions.txt",
+        "after": "awake-assertions-after.txt",
+        "released": true
+      }
+    }
+  },
+  "comparabilityNotes": [
+    "Candidate startup hostHardware label differs in formatting; hardware/model/memory/core/OS/WebKit fields match exactly.",
+    "Baseline runner lacks binary in raw schema2 report; separate digest-bound binding supplies exact executable identity; raw report remains unchanged.",
+    "Baseline babc027 vs candidate runner849b1ff: pre-measurement binary hash/provenance reporting and formatting only; metric clocks, workload, seed, window, accounting and budgets unchanged.",
+    "Candidate buildCheckout711ce26, productSourceeb961ca and runner849b1ff remain distinct; reusing unchanged runtime build does not make them identical commits.",
+    "Cold process launch is not guaranteed OS cache-cold; nearest-rank P95 of10 is the maximum sample; no outlier removed.",
+    "Candidate soak runner8ec98ca adds utility-scoped caffeinate, fatal-signal checks and partial-sample preservation; workload, seed, timing/statistics, accounting and budgets unchanged. Baseline remained visible and complete without the assertion; unchanged source/binary and full baseline samples reused, rather than rerun.",
+    "Baseline soak health UTC window2026-10-04T17:11:42.210Z to17:27:18.872Z; candidate soak health window2026-10-04T22:04:16.311Z to22:20:51.205Z. First observations differ by4h52m34s; not interleaved, background/memory pressure over the gap uncontrolled."
+  ],
+  "pairs": {
+    "startup": {
+      "baselineArtifact": "baselineStartup",
+      "candidateArtifact": "candidateStartup",
+      "comparability": {
+        "sameEnvironment": true,
+        "sameWorkloadAndSeed": true,
+        "sameBudgets": true,
+        "sameProcessTreeAccounting": true,
+        "verdict": "comparable-with-documented-runner-provenance-difference"
+      },
+      "metrics": [
+        {
+          "name": "coldStartToEditableP95",
+          "unit": "ms",
+          "baseline": 1769.799375,
+          "candidate": 2112.3765,
+          "delta": 342.5771249999998,
+          "deltaPercent": 19.35683387841629,
+          "budget": {
+            "value": 2000,
+            "operator": "<="
+          },
+          "baselineBudgetVerdict": "pass",
+          "candidateBudgetVerdict": "fail"
+        },
+        {
+          "name": "idleProcessTreeRssP95",
+          "unit": "bytes",
+          "baseline": 315113472,
+          "candidate": 313819136,
+          "delta": -1294336,
+          "deltaPercent": -0.41075235272708366,
+          "budget": {
+            "value": 500000000,
+            "operator": "<="
+          },
+          "baselineBudgetVerdict": "pass",
+          "candidateBudgetVerdict": "pass"
+        }
+      ]
+    },
+    "canvas": {
+      "baselineArtifact": "baselineCanvas",
+      "candidateArtifact": "candidateCanvas",
+      "comparability": {
+        "sameEnvironment": true,
+        "sameWorkloadAndSeed": true,
+        "sameBudgets": true,
+        "sameProcessTreeAccounting": true,
+        "verdict": "comparable-with-documented-runner-provenance-difference"
+      },
+      "metrics": [
+        {
+          "name": "stable10kSceneProcessTreeRssP95",
+          "unit": "bytes",
+          "baseline": 613826560,
+          "candidate": 1366769664,
+          "delta": 752943104,
+          "deltaPercent": 122.66381956492727,
+          "budget": {
+            "value": 950000000,
+            "operator": "<="
+          },
+          "baselineBudgetVerdict": "pass",
+          "candidateBudgetVerdict": "fail"
+        },
+        {
+          "name": "panObservedFps",
+          "unit": "frames/second",
+          "baseline": 59.976009596161504,
+          "candidate": 31.739159395190836,
+          "delta": -28.236850200970668,
+          "deltaPercent": -47.08024156841845,
+          "budget": {
+            "value": 30,
+            "operator": ">="
+          },
+          "baselineBudgetVerdict": "pass",
+          "candidateBudgetVerdict": "pass"
+        },
+        {
+          "name": "panMaximumFrameIntervalMs",
+          "unit": "ms",
+          "baseline": 32,
+          "candidate": 60.00000000001455,
+          "delta": 28.000000000014552,
+          "deltaPercent": 87.50000000004547,
+          "budget": {
+            "value": 100,
+            "operator": "<="
+          },
+          "baselineBudgetVerdict": "pass",
+          "candidateBudgetVerdict": "pass"
+        },
+        {
+          "name": "editingMaximumFrameIntervalMs",
+          "unit": "ms",
+          "baseline": 62,
+          "candidate": 413,
+          "delta": 351,
+          "deltaPercent": 566.1290322580645,
+          "budget": {
+            "value": 100,
+            "operator": "<="
+          },
+          "baselineBudgetVerdict": "pass",
+          "candidateBudgetVerdict": "fail"
+        },
+        {
+          "name": "writesPerEditEventRatio",
+          "unit": "filesystem-events/scripted-edit",
+          "baseline": 0,
+          "candidate": 0,
+          "delta": 0,
+          "deltaPercent": null,
+          "budget": {
+            "value": 0.01,
+            "operator": "<="
+          },
+          "baselineBudgetVerdict": "pass",
+          "candidateBudgetVerdict": "pass"
+        }
+      ]
+    },
+    "soak": {
+      "baselineArtifact": "baselineSoak",
+      "candidateArtifact": "candidateSoak",
+      "status": "complete-pair",
+      "baselineStatistic": {
+        "warmedRssP95": 674316288,
+        "postSoakRssP95": 822706176,
+        "rssGrowthBytes": 148389888,
+        "rssGrowthPercent": 22.005977112034405,
+        "idleCpuP95": 12.3,
+        "editEventCount": 3600,
+        "observedQuiescentWriteEvents": 0,
+        "changedPathCount": 0
+      },
+      "baselineBudget": {
+        "rssGrowthAbsolute": {
+          "value": 50000000,
+          "unit": "bytes (50 decimal MB)",
+          "statistic": "post-soak quiescent RSS p95 minus warmed RSS p95"
+        },
+        "rssGrowthRelative": {
+          "value": 15,
+          "unit": "percent",
+          "statistic": "RSS p95 delta divided by warmed RSS p95"
+        },
+        "idleCpu": {
+          "value": 35,
+          "unit": "percent of one logical core",
+          "statistic": "nearest-rank p95 over 60 seconds"
+        },
+        "quiescentWrites": {
+          "value": 0,
+          "unit": "observed filesystem events and persistently changed paths",
+          "statistic": "60 second quiescent window"
+        }
+      },
+      "baselineRawVerdict": {
+        "overall": "fail",
+        "scope": "diagnostic T108 soak",
+        "reason": "At least one evaluated T108 resource budget failed.",
+        "comparisons": {
+          "rssGrowthAbsolute": false,
+          "rssGrowthRelative": false,
+          "idleCpu": true,
+          "zeroQuiescentWrites": true
+        }
+      },
+      "delta": {
+        "warmedRssP95": -69664768,
+        "postSoakRssP95": 326582272,
+        "rssGrowthBytes": 396247040,
+        "rssGrowthPercent": 68.06853853625174,
+        "idleCpuP95": 3.299999999999999,
+        "editEventCount": 0,
+        "observedQuiescentWriteEvents": 0,
+        "changedPathCount": 0
+      },
+      "candidateStatistic": {
+        "warmedRssP95": 604651520,
+        "postSoakRssP95": 1149288448,
+        "rssGrowthBytes": 544636928,
+        "rssGrowthPercent": 90.07451564828614,
+        "idleCpuP95": 15.6,
+        "editEventCount": 3600,
+        "observedQuiescentWriteEvents": 0,
+        "changedPathCount": 0
+      },
+      "candidateRawVerdict": {
+        "overall": "fail",
+        "scope": "diagnostic T108 soak",
+        "reason": "At least one evaluated T108 resource budget failed.",
+        "comparisons": {
+          "rssGrowthAbsolute": false,
+          "rssGrowthRelative": false,
+          "idleCpu": true,
+          "zeroQuiescentWrites": true
+        }
+      },
+      "comparability": {
+        "sameEnvironment": true,
+        "sameWorkloadAndSeed": true,
+        "sameBudgets": true,
+        "sameProcessTreeAccounting": true,
+        "verdict": "comparable-with-documented-runner-environment-control-and-time-gap"
+      },
+      "metrics": [
+        {
+          "name": "rssGrowthBytes",
+          "unit": "bytes",
+          "baseline": 148389888,
+          "candidate": 544636928,
+          "delta": 396247040,
+          "deltaPercent": 267.0310257259578,
+          "budget": {
+            "value": 50000000,
+            "operator": "<="
+          },
+          "baselineBudgetVerdict": "fail",
+          "candidateBudgetVerdict": "fail"
+        },
+        {
+          "name": "rssGrowthPercent",
+          "unit": "percent",
+          "baseline": 22.005977112034405,
+          "candidate": 90.07451564828614,
+          "delta": 68.06853853625174,
+          "deltaPercent": 309.3184101287968,
+          "budget": {
+            "value": 15,
+            "operator": "<="
+          },
+          "baselineBudgetVerdict": "fail",
+          "candidateBudgetVerdict": "fail"
+        },
+        {
+          "name": "idleCpuP95",
+          "unit": "percent of one logical core",
+          "baseline": 12.3,
+          "candidate": 15.6,
+          "delta": 3.299999999999999,
+          "deltaPercent": 26.82926829268292,
+          "budget": {
+            "value": 35,
+            "operator": "<="
+          },
+          "baselineBudgetVerdict": "pass",
+          "candidateBudgetVerdict": "pass"
+        },
+        {
+          "name": "observedQuiescentWriteEvents",
+          "unit": "filesystem events",
+          "baseline": 0,
+          "candidate": 0,
+          "delta": 0,
+          "deltaPercent": null,
+          "budget": {
+            "value": 0,
+            "operator": "<="
+          },
+          "baselineBudgetVerdict": "pass",
+          "candidateBudgetVerdict": "pass"
+        },
+        {
+          "name": "changedPathCount",
+          "unit": "paths",
+          "baseline": 0,
+          "candidate": 0,
+          "delta": 0,
+          "deltaPercent": null,
+          "budget": {
+            "value": 0,
+            "operator": "<="
+          },
+          "baselineBudgetVerdict": "pass",
+          "candidateBudgetVerdict": "pass"
+        }
+      ]
+    }
+  },
+  "history": {
+    "status": "complete-workload",
+    "candidateOnly": true,
+    "artifact": "candidateHistory",
+    "workloadVerdict": "PASS_WORKLOAD",
+    "warmupJourneys": 1,
+    "measuredJourneys": 3,
+    "durationsMs": [
+      1558.379125,
+      1573.335958,
+      1564.361667
+    ],
+    "descriptiveLifecycleDurationP95": {
+      "value": 1573.335958,
+      "unit": "ms",
+      "statistic": "nearest-rank p95 of three independent complete journeys"
+    },
+    "rawBudgetVerdict": {
+      "overall": "not_evaluated",
+      "scope": "history-specific absolute facts and descriptive timing",
+      "reason": "No standalone local-version-history timing or memory budget is approved; T090/T108 own generic performance verdicts."
+    },
+    "baselineComparisonApplicable": false,
+    "resourceBudgetApplicable": false,
+    "absoluteFacts": "Each measured journey lists and retains20 versions, verifiesA/B scene digests, adoption and stale-autosave rejection, protectedobjects/assets andGC target retention.",
+    "runnerFix": {
+      "commit": "91c5d7b36266935c64bd855a9956e8ae0526d73d",
+      "scope": "Evidence stage/type correction only; frontendB/A produce staleAutosave evidence; verifyB/A do not. All anti-stale assertions remain and were expanded; product binary reused.",
+      "validation": {
+        "reportedBy": "primary",
+        "scopedTypecheck": "pass",
+        "lint": "pass",
+        "fullE2eTypecheck": "pre-existing DOM/config failures; no full-pass claim; outside scoped runner fix"
+      }
+    }
+  },
+  "excludedAttempts": [
+    {
+      "binding": "baseline-soak/binding.json",
+      "report": "baseline-soak/edit-soak.json",
+      "operatorRecord": "baseline-soak/operator-interference.json",
+      "rawVerdict": "not_evaluated",
+      "classification": "INVALID_OPERATOR_INTERFERENCE",
+      "pairedComparisonEligible": false,
+      "reason": "Owner confirmed clicks/dragging/scrolling; exact time/action not recorded. Root later exited; exact cause and causal relationship unestablished."
+    },
+    {
+      "binding": "candidate-soak/binding.json",
+      "bindingSha256": "8cfbc49e2a20deab776a5489c7cfc502d44eca2b744074b222d1c3f5fa78f777",
+      "report": "candidate-soak/edit-soak.json",
+      "reportSha256": "9a98be6905a63a4511c35c857094f8868513d704723ec07895daa182568b549f",
+      "driverError": "candidate-soak/observed-error.json",
+      "driverErrorSha256": "c3e4656e01c4ac43cda5448ff0433269004f1e573ccf0ea47eb0352bcdc1e976",
+      "termination": "candidate-soak/termination.json",
+      "terminationSha256": "84ce9b53a9a6e97d7406ef3a00448362cec8b440fd53a34f15701a4be8969b17",
+      "rawVerdict": {
+        "overall": "not_evaluated",
+        "scope": "diagnostic T108 soak",
+        "reason": "The 15-minute native editing contract was unavailable or incomplete. Tauri root process 72464 is not running.",
+        "comparisons": null
+      },
+      "classification": "INVALID_WINDOW_HIDDEN",
+      "pairedComparisonEligible": false,
+      "digestChecks": {
+        "report": "pass",
+        "uncompressedRunnerLog": "pass",
+        "health": "pass"
+      },
+      "sampleCounts": {
+        "warmedBaseline": 60,
+        "soak": 0,
+        "quiescent": 0
+      },
+      "failureSequence": [
+        "Driver reports visibilityState=hidden and10199ms without requestAnimationFrame.",
+        "Driver error preserved, then primary terminated uniquely matched owned PID72464 to stop unusable run.",
+        "Raw report root-not-running observation follows explicit stop; not evidence of a spontaneous product crash."
+      ],
+      "reason": "System loginwindow log confirms1200 seconds idle triggered automatic screen saver; owner states no operation. Hidden/no-frame invalidates the run; explicit later stop is not evidence of spontaneous product crash.",
+      "diagnosis": "candidate-soak/automatic-screensaver.json",
+      "diagnosisSha256": "d1a97ec2f1a82741065216def1ed68abe704618bfcc101ba2a02848cdbf39e53"
+    },
+    {
+      "binding": "candidate-history-001/binding.json",
+      "bindingSha256": "6c1d577f4f5bed0bc23f95e363cadff9551bd208ce17938ef4aa7187514f112b",
+      "runnerLog": "candidate-history-001/runner.log.gz",
+      "runnerLogUncompressedSha256": "3e4cb4561d64e2593f503a1c2a3eeb43d055bce2aa42c3a019156f01db228128",
+      "classification": "FAILED_WARMUP_ASSERTION",
+      "pairedComparisonEligible": false,
+      "reportProduced": false,
+      "measuredSamples": 0,
+      "reason": "runner oracle/type contract error: stale-autosave evidence belongs to frontendB/A, not verifyB/A",
+      "resolvedBy": "91c5d7b",
+      "productBinaryChanged": false
+    },
+    {
+      "record": "candidate-soak-002/review-interruption.json",
+      "recordSha256": "4551413a8bd353b43340e5d11bac38e74698c6f365e1c214917cbe6250ab5128",
+      "classification": "INTERRUPTED_FOR_OWNER_REQUESTED_TASK_REVIEW",
+      "pairedComparisonEligible": false,
+      "productFailure": false,
+      "reason": "Primary stopped for owner-requested necessity/cost review; no complete measured report; not a new product failure."
+    }
+  ],
+  "regressionAssessment": {
+    "status": "complete-observed-deltas",
+    "candidateBudgetFailures": [
+      "coldStartToEditableP95",
+      "stable10kSceneProcessTreeRssP95",
+      "editingMaximumFrameIntervalMs",
+      "soak rssGrowthAbsolute",
+      "soak rssGrowthRelative"
+    ],
+    "baselineBudgetFailures": [
+      "soak rssGrowthAbsolute",
+      "soak rssGrowthRelative"
+    ],
+    "automaticMergeOrReleaseBlocker": false,
+    "bottleneckAttribution": "not established; no role-resolved profile or controlled repeated pair",
+    "assignedImplementationOwner": null,
+    "remaining": [],
+    "measurementComplete": true,
+    "ownerAcceptance": "T054 decision pending; not granted by this report"
+  },
+  "limitations": {
+    "expectedVariance": {
+      "fps": "window compositing and background load may vary; repeat before assigning a bottleneck",
+      "rss": "up to 10 percent run-to-run before investigation; absolute budgets remain unchanged",
+      "writes": "fs.watch can coalesce or multiply kernel notifications; raw events are retained with observer limitations"
+    },
+    "processTreeAccounting": {
+      "rootProcessName": "excalidraw-desktop",
+      "associationMethod": "recursive parent PID closure, plus WebView/GPU/Network auxiliary processes carrying an explicit app association token, plus launch-time-window attribution of WebKit-role processes re-parented to launchd (PID 1) that appeared after the app launch and were absent from the pre-launch snapshot",
+      "includedClasses": [
+        "Tauri main",
+        "descendants",
+        "associated WebView",
+        "GPU",
+        "Network"
+      ],
+      "exclusions": [
+        "unrelated system WebView/GPU processes",
+        "WebKit-role processes that already existed before the app launch"
+      ],
+      "platformLimitations": [
+        "macOS re-parents WKWebView auxiliary processes to launchd with no app token; launch-time-window attribution assumes no other same-user WebKit app is launched during the measurement window",
+        "ps etime has one-second granularity; a two-second slack is applied to the launch window",
+        "ps RSS can include shared pages charged independently to more than one process",
+        "ps CPU is an OS interval estimate normalized so 100 percent equals one logical core"
+      ]
+    },
+    "writeObservation": [
+      "fs.watch may coalesce events; the before/after metadata snapshot detects persistent changes but not an ephemeral file created and removed between snapshots",
+      "write observation covers only the explicitly supplied application-managed data roots and mounted test workspaces"
+    ],
+    "statistical": "One complete run per role/workload; deltas describe this pair, not a causal feature attribution or a repeated distribution.",
+    "schemaValidation": "All constraints present in current e2e/perf/report.schema.json validated by a read-only local checker; original reports unchanged."
+  },
+  "measurementCompleteness": "complete-approved-T049-physical-only-scope"
+}

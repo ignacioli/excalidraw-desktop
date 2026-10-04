@@ -1,0 +1,6 @@
+{
+  "at": "2026-10-04T17:36:50.397Z",
+  "reason": "Driver error: visibilityState=hidden and 10199 ms without animation frame",
+  "action": "Terminate uniquely matched owned candidate binary after preserving driver error; do not wait remaining edit window",
+  "pairedComparisonEligible": false
+}

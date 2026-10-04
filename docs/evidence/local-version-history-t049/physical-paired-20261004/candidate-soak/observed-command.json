@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1.0.0",
+  "commandId": "ddb7b09d-54c0-4de7-8006-168c65ff1794",
+  "operation": "edit-soak",
+  "durationMs": 900000,
+  "seed": 40000
+}

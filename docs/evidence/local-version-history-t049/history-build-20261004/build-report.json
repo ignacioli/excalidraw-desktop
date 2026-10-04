@@ -1,0 +1,52 @@
+{
+  "status": "BUILD_READY",
+  "mode": "history",
+  "repo": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history",
+  "gitCommit": "849b1ffcff908146f288ed9ac4330153d925ce11",
+  "targetDir": "/private/tmp/t049-20261004-history-target-849b1ff",
+  "command": [
+    "pnpm",
+    "exec",
+    "tauri",
+    "build",
+    "--no-bundle",
+    "--features",
+    "e2e-harness",
+    "--",
+    "--offline",
+    "--locked"
+  ],
+  "environment": {
+    "VITE_E2E_HARNESS": "1",
+    "VITE_E2E_HISTORY_FRONTEND": "1",
+    "CARGO_TARGET_DIR": "/private/tmp/t049-20261004-history-target-849b1ff"
+  },
+  "startedAt": "2026-10-04T17:37:44.641Z",
+  "performanceVerdict": "not_evaluated",
+  "build": {
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "checkoutCommitAtFinish": "849b1ffcff908146f288ed9ac4330153d925ce11",
+  "output": {
+    "binary": {
+      "path": "/private/tmp/t049-20261004-history-target-849b1ff/release/excalidraw-desktop",
+      "sha256": "e8e703560193ef907a6922eeceb311f0e13773535d84615932c8bc1d474534cd",
+      "sizeBytes": 35836512
+    },
+    "e2eHarness": "/private/tmp/t049-20261004-history-target-849b1ff/release/.fingerprint/excalidraw-desktop-e217f7dabe4ec90b/lib-excalidraw_desktop_lib.json",
+    "customProtocol": [
+      "/private/tmp/t049-20261004-history-target-849b1ff/release/.fingerprint/tauri-6c35d76a4bc5e1b5/lib-tauri.json",
+      "/private/tmp/t049-20261004-history-target-849b1ff/release/.fingerprint/tauri-macros-27bade1921eb0b03/lib-tauri_macros.json"
+    ],
+    "productionMode": [
+      "/private/tmp/t049-20261004-history-target-849b1ff/release/build/tauri-3b3eb3f206c60f44/output"
+    ],
+    "embeddedFrontendAssetKeys": [
+      "performanceDriver-Bico2RM1.js",
+      "historyFrontendDriver-B7w4u3vW.js"
+    ]
+  },
+  "finishedAt": "2026-10-04T17:39:46.036Z"
+}

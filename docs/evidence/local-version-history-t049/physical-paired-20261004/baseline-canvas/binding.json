@@ -1,0 +1,85 @@
+{
+  "role": "baseline",
+  "scenario": "canvas",
+  "runRoot": "/private/tmp/t049-20261004-resume-baseline-canvas",
+  "runnerCheckout": "/Users/liyongqiang/.codex/worktrees/history-perf-baseline/local-version-history",
+  "runnerCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+  "productSourceCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+  "buildCheckoutCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+  "binary": {
+    "path": "/private/tmp/t049-20261004-baseline-Oe9293/corrected/excalidraw-desktop",
+    "sha256": "c5e6cd8ed502a0a2b9f002bfb71441833d2d049607fb6a445af22a16eb0cee8b",
+    "sizeBytes": 34695136
+  },
+  "buildBinding": "../../baseline-build-20261004/corrected-binding.json",
+  "reportSha256": "e37e13645a73d477fe74dd95bb78526c11762b55bc94bd8bc78b1b896d0975e3",
+  "runnerLogUncompressedSha256": "f6c48553293e2122fb7d256c1a61d11fc9d2f3bec99ba181296f4aaaa11d3a4c",
+  "exitCode": 0,
+  "runnerHashes": [
+    {
+      "path": "e2e/perf/canvas-io.spec.ts",
+      "sha256": "f0d8ef205b9e09990fc2042a2888e4b9d6cab735ecace74017be2e348d168dff"
+    },
+    {
+      "path": "e2e/perf/helpers/processMetrics.ts",
+      "sha256": "b899213d27c7ce7a645fc91894cd8d01d545e5f2b93cbac55a101602767aef28"
+    },
+    {
+      "path": "e2e/perf/helpers/workloads.ts",
+      "sha256": "53aef4d9712dffd350739e857e0989d520ebb53018d7e50c5c993ddfd17b4375"
+    },
+    {
+      "path": "e2e/perf/helpers/nativePerformanceContract.ts",
+      "sha256": "982960e39c71ab6cef8cb9c9795b0657c0cf49d4f393835f7695025db67b8210"
+    },
+    {
+      "path": "e2e/helpers/app.ts",
+      "sha256": "f10cc0f63a6da9839ebec82803e531d513f0d4f98b6397e695d5a83b89c98e27"
+    },
+    {
+      "path": "e2e/helpers/webkitProcesses.ts",
+      "sha256": "c4ab25b7af56fbd104dcb551d4e0b197a0bef101f1a5947bccb6f1c8bc63b8af"
+    },
+    {
+      "path": "e2e/playwright.config.ts",
+      "sha256": "3c4779f3f225fa13980f8c15b9452763e51a054b71dccd0dd1004d75ee91a73e"
+    }
+  ],
+  "command": [
+    "pnpm",
+    "exec",
+    "playwright",
+    "test",
+    "--config",
+    "e2e/playwright.config.ts",
+    "e2e/perf/canvas-io.spec.ts",
+    "--workers=1",
+    "--retries=0",
+    "--reporter=line",
+    "--output=/private/tmp/t049-20261004-resume-baseline-canvas/playwright"
+  ],
+  "environment": {
+    "PERF_TEST": "1",
+    "APP_E2E": "1",
+    "PERF_REFERENCE_RUN": "0",
+    "PERF_EXECUTION_ENVIRONMENT": "physical",
+    "PERF_HOST_HARDWARE": "Mac17,9 (Apple M5 Pro)",
+    "EXCALIDRAW_E2E_BINARY": "/private/tmp/t049-20261004-baseline-Oe9293/corrected/excalidraw-desktop",
+    "TMPDIR": "/private/tmp/t049-20261004-resume-baseline-canvas/tmp",
+    "reportPath": "/private/tmp/t049-20261004-resume-baseline-canvas/canvas-io.json",
+    "PERF_DIAGNOSTIC_SOAK_DURATION_MS": null
+  },
+  "rawReportUnmodified": true,
+  "verdict": {
+    "overall": "pass",
+    "scope": "diagnostic T090 canvas and I/O",
+    "reason": "All evaluated T090 10k canvas and write-coalescing budgets passed.",
+    "comparisons": {
+      "stable10kSceneRss": true,
+      "panZoomFps": true,
+      "noPanZoomFreeze": true,
+      "noEditingFreeze": true,
+      "writeCoalescing": true
+    }
+  }
+}

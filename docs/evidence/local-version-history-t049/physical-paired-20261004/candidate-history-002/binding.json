@@ -1,0 +1,69 @@
+{
+  "status": "PASS_WORKLOAD",
+  "role": "candidate",
+  "scenario": "history",
+  "runRoot": "/private/tmp/t049-20261004-resume-candidate-history-002",
+  "runnerCommit": "91c5d7b36266935c64bd855a9956e8ae0526d73d",
+  "productSourceCommit": "eb961ca8c8b221c34a11989d5e4d37e9a9e8f537",
+  "buildCheckoutCommit": "849b1ffcff908146f288ed9ac4330153d925ce11",
+  "binary": {
+    "path": "/private/tmp/t049-20261004-history-target-849b1ff/release/excalidraw-desktop",
+    "sha256": "e8e703560193ef907a6922eeceb311f0e13773535d84615932c8bc1d474534cd",
+    "sizeBytes": 35836512
+  },
+  "buildReport": "../../history-build-20261004/build-report.json",
+  "reportSha256": "bcc1bfe8f022ad475e55c965f01a5bf5e3bae12a17d578fcb036775aa8613f69",
+  "runnerLogUncompressedSha256": "f0c498f457afc5eb2a2d7f60045aaa01b6bda1552c9c30b027dfcf56d6f83f3f",
+  "exitCode": 0,
+  "warmupJourneys": 1,
+  "measuredSamples": 3,
+  "rawReportUnmodified": true,
+  "runnerHashes": [
+    {
+      "path": "e2e/perf/local-version-history.spec.ts",
+      "sha256": "4537272fe910c3204435599a8ff0d2b31cd565d47bfb3489e4f5d2cf7ccd1f9e"
+    },
+    {
+      "path": "e2e/helpers/reliability.ts",
+      "sha256": "5a33bde421de565ecaf86025d6e30313c58e75ce986faba7e98965cb6e6ba1d6"
+    },
+    {
+      "path": "e2e/perf/helpers/processMetrics.ts",
+      "sha256": "88f0d66d54ccc8c411c5fe386276cf871bf28ce69d81e69b167be43ec94fb30f"
+    },
+    {
+      "path": "e2e/playwright.config.ts",
+      "sha256": "3c4779f3f225fa13980f8c15b9452763e51a054b71dccd0dd1004d75ee91a73e"
+    }
+  ],
+  "environment": {
+    "PERF_TEST": "1",
+    "APP_E2E": "1",
+    "PERF_REFERENCE_RUN": "0",
+    "PERF_EXECUTION_ENVIRONMENT": "physical",
+    "PERF_HOST_HARDWARE": "Mac17,9 (Apple M5 Pro)",
+    "EXCALIDRAW_E2E_HISTORY_RESTART": "1",
+    "EXCALIDRAW_E2E_BINARY": "/private/tmp/t049-20261004-history-target-849b1ff/release/excalidraw-desktop",
+    "TMPDIR": "/private/tmp/t049-20261004-resume-candidate-history-002/tmp",
+    "PERF_HISTORY_REPORT_PATH": "/private/tmp/t049-20261004-resume-candidate-history-002/local-version-history.json"
+  },
+  "command": [
+    "pnpm",
+    "exec",
+    "playwright",
+    "test",
+    "--config",
+    "e2e/playwright.config.ts",
+    "e2e/perf/local-version-history.spec.ts",
+    "--workers=1",
+    "--retries=0",
+    "--reporter=line",
+    "--output=/private/tmp/t049-20261004-resume-candidate-history-002/playwright"
+  ],
+  "verdict": {
+    "overall": "not_evaluated",
+    "scope": "history-specific absolute facts and descriptive timing",
+    "reason": "No standalone local-version-history timing or memory budget is approved; T090/T108 own generic performance verdicts."
+  },
+  "runnerFix": "91c5d7b corrects evidence stage and retains full anti-stale assertions; workload and product binary unchanged"
+}

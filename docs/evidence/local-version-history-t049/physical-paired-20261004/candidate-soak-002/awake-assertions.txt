@@ -1,0 +1,2 @@
+   pid 79874(caffeinate): [0x00035ff800018363] 00:00:40 PreventUserIdleSystemSleep named: "caffeinate command-line tool"  
+   pid 79874(caffeinate): [0x00035ff800058364] 00:00:40 PreventUserIdleDisplaySleep named: "caffeinate command-line tool"  

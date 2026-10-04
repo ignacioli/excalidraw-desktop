@@ -1,6 +1,6 @@
 # Local version history performance baseline
 
-**当前执行范围（2026-10-04 owner决定）：** Parallels Desktop已不可用，本轮004关闭只在同一M5 Pro物理机测量基线／候选，跳过VM。共同startup-idle、canvas-io、完整15分钟edit-soak与候选History专项均保留。`PERF_REFERENCE_RUN=0`、`PERF_EXECUTION_ENVIRONMENT=physical`；保存原始diagnostic budget verdict与完整性结果，另报告配对绝对值／差值，不把历史VM阈值改造成新的M5 Pro硬门槛。VM不再是本轮T049完成条件，下文VM环境与旧失败作为历史保留。基线已重新构建，见[构建绑定](../../docs/evidence/local-version-history-t049/baseline-build-20261004/binding.json)；本轮首次startup测量INVALID（0/10 ready），已确认raw Cargo产物误用devUrl；保持原失败；修正构建后同项复验已PASS（10/10启动，P95 1769.799375ms，61个idle样本，RSS P95 315113472bytes），其余测量未执行，见[本轮记录](../../docs/evidence/local-version-history-t049/physical-startup-20261004/README.md)。
+**本轮测量结果（2026-10-04）：完整测量已完成。** 同一M5 Pro物理startup/canvas/完整15分钟soak配对，以及候选History 1预热＋3样本均完成。候选startup、10k RSS／编辑卡顿及双方soak RSS增长存在真实diagnostic FAIL，均保留；完整性完成不代表预算全部PASS。Harness `8ec98ca`修复临时防休眠与错误及时退出，只补candidate soak，未改变时长／统计／预算或重跑有效数据。见[完整配对记录](../../docs/evidence/local-version-history-t049/physical-paired-20261004/README.md)与[当前验证索引](../../docs/evidence/local-version-history-validation-index.md)。VM按owner决定跳过，T054待独立接受；后文早期运行快照不覆盖本轮结果。
 
 **此前状态（2026-09-29）：T049 仍为 `not_evaluated`。** 固定基线 `babc027d64c2c50e6922482b416ef1099ea9d07e` 的独立 `e2e-harness` binary 已构建，SHA-256 为 `158fc23d122d5595b3950e934da77014b119f0382f393afac95a5628caa50511`。一次物理 macOS `startup-idle` 尝试在第 5 次冷启动等待 `ready.json` 15 秒后失败；只有 4/10 次 editable-canvas 样本。操作员最小化了挡住工作的窗口，精确时点未知，无法归因。本次整体 **INVALID**，原始报告及运行前 binary/runner binding 见[物理基线尝试](../../docs/evidence/local-version-history-t049/physical-startup-20260929/README.md)。没有重试、有效物理配对、参考 VM 报告或速度／回归结论。候选 UI 正在修改；先前构建的候选 binary 不预支修改后的候选身份。
 
@@ -132,7 +132,7 @@ comparability:
 
 `sameWorkloadAndSeed`、`sameEnvironment` 在实际核对前必须保持 `false`；不能用模板本身宣称可比较。每个原始 JSON 报告必须符合 `e2e/perf/report.schema.json`，且 schema 中的 `binary` 字段在有效 T003/T049 结果里必须实际填充。
 
-## 当前证据边界
+## 历史证据边界（以下为此前运行快照）
 
 2026-09-29 物理 macOS 基线 `startup-idle` 首次尝试的 Playwright 命令失败，原始报告 `verdict.overall=not_evaluated`：4/10 次 editable-canvas ready，第 5 次未在 15 秒内发布 `ready.json`；空闲窗口虽有 60 个进程树样本，整次运行仍因启动窗口不完整且操作员最小化时间未知而标记 **INVALID**。没有原样重跑。原始 JSON、SHA-256、独立 binary/runner binding 和停止检查归档在[物理基线尝试](../../docs/evidence/local-version-history-t049/physical-startup-20260929/README.md)。候选 `startup-idle`、其余共同负载、History 专项正式测量以及参考 VM 均未执行。
 
