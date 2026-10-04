@@ -12,7 +12,7 @@
     "reduceMotion": true,
     "reduceMotionVerification": "NSWorkspace accessibilityDisplayShouldReduceMotion true; defaults write reported could not write, not claimed successful"
   },
-  "status": "PENDING_FOCUSED_COPY_FIX",
+  "status": "PASS_WITH_SCOPED_FOLLOWUP",
   "scope": "H4/T048; not T054 final acceptance",
   "desktopAuthorization": "现在可以",
   "observations": [
@@ -79,9 +79,10 @@
     }
   ],
   "pendingCopyDecision": {
-    "ownerResponse": "The history operation is pending reconciliation. 这个文案似乎不能提供啥有用的信息，我的意见是要么删除，要么提供更加精确的提示方便用户debug。",
+    "ownerResponse": "接受，关闭这项",
     "selectedOption": "Omit only generic pending detail; preserve meaningful diagnostics",
-    "status": "IMPLEMENTED_TARGETED_CHECKS_PASS_RENDER_PENDING"
+    "status": "ACCEPTED_IN_FOLLOWUP_PACKAGE",
+    "followup": "pending-copy/native-report.json"
   },
   "reduceMotionRestore": {
     "original": false,
@@ -90,5 +91,11 @@
     "verification": "NSWorkspace.accessibilityDisplayShouldReduceMotion returned false",
     "verifiedAt": "2026-10-04T13:48:22.566Z",
     "automationFailurePreserved": "defaults write rejected by OS; owner restored manually"
+  },
+  "closure": {
+    "H4": "PASS",
+    "basis": "All required groups accepted on 2c13f50; only generic pending body changed in eb961ca, confirmed by targeted native followup and explicit owner acceptance. Original observations retain their own package identity.",
+    "recovery": "Unchanged Recovery UI and persistence paths; existing T050/T038-T044 evidence reused per acceptance-contract impact rule",
+    "T054": "PENDING independent final acceptance"
   }
 }

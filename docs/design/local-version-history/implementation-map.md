@@ -105,7 +105,8 @@ Anatomy：画布侧覆盖层 → toolbar（Preview · v-NNN · summary、只读�
 | H1   | DONE                   | 本anatomy+设计元数据回填；保留策略入口决定              |
 | H2   | PASS（含本轮定向修复） | 相关formatter/lint/typecheck/unit通过，代表组件视觉符合 |
 | H3   | PASS（含本轮定向修复） | 受影响页面组合抽检通过                                  |
-| H4   | 未执行                 | exact-package集中owner观察覆盖现行合同                  |
+| H4   | PASS（2026-10-04）      | 原包集中owner体验+pending文案修订包定点接受；逐包身份见证据 |
+| H5   | DONE（2026-10-04）      | 证据入口、组件状态与T058/T048同步；owner已授权本轮private提交 |
 
 历史WIP记录：此前typecheck及5项unit失败，本轮尚未重跑。初始“等宽按钮”assertion已确认是错误oracle，不计产品缺陷。Tab tooltip已owner确认；Mark轻微肉眼弹跳不确定且owner停止调查，本轮不重开。
 
@@ -116,3 +117,7 @@ H2/H3结果：[component-first记录](../../evidence/local-version-history-t059/
 ## H4 owner反馈后的定向修复（2026-09-30）
 
 owner报告两处成功提示同时常驻、Already marked位置不合适、原生粗滚动条，并要求History info支持hover。以上记录为本轮FAIL/变更，不将此前browser通过外推为native通过。滚动区复用左侧Workspace的thin及6px WebKit thumb/theme/hover/focus规则，不改系统滚动条偏好。修复完成后只复查提示生命周期/锚点、info hover/keyboard及细滚动条，继续保留未完成native项。
+
+## H4收尾记录（2026-10-04）
+
+所有必需观察已获owner明确接受；原包`2c13f50`的集中观察与文案修订包`eb961ca`的pending定点复验分开记录，见[owner记录](../../evidence/local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json)。旧pending fixture在保存后清除、初轮browser缺少harness环境变量的失败原样保留；未将其写成产品样式故障。原包零AX窗口当前已恢复，未确认根因；文案修订后只有一次新package构建及一次启动，无逐屏collector或重复全套owner审批。该案例验证本次组件→组合→按影响native收尾流程可执行，不据此声称未来零返工或已证明通用效率收益。

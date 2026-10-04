@@ -22,5 +22,10 @@
     },
     "globalLint": "PASS"
   },
-  "native": "PENDING focused copy followup; other owner observations retain original package identity"
+  "native": {
+    "result": "PASS",
+    "report": "pending-copy/native-report.json",
+    "ownerResponse": "接受，关闭这项",
+    "scope": "Only pending/error body omission; unchanged groups reused by impact, not relabeled as tested on new package"
+  }
 }

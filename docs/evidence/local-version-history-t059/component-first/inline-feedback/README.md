@@ -1,5 +1,7 @@
 # 版本行内短提示增强
 
+**最新结论（2026-10-04）：H4 PASS，H5证据/任务状态同步完成（owner已授权本轮private提交）。** [Owner记录](owner-walkthrough.json)覆盖Light主路径、长列表/行内短提示、Preview/Restore/Cancel/焦点、Dark300、Unavailable、Conflict及Reduce Motion。pending通用文案按owner允许的删除方案完成，47项定向测试、typecheck/lint和browser状态复验通过；[新包定点报告](pending-copy/native-report.json)及owner“接受，关闭这项”完成受影响项收尾。原包`2c13f50`与文案修订包`eb961ca`身份分开，按影响复用未变观察；未将全范围复验冒称发生在新包。系统Reduce Motion最终已核实恢复关闭。T049仅物理机配对仍待执行，T052/T054尚未关闭。
+
 **本轮推进（2026-10-04）：封存包复用，无重建或重启；同一 PID 已恢复可读 AX 窗口，当前包窄原生入口 PASS。** 见 [入口报告](native-entry-report.json) 与 [准备续查](native-preparation-followup.json)。旧零窗口失败保留，原因仍未确定，不能据此宣称产品修复。三个合成状态已在 production 中可达；[owner walkthrough](owner-walkthrough.json) 正在逐项记录，T058/T048/H5 尚不提前关闭。
 
 I5 的原定义是“一次封存并衔接 H4”，合理且包封存已完成；它不是新的独立 native gate。行内提示的目标绑定、timer 与状态语义复用 I4，实际 WKWebView 呈现并入 H4 同包抽检。H4 原先未完成的观察范围仍按公共 acceptance contract 执行，不因这个小改动重复整套自动检查或逐屏 collection。

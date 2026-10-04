@@ -1,6 +1,8 @@
 # 本地版本历史验证索引
 
-**本轮最新状态（2026-10-04，集中验收进行中）：** 复用产品 `2c13f50` 的同一封存 production 包，未重建或重启；[窄原生入口](local-version-history-t059/component-first/inline-feedback/native-entry-report.json) PASS（1280×760、fresh route、正确文档与 fixture 字节未变）。旧0窗口 BLOCKED保留，恢复原因未确定。[状态续查](local-version-history-t059/component-first/inline-feedback/native-preparation-followup.json)确认50版本、Unavailable与实际pending/error呈现；pending fixture曾被成功checkpoint清除，已在保存稳定后恢复，原失败保留为准备失败。
+**最新结论（2026-10-04）：T058准备与窄入口、H4/T048已通过。** [Owner完整记录](local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json)保留各组结果与旧FAIL；原包`2c13f50`完成集中体验，文案修订包`eb961ca`仅对pending错误正文进行[定点复验](local-version-history-t059/component-first/inline-feedback/pending-copy/native-report.json)，owner明确“接受，关闭这项”。依据既定按影响复验规则保留未变项接受，不把旧包观察移植为新包全量运行。Recovery沿用未受影响的既有安全证据；Reduce Motion已恢复关闭。H5状态同步完成，owner已授权本轮private提交；T049按owner新决定仅M5 Pro物理配对，T052完整索引与T054最终接受仍待其后，不宣称phase7完成。
+
+**本轮过程记录（2026-10-04，验收收尾前）：** 复用产品 `2c13f50` 的同一封存 production 包，未重建或重启；[窄原生入口](local-version-history-t059/component-first/inline-feedback/native-entry-report.json) PASS（1280×760、fresh route、正确文档与 fixture 字节未变）。旧0窗口 BLOCKED保留，恢复原因未确定。[状态续查](local-version-history-t059/component-first/inline-feedback/native-preparation-followup.json)确认50版本、Unavailable与实际pending/error呈现；pending fixture曾被成功checkpoint清除，已在保存稳定后恢复，原失败保留为准备失败。
 
 [本轮owner记录](local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json)：Unavailable、Conflict、Light主路径及Dark/300px/Reduce Motion已明确PASS；用户提供的[截图](local-version-history-t059/component-first/inline-feedback/pending-owner-screenshot.png)确认pending说明和Try again可见，但owner认为通用状态说明无帮助，已按允许的删除方案省略正文，定向测试47项、typecheck/lint与状态浏览器复验通过，待新包定点确认。系统Reduce Motion由owner恢复，API已核实关闭。I5包准备已完成，其余原生事实并入T058/H4，不新设独立gate。T058/T048/H5尚不提前关闭。
 
