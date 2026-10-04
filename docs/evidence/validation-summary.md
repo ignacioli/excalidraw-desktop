@@ -1,33 +1,22 @@
 # 验证证据汇总（004 实施中；003 已完成；001/002 历史）
 
-**当前性能进度（2026-10-04）：** M5 Pro物理baseline startup-idle已取得[有效PASS](local-version-history-t049/physical-startup-20261004/corrected/startup-idle.json)：10次editable启动、61个idle样本，启动P95 1769.799375ms、进程树RSS P95 315113472bytes。首次错误构建导致的INVALID保留在[同次记录](local-version-history-t049/physical-startup-20261004/README.md)，修正仅是使用Tauri CLI custom-protocol构建，未改变timeout/断言。候选启动、双方canvas/soak及History专项尚未执行，不预支T049/T052/T054完成；H4/H5完成结论保持。
+Feature 004 的唯一当前状态见[本地版本历史验证索引](local-version-history-validation-index.md)，包括 T048/T058、T049、T052/T054 的当前结论、证据身份和缺口。
 
-**最新结论（2026-10-04）：T058准备与窄入口、H4/T048已通过。** [Owner完整记录](local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json)保留各组结果与旧FAIL；原包`2c13f50`完成集中体验，文案修订包`eb961ca`仅对pending错误正文进行[定点复验](local-version-history-t059/component-first/inline-feedback/pending-copy/native-report.json)，owner明确“接受，关闭这项”。依据既定按影响复验规则保留未变项接受，不把旧包观察移植为新包全量运行。Recovery沿用未受影响的既有安全证据；Reduce Motion已恢复关闭。H5状态同步完成，owner已授权本轮private提交；T049按owner新决定仅M5 Pro物理配对，T052完整索引与T054最终接受仍待其后，不宣称phase7完成。
+本文件保留实际验证运行、命令、历史问题和其他 feature 的证据。Feature 004 的旧状态段落是其标注日期时的记录，不代表当前状态；更新当前结论时只改验证索引。
 
-**本轮过程记录（2026-10-04，验收收尾前）：** 复用产品 `2c13f50` 的同一封存 production 包，未重建或重启；[窄原生入口](local-version-history-t059/component-first/inline-feedback/native-entry-report.json) PASS（1280×760、fresh route、正确文档与 fixture 字节未变）。旧0窗口 BLOCKED保留，恢复原因未确定。[状态续查](local-version-history-t059/component-first/inline-feedback/native-preparation-followup.json)确认50版本、Unavailable与实际pending/error呈现；pending fixture曾被成功checkpoint清除，已在保存稳定后恢复，原失败保留为准备失败。
+## Feature 004 historical validation snapshots (through 2026-09-29)
 
-[本轮owner记录](local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json)：Unavailable、Conflict、Light主路径及Dark/300px/Reduce Motion已明确PASS；用户提供的[截图](local-version-history-t059/component-first/inline-feedback/pending-owner-screenshot.png)确认pending说明和Try again可见，但owner认为通用状态说明无帮助，已按允许的删除方案省略正文，定向测试47项、typecheck/lint与状态浏览器复验通过，待新包定点确认。系统Reduce Motion由owner恢复，API已核实关闭。I5包准备已完成，其余原生事实并入T058/H4，不新设独立gate。T058/T048/H5尚不提前关闭。
+以下 Feature 004 内容记录到 2026-09-29 为止的历史快照。段内的“当前”“最新”“待完成”均以段落标注日期为准；请勿据此判断今天的状态。
 
-[T049当前预检](local-version-history-t059/component-first/inline-feedback/performance-preflight.json)保留原VM版本不符记录；2026-10-04 owner明确Parallels不可用，本轮仅M5 Pro物理机完整基线／候选配对，跳过VM。基线测试binary已重新构建并绑定，尚无本轮有效性能配对，T052/T054与phase7未完成。
-
-**此前状态（2026-10-04）：无背景版本行内短提示已获owner局部Penpot批准，source revision108及规范同步，实现、unit87/87、typecheck、lint/format和受影响browser复验完成。** 过程中的测试定位失败与hooks修复如实保留，见[增量证据](local-version-history-t059/component-first/inline-feedback/README.md)。新production包已一次seal PASS（产品commit `2c13f50`，SHA-256 `6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4`），[manifest](local-version-history-t059/component-first/inline-feedback/package-manifest.json)保存精确身份；新包入口及owner原生复查待执行；894228a包的既有定向owner接受保持原身份。T058/T048、T049有效配对、T052索引和T054最终接受未完成；不预支Phase7或发布。
-
-**此前状态（2026-09-30，component-first H0–H3完成）**：共享组件目录、History anatomy、信息入口与Penpot源/七屏已同步；组件82项、定向browser及原有5项语义检查通过，primary完成代表组合渲染抽检。详见[执行记录](local-version-history-t059/component-first/README.md)。新原生候选包待构建/复查，T048与Phase7未完成，Mark微动仍owner-deferred。下文保留历史快照。
-
-**当前设计入口（2026-09-30）**：[唯一高保真目录](../design/local-version-history/high-fi/README.md)包含本轮已批准的7张画板。旧 task/revision 路径仅是下文历史证据的原始记录，可在 Git `45630f81c429ba30effe12118c200f193e713745` 中恢复。本轮只整理资产与引用，不新增实现或原生验收结论。
-
-**历史状态（2026-09-29，暂停等待 Penpot Review）**：负责人确认 `70132eb` 包的 Tab tooltip 正常；Mark 区域轻微肉眼弹跳真实性未确定，负责人要求停止修复。History 整体设计一致性另行纠正：共享系统字体标准已确认，Penpot 回填至 quick-check revision 98，新增 07 Unavailable 草稿，140 个文字角色绑定检查无差异、文件校验 0 错误。负责人要求完成回填与一次抽查后停止；代码对齐保持 WIP，typecheck 和 5 项定向测试失败，未进行修后浏览器/原生验证。详见 [Penpot Review 记录](local-version-history-t059/resume-20260929/penpot-backfill-review.json)。T048/Phase 7 未完成。
-
-
-## Feature 004 当前最新状态（2026-09-29）
+### Snapshot: 2026-09-29
 
 T055 已归档产品负责人批准的 T048 六屏高保真与 token 映射；T056/T057 实现及针对性自动验证见产品提交 `7b7ddc8`。当前 production `.app` 绑定产品提交 `9c1e6a37a10b72ec8213af9d3e45d81667ad73c7`，package SHA-256 `2420a8a8f5af8253c7ebcd90747e8e0430c1a7cee9d65585322c7e9e5e6aeae3`；T058 原生入口检查 13/13 PASS。HISTORY-01 capture integrity PASS，collection digest `a4db47bdeb17c503b84ca214a8bd23d41878a22eccf5181ce095e40bf0447620`；采集、包绑定和截图见 [window-repair-004](./local-version-history-t048/window-repair-004/README.md)。
 
 T023 完整 `local-version-history-preview.spec.ts` 最终 5/5 PASS；JSON 当前位于 `/private/tmp/history-t023-20260929/final-report.json`，首轮、复测及最终报告的仓库归档与提交 binding 待补到 `local-version-history-t059/t023/`。该 browser semantic 结果不依赖 native package/process 身份。
 
-**T048 当前画面 `FAIL`**：独立 reviewer 在 HISTORY-01 发现两项 HIGH 样式偏差：Mark current 按钮的几何和视觉层级偏离已批准 token，Restore 主按钮丢失 accent 层级。详见[独立审查报告](./local-version-history-t048/window-repair-004/history01-review.md)；此前窗口查询 BLOCKED 及其修复过程见[harness incident report](./local-version-history-t048-harness-incident.md)。UI 修复已进入 `a50818e`，新包复审仍未执行。History drawer 默认 360 px，产品负责人已决定允许拖动边缘缩至 300 px，任何视口下均不依赖 breakpoint；此交互决定记录于[批准的 interaction contract](../design/local-version-history/interaction.md)。
+**截至 2026-09-29 的 T048 画面 `FAIL`**：独立 reviewer 在 HISTORY-01 发现两项 HIGH 样式偏差：Mark current 按钮的几何和视觉层级偏离已批准 token，Restore 主按钮丢失 accent 层级。详见[独立审查报告](./local-version-history-t048/window-repair-004/history01-review.md)；此前窗口查询 BLOCKED 及其修复过程见[harness incident report](./local-version-history-t048-harness-incident.md)。UI 修复已进入 `a50818e`，新包复审当时仍未执行。History drawer 默认 360 px，产品负责人已决定允许拖动边缘缩至 300 px，任何视口下均不依赖 breakpoint；此交互决定记录于[批准的 interaction contract](../design/local-version-history/interaction.md)。当前 T048 verdict 见上方唯一状态索引。
 
-T048 总体尚未通过：其余所需状态仍待采集和独立评审，修复后的精确包需重新绑定，产品负责人最终接受也未记录。T049 正式物理机/参考 VM 配对性能仍未完成；T052 索引继续按各事实适用性绑定证据；T054 最终接受待定。T058 原生入口 PASS、capture integrity PASS 和当前 reviewer FAIL 分别保留其自身范围，不能合并为产品视觉通过。
+在该快照时间点，T048 尚未通过：其余所需状态仍待采集和独立评审，修复后的精确包需重新绑定，产品负责人最终接受也未记录。T049 正式物理机/参考 VM 配对性能仍未完成；T052 索引继续按各事实适用性绑定证据；T054 最终接受待定。T058 原生入口 PASS、capture integrity PASS 和当时 reviewer FAIL 分别保留其自身范围，不能合并为产品视觉通过。
 
 T049 物理 `startup-idle` 首次基线尝试为 **INVALID / `not_evaluated`**，原始报告、binding 和观察边界见[归档记录](./local-version-history-t049/physical-startup-20260929/README.md)。10 次冷启动要求中只取得 4 个 ready，第 5 次超时；操作员曾最小化挡住工作的应用窗口，但事件时间无法对应到样本，不能把超时归因于该动作或记为产品性能失败。该尝试不进入基线／候选配对。
 
@@ -55,7 +44,7 @@ T045/T046 已完成；T047 已在 `e873aac` production package 上取得原生�
 
 | 事实 | 主要证据 | 当前结果 | 边界 |
 | --- | --- | --- | --- |
-| 低保真与必要高保真审批 | [`docs/design/local-version-history/interaction.md`](../design/local-version-history/interaction.md)、[`low-fi/manifest.json`](../design/local-version-history/low-fi/manifest.json)、[`T048 high-fi/manifest.json`](../design/local-version-history/high-fi/t048/manifest.json) | **PASS — design approval** | 审批解除界面实现门控，不是 production rendering 验收 |
+| 低保真与必要高保真审批 | [`docs/design/local-version-history/interaction.md`](../design/local-version-history/interaction.md)、[`low-fi/manifest.json`](../design/local-version-history/low-fi/manifest.json)、[high-fi manifest](../design/local-version-history/high-fi/manifest.json) | **PASS — design approval** | 审批解除界面实现门控，不是 production rendering 验收 |
 | History 列表、键盘、焦点、预览退出和 reduced motion | [`e2e/tests/local-version-history-preview.spec.ts`](../../e2e/tests/local-version-history-preview.spec.ts)（T023） | 由 browser semantic tests 负责 | Chromium/WebView 语义证据不证明 macOS package 的视觉结果 |
 | `File → Version History…` 原生菜单层级、标签、状态和路由 | [旧包 T047](./local-version-history-t045-t047.md)；[新包 T058](./local-version-history-t058/README.md) | 两个不同精确包各自取得菜单 enabled、一次路由、唯一目标文档及字节保持不变 **PASS** | 不以 browser event 注入或人工视觉替代 Accessibility/System Events；旧包结果不代替新包 |
 | Light/Dark、1280 × 760、可读性、当前／预览、错误、焦点、裁切 | [`docs/evidence/local-version-history-visual-checklist.md`](./local-version-history-visual-checklist.md)（T048） | **BLOCKED / PENDING** | 必须由 exact production package 上的人类视觉 reviewer 记录 |

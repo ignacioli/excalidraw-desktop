@@ -32,12 +32,26 @@ const VERSION_COUNT: usize = 50;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = env::args_os();
     let _program = args.next();
-    let requested_root = args.next().ok_or_else(|| {
+    let first = args.next().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
-            "usage: prepare_history_visual_fixture <new-absolute-temp-root>",
+            "usage: prepare_history_visual_fixture <new-absolute-temp-root> | refresh-pending <existing-root>",
         )
     })?;
+    if first == "refresh-pending" {
+        let requested_root = args
+            .next()
+            .ok_or_else(|| io::Error::other("existing root is required"))?;
+        if args.next().is_some() {
+            return Err(io::Error::other("unexpected extra argument").into());
+        }
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&refresh_pending(Path::new(&requested_root))?)?
+        );
+        return Ok(());
+    }
+    let requested_root = first;
     if args.next().is_some() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -51,7 +65,131 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .enable_all()
         .build()?;
     let manifest = runtime.block_on(prepare(&root))?;
+    fs::write(
+        root.join("fixture-manifest.json"),
+        serde_json::to_vec_pretty(&manifest)?,
+    )?;
     println!("{}", serde_json::to_string_pretty(&manifest)?);
+    Ok(())
+}
+
+fn validate_existing_fixture_path(root: &Path, target: &Path) -> io::Result<()> {
+    if !target.starts_with(root)
+        || target == root
+        || target
+            .components()
+            .any(|part| matches!(part, Component::CurDir | Component::ParentDir))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "fixture path escapes its root",
+        ));
+    }
+    let mut checked = root.to_path_buf();
+    for part in target
+        .strip_prefix(root)
+        .map_err(io::Error::other)?
+        .components()
+    {
+        checked.push(part);
+        if fs::symlink_metadata(&checked)?.file_type().is_symlink() {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "fixture path contains a symbolic link",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn refresh_pending(requested: &Path) -> Result<Value, Box<dyn std::error::Error>> {
+    // Reuse the new-root validator's parent/temp checks without deleting or
+    // replacing the existing root. Existing roots must be canonical directories.
+    if validate_new_root(requested)
+        .err()
+        .is_none_or(|error| error.kind() != io::ErrorKind::AlreadyExists)
+        || fs::symlink_metadata(requested)?.file_type().is_symlink()
+        || requested.canonicalize()? != requested
+        || !requested.is_dir()
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "refresh requires a canonical existing synthetic temporary root",
+        )
+        .into());
+    }
+    let manifest_path = requested.join("fixture-manifest.json");
+    validate_existing_fixture_path(requested, &manifest_path)?;
+    let manifest: Value = serde_json::from_slice(&fs::read(&manifest_path)?)?;
+    let app_data = requested.join("home/Library/Application Support/excalidraw-desktop");
+    let current_file = requested.join("workspace/History pending issue.excalidraw");
+    let field_matches = |key: &str, expected: &Path| manifest[key].as_str() == expected.to_str();
+    if !field_matches("root", requested)
+        || !field_matches("profileHome", &requested.join("home"))
+        || !field_matches("appDataDirectory", &app_data)
+        || !field_matches("workspace", &requested.join("workspace"))
+        || manifest["nativeVerified"] != false
+        || manifest["documents"]["pendingIssue"]["currentFile"].as_str() != current_file.to_str()
+    {
+        return Err(io::Error::other("manifest is not the declared synthetic fixture").into());
+    }
+    // Validate the complete History tree before opening the store: it can
+    // access WAL/object files as well as the declared main SQLite path.
+    validate_existing_fixture_path(requested, &app_data)?;
+    validate_existing_fixture_path(requested, &current_file)?;
+    validate_no_symlinks(&app_data)?;
+    let scene: Value = serde_json::from_slice(&fs::read(&current_file)?)?;
+    if scene["type"] != "excalidraw" {
+        return Err(io::Error::other("pending drawing is invalid").into());
+    }
+    let history_database = PathBuf::from(
+        manifest["historyDatabase"]
+            .as_str()
+            .ok_or_else(|| io::Error::other("history database is missing"))?,
+    );
+    validate_existing_fixture_path(requested, &history_database)?;
+    let store = HistoryStore::open(&app_data)?;
+    if store.database_path() != history_database {
+        return Err(io::Error::other("history database path mismatch").into());
+    }
+    let identity = store
+        .load_active_document_identity(&current_file.display().to_string())?
+        .ok_or_else(|| io::Error::other("pending drawing has no active History identity"))?;
+    if manifest["documents"]["pendingIssue"]["documentId"].as_str()
+        != Some(identity.document_id.as_str())
+    {
+        return Err(
+            io::Error::other("pending drawing identity differs from fixture manifest").into(),
+        );
+    }
+    let recorded_at = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
+    store.record_maintenance_issue(
+        &identity.document_id,
+        "fixture_pending",
+        "fixture_preparation",
+        recorded_at,
+    )?;
+    Ok(
+        json!({"root": requested, "documentId": identity.document_id, "currentFile": current_file,
+        "backendSeeded": true, "nativeVerified": false,
+        "nextStep": "Reopen Version History, then run native-macos-validation readiness. A later Save can clear this synthetic pending issue."}),
+    )
+}
+
+fn validate_no_symlinks(directory: &Path) -> io::Result<()> {
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        if kind.is_symlink() {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "fixture History tree contains a symbolic link",
+            ));
+        }
+        if kind.is_dir() {
+            validate_no_symlinks(&entry.path())?;
+        }
+    }
     Ok(())
 }
 
@@ -444,7 +582,7 @@ fn ipc_error(error: excalidraw_desktop_lib::commands::error::IpcError) -> io::Er
 
 #[cfg(test)]
 mod tests {
-    use super::validate_new_root;
+    use super::{prepare, refresh_pending, validate_existing_fixture_path, validate_new_root};
     use std::{fs, io, path::PathBuf};
     use uuid::Uuid;
 
@@ -488,5 +626,52 @@ mod tests {
             validate_new_root(&outside).unwrap_err().kind(),
             io::ErrorKind::PermissionDenied
         );
+    }
+
+    #[tokio::test]
+    async fn refreshes_only_the_manifest_bound_synthetic_pending_identity(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let root = validate_new_root(&test_path())?;
+        fs::create_dir(&root)?;
+        let manifest = prepare(&root).await?;
+        fs::write(
+            root.join("fixture-manifest.json"),
+            serde_json::to_vec(&manifest)?,
+        )?;
+        let result = refresh_pending(&root)?;
+        assert_eq!(result["nativeVerified"], false);
+        assert_eq!(
+            result["documentId"],
+            manifest["documents"]["pendingIssue"]["documentId"]
+        );
+        let mut forged = manifest;
+        forged["documents"]["pendingIssue"]["documentId"] = serde_json::json!("wrong-identity");
+        fs::write(
+            root.join("fixture-manifest.json"),
+            serde_json::to_vec(&forged)?,
+        )?;
+        assert!(refresh_pending(&root)
+            .unwrap_err()
+            .to_string()
+            .contains("identity differs"));
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_internal_symlink_escape_before_refresh_writes() -> io::Result<()> {
+        use std::os::unix::fs::symlink;
+        let root = validate_new_root(&test_path())?;
+        fs::create_dir(&root)?;
+        symlink(std::env::temp_dir(), root.join("home"))?;
+        assert_eq!(
+            validate_existing_fixture_path(&root, &root.join("home"))
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::PermissionDenied
+        );
+        fs::remove_file(root.join("home"))?;
+        fs::remove_dir(root)
     }
 }

@@ -1,46 +1,20 @@
 # Local Version History visual checklist
 
-**当前性能进度（2026-10-04）：** M5 Pro物理baseline startup-idle已取得[有效PASS](local-version-history-t049/physical-startup-20261004/corrected/startup-idle.json)：10次editable启动、61个idle样本，启动P95 1769.799375ms、进程树RSS P95 315113472bytes。首次错误构建导致的INVALID保留在[同次记录](local-version-history-t049/physical-startup-20261004/README.md)，修正仅是使用Tauri CLI custom-protocol构建，未改变timeout/断言。候选启动、双方canvas/soak及History专项尚未执行，不预支T049/T052/T054完成；H4/H5完成结论保持。
+**当前状态与证据：** 以[本地版本历史验证索引](local-version-history-validation-index.md)为 Feature 004 唯一当前状态入口。本表只定义 T048 视觉 walkthrough 的观察范围、流程和证据边界；具体 PASS/FAIL/BLOCKED 及包身份不在此重复维护。
 
-**最新结论（2026-10-04）：T058准备与窄入口、H4/T048已通过。** [Owner完整记录](local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json)保留各组结果与旧FAIL；原包`2c13f50`完成集中体验，文案修订包`eb961ca`仅对pending错误正文进行[定点复验](local-version-history-t059/component-first/inline-feedback/pending-copy/native-report.json)，owner明确“接受，关闭这项”。依据既定按影响复验规则保留未变项接受，不把旧包观察移植为新包全量运行。Recovery沿用未受影响的既有安全证据；Reduce Motion已恢复关闭。H5状态同步完成，owner已授权本轮private提交；T049按owner新决定仅M5 Pro物理配对，T052完整索引与T054最终接受仍待其后，不宣称phase7完成。
-
-### 2026-10-04 已完成观察（当前）
-
-| 组 | 结果 | 实际观察及包边界 |
-| --- | --- | --- |
-| W1 Light | PASS | 文件名、版本信息、Current Drawing与固定操作可读无裁切；`2c13f50` |
-| W2 Preview/确认 | PASS | 只读区分、Exit、Restore确认/Cancel、焦点外观与返回；`2c13f50` |
-| W3 长列表/行反馈 | PASS | 50行顶/中/底、菜单目标、Mark/Unmark目标行提示及约3秒恢复；`2c13f50` |
-| W4 Dark/300px | PASS | AX splitter值300，文字/长提示/操作无裁切；`2c13f50` |
-| W5 异常 | PASS | Unavailable与Conflict由owner分别接受；pending通用正文经owner要求删除，在`eb961ca`包定点接受。未把dormant variants称为生产验证 |
-| Recovery影响范围 | 复用适用证据 | Recovery UI/持久化路径未改，沿用T050/T038–T044；不新增History专属Recovery屏 |
-| W6 Focus/Reduce Motion | PASS | 主路径及Dark紧凑组含焦点，系统API确认Reduce Motion=true时owner通过，结束后owner恢复且API=false |
-
-具体原始回复、先前fixture准备失败及修正见[owner记录](local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json)。新包仅改变通用错误正文，按既定影响规则复用未变观察，不把两次包身份合并。
-
-**本轮过程记录（2026-10-04，验收收尾前）：** 复用产品 `2c13f50` 的同一封存 production 包，未重建或重启；[窄原生入口](local-version-history-t059/component-first/inline-feedback/native-entry-report.json) PASS（1280×760、fresh route、正确文档与 fixture 字节未变）。旧0窗口 BLOCKED保留，恢复原因未确定。[状态续查](local-version-history-t059/component-first/inline-feedback/native-preparation-followup.json)确认50版本、Unavailable与实际pending/error呈现；pending fixture曾被成功checkpoint清除，已在保存稳定后恢复，原失败保留为准备失败。
-
-[本轮owner记录](local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json)：Unavailable、Conflict、Light主路径及Dark/300px/Reduce Motion已明确PASS；用户提供的[截图](local-version-history-t059/component-first/inline-feedback/pending-owner-screenshot.png)确认pending说明和Try again可见，但owner认为通用状态说明无帮助，已按允许的删除方案省略正文，定向测试47项、typecheck/lint与状态浏览器复验通过，待新包定点确认。系统Reduce Motion由owner恢复，API已核实关闭。I5包准备已完成，其余原生事实并入T058/H4，不新设独立gate。T058/T048/H5尚不提前关闭。
-
-[T049当前预检](local-version-history-t059/component-first/inline-feedback/performance-preflight.json)保留原VM版本不符记录；2026-10-04 owner明确Parallels不可用，本轮仅M5 Pro物理机完整基线／候选配对，跳过VM。基线测试binary已重新构建并绑定，尚无本轮有效性能配对，T052/T054与phase7未完成。
-
-**此前状态（2026-10-04）：无背景版本行内短提示已获owner局部Penpot批准，source revision108及规范同步，实现、unit87/87、typecheck、lint/format和受影响browser复验完成。** 过程中的测试定位失败与hooks修复如实保留，见[增量证据](local-version-history-t059/component-first/inline-feedback/README.md)。新production包已一次seal PASS（产品commit `2c13f50`，SHA-256 `6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4`），[manifest](local-version-history-t059/component-first/inline-feedback/package-manifest.json)保存精确身份；新包入口及owner原生复查待执行；894228a包的既有定向owner接受保持原身份。T058/T048、T049有效配对、T052索引和T054最终接受未完成；不预支Phase7或发布。
-
-**此前交接状态（2026-09-30）**：产品包 `894228a` 的反馈位置/4秒生命周期、细滚动条、History info hover 经 owner 定向复查通过，当前通知外观可接受；见 `local-version-history-t059/component-first/owner-review.json` 的 followup。行内短提示为非阻塞优化，本轮不实施。H4其余必要观察尚未完整确认，H5/T048未完成。下方旧包PASS/FAIL为历史，不能移植为894228a全范围结论；Mark轻微跳动已被owner明确延后，不再作为当前必须修复项。
-
-**此前状态（2026-09-30，component-first H0–H3完成）**：共享组件目录、History anatomy、信息入口与Penpot源/七屏已同步；组件82项、定向browser及原有5项语义检查通过，primary完成代表组合渲染抽检。详见[执行记录](local-version-history-t059/component-first/README.md)。新原生候选包待构建/复查，T048与Phase7未完成，Mark微动仍owner-deferred。下文保留历史快照。
-
-**当前设计入口（2026-09-30）**：[唯一高保真目录](../design/local-version-history/high-fi/README.md)包含本轮已批准的7张画板。旧 task/revision 路径仅是下文历史证据的原始记录，可在 Git `45630f81c429ba30effe12118c200f193e713745` 中恢复。本轮只整理资产与引用，不新增实现或原生验收结论。
-
-**历史状态（2026-09-29，暂停等待 Penpot Review）**：负责人确认 `70132eb` 包的 Tab tooltip 正常；Mark 区域轻微肉眼弹跳真实性未确定，负责人要求停止修复。History 整体设计一致性另行纠正：共享系统字体标准已确认，Penpot 回填至 quick-check revision 98，新增 07 Unavailable 草稿，140 个文字角色绑定检查无差异、文件校验 0 错误。负责人要求完成回填与一次抽查后停止；代码对齐保持 WIP，typecheck 和 5 项定向测试失败，未进行修后浏览器/原生验证。详见 [Penpot Review 记录](local-version-history-t059/resume-20260929/penpot-backfill-review.json)。T048/Phase 7 未完成。
+T048 当前接受范围包含 Light/Dark、1280 × 760、默认 360 px 与可调整到 300 px、列表及行操作、Preview/Restore、异常提示、焦点外观和 reduced motion。集中 walkthrough 的真实结果与 package 边界见索引所链接的[owner 原始记录](local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json)。历史准备失败、旧包 FAIL/BLOCKED 和旧审批仍保留在下方记录，均不得覆盖当前索引。
 
 
-**Current gate**: T004 low/high-fidelity baseline APPROVED; T048 revised low/high-fidelity APPROVED; production visual acceptance FAIL pending focused Mark fix
+## 2026-09-29 walkthrough snapshot (historical)
+
+The following filled record describes the package and owner session from 2026-09-29. It is preserved for traceability; use the current validation index above for today's verdict.
+
+**Gate at that time**: T004 low/high-fidelity baseline APPROVED; T048 revised low/high-fidelity APPROVED; production visual acceptance pending focused Mark fix
 **T004 low/high-fidelity owner approval date**: 2026-09-23
 **T048 revised low-fidelity owner approval date**: 2026-09-27
-**T048 revised high-fidelity owner approval date**: 2026-09-28; approved screens and token roles: [`docs/design/local-version-history/high-fi/t048/`](../design/local-version-history/high-fi/t048/README.md)
+**T048 revised high-fidelity owner approval date**: 2026-09-28; approved screens and token roles: [current high-fi package](../design/local-version-history/high-fi/README.md)
 
-## Current execution contract: one owner walkthrough
+## Walkthrough procedure: one owner session
 
 Use this section for the next production-package visual acceptance. The policy decision and evidence split are recorded in the [native visual validation contract](local-version-history-acceptance-contract.md). The per-screen collection matrix below is retained as the historical T048 plan; it is not a requirement to create a separate capture, collection, or AI review for every row.
 
@@ -48,7 +22,7 @@ The walkthrough uses one identified production package and one owner session. Ke
 
 Do not launch or activate the packaged app until the operator has confirmed that the desktop is available, as required by the decision record. Complete package preparation and state preparation before arranging the walkthrough. If a required state cannot be established or inspected, record `BLOCKED`, the reason, and the next preparation step; do not infer `PASS`. Record an observed mismatch as `FAIL` with a concise description. A browser result may inform preparation but cannot fill in a native-package result.
 
-### Fillable walkthrough record
+### Historical filled walkthrough record (2026-09-29)
 
 Record package and environment details once, then complete each row during the same owner walkthrough. Add rows only when an observed issue requires a focused recheck; do not expand the session into a new full per-screen review by default.
 
@@ -109,9 +83,9 @@ Record package and environment details once, then complete each row during the s
 
 The T004 baseline and T048 refinement each have six independently approved high-fidelity frames. T048's approved source, screen digests and token-role mapping are in `docs/design/local-version-history/high-fi/t048/`. The low-fidelity prototype remains the exhaustive interaction-state reference for loading, empty, permission, unavailable-resource, conflict, generic-error, delete-confirmation, focus-return, and reduced-motion behavior. Production rendering remains in the package-level gate below.
 
-## Production visual acceptance
+## Production visual acceptance snapshot (historical; see the index above for current status)
 
-**Current verdict:** HISTORY-01 visual review `FAIL` on two HIGH style mismatches; capture integrity for that package is `PASS`. T048 has not passed. UI correction, new exact-package capture/review, the remaining required states, and the separate product-owner decision are pending. No correction is recorded as complete here.
+**Verdict at that time:** HISTORY-01 visual review `FAIL` on two HIGH style mismatches; capture integrity for that package is `PASS`. This was the old package result before the 2026-10-04 owner walkthrough and focused copy correction. It remains bound to the package below and does not state today's T048 verdict.
 
 The T004 and T048 design approvals are complete. The old `e873aac` package passed T047 native entry; its pre-remediation `HISTORY-01` image and verdict remain historical. The current package passed the separate T058 native entry check and produced a valid HISTORY-01 capture. The independent [HISTORY-01 review](./local-version-history-t048/window-repair-004/history01-review.md) found two HIGH style mismatches: Mark current button geometry/hierarchy and Restore primary accent styling. The capture is bound to product `9c1e6a37a10b72ec8213af9d3e45d81667ad73c7` and package SHA-256 `2420a8a8f5af8253c7ebcd90747e8e0430c1a7cee9d65585322c7e9e5e6aeae3`; see the [collection record](./local-version-history-t048/window-repair-004/README.md). The [capture incident report](./local-version-history-t048-harness-incident.md) records the earlier window-lookup block and separate HISTORY-06 geometry question. The approved interaction decision keeps the drawer at a 360 px default and permits edge dragging to 300 px at any viewport; it does not use a viewport breakpoint ([interaction contract](../design/local-version-history/interaction.md)).
 
@@ -124,9 +98,9 @@ The T004 and T048 design approvals are complete. The old `e873aac` package passe
 | Executable | Absolute path and SHA-256 | [T058 package manifest](./local-version-history-t058/postfix-003/package-manifest.json): SHA-256 `863cf487b9fbbceec3c1341f2a09b05c3a0f293334e7e92137daebdb753c8a81` |
 | Environment | macOS version/build, filesystem, display scale | [HISTORY-01 collection](./local-version-history-t048/window-repair-004/collection-HISTORY-01/environment.json): macOS 26.6.2, arm64, backing scale 2; filesystem type is not recorded in this collection |
 | Window | Native logical bounds, exactly 1280 × 760, two stable samples | [HISTORY-01 readiness](./local-version-history-t048/window-repair-004/collection-HISTORY-01/capture-readiness.json): logical 1280 × 760, frontmost, two stable samples; capture integrity PASS |
-| Review identity | Independent reviewer and product-owner decision | Independent reviewer: [FAIL, two HIGH findings](./local-version-history-t048/window-repair-004/history01-review.md); product-owner decision: `PENDING` |
+| Review identity | Independent reviewer and product-owner decision | Historical package reviewer: [FAIL, two HIGH findings](./local-version-history-t048/window-repair-004/history01-review.md); product-owner decision at that time: `PENDING` |
 
-### Human review matrix
+### Historical per-screen review matrix
 
 Review the following states on the exact package. Record `PASS`, `FAIL`, or
 `BLOCKED` for every row and attach the package identity and reviewer report.
@@ -163,13 +137,13 @@ menu collector, or the approved design archive.
 | Keyboard focus and focus return          | `HISTORY-FOCUS`（焦点行）                                                     | More Actions、Preview、modal Cancel、Close 的焦点外观及关闭后的焦点返回；键盘行为由 T023 负责 |
 | Reduced motion                           | `HISTORY-REDUCED-MOTION`                                                      | —                                                                                             |
 
-所有 gate 的状态建立方式均为 `operator-assisted`，不由 fixture 或 collector 自动证明。不能在 production package 上建立或观察的状态记为 `BLOCKED`，观察到不符则记为 `FAIL`；不得从其余截图推定通过。当前 capture 与两项 HIGH 样式不符均绑定 package `2420a8a8f5af8253c7ebcd90747e8e0430c1a7cee9d65585322c7e9e5e6aeae3`。较早窗口查询失败及修复分析见[incident report](./local-version-history-t048-harness-incident.md)；该报告中的 HISTORY-06 可达性问题由负责人随后作出独立尺寸决定：默认 360 px，可拖动至 300 px，不受视口 breakpoint 限制，参见[interaction contract](../design/local-version-history/interaction.md)。
+所有 gate 的状态建立方式均为 `operator-assisted`，不由 fixture 或 collector 自动证明。不能在 production package 上建立或观察的状态记为 `BLOCKED`，观察到不符则记为 `FAIL`；不得从其余截图推定通过。该历史 capture 与两项 HIGH 样式不符均绑定 package `2420a8a8f5af8253c7ebcd90747e8e0430c1a7cee9d65585322c7e9e5e6aeae3`。较早窗口查询失败及修复分析见[incident report](./local-version-history-t048-harness-incident.md)；该报告中的 HISTORY-06 可达性问题由负责人随后作出独立尺寸决定：默认 360 px，可拖动至 300 px，不受视口 breakpoint 限制，参见[interaction contract](../design/local-version-history/interaction.md)。
 
 ### 视觉采集范围适配结论（2026-09-27）
 
 - `HISTORY` 是独立于 003 `VSL` / `FINAL` 的采集计划；它只含上表 12 个 History gate，不带 HF2 六屏、T023b 原生菜单图谱或虚构的 PNG pixel baseline。六个 high-fi 画面绑定 frame ID，补充状态绑定获批 low-fi manifest；plan 同时绑定 registry、fixture、精确 production package 和各自 SHA-256。
 - 聚焦的 prepare/capture 测试 **17/17 PASS**，ESLint、Prettier 和 `git diff --check` PASS；T047 封存包的 `HISTORY` prepare 及 capture 入口身份预检 PASS。此结论只覆盖范围与采集入口，不是 production 视觉 verdict。
-- 首次正式采集没有已保存图纸，Version History 为 disabled；第二次虽有图纸，代理提示却引用产品中不存在的 `File > Open`。两次均在截图前停止，保留各自计划与空 collection。后续适配器将 digest-bound 图纸作为 production executable 的启动参数，沿用 T047 已验证的打开路径。第三次修复前 capture integrity PASS 和截图仍见 `docs/evidence/local-version-history-t048/`。当前 package `9c1e6a37a10b72ec8213af9d3e45d81667ad73c7` 的新 HISTORY-01 collection capture integrity PASS，但独立 reviewer 判定两项 HIGH 样式偏差为 FAIL；详见[审查报告](./local-version-history-t048/window-repair-004/history01-review.md)。UI 修复和新包复审待完成。
+- 首次正式采集没有已保存图纸，Version History 为 disabled；第二次虽有图纸，代理提示却引用产品中不存在的 `File > Open`。两次均在截图前停止，保留各自计划与空 collection。后续适配器将 digest-bound 图纸作为 production executable 的启动参数，沿用 T047 已验证的打开路径。第三次修复前 capture integrity PASS 和截图仍见 `docs/evidence/local-version-history-t048/`。当时 package `9c1e6a37a10b72ec8213af9d3e45d81667ad73c7` 的新 HISTORY-01 collection capture integrity PASS，但独立 reviewer 判定两项 HIGH 样式偏差为 FAIL；详见[审查报告](./local-version-history-t048/window-repair-004/history01-review.md)。后续 UI 修复与 2026-10-04 owner walkthrough 结论见当前验证索引。
 
 ### Separate evidence owners for SC-008
 
@@ -181,10 +155,11 @@ menu collector, or the approved design archive.
   owns list metadata, keyboard traversal, visible focus, preview exit, focus
   return, state roles, and reduced-motion assertions. Browser evidence is not
   a native-package visual verdict.
-- **T048 visual evidence** owns the human observations in the matrix above:
+- **T048 visual evidence (historical package)** owns the observations in the
+  matrix above:
   Light/Dark rendering, 1280 × 760 composition, readability, current versus
   preview distinction, error clarity, focus appearance, and clipping. The
-  current HISTORY-01 reviewer verdict is FAIL; the independent [review report](./local-version-history-t048/window-repair-004/history01-review.md)
+  old HISTORY-01 reviewer verdict was FAIL; the independent [review report](./local-version-history-t048/window-repair-004/history01-review.md)
   records two HIGH style mismatches. The product-owner decision remains
   separate and pending.
 

@@ -2,7 +2,16 @@
 
 **2026-10-04 owner范围修订：** Parallels Desktop已不可用；本轮004/T049跳过虚拟机，仅在M5 Pro物理机执行既定完整工作负载的基线／候选配对。保留历史VM记录，不移植或伪造VM PASS；环境、二进制、完整样本和真实diagnostic verdict仍必需，预算失败仍不升级为发布硬门槛。
 
-**状态（2026-09-29）：执行方式已按负责人批准的轻量验收决策对齐；实际原生/视觉仍未完成。** 本合同落实 `.handoff/native-vision-validation-contract.md` 及随后“按计划推进”的授权；产品行为和已批准设计不变。新候选包见 [package manifest](local-version-history-t059/resume-20260929/package-manifest.json)。旧 capture 和 review 记录保留为历史证据，不移植其结论。
+本文件是本feature的当前执行合同，落实已批准的轻量验收决定；产品行为和设计权威不变。当前完成状态、实际包身份和下一步只在[验证索引](local-version-history-validation-index.md)维护，原始报告保持原身份。`.handoff/native-vision-validation-contract.md`是历史决策背景，其中当时的暂停、提交限制及候选包状态不作为当前状态复制。
+
+## 默认执行入口
+
+先从当前任务定位本合同和验证索引；使用[组件目录的五行执行记录](../design/components.md#最小执行记录)，在现有任务或实施说明中写明本次变更、仍适用的证据、受影响的复验范围及未就绪项。此记录由agent完成，不增加owner审批或新文件。视觉设计以批准的design/component spec为准，本合同决定证明分工，索引记录实际结果。
+
+- 包、原生入口、状态准备各自报告结果；任何一项准备未完成，都不能据此邀请owner判断缺失的画面。技术就绪不等于视觉PASS或负责人接受。
+- 修复只重新打开有具体影响的证据。仅文档/工具调整不自动要求重建产品或重验已接受画面；包复用仍须核对实际artifact与运行时输入，不能仅凭“看起来没改UI”。
+- 原生会话按下面W1–W6组织，复用未变观察。准备问题先由agent定位，状态稳定后再协调桌面；不得用持续人工尝试替代准备。
+- T049等待桌面不阻止T052整理现有事实/缺口。T054材料可同步准备，是否接受剩余事项由owner明确决定；暂停一项不自动暂停独立任务，接受决定也不把未执行测试变成完成。
 
 ## 事实分工与完成信号
 
@@ -41,11 +50,22 @@
 
 ## 结果、失败和复验
 
+### 已有准备工具
+
+从选定 product worktree 运行，先查看对应 `--help`。下面参数均指实际已有 artifact 或新建隔离目录，不是新的验收门槛：
+
+- `node scripts/native-macos-validation.mjs seal --manifest <已有manifest>`：验证实际包及 runtime inputs 后复用原身份；不因 docs/tool-only 修改重建，不覆盖不匹配的旧 manifest。
+- `node scripts/native-macos-validation.mjs readiness --manifest <包manifest> --pid <owned PID> --fixture <ROOT/fixture-manifest.json> --scenario pendingIssue|unavailable|longList`：只读检查目标进程、合成 fixture、保存状态及 AX 页面；可用 `--report <新路径>` 保存结果。`preparation-only` 不表示视觉或 owner PASS。
+- pending 在正常 Save 后被清除时，使用 `cargo run --manifest-path src-tauri/Cargo.toml --example prepare_history_visual_fixture -- refresh-pending <ROOT>`，随后重新打开 History 并检查 readiness；只允许工具创建的临时 fixture，不能对日常 profile 操作。
+- `node scripts/performance-build.mjs --mode common|history --repo <目标checkout> --target-dir <所有worktree以外的新绝对目录>`：固定使用 Tauri CLI 构建独立测试 binary，检查协议、模式和内嵌资源。`BUILD_READY` 不表示 T049 测量已运行；执行真实构建或测量前仍遵守时长预告和桌面协调。
+
+新增 readiness 的 AX 查询已通过编译与针对性测试，但尚未完成实际 WKWebView 运行确认；无法观察时返回 BLOCKED，不回填既有验收为新工具 PASS。
+
 一次记录 package、系统版本、主题/逻辑窗口大小、fixture、时间和检查者；逐项记录 PASS/FAIL/BLOCKED 与具体问题。文件字节、operation ID、故障阶段等仅由其适用的 process 证据提供，不向普通视觉行强加无关字段。保留原始报告，不新增全链 publisher/aggregate 作为完成条件。
 
 同一阻塞不原样重跑；先区分 product/harness/environment/specification。修复后的复验范围由实际影响决定：样式局部修复检查相应组件，公共 theme/font/layout 改动扩大到受影响状态，后端数据路径改动回到其可靠性 owner。任何 required 自动失败仍保留，人工意见不能覆盖。
 
-本轮先完成合同对齐与状态准备。没有立即执行 adversarial review；后续确有无法解决的 proof-owner、依赖、状态可达或证据合同矛盾时，依据具体 delta/incident 对最小范围使用 `spec-adversarial-review`，不为获得“零发现”反复 review。
+只有具体新证据造成无法解决的证明归属、依赖或状态可达冲突时，才对该最小范围复审；不为获得“零发现”反复审查整个feature。
 
 ## Recovery 范围决定已落实
 

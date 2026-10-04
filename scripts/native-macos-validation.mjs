@@ -1137,18 +1137,25 @@ function gitState(repoRoot) {
   };
 }
 
-export function runtimeProductIdentitySha256(repoRoot, commit) {
-  const ownershipMapPath = path.join(
-    repoRoot,
-    "e2e/visual/003EvidenceOwnership.json",
+function runtimePathPrefixes(repoRoot, commit) {
+  const ownershipMap = JSON.parse(
+    runRequired(
+      "git",
+      ["show", `${commit}:e2e/visual/003EvidenceOwnership.json`],
+      { cwd: repoRoot },
+    ),
   );
-  const ownershipMap = JSON.parse(fs.readFileSync(ownershipMapPath, "utf8"));
   const prefixes = ownershipMap.productIdentity?.pathPrefixes;
   if (!Array.isArray(prefixes) || prefixes.length === 0) {
     throw new NativeValidationBlockedError(
       "product identity path prefixes are missing",
     );
   }
+  return prefixes;
+}
+
+export function runtimeProductIdentitySha256(repoRoot, commit) {
+  const prefixes = runtimePathPrefixes(repoRoot, commit);
   const tree = runSync("git", ["ls-tree", "-r", "--full-tree", commit], {
     cwd: repoRoot,
   });
@@ -1186,6 +1193,100 @@ export function runtimeProductIdentitySha256(repoRoot, commit) {
     );
   }
   return sha256Canonical(entries);
+}
+
+export async function verifyReusableManifest({
+  repoRoot,
+  manifest,
+  inspect = inspectBundle,
+}) {
+  const state = gitState(repoRoot);
+  if (
+    manifest.schemaVersion !== 1 ||
+    manifest.repositoryRoot !== repoRoot ||
+    !/^[0-9a-f]{40,64}$/u.test(manifest.gitCommit ?? "") ||
+    !state.commit ||
+    state.status === null ||
+    !Array.isArray(manifest.artifacts) ||
+    !["executableSha256", "packageSha256", "artifactSha256"].every((field) =>
+      /^[0-9a-f]{64}$/u.test(manifest[field] ?? ""),
+    ) ||
+    JSON.stringify(manifest.buildCommand) !==
+      JSON.stringify(["pnpm", ...PRODUCTION_APP_BUILD_ARGS])
+  ) {
+    throw new NativeValidationBlockedError(
+      "Invalid manifest repository or commit identity",
+    );
+  }
+  const prefixes = [
+    ...new Set([
+      ...runtimePathPrefixes(repoRoot, manifest.gitCommit),
+      ...runtimePathPrefixes(repoRoot, state.commit),
+      "e2e/visual/003EvidenceOwnership.json",
+      "src-tauri/build.rs",
+    ]),
+  ];
+  const changed = [
+    runRequired("git", ["diff", "--no-renames", "--name-only", "-z", "HEAD"], {
+      cwd: repoRoot,
+    }),
+    runRequired("git", ["ls-files", "--others", "--exclude-standard", "-z"], {
+      cwd: repoRoot,
+    }),
+  ].flatMap((output) => output.split("\0").filter(Boolean));
+  const dirtyRuntimePaths = changed.filter((file) =>
+    prefixes.some((prefix) => file === prefix || file.startsWith(prefix)),
+  );
+  if (dirtyRuntimePaths.length > 0) {
+    throw new NativeValidationBlockedError(
+      `Uncommitted runtime inputs: ${dirtyRuntimePaths.join(", ")}`,
+    );
+  }
+  const sealed = runtimeProductIdentitySha256(repoRoot, manifest.gitCommit);
+  const current = runtimeProductIdentitySha256(repoRoot, state.commit);
+  if (sealed !== current) {
+    throw new NativeValidationBlockedError(
+      "Runtime inputs changed since the sealed package; choose a new manifest path for a fresh build",
+    );
+  }
+  // Keep the established runtime identity digest unchanged. The Tauri build
+  // script is a necessary input omitted by the legacy ownership map.
+  const changedBuildInputs = runRequired(
+    "git",
+    [
+      "diff",
+      "--name-only",
+      manifest.gitCommit,
+      state.commit,
+      "--",
+      "src-tauri/build.rs",
+    ],
+    { cwd: repoRoot },
+  );
+  if (changedBuildInputs) {
+    throw new NativeValidationBlockedError(
+      "Build inputs changed since the sealed package: src-tauri/build.rs",
+    );
+  }
+  const observed = await inspect(manifest.appPath, repoRoot);
+  const mismatches = [
+    ...compareManifest(manifest, observed),
+    ...compareBundleContract(
+      await productionBundleContract(repoRoot),
+      observed,
+    ),
+  ];
+  if (mismatches.length > 0) {
+    throw new NativeValidationBlockedError(
+      `Sealed package identity mismatch: ${JSON.stringify(mismatches)}`,
+    );
+  }
+  return {
+    packageProvenanceCommit: manifest.gitCommit,
+    validatorProvenanceCommit: state.commit,
+    runtimeInputsSha256: current,
+    observed,
+  };
 }
 
 function readPlistValue(plistPath, key) {
@@ -1489,6 +1590,48 @@ export async function waitForHistoryMenuReady(
   };
 }
 
+export function windowCountAppleScript(pid) {
+  return `tell application "System Events"
+  set appProcess to first application process whose unix id is ${Number(pid)}
+  return count of windows of appProcess
+end tell`;
+}
+
+export async function waitForUniqueHistoryWindow(
+  inspect,
+  {
+    timeoutMs = HISTORY_MENU_READY_TIMEOUT_MS,
+    now = Date.now,
+    delay = wait,
+  } = {},
+) {
+  const deadline = now() + timeoutMs;
+  let attempts = 0;
+  let error = null;
+  do {
+    attempts += 1;
+    try {
+      const count = Number(await inspect());
+      if (!Number.isSafeInteger(count) || count < 0)
+        throw new Error("AX window count must be a nonnegative integer");
+      if (count === 1) return { status: "PASS", attempts, windowCount: count };
+      if (count > 1)
+        return {
+          status: "BLOCKED",
+          attempts,
+          windowCount: count,
+          error: "Owned PID has multiple AX windows; no actions performed",
+        };
+      error = "Owned PID has no AX window before the readiness deadline";
+    } catch (cause) {
+      error = String(cause.message ?? cause);
+    }
+    if (now() >= deadline) break;
+    await delay(Math.min(250, Math.max(0, deadline - now())));
+  } while (now() <= deadline);
+  return { status: "BLOCKED", attempts, error };
+}
+
 export function historyPanelObservationAppleScript(pid, fileName) {
   if (typeof fileName !== "string" || fileName.length === 0) {
     throw new TypeError("History target filename is required");
@@ -1534,6 +1677,383 @@ export function parseHistoryPanelObservation(output) {
     closeCount,
     pass: headingCount > 0 && fileNameCount > 0 && closeCount > 0,
   };
+}
+
+// Read app-owned accessibility semantics only. Never navigate, activate, or
+// mutate the app while determining whether an operator's prepared state exists.
+export function historyReadinessAppleScript(pid, fileName) {
+  return `tell application "System Events"
+  set appProcess to first application process whose unix id is ${Number(pid)}
+  tell appProcess
+    set counts to {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+    set axElements to entire contents of front window
+    repeat with elementRef in axElements
+      set axElement to contents of elementRef
+      set elementName to ""
+      try
+        set elementName to (name of axElement) as text
+      end try
+      if elementName is ${appleScriptQuote(fileName)} then
+        try
+          if value of attribute "AXSelected" of axElement is true then set item 4 of counts to (item 4 of counts) + 1
+        end try
+        if role of axElement is "AXRadioButton" then
+          try
+            if value of axElement is 1 then set item 4 of counts to (item 4 of counts) + 1
+          end try
+        end if
+      end if
+      if elementName contains ", unsaved changes" then set item 5 of counts to (item 5 of counts) + 1
+      if role of axElement is "AXStaticText" then
+        set elementValue to (value of axElement) as text
+        if elementValue is "Version History" then set item 1 of counts to (item 1 of counts) + 1
+        if elementValue is ${appleScriptQuote(fileName)} then set item 2 of counts to (item 2 of counts) + 1
+        if elementValue is "Version history could not be loaded" then set item 6 of counts to (item 6 of counts) + 1
+        if elementValue is "Selected version · unavailable" then set item 8 of counts to (item 8 of counts) + 1
+        if elementValue contains "Your current drawing is unchanged." then set item 9 of counts to (item 9 of counts) + 1
+        if elementValue ends with " versions shown" then
+          try
+            set displayedCount to (text 1 thru ((length of elementValue) - (length of " versions shown")) of elementValue) as integer
+            if item 12 of counts is 0 then
+              set item 12 of counts to displayedCount
+            else
+              set item 12 of counts to -1
+            end if
+          on error
+            set item 12 of counts to -1
+          end try
+        end if
+        if elementValue is "Loading version history" then set item 13 of counts to (item 13 of counts) + 1
+      else if role of axElement is "AXButton" then
+        if elementName is "Close version history" then set item 3 of counts to (item 3 of counts) + 1
+        if elementName is "Try again" and enabled of axElement then set item 7 of counts to (item 7 of counts) + 1
+        if elementName is "Preview" and not enabled of axElement then set item 10 of counts to (item 10 of counts) + 1
+        if elementName is "Restore this version" and not enabled of axElement then set item 11 of counts to (item 11 of counts) + 1
+        if elementName is "Mark current version" and enabled of axElement then set item 14 of counts to (item 14 of counts) + 1
+        if elementName starts with "More actions for " and enabled of axElement then set item 15 of counts to (item 15 of counts) + 1
+      end if
+    end repeat
+    set AppleScript's text item delimiters to tab
+    return counts as text
+  end tell
+end tell`;
+}
+
+export function parseHistoryReadiness(
+  output,
+  scenario,
+  requiredVersionCount = 50,
+) {
+  const counts = String(output).trim().split("\t").map(Number);
+  if (
+    counts.length !== 15 ||
+    counts.some((count) => !Number.isSafeInteger(count) || count < 0)
+  ) {
+    throw new NativeValidationBlockedError(
+      "History readiness AX observation must contain fifteen nonnegative counts",
+    );
+  }
+  const [
+    heading,
+    filename,
+    close,
+    selectedSavedTab,
+    dirtyTabs,
+    error,
+    retry,
+    unavailable,
+    reason,
+    previewDisabled,
+    restoreDisabled,
+    versions,
+    loading,
+    markCurrent,
+    rowMenus,
+  ] = counts;
+  const missing = [];
+  if (!heading || !filename || !close)
+    missing.push("History panel for the declared filename");
+  if (!selectedSavedTab)
+    missing.push(
+      "active saved target tab (AXSelected or selected radio value)",
+    );
+  if (dirtyTabs) missing.push("saved drawing tabs; unsaved changes remain");
+  if (loading) missing.push("loading must finish");
+  if (scenario === "pendingIssue" && (!error || !retry))
+    missing.push("pending/error heading and enabled Try again");
+  else if (
+    scenario === "unavailable" &&
+    (!unavailable || !reason || !previewDisabled || !restoreDisabled)
+  )
+    missing.push(
+      "selected unavailable version, reason, and disabled Preview/Restore",
+    );
+  else if (
+    scenario === "longList" &&
+    (versions < requiredVersionCount ||
+      error ||
+      unavailable ||
+      !markCurrent ||
+      !rowMenus)
+  )
+    missing.push(
+      `loaded long-list state showing at least ${requiredVersionCount} versions with enabled Mark current and row actions`,
+    );
+  if (
+    scenario === "longList" &&
+    (!Number.isSafeInteger(requiredVersionCount) || requiredVersionCount < 50)
+  ) {
+    throw new NativeValidationBlockedError(
+      "Long-list fixture must require at least 50 displayed versions",
+    );
+  }
+  if (!["pendingIssue", "unavailable", "longList"].includes(scenario))
+    throw new NativeValidationBlockedError(
+      "Unsupported History readiness scenario",
+    );
+  return { status: missing.length ? "BLOCKED" : "PASS", counts, missing };
+}
+
+async function existingSyntheticFixture(fixturePath, scenario) {
+  const fixture = JSON.parse(await fsp.readFile(fixturePath, "utf8"));
+  const root = await fsp.realpath(fixture.root);
+  const temp = await fsp.realpath(os.tmpdir());
+  if (!temp.startsWith("/private/var/folders/") && temp !== "/private/tmp") {
+    throw new NativeValidationBlockedError(
+      "System temp must resolve inside a macOS temporary directory",
+    );
+  }
+  const isBeneath = (base, target) => {
+    const relative = path.relative(base, target);
+    return (
+      relative !== "" &&
+      !relative.startsWith("..") &&
+      !path.isAbsolute(relative)
+    );
+  };
+  if (
+    !isBeneath(temp, root) ||
+    fixture.root !== root ||
+    fixture.nativeVerified !== false
+  ) {
+    throw new NativeValidationBlockedError(
+      "Readiness requires an existing synthetic fixture beneath system temp",
+    );
+  }
+  const document = fixture.documents?.[scenario];
+  for (const target of [
+    fixturePath,
+    fixture.profileHome,
+    fixture.workspace,
+    fixture.historyDatabase,
+    document?.currentFile,
+  ]) {
+    if (
+      typeof target !== "string" ||
+      !path.isAbsolute(target) ||
+      !isBeneath(root, target) ||
+      (await fsp.realpath(target)) !== target
+    ) {
+      throw new NativeValidationBlockedError(
+        "Fixture path is missing, symlinked, or outside the synthetic root",
+      );
+    }
+    // Detect internal symlinks even if they happen to resolve to the same root.
+    let checked = root;
+    for (const part of path.relative(root, target).split(path.sep)) {
+      checked = path.join(checked, part);
+      if ((await fsp.lstat(checked)).isSymbolicLink())
+        throw new NativeValidationBlockedError(
+          "Fixture contains a symbolic link",
+        );
+    }
+  }
+  if (
+    fixture.profileHome !== path.join(root, "home") ||
+    fixture.workspace !== path.join(root, "workspace") ||
+    Object.values(fixture.documents).filter(
+      (entry) =>
+        path.basename(entry.currentFile) ===
+        path.basename(document.currentFile),
+    ).length !== 1
+  ) {
+    throw new NativeValidationBlockedError(
+      "Fixture profile or target filename is ambiguous",
+    );
+  }
+  return { fixture, target: document.currentFile };
+}
+
+function verifyFixtureBackend(fixture, scenario, target) {
+  const document = fixture.documents[scenario];
+  const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
+  const query = `SELECT id FROM history_documents WHERE canonical_path=${quote(target)} AND state='active';
+    SELECT count(*) FROM maintenance_state WHERE document_id=${quote(document.documentId)} AND issue_code='fixture_pending';
+    SELECT count(*) FROM history_versions WHERE document_id=${quote(document.documentId)};`;
+  const [id, pending, versionCount] = runRequired("sqlite3", [
+    "-readonly",
+    fixture.historyDatabase,
+    query,
+  ]).split(/\r?\n/u);
+  if (
+    id !== document.documentId ||
+    (scenario === "pendingIssue" && Number(pending) !== 1) ||
+    (scenario === "longList" && Number(versionCount) < document.versionCount) ||
+    (scenario === "unavailable" && Number(versionCount) < 1)
+  ) {
+    throw new NativeValidationBlockedError(
+      "Synthetic backend state is missing or changed; Save can clear pending. Run refresh-pending after Save, then reopen History",
+    );
+  }
+  return {
+    documentId: id,
+    pendingIssueCount: Number(pending),
+    versionCount: Number(versionCount),
+  };
+}
+
+export async function historyReadiness({
+  repoRoot = REPO_ROOT,
+  manifestPath,
+  pid,
+  fixturePath,
+  scenario,
+}) {
+  const checks = [];
+  try {
+    if (process.platform !== "darwin" || !Number.isSafeInteger(pid) || pid <= 0)
+      throw new NativeValidationBlockedError(
+        "Readiness requires macOS and one declared owned PID",
+      );
+    const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"));
+    const identity = await verifyReusableManifest({ repoRoot, manifest });
+    checks.push(
+      makeCheck(
+        "artifact-identity",
+        "reusable package identity",
+        "PASS",
+        identity,
+      ),
+    );
+    const { fixture, target } = await existingSyntheticFixture(
+      fixturePath,
+      scenario,
+    );
+    for (const suffix of ["-wal", "-shm"]) {
+      const metadata = await fsp
+        .lstat(`${fixture.historyDatabase}${suffix}`)
+        .catch((error) => {
+          if (error.code === "ENOENT") return null;
+          throw error;
+        });
+      if (metadata?.isSymbolicLink())
+        throw new NativeValidationBlockedError(
+          "Synthetic SQLite sidecar contains a symbolic link",
+        );
+    }
+    const backendBefore = verifyFixtureBackend(fixture, scenario, target);
+    const command = runRequired("ps", ["-p", String(pid), "-o", "comm="]);
+    const peers = listAmbiguousProcesses(
+      manifest.executablePath,
+      manifest.executable,
+    );
+    if (
+      command !== manifest.executablePath ||
+      peers.length !== 1 ||
+      Number(peers[0].split(/\s+/u)[0]) !== pid
+    )
+      throw new NativeValidationBlockedError(
+        "Declared PID is not the unique manifest-bound process",
+      );
+    const environment = runRequired("ps", [
+      "eww",
+      "-p",
+      String(pid),
+      "-o",
+      "command=",
+    ]);
+    if (
+      !environment.includes(` HOME=${fixture.profileHome} `) &&
+      !environment.endsWith(` HOME=${fixture.profileHome}`)
+    )
+      throw new NativeValidationBlockedError(
+        "Owned process HOME does not match the synthetic backend profile",
+      );
+    const before = await validExcalidrawSnapshot(target);
+    if (!before)
+      throw new NativeValidationBlockedError(
+        "Synthetic drawing is absent or invalid",
+      );
+    const samples = [];
+    for (let index = 0; index < 2; index += 1) {
+      const ready = await waitForUniqueHistoryWindow(() =>
+        runAppleScript(windowCountAppleScript(pid), 5000),
+      );
+      if (ready.status !== "PASS")
+        throw new NativeValidationBlockedError(ready.error);
+      samples.push(
+        parseHistoryReadiness(
+          runAppleScript(
+            historyReadinessAppleScript(pid, path.basename(target)),
+            5000,
+          ),
+          scenario,
+          fixture.documents[scenario].versionCount,
+        ),
+      );
+      if (samples.at(-1).status !== "PASS")
+        throw new NativeValidationBlockedError(
+          samples.at(-1).missing.join("; "),
+        );
+      if (index === 0) await wait(500);
+    }
+    const after = await validExcalidrawSnapshot(target);
+    const backendAfter = verifyFixtureBackend(fixture, scenario, target);
+    if (
+      JSON.stringify(before) !== JSON.stringify(after) ||
+      JSON.stringify(samples[0]) !== JSON.stringify(samples[1])
+    )
+      throw new NativeValidationBlockedError(
+        "Prepared drawing or AX state changed between stable samples",
+      );
+    if (JSON.stringify(backendBefore) !== JSON.stringify(backendAfter))
+      throw new NativeValidationBlockedError(
+        "Synthetic backend state changed between readiness samples",
+      );
+    checks.push(
+      makeCheck(
+        "history-preparation",
+        "stable saved History scenario",
+        "PASS",
+        {
+          pid,
+          scenario,
+          target,
+          fixturePath,
+          profileHome: fixture.profileHome,
+          samples,
+          drawing: after,
+        },
+      ),
+    );
+  } catch (error) {
+    checks.push(
+      makeCheck(
+        "history-preparation",
+        "stable saved History scenario",
+        "BLOCKED",
+        { error: String(error.message ?? error) },
+      ),
+    );
+  }
+  return buildReport({
+    command: "readiness",
+    manifestPath,
+    checks,
+    scope: "preparation-only",
+    visualVerified: false,
+    ownerAccepted: false,
+  });
 }
 
 function invokeMenuItem(pid, labels) {
@@ -2062,6 +2582,12 @@ export async function createManifest({
 export async function sealProductionBundle({
   repoRoot = REPO_ROOT,
   manifestPath,
+  build = () =>
+    runSync("pnpm", PRODUCTION_APP_BUILD_ARGS, {
+      cwd: repoRoot,
+      inherit: true,
+    }),
+  inspect = inspectBundle,
 } = {}) {
   const startedAt = new Date().toISOString();
   const initialState = gitState(repoRoot);
@@ -2074,6 +2600,66 @@ export async function sealProductionBundle({
     );
     return buildReport({ command: "seal", manifestPath, startedAt, checks });
   }
+  if (!initialState.commit || initialState.status === null) {
+    checks.push(
+      makeCheck("clean-commit", "read repository HEAD and status", "BLOCKED"),
+    );
+    return buildReport({ command: "seal", manifestPath, startedAt, checks });
+  }
+  const outputPath =
+    manifestPath ?? defaultManifestPath(repoRoot, initialState.commit);
+  const existingManifest = await fsp.lstat(outputPath).catch((error) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (existingManifest) {
+    try {
+      const manifest = JSON.parse(await fsp.readFile(outputPath, "utf8"));
+      const identity = await verifyReusableManifest({
+        repoRoot,
+        manifest,
+        inspect,
+      });
+      checks.push(
+        makeCheck(
+          "manifest-reuse",
+          "unchanged sealed production package",
+          "PASS",
+          {
+            path: outputPath,
+            ...identity,
+            reused: true,
+          },
+        ),
+      );
+      return buildReport({
+        command: "seal",
+        manifestPath: outputPath,
+        startedAt,
+        checks,
+        manifest,
+      });
+    } catch (error) {
+      checks.push(
+        makeCheck(
+          "manifest-reuse",
+          "unchanged sealed production package",
+          "BLOCKED",
+          {
+            error: String(error.message ?? error),
+            reason:
+              "Existing manifests are immutable; use a new path after resolving the mismatch",
+          },
+        ),
+      );
+      return buildReport({
+        command: "seal",
+        manifestPath: outputPath,
+        startedAt,
+        checks,
+      });
+    }
+  }
   if (!initialState.clean) {
     checks.push(
       makeCheck("clean-commit", "clean git commit", "BLOCKED", {
@@ -2082,14 +2668,11 @@ export async function sealProductionBundle({
     );
     return buildReport({ command: "seal", manifestPath, startedAt, checks });
   }
-  const build = runSync("pnpm", PRODUCTION_APP_BUILD_ARGS, {
-    cwd: repoRoot,
-    inherit: true,
-  });
-  if (build.status !== 0) {
+  const buildResult = await build();
+  if (buildResult.status !== 0) {
     checks.push(
       makeCheck("production-build", "pnpm tauri build --bundles app", "FAIL", {
-        exitCode: build.status,
+        exitCode: buildResult.status,
       }),
     );
     return buildReport({ command: "seal", manifestPath, startedAt, checks });
@@ -2104,9 +2687,10 @@ export async function sealProductionBundle({
     }
     const state = gitState(repoRoot);
     const manifest = await createManifest({ repoRoot, appPath: resolvedApp });
-    const outputPath =
-      manifestPath ?? defaultManifestPath(repoRoot, state.commit);
-    await writeJson(outputPath, manifest);
+    await fsp.mkdir(path.dirname(outputPath), { recursive: true });
+    await fsp.writeFile(outputPath, `${JSON.stringify(manifest, null, 2)}\n`, {
+      flag: "wx",
+    });
     checks.push(
       makeCheck("clean-commit", "clean git commit", "PASS", {
         gitCommit: state.commit,
@@ -2269,6 +2853,18 @@ async function runNativeChecks(
         ),
       );
       if (readiness.status !== "PASS") return;
+      const windowReady = await waitForUniqueHistoryWindow(() =>
+        runAppleScript(windowCountAppleScript(child.pid), 5000),
+      );
+      checks.push(
+        makeCheck(
+          "window-ready",
+          "unique owned AX window",
+          windowReady.status,
+          windowReady,
+        ),
+      );
+      if (windowReady.status !== "PASS") return;
     } else {
       let lastError;
       for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -2337,6 +2933,7 @@ async function runNativeChecks(
         { error: String(error.message ?? error) },
       ),
     );
+    if (proofScope === PROOF_SCOPES.HISTORY) return;
   }
 
   const consumedIds = new Set();
@@ -2881,7 +3478,7 @@ export async function validateProductionBundle({
 
 function printUsage() {
   console.log(
-    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--capture-plan FINAL_PLAN] [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n\nThe validate command uses macOS Accessibility/System Events and never captures screenshots. A schema-v2 FINAL plan supplies a distinct T023b profile and one digest-bound .excalidraw fixture through the normal launch/open path. Qualification scope proves exact 1280x760 geometry, File > Save, physical Command-S, and unchanged prepared state; final scope proves 6/6 menu facts, seven unchanged 003 nativeEntry -> routeAccepted pairs, and one fresh Version History nativeEntry -> routeAccepted pair bound to the launch document. The physical Command-S step requires one nonce-confirmed interactive terminal and one operator keypress while the owned PID is frontmost; menu-click substitution and duplicate observations are rejected. Save/PNG/SVG business filesystem outcomes are owned by deterministic implementation/process-level tests, not this exact-package router probe. Adapter outputs carry separate product, validator, attempt, remediation-epoch, and STOP_REOPEN identities and never contain reviewer or owner decisions.`,
+    `Usage:\n  node scripts/native-macos-validation.mjs seal [--manifest PATH]\n  node scripts/native-macos-validation.mjs validate --manifest PATH [--capture-plan FINAL_PLAN] [--report PATH] [--collection-dir NEW_PATH --binding BINDING_JSON]\n  node scripts/native-macos-validation.mjs readiness --manifest PATH --pid N --fixture FIXTURE_JSON --scenario pendingIssue|unavailable|longList [--report NEW_PATH]\n\nExisting seal manifests are reused only when package and runtime inputs match. Fresh seals require a clean commit and an absent manifest path. Readiness is read-only preparation evidence for a unique PID in a synthetic backend HOME; it never grants owner or visual PASS. Save the drawing, use prepare_history_visual_fixture refresh-pending ROOT for the pending scenario, reopen History, then run readiness. The validate command uses macOS Accessibility/System Events and never captures screenshots. A schema-v2 FINAL plan supplies a distinct T023b profile and one digest-bound .excalidraw fixture through the normal launch/open path. Qualification scope proves exact 1280x760 geometry, File > Save, physical Command-S, and unchanged prepared state; final scope proves 6/6 menu facts, seven unchanged 003 nativeEntry -> routeAccepted pairs, and one fresh Version History nativeEntry -> routeAccepted pair bound to the launch document. The physical Command-S step requires one nonce-confirmed interactive terminal and one operator keypress while the owned PID is frontmost; menu-click substitution and duplicate observations are rejected. Save/PNG/SVG business filesystem outcomes are owned by deterministic implementation/process-level tests, not this exact-package router probe. Adapter outputs carry separate product, validator, attempt, remediation-epoch, and STOP_REOPEN identities and never contain reviewer or owner decisions.`,
   );
 }
 
@@ -2902,6 +3499,19 @@ async function main() {
       repoRoot,
       manifestPath: optionValue(args, "--manifest"),
     });
+  } else if (command === "readiness") {
+    report = await historyReadiness({
+      repoRoot,
+      manifestPath: optionValue(args, "--manifest"),
+      pid: Number(optionValue(args, "--pid")),
+      fixturePath: optionValue(args, "--fixture"),
+      scenario: optionValue(args, "--scenario"),
+    });
+    const reportPath = optionValue(args, "--report");
+    if (reportPath)
+      await fsp.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, {
+        flag: "wx",
+      });
   } else if (command === "validate") {
     report = await validateProductionBundle({
       repoRoot,
