@@ -1,6 +1,6 @@
 # 版本行内短提示增强
 
-**当前状态（2026-10-04）：设计局部 Review、生产实现与定向 unit/browser 验证完成；新包已封存，原生复查、H4及Phase7未完成。** 本增强按本轮负责人要求实施，不修改 History 持久化、去重或 retention 业务语义，也不扩大 T059 已完成的历史范围。
+**当前状态（2026-10-04）：I1–I4完成，新包已封存；I5/H4原生准备BLOCKED，H5及Phase7未完成。** 指定新包PID73019的History菜单就绪，但Accessibility窗口查询失败；随后两次查询均为0个窗口，正常前台激活后仍为0。未执行History入口点击，未产生T058 PASS或owner视觉决定；停止重复启动/重建，见[本轮准备记录](native-preparation-attempt.json)。本增强按本轮负责人要求实施，不修改 History 持久化、去重或 retention 业务语义，也不扩大 T059 已完成的历史范围。
 
 ## 批准与实现输入
 
@@ -13,13 +13,13 @@
 
 ## 增量执行记录
 
-| 步骤 | 状态 | 证据或完成条件 |
-| --- | --- | --- |
-| I1 规范核对 | 完成 | 复用共享token、原badge slot及既有操作generation |
-| I2 局部设计与归档 | 完成 | owner明确批准；source revision108、两个代表状态和组件规范已同步 |
-| I3 实现 | 完成 | HistoryPanel/HistoryList/CSS；现有AppShell回调保留，普通成功仅行内提示 |
-| I4 定向验证 | 完成 | unit87/87、typecheck、全局lint/format；两个browser失败用例修正后各1/1 PASS；代表Light360/Dark300行渲染检查 |
-| I5 包封存与H4衔接 | 包就绪；原生复查PENDING | production seal一次PASS（约82秒）；manifest绑定2c13f50，入口/owner复查尚未执行 |
+| 步骤              | 状态                    | 证据或完成条件                                                                                             |
+| ----------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------- |
+| I1 规范核对       | 完成                    | 复用共享token、原badge slot及既有操作generation                                                            |
+| I2 局部设计与归档 | 完成                    | owner明确批准；source revision108、两个代表状态和组件规范已同步                                            |
+| I3 实现           | 完成                    | HistoryPanel/HistoryList/CSS；现有AppShell回调保留，普通成功仅行内提示                                     |
+| I4 定向验证       | 完成                    | unit87/87、typecheck、全局lint/format；两个browser失败用例修正后各1/1 PASS；代表Light360/Dark300行渲染检查 |
+| I5 包封存与H4衔接 | 包就绪；原生准备BLOCKED | production seal一次PASS（约82秒）；manifest绑定2c13f50；本轮指定进程0个AX窗口，入口/owner复查尚未执行      |
 
 ## 验证与保留的失败
 
@@ -31,10 +31,10 @@
 
 ## 原生准备与剩余范围
 
-[fixture-manifest.json](fixture-manifest.json) 记录本轮全新的系统临时profile：50条manual历史、pending issue和unavailable，使用既有backend-only准备工具。3处preview readback及50条分页由准备工具检查；`nativeVerified=false`，不把离线造数当作生产包可达性或owner PASS。旧PID17298现场保留。
+[fixture-manifest.json](fixture-manifest.json) 记录本轮全新的系统临时profile：50条manual历史、pending issue和unavailable，使用既有backend-only准备工具。3处preview readback及50条分页由准备工具检查；`nativeVerified=false`，不把离线造数当作生产包可达性或owner PASS。旧PID17298经普通Quit退出；本轮新包会话身份见[native-owner-session.json](native-owner-session.json)，状态准备影响分析见[h4-state-preparation.json](h4-state-preparation.json)。
 
 H4集中复查仍覆盖Light、Preview/Restore/Cancel、长列表与目标、Dark300、error/conflict/pending/unavailable、焦点及reduced motion。未受影响且已有owner接受的细滚动条/History info不重复全量观察；Recovery按共享UI实际影响决定。T058/T048、T049有效性能配对、T052索引及T054最终接受保持未完成，旧FAIL与包身份保留。
 
 ## 新精确包
 
-产品commit `2c13f5066490ca4e5a8dbbbdaedfee253559f779`，package SHA-256 `6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4`；[manifest](package-manifest.json)、[seal report](package-seal-report.json)和[原始构建输出](package-seal.raw.txt.gz)（gzip解压后字节不变）和[可读日志](package-seal.txt)（仅移除行末空白）保存实际身份。本次仅一次production seal，包含strict TypeScript/Vite与Rust release build，约82秒PASS，保留既有大chunk警告。后续仅证据文档提交不重复构建。未启动新包；旧PID17298仍是旧包会话。
+产品commit `2c13f5066490ca4e5a8dbbbdaedfee253559f779`，package SHA-256 `6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4`；[manifest](package-manifest.json)、[seal report](package-seal-report.json)和[原始构建输出](package-seal.raw.txt.gz)（gzip解压后字节不变）和[可读日志](package-seal.txt)（仅移除行末空白）保存实际身份。本次仅一次production seal，包含strict TypeScript/Vite与Rust release build，约82秒PASS，保留既有大chunk警告。后续仅证据文档提交不重复构建。本轮已启动新包PID73019；原生准备受0个AX窗口阻塞，未作视觉PASS声明。

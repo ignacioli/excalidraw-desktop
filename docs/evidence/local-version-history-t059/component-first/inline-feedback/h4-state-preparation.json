@@ -1,0 +1,83 @@
+{
+  "status": "BACKEND_PREPARED_NATIVE_UNVERIFIED",
+  "scope": "H4 abnormal-state preparation only; no app launch, native observation, owner verdict, or user profile access",
+  "sourceCommit": "11d929e",
+  "productionPackageCommit": "2c13f50",
+  "isolatedPreparation": {
+    "tool": "src-tauri/target/debug/examples/prepare_history_visual_fixture",
+    "toolSha256": "51e830cf0edbe98ac6fb1cd79a4f924bb7df2be7c6fcd6ff042f0ff69c6ef9d6",
+    "manifest": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-h4-state-gh6lrM/fixture-manifest.json",
+    "manifestSha256": "30eefe301fe3855c2498aa004fa3085658088ab9eb3fa4c3d9d9fea4c7554e7d",
+    "profileHome": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-h4-state-gh6lrM/profile/home",
+    "result": "PASS: backend fixture created in a new system temporary root; 50 pages, 3 preview readbacks, pending issue and unavailable version were verified by its backend queries",
+    "nativeVerified": false
+  },
+  "states": [
+    {
+      "id": "long-list",
+      "file": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-h4-state-gh6lrM/profile/workspace/History long list.excalidraw",
+      "fileSha256": "e1fcde65ac2ac3370d816cc8181f5ef9e8b6906bc6e92b9c80c25da4ff42f30a",
+      "preparation": "Backend query returned 50 marked versions and three parseable preview scenes.",
+      "nativeEntry": "Launch the exact production app with this isolated HOME and the absolute drawing path as an argv file, then open Version History; verify identity and availability before owner review.",
+      "expectedPresentation": "50-row list; Mark-current/repeated-Mark, selection, Preview, Restore and Cancel can be observed on synthetic content.",
+      "ownerVerdict": "PENDING"
+    },
+    {
+      "id": "pending-issue",
+      "file": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-h4-state-gh6lrM/profile/workspace/History pending issue.excalidraw",
+      "fileSha256": "511c61dedb2f7ea0eae6a775c836bde581513c40bb2391bb22babd8aca85f536",
+      "preparation": "Backend query returned pendingIssue code HISTORY_OPERATION_PENDING and zero versions.",
+      "nativeEntry": "Open this absolute drawing path from the same isolated profile, then open Version History; first verify the pending issue survived production startup reconciliation.",
+      "expectedPresentation": "AppShell currently maps a pendingIssue to HistoryPanel status=error with the issue message. It does not select the dedicated HistoryStateView processing variant.",
+      "ownerVerdict": "PENDING",
+      "sourceRefs": [
+        "src/app/AppShell.tsx:904",
+        "src/history/HistoryStates.tsx:24",
+        "src-tauri/src/history/query.rs:630"
+      ]
+    },
+    {
+      "id": "unavailable-version",
+      "file": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-h4-state-gh6lrM/profile/workspace/History unavailable version.excalidraw",
+      "fileSha256": "bf7a0ecea96dbcc18750d78e5f9b4ce090fc941c332db02dd82b8f4e0137fc09",
+      "preparation": "One version lists as unavailable; its scene object was moved into this profile's quarantine and preview returns HISTORY_RESOURCE_MISSING. The active file remains parseable and present.",
+      "nativeEntry": "Open this absolute drawing path from the isolated profile, then open Version History and select the unavailable row.",
+      "expectedPresentation": "Unavailable row badge, selected reason and disabled Preview/Restore. The dedicated full-panel resourceUnavailable variant is not selected by AppShell.",
+      "ownerVerdict": "PENDING",
+      "sourceRefs": [
+        "src/history/HistoryList.tsx:105",
+        "src/history/HistoryPanel.tsx:1302",
+        "src/app/AppShell.tsx:907"
+      ]
+    },
+    {
+      "id": "external-conflict",
+      "preparation": "No backend-only conflict state can be preloaded into HistoryPanel: the live UI owner is AppShell ConflictDialog, fed by ConflictDetector when a modified file event occurs while the active session has unsaved changes.",
+      "nativeEntry": "If W5 needs a fresh native sample, use a separate synthetic drawing, first make an unsaved canvas edit in the running app, then perform one controlled external edit of that same disposable drawing and wait for the watcher event. Preserve original bytes and record both hashes. Do not mutate the shared long-list or user file.",
+      "expectedPresentation": "Application-level File changed on disk dialog. HistoryStateView conflict variant has no production AppShell route.",
+      "ownerVerdict": "PENDING_OR_REUSE_UNCHANGED_PROOF",
+      "sourceRefs": [
+        "src/documents/conflictDetector.ts:73",
+        "src/app/AppShell.tsx:1500",
+        "src/documents/ConflictDialog.tsx:78"
+      ]
+    },
+    {
+      "id": "generic-load-error",
+      "preparation": "No separate ordinary backend-only generic error fixture was created. PendingIssue reaches the currently wired generic error presentation; a forced database or permission failure would risk confusing startup failure with History UI failure.",
+      "ownerVerdict": "REUSE_PENDING_ERROR_PRESENTATION_OR_RECORD_GAP",
+      "sourceRefs": ["src/app/AppShell.tsx:870", "src/app/AppShell.tsx:910"]
+    },
+    {
+      "id": "recovery",
+      "preparation": "The inline feedback commit changed HistoryPanel, HistoryList and History CSS; existing AppShell callbacks were reused without production AppShell edits. RecoveryStartup/RecoveryNotice components and their presentation contract were not edited.",
+      "nativeEntry": "Apply the existing Recovery process-level evidence if still valid; no new native Recovery screen is required by the accepted impact rule.",
+      "ownerVerdict": "EXISTING_EVIDENCE_APPLICABILITY_TO_BE_INDEXED",
+      "sourceRefs": [
+        "docs/evidence/local-version-history-acceptance-contract.md:27",
+        "src/app/AppShell.tsx:1409"
+      ]
+    }
+  ],
+  "decisionNeeded": "Before claiming W5 PASS, explicitly record that pendingIssue is presented as generic error and external conflict is an ApplicationDialog, then decide from the accepted contract whether their existing evidence plus one bounded native observation satisfies the remaining visual fact. Do not label dormant HistoryStateView variants as production-verified."
+}
