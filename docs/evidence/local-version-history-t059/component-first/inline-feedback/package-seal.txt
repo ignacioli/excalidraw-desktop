@@ -188,7 +188,7 @@ dist/assets/App-Bb54mY9J.js                           1,285.19 kB │ gzip: 400.
 dist/assets/chunk-EIO257PC-DU9DXMRt.js                1,821.02 kB │ gzip: 744.21 kB
 
 ✓ built in 552ms
-[plugin builtin:vite-reporter] 
+[plugin builtin:vite-reporter]
 (!) Some chunks are larger than 500 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting

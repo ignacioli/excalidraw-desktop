@@ -37,4 +37,4 @@ H4集中复查仍覆盖Light、Preview/Restore/Cancel、长列表与目标、Dar
 
 ## 新精确包
 
-产品commit `2c13f5066490ca4e5a8dbbbdaedfee253559f779`，package SHA-256 `6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4`；[manifest](package-manifest.json)、[seal report](package-seal-report.json)和[原始构建输出](package-seal.txt)保存实际身份。本次仅一次production seal，包含strict TypeScript/Vite与Rust release build，约82秒PASS，保留既有大chunk警告。后续仅证据文档提交不重复构建。未启动新包；旧PID17298仍是旧包会话。
+产品commit `2c13f5066490ca4e5a8dbbbdaedfee253559f779`，package SHA-256 `6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4`；[manifest](package-manifest.json)、[seal report](package-seal-report.json)和[原始构建输出](package-seal.raw.txt.gz)（gzip解压后字节不变）和[可读日志](package-seal.txt)（仅移除行末空白）保存实际身份。本次仅一次production seal，包含strict TypeScript/Vite与Rust release build，约82秒PASS，保留既有大chunk警告。后续仅证据文档提交不重复构建。未启动新包；旧PID17298仍是旧包会话。
