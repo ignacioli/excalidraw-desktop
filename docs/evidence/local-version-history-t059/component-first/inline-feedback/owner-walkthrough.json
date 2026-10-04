@@ -86,11 +86,12 @@
   },
   "reduceMotionRestore": {
     "original": false,
-    "restored": false,
     "ownerResponse": "已关闭",
     "verification": "NSWorkspace.accessibilityDisplayShouldReduceMotion returned false",
     "verifiedAt": "2026-10-04T13:48:22.566Z",
-    "automationFailurePreserved": "defaults write rejected by OS; owner restored manually"
+    "automationFailurePreserved": "defaults write rejected by OS; owner restored manually",
+    "status": "RESTORED_VERIFIED",
+    "restoredValue": false
   },
   "closure": {
     "H4": "PASS",

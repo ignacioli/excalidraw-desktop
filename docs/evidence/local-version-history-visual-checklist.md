@@ -1,5 +1,7 @@
 # Local Version History visual checklist
 
+**当前性能进度（2026-10-04）：** M5 Pro物理baseline startup-idle已取得[有效PASS](local-version-history-t049/physical-startup-20261004/corrected/startup-idle.json)：10次editable启动、61个idle样本，启动P95 1769.799375ms、进程树RSS P95 315113472bytes。首次错误构建导致的INVALID保留在[同次记录](local-version-history-t049/physical-startup-20261004/README.md)，修正仅是使用Tauri CLI custom-protocol构建，未改变timeout/断言。候选启动、双方canvas/soak及History专项尚未执行，不预支T049/T052/T054完成；H4/H5完成结论保持。
+
 **最新结论（2026-10-04）：T058准备与窄入口、H4/T048已通过。** [Owner完整记录](local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json)保留各组结果与旧FAIL；原包`2c13f50`完成集中体验，文案修订包`eb961ca`仅对pending错误正文进行[定点复验](local-version-history-t059/component-first/inline-feedback/pending-copy/native-report.json)，owner明确“接受，关闭这项”。依据既定按影响复验规则保留未变项接受，不把旧包观察移植为新包全量运行。Recovery沿用未受影响的既有安全证据；Reduce Motion已恢复关闭。H5状态同步完成，owner已授权本轮private提交；T049按owner新决定仅M5 Pro物理配对，T052完整索引与T054最终接受仍待其后，不宣称phase7完成。
 
 ### 2026-10-04 已完成观察（当前）

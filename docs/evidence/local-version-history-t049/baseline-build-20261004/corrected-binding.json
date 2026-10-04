@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "evidenceType": "t049-corrected-build-binding",
+  "role": "baseline",
+  "createdAt": "2026-10-04T14:20:21.729Z",
+  "productSourceCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+  "buildCheckoutCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+  "checkoutCommitAtBinding": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+  "worktree": "/Users/liyongqiang/.codex/worktrees/history-perf-baseline/local-version-history",
+  "binary": {
+    "path": "/private/tmp/t049-20261004-baseline-Oe9293/corrected/excalidraw-desktop",
+    "sha256": "c5e6cd8ed502a0a2b9f002bfb71441833d2d049607fb6a445af22a16eb0cee8b",
+    "sizeBytes": 34695136
+  },
+  "build": {
+    "schemaVersion": 1,
+    "role": "baseline",
+    "command": "pnpm",
+    "args": [
+      "exec",
+      "tauri",
+      "build",
+      "--no-bundle",
+      "--features",
+      "e2e-harness",
+      "--",
+      "--offline",
+      "--locked"
+    ],
+    "cwd": "/Users/liyongqiang/.codex/worktrees/history-perf-baseline/local-version-history",
+    "environment": {
+      "VITE_E2E_HARNESS": "1",
+      "CARGO_TARGET_DIR": "/private/tmp/t049-20261004-baseline-Oe9293/target"
+    },
+    "startedAt": "2026-10-04T14:17:04.923Z",
+    "status": "pass",
+    "timeoutMs": 1500000,
+    "exitCode": 0,
+    "signal": null,
+    "finishedAt": "2026-10-04T14:18:39.444Z",
+    "log": {
+      "path": "/private/tmp/t049-20261004-baseline-Oe9293/corrected-cli-build.log",
+      "sha256": "d0789a2fe832844f1169bafe66da2ee57626049a16e8cb82b1c6e21942c84208",
+      "sizeBytes": 17477
+    }
+  },
+  "runnerHashes": [
+    {
+      "relativePath": "e2e/perf/startup-idle.spec.ts",
+      "sha256": "b4355ae7d54e628fe3fd0e9ecc32147304cec6e31ebc601fc976c1074e96b23b",
+      "sizeBytes": 9123
+    },
+    {
+      "relativePath": "e2e/perf/canvas-io.spec.ts",
+      "sha256": "f0d8ef205b9e09990fc2042a2888e4b9d6cab735ecace74017be2e348d168dff",
+      "sizeBytes": 9496
+    },
+    {
+      "relativePath": "e2e/perf/edit-soak.spec.ts",
+      "sha256": "6517966a0919e51c086f0d2a4a16acfbb88c45c588d8062be29731650fe93e7e",
+      "sizeBytes": 10914
+    },
+    {
+      "relativePath": "e2e/perf/helpers/nativePerformanceContract.ts",
+      "sha256": "982960e39c71ab6cef8cb9c9795b0657c0cf49d4f393835f7695025db67b8210",
+      "sizeBytes": 8575
+    },
+    {
+      "relativePath": "e2e/perf/helpers/processMetrics.ts",
+      "sha256": "b899213d27c7ce7a645fc91894cd8d01d545e5f2b93cbac55a101602767aef28",
+      "sizeBytes": 18266
+    },
+    {
+      "relativePath": "e2e/perf/helpers/workloads.ts",
+      "sha256": "53aef4d9712dffd350739e857e0989d520ebb53018d7e50c5c993ddfd17b4375",
+      "sizeBytes": 5160
+    },
+    {
+      "relativePath": "e2e/helpers/app.ts",
+      "sha256": "f10cc0f63a6da9839ebec82803e531d513f0d4f98b6397e695d5a83b89c98e27",
+      "sizeBytes": 8199
+    },
+    {
+      "relativePath": "e2e/helpers/webkitProcesses.ts",
+      "sha256": "c4ab25b7af56fbd104dcb551d4e0b197a0bef101f1a5947bccb6f1c8bc63b8af",
+      "sizeBytes": 6682
+    },
+    {
+      "relativePath": "e2e/playwright.config.ts",
+      "sha256": "3c4779f3f225fa13980f8c15b9452763e51a054b71dccd0dd1004d75ee91a73e",
+      "sizeBytes": 1145
+    },
+    {
+      "relativePath": "e2e/perf/report.schema.json",
+      "sha256": "ee3857fa678dfa9b0a36294c5d19764edc408e40d8b0eee936db3efdd68d2e10",
+      "sizeBytes": 2434
+    }
+  ],
+  "sourceInputs": {
+    "manifest": {
+      "path": "/private/tmp/t049-20261004-baseline-Oe9293/corrected-inputs.json",
+      "sha256": "584187f312b2e635d8c5fbf069f4476efbdcc0c7f39bd8496bfc4d773c88a6d2",
+      "sizeBytes": 94697
+    },
+    "gitRuntimeDiff": "",
+    "verdict": "pass"
+  },
+  "customProtocolFeatureProofs": [
+    {
+      "path": "/private/tmp/t049-20261004-baseline-Oe9293/target/release/.fingerprint/tauri-6c35d76a4bc5e1b5/lib-tauri.json",
+      "sha256": "aad2279872104c9440e32e2e9e9d58f854265488541ef40c810b0eca8a0580fa",
+      "sizeBytes": 3189,
+      "features": "[\"common-controls-v6\", \"compression\", \"custom-protocol\", \"dbus\", \"default\", \"dynamic-acl\", \"http-range\", \"protocol-asset\", \"tauri-runtime-wry\", \"webkit2gtk\", \"webview2-com\", \"wry\", \"x11\"]"
+    },
+    {
+      "path": "/private/tmp/t049-20261004-baseline-Oe9293/target/release/.fingerprint/tauri-macros-27bade1921eb0b03/lib-tauri_macros.json",
+      "sha256": "40df0049f28d2328d268cf7b2d61f2b6f41cb6b394d138aad2faa973bc1a2c39",
+      "sizeBytes": 850,
+      "features": "[\"compression\", \"custom-protocol\"]"
+    }
+  ],
+  "productionModeProofs": [
+    {
+      "path": "/private/tmp/t049-20261004-baseline-Oe9293/target/release/build/tauri-3b3eb3f206c60f44/output",
+      "sha256": "1c937573d983e811516b62608d1e80bf2cc297def691250ff3dd5ecd014357eb",
+      "sizeBytes": 2199,
+      "dev": false,
+      "customProtocol": true
+    }
+  ],
+  "embeddedFrontend": {
+    "driver": {
+      "path": "/Users/liyongqiang/.codex/worktrees/history-perf-baseline/local-version-history/dist/assets/performanceDriver-DfQYQNHa.js",
+      "sha256": "e2ebd3283813becc5c5bf4b263b00ed2d9902cebbdd4ce3bc778241e103ef71a",
+      "sizeBytes": 5887
+    },
+    "assetKeys": [
+      {
+        "filename": "index.html",
+        "presentInBinary": true
+      },
+      {
+        "filename": "performanceDriver-DfQYQNHa.js",
+        "presentInBinary": true
+      },
+      {
+        "filename": "index-LVP3HeTH.js",
+        "presentInBinary": true
+      }
+    ],
+    "method": "custom-protocol macro fingerprint plus cargo:dev=false plus expected frontend asset keys present in final binary; not a runtime launch proof"
+  },
+  "invalidPreparation": {
+    "preservedBinary": {
+      "path": "/private/tmp/t049-20261004-baseline-Oe9293/invalid-dev-mode/excalidraw-desktop",
+      "sha256": "4f6a1469ad69536253be3287882751e933e75e911a56920bcd2c64d932387063",
+      "sizeBytes": 7813616
+    },
+    "originalBinding": {
+      "path": "/private/tmp/t049-20261004-baseline-Oe9293/invalid-dev-mode/original-binding.json",
+      "sha256": "0e3c6fd00ebdfdceb73e05ad2cf5af51624a6805de58eb9c2bb9677ce19852f7",
+      "sizeBytes": 8046
+    },
+    "preservationReceipt": {
+      "path": "/private/tmp/t049-20261004-baseline-Oe9293/invalid-dev-mode/preservation.json",
+      "sha256": "3b25375090bb49db582135626437dae6d097e4d3c1833b6caf88bd381ddfa0db",
+      "sizeBytes": 636
+    },
+    "classification": "raw Cargo e2e-harness build selected Tauri devUrl instead of embedding frontendDist"
+  },
+  "buildEnvironment": {
+    "hardwareModel": "Mac17,9",
+    "memoryBytes": 51539607552,
+    "logicalCpuCount": 15,
+    "os": {
+      "name": "macOS",
+      "version": "26.6.2",
+      "build": "25G83"
+    },
+    "installedWebKitBundleVersion": "21624.5.1.11.3",
+    "runtimeWebViewVersion": null,
+    "runtimeWebViewVersionReason": "No native app launched in this build-only task",
+    "pnpm": "11.25.0",
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "node": "v26.8.2",
+    "xcode": "Xcode 27.0\nBuild version 27A266a",
+    "packageVersions": {
+      "vite": "8.2.1",
+      "typescript": "6.0.3",
+      "react": "19.2.8",
+      "@playwright/test": "1.62.1",
+      "@excalidraw/excalidraw": "0.18.1"
+    }
+  },
+  "validation": {
+    "correctedCliBuild": "pass",
+    "runtimeSourceAndRunnerUnchanged": "pass",
+    "customProtocol": "pass",
+    "devModeDisabled": "pass",
+    "embeddedFrontendAssetKeys": "pass",
+    "performanceBudgetVerdict": "not_evaluated"
+  },
+  "outputScope": [
+    "baseline ignored dist rebuilt with VITE_E2E_HARNESS=1",
+    "baseline original independent tmp Cargo target incrementally rebuilt",
+    "old invalid binary and binding preserved",
+    "corrected binary copied to separate role-specific corrected path"
+  ],
+  "exclusions": [
+    "No app launch or performance workload",
+    "No VM run",
+    "No sealed production .app modified",
+    "No tracked product source modified",
+    "No other role target modified by this CLI command",
+    "No bundling or package validation"
+  ],
+  "wordingClarification": "The earlier candidate binding phrase No production worktree outputs modified was too broad: ignored dist was normally rebuilt. The sealed production .app and tracked product source were not modified."
+}

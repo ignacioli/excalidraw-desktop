@@ -1,6 +1,6 @@
 # Local version history performance baseline
 
-**当前执行范围（2026-10-04 owner决定）：** Parallels Desktop已不可用，本轮004关闭只在同一M5 Pro物理机测量基线／候选，跳过VM。共同startup-idle、canvas-io、完整15分钟edit-soak与候选History专项均保留。`PERF_REFERENCE_RUN=0`、`PERF_EXECUTION_ENVIRONMENT=physical`；保存原始diagnostic budget verdict与完整性结果，另报告配对绝对值／差值，不把历史VM阈值改造成新的M5 Pro硬门槛。VM不再是本轮T049完成条件，下文VM环境与旧失败作为历史保留。基线已重新构建，见[构建绑定](../../docs/evidence/local-version-history-t049/baseline-build-20261004/binding.json)；尚未开始本轮测量。
+**当前执行范围（2026-10-04 owner决定）：** Parallels Desktop已不可用，本轮004关闭只在同一M5 Pro物理机测量基线／候选，跳过VM。共同startup-idle、canvas-io、完整15分钟edit-soak与候选History专项均保留。`PERF_REFERENCE_RUN=0`、`PERF_EXECUTION_ENVIRONMENT=physical`；保存原始diagnostic budget verdict与完整性结果，另报告配对绝对值／差值，不把历史VM阈值改造成新的M5 Pro硬门槛。VM不再是本轮T049完成条件，下文VM环境与旧失败作为历史保留。基线已重新构建，见[构建绑定](../../docs/evidence/local-version-history-t049/baseline-build-20261004/binding.json)；本轮首次startup测量INVALID（0/10 ready），已确认raw Cargo产物误用devUrl；保持原失败；修正构建后同项复验已PASS（10/10启动，P95 1769.799375ms，61个idle样本，RSS P95 315113472bytes），其余测量未执行，见[本轮记录](../../docs/evidence/local-version-history-t049/physical-startup-20261004/README.md)。
 
 **此前状态（2026-09-29）：T049 仍为 `not_evaluated`。** 固定基线 `babc027d64c2c50e6922482b416ef1099ea9d07e` 的独立 `e2e-harness` binary 已构建，SHA-256 为 `158fc23d122d5595b3950e934da77014b119f0382f393afac95a5628caa50511`。一次物理 macOS `startup-idle` 尝试在第 5 次冷启动等待 `ready.json` 15 秒后失败；只有 4/10 次 editable-canvas 样本。操作员最小化了挡住工作的窗口，精确时点未知，无法归因。本次整体 **INVALID**，原始报告及运行前 binary/runner binding 见[物理基线尝试](../../docs/evidence/local-version-history-t049/physical-startup-20260929/README.md)。没有重试、有效物理配对、参考 VM 报告或速度／回归结论。候选 UI 正在修改；先前构建的候选 binary 不预支修改后的候选身份。
 
@@ -28,6 +28,12 @@ babc027d64c2c50e6922482b416ef1099ea9d07e
 | `binary.pathScope` | `absolute` 表示原始 runner 路径；`workspace-relative` 仅用于去除工作区根目录后的机器报告。若采用后者，配套证据仍须能还原并核对原始绝对路径。                                       |
 
 基线 binary 已在独立 target 中构建：`/private/tmp/t049-20260929-baseline-target/release/excalidraw-desktop`，SHA-256 `158fc23d122d5595b3950e934da77014b119f0382f393afac95a5628caa50511`。2026-09-29 首次物理运行未形成有效样本；旧基线 runner 的原始 JSON 没有 `binary` 字段，运行前 binding 单独保留路径、hash 和 runner 文件 hash。候选版本必须另有提交、路径和 hash；不能把基线 hash 复制给候选版本。
+
+## 独立性能二进制的构建方式
+
+共同startup/canvas/soak从各自checkout运行项目Tauri CLI，设置独立的`CARGO_TARGET_DIR`，使用`VITE_E2E_HARNESS=1 pnpm tauri build --no-bundle --features e2e-harness`。`--no-bundle`避免覆盖正在验收的production `.app`；独立target避免覆盖另一侧binary。记录CLI实际参数、custom-protocol/`dev=false`模式、binary realpath/hash及源码提交。不能直接用只有`--features e2e-harness`的raw Cargo构建替代：该方式可能保留devUrl模式，未内嵌dist，构建PASS不证明性能驱动可运行。
+
+History专项A→B→A另外需要构建时`VITE_E2E_HISTORY_FRONTEND=1`，以及运行时`EXCALIDRAW_E2E_HISTORY_RESTART=1`；见[T024构建入口](../../docs/evidence/local-version-history-t024.md)。共同负载binary不冒称已包含History旅程driver；使用额外flag的专项binary单独绑定身份。
 
 ## 比较环境
 

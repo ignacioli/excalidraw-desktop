@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "role": "candidate",
+  "command": "pnpm",
+  "args": [
+    "exec",
+    "tauri",
+    "build",
+    "--no-bundle",
+    "--features",
+    "e2e-harness",
+    "--",
+    "--offline",
+    "--locked"
+  ],
+  "cwd": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history",
+  "environment": {
+    "VITE_E2E_HARNESS": "1",
+    "CARGO_TARGET_DIR": "/private/tmp/t049-20261004-candidate-QF5bUb/target"
+  },
+  "startedAt": "2026-10-04T14:20:25.284Z",
+  "status": "pass",
+  "timeoutMs": 1500000,
+  "exitCode": 0,
+  "signal": null,
+  "finishedAt": "2026-10-04T14:22:18.158Z"
+}
