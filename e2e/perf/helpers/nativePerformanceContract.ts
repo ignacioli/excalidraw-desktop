@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, readFile, rm, rename, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -66,6 +67,9 @@ export class NativePerformanceControl {
   readonly root: string;
   readonly environment: Readonly<NodeJS.ProcessEnv>;
   readonly bootstrap: PerformanceBootstrap;
+  private idleAssertion?: ChildProcess;
+  private assertionFailure?: Error;
+  private disposing = false;
 
   private constructor(root: string, bootstrap: PerformanceBootstrap) {
     this.root = root;
@@ -81,11 +85,56 @@ export class NativePerformanceControl {
       schemaVersion: CONTRACT_SCHEMA_VERSION,
       ...bootstrap,
     };
-    await writeJsonAtomically(join(root, "bootstrap.json"), completeBootstrap);
-    return new NativePerformanceControl(root, completeBootstrap);
+    const control = new NativePerformanceControl(root, completeBootstrap);
+    try {
+      await writeJsonAtomically(
+        join(root, "bootstrap.json"),
+        completeBootstrap,
+      );
+      await control.holdIdleAssertion();
+      return control;
+    } catch (error) {
+      await control.dispose();
+      throw error;
+    }
+  }
+
+  private async holdIdleAssertion(): Promise<void> {
+    if (process.platform !== "darwin") return;
+    // -w bounds the assertion to the runner even if cleanup is interrupted.
+    const child = spawn(
+      "/usr/bin/caffeinate",
+      ["-di", "-w", String(process.pid)],
+      {
+        stdio: "ignore",
+      },
+    );
+    this.idleAssertion = child;
+    child.on("error", (error) => {
+      this.assertionFailure = new Error(
+        `Unable to hold performance idle assertion: ${error.message}`,
+      );
+    });
+    child.on("exit", (code, signal) => {
+      if (!this.disposing) {
+        this.assertionFailure = new Error(
+          `Performance idle assertion exited unexpectedly (${code ?? signal}).`,
+        );
+      }
+    });
+    await delay(100);
+    if (this.assertionFailure) throw this.assertionFailure;
+    if (!child.pid)
+      throw new Error("Performance idle assertion did not start.");
+  }
+
+  async throwIfFailed(): Promise<void> {
+    await throwIfDriverErrorPublished(join(this.root, "error.json"));
+    if (this.assertionFailure) throw this.assertionFailure;
   }
 
   async waitForReady(timeoutMs: number): Promise<PerformanceReadySignal> {
+    await this.throwIfFailed();
     const value = await waitForJson(
       join(this.root, "ready.json"),
       timeoutMs,
@@ -97,6 +146,7 @@ export class NativePerformanceControl {
   async sendCommand(
     command: Omit<PerformanceCommand, "schemaVersion" | "commandId">,
   ): Promise<PerformanceCommand> {
+    await this.throwIfFailed();
     const completeCommand: PerformanceCommand = {
       schemaVersion: CONTRACT_SCHEMA_VERSION,
       commandId: randomUUID(),
@@ -111,6 +161,7 @@ export class NativePerformanceControl {
     command: PerformanceCommand,
     timeoutMs: number,
   ): Promise<PerformanceCommandResult> {
+    await this.throwIfFailed();
     const value = await waitForJson(
       join(this.root, "result.json"),
       timeoutMs,
@@ -120,6 +171,26 @@ export class NativePerformanceControl {
   }
 
   async dispose(): Promise<void> {
+    this.disposing = true;
+    const assertion = this.idleAssertion;
+    if (
+      assertion &&
+      assertion.pid &&
+      assertion.exitCode === null &&
+      assertion.signalCode === null
+    ) {
+      assertion.kill("SIGTERM");
+      const deadline = Date.now() + 1_000;
+      while (
+        assertion.exitCode === null &&
+        assertion.signalCode === null &&
+        Date.now() < deadline
+      ) {
+        await delay(25);
+      }
+      if (assertion.exitCode === null && assertion.signalCode === null)
+        assertion.kill("SIGKILL");
+    }
     const expectedPrefix = join(tmpdir(), CONTROL_ROOT_PREFIX);
     if (!this.root.startsWith(expectedPrefix)) {
       throw new Error(
@@ -164,12 +235,15 @@ async function throwIfDriverErrorPublished(path: string): Promise<void> {
   let raw: string;
   try {
     raw = await readFile(path, "utf8");
-  } catch {
-    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
   }
   let message: string | undefined;
+  let driverError: unknown = raw;
   try {
     const value: unknown = JSON.parse(raw);
+    driverError = value;
     if (
       isRecord(value) &&
       typeof value.message === "string" &&
@@ -180,9 +254,20 @@ async function throwIfDriverErrorPublished(path: string): Promise<void> {
   } catch {
     // A partially written error file still proves a driver failure.
   }
-  throw new Error(
+  throw new NativePerformanceDriverError(
     `Native performance driver reported a fatal error: ${message ?? raw}`,
+    driverError,
   );
+}
+
+export class NativePerformanceDriverError extends Error {
+  constructor(
+    message: string,
+    readonly driverError: unknown,
+  ) {
+    super(message);
+    this.name = "NativePerformanceDriverError";
+  }
 }
 
 function validateReadySignal(

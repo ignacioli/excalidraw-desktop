@@ -31,10 +31,11 @@ export const PERF_BUDGETS = {
  */
 export const QUIESCENT_SETTLE_MS = 5_000;
 
-async function collectWindow<T>(
+export async function collectWindow<T>(
   options: {
     durationMs: number;
     intervalMs: number;
+    beforeSample?: () => Promise<void> | void;
     onSample?: (sample: T, samples: readonly T[]) => Promise<void> | void;
   },
   collect: () => Promise<T>,
@@ -44,6 +45,7 @@ async function collectWindow<T>(
     process.hrtime.bigint() + BigInt(options.durationMs) * 1_000_000n;
   while (process.hrtime.bigint() < deadline) {
     const sampleStartedAt = process.hrtime.bigint();
+    await options.beforeSample?.();
     samples.push(await collect());
     await options.onSample?.(samples[samples.length - 1]!, samples);
     const elapsedMs =
@@ -90,6 +92,11 @@ export async function collectProcessTreeWindow(options: {
   durationMs: number;
   intervalMs: number;
   webkitTracker?: WebKitProcessTracker;
+  beforeSample?: () => Promise<void> | void;
+  onSample?: (
+    sample: ProcessTreeSample,
+    samples: readonly ProcessTreeSample[],
+  ) => Promise<void> | void;
 }): Promise<ProcessTreeSample[]> {
   return collectWindow(options, () =>
     collectProcessTreeSample(
