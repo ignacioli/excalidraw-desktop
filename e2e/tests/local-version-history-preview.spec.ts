@@ -135,13 +135,21 @@ test("distinguishes loading, empty, processing, permission, conflict, unavailabl
     ["Resource unavailable", "Version resource unavailable", "alert"],
     ["Error", "Version history could not be loaded", "alert"],
   ] as const;
+  const announcement = panel.locator(
+    '.visually-hidden[role="status"][aria-live="polite"]',
+  );
+  await expect(announcement).toHaveCount(1);
 
   for (const [label, title, role] of cases) {
     await stateSelect.selectOption({ label });
-    await expect(
-      panel.getByRole(role).getByRole("heading", { name: title }),
-    ).toBeVisible();
-    await expect(panel.getByRole(role)).toHaveCount(1);
+    const heading = panel.getByRole("heading", { name: title, exact: true });
+    const state = panel
+      .getByRole(role)
+      .filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+    await expect(heading).toBeVisible();
+    await expect(state).toHaveCount(1);
+    await expect(state).toContainText(title);
+    await expect(announcement).toBeEmpty();
   }
 });
 

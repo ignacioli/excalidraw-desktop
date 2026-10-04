@@ -1,6 +1,8 @@
 # 验证证据汇总（004 实施中；003 已完成；001/002 历史）
 
-**最新状态（2026-09-30，component-first H0–H3完成）**：共享组件目录、History anatomy、信息入口与Penpot源/七屏已同步；组件82项、定向browser及原有5项语义检查通过，primary完成代表组合渲染抽检。详见[执行记录](local-version-history-t059/component-first/README.md)。新原生候选包待构建/复查，T048与Phase7未完成，Mark微动仍owner-deferred。下文保留历史快照。
+**最新状态（2026-10-04）：无背景版本行内短提示已获owner局部Penpot批准，source revision108及规范同步，实现、unit87/87、typecheck、lint/format和受影响browser复验完成。** 过程中的测试定位失败与hooks修复如实保留，见[增量证据](local-version-history-t059/component-first/inline-feedback/README.md)。新production包尚待封存及原生复查；894228a包的既有定向owner接受保持原身份。T058/T048、T049有效配对、T052索引和T054最终接受未完成；不预支Phase7或发布。
+
+**此前状态（2026-09-30，component-first H0–H3完成）**：共享组件目录、History anatomy、信息入口与Penpot源/七屏已同步；组件82项、定向browser及原有5项语义检查通过，primary完成代表组合渲染抽检。详见[执行记录](local-version-history-t059/component-first/README.md)。新原生候选包待构建/复查，T048与Phase7未完成，Mark微动仍owner-deferred。下文保留历史快照。
 
 **当前设计入口（2026-09-30）**：[唯一高保真目录](../design/local-version-history/high-fi/README.md)包含本轮已批准的7张画板。旧 task/revision 路径仅是下文历史证据的原始记录，可在 Git `45630f81c429ba30effe12118c200f193e713745` 中恢复。本轮只整理资产与引用，不新增实现或原生验收结论。
 

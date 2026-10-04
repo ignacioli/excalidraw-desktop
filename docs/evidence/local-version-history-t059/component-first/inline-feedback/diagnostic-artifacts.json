@@ -1,0 +1,77 @@
+{
+  "scope": "Local raw failure diagnostics preserved byte-for-byte; original reports/stdout/screens remain in Git evidence. Generated context Markdown contains original whitespace and is archived with trace/video under the existing ignored test-results directory.",
+  "artifacts": [
+    {
+      "originalPath": "docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/trace.zip",
+      "localPath": "test-results/history-inline-artifacts-20261004/browser-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/trace.zip",
+      "bytes": 12035299,
+      "sha256": "3b1236c731a16e345ca2ad3208e28f80b1b961ee806cdc128774b2da829e53e6"
+    },
+    {
+      "originalPath": "docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/video.webm",
+      "localPath": "test-results/history-inline-artifacts-20261004/browser-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/video.webm",
+      "bytes": 43559,
+      "sha256": "2fe4edfb49cd0ffded0f199ea190d1703649423ba8ecb243b4a89030f25a4c28"
+    },
+    {
+      "originalPath": "docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-retest-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/trace.zip",
+      "localPath": "test-results/history-inline-artifacts-20261004/browser-retest-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/trace.zip",
+      "bytes": 12310418,
+      "sha256": "70f74d759c9d2a3563a678a3ecc7e38332fae1f0e301b1fa716b79d458c60312"
+    },
+    {
+      "originalPath": "docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-retest-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/video.webm",
+      "localPath": "test-results/history-inline-artifacts-20261004/browser-retest-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/video.webm",
+      "bytes": 316458,
+      "sha256": "199626d70c4f0b3d3188ae45d46af690b338293155bbff33e4681c5eb9a0b278"
+    },
+    {
+      "originalPath": "docs/evidence/local-version-history-t059/component-first/inline-feedback/semantic-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/trace.zip",
+      "localPath": "test-results/history-inline-artifacts-20261004/semantic-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/trace.zip",
+      "bytes": 11855413,
+      "sha256": "1ddd1181cdf513d9d0fa4de2b1abccc03a3f962281593b49b3fe6ffa8727048d"
+    },
+    {
+      "originalPath": "docs/evidence/local-version-history-t059/component-first/inline-feedback/semantic-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/video.webm",
+      "localPath": "test-results/history-inline-artifacts-20261004/semantic-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/video.webm",
+      "bytes": 76681,
+      "sha256": "04cdedaa25b23a8bdb79d18b31f8fa0227799e43878598ae0c56caf321423c56"
+    },
+    {
+      "originalPath": "docs/evidence/local-version-history-t059/component-first/inline-feedback/semantic-retest-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/trace.zip",
+      "localPath": "test-results/history-inline-artifacts-20261004/semantic-retest-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/trace.zip",
+      "bytes": 11869309,
+      "sha256": "764193b8c74faca1eef5321d03082f0a65be123055bdb49c9e17723f4006b7f0"
+    },
+    {
+      "originalPath": "docs/evidence/local-version-history-t059/component-first/inline-feedback/semantic-retest-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/video.webm",
+      "localPath": "test-results/history-inline-artifacts-20261004/semantic-retest-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/video.webm",
+      "bytes": 77244,
+      "sha256": "903e36e0df846faf588837ff17d014c7735a580de7031215973b995bca4f7b3b"
+    },
+    {
+      "originalPath": "docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/error-context.md",
+      "localPath": "test-results/history-inline-artifacts-20261004/browser-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/error-context.md",
+      "bytes": 14409,
+      "sha256": "23f3756dccf34adab88b199f9dcec78373c474897bb83d5e5b530fbf6c8b2f21"
+    },
+    {
+      "originalPath": "docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-retest-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/error-context.md",
+      "localPath": "test-results/history-inline-artifacts-20261004/browser-retest-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/error-context.md",
+      "bytes": 14031,
+      "sha256": "1b0b5aa209c9f75c0c1009ed51ae42f23d169064c597fa1459994b8d9e4254f4"
+    },
+    {
+      "originalPath": "docs/evidence/local-version-history-t059/component-first/inline-feedback/semantic-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/error-context.md",
+      "localPath": "test-results/history-inline-artifacts-20261004/semantic-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/error-context.md",
+      "bytes": 9194,
+      "sha256": "7c1eb18a86ab3c735dd02e00bf914f562f0b483d7fce9e4964c39b35f367feee"
+    },
+    {
+      "originalPath": "docs/evidence/local-version-history-t059/component-first/inline-feedback/semantic-retest-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/error-context.md",
+      "localPath": "test-results/history-inline-artifacts-20261004/semantic-retest-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/error-context.md",
+      "bytes": 9589,
+      "sha256": "20fff3e14f91b8546593f39c5f2a73e7ac990c1bacce31f353752d178760b4f3"
+    }
+  ]
+}

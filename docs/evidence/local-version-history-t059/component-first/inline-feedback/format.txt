@@ -1,0 +1,3 @@
+$ prettier --check package.json eslint.config.js .prettierrc tsconfig.json tsconfig.node.json vite.config.ts vitest.config.ts 'src/**/*.{ts,tsx,css}' public/fonts/README.md
+Checking formatting...
+All matched files use Prettier code style!

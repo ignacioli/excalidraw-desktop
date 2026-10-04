@@ -419,6 +419,24 @@
   color: var(--accent);
 }
 
+.history-list-inline-success {
+  display: inline-flex;
+  min-height: 16px;
+  align-items: center;
+  gap: var(--space-1);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-micro, 11px);
+  font-weight: var(--font-weight-medium, 500);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.history-list-inline-success svg {
+  flex: 0 0 auto;
+}
+
 .history-list-status--unavailable {
   display: inline-flex;
   align-items: center;

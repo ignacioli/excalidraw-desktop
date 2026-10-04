@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
@@ -27,6 +28,15 @@ export type HistoryPanelStatus = HistoryStateKind | "available";
 export interface HistorySuccessNotice {
   title: string;
   message: string;
+}
+
+interface InlineMarkFeedback {
+  documentId: string;
+  versionId: string;
+  message: string;
+  announcement: string;
+  announcementId: number;
+  itemsAtCommit: readonly HistoryVersionView[];
 }
 
 export interface HistoryPanelProps {
@@ -125,6 +135,13 @@ export function HistoryPanel({
   moreActions,
   triggerRef,
 }: HistoryPanelProps) {
+  const activeDocumentKey = documentId ?? fileName;
+  const onClearSuccessNoticeRef = useRef(onClearSuccessNotice);
+  const activeDocumentRef = useRef(activeDocumentKey);
+  useLayoutEffect(() => {
+    onClearSuccessNoticeRef.current = onClearSuccessNotice;
+    activeDocumentRef.current = activeDocumentKey;
+  }, [activeDocumentKey, onClearSuccessNotice]);
   const [internalWidth, setInternalWidth] = useState(360);
   const activeWidth = width ?? internalWidth;
   const resizeStartRef = useRef<{
@@ -143,6 +160,8 @@ export function HistoryPanel({
     | { status: "error"; message: string }
     | null
   >(null);
+  const [inlineMarkFeedback, setInlineMarkFeedback] =
+    useState<InlineMarkFeedback | null>(null);
   const [reusedTargetId, setReusedTargetId] = useState<string | null>(null);
   const [markBusy, setMarkBusy] = useState(false);
   const [setMarkedBusy, setSetMarkedBusy] = useState(false);
@@ -193,7 +212,11 @@ export function HistoryPanel({
   const focusRetentionInfoOnOpenRef = useRef(false);
   const suppressRetentionInfoFocusOpenRef = useRef(false);
   const actionNoticeGenerationRef = useRef(0);
+  const inlineAnnouncementIdRef = useRef(0);
   const localSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const inlineSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
 
@@ -254,10 +277,31 @@ export function HistoryPanel({
       if (localSuccessTimerRef.current !== null) {
         clearTimeout(localSuccessTimerRef.current);
       }
-      onClearSuccessNotice?.();
+      if (inlineSuccessTimerRef.current !== null) {
+        clearTimeout(inlineSuccessTimerRef.current);
+      }
+      onClearSuccessNoticeRef.current?.();
     },
-    [documentId, fileName, onClearSuccessNotice],
+    [activeDocumentKey],
   );
+
+  const previousDocumentKeyRef = useRef(activeDocumentKey);
+  useEffect(() => {
+    if (previousDocumentKeyRef.current === activeDocumentKey) return;
+    previousDocumentKeyRef.current = activeDocumentKey;
+    actionNoticeGenerationRef.current += 1;
+    if (localSuccessTimerRef.current !== null) {
+      clearTimeout(localSuccessTimerRef.current);
+      localSuccessTimerRef.current = null;
+    }
+    if (inlineSuccessTimerRef.current !== null) {
+      clearTimeout(inlineSuccessTimerRef.current);
+      inlineSuccessTimerRef.current = null;
+    }
+    setInlineMarkFeedback(null);
+    setMarkFeedback(null);
+    setReusedTargetId(null);
+  }, [activeDocumentKey]);
 
   const clearActionSuccessNotice = () => {
     actionNoticeGenerationRef.current += 1;
@@ -268,9 +312,45 @@ export function HistoryPanel({
     setMarkFeedback((current) =>
       current?.status === "success" ? null : current,
     );
+    if (inlineSuccessTimerRef.current !== null) {
+      clearTimeout(inlineSuccessTimerRef.current);
+      inlineSuccessTimerRef.current = null;
+    }
+    setInlineMarkFeedback(null);
     setReusedTargetId(null);
     onClearSuccessNotice?.();
     return actionNoticeGenerationRef.current;
+  };
+
+  const showInlineMarkFeedback = (
+    generation: number,
+    versionId: string,
+    message: string,
+    announcement: string,
+  ) => {
+    if (generation !== actionNoticeGenerationRef.current) return;
+    if (localSuccessTimerRef.current !== null) {
+      clearTimeout(localSuccessTimerRef.current);
+      localSuccessTimerRef.current = null;
+    }
+    if (inlineSuccessTimerRef.current !== null) {
+      clearTimeout(inlineSuccessTimerRef.current);
+    }
+    const announcementId = ++inlineAnnouncementIdRef.current;
+    setInlineMarkFeedback({
+      documentId: activeDocumentKey,
+      versionId,
+      message,
+      announcement,
+      announcementId,
+      itemsAtCommit: items,
+    });
+    inlineSuccessTimerRef.current = setTimeout(() => {
+      inlineSuccessTimerRef.current = null;
+      setInlineMarkFeedback((current) =>
+        current?.announcementId === announcementId ? null : current,
+      );
+    }, 3000);
   };
 
   const showActionSuccessNotice = (
@@ -323,7 +403,6 @@ export function HistoryPanel({
     };
   }, [openActionsTarget]);
 
-  const activeDocumentKey = documentId ?? fileName;
   const deleteDocumentChanged =
     deleteTarget !== null && deleteTarget.documentId !== activeDocumentKey;
   const visibleDeleteTarget = deleteDocumentChanged ? null : deleteTarget;
@@ -412,6 +491,42 @@ export function HistoryPanel({
     }
   }, [activePreviewId, items, selectedVersionId]);
 
+  useEffect(() => {
+    if (
+      inlineMarkFeedback === null ||
+      inlineMarkFeedback.documentId !== activeDocumentKey ||
+      status !== "available" ||
+      items === inlineMarkFeedback.itemsAtCommit ||
+      items.some((item) => item.versionId === inlineMarkFeedback.versionId)
+    ) {
+      return;
+    }
+    const removedAnnouncementId = inlineMarkFeedback.announcementId;
+    queueMicrotask(() => {
+      setInlineMarkFeedback((current) =>
+        current?.announcementId === removedAnnouncementId ? null : current,
+      );
+    });
+  }, [activeDocumentKey, inlineMarkFeedback, items, status]);
+
+  useEffect(() => {
+    if (selectedVersionId === undefined) return;
+    setInlineMarkFeedback((current) => {
+      if (
+        current === null ||
+        current.documentId !== activeDocumentKey ||
+        current.versionId === selectedVersionId
+      ) {
+        return current;
+      }
+      if (inlineSuccessTimerRef.current !== null) {
+        clearTimeout(inlineSuccessTimerRef.current);
+        inlineSuccessTimerRef.current = null;
+      }
+      return null;
+    });
+  }, [activeDocumentKey, selectedVersionId]);
+
   const selectItem = (item: HistoryVersionView) => {
     clearActionSuccessNotice();
     if (item.versionId !== reusedTargetId) setReusedTargetId(null);
@@ -497,12 +612,17 @@ export function HistoryPanel({
 
   const handleMark = async () => {
     if (onMark === undefined || processing || markIsProcessing) return;
+    const operationDocumentKey = activeDocumentKey;
     const noticeGeneration = clearActionSuccessNotice();
     setMarkFeedback(null);
     setMarkBusy(true);
     try {
       const result = await onMark();
-      if (noticeGeneration !== actionNoticeGenerationRef.current) return;
+      if (
+        noticeGeneration !== actionNoticeGenerationRef.current ||
+        operationDocumentKey !== activeDocumentRef.current
+      )
+        return;
       const outcome = result ?? undefined;
       if (outcome !== undefined && selectedVersionId === undefined) {
         setInternalSelectedId(outcome.versionId);
@@ -511,26 +631,35 @@ export function HistoryPanel({
       if (outcome?.reused) {
         setReusedTargetId(outcome.versionId);
       }
-      const reusedItem = outcome?.reused
-        ? items.find((item) => item.versionId === outcome.versionId)
-        : undefined;
-      showActionSuccessNotice(
-        noticeGeneration,
-        outcome?.reused
-          ? {
-              title:
-                reusedItem === undefined
-                  ? "Already marked"
-                  : `Already marked · v-${String(reusedItem.sequence).padStart(3, "0")}`,
-              message: "No new version. Focus moved to the saved version.",
-            }
-          : { title: "Version marked", message: markSuccessMessage },
-        outcome?.reused
-          ? "Already marked. Selected the existing version."
-          : markSuccessMessage,
-      );
+      if (outcome !== undefined) {
+        const identity = items.find(
+          (item) => item.versionId === outcome.versionId,
+        )?.sequence;
+        const announcementIdentity =
+          identity === undefined
+            ? outcome.versionId
+            : `v-${String(identity).padStart(3, "0")}`;
+        showInlineMarkFeedback(
+          noticeGeneration,
+          outcome.versionId,
+          outcome.reused ? "Already marked · no new version" : "Marked",
+          outcome.reused
+            ? `Already marked · no new version · ${announcementIdentity}`
+            : `Marked · ${announcementIdentity}`,
+        );
+      } else {
+        showActionSuccessNotice(
+          noticeGeneration,
+          { title: "Version marked", message: markSuccessMessage },
+          markSuccessMessage,
+        );
+      }
     } catch (error) {
-      if (noticeGeneration !== actionNoticeGenerationRef.current) return;
+      if (
+        noticeGeneration !== actionNoticeGenerationRef.current ||
+        operationDocumentKey !== activeDocumentRef.current
+      )
+        return;
       const message =
         markErrorMessage ??
         (error instanceof Error
@@ -546,12 +675,17 @@ export function HistoryPanel({
     if (processing || setMarkedBusy || onSetMarked === undefined) {
       return;
     }
+    const operationDocumentKey = activeDocumentKey;
     const noticeGeneration = clearActionSuccessNotice();
     setMarkFeedback(null);
     setSetMarkedBusy(true);
     try {
       const result = await onSetMarked(item, marked);
-      if (noticeGeneration !== actionNoticeGenerationRef.current) return;
+      if (
+        noticeGeneration !== actionNoticeGenerationRef.current ||
+        operationDocumentKey !== activeDocumentRef.current
+      )
+        return;
       if (
         !marked &&
         result !== undefined &&
@@ -560,21 +694,49 @@ export function HistoryPanel({
       ) {
         exitPreview();
       }
-      const message = marked
-        ? "Version marked."
-        : result !== undefined && result.retained === false
-          ? "Version unmarked and removed by the retention policy."
-          : "Version unmarked.";
-      showActionSuccessNotice(
-        noticeGeneration,
-        {
-          title: marked ? "Version marked" : "Version unmarked",
+      if (result !== undefined && result.retained === false) {
+        const message = "Version unmarked and removed by the retention policy.";
+        showActionSuccessNotice(
+          noticeGeneration,
+          { title: "Version unmarked", message },
           message,
-        },
-        message,
-      );
+        );
+      } else if (result !== undefined) {
+        const identity = items.find(
+          (candidate) => candidate.versionId === result.versionId,
+        )?.sequence;
+        const announcementIdentity =
+          identity === undefined
+            ? result.versionId
+            : `v-${String(identity).padStart(3, "0")}`;
+        const message = marked ? "Marked" : "Unmarked";
+        showInlineMarkFeedback(
+          noticeGeneration,
+          result.versionId,
+          message,
+          `${message} · ${announcementIdentity}`,
+        );
+      } else {
+        const identity = items.find(
+          (candidate) => candidate.versionId === item.versionId,
+        )?.sequence;
+        const announcementIdentity =
+          identity === undefined
+            ? item.versionId
+            : `v-${String(identity).padStart(3, "0")}`;
+        showInlineMarkFeedback(
+          noticeGeneration,
+          item.versionId,
+          marked ? "Marked" : "Unmarked",
+          `${marked ? "Marked" : "Unmarked"} · ${announcementIdentity}`,
+        );
+      }
     } catch (error) {
-      if (noticeGeneration !== actionNoticeGenerationRef.current) return;
+      if (
+        noticeGeneration !== actionNoticeGenerationRef.current ||
+        operationDocumentKey !== activeDocumentRef.current
+      )
+        return;
       const message =
         markErrorMessage ??
         (error instanceof Error
@@ -1007,6 +1169,16 @@ export function HistoryPanel({
           </div>
         </div>
       </header>
+      <p
+        aria-atomic="true"
+        aria-live="polite"
+        className="visually-hidden"
+        role="status"
+      >
+        {inlineMarkFeedback?.documentId === activeDocumentKey
+          ? inlineMarkFeedback.announcement
+          : ""}
+      </p>
       <div
         aria-labelledby="history-retention-heading"
         className="history-retention-popover"
@@ -1094,6 +1266,11 @@ export function HistoryPanel({
                   <HistoryList
                     currentVersionId={currentVersionId}
                     items={items}
+                    successFeedback={
+                      inlineMarkFeedback?.documentId === activeDocumentKey
+                        ? inlineMarkFeedback
+                        : null
+                    }
                     onPreview={openPreview}
                     onRegisterRow={(versionId, element) => {
                       if (element === null) rowRefs.current.delete(versionId);

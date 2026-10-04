@@ -1,0 +1,664 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/26.8.2/bin/node",
+      "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config",
+      "e2e/playwright.config.ts",
+      "e2e/tests/local-version-history-t048.spec.ts",
+      "e2e/tests/local-version-history-t048-regression.spec.ts",
+      "--workers=2",
+      "--reporter=json",
+      "--output=/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-output"
+    ],
+    "configFile": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/playwright.config.ts",
+    "rootDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 2
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-output",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "browser-ui",
+        "name": "browser-ui",
+        "testDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "tests/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 2,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/local-version-history-t048-regression.spec.ts",
+      "file": "tests/local-version-history-t048-regression.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "workspace sidebar toggle remains effective while History is open",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1058,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:39.882Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5571f674fdefad22bde9-39513c2d80d7369f78a3",
+          "file": "tests/local-version-history-t048-regression.spec.ts",
+          "line": 46,
+          "column": 1
+        },
+        {
+          "title": "read-only version preview hides the SDK main-menu trigger and actions",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 752,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:41.038Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5571f674fdefad22bde9-9b0798125ad71167347f",
+          "file": "tests/local-version-history-t048-regression.spec.ts",
+          "line": 78,
+          "column": 1
+        },
+        {
+          "title": "Mark version preserves the action focus while History refreshes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4411,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:41.794Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5571f674fdefad22bde9-a1e28ba248f11a6ba0ce",
+          "file": "tests/local-version-history-t048-regression.spec.ts",
+          "line": 136,
+          "column": 1
+        },
+        {
+          "title": "production AppShell asks before replacing the selected history version",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 825,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:46.209Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5571f674fdefad22bde9-ba6e2c89efb0d986cb74",
+          "file": "tests/local-version-history-t048-regression.spec.ts",
+          "line": 164,
+          "column": 1
+        },
+        {
+          "title": "Mark feedback replaces the row badge, preserves geometry and expires",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 940,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m82\u001b[39m\nReceived: \u001b[31m64\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m82\u001b[39m\nReceived: \u001b[31m64\u001b[39m\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts:389:31",
+                    "location": {
+                      "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts",
+                      "column": 31,
+                      "line": 389
+                    },
+                    "snippet": "  387 |   });\n  388 |   expect(rowAfterMark.height).toBe(firstRowHeightBefore);\n> 389 |   expect(rowAfterMark.height).toBe(82);\n      |                               ^\n  390 |   expect(rowAfterMark.background).toBe(\"rgba(0, 0, 0, 0)\");\n  391 |   expect(rowAfterMark.borderWidth).toBe(\"0px\");\n  392 |   expect(rowAfterMark.boxShadow).toBe(\"none\");"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts",
+                        "column": 31,
+                        "line": 389
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m82\u001b[39m\nReceived: \u001b[31m64\u001b[39m\n\n  387 |   });\n  388 |   expect(rowAfterMark.height).toBe(firstRowHeightBefore);\n> 389 |   expect(rowAfterMark.height).toBe(82);\n      |                               ^\n  390 |   expect(rowAfterMark.background).toBe(\"rgba(0, 0, 0, 0)\");\n  391 |   expect(rowAfterMark.borderWidth).toBe(\"0px\");\n  392 |   expect(rowAfterMark.boxShadow).toBe(\"none\");\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts:389:31"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:47.039Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts",
+                    "column": 31,
+                    "line": 389
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "5571f674fdefad22bde9-313f6decf3fe32f0b9cb",
+          "file": "tests/local-version-history-t048-regression.spec.ts",
+          "line": 319,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/local-version-history-t048.spec.ts",
+      "file": "tests/local-version-history-t048.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "keeps the 360 px history drawer and fixed selection usable in light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1139,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:39.885Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-8c8e7f7a8690cdc6422e",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 49,
+          "column": 3
+        },
+        {
+          "title": "keeps the 360 px history drawer and fixed selection usable in dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 883,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:41.118Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-fcd27cb4b04a10c8e999",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 49,
+          "column": 3
+        },
+        {
+          "title": "resizes by drag and keyboard without changing the selected version",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 946,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:42.005Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-2838bc9c4fdb24ae7310",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 168,
+          "column": 1
+        },
+        {
+          "title": "keeps the 360 px default drawer inside a narrow viewport",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 802,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:42.958Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-51e49cece6d4a787ad3b",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 210,
+          "column": 1
+        },
+        {
+          "title": "honors reduced motion and keeps row focus visible with 50 versions",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 720,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:43.764Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-22c4291db1cf5d5a8517",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 276,
+          "column": 1
+        },
+        {
+          "title": "matches approved History hierarchy and typography before native packaging",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 685,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:44.488Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "design-contract-comparison",
+                      "contentType": "application/json",
+                      "body": "ewogICJhY3R1YWwiOiB7CiAgICAicmVkdW5kYW50RXllYnJvd0NvdW50IjogMCwKICAgICJmb250RmFtaWxpZXMiOiBbCiAgICAgICItYXBwbGUtc3lzdGVtIiwKICAgICAgInN5c3RlbS11aSIsCiAgICAgICJTZWdvZSBVSSIsCiAgICAgICJzYW5zLXNlcmlmIgogICAgXSwKICAgICJoZWFkaW5nU2l6ZSI6IDIwLAogICAgImhlYWRpbmdXZWlnaHQiOiA2MDAsCiAgICAiZmlsZW5hbWVTaXplIjogMTIsCiAgICAicm93SGVpZ2h0IjogODIsCiAgICAicm93UmFkaXVzIjogNiwKICAgICJzdW1tYXJ5U2l6ZSI6IDE0LAogICAgInN1bW1hcnlXZWlnaHQiOiA2MDAsCiAgICAic3VtbWFyeUJlZm9yZU1ldGFkYXRhIjogdHJ1ZSwKICAgICJjdXJyZW50Q2FyZEhlaWdodCI6IDU5LAogICAgInRhcmdldFdlaWdodCI6IDYwMCwKICAgICJwb2xpY3lPdXRzaWRlVmlzdWFsRmxvdyI6IHRydWUsCiAgICAiY291bnRBbmRNYXJrSW5saW5lIjogdHJ1ZSwKICAgICJhY3Rpb25UZXh0QWxpZ25tZW50IjogWwogICAgICAibGVmdCIsCiAgICAgICJsZWZ0IgogICAgXSwKICAgICJzZWNvbmRhcnlCYWNrZ3JvdW5kIjogInJnYigyNTUsIDI1NSwgMjU1KSIsCiAgICAiYWN0aW9uSGVpZ2h0cyI6IFsKICAgICAgMzgsCiAgICAgIDM4CiAgICBdLAogICAgImFjdGlvbldpZHRoUmF0aW8iOiAwLjg0LAogICAgImZvbnRzUmVhZHkiOiB0cnVlCiAgfSwKICAiZXhwZWN0ZWQiOiB7CiAgICAicmVkdW5kYW50RXllYnJvd0NvdW50IjogMCwKICAgICJmb250RmFtaWxpZXMiOiBbCiAgICAgICItYXBwbGUtc3lzdGVtIiwKICAgICAgInN5c3RlbS11aSIsCiAgICAgICJTZWdvZSBVSSIsCiAgICAgICJzYW5zLXNlcmlmIgogICAgXSwKICAgICJoZWFkaW5nU2l6ZSI6IDIwLAogICAgImhlYWRpbmdXZWlnaHQiOiA2MDAsCiAgICAiZmlsZW5hbWVTaXplIjogMTIsCiAgICAicm93SGVpZ2h0IjogODIsCiAgICAicm93UmFkaXVzIjogNiwKICAgICJzdW1tYXJ5U2l6ZSI6IDE0LAogICAgInN1bW1hcnlXZWlnaHQiOiA2MDAsCiAgICAic3VtbWFyeUJlZm9yZU1ldGFkYXRhIjogdHJ1ZSwKICAgICJjdXJyZW50Q2FyZEhlaWdodCI6IDU5LAogICAgInRhcmdldFdlaWdodCI6IDYwMCwKICAgICJwb2xpY3lPdXRzaWRlVmlzdWFsRmxvdyI6IHRydWUsCiAgICAiY291bnRBbmRNYXJrSW5saW5lIjogdHJ1ZSwKICAgICJhY3Rpb25UZXh0QWxpZ25tZW50IjogWwogICAgICAibGVmdCIsCiAgICAgICJsZWZ0IgogICAgXSwKICAgICJzZWNvbmRhcnlCYWNrZ3JvdW5kIjogInJnYigyNTUsIDI1NSwgMjU1KSIsCiAgICAiYWN0aW9uSGVpZ2h0cyI6IFsKICAgICAgMzgsCiAgICAgIDM4CiAgICBdLAogICAgImFjdGlvbldpZHRoUmF0aW8iOiAwLjg0LAogICAgImZvbnRzUmVhZHkiOiB0cnVlCiAgfQp9"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-ac67200ee71370534a4c",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 309,
+          "column": 1
+        },
+        {
+          "title": "keeps populated History geometry stable through both Mark paths",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 4425,
+                  "errors": [],
+                  "stdout": [
+                    {
+                      "text": "MARK_GEOMETRY [{\"action\":\"current\",\"calls\":[\"history_mark\",\"history_list\"],\"scrolls\":1,\"samples\":[[0,0,203,241,480,4433]],\"done\":true},{\"action\":\"current\",\"calls\":[\"history_mark\",\"history_list\"],\"scrolls\":0,\"samples\":[[0,0,203,241,480,4433]],\"done\":true},{\"action\":\"row\",\"calls\":[\"history_set_marked\",\"history_list\"],\"scrolls\":0,\"samples\":[[0,0,203,241,480,4433]],\"done\":true}]\n"
+                    }
+                  ],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:45.178Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "mark-geometry",
+                      "contentType": "application/json",
+                      "body": "WwogIHsKICAgICJhY3Rpb24iOiAiY3VycmVudCIsCiAgICAiY2FsbHMiOiBbCiAgICAgICJoaXN0b3J5X21hcmsiLAogICAgICAiaGlzdG9yeV9saXN0IgogICAgXSwKICAgICJzY3JvbGxzIjogMSwKICAgICJzYW1wbGVzIjogWwogICAgICBbCiAgICAgICAgMCwKICAgICAgICAwLAogICAgICAgIDIwMywKICAgICAgICAyNDEsCiAgICAgICAgNDgwLAogICAgICAgIDQ0MzMKICAgICAgXQogICAgXSwKICAgICJkb25lIjogdHJ1ZQogIH0sCiAgewogICAgImFjdGlvbiI6ICJjdXJyZW50IiwKICAgICJjYWxscyI6IFsKICAgICAgImhpc3RvcnlfbWFyayIsCiAgICAgICJoaXN0b3J5X2xpc3QiCiAgICBdLAogICAgInNjcm9sbHMiOiAwLAogICAgInNhbXBsZXMiOiBbCiAgICAgIFsKICAgICAgICAwLAogICAgICAgIDAsCiAgICAgICAgMjAzLAogICAgICAgIDI0MSwKICAgICAgICA0ODAsCiAgICAgICAgNDQzMwogICAgICBdCiAgICBdLAogICAgImRvbmUiOiB0cnVlCiAgfSwKICB7CiAgICAiYWN0aW9uIjogInJvdyIsCiAgICAiY2FsbHMiOiBbCiAgICAgICJoaXN0b3J5X3NldF9tYXJrZWQiLAogICAgICAiaGlzdG9yeV9saXN0IgogICAgXSwKICAgICJzY3JvbGxzIjogMCwKICAgICJzYW1wbGVzIjogWwogICAgICBbCiAgICAgICAgMCwKICAgICAgICAwLAogICAgICAgIDIwMywKICAgICAgICAyNDEsCiAgICAgICAgNDgwLAogICAgICAgIDQ0MzMKICAgICAgXQogICAgXSwKICAgICJkb25lIjogdHJ1ZQogIH0KXQ=="
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-dd41b4ba775588c54043",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 414,
+          "column": 1
+        },
+        {
+          "title": "History info explains retention without displacing the version list",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 800,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:49.607Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-d82058e81dcd39d04a1a",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 635,
+          "column": 1
+        },
+        {
+          "title": "unavailable selection explains the failure and prevents preview and restore",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 772,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:50.410Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-639eefc42663c4e53523",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 656,
+          "column": 1
+        },
+        {
+          "title": "History info hover preserves focus and shared thin scrollbar styling",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 988,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:49:51.186Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-571f97ed5137d2c7f9f4",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 726,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-04T06:49:39.659Z",
+    "duration": 12559.058,
+    "expected": 14,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
   "status": "APPROVED_HIGH_FIDELITY",
-  "approvedAt": "2026-09-30",
-  "ownerDecision": "Review通过，请保存并持久化screenshots到本地仓库。 2026-09-30追加批准：采用标题旁信息按钮。",
+  "approvedAt": "2026-10-03",
+  "ownerDecision": "Review通过，请保存并持久化screenshots到本地仓库。 2026-09-30追加批准：采用标题旁信息按钮。 2026-10-03：无背景行内短提示局部 Penpot Review通过。请继续。",
   "scope": "Design approval only; implementation, native acceptance and incident review remain separate.",
   "penpot": {
     "fileId": "a5ac146a-5787-80fa-8008-b3c2d0b30bae",
     "fileName": "excalidraw-desktop-uxui-redesign",
     "pageId": "87d1db27-904b-80ba-8008-aeafe0fb388d",
     "pageName": "05 · Local Version History · T004",
-    "liveRevisionBeforeExport": 102,
-    "liveRevisionAfterExport": 102,
-    "archiveInternalRevision": 105,
-    "revisionNote": "Live MCP revision and exported archive revision recorded independently."
+    "liveRevisionBeforeExport": null,
+    "liveRevisionAfterExport": null,
+    "archiveInternalRevision": 108,
+    "revisionNote": "Current owner-supplied archive revision108 verified; live MCP revision not sampled for this download. Prior export live revisions retained in history."
   },
   "viewport": {
     "width": 1280,
@@ -20,9 +20,9 @@
   },
   "source": {
     "path": "source/excalidraw-desktop-uxui-redesign.penpot",
-    "sha256": "1565e8a4f5f704b0aed05bf3343dd32fa214e0abef38c369c16ad81b9efed8b4",
-    "bytes": 2654193,
-    "exportMethod": "Official Playwright MCP extension; existing Chrome Penpot tab, Main menu > File > Download Penpot file (.penpot)",
+    "sha256": "c77a892a1a61eb439cab212a8c13aae0edf4d37ed43f12fe6a221d1f111ec7ec",
+    "bytes": 2657279,
+    "exportMethod": "Owner supplied official Chrome Penpot UI download: excalidraw-desktop-uxui-redesign-2026100301.penpot",
     "archiveIntegrity": "PASS",
     "filePageAndSevenBoardIds": "PASS",
     "hiddenDuplicateEyebrows": 7,
@@ -33,7 +33,8 @@
     },
     "currentBackfillIncluded": true,
     "componentAnatomyAnnotations": 425,
-    "historyInfoButtons": 7
+    "historyInfoButtons": 7,
+    "archiveAnnotationNote": "Legacy shared anatomy mentions canvas feedback; the 2026-10-03 OWNER_APPROVED inline-feedback-delta on boards05/06 and implementation-map supersede it. Download archived byte-for-byte, no manual archive edits."
   },
   "frames": [
     {
@@ -72,7 +73,7 @@
       "name": "T048 · 05 · Repeated Mark · Long List · Light",
       "shapeId": "b48ddf15-5062-8001-8008-b5756dd21737",
       "path": "screens/05-repeated-mark-long-list-light.png",
-      "sha256": "2516544c824f08c0680b8fe43bbe09fe533594c2ba3c2497a9b16864b9a2b21a",
+      "sha256": "3d1cfa8a335998cfd0de6e78722e63b191489d5759ba07d30a7a144eed8920d0",
       "width": 1280,
       "height": 760
     },
@@ -80,7 +81,7 @@
       "name": "T048 · 06 · History · Compact 300 · Dark",
       "shapeId": "b48ddf15-5062-8001-8008-b57586ef024c",
       "path": "screens/06-history-compact-dark.png",
-      "sha256": "a1580f7fabbc96db657ea588645071a98b62b1afa1eec14dfa3746ab91388ad9",
+      "sha256": "7cc817c1ed3c10ff1c819d1b8dccaffc4cc5e4a95ee94bd68f33dd784091d23f",
       "width": 1280,
       "height": 760
     },
@@ -98,7 +99,7 @@
     "header": "Main title, filename, owner-approved History info button and Close; duplicate eyebrow removed.",
     "selectedActionWidthRatio": "146:174",
     "unavailable": "Seventh state approved by this owner review; Draft suffix preserved from the exported source name.",
-    "feedback": "Owner-approved: canvas bottom-right near History, right 24px / bottom 64px; newest success only, 4000ms expiry; later actions replace prior feedback.",
+    "feedback": "Owner-approved: transient target-version badge-slot text, secondary color, 11px medium, transparent background, no border/shadow/uppercase; latest-only 3000ms expiry restores persistent badge. Retention-removed Unmark and Delete retain existing canvas fallback.",
     "historyInfo": "Hover opens without moving focus; entering popover keeps it open; click/keyboard and Escape remain available."
   },
   "validation": {
@@ -111,11 +112,15 @@
   "task": "T048/T055",
   "history": {
     "storage": "Git history only",
-    "previousLayoutCommit": "45630f81c429ba30effe12118c200f193e713745"
+    "previousLayoutCommit": "45630f81c429ba30effe12118c200f193e713745",
+    "previousExportLiveRevision": {
+      "before": 102,
+      "after": 102
+    }
   },
   "tokens": {
     "path": "tokens.json",
-    "sha256": "83eb85e289c869e6e9cd56538a377028075750ff2d45fde29f1c79f2ea260f73",
+    "sha256": "6495977e506b1cc690b0eae888ec8bd35ace99dff27c1278a7fdd47e1989f57b",
     "basePath": "docs/design/desktop-shell/hf-2/tokens.json",
     "baseSha256": "151826bbcea894cb64e59899ee85651ff13f2205df0b65768d048bf12c37b184"
   },

@@ -870,7 +870,7 @@ describe("AppShell", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("selects the reused version and refreshes its single success notice timer", async () => {
+  it("selects the reused version and refreshes its inline feedback timer", async () => {
     const activeNoticeTimers = new Map<number, () => void>();
     let timerSequence = 0;
     const realSetTimeout = globalThis.setTimeout;
@@ -880,7 +880,7 @@ describe("AppShell", () => {
       timeout?: number,
       ...args: unknown[]
     ) => {
-      if (timeout === 4000 && typeof handler === "function") {
+      if (timeout === 3000 && typeof handler === "function") {
         const id = ++timerSequence;
         activeNoticeTimers.set(id, handler as () => void);
         return id as unknown as ReturnType<typeof setTimeout>;
@@ -954,11 +954,20 @@ describe("AppShell", () => {
       for (let turn = 0; turn < 12; turn += 1) await Promise.resolve();
     });
 
-    const reuseMessage = screen.getByText("Already marked · v-001");
-    const reuseNotice = reuseMessage.closest('[role="status"]');
-    expect(reuseNotice).not.toBeNull();
-    expect(reuseNotice).toHaveTextContent("Already marked · v-001");
-    expect(reuseNotice).toHaveTextContent("No new version.");
+    const historyPanel = screen.getByRole("complementary", {
+      name: "Version History",
+    });
+    expect(
+      within(screen.getByRole("option")).getByText(
+        "Already marked · no new version",
+        { exact: true },
+      ),
+    ).toBeInTheDocument();
+    expect(
+      historyPanel.querySelector('[role="status"][aria-live="polite"]'),
+    ).toHaveTextContent("Already marked · no new version · v-001");
+    expect(screen.queryByRole("status", { name: /Already marked/ })).toBeNull();
+    expect(document.querySelector(".history-action-notice")).toBeNull();
     expect(invoker).toHaveBeenCalledWith(
       "history_mark",
       expect.objectContaining({
@@ -976,15 +985,28 @@ describe("AppShell", () => {
     await act(async () => {
       for (let turn = 0; turn < 12; turn += 1) await Promise.resolve();
     });
-    expect(screen.getByText("Already marked · v-001")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("option")).getByText(
+        "Already marked · no new version",
+        { exact: true },
+      ),
+    ).toBeInTheDocument();
     const secondNoticeTimer = [...activeNoticeTimers.values()][0];
     expect(secondNoticeTimer).toBeDefined();
     expect(secondNoticeTimer).not.toBe(firstNoticeTimer);
     act(() => firstNoticeTimer?.());
-    expect(screen.getByText("Already marked · v-001")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("option")).getByText(
+        "Already marked · no new version",
+        { exact: true },
+      ),
+    ).toBeInTheDocument();
     act(() => secondNoticeTimer?.());
     expect(
-      screen.queryByText("Already marked · v-001"),
+      within(screen.getByRole("option")).queryByText(
+        "Already marked · no new version",
+        { exact: true },
+      ),
     ).not.toBeInTheDocument();
   });
 

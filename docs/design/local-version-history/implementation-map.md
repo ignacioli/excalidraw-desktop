@@ -1,6 +1,6 @@
 # History component anatomy 与实现映射
 
-状态：2026-09-30 H0–H3及本轮反馈修复已完成。产品894228a本轮提示位置/生命周期、滚动条、History info hover已获owner定向复查通过；当前通知外观可接受，行内短提示为非阻塞后续优化。H4其余观察与H5未完成，不代表T048整体PASS。
+状态：2026-10-03 行内短提示的 Penpot 局部 Review 已通过，05 Light 与 06 Dark 300px 使用无背景的短提示；实现及定向 unit/browser 检查已完成，记录见[增量证据](../../evidence/local-version-history-t059/component-first/inline-feedback/README.md)。2026-09-30 H0–H3及反馈修复的历史结果保留；新包原生复查、H4其余观察与H5未完成，不代表T048整体PASS。
 
 ## 权威与实施入口
 
@@ -18,12 +18,12 @@
 | ------------------------------- | -------------------------------------- | -------------- | ------------------------------------------------------------ |
 | HISTORY-PANEL / extend          | HistoryPanel、history.css              | 01/06          | header/body/footer顺序；360→300；只有列表区滚动              |
 | HISTORY-CURRENT / new组合       | HistoryPanel                           | 01/05          | Current卡与count/Mark同行；数量真实；反馈不占列表空位        |
-| HISTORY-ROW / new组合           | HistoryList、historyFormat             | 01/05/06/07    | summary→metadata→badge；选中accent；长文案可读               |
+| HISTORY-ROW / new组合           | HistoryList、historyFormat             | 01/05/06/07    | summary→metadata→badge/瞬态短提示；选中accent；几何稳定       |
 | HISTORY-ACTIONS / extend        | HistoryPanel                           | 02             | 目标、Mark/Unmark、Delete顺序；键盘/焦点；不被scrollport裁切 |
 | HISTORY-DETAIL / new组合        | HistoryPanel                           | 01/05/07       | summary与ID分层；146:174按钮；Unavailable原因与禁用          |
 | HISTORY-PREVIEW / extend        | HistoryPreview、HistoryPanel、AppShell | 03             | 在画布区域独立只读展示；drawer保留；退出回焦点；零写入       |
 | HISTORY-CONFIRM / reuse+variant | ApplicationDialog、HistoryPanel        | 04             | 目标、说明、Cancel/Restore；初始Cancel焦点、返回             |
-| HISTORY-FEEDBACK / extend       | HistoryStates、AppShell、HistoryPanel  | 05/07+行为合同 | 状态/错误可见；重复Mark画布侧提示；标题旁信息入口            |
+| HISTORY-FEEDBACK / extend       | HistoryStates、AppShell、HistoryPanel  | 05/06/07+行为合同 | 目标行成功短提示；持续错误与移除fallback；标题旁信息入口  |
 
 ## HISTORY-PANEL：框架与Header
 
@@ -50,6 +50,7 @@ Anatomy：content列依次summary → formatted time · source → status badge�
 - summary：body14/600；不可靠时`Canvas changed`。单行省略保留完整可访问文本/悬停说明。metadata：label12/400；Today/Yesterday+时间，较早日期用短日期，完整日期放time title/dateTime；统一formatter处理无效值，不直接平铺原始时间戳。
 - 常规参考行82px/radius6，selected左3px accent+批准surface，无整圈accent替代。默认panel白/暗主题surface；More32px hit/icon16px。
 - READY/MARKED为badge；Unavailable优先，带警告图标与danger色，不用虚线表达。marked不重复显示`Manual · Marked`字段。保留marked的可访问语义，preview/当前等组合不得掩盖unavailable。
+- 2026-10-03 批准增量：正常 Mark/Unmark 成功时，在实际目标版本的 badge slot 暂时显示 `✓ Marked`、`✓ Unmarked` 或 `✓ Already marked · no new version`。使用共享 `font.size.micro`（11px）、`font.weight.medium`（500）及 `color.text.secondary`；无背景、边框或阴影，不使用 uppercase。复用原 slot 的高度与 padding，不增加行高、不推列表、不做动画。3秒后按真实数据恢复 READY/MARKED；Unavailable/Current/Preview 状态优先且不能被成功结果遮蔽，结果仍由 polite live region 公告。Light 与 Dark300 为代表状态。
 - 长文案不扩张横向scrollport；状态原因在detail显示完整；metadata可压缩/截断并保留完整文本，不为82px裁掉关键交互。
 - 不改变listbox/roving focus/Enter preview既有行为；unavailable仍可选中查看原因，但不能preview/restore。
 - 验收：slot顺序与字重；Ready/Marked/Unavailable代表；selected不改变外部尺寸；300px长文件/摘要无横向溢出；键盘语义沿用现有tests。
@@ -87,8 +88,8 @@ Anatomy：画布侧覆盖层 → toolbar（Preview · v-NNN · summary、只读�
 
 ## HISTORY-FEEDBACK：状态和提示
 
-- Mark/Unmark成功反馈：复用单一画布侧328×77参考notice，owner本轮决定锚定画布右下角，right24px/bottom64px（避开SDK底部控件），不使用百分比top。最新提示替换旧提示，4秒自动消失；下一操作、选择/文档/关闭等context变化立即清旧提示，迟到结果不得复活。重复Mark标题`Already marked · v-NNN`，正文`No new version. Focus moved to the saved version.`；无列表内长段落或永久空白占位。id绑定当前文档/版本，切换或关闭清理，避免陈旧提示。
-- 新mark/row mark/unmark：成功反馈交同一个canvas notice，不另在列表上放成功浮层；live announcement不抢焦点。error仍在操作上下文可读，不随成功TTL自动隐藏。
+- Mark/Unmark成功反馈：使用 HISTORY-ROW 的瞬态文字，绑定 `documentId` 与操作返回的 `versionId`，不能绑定当前 selection。覆盖 Mark current 新建/复用、行菜单 Mark/Unmark。新操作替换旧反馈并重新计时3000ms；旧 timer、迟到结果不得覆盖新状态。选择、文档切换、关闭及目标移除清理提示；正常异步刷新不能让新提示提前失效。复用既有选择/定位行为，不为反馈增加滚动或抢焦点。已移出可视区域的目标仍可通过独立、持续挂载的 polite live region 感知结果；公告带版本身份。持久 marked 语义独立于瞬态结果，Unmark 不留下错误 MARKED 状态。
+- 普通新mark/复用/row mark/retained unmark 不再调用 canvas success notice，避免重复视觉与公告。Unmark 返回 `retained=false` 时目标已移除，保留现有简短 canvas fallback，明确 retention 移除，不挂到下一行。Delete 沿用现有反馈；旧 void 回调无法提供 Mark current 目标时保留兼容 fallback，不伪造版本绑定。fallback 沿用4秒生命周期；error仍在操作上下文可读、持续，不随成功TTL自动隐藏。2026-09-30 的画布侧大通知设计作为历史保留，不再支配普通 Mark/Unmark 成功。
 - Loading/empty/processing/permissionDenied/conflict/resourceUnavailable/error复用HistoryStateView。title、body、可选Retry按统一text/button角色；没有retry回调不虚构操作，empty不出现Retry。processing避免断言尚未确认的磁盘结果。
 - **保留策略已由owner选择标题旁信息按钮**：Header标题行右侧、Close左侧放32px低强调共享IconButton，accessible name/tooltip为`History info`。悬停显示锚定信息popover，鼠标移入popover保持，移出短暂延迟后关闭；保留点击/键盘打开（纯hover不抢焦点）。弹层标题`Version retention`，正文解释最新20条automatic/before-operation共享池、无按年龄过期、manual不自动删除。默认关闭，不挤占列表；按钮aria-expanded/aria-controls，Escape或再次点击关闭，键盘焦点返回入口；点击外部可关闭。Popover内容可选择/阅读，长文案在drawer内换行，不用hover-only tooltip承载完整规则。
 - 状态与错误按实际数据，不为像素一致修改业务语义。Recovery仅复用现有异常退出草稿流程。

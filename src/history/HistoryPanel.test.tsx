@@ -117,7 +117,7 @@ describe("HistoryPanel", () => {
     }
   });
 
-  it("routes Mark and Unmark success through one notice and clears an old notice on action", async () => {
+  it("shows Mark and Unmark success on the returned target without a canvas notice", async () => {
     const item = makeItem({ versionId: "version-1", marked: true });
     const onSuccessNotice = vi.fn();
     const onClearSuccessNotice = vi.fn();
@@ -146,10 +146,16 @@ describe("HistoryPanel", () => {
       );
       await Promise.resolve();
     });
-    expect(onSuccessNotice).toHaveBeenLastCalledWith({
-      title: "Already marked · v-001",
-      message: "No new version. Focus moved to the saved version.",
-    });
+    expect(onSuccessNotice).not.toHaveBeenCalled();
+    expect(
+      within(screen.getByRole("option")).getByText(
+        "Already marked · no new version",
+        { exact: true },
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("status").map((node) => node.textContent),
+    ).toContain("Already marked · no new version · v-001");
     expect(
       screen.queryByText("Already marked. Selected the existing version."),
     ).not.toBeInTheDocument();
@@ -162,10 +168,13 @@ describe("HistoryPanel", () => {
       await Promise.resolve();
     });
     expect(onClearSuccessNotice).toHaveBeenCalledTimes(2);
-    expect(onSuccessNotice).toHaveBeenLastCalledWith({
-      title: "Version unmarked",
-      message: "Version unmarked.",
-    });
+    expect(onSuccessNotice).not.toHaveBeenCalled();
+    expect(
+      within(screen.getByRole("option")).getByText("Unmarked", {
+        exact: true,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("option")).toHaveAccessibleName(/Marked$/);
   });
 
   it("fails closed when the caller cannot provide a rendered preview", () => {
@@ -452,13 +461,14 @@ describe("HistoryPanel", () => {
         status={status}
       />,
     );
-    expect(
-      screen.getByRole(
-        status === "loading" || status === "empty" || status === "processing"
-          ? "status"
-          : "alert",
-      ),
-    ).toHaveTextContent(title);
+    const stateRole =
+      status === "loading" || status === "empty" || status === "processing"
+        ? "status"
+        : "alert";
+    const state = screen
+      .getAllByRole(stateRole)
+      .find((node) => node.textContent?.includes(title));
+    expect(state).toHaveTextContent(title);
   });
 
   it("keeps preview separate and returns Escape focus to the triggering row", async () => {
@@ -677,9 +687,9 @@ describe("HistoryPanel", () => {
     );
 
     expect(onMark).toHaveBeenCalledOnce();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Version marked and saved to history.",
-    );
+    expect(
+      screen.getAllByRole("status").map((node) => node.textContent),
+    ).toContain("Version marked and saved to history.");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
@@ -737,8 +747,14 @@ describe("HistoryPanel", () => {
       screen.getByRole("button", { name: "Mark current version" }),
     );
     expect(
-      screen.getByText("Already marked. Selected the existing version."),
+      within(screen.getByRole("option")).getByText(
+        "Already marked · no new version",
+        { exact: true },
+      ),
     ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("status").map((node) => node.textContent),
+    ).toContain("Already marked · no new version · v-002");
     expect(
       screen.getByRole("region", { name: "Selected version actions" }),
     ).toHaveTextContent("Selected version · reused target");
@@ -755,8 +771,289 @@ describe("HistoryPanel", () => {
       screen.getByRole("button", { name: "Mark current version" }),
     );
     expect(
-      screen.queryByText("Already marked. Selected the existing version."),
+      screen.queryByText("Already marked · no new version", { exact: true }),
     ).not.toBeInTheDocument();
+  });
+
+  it("binds row feedback to the returned version instead of the selected row", async () => {
+    const user = userEvent.setup();
+    const selected = makeItem({ versionId: "version-1", sequence: 1 });
+    const target = makeItem({
+      versionId: "version-2",
+      sequence: 2,
+      marked: true,
+    });
+    render(
+      <HistoryPanel
+        documentId="document-a"
+        fileName="drawing.excalidraw"
+        items={[selected, target]}
+        onClose={vi.fn()}
+        onSetMarked={vi.fn(async () => ({
+          versionId: target.versionId,
+          marked: false,
+          retained: true,
+        }))}
+        selectedVersionId={selected.versionId}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /More actions for v-002/ }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Unmark version" }));
+
+    const rows = screen.getAllByRole("option");
+    expect(
+      within(rows[1]!).getByText("Unmarked", { exact: true }),
+    ).toBeInTheDocument();
+    expect(within(rows[0]!).queryByText("Unmarked")).not.toBeInTheDocument();
+    expect(rows[1]).toHaveAccessibleName(/Marked$/);
+    expect(
+      screen.getAllByRole("status").map((node) => node.textContent),
+    ).toContain("Unmarked · v-002");
+  });
+
+  it("keeps void row callbacks inline on their known target", async () => {
+    const user = userEvent.setup();
+    const item = makeItem({
+      versionId: "version-4",
+      sequence: 4,
+      marked: true,
+    });
+    const onSuccessNotice = vi.fn();
+    render(
+      <HistoryPanel
+        fileName="drawing.excalidraw"
+        items={[item]}
+        onClose={vi.fn()}
+        onSetMarked={vi.fn(async () => undefined)}
+        onSuccessNotice={onSuccessNotice}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: /More actions for v-004/ }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Unmark version" }));
+
+    expect(
+      within(screen.getByRole("option")).getByText("Unmarked", {
+        exact: true,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("status").map((node) => node.textContent),
+    ).toContain("Unmarked · v-004");
+    expect(onSuccessNotice).not.toHaveBeenCalled();
+  });
+
+  it("clears row feedback when its target disappears from a refreshed list", async () => {
+    const user = userEvent.setup();
+    const target = makeItem({ versionId: "version-1", marked: true });
+    const retained = makeItem({ versionId: "version-2", sequence: 2 });
+    const items = [target, retained];
+    const props = {
+      fileName: "drawing.excalidraw",
+      onClose: vi.fn(),
+      onSetMarked: vi.fn(async () => ({
+        versionId: target.versionId,
+        marked: false,
+        retained: true,
+      })),
+    };
+    const { rerender } = render(<HistoryPanel {...props} items={items} />);
+    await user.click(
+      screen.getByRole("button", { name: /More actions for v-001/ }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Unmark version" }));
+    expect(screen.getByText("Unmarked", { exact: true })).toBeInTheDocument();
+
+    rerender(<HistoryPanel {...props} items={[retained]} />);
+    expect(
+      screen.queryByText("Unmarked", { exact: true }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps success through refresh and replaces old expiry timers", async () => {
+    vi.useFakeTimers();
+    try {
+      const item = makeItem({ versionId: "version-1", sequence: 1 });
+      const onMark = vi.fn(async () => ({
+        versionId: item.versionId,
+        reused: true,
+      }));
+      const initialItems = [item];
+      const props = {
+        documentId: "document-a",
+        fileName: "drawing.excalidraw",
+        onClose: vi.fn(),
+        onMark,
+      };
+      const view = render(<HistoryPanel {...props} items={initialItems} />);
+      const mark = screen.getByRole("button", { name: "Mark current version" });
+
+      await act(async () => {
+        fireEvent.click(mark);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+      await act(async () => {
+        fireEvent.click(mark);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(onMark).toHaveBeenCalledTimes(2);
+      expect(vi.getTimerCount()).toBe(1);
+      view.rerender(
+        <HistoryPanel
+          {...props}
+          fileName="renamed.excalidraw"
+          items={[{ ...item, summary: "Refreshed" }]}
+        />,
+      );
+      expect(
+        within(screen.getByRole("option")).getByText(
+          "Already marked · no new version",
+          { exact: true },
+        ),
+      ).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+      expect(
+        screen.queryByText("Already marked · no new version", { exact: true }),
+      ).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1499);
+      });
+      expect(
+        screen.queryByText("Already marked · no new version", { exact: true }),
+      ).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(
+        screen.queryByText("Already marked · no new version", { exact: true }),
+      ).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows a new mark when its target first arrives in the refreshed list", async () => {
+    const user = userEvent.setup();
+    let resolveMark:
+      ((result: { versionId: string; reused: boolean }) => void) | undefined;
+    const onMark = vi.fn(
+      () =>
+        new Promise<{ versionId: string; reused: boolean }>((resolve) => {
+          resolveMark = resolve;
+        }),
+    );
+    const { rerender } = render(
+      <HistoryPanel
+        documentId="document-a"
+        fileName="drawing.excalidraw"
+        items={[]}
+        onClose={vi.fn()}
+        onMark={onMark}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Mark current version" }),
+    );
+    await act(async () => {
+      resolveMark?.({ versionId: "new-version", reused: false });
+      await Promise.resolve();
+    });
+
+    rerender(
+      <HistoryPanel
+        documentId="document-a"
+        fileName="drawing.excalidraw"
+        items={[makeItem({ versionId: "new-version", sequence: 3 })]}
+        onClose={vi.fn()}
+        onMark={onMark}
+      />,
+    );
+    expect(
+      within(screen.getByRole("option")).getByText("Marked", { exact: true }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("status").map((node) => node.textContent),
+    ).toContain("Marked · new-version");
+  });
+
+  it("ignores a late mark result after a document switch", async () => {
+    const user = userEvent.setup();
+    let resolveMark:
+      ((result: { versionId: string; reused: boolean }) => void) | undefined;
+    const onMark = vi.fn(
+      () =>
+        new Promise<{ versionId: string; reused: boolean }>((resolve) => {
+          resolveMark = resolve;
+        }),
+    );
+    const props = {
+      fileName: "drawing.excalidraw",
+      onClose: vi.fn(),
+      onMark,
+    };
+    const { rerender } = render(
+      <HistoryPanel {...props} documentId="document-a" items={[makeItem()]} />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Mark current version" }),
+    );
+    rerender(
+      <HistoryPanel
+        {...props}
+        documentId="document-b"
+        items={[makeItem({ versionId: "other-version", sequence: 2 })]}
+      />,
+    );
+    await act(async () => {
+      resolveMark?.({ versionId: "version-1", reused: false });
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.queryByText("Marked", { exact: true }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole("status").map((node) => node.textContent),
+    ).not.toContain("Marked · v-001");
+  });
+
+  it("keeps mark errors persistent beyond the success feedback lifetime", async () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <HistoryPanel
+          fileName="drawing.excalidraw"
+          items={[makeItem()]}
+          onClose={vi.fn()}
+          onMark={vi.fn(async () => {
+            throw new Error("Mark failed");
+          })}
+        />,
+      );
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", { name: "Mark current version" }),
+        );
+        await Promise.resolve();
+      });
+      expect(screen.getByRole("alert")).toHaveTextContent("Mark failed");
+      act(() => vi.advanceTimersByTime(30_000));
+      expect(screen.getByRole("alert")).toHaveTextContent("Mark failed");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("explains when unmarking lets the retention policy remove the version", async () => {
@@ -1097,13 +1394,17 @@ describe("HistoryPanel", () => {
       }),
     );
     expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "true");
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
 
     resolveDelete?.();
     await vi.waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(
-        "Version deleted from history.",
-      );
+      expect(
+        screen
+          .getAllByRole("status")
+          .find((node) =>
+            node.textContent?.includes("Version deleted from history."),
+          ),
+      ).toHaveTextContent("Version deleted from history.");
     });
     expect(
       screen.getByRole("button", { name: "Close version history" }),

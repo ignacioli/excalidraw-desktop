@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "status": "OWNER_APPROVED",
+  "date": "2026-10-03",
+  "productCommit": "3b15dde32ad4ecc876a460006d18c16b8fd69ba2",
+  "requestSource": ".handoff/2026-09-30-history-h4-partial-handoff.md#下一chat首项版本行内短提示待实施",
+  "fileId": "a5ac146a-5787-80fa-8008-b3c2d0b30bae",
+  "pageId": "87d1db27-904b-80ba-8008-aeafe0fb388d",
+  "boards": [
+    {
+      "id": "b48ddf15-5062-8001-8008-b5756dd21737",
+      "name": "T048 · 05 · Repeated Mark · Long List · Light",
+      "delta": {
+        "status": "OWNER_APPROVED",
+        "components": [
+          "HISTORY-ROW",
+          "HISTORY-FEEDBACK"
+        ],
+        "placement": "Replace the existing badge content in the target version row. Keep row geometry unchanged.",
+        "durationMs": 3000,
+        "copy": {
+          "marked": "✓ Marked",
+          "unmarked": "✓ Unmarked",
+          "reused": "✓ Already marked · no new version"
+        },
+        "restore": "After 3000ms restore persistent READY/MARKED; unavailable/current/preview indicators retain priority.",
+        "target": "documentId + actual returned versionId; newest operation replaces feedback; ignore stale result/timer.",
+        "a11y": "Polite announcement; no focus change or extra scroll.",
+        "fallback": "Retention removed row keeps existing short canvas notice; Delete and persistent errors unchanged.",
+        "styles": "font.size.micro; font.weight.medium; color.text.secondary; transparent background, no border or shadow. Persistent READY/MARKED badge styling resumes after 3000ms.",
+        "representative": "Reused Mark -> MARKED",
+        "ownerDecision": "Penpot Review通过。请继续。",
+        "approvedAt": "2026-10-03"
+      }
+    },
+    {
+      "id": "b48ddf15-5062-8001-8008-b57586ef024c",
+      "name": "T048 · 06 · History · Compact 300 · Dark",
+      "delta": {
+        "status": "OWNER_APPROVED",
+        "components": [
+          "HISTORY-ROW",
+          "HISTORY-FEEDBACK"
+        ],
+        "placement": "Replace the existing badge content in the target version row. Keep row geometry unchanged.",
+        "durationMs": 3000,
+        "copy": {
+          "marked": "✓ Marked",
+          "unmarked": "✓ Unmarked",
+          "reused": "✓ Already marked · no new version"
+        },
+        "restore": "After 3000ms restore persistent READY/MARKED; unavailable/current/preview indicators retain priority.",
+        "target": "documentId + actual returned versionId; newest operation replaces feedback; ignore stale result/timer.",
+        "a11y": "Polite announcement; no focus change or extra scroll.",
+        "fallback": "Retention removed row keeps existing short canvas notice; Delete and persistent errors unchanged.",
+        "styles": "font.size.micro; font.weight.medium; color.text.secondary; transparent background, no border or shadow. Persistent READY/MARKED badge styling resumes after 3000ms.",
+        "representative": "Retained Unmark -> READY",
+        "ownerDecision": "Penpot Review通过。请继续。",
+        "approvedAt": "2026-10-03"
+      }
+    }
+  ],
+  "exports": [
+    {
+      "path": "design-review-light.png",
+      "sha256": "3d1cfa8a335998cfd0de6e78722e63b191489d5759ba07d30a7a144eed8920d0",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "path": "design-review-dark-300.png",
+      "sha256": "7cc817c1ed3c10ff1c819d1b8dccaffc4cc5e4a95ee94bd68f33dd784091d23f",
+      "width": 1280,
+      "height": 760
+    }
+  ],
+  "inspection": {
+    "kind": "Penpot design inspection only",
+    "rowHeightPx": 82,
+    "badgeHeightPx": 17,
+    "fontSizePx": 11,
+    "fontWeight": 500,
+    "unchangedRowGeometry": true,
+    "oldCanvasNoticeHidden": true,
+    "textBoundsFit": true,
+    "background": "transparent"
+  },
+  "productionImplementation": "COMPLETE_AUTOMATED_VALIDATION",
+  "canonicalArchive": "SYNCHRONIZED: owner-provided official Penpot download, byte-for-byte, revision108.",
+  "runtimeValidation": {
+    "unit": "87/87 PASS",
+    "typecheck": "PASS (implementation agent)",
+    "lint": "PASS",
+    "format": "PASS",
+    "browser": "Initial14/15; targeted final1/1 PASS; intermediate failures preserved",
+    "semantic": "Initial4/5; targeted final1/1 PASS; intermediate failures preserved",
+    "native": "PENDING",
+    "scope": "Frontend-only delta; no backend persistence or IPC changes"
+  },
+  "next": "Commit validated product checkpoint and execute one production seal, then coordinate exact-package native review and remaining Phase7 work.",
+  "ownerFeedback": {
+    "date": "2026-10-03",
+    "message": "这个提示没问题，但是字体背景难看。移除背景，或者你的推荐是？",
+    "response": "Remove transient inline-feedback background; retain existing secondary text color, 11px medium type and check mark.",
+    "scope": "Inline message accepted; this revised visual candidate has not yet received a separate owner verdict."
+  },
+  "approvedAt": "2026-10-03",
+  "ownerDecision": "Penpot Review通过。请继续。",
+  "sourceArchive": {
+    "path": "docs/design/local-version-history/high-fi/source/excalidraw-desktop-uxui-redesign.penpot",
+    "revision": 108,
+    "sha256": "c77a892a1a61eb439cab212a8c13aae0edf4d37ed43f12fe6a221d1f111ec7ec",
+    "filePageSevenBoards": "PASS",
+    "zipIntegrity": "PASS",
+    "inlineBackgroundCopyApproval": "PASS"
+  },
+  "nativePreparation": {
+    "manifest": "fixture-manifest.json",
+    "scope": "Fresh synthetic backend-only profile; no Tauri launch",
+    "nativeVerified": false
+  }
+}

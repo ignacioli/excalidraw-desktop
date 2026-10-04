@@ -112,6 +112,41 @@ describe("HistoryList", () => {
     expect(screen.getByText("Unavailable")).toBeInTheDocument();
   });
 
+  it("keeps persistent row states above transient success feedback", () => {
+    render(
+      <HistoryList
+        currentVersionId="current"
+        items={[
+          item({
+            versionId: "unavailable",
+            availability: {
+              status: "unavailable",
+              error: {
+                code: "HISTORY_RESOURCE_MISSING",
+                message: "Missing",
+                retriable: false,
+              },
+            },
+          }),
+          item({ versionId: "current" }),
+          item({ versionId: "preview" }),
+          item({ versionId: "ready" }),
+        ]}
+        previewVersionId="preview"
+        successFeedback={{ versionId: "unavailable", message: "Unmarked" }}
+        selectedVersionId="ready"
+      />,
+    );
+
+    expect(
+      screen.getByRole("option", { name: /Unavailable/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Current/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Preview/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Ready/ })).toBeInTheDocument();
+    expect(screen.queryAllByText("Unmarked", { exact: true })).toHaveLength(0);
+  });
+
   it("supports roving Arrow/Home/End selection and Enter preview", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();

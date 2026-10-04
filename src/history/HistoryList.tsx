@@ -21,6 +21,7 @@ export interface HistoryVersionView extends HistoryVersionItem {
 
 export interface HistoryListProps {
   items: readonly HistoryVersionView[];
+  successFeedback?: { versionId: string; message: string } | null;
   selectedVersionId?: string | null;
   currentVersionId?: string | null;
   previewVersionId?: string | null;
@@ -39,6 +40,7 @@ export interface HistoryListProps {
  */
 export function HistoryList({
   items,
+  successFeedback = null,
   selectedVersionId = null,
   currentVersionId = null,
   previewVersionId = null,
@@ -187,6 +189,25 @@ export function HistoryList({
                         <path d="M12 7v6m0 4h.01" />
                       </svg>
                       Unavailable
+                    </span>
+                  ) : successFeedback?.versionId === item.versionId &&
+                    !current &&
+                    !preview ? (
+                    <span className="history-list-inline-success">
+                      <svg
+                        aria-hidden="true"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m3 8 3.1 3.1L13 4.5" />
+                      </svg>
+                      {successFeedback.message}
                     </span>
                   ) : (
                     <span

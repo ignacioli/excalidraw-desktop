@@ -316,9 +316,9 @@ async function readHistoryRestoreCalls(
   );
 }
 
-test("Mark feedback is single, canvas-anchored and expires after Unmark", async ({
+test("Mark feedback replaces the row badge, preserves geometry and expires", async ({
   page,
-}) => {
+}, testInfo) => {
   await page.evaluate(() => {
     const browser = globalThis as typeof globalThis & {
       __TAURI_INTERNALS__: {
@@ -356,47 +356,107 @@ test("Mark feedback is single, canvas-anchored and expires after Unmark", async 
     };
   });
   const panel = historyPanel(page);
+  const targetAction = panel.getByRole("button", {
+    name: /More actions for v-001/,
+  });
+  const targetRow = targetAction
+    .locator("xpath=ancestor::li")
+    .getByRole("option");
+  const targetRowCard = targetRow.locator("xpath=..");
+  const firstRowHeightBefore = await targetRowCard.evaluate(
+    (node) => node.getBoundingClientRect().height,
+  );
   await panel
     .getByRole("button", { name: "Mark current version", exact: true })
     .click();
-  const notice = page.locator(".history-action-notice");
-  await expect(notice).toContainText("Already marked");
-  const canvasBox = await page
-    .getByRole("main", { name: "Drawing canvas" })
-    .boundingBox();
-  const noticeBox = await notice.boundingBox();
-  if (!canvasBox || !noticeBox)
-    throw new Error("Missing canvas feedback geometry");
-  expect(
-    Math.round(canvasBox.x + canvasBox.width - noticeBox.x - noticeBox.width),
-  ).toBe(24);
-  expect(
-    Math.round(canvasBox.y + canvasBox.height - noticeBox.y - noticeBox.height),
-  ).toBe(64);
+  const inlineFeedback = panel.locator(".history-list-inline-success");
+  await expect(inlineFeedback).toHaveText("Already marked · no new version");
+  await expect(page.locator(".history-action-notice")).toHaveCount(0);
+  const rowAfterMark = await targetRowCard.evaluate((node) => {
+    const feedback = node.querySelector(".history-list-inline-success");
+    const style = feedback ? getComputedStyle(feedback) : null;
+    return {
+      height: node.getBoundingClientRect().height,
+      background: style?.backgroundColor,
+      borderWidth: style?.borderTopWidth,
+      boxShadow: style?.boxShadow,
+      fontSize: style?.fontSize,
+      fontWeight: style?.fontWeight,
+      textTransform: style?.textTransform,
+    };
+  });
+  expect(rowAfterMark.height).toBe(firstRowHeightBefore);
+  expect(rowAfterMark.height).toBe(82);
+  expect(rowAfterMark.background).toBe("rgba(0, 0, 0, 0)");
+  expect(rowAfterMark.borderWidth).toBe("0px");
+  expect(rowAfterMark.boxShadow).toBe("none");
+  expect(rowAfterMark.fontSize).toBe("11px");
+  expect(rowAfterMark.fontWeight).toBe("500");
+  expect(rowAfterMark.textTransform).toBe("none");
+  await expect(
+    panel.locator('[role="status"][aria-live="polite"]'),
+  ).toContainText("Already marked · no new version · v-001");
+  await targetRowCard.screenshot({
+    path: testInfo.outputPath("history-inline-feedback-light-360.png"),
+  });
   await panel.getByRole("button", { name: "Preview", exact: true }).click();
   await expect(page.locator(".history-preview")).toBeVisible();
-  await panel.getByRole("button", { name: /More actions for/ }).click();
+  await targetAction.click();
   await panel
     .getByRole("menuitem", { name: "Unmark version", exact: true })
     .click();
-  await expect(notice).toContainText("Version unmarked");
-  expect(
-    await notice.evaluate((node) => {
-      const box = node.getBoundingClientRect();
-      return (
-        !node.closest("[inert]") &&
-        node.contains(
-          document.elementFromPoint(
-            box.x + box.width / 2,
-            box.y + box.height / 2,
-          ),
-        )
-      );
-    }),
-  ).toBe(true);
-  await expect(page.getByText(/Already marked/)).toHaveCount(0);
-  await expect(panel.locator(".history-mark-feedback.is-success")).toHaveCount(
-    0,
+  await expect(targetRow).toHaveAccessibleName(/· Preview$/);
+  await expect(inlineFeedback).toHaveCount(0);
+  await expect(
+    panel.locator('[role="status"][aria-live="polite"]'),
+  ).toContainText("Unmarked · v-001");
+  await expect(page.locator(".history-action-notice")).toHaveCount(0);
+  await page
+    .getByRole("region", { name: "Version preview", exact: true })
+    .getByRole("button", { name: "Exit version preview" })
+    .click();
+  await expect(inlineFeedback).toHaveText("Unmarked");
+  await expect(targetRow).toHaveAccessibleName(/· Ready$/);
+
+  await emitBrowserTauriEvent(page, "native-menu-command", {
+    command: "appearanceDark",
+  });
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-color-scheme",
+    "dark",
   );
-  await expect(notice).toHaveCount(0, { timeout: 6500 });
+  const resizeHandle = panel.getByRole("separator", {
+    name: "Resize version history panel",
+  });
+  await resizeHandle.focus();
+  await page.keyboard.press("Home");
+  await expect(resizeHandle).toHaveAttribute("aria-valuenow", "300");
+  await targetAction.click();
+  await panel
+    .getByRole("menuitem", { name: "Mark version", exact: true })
+    .click();
+  await expect(inlineFeedback).toHaveText("Marked");
+  const darkFeedbackStyle = await inlineFeedback.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      background: style.backgroundColor,
+      color: style.color,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+    };
+  });
+  expect(darkFeedbackStyle.background).toBe("rgba(0, 0, 0, 0)");
+  expect(darkFeedbackStyle.color).toBe(
+    await targetRow.evaluate(
+      (row) =>
+        getComputedStyle(row.querySelector(".history-list-source")!).color,
+    ),
+  );
+  expect(darkFeedbackStyle.fontSize).toBe("11px");
+  expect(darkFeedbackStyle.fontWeight).toBe("500");
+  await targetRowCard.screenshot({
+    path: testInfo.outputPath("history-inline-feedback-dark-300.png"),
+  });
+  await expect(inlineFeedback).toHaveCount(0, { timeout: 4500 });
+  await expect(targetRow).toHaveAccessibleName(/· Marked$/);
 });
