@@ -1,5 +1,7 @@
 # 本地版本历史：原生与视觉验收执行合同
 
+**2026-10-04 owner范围修订：** Parallels Desktop已不可用；本轮004/T049跳过虚拟机，仅在M5 Pro物理机执行既定完整工作负载的基线／候选配对。保留历史VM记录，不移植或伪造VM PASS；环境、二进制、完整样本和真实diagnostic verdict仍必需，预算失败仍不升级为发布硬门槛。
+
 **状态（2026-09-29）：执行方式已按负责人批准的轻量验收决策对齐；实际原生/视觉仍未完成。** 本合同落实 `.handoff/native-vision-validation-contract.md` 及随后“按计划推进”的授权；产品行为和已批准设计不变。新候选包见 [package manifest](local-version-history-t059/resume-20260929/package-manifest.json)。旧 capture 和 review 记录保留为历史证据，不移植其结论。
 
 ## 事实分工与完成信号
@@ -11,7 +13,7 @@
 | History 原生入口及目标文档路由 | T047/T058 exact-package AX/menu probe | 保留现有窄 scope，不复跑旧 003 的完整菜单/物理按键矩阵 | 当前包的既定入口检查 PASS |
 | 真实 WKWebView 的可读性、当前/预览区分、错误表达、焦点外观、裁切与整体体验 | T048 owner walkthrough | 下述集中 session 分组与状态准备；原生包与环境记录一次 | 所有必需观察有 owner 的明确 PASS，无未处理 FAIL/BLOCKED |
 | 保存、恢复、资源、故障与重启 | Rust / process reliability | 复用各自适用证据；产品路径变更才定向复验 | 对应原有 gates PASS，不以视觉意见覆盖 |
-| 资源和性能 | T049 paired measurements | 稳定的独立测试时段、物理机先于合规参考 VM | 有效报告及真实 verdict；不与 T048 合并 |
+| 资源和性能 | T049 paired measurements | 稳定的独立测试时段、同一 M5 Pro 物理机的基线／候选配对（2026-10-04 owner撤销本轮VM要求） | 有效报告及真实 verdict；不与 T048 合并 |
 | 功能最终接受 | T054 product owner | T052 索引、各层实际结论和剩余限制 | 单独明确接受决定；T048 通过不自动完成 T054 |
 
 ## 一次 session，保留全部观察范围

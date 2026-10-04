@@ -1,0 +1,58 @@
+{
+  "observedAt": "2026-10-04T13:25:02.610Z",
+  "scope": "Read-only host preflight; no workload run or VM resume",
+  "status": "PHYSICAL_ONLY_PREPARATION",
+  "hostOS": {
+    "version": "26.6.2",
+    "build": "25G83"
+  },
+  "parallels": {
+    "version": "27.0.1",
+    "build": "58670",
+    "source": "prlctl --version",
+    "edition": "not independently verified"
+  },
+  "vm": {
+    "name": "macOS26.5.2",
+    "state": "suspended",
+    "configuredCpus": 4,
+    "configuredMemory": "8192Mb",
+    "autoCpu": true,
+    "autoMemory": true,
+    "guestRuntimeOS": "unverified",
+    "guestRuntimeResources": "unverified",
+    "source": "prlctl list -i <id> -j"
+  },
+  "declaredReference": {
+    "parallelsVersion": "26.4.1",
+    "cpus": 4,
+    "memoryGiB": 8,
+    "guestOS": "macOS 26.5.2"
+  },
+  "baselineBinary": {
+    "path": "/private/tmp/t049-20260929-baseline-target/release/excalidraw-desktop",
+    "exists": false
+  },
+  "attempts": [
+    {
+      "command": "prlsrvctl --version",
+      "result": "Unsupported action; corrected to prlctl --version"
+    }
+  ],
+  "verdict": "not_evaluated",
+  "next": "Rebuild missing baseline and current candidate harness binaries in distinct targets; coordinate physical workloads after owner session; reference version change requires an explicit new-series decision, not relabeling old evidence.",
+  "baselineBuildFollowup": {
+    "status": "BUILD_PASS_NOT_MEASURED",
+    "binary": "/private/tmp/t049-20261004-baseline-Oe9293/target/release/excalidraw-desktop",
+    "sha256": "4f6a1469ad69536253be3287882751e933e75e911a56920bcd2c64d932387063",
+    "binding": "../../../local-version-history-t049/baseline-build-20261004/binding.json",
+    "note": "Original absent binary observation retained; newly rebuilt binary does not establish performance verdict"
+  },
+  "ownerScopeChange": {
+    "at": "2026-10-04T13:54:39.950Z",
+    "statement": "我的Parallels Desktop已经不可用了，所以虚拟机性能测试请跳过，我们只在M5 Pro物理机设备做性能测试即可。",
+    "scope": "Current 004/T049 closure; physical paired workloads retained",
+    "vm": "SKIPPED_BY_OWNER",
+    "referenceMismatchIsCurrentBlock": false
+  }
+}

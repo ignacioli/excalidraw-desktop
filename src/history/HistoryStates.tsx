@@ -89,7 +89,7 @@ export function HistoryStateView({
       role={copy.role}
     >
       <h2>{copy.title}</h2>
-      <p>{announcement}</p>
+      {announcement.length > 0 ? <p>{announcement}</p> : null}
       {children}
       {onRetry !== undefined && state !== "empty" ? (
         <button className="primary-action" onClick={onRetry} type="button">

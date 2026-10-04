@@ -48,4 +48,13 @@ describe("HistoryStateView", () => {
     await user.click(screen.getByRole("button", { name: "Retry history" }));
     expect(onRetry).toHaveBeenCalledOnce();
   });
+
+  it("omits an explicitly empty message without rendering an empty paragraph", () => {
+    render(<HistoryStateView message="" state="error" />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Version history could not be loaded",
+    );
+    expect(screen.getByRole("alert").querySelector("p")).toBeNull();
+  });
 });

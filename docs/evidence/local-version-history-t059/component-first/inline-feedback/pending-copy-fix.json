@@ -1,0 +1,26 @@
+{
+  "scope": "Omit only generic pending detail; retain actionable messages, heading, alert and retry",
+  "ownerDecision": "Delete generic pending sentence or provide accurate diagnostics; selected deletion because current backend aggregates causes",
+  "implementation": [
+    "src/app/AppShell.tsx",
+    "src/history/HistoryStates.tsx"
+  ],
+  "componentSpec": "docs/design/local-version-history/implementation-map.md HISTORY-FEEDBACK 2026-10-04",
+  "validation": {
+    "focusedUnit": {
+      "result": "PASS",
+      "count": 47,
+      "executor": "pending_copy_fix ui-dev"
+    },
+    "typecheck": "PASS",
+    "scopedLintFormat": "PASS",
+    "independentReview": "No actionable findings; closure_audit fs-reviewer",
+    "browser": {
+      "first": "FAIL: VITE_E2E_HARNESS missing; fixture not entered",
+      "corrected": "PASS 1/1 existing state component regression",
+      "assertionsChanged": false
+    },
+    "globalLint": "PASS"
+  },
+  "native": "PENDING focused copy followup; other owner observations retain original package identity"
+}

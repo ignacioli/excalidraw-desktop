@@ -1,0 +1,51 @@
+{
+  "observedAt": "2026-10-04T13:20:33.653Z",
+  "scope": "T058 narrow native entry only; no owner visual verdict",
+  "productCommit": "2c13f5066490ca4e5a8dbbbdaedfee253559f779",
+  "packageSha256": "6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4",
+  "pid": 73019,
+  "packageIdentityVerified": true,
+  "runtimeSourceUnchanged": true,
+  "window": {
+    "width": 1280,
+    "height": 760
+  },
+  "route": {
+    "validationId": 1,
+    "command": "versionHistory",
+    "stages": [
+      "applicationRoute",
+      "nativeEntry"
+    ]
+  },
+  "panel": {
+    "headingCount": 1,
+    "fileNameCount": 1,
+    "closeCount": 1,
+    "pass": true
+  },
+  "fixture": {
+    "path": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/workspace/H4 native entry.excalidraw",
+    "sha256Before": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+    "sha256After": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009"
+  },
+  "status": "PASS",
+  "menu": {
+    "path": [
+      "File",
+      "Version History…"
+    ],
+    "label": "Version History…",
+    "enabled": true,
+    "keyboard": {
+      "character": "",
+      "axModifiers": 8
+    },
+    "source": "inspectMenuItemAppleScript observation immediately before invocation"
+  },
+  "routeFreshness": {
+    "mechanism": "Read only stderr suffix appended after the pre-invocation byte offset",
+    "priorLogExcluded": true
+  },
+  "ownerVisualVerdict": null
+}

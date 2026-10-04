@@ -1,0 +1,233 @@
+{
+  "schemaVersion": 1,
+  "evidenceType": "t049-baseline-build-binding",
+  "createdAt": "2026-10-04T13:38:57.449Z",
+  "commit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+  "worktree": "/Users/liyongqiang/.codex/worktrees/history-perf-baseline/local-version-history",
+  "gitStatusShort": "",
+  "binary": {
+    "path": "/private/tmp/t049-20261004-baseline-Oe9293/target/release/excalidraw-desktop",
+    "sha256": "4f6a1469ad69536253be3287882751e933e75e911a56920bcd2c64d932387063",
+    "sizeBytes": 7813616,
+    "format": "/private/tmp/t049-20261004-baseline-Oe9293/target/release/excalidraw-desktop: Mach-O 64-bit executable arm64"
+  },
+  "builds": {
+    "frontend": {
+      "stage": "frontend",
+      "command": "pnpm",
+      "args": [
+        "build"
+      ],
+      "cwd": "/Users/liyongqiang/.codex/worktrees/history-perf-baseline/local-version-history",
+      "environment": {
+        "VITE_E2E_HARNESS": "1"
+      },
+      "startedAt": "2026-10-04T13:35:38.908Z",
+      "status": "pass",
+      "timeoutMs": 1500000,
+      "exitCode": 0,
+      "signal": null,
+      "finishedAt": "2026-10-04T13:35:41.593Z",
+      "log": {
+        "path": "/private/tmp/t049-20261004-baseline-Oe9293/frontend-build.log",
+        "sha256": "d09371211c8472adc7e86c21f0796221f10ac6f5be0842af5712746472681270",
+        "sizeBytes": 16290
+      }
+    },
+    "cargo": {
+      "stage": "cargo",
+      "command": "cargo",
+      "args": [
+        "build",
+        "--release",
+        "--offline",
+        "--locked",
+        "--features",
+        "e2e-harness",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--target-dir",
+        "/private/tmp/t049-20261004-baseline-Oe9293/target"
+      ],
+      "cwd": "/Users/liyongqiang/.codex/worktrees/history-perf-baseline/local-version-history",
+      "environment": {
+        "VITE_E2E_HARNESS": "1"
+      },
+      "startedAt": "2026-10-04T13:36:04.056Z",
+      "status": "pass",
+      "timeoutMs": 1500000,
+      "exitCode": 0,
+      "signal": null,
+      "finishedAt": "2026-10-04T13:37:53.213Z",
+      "log": {
+        "path": "/private/tmp/t049-20261004-baseline-Oe9293/cargo-build.log",
+        "sha256": "1dab708df9a54971a25791b880dfb16c494a108c8596e8a16d4d326c8b85a10f",
+        "sizeBytes": 8230
+      }
+    }
+  },
+  "runnerHashes": [
+    {
+      "relativePath": "e2e/perf/startup-idle.spec.ts",
+      "sha256": "b4355ae7d54e628fe3fd0e9ecc32147304cec6e31ebc601fc976c1074e96b23b",
+      "sizeBytes": 9123
+    },
+    {
+      "relativePath": "e2e/perf/canvas-io.spec.ts",
+      "sha256": "f0d8ef205b9e09990fc2042a2888e4b9d6cab735ecace74017be2e348d168dff",
+      "sizeBytes": 9496
+    },
+    {
+      "relativePath": "e2e/perf/edit-soak.spec.ts",
+      "sha256": "6517966a0919e51c086f0d2a4a16acfbb88c45c588d8062be29731650fe93e7e",
+      "sizeBytes": 10914
+    },
+    {
+      "relativePath": "e2e/perf/helpers/nativePerformanceContract.ts",
+      "sha256": "982960e39c71ab6cef8cb9c9795b0657c0cf49d4f393835f7695025db67b8210",
+      "sizeBytes": 8575
+    },
+    {
+      "relativePath": "e2e/perf/helpers/processMetrics.ts",
+      "sha256": "b899213d27c7ce7a645fc91894cd8d01d545e5f2b93cbac55a101602767aef28",
+      "sizeBytes": 18266
+    },
+    {
+      "relativePath": "e2e/perf/helpers/workloads.ts",
+      "sha256": "53aef4d9712dffd350739e857e0989d520ebb53018d7e50c5c993ddfd17b4375",
+      "sizeBytes": 5160
+    },
+    {
+      "relativePath": "e2e/helpers/app.ts",
+      "sha256": "f10cc0f63a6da9839ebec82803e531d513f0d4f98b6397e695d5a83b89c98e27",
+      "sizeBytes": 8199
+    },
+    {
+      "relativePath": "e2e/helpers/webkitProcesses.ts",
+      "sha256": "c4ab25b7af56fbd104dcb551d4e0b197a0bef101f1a5947bccb6f1c8bc63b8af",
+      "sizeBytes": 6682
+    },
+    {
+      "relativePath": "e2e/playwright.config.ts",
+      "sha256": "3c4779f3f225fa13980f8c15b9452763e51a054b71dccd0dd1004d75ee91a73e",
+      "sizeBytes": 1145
+    },
+    {
+      "relativePath": "e2e/perf/report.schema.json",
+      "sha256": "ee3857fa678dfa9b0a36294c5d19764edc408e40d8b0eee936db3efdd68d2e10",
+      "sizeBytes": 2434
+    }
+  ],
+  "sourceHashes": [
+    {
+      "relativePath": "package.json",
+      "sha256": "8c259a1cadfe3f3535e3ddeede838442601a70a2159759bdfd00c3ecf0be235a",
+      "sizeBytes": 2975
+    },
+    {
+      "relativePath": "pnpm-lock.yaml",
+      "sha256": "a95ef51a01a4239458cfbeda267b6f6378d9dc296558465801b6ccf634b11b79",
+      "sizeBytes": 162804
+    },
+    {
+      "relativePath": "src-tauri/Cargo.toml",
+      "sha256": "3ab32e876c9e1f1edcc4af84bed391d3e2fb010d32d68555dd1ec3cd67af022a",
+      "sizeBytes": 1647
+    },
+    {
+      "relativePath": "src-tauri/Cargo.lock",
+      "sha256": "da05c00175ca7ec19cdf7b2a7d00df287073bdf8a9296492209da2922f696410",
+      "sizeBytes": 128324
+    },
+    {
+      "relativePath": "src-tauri/tauri.conf.json",
+      "sha256": "8bca18bfcde6675ac5a46f8a81c96eb48e51b824cf9abf92ea81fdfb99f2861a",
+      "sizeBytes": 1853
+    },
+    {
+      "relativePath": "vite.config.ts",
+      "sha256": "9607b715240b81399528e12d24bc070ddf2da0a18166714e1b42f234fcb939ca",
+      "sizeBytes": 1350
+    }
+  ],
+  "dist": {
+    "path": "/Users/liyongqiang/.codex/worktrees/history-perf-baseline/local-version-history/dist",
+    "fileCount": 422,
+    "manifest": {
+      "path": "/private/tmp/t049-20261004-baseline-Oe9293/dist-manifest.json",
+      "sha256": "aace2bccd173ae23aaef906c55a6634d74ecc52a85bb76a1f1d80232e465e9b3",
+      "sizeBytes": 85966
+    }
+  },
+  "cargoFingerprints": [
+    {
+      "path": "/private/tmp/t049-20261004-baseline-Oe9293/target/release/.fingerprint/excalidraw-desktop-49fdf7a7c73ebe64/bin-excalidraw-desktop.json",
+      "sha256": "435484a3800b6edbeaf767fe850ac1a4f28bc1d65d5848e6af56d383908c433c",
+      "sizeBytes": 1467,
+      "features": "[\"e2e-harness\"]"
+    },
+    {
+      "path": "/private/tmp/t049-20261004-baseline-Oe9293/target/release/.fingerprint/excalidraw-desktop-bdc35cf2c3aadf3d/build-script-build-script-build.json",
+      "sha256": "d527411bec73ac43b022ba4b72cac44c118dc10026d9fd295ca5d5758e93cbb2",
+      "sizeBytes": 473,
+      "features": "[\"e2e-harness\"]"
+    },
+    {
+      "path": "/private/tmp/t049-20261004-baseline-Oe9293/target/release/.fingerprint/excalidraw-desktop-cf39433f94d5b1e8/run-build-script-build-script-build.json",
+      "sha256": "c4058d08fa9437daa7f0393e4444add2d4af4def67aca1749435ad0b32967f57",
+      "sizeBytes": 695,
+      "features": ""
+    },
+    {
+      "path": "/private/tmp/t049-20261004-baseline-Oe9293/target/release/.fingerprint/excalidraw-desktop-e217f7dabe4ec90b/lib-excalidraw_desktop_lib.json",
+      "sha256": "a8377a91de6f45fa724e3f965e51150de023246238bc236747c814c686eb5fce",
+      "sizeBytes": 1395,
+      "features": "[\"e2e-harness\"]"
+    }
+  ],
+  "buildEnvironment": {
+    "hardwareModel": "Mac17,9",
+    "memoryBytes": 51539607552,
+    "logicalCpuCount": 15,
+    "os": {
+      "name": "macOS",
+      "version": "26.6.2",
+      "build": "25G83"
+    },
+    "installedWebKitBundleVersion": "21624.5.1.11.3",
+    "runtimeWebViewVersion": null,
+    "runtimeWebViewVersionReason": "No native app launched in this build-only task",
+    "pnpm": "11.25.0",
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "node": "v26.8.2",
+    "xcode": "Xcode 27.0\nBuild version 27A266a",
+    "packageVersions": {
+      "vite": "8.2.1",
+      "typescript": "6.0.3",
+      "react": "19.2.8",
+      "@playwright/test": "1.62.1",
+      "@excalidraw/excalidraw": "0.18.1"
+    }
+  },
+  "validation": {
+    "frontendBuild": "pass",
+    "cargoBuild": "pass",
+    "baselineClean": "pass",
+    "performanceBudgetVerdict": "not_evaluated"
+  },
+  "exclusions": [
+    "No native app launch",
+    "No functional runtime checks",
+    "No performance workload",
+    "No VM measurement",
+    "No production worktree outputs modified",
+    "No packaging or DMG validation"
+  ],
+  "outputScope": [
+    "baseline dist/",
+    "baseline ignored *.tsbuildinfo",
+    "same-byte baseline tracked SDK font copies",
+    "new independent temporary target, logs and binding"
+  ]
+}

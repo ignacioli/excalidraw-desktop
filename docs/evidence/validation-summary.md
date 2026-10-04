@@ -1,6 +1,12 @@
 # 验证证据汇总（004 实施中；003 已完成；001/002 历史）
 
-**最新状态（2026-10-04）：无背景版本行内短提示已获owner局部Penpot批准，source revision108及规范同步，实现、unit87/87、typecheck、lint/format和受影响browser复验完成。** 过程中的测试定位失败与hooks修复如实保留，见[增量证据](local-version-history-t059/component-first/inline-feedback/README.md)。新production包已一次seal PASS（产品commit `2c13f50`，SHA-256 `6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4`），[manifest](local-version-history-t059/component-first/inline-feedback/package-manifest.json)保存精确身份；新包入口及owner原生复查待执行；894228a包的既有定向owner接受保持原身份。T058/T048、T049有效配对、T052索引和T054最终接受未完成；不预支Phase7或发布。
+**本轮最新状态（2026-10-04，集中验收进行中）：** 复用产品 `2c13f50` 的同一封存 production 包，未重建或重启；[窄原生入口](local-version-history-t059/component-first/inline-feedback/native-entry-report.json) PASS（1280×760、fresh route、正确文档与 fixture 字节未变）。旧0窗口 BLOCKED保留，恢复原因未确定。[状态续查](local-version-history-t059/component-first/inline-feedback/native-preparation-followup.json)确认50版本、Unavailable与实际pending/error呈现；pending fixture曾被成功checkpoint清除，已在保存稳定后恢复，原失败保留为准备失败。
+
+[本轮owner记录](local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json)：Unavailable、Conflict、Light主路径及Dark/300px/Reduce Motion已明确PASS；用户提供的[截图](local-version-history-t059/component-first/inline-feedback/pending-owner-screenshot.png)确认pending说明和Try again可见，但owner认为通用状态说明无帮助，已按允许的删除方案省略正文，定向测试47项、typecheck/lint与状态浏览器复验通过，待新包定点确认。系统Reduce Motion由owner恢复，API已核实关闭。I5包准备已完成，其余原生事实并入T058/H4，不新设独立gate。T058/T048/H5尚不提前关闭。
+
+[T049当前预检](local-version-history-t059/component-first/inline-feedback/performance-preflight.json)保留原VM版本不符记录；2026-10-04 owner明确Parallels不可用，本轮仅M5 Pro物理机完整基线／候选配对，跳过VM。基线测试binary已重新构建并绑定，尚无本轮有效性能配对，T052/T054与phase7未完成。
+
+**此前状态（2026-10-04）：无背景版本行内短提示已获owner局部Penpot批准，source revision108及规范同步，实现、unit87/87、typecheck、lint/format和受影响browser复验完成。** 过程中的测试定位失败与hooks修复如实保留，见[增量证据](local-version-history-t059/component-first/inline-feedback/README.md)。新production包已一次seal PASS（产品commit `2c13f50`，SHA-256 `6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4`），[manifest](local-version-history-t059/component-first/inline-feedback/package-manifest.json)保存精确身份；新包入口及owner原生复查待执行；894228a包的既有定向owner接受保持原身份。T058/T048、T049有效配对、T052索引和T054最终接受未完成；不预支Phase7或发布。
 
 **此前状态（2026-09-30，component-first H0–H3完成）**：共享组件目录、History anatomy、信息入口与Penpot源/七屏已同步；组件82项、定向browser及原有5项语义检查通过，primary完成代表组合渲染抽检。详见[执行记录](local-version-history-t059/component-first/README.md)。新原生候选包待构建/复查，T048与Phase7未完成，Mark微动仍owner-deferred。下文保留历史快照。
 

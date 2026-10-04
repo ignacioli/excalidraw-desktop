@@ -791,6 +791,57 @@ describe("AppShell", () => {
     });
   });
 
+  it("hides only the generic pending history explanation and preserves diagnostics", async () => {
+    const user = userEvent.setup();
+    nativeRuntimeHarness.enabled = true;
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "clean"),
+    ]);
+    let listCount = 0;
+    const invoker = vi.fn(async (command: string) => {
+      if (command === "workspace_list" || command === "workspace_recent_list")
+        return [];
+      if (command === "native_menu_set_enabled") return {};
+      if (command === "history_list") {
+        listCount += 1;
+        return {
+          documentId: "drawing",
+          items: [],
+          listRevision: listCount,
+          pendingIssue: {
+            code: "HISTORY_OPERATION_PENDING",
+            message:
+              listCount === 1
+                ? "The history operation is pending reconciliation."
+                : "Operation 42 is pending reconciliation after a timeout.",
+          },
+        };
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+
+    render(<AppShell workspaceInvoker={{ invoke: invoker }} />);
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+    nativeMenuHarness.handler?.("versionHistory");
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Version history could not be loaded");
+    expect(alert.querySelector("p")).toBeNull();
+    const retry = screen.getByRole("button", { name: "Try again" });
+    expect(retry).toBeVisible();
+
+    await user.click(retry);
+    expect(
+      await screen.findByText(
+        "Operation 42 is pending reconciliation after a timeout.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Version history could not be loaded",
+    );
+    expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
+  });
+
   it("ignores a history list response from the previously active drawing", async () => {
     nativeRuntimeHarness.enabled = true;
     const drawingB = createSession(

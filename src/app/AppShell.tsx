@@ -908,7 +908,13 @@ export function AppShell({
         );
         if (response.pendingIssue !== undefined) {
           setHistoryPanelStatus("error");
-          setHistoryPanelMessage(response.pendingIssue.message);
+          const { code, message } = response.pendingIssue;
+          setHistoryPanelMessage(
+            code === "HISTORY_OPERATION_PENDING" &&
+              message === "The history operation is pending reconciliation."
+              ? ""
+              : message,
+          );
         } else {
           setHistoryPanelStatus(
             response.items.length === 0 ? "empty" : "available",

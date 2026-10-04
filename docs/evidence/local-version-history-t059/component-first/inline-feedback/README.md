@@ -1,6 +1,10 @@
 # 版本行内短提示增强
 
-**当前状态（2026-10-04）：I1–I4完成，新包已封存；I5/H4原生准备BLOCKED，H5及Phase7未完成。** 指定新包PID73019的History菜单就绪，但Accessibility窗口查询失败；随后两次查询均为0个窗口，正常前台激活后仍为0。未执行History入口点击，未产生T058 PASS或owner视觉决定；停止重复启动/重建，见[本轮准备记录](native-preparation-attempt.json)。本增强按本轮负责人要求实施，不修改 History 持久化、去重或 retention 业务语义，也不扩大 T059 已完成的历史范围。
+**本轮推进（2026-10-04）：封存包复用，无重建或重启；同一 PID 已恢复可读 AX 窗口，当前包窄原生入口 PASS。** 见 [入口报告](native-entry-report.json) 与 [准备续查](native-preparation-followup.json)。旧零窗口失败保留，原因仍未确定，不能据此宣称产品修复。三个合成状态已在 production 中可达；[owner walkthrough](owner-walkthrough.json) 正在逐项记录，T058/T048/H5 尚不提前关闭。
+
+I5 的原定义是“一次封存并衔接 H4”，合理且包封存已完成；它不是新的独立 native gate。行内提示的目标绑定、timer 与状态语义复用 I4，实际 WKWebView 呈现并入 H4 同包抽检。H4 原先未完成的观察范围仍按公共 acceptance contract 执行，不因这个小改动重复整套自动检查或逐屏 collection。
+
+**此前状态（2026-10-04）：I1–I4完成，新包已封存；I5/H4原生准备BLOCKED，H5及Phase7未完成。** 指定新包PID73019的History菜单就绪，但Accessibility窗口查询失败；随后两次查询均为0个窗口，正常前台激活后仍为0。未执行History入口点击，未产生T058 PASS或owner视觉决定；停止重复启动/重建，见[本轮准备记录](native-preparation-attempt.json)。本增强按本轮负责人要求实施，不修改 History 持久化、去重或 retention 业务语义，也不扩大 T059 已完成的历史范围。
 
 ## 批准与实现输入
 

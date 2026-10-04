@@ -1,6 +1,8 @@
 # Local version history performance baseline
 
-**最新状态（2026-09-29）：T049 仍为 `not_evaluated`。** 固定基线 `babc027d64c2c50e6922482b416ef1099ea9d07e` 的独立 `e2e-harness` binary 已构建，SHA-256 为 `158fc23d122d5595b3950e934da77014b119f0382f393afac95a5628caa50511`。一次物理 macOS `startup-idle` 尝试在第 5 次冷启动等待 `ready.json` 15 秒后失败；只有 4/10 次 editable-canvas 样本。操作员最小化了挡住工作的窗口，精确时点未知，无法归因。本次整体 **INVALID**，原始报告及运行前 binary/runner binding 见[物理基线尝试](../../docs/evidence/local-version-history-t049/physical-startup-20260929/README.md)。没有重试、有效物理配对、参考 VM 报告或速度／回归结论。候选 UI 正在修改；先前构建的候选 binary 不预支修改后的候选身份。
+**当前执行范围（2026-10-04 owner决定）：** Parallels Desktop已不可用，本轮004关闭只在同一M5 Pro物理机测量基线／候选，跳过VM。共同startup-idle、canvas-io、完整15分钟edit-soak与候选History专项均保留。`PERF_REFERENCE_RUN=0`、`PERF_EXECUTION_ENVIRONMENT=physical`；保存原始diagnostic budget verdict与完整性结果，另报告配对绝对值／差值，不把历史VM阈值改造成新的M5 Pro硬门槛。VM不再是本轮T049完成条件，下文VM环境与旧失败作为历史保留。基线已重新构建，见[构建绑定](../../docs/evidence/local-version-history-t049/baseline-build-20261004/binding.json)；尚未开始本轮测量。
+
+**此前状态（2026-09-29）：T049 仍为 `not_evaluated`。** 固定基线 `babc027d64c2c50e6922482b416ef1099ea9d07e` 的独立 `e2e-harness` binary 已构建，SHA-256 为 `158fc23d122d5595b3950e934da77014b119f0382f393afac95a5628caa50511`。一次物理 macOS `startup-idle` 尝试在第 5 次冷启动等待 `ready.json` 15 秒后失败；只有 4/10 次 editable-canvas 样本。操作员最小化了挡住工作的窗口，精确时点未知，无法归因。本次整体 **INVALID**，原始报告及运行前 binary/runner binding 见[物理基线尝试](../../docs/evidence/local-version-history-t049/physical-startup-20260929/README.md)。没有重试、有效物理配对、参考 VM 报告或速度／回归结论。候选 UI 正在修改；先前构建的候选 binary 不预支修改后的候选身份。
 
 **先前状态（2026-09-28，保留历史）：** T049 正式配对测量尚未执行。History 专项 workload 已准备为 1 次预热和 3 次独立测量；共同三项性能报告现会写入实际 binary `realpath` 和 SHA-256。旧 smoke 保留为历史诊断，所有当时预算仍为 `not_evaluated`。当时的候选实现尚有未提交并行修改，不能用当时 HEAD 伪装成测量提交。
 
@@ -44,7 +46,7 @@ T049 先在同一物理 macOS 上运行基线／候选的共同启动、编辑�
 | `webviewVersion`                | 精确系统 WebKit/WKWebView framework 版本。                                                  |
 | `executionEnvironment`          | `{ "type": "physical", "hostHardware": "<exact host hardware>", "virtualization": null }`。 |
 
-### 可比较参考虚拟机
+### 历史参考虚拟机（本轮已按owner决定跳过）
 
 这是本项目的 authoritative auditable reference series；它只在同一 VM 配置内比较基线／候选。当前声明的配置来自 ADR-004 和功能 plan，仍须由运行时报告核实：
 
@@ -80,7 +82,7 @@ T049 先在同一物理 macOS 上运行基线／候选的共同启动、编辑�
 
 旧提交 `babc027d64c2c50e6922482b416ef1099ea9d07e` 不含 `history_*` IPC。基线和候选只比较双方均存在的 `startup-idle`、`canvas-io`、`edit-soak`：相同 10,000 元素 fixture、seed、预热/采样窗、显示条件和进程树口径。`local-version-history.spec.ts` 仅在候选上运行；它记录 20 条池的列表数、A→B→A 场景 SHA-256、对象/asset 存在与 GC 保留、恢复状态的**绝对值**，不构造旧版本 History 延迟或内存差值。每次旅程使用新隔离 root 和六个原生进程阶段；先做 1 次预热，再做 3 次完整样本，使用 monotonic clock，旅程耗时的 nearest-rank P95 仅作描述值。进程树 RSS/CPU 由共同的 T090/T108 workload 测量；History 报告明确列出该项排除，不得据此宣称 History 专属资源预算 `pass`。
 
-测量顺序为同一物理 macOS 的基线、候选配对，随后同一声明参考 VM 的基线、候选配对。每个 checkout 需构建独立 `e2e-harness` 二进制，记录实际可执行文件 `realpath` 与 SHA-256；报告的 `commit` 必须对应正在运行的 checkout，且构建输入不能有未提交产品改动。每条 spec 单独运行并保存 JSON 和 digest，不能让后一次运行覆盖前一次报告。参考 VM 的宿主、Parallels、guest OS/build、4 vCPU/8 GiB 与 WebView 必须由当次运行核对；如与声明系列不一致，按 rebaseline 流程新建系列，不直接比较绝对值。
+本轮测量顺序为同一M5 Pro物理macOS的基线、候选配对；不再执行参考VM配对。每个 checkout 需构建独立 `e2e-harness` 二进制，记录实际可执行文件 `realpath` 与 SHA-256；报告的 `commit` 必须对应正在运行的 checkout，且构建输入不能有未提交产品改动。每条 spec 单独运行并保存 JSON 和 digest，不能让后一次运行覆盖前一次报告。参考 VM 的宿主、Parallels、guest OS/build、4 vCPU/8 GiB 与 WebView 必须由当次运行核对；如与声明系列不一致，按 rebaseline 流程新建系列，不直接比较绝对值。
 
 | 单次命令                                  | 计划窗口及保守耗时                                                          | 完成信号                                                                |
 | ----------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
