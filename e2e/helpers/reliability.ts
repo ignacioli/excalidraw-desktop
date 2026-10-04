@@ -368,17 +368,6 @@ export interface HistoryRestartVerifyEvidence {
   activeDocumentId?: string;
   operationDocumentId?: string;
   operationState?: string;
-  targetSha256: string;
-  draftSceneSha256?: string;
-  draftDirty?: boolean;
-  staleAutosaveAttemptedHash: string;
-  staleAutosaveCapturedSessionGeneration: number;
-  staleAutosaveCapturedRevision: number;
-  staleAutosaveObservedSessionGeneration?: number;
-  staleAutosaveObservedRevision?: number;
-  staleAutosaveRejected: boolean;
-  staleAutosaveRejection: string | null;
-  staleAutosaveDraftSaveState: string | null;
   persistedSceneSha256: string;
   statusSceneSha256?: string;
   statusState: string;
@@ -434,6 +423,17 @@ export type HistoryCanvasReadback = Awaited<
 >["canvasReadback"];
 
 export interface HistoryFrontendCanvasEvidence {
+  targetSha256: string;
+  draftSceneSha256: string | null;
+  draftDirty: boolean | null;
+  staleAutosaveAttemptedHash: string;
+  staleAutosaveCapturedSessionGeneration: number;
+  staleAutosaveCapturedRevision: number;
+  staleAutosaveObservedSessionGeneration?: number;
+  staleAutosaveObservedRevision?: number;
+  staleAutosaveRejected: boolean;
+  staleAutosaveRejection: string | null;
+  staleAutosaveDraftSaveState: string | null;
   scenario: "history-frontend-adoption";
   requestId: string;
   targetVersionId: string;

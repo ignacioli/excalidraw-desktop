@@ -141,10 +141,10 @@ export async function runLocalVersionHistoryPerformanceWorkload(options?: {
           frontendAAdopted: run.evidence.frontendA.adopted,
           verifyBStatus: run.evidence.verifyB.statusState,
           verifyAStatus: run.evidence.verifyA.statusState,
-          verifyBStaleAutosaveRejected:
-            run.evidence.verifyB.staleAutosaveRejected,
-          verifyAStaleAutosaveRejected:
-            run.evidence.verifyA.staleAutosaveRejected,
+          frontendBStaleAutosaveRejected:
+            run.evidence.frontendB.staleAutosaveRejected,
+          frontendAStaleAutosaveRejected:
+            run.evidence.frontendA.staleAutosaveRejected,
           evictionStatus: run.evidence.evict.operationStatusState,
         },
       });
@@ -272,8 +272,8 @@ export interface LocalVersionHistoryPerformanceReport {
         frontendAAdopted: true;
         verifyBStatus: string;
         verifyAStatus: string;
-        verifyBStaleAutosaveRejected: boolean;
-        verifyAStaleAutosaveRejected: boolean;
+        frontendBStaleAutosaveRejected: boolean;
+        frontendAStaleAutosaveRejected: boolean;
         evictionStatus: string;
       };
     }>;
@@ -335,8 +335,19 @@ function assertHistoryJourney(
   expect(evidence.verifyB.targetAssetExists).toBe(true);
   expect(evidence.verifyA.targetObjectExists).toBe(true);
   expect(evidence.verifyA.targetAssetExists).toBe(true);
-  expect(evidence.verifyB.staleAutosaveRejected).toBe(true);
-  expect(evidence.verifyA.staleAutosaveRejected).toBe(true);
+  for (const frontend of [evidence.frontendB, evidence.frontendA]) {
+    expect(frontend.staleAutosaveRejected).toBe(true);
+    expect(frontend.staleAutosaveRejection).toBe("sessionGeneration");
+    expect(frontend.staleAutosaveObservedSessionGeneration).toBeGreaterThan(
+      frontend.staleAutosaveCapturedSessionGeneration,
+    );
+    expect(frontend.staleAutosaveDraftSaveState).toBe("clean");
+    expect(frontend.targetSha256).not.toBe(frontend.staleAutosaveAttemptedHash);
+    expect(frontend.draftSceneSha256).not.toBe(
+      frontend.staleAutosaveAttemptedHash,
+    );
+    expect(frontend.draftDirty).toBe(false);
+  }
   expect(evidence.evict.targetObjectExistsAfterGc).toBe(true);
   expect(evidence.evict.targetAssetExistsAfterGc).toBe(true);
   expect(evidence.evict.gcDeletedTarget).toBe(false);
