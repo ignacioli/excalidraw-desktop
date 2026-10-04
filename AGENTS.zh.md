@@ -117,6 +117,8 @@
 
 实现或评审应用自有 UI 前，先读 `DESIGN.md` 与 `docs/design/components.md`。History 变更还必须读取 `docs/design/local-version-history/implementation-map.md`，以及该功能目录当前 `high-fi/manifest.json`、`tokens.json` 和受影响截图。implementation map 规定组件 anatomy、内容层级、状态、复用边界与验证职责；仅有 token 不能定义布局。修改前明确受影响组件 ID 和代表状态，先验收组件，再抽检受影响页面组合。与批准设计有冲突时先解决，不得修改设计以迁就实现偏离。browser/component PASS 不代表 native 或 owner 验收通过。
 
+修改前执行 `docs/design/components.md` 的工作流选择表与最小执行记录。依据实际设计差异及适用批准来源分类，不以“修复”“新feature”等名称代替判断；区分设计修订、规范抽取和实现偏离修复。自行说明分类依据与复用/扩展/新增范围，不要求人类例行确认。新视觉先Review，再定稿其component spec；目标设计不变时不重新设计或重复审批。只对实质未解决的权威冲突、歧义或未授权设计决定提问，并保留必需验证边界。
+
 ### UI 调试与视觉证据效率
 
 - 除非人类明确授权当前 task 使用 Computer Use，否则禁止使用。视觉门禁、截图要求、工具失败或浏览器超时均不构成授权。此限制适用于所有 Computer Use 工具，并优先于下文任何条件性允许。
