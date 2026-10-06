@@ -1,6 +1,8 @@
 # 本地版本历史验证索引
 
-**当前状态（2026-10-04；本索引为 Feature 004 唯一当前状态入口）：**
+**当前状态（2026-10-05；本索引为 Feature 004 唯一当前状态入口）：**
+
+性能结果速读：[性能测试摘要](local-version-history-performance-summary.md)。2026-10-05 owner 明确要求进行 0.4.0 发版，授权从此前的本地准备扩展到 push、PR 合并及发布；以下 2026-10-04 接受记录保留当时范围。实际发布结果以 GitHub Release 为准。
 
 - **H4 / T048：PASS。** T058 准备与窄原生入口已经完成；owner 在产品 `2c13f50` 封存包完成集中 walkthrough，各组观察详见[原始 owner 记录](local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json)。pending 通用错误正文随后仅在修订包 `eb961ca` 上做定点复验，owner 接受该项；该接受不扩展成修订包全范围重测。既有 Recovery 安全证据按未受影响范围复用。
 - **H5 / T058：PASS。** 状态准备、精确包身份与窄原生入口均有记录；“0 窗口”旧 BLOCKED 和 pending fixture 准备失败保留在原始记录中，不推翻之后实际观察结果。
