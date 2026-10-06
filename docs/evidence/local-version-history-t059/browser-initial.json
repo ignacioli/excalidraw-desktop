@@ -1,0 +1,824 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/26.8.2/bin/node",
+      "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config=e2e/playwright.config.ts",
+      "--project=browser-ui",
+      "--retries=0",
+      "e2e/tests/local-version-history-t048.spec.ts",
+      "e2e/tests/local-version-history-preview.spec.ts",
+      "e2e/tests/local-version-history-t048-regression.spec.ts",
+      "--reporter=json"
+    ],
+    "configFile": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/playwright.config.ts",
+    "rootDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 3
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 3
+        },
+        "id": "browser-ui",
+        "name": "browser-ui",
+        "testDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "tests/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 7,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/local-version-history-preview.spec.ts",
+      "file": "tests/local-version-history-preview.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "lists history with 50/100 pagination and stable semantic metadata",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 6305,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5",
+                    "location": {
+                      "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                      "column": 5,
+                      "line": 12
+                    },
+                    "snippet": "  10 |   await expect(\n  11 |     page.getByRole(\"complementary\", { name: \"Version History\" }),\n> 12 |   ).toBeVisible();\n     |     ^\n  13 | });\n  14 |\n  15 | test(\"lists history with 50/100 pagination and stable semantic metadata\", async ({"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                        "column": 5,
+                        "line": 12
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n\n\n  10 |   await expect(\n  11 |     page.getByRole(\"complementary\", { name: \"Version History\" }),\n> 12 |   ).toBeVisible();\n     |     ^\n  13 | });\n  14 |\n  15 | test(\"lists history with 50/100 pagination and stable semantic metadata\", async ({\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:28:12.029Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-d858e-nd-stable-semantic-metadata-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-d858e-nd-stable-semantic-metadata-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-d858e-nd-stable-semantic-metadata-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-d858e-nd-stable-semantic-metadata-browser-ui/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                    "column": 5,
+                    "line": 12
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "df5cc1858aad4f19d04b-31b566c639ec2c4b41a1",
+          "file": "tests/local-version-history-preview.spec.ts",
+          "line": 15,
+          "column": 1
+        },
+        {
+          "title": "supports keyboard browsing, visible focus, preview exit, and trigger focus return",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 5,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 5791,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5",
+                    "location": {
+                      "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                      "column": 5,
+                      "line": 12
+                    },
+                    "snippet": "  10 |   await expect(\n  11 |     page.getByRole(\"complementary\", { name: \"Version History\" }),\n> 12 |   ).toBeVisible();\n     |     ^\n  13 | });\n  14 |\n  15 | test(\"lists history with 50/100 pagination and stable semantic metadata\", async ({"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                        "column": 5,
+                        "line": 12
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n\n\n  10 |   await expect(\n  11 |     page.getByRole(\"complementary\", { name: \"Version History\" }),\n> 12 |   ).toBeVisible();\n     |     ^\n  13 | });\n  14 |\n  15 | test(\"lists history with 50/100 pagination and stable semantic metadata\", async ({\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:28:18.876Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-b449c-it-and-trigger-focus-return-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-b449c-it-and-trigger-focus-return-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-b449c-it-and-trigger-focus-return-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-b449c-it-and-trigger-focus-return-browser-ui/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                    "column": 5,
+                    "line": 12
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "df5cc1858aad4f19d04b-1bf8743d93a5c9eba1fb",
+          "file": "tests/local-version-history-preview.spec.ts",
+          "line": 44,
+          "column": 1
+        },
+        {
+          "title": "keeps preview read-only and rejects a late response from another document tab",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 6,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 5794,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5",
+                    "location": {
+                      "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                      "column": 5,
+                      "line": 12
+                    },
+                    "snippet": "  10 |   await expect(\n  11 |     page.getByRole(\"complementary\", { name: \"Version History\" }),\n> 12 |   ).toBeVisible();\n     |     ^\n  13 | });\n  14 |\n  15 | test(\"lists history with 50/100 pagination and stable semantic metadata\", async ({"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                        "column": 5,
+                        "line": 12
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n\n\n  10 |   await expect(\n  11 |     page.getByRole(\"complementary\", { name: \"Version History\" }),\n> 12 |   ).toBeVisible();\n     |     ^\n  13 | });\n  14 |\n  15 | test(\"lists history with 50/100 pagination and stable semantic metadata\", async ({\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:28:25.127Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-336ba-e-from-another-document-tab-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-336ba-e-from-another-document-tab-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-336ba-e-from-another-document-tab-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-336ba-e-from-another-document-tab-browser-ui/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                    "column": 5,
+                    "line": 12
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "df5cc1858aad4f19d04b-acb4797315a9cf0e5e6c",
+          "file": "tests/local-version-history-preview.spec.ts",
+          "line": 84,
+          "column": 1
+        },
+        {
+          "title": "distinguishes loading, empty, processing, permission, conflict, unavailable, and error states",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 7,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 5799,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5",
+                    "location": {
+                      "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                      "column": 5,
+                      "line": 12
+                    },
+                    "snippet": "  10 |   await expect(\n  11 |     page.getByRole(\"complementary\", { name: \"Version History\" }),\n> 12 |   ).toBeVisible();\n     |     ^\n  13 | });\n  14 |\n  15 | test(\"lists history with 50/100 pagination and stable semantic metadata\", async ({"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                        "column": 5,
+                        "line": 12
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n\n\n  10 |   await expect(\n  11 |     page.getByRole(\"complementary\", { name: \"Version History\" }),\n> 12 |   ).toBeVisible();\n     |     ^\n  13 | });\n  14 |\n  15 | test(\"lists history with 50/100 pagination and stable semantic metadata\", async ({\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:28:31.383Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                    "column": 5,
+                    "line": 12
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "df5cc1858aad4f19d04b-5c3f77d09aafc76fcc81",
+          "file": "tests/local-version-history-preview.spec.ts",
+          "line": 122,
+          "column": 1
+        },
+        {
+          "title": "reduces motion while preserving the visible focus contract",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 8,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 5820,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5",
+                    "location": {
+                      "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                      "column": 5,
+                      "line": 12
+                    },
+                    "snippet": "  10 |   await expect(\n  11 |     page.getByRole(\"complementary\", { name: \"Version History\" }),\n> 12 |   ).toBeVisible();\n     |     ^\n  13 | });\n  14 |\n  15 | test(\"lists history with 50/100 pagination and stable semantic metadata\", async ({"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                        "column": 5,
+                        "line": 12
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Version History' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' })\u001b[22m\n\n\n  10 |   await expect(\n  11 |     page.getByRole(\"complementary\", { name: \"Version History\" }),\n> 12 |   ).toBeVisible();\n     |     ^\n  13 | });\n  14 |\n  15 | test(\"lists history with 50/100 pagination and stable semantic metadata\", async ({\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:28:37.647Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-509a4--the-visible-focus-contract-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-509a4--the-visible-focus-contract-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-509a4--the-visible-focus-contract-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-509a4--the-visible-focus-contract-browser-ui/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                    "column": 5,
+                    "line": 12
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "df5cc1858aad4f19d04b-fd2ceb66f95a3c456d2f",
+          "file": "tests/local-version-history-preview.spec.ts",
+          "line": 146,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/local-version-history-t048-regression.spec.ts",
+      "file": "tests/local-version-history-t048-regression.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "workspace sidebar toggle remains effective while History is open",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1260,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:28:12.031Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5571f674fdefad22bde9-39513c2d80d7369f78a3",
+          "file": "tests/local-version-history-t048-regression.spec.ts",
+          "line": 46,
+          "column": 1
+        },
+        {
+          "title": "read-only version preview hides the SDK main-menu trigger and actions",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 676,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:28:13.436Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5571f674fdefad22bde9-9b0798125ad71167347f",
+          "file": "tests/local-version-history-t048-regression.spec.ts",
+          "line": 78,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/local-version-history-t048.spec.ts",
+      "file": "tests/local-version-history-t048.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "keeps the 360 px history drawer and fixed selection usable in light",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "failed",
+                  "duration": 1503,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"#CED4DA\"\u001b[39m\nReceived: \u001b[31m\"rgb(206, 212, 218)\"\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"#CED4DA\"\u001b[39m\nReceived: \u001b[31m\"rgb(206, 212, 218)\"\u001b[39m\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts:124:41",
+                    "location": {
+                      "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts",
+                      "column": 41,
+                      "line": 124
+                    },
+                    "snippet": "  122 |     });\n  123 |     expect(approvedControls.markHeight).toBe(30);\n> 124 |     expect(approvedControls.markBorder).toBe(approvedControls.borderStrong);\n      |                                         ^\n  125 |     expect(approvedControls.markBackground).toBe(\n  126 |       approvedControls.panelBackground,\n  127 |     );"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts",
+                        "column": 41,
+                        "line": 124
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"#CED4DA\"\u001b[39m\nReceived: \u001b[31m\"rgb(206, 212, 218)\"\u001b[39m\n\n  122 |     });\n  123 |     expect(approvedControls.markHeight).toBe(30);\n> 124 |     expect(approvedControls.markBorder).toBe(approvedControls.borderStrong);\n      |                                         ^\n  125 |     expect(approvedControls.markBackground).toBe(\n  126 |       approvedControls.panelBackground,\n  127 |     );\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts:124:41"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:28:12.031Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-1ed79-d-selection-usable-in-light-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-1ed79-d-selection-usable-in-light-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-1ed79-d-selection-usable-in-light-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-1ed79-d-selection-usable-in-light-browser-ui/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts",
+                    "column": 41,
+                    "line": 124
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-8c8e7f7a8690cdc6422e",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 47,
+          "column": 3
+        },
+        {
+          "title": "keeps the 360 px history drawer and fixed selection usable in dark",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 2,
+                  "status": "failed",
+                  "duration": 949,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"#5C5C5C\"\u001b[39m\nReceived: \u001b[31m\"rgb(92, 92, 92)\"\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"#5C5C5C\"\u001b[39m\nReceived: \u001b[31m\"rgb(92, 92, 92)\"\u001b[39m\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts:124:41",
+                    "location": {
+                      "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts",
+                      "column": 41,
+                      "line": 124
+                    },
+                    "snippet": "  122 |     });\n  123 |     expect(approvedControls.markHeight).toBe(30);\n> 124 |     expect(approvedControls.markBorder).toBe(approvedControls.borderStrong);\n      |                                         ^\n  125 |     expect(approvedControls.markBackground).toBe(\n  126 |       approvedControls.panelBackground,\n  127 |     );"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts",
+                        "column": 41,
+                        "line": 124
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"#5C5C5C\"\u001b[39m\nReceived: \u001b[31m\"rgb(92, 92, 92)\"\u001b[39m\n\n  122 |     });\n  123 |     expect(approvedControls.markHeight).toBe(30);\n> 124 |     expect(approvedControls.markBorder).toBe(approvedControls.borderStrong);\n      |                                         ^\n  125 |     expect(approvedControls.markBackground).toBe(\n  126 |       approvedControls.panelBackground,\n  127 |     );\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts:124:41"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:28:14.142Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-d3aa0-ed-selection-usable-in-dark-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-d3aa0-ed-selection-usable-in-dark-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-d3aa0-ed-selection-usable-in-dark-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-d3aa0-ed-selection-usable-in-dark-browser-ui/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts",
+                    "column": 41,
+                    "line": 124
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-fcd27cb4b04a10c8e999",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 47,
+          "column": 3
+        },
+        {
+          "title": "resizes by drag and keyboard without changing the selected version",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 820,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:28:15.553Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-2838bc9c4fdb24ae7310",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 168,
+          "column": 1
+        },
+        {
+          "title": "keeps the 360 px default drawer inside a narrow viewport",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 766,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:28:16.454Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-51e49cece6d4a787ad3b",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 202,
+          "column": 1
+        },
+        {
+          "title": "honors reduced motion and keeps row focus visible with 50 versions",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 703,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:28:17.225Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-22c4291db1cf5d5a8517",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 268,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-29T09:28:11.848Z",
+    "duration": 31945.006,
+    "expected": 5,
+    "skipped": 0,
+    "unexpected": 7,
+    "flaky": 0
+  }
+}

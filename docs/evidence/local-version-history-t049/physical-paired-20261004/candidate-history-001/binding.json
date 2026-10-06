@@ -1,0 +1,19 @@
+{
+  "status": "FAILED_WARMUP_ASSERTION",
+  "runRoot": "/private/tmp/t049-20261004-resume-candidate-history",
+  "runnerCommit": "849b1ffcff908146f288ed9ac4330153d925ce11",
+  "binary": {
+    "path": "/private/tmp/t049-20261004-history-target-849b1ff/release/excalidraw-desktop",
+    "sha256": "e8e703560193ef907a6922eeceb311f0e13773535d84615932c8bc1d474534cd",
+    "sizeBytes": 35836512
+  },
+  "buildReport": "../../history-build-20261004/build-report.json",
+  "exitCode": 1,
+  "measuredSamples": 0,
+  "reportProduced": false,
+  "runnerLogUncompressedSha256": "3e4cb4561d64e2593f503a1c2a3eeb43d055bce2aa42c3a019156f01db228128",
+  "failure": "verifyB.staleAutosaveRejected expected true received undefined",
+  "classification": "runner oracle/type contract error: stale-autosave evidence belongs to frontendB/A, not verifyB/A",
+  "rawJourneyEvidence": "journey cleanup ran; no complete performance report produced",
+  "resolvedBy": "91c5d7b"
+}

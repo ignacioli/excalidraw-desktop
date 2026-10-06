@@ -1,0 +1,14 @@
+{
+  "pid": 73019,
+  "productCommit": "2c13f5066490ca4e5a8dbbbdaedfee253559f779",
+  "packageSha256": "6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4",
+  "executablePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app/Contents/MacOS/excalidraw-desktop",
+  "profileHome": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/home",
+  "fixtureRoot": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2",
+  "entryFile": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/workspace/H4 native entry.excalidraw",
+  "entryFileSha256Before": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+  "stderrPath": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/native-session-stderr.txt",
+  "startedAt": "2026-10-04T10:38:23.856Z",
+  "alwaysOnTop": false,
+  "webkitFilesystemIsolationClaimed": false
+}

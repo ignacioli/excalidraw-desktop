@@ -2,7 +2,7 @@
 
 # Getting started and verification: Excalidraw Desktop
 
-**Date**: 2026-08-04 | **Last updated**: 2026-09-16 | **Architecture**: [architecture.md](./architecture.md) | **Design contract**: [../DESIGN.md](../DESIGN.md) | **IPC contract**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md) | **ADR-009**: [adr/ADR-009-desktop-ui-interactions.md](./adr/ADR-009-desktop-ui-interactions.md)
+**Date**: 2026-08-04 | **Last updated**: 2026-09-25 | **Architecture**: [architecture.md](./architecture.md) | **Design contract**: [../DESIGN.md](../DESIGN.md) | **IPC contract**: [contracts/ipc-contracts.md](./contracts/ipc-contracts.md) | **ADR-009**: [adr/ADR-009-desktop-ui-interactions.md](./adr/ADR-009-desktop-ui-interactions.md)
 
 This file explains how to run Excalidraw Desktop locally and how to check behavior against **product capabilities**. Implementation detail lives in the source and in [architecture.md](./architecture.md); it is not repeated here.
 
@@ -44,9 +44,32 @@ pnpm tauri build             # production bundle (dmg / AppImage / deb / rpm)
 pnpm lint && pnpm typecheck && pnpm test          # frontend
 cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml
 APP_E2E=1 pnpm e2e           # Playwright desktop E2E (test-only build; exposes the fault-injection harness)
+
+# version-history focused checks
+pnpm exec vitest run src/history src/documents/documentStore.test.ts src/ipc/contracts.test.ts
+cargo test --manifest-path src-tauri/Cargo.toml --features e2e-harness -q
 ```
 
 Process-level cases also require `EXCALIDRAW_E2E_BINARY` to point at a test binary built with `--features e2e-harness`. Production builds must not register the harness, and must not register `thumb_lookup` / `thumb_store`.
+
+### Long-running verification runs
+
+Before starting a build, performance measurement, soak, or other command expected to take several minutes, announce its estimated duration and the exact completion artifact (for example, the report JSON path and expected verdict). About every five minutes, check an observable health signal such as sample count, a growing report, or an error file, and report progress even if the process is still healthy. A live process by itself is not a health signal.
+
+Keep each command under 30 minutes by default; split independent workloads into separate commands and report at each boundary. If a genuinely indivisible run needs longer, announce its expected duration and obtain acknowledgment before launch while continuing the five-minute checks. At the end, record the command, product commit, binary hash, environment, raw report path, result, and any failure or missing evidence. A missing required artifact is `BLOCKED`; an executed behavior or budget mismatch is `FAIL`.
+
+For the local version-history lifecycle journey, build the test-only binary and run the focused process suite from the repository root:
+
+```bash
+VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness
+APP_E2E=1 \
+EXCALIDRAW_E2E_BINARY="$PWD/src-tauri/target/release/excalidraw-desktop" \
+PLAYWRIGHT_SKIP_WEBSERVER=1 \
+pnpm e2e e2e/tests/local-version-history-lifecycle.spec.ts \
+  --project=browser-ui --workers=1 --retries=0
+```
+
+This command is a verification entry point; this guide does not claim that an unexecuted local or packaged run passed.
 
 Related suites (verification entry points; this file does not claim they have passed): `e2e/tests/ui-sidebar-modes.spec.ts`, `e2e/tests/us3-workspace-files.spec.ts`, `e2e/tests/native-entry-mutations.spec.ts`, `e2e/tests/native-tab-close.spec.ts`, `e2e/tests/native-window-contract.spec.ts`, `e2e/tests/us7-thumbnails.spec.ts` (asserts thumbnail commands are not called).
 
@@ -119,6 +142,49 @@ The browser can cover dialogs, the tree, and the keyboard. Process-level proof o
 
 5. Close several tabs in a row, or switch rapidly with the scroll wheel.
    - Expected: closes are serialized; a failure stops the batch; activation applies only the latest intent. The browser can measure queue behavior. Real Cmd+W / middle-click hits need physical macOS; harness-synthesized events must not be claimed as proof of the real shortcut.
+
+### Local version history cadence
+
+1. Save a new document, advance the controlled clock to 29m59s, and complete another changed cold checkpoint.
+   - Expected: the first save establishes the baseline and the second remains pending; no automatic version is created early.
+
+2. At 30m, complete the next changed cold checkpoint, then perform unchanged Cmd+S/close checkpoints and leave the app idle.
+   - Expected: exactly one automatic version is published from the qualifying checkpoint; unchanged saves and idle time add none, and history creates zero independent timer wakeups.
+
+3. Mark the current state, edit again, restart against the same isolated data root, and inspect mixed automatic/protected pools at 19, 20, and 21 records.
+   - Expected: the manual version still contains the click-time scene and is not auto-evicted; automatic/protected retain the newest 20 together, while a history failure remains separate from the successful current-file save.
+
+### Protected clear and drawing import
+
+1. Edit a saved drawing, then use Cmd/Ctrl+Backspace or Delete on the canvas, or import a `.excalidraw` drawing or PNG/SVG with an embedded scene.
+   - Expected: a recoverable operation-before version is saved before the current file and canvas change. A protection failure leaves both unchanged.
+
+2. Repeat with an untitled drawing and cancel its first Save dialog; then drop an ordinary PNG/SVG and a library item, and use the shortcut in a text field.
+   - Expected: cancellation leaves the drawing unchanged; ordinary images and library items insert once without replacing the scene; text editing keeps its normal shortcut behavior.
+
+### Version-history identity, deletion, and failure feedback
+
+History metadata is stored locally below the Tauri app-data directory in
+`version-history/history.sqlite3`; immutable scene and asset objects are stored
+beside it. A saved drawing keeps one persistent identity across an
+application-owned file or ancestor-directory rename. Save As creates a new
+identity and starts with no inherited versions. A different file replacing the
+old path is rejected until the document is resolved, so equal bytes alone do
+not attach the old history to the new file.
+
+1. Rename an open drawing and then rename one of its ancestor directories from the workspace UI.
+   - Expected: the drawing keeps its version history and the open tab follows the migrated path.
+
+2. Use Save As to create a new drawing, then open its Version History.
+   - Expected: the new document has its own identity and starts with no versions from the source drawing.
+
+3. In Version History, delete one manual or automatic version and retry the same request after a transport interruption.
+   - Expected: `history_delete` removes exactly that semantic version, leaves the current canvas/file unchanged, and the same `requestId` is idempotent. A version referenced by an active replacement remains protected and reports a structured busy error.
+
+4. Trigger a protected restore, clear, or embedded-scene import while the result is uncertain.
+   - Expected: the document remains read-only and pending until `history_operation_status` confirms a completed adoption or a terminal failure. A history publication failure is shown through `history-issue` and does not turn a successful current-file checkpoint into a failed save.
+
+The focused browser checks can prove frontend routing and panel behavior. Filesystem identity, rename migration, Save As separation, Trash commit, restart replay, and object retention require the test-only process build. An exact packaged WKWebView run, native menu/visual approval, performance measurement, and release acceptance are separate checks.
 
 ### Export
 

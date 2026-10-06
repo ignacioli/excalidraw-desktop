@@ -1,0 +1,60 @@
+{
+  "observedAt": "2026-10-04T13:23:08.689Z",
+  "productCommit": "2c13f5066490ca4e5a8dbbbdaedfee253559f779",
+  "packageSha256": "6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4",
+  "pid": 73019,
+  "status": "PARTIAL",
+  "windowRecovery": {
+    "windowCount": 1,
+    "launchSize": {
+      "width": 800,
+      "height": 600
+    },
+    "preparedSize": {
+      "width": 1280,
+      "height": 760
+    },
+    "restartCount": 0,
+    "rebuildCount": 0,
+    "cause": "Unresolved; same process now exposes an AX window. Do not infer delayed startup or a product fix."
+  },
+  "nativeEntry": "native-entry-report.json",
+  "states": {
+    "longList": {
+      "file": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/workspace/History long list.excalidraw",
+      "axText": "AX unreadable element count: 2\nBUTTON: Toggle workspace sidebar\nBUTTON: Back\nBUTTON: Close History long list.excalidraw\nAll changes saved\nBUTTON: missing value\nTo move canvas, hold mouse wheel or spacebar while dragging, or use the hand tool\nShapes\n1\n2\n3\n4\n5\n6\n7\n8\n9\n0\nBUTTON: missing value\nLibrary\nCanvas actions\nBUTTON: Zoom out\nBUTTON: Reset zoom\nBUTTON: Zoom in\nBUTTON: Undo\nBUTTON: Redo\nBUTTON: Help\nDrawing canvas\nLeft Arrow moves the divider left and increases width by 10 pixels; Right Arrow moves it right and decreases width by 10 pixels. Home sets 300 pixels; End sets 360 pixels. Hold Shift to resize by 20 pixels.\nVersion History\nHistory long list.excalidraw\nBUTTON: History info\nBUTTON: Close version history\nCURRENT DRAWING\nOpen canvas\n50\nversions\nshown\nBUTTON: Mark current version\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nCanvas changed\nv-\n052\n · \nToday · 9:21 PM\n · \nManual\nBUTTON: Preview\nBUTTON: Restore this version\nBUTTON: missing value\nBUTTON: missing value\nBUTTON: missing value\nExcalidraw Whiteboard\n\n",
+      "observation": "50 versions shown; two AX elements unreadable; full row semantics not claimed"
+    },
+    "pendingIssue": {
+      "file": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/workspace/History pending issue.excalidraw",
+      "axText": "AX unreadable element count: 0\nBUTTON: Toggle workspace sidebar\nBUTTON: Back\nBUTTON: Close History pending issue.excalidraw\nRecovery draft saved; file has unsaved changes\nBUTTON: missing value\nTo move canvas, hold mouse wheel or spacebar while dragging, or use the hand tool\nShapes\n1\n2\n3\n4\n5\n6\n7\n8\n9\n0\nBUTTON: missing value\nLibrary\nCanvas actions\nBUTTON: Zoom out\nBUTTON: Reset zoom\nBUTTON: Zoom in\nBUTTON: Undo\nBUTTON: Redo\nBUTTON: Help\nDrawing canvas\nLeft Arrow moves the divider left and increases width by 10 pixels; Right Arrow moves it right and decreases width by 10 pixels. Home sets 300 pixels; End sets 360 pixels. Hold Shift to resize by 20 pixels.\nVersion History\nHistory pending issue.excalidraw\nBUTTON: History info\nBUTTON: Close version history\nCURRENT DRAWING\nOpen canvas\n0\nversions\nshown\nBUTTON: Mark current version\nVersion history could not be loaded\nThe history operation is pending reconciliation.\nBUTTON: Try again\nBUTTON: missing value\nBUTTON: missing value\nBUTTON: missing value\nExcalidraw Whiteboard\n\n",
+      "observation": "Version history could not be loaded; pending reconciliation; Try again"
+    },
+    "unavailable": {
+      "file": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/workspace/History unavailable version.excalidraw",
+      "axText": "AX unreadable element count: 0\nBUTTON: Toggle workspace sidebar\nBUTTON: Back\nBUTTON: Close History unavailable version.excalidraw\nRecovery draft saved; file has unsaved changes\nBUTTON: missing value\nTo move canvas, hold mouse wheel or spacebar while dragging, or use the hand tool\nShapes\n1\n2\n3\n4\n5\n6\n7\n8\n9\n0\nBUTTON: missing value\nLibrary\nCanvas actions\nBUTTON: Zoom out\nBUTTON: Reset zoom\nBUTTON: Zoom in\nBUTTON: Undo\nBUTTON: Redo\nBUTTON: Help\nDrawing canvas\nLeft Arrow moves the divider left and increases width by 10 pixels; Right Arrow moves it right and decreases width by 10 pixels. Home sets 300 pixels; End sets 360 pixels. Hold Shift to resize by 20 pixels.\nVersion History\nHistory unavailable version.excalidraw\nBUTTON: History info\nBUTTON: Close version history\nCURRENT DRAWING\nOpen canvas\n1\nversion\nshown\nBUTTON: Mark current version\n\nSELECTED VERSION · UNAVAILABLE\nCanvas changed\nv-\n001\n · \nToday · 2:41 PM\n · \nManual\nA version history resource is missing or corrupted.\n Your current drawing is unchanged.\nBUTTON: Preview\nBUTTON: Restore this version\nBUTTON: missing value\nBUTTON: missing value\nBUTTON: missing value\nExcalidraw Whiteboard\n\n",
+      "observation": "Selected version unavailable; missing resource guidance; disabled buttons require separate confirmation"
+    }
+  },
+  "ownerVerdict": "PENDING",
+  "conflict": {
+    "at": "2026-10-04T13:30:07.515Z",
+    "file": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/workspace/H4 external conflict.excalidraw",
+    "beforeSha256": "bb44b146b689c49996f9d21ebb29e0987d805bc306fc16fbe1468086b5abbccd",
+    "afterSha256": "0b420e69f26758f8473515a42f13ced52263126590ef8b9f527b384a44f7165d",
+    "unsavedStateConfirmed": true,
+    "axText": "AX unreadable element count: 0\nFile changed on disk\nH4 external conflict.excalidraw\n/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/workspace/H4 external conflict.excalidraw\nThe file was changed outside this app while it had unsaved changes. Nothing is written to the file until you choose what to do.\nExternal version changed\n10/4/2026, 9:30:06 PM\nLocal draft last saved\n10/4/2026, 9:30:04 PM\nBUTTON: Use external version\nBUTTON: Keep local changes\nBUTTON: Save local changes as new…\nBUTTON: missing value\nBUTTON: missing value\nBUTTON: missing value\nExcalidraw Whiteboard\n\n",
+    "nativeStateReachable": true,
+    "ownerVerdict": "PENDING"
+  },
+  "reducedMotion": "PENDING OS state and owner observation",
+  "pendingRepair": {
+    "at": "2026-10-04T13:27:08.867Z",
+    "before": "Empty state visible; seeded maintenance record absent after successful checkpoint",
+    "classification": "State preparation failure; no product regression verdict",
+    "action": "After All changes saved, restore only the known maintenance issue in isolated fixture DB; close/reopen History without reloading document",
+    "sql": "BEGIN IMMEDIATE; INSERT INTO maintenance_state (scope_key,scope,document_id,issue_code,last_phase,updated_at) VALUES ('document:d1290225-4d06-47ab-9e94-1b7e11e3ae7f','document','d1290225-4d06-47ab-9e94-1b7e11e3ae7f','fixture_pending','owner_preparation_after_save',1791120423); COMMIT;",
+    "source": "src-tauri/src/commands/documents.rs successful checkpoint clears maintenance issue",
+    "ownerRetest": "PENDING"
+  }
+}

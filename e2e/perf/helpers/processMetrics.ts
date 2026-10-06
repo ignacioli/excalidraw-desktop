@@ -1,15 +1,17 @@
 import { execFile } from "node:child_process";
-import { watch, type FSWatcher } from "node:fs";
+import { createHash } from "node:crypto";
+import { createReadStream, watch, type FSWatcher } from "node:fs";
 import {
   lstat,
   mkdir,
   readdir,
   readFile,
+  realpath,
   stat,
   writeFile,
 } from "node:fs/promises";
 import os from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 
 import {
@@ -39,6 +41,42 @@ export interface EnvironmentMetadata {
   osVersion: string;
   webviewVersion: string;
   executionEnvironment: ExecutionEnvironmentMetadata;
+}
+
+export interface PerformanceBinaryIdentity {
+  path: string;
+  sha256: string;
+  kind: "e2e-harness";
+  pathScope: "absolute" | "workspace-relative";
+}
+
+/** Identify the exact executable selected by the native performance runner. */
+export async function collectPerformanceBinaryIdentity(
+  executablePath: string,
+): Promise<PerformanceBinaryIdentity> {
+  const canonicalPath = await realpath(executablePath);
+  const file = await stat(canonicalPath);
+  if (!file.isFile()) {
+    throw new Error(
+      "The selected performance executable is not a regular file.",
+    );
+  }
+  const digest = createHash("sha256");
+  for await (const chunk of createReadStream(canonicalPath)) {
+    digest.update(chunk);
+  }
+  const workspacePath = relative(process.cwd(), canonicalPath);
+  const insideWorkspace =
+    workspacePath.length > 0 &&
+    workspacePath !== ".." &&
+    !workspacePath.startsWith(`..${sep}`) &&
+    !isAbsolute(workspacePath);
+  return {
+    path: insideWorkspace ? workspacePath : canonicalPath,
+    sha256: digest.digest("hex"),
+    kind: "e2e-harness",
+    pathScope: insideWorkspace ? "workspace-relative" : "absolute",
+  };
 }
 
 export interface ProcessClassCounts {
@@ -400,7 +438,9 @@ export async function collectProcessTreeBreakdown(
     const rssBytes = record.rssKilobytes * 1024;
     processClasses[role] += 1;
     rssBytesByClass[role] += rssBytes;
-    cpuPercentByClass[role] = round(cpuPercentByClass[role] + record.cpuPercent);
+    cpuPercentByClass[role] = round(
+      cpuPercentByClass[role] + record.cpuPercent,
+    );
     return {
       pid: record.pid,
       role,

@@ -1,0 +1,4 @@
+{
+  "schemaVersion": "1.0.0",
+  "message": "requestAnimationFrame produced no frame for 10199 ms (visibilityState=hidden); the window is likely occluded or the process was suspended, so the measurement cannot continue.\na@tauri://localhost/assets/performanceDriver-H_saRuwN.js:2:524\n@tauri://localhost/assets/performanceDriver-H_saRuwN.js:2:610"
+}

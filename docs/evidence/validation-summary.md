@@ -1,4 +1,101 @@
-# 验证证据汇总（003 当前状态；001/002 历史）
+# 验证证据汇总（004 实施中；003 已完成；001/002 历史）
+
+**2026-10-04负责人最终接受记录：** Feature 004的T049完整物理测量已归档；owner在获知诊断性能FAIL与历史原始记录字段缺口后明确回复“接受”，T054及Phase 7关闭。准确范围见[唯一当前索引](local-version-history-validation-index.md)。该接受允许继续本地准备0.4.0，不表示全部性能预算PASS或已发布。
+
+Feature 004 的唯一当前状态见[本地版本历史验证索引](local-version-history-validation-index.md)，包括 T048/T058、T049、T052/T054 的当前结论、证据身份和缺口。
+
+本文件保留实际验证运行、命令、历史问题和其他 feature 的证据。Feature 004 的旧状态段落是其标注日期时的记录，不代表当前状态；更新当前结论时只改验证索引。
+
+## Feature 004 historical validation snapshots (through 2026-09-29)
+
+以下 Feature 004 内容记录到 2026-09-29 为止的历史快照。段内的“当前”“最新”“待完成”均以段落标注日期为准；请勿据此判断今天的状态。
+
+### Snapshot: 2026-09-29
+
+T055 已归档产品负责人批准的 T048 六屏高保真与 token 映射；T056/T057 实现及针对性自动验证见产品提交 `7b7ddc8`。当前 production `.app` 绑定产品提交 `9c1e6a37a10b72ec8213af9d3e45d81667ad73c7`，package SHA-256 `2420a8a8f5af8253c7ebcd90747e8e0430c1a7cee9d65585322c7e9e5e6aeae3`；T058 原生入口检查 13/13 PASS。HISTORY-01 capture integrity PASS，collection digest `a4db47bdeb17c503b84ca214a8bd23d41878a22eccf5181ce095e40bf0447620`；采集、包绑定和截图见 [window-repair-004](./local-version-history-t048/window-repair-004/README.md)。
+
+T023 完整 `local-version-history-preview.spec.ts` 最终 5/5 PASS；JSON 当前位于 `/private/tmp/history-t023-20260929/final-report.json`，首轮、复测及最终报告的仓库归档与提交 binding 待补到 `local-version-history-t059/t023/`。该 browser semantic 结果不依赖 native package/process 身份。
+
+**截至 2026-09-29 的 T048 画面 `FAIL`**：独立 reviewer 在 HISTORY-01 发现两项 HIGH 样式偏差：Mark current 按钮的几何和视觉层级偏离已批准 token，Restore 主按钮丢失 accent 层级。详见[独立审查报告](./local-version-history-t048/window-repair-004/history01-review.md)；此前窗口查询 BLOCKED 及其修复过程见[harness incident report](./local-version-history-t048-harness-incident.md)。UI 修复已进入 `a50818e`，新包复审当时仍未执行。History drawer 默认 360 px，产品负责人已决定允许拖动边缘缩至 300 px，任何视口下均不依赖 breakpoint；此交互决定记录于[批准的 interaction contract](../design/local-version-history/interaction.md)。当前 T048 verdict 见上方唯一状态索引。
+
+在该快照时间点，T048 尚未通过：其余所需状态仍待采集和独立评审，修复后的精确包需重新绑定，产品负责人最终接受也未记录。T049 正式物理机/参考 VM 配对性能仍未完成；T052 索引继续按各事实适用性绑定证据；T054 最终接受待定。T058 原生入口 PASS、capture integrity PASS 和当时 reviewer FAIL 分别保留其自身范围，不能合并为产品视觉通过。
+
+T049 物理 `startup-idle` 首次基线尝试为 **INVALID / `not_evaluated`**，原始报告、binding 和观察边界见[归档记录](./local-version-history-t049/physical-startup-20260929/README.md)。10 次冷启动要求中只取得 4 个 ready，第 5 次超时；操作员曾最小化挡住工作的应用窗口，但事件时间无法对应到样本，不能把超时归因于该动作或记为产品性能失败。该尝试不进入基线／候选配对。
+
+## Feature 004 先前状态（2026-09-26，保留历史）
+
+Phase 6 的 T038–T044 已完成，用户故事 4 检查点为 **`PASS`（产品实现及真实进程可靠性范围）**。产品代码提交 `01977ec` 的 test-only release binary SHA-256 为 `585ad9ae4731838e480d876d70af2571af9fdd61bc1f02d1e368df134f250496`；故障与生命周期真实进程测试共 36/36 PASS，Rust 205 个库测试及全部 integration suites PASS。具体证明和边界见 [`local-version-history-t038-t044.md`](./local-version-history-t038-t044.md)。Phase 7 已完成 T045/T046 的实现，T047 已通过精确包原生入口验收，T048 尚未取得人工视觉验收。
+
+T050 的既有共享 Harness（47/47）、US4（5/5）、原子写（9/9，含 100 seeds）、Recovery（1/1）及前端/Rust 核心门禁均保持 PASS；这些未受本次 harness-only fixture 修正影响的结果按原记录复用。T024 A→B→A 曾在 `frontendB` 失败，初始证据与原因分类见 [T024 复验记录](local-version-history-t024.md)：seed 将 20 个版本的时间戳固定在 1–20，旧 B 因而远早于实际运行时；启动产生的 automatic 版本进入统一保留池后淘汰 B。T024 seed 时间改为运行时附近后，当前产品提交 `b6fca0d77d2b3e9d06b7f866fbd6ff79eaa56766` 的 test-only binary 完成 fresh-process A→B→A **1/1 PASS**。T050 技术回归证据现为 **`PASS`（上述既有门禁复用，加本次 T024 复验）**；旧失败根 `/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/excalidraw-desktop-e2e-7W21bo` 保留为历史诊断数据。此结果只排除该次 fixture 时间基准导致的淘汰；启动格式规范化与无用户编辑时的保存观察仍需单独对照产品契约评估，不据此断言产品回归。
+
+T049 工作负载 smoke 曾因旧 T024 失败而中止；fixture 修正后的 history 专项 smoke 已 1/1 PASS，原始描述性报告见 [`e2e/perf/local-version-history-baseline.md`](../../e2e/perf/local-version-history-baseline.md)。该报告未做基线/候选配对或进程树采样，`executionEnvironment.type=unspecified`；三项通用性能 spec 尚未写入正式配对所需的 binary 身份，参考 VM 版本和内存也不符合声明环境，性能仍为 `not_evaluated`。
+
+**T047：PASS（精确 production package 的 History 原生入口范围）**。产品修复提交 `e873aac208e0271641cb2434f49daa4a6d2e01fd`，validator 提交 `0be255df09eec3a076d2e56b9eb64564afece21c`；包 SHA-256 `ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162`。在 macOS 26.6.2 / arm64 / scale 2 上，首次 AX 菜单采样即 enabled；一次 `versionHistory` 路由（validationId 1）、面板标题/唯一目标文件名/关闭按钮各 1 个，以及规范化 fixture 的前后 SHA-256 一致全部通过。[原始报告](local-version-history-t047/history-pass/collection/native-report.json)、[binding](local-version-history-t047/history-pass/binding.json)与[package manifest](local-version-history-t047/history-pass/package-manifest.json)已封存。T048 人工视觉仍 BLOCKED，T049 性能和 T054 负责人接受未在本轮执行。
+
+根因、修复与保留的旧 FAIL/BLOCKED 见 [T047 记录](local-version-history-t045-t047.md)。
+
+### T051 精确生产包隔离
+
+**T051：PASS（production `.app` 与测试入口隔离范围）。** 产品提交 `ab67c3c43ee69ae32a040bb3e6f9c762807d8c3c` 的无 `e2e-harness` production `.app` 以 `pnpm tauri build --bundles app` 封存通过；manifest 位于 `/private/tmp/history-t047-current-uug7DR/post-t050-manifest.json`，包 SHA-256 `f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f`，可执行文件 SHA-256 `7ef5956afe65549602bbb05dfdf73f2944d754fad777dcbd4abbcd84b9fdeb35`。该精确可执行文件的故障命令及 History restart driver token 缺席测试 2/2 PASS；实际启动的 production 进程忽略 `EXCALIDRAW_PERF_CONTROL_DIR` 1/1 PASS。首次进程探针受沙箱 `ps` 权限限制而未执行到产品断言，授权后重跑通过。
+
+`src-tauri/capabilities/` 相对 `origin/main` 无差异；`e2e_harness` 模块及故障命令注册仅在 Cargo feature 下编译，生产命令仍经过既有后端授权。测试专用 release binary SHA-256 `585ad9ae4731838e480d876d70af2571af9fdd61bc1f02d1e368df134f250496` 已运行生命周期及故障进程测试 36/36 PASS，其中重挂需重新授权且同路径新 inode 被拒绝。未限定 bundle 的 test-only `pnpm tauri build --features e2e-harness` 曾在 DMG 包装阶段失败，但测试二进制已编译并运行；DMG 不参与本 `.app` 边界结论。T047 原生菜单、T048 人工视觉与性能各有独立门控。
+
+T045/T046 已完成；T047 已在 `e873aac` production package 上取得原生入口 PASS。旧 `ab67c3c` / `55458f2` 的 seal 和 T051 隔离报告保留其原身份。T048 的生产包人工视觉验收仍为 **`BLOCKED` / `PENDING`**：低保真与必要高保真审批已完成，但当前包没有独立视觉 reviewer verdict 或 product-owner decision。T047 的菜单窗口几何记录不替代 T048 的稳定采样和视觉检查，因此本节不声称 Light/Dark、列表可读性、当前／预览区分、错误、焦点或裁切通过。
+
+### T048 证据分工
+
+| 事实 | 主要证据 | 当前结果 | 边界 |
+| --- | --- | --- | --- |
+| 低保真与必要高保真审批 | [`docs/design/local-version-history/interaction.md`](../design/local-version-history/interaction.md)、[`low-fi/manifest.json`](../design/local-version-history/low-fi/manifest.json)、[high-fi manifest](../design/local-version-history/high-fi/manifest.json) | **PASS — design approval** | 审批解除界面实现门控，不是 production rendering 验收 |
+| History 列表、键盘、焦点、预览退出和 reduced motion | [`e2e/tests/local-version-history-preview.spec.ts`](../../e2e/tests/local-version-history-preview.spec.ts)（T023） | 由 browser semantic tests 负责 | Chromium/WebView 语义证据不证明 macOS package 的视觉结果 |
+| `File → Version History…` 原生菜单层级、标签、状态和路由 | [旧包 T047](./local-version-history-t045-t047.md)；[新包 T058](./local-version-history-t058/README.md) | 两个不同精确包各自取得菜单 enabled、一次路由、唯一目标文档及字节保持不变 **PASS** | 不以 browser event 注入或人工视觉替代 Accessibility/System Events；旧包结果不代替新包 |
+| Light/Dark、1280 × 760、可读性、当前／预览、错误、焦点、裁切 | [`docs/evidence/local-version-history-visual-checklist.md`](./local-version-history-visual-checklist.md)（T048） | **BLOCKED / PENDING** | 必须由 exact production package 上的人类视觉 reviewer 记录 |
+
+T048 的 checklist 已固定六个必要高保真状态：Light 默认列表、Light
+More Actions、Light readonly preview、Light restore confirmation、Light
+repeated Mark / long list，以及 Dark 300 px compact fallback；T004 基线与低保真仍覆盖 external recovery，同时要求检查
+error/conflict/pending/unavailable、焦点返回和 reduced motion。T047、T023
+和 T048 分别负责 native entry、semantic keyboard behavior 和 visual
+fidelity，三者不合并为单一验收。
+
+### 当前 package binding 与阻断原因
+
+| 项目 | 当前记录 |
+| --- | --- |
+| Reviewed product commit | `e873aac208e0271641cb2434f49daa4a6d2e01fd`；validator `0be255d`，runtime input digest 一致；这是 T047 binding，尚非 T048 reviewed verdict |
+| Production `.app` path / bundle identity | `src-tauri/target/release/bundle/macos/Excalidraw.app` 已 seal；bundle ID `excalidraw-desktop`、版本 `0.3.0`、包 SHA-256 `ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162`；[manifest](local-version-history-t047/history-pass/package-manifest.json) |
+| Native executable | production `.app` 内可执行文件 SHA-256 `8e1772087bf27ac277d96b1a44a0f816650edaf0ff8822e06d38babdc03d2787`；未运行 T048 视觉 collection |
+| Exact native window | **未记录** 1280 × 760 两次稳定采样 |
+| Independent visual reviewer report | **未记录** |
+| Product-owner decision | **未记录** |
+
+因此 T048 不能勾选为 PASS。后续应从干净的精确 production package
+开始，记录 package identity、macOS/build、filesystem、display scale 和
+窗口稳定采样，再由独立 reviewer 完成 checklist，并单独取得 product-owner
+decision。缺少必需输入继续记为 `BLOCKED`；实际观察到的视觉不符记为
+`FAIL`。
+
+## Feature 004 当前状态（实施基线，2026-09-22）
+
+Feature 004（跨重启本地版本历史）已完成规格、方案和 SDK 边界资格研究，现进入产品实施；**产品功能尚未实现，T001–T054 尚未形成任何运行验收结论**。本节记录实施起点和后续证据的归属格式，不把研究 stub、文档批准或旧功能证据改写为产品通过。
+
+| 事实 | 当前基线 |
+|---|---|
+| Product worktree / branch | `/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history` / `codex/local-version-history` |
+| Source baseline | `babc027d64c2c50e6922482b416ef1099ea9d07e`（`Point SpecKit to the independent local history feature`） |
+| Feature 004 candidate binary | **尚无**；不得复用 Feature 003 package 或研究 Vite 进程作为候选二进制 |
+| Implementation environment | macOS `26.6.2`（build `25G83`），`arm64` |
+| Authoritative private specs | `codex/excalidraw-local-version-history` 的 `004-local-version-history/`；实施入口提交 `0e1661dee12c11327fab8d502a78beaeff0e2456` |
+| Working-tree audit | 产品与 private-specs worktree 在实施开始时均无 tracked、untracked 或 staged 变更；private-specs 相对本地 `origin/main` ahead 7 |
+
+后续每项证据须记录适用的产品提交、精确 `.app`/可执行文件路径与 SHA-256（若涉及二进制）、操作系统与文件系统、夹具或 seed、文档/操作/版本身份、前后内容与资源哈希、原始报告路径及 verdict。证据职责保持分离：
+
+- SDK 边界资格只证明 Excalidraw `0.18.1` 的公开入口可被宿主控制；异步 stub 不证明真实持久化、macOS package、视觉或性能。
+- Rust/TypeScript 核心测试负责身份、对象、保留、引用保护、状态机和 IPC 契约；浏览器语义测试负责 WebView 可访问行为，二者均不替代真实进程故障与重启。
+- 真实进程测试负责磁盘字节、SIGKILL/故障屏障、重启修复及外部竞争；原生菜单、人工视觉、性能和产品负责人接受各自单独记录，不能由其他层推断。
+- 缺少必需环境或批准记为 `BLOCKED`，已执行且行为不符记为 `FAIL`；本地实现或测试通过不等于 push、merge、tag、release 或产品负责人批准。
+
+Feature 003 以下记录保持其既有完成身份；不得将其 package、视觉结论或 owner acceptance 继承给 Feature 004。
 
 ## Feature 003 当前状态（已完成，R15 轻量验收，2026-09-16）
 

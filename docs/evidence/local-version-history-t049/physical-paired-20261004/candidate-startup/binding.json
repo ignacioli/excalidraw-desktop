@@ -1,0 +1,82 @@
+{
+  "role": "candidate",
+  "scenario": "startup",
+  "runRoot": "/private/tmp/t049-20261004-resume-candidate-startup",
+  "runnerCheckout": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history",
+  "runnerCommit": "849b1ffcff908146f288ed9ac4330153d925ce11",
+  "productSourceCommit": "eb961ca8c8b221c34a11989d5e4d37e9a9e8f537",
+  "buildCheckoutCommit": "711ce26ff94976e91d48ad39970b7ca46e22152a",
+  "binary": {
+    "path": "/private/tmp/t049-20261004-candidate-QF5bUb/corrected/excalidraw-desktop",
+    "sha256": "3b641885ffa43a439f99ca16ad8c424830fb2a16f2ec16cbcc932bd66d95fe99",
+    "sizeBytes": 35820000
+  },
+  "buildBinding": "../../candidate-build-20261004/corrected-binding.json",
+  "reportSha256": "3d6b7dca7570faee56a57ab513dfd06ad6f51a305f987971a7c447b0e4609799",
+  "runnerLogUncompressedSha256": "601a69a8d04c0856e9dcba422a4a0be28ae3a57b0f1ecbd9d96e850dcad2460c",
+  "exitCode": 0,
+  "runnerHashes": [
+    {
+      "path": "e2e/perf/startup-idle.spec.ts",
+      "sha256": "26ceefeb81595fa33fb5b18ffc7049b4d5c69d01b473b2aa51d6420988ba2775"
+    },
+    {
+      "path": "e2e/perf/helpers/processMetrics.ts",
+      "sha256": "88f0d66d54ccc8c411c5fe386276cf871bf28ce69d81e69b167be43ec94fb30f"
+    },
+    {
+      "path": "e2e/perf/helpers/workloads.ts",
+      "sha256": "53aef4d9712dffd350739e857e0989d520ebb53018d7e50c5c993ddfd17b4375"
+    },
+    {
+      "path": "e2e/perf/helpers/nativePerformanceContract.ts",
+      "sha256": "982960e39c71ab6cef8cb9c9795b0657c0cf49d4f393835f7695025db67b8210"
+    },
+    {
+      "path": "e2e/helpers/app.ts",
+      "sha256": "f10cc0f63a6da9839ebec82803e531d513f0d4f98b6397e695d5a83b89c98e27"
+    },
+    {
+      "path": "e2e/helpers/webkitProcesses.ts",
+      "sha256": "c4ab25b7af56fbd104dcb551d4e0b197a0bef101f1a5947bccb6f1c8bc63b8af"
+    },
+    {
+      "path": "e2e/playwright.config.ts",
+      "sha256": "3c4779f3f225fa13980f8c15b9452763e51a054b71dccd0dd1004d75ee91a73e"
+    }
+  ],
+  "command": [
+    "pnpm",
+    "exec",
+    "playwright",
+    "test",
+    "--config",
+    "e2e/playwright.config.ts",
+    "e2e/perf/startup-idle.spec.ts",
+    "--workers=1",
+    "--retries=0",
+    "--reporter=line",
+    "--output=/private/tmp/t049-20261004-resume-candidate-startup/playwright"
+  ],
+  "environment": {
+    "PERF_TEST": "1",
+    "APP_E2E": "1",
+    "PERF_REFERENCE_RUN": "0",
+    "PERF_EXECUTION_ENVIRONMENT": "physical",
+    "PERF_HOST_HARDWARE": "Mac17,9 / Apple M5 Pro / 48 GiB",
+    "EXCALIDRAW_E2E_BINARY": "/private/tmp/t049-20261004-candidate-QF5bUb/corrected/excalidraw-desktop",
+    "TMPDIR": "/private/tmp/t049-20261004-resume-candidate-startup/tmp",
+    "reportPath": "/private/tmp/t049-20261004-resume-candidate-startup/startup-idle.json",
+    "PERF_DIAGNOSTIC_SOAK_DURATION_MS": null
+  },
+  "rawReportUnmodified": true,
+  "verdict": {
+    "overall": "fail",
+    "scope": "diagnostic T090 startup and idle RSS",
+    "reason": "At least one evaluated T090 startup or idle RSS budget failed.",
+    "comparisons": {
+      "coldStartToEditable": false,
+      "idleProcessTreeRss": true
+    }
+  }
+}

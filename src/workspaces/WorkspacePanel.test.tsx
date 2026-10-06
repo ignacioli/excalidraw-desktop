@@ -916,6 +916,7 @@ describe("WorkspacePanel", () => {
             operationId: "delete-1",
             kind: "drawing",
             oldRelativePath: relativePath,
+            historyMaintenance: "pendingReplay",
           };
         }
         throw new Error(`Unexpected command ${command}`);
@@ -943,5 +944,73 @@ describe("WorkspacePanel", () => {
       ).not.toBeInTheDocument(),
     );
     expect(screen.getByRole("treeitem", { name: "Sketches" })).toHaveFocus();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "版本历史清理仍待完成，稍后会重试",
+    );
+  });
+
+  it("reports deferred physical history cleanup after deleting a drawing", async () => {
+    const user = userEvent.setup();
+    const entries = ROOT_ENTRIES.filter(
+      (entry) => entry.workspaceId === "workspace-1",
+    );
+    const invoke = vi.fn(
+      async (command: string, args: Record<string, unknown>) => {
+        if (command === "workspace_list") return [WORKSPACES[0]];
+        if (command === "workspace_entry_list") {
+          const parentRelativePath = String(args.parentRelativePath ?? "");
+          return entries.filter(
+            (entry) => entry.parentRelativePath === parentRelativePath,
+          );
+        }
+        if (command === "workspace_entry_delete_preflight") {
+          const entry = entries.find(
+            (item) => item.relativePath === String(args.relativePath ?? ""),
+          );
+          if (entry === undefined) throw new Error("missing entry");
+          return { status: "confirmable", entry };
+        }
+        if (command === "workspace_entry_delete") {
+          const relativePath = String(args.relativePath ?? "");
+          const index = entries.findIndex(
+            (entry) => entry.relativePath === relativePath,
+          );
+          if (index >= 0) entries.splice(index, 1);
+          return {
+            operationId: "delete-2",
+            kind: "drawing",
+            oldRelativePath: relativePath,
+            historyMaintenance: "cleanupPending",
+          };
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        selectDirectory={async () => null}
+      />,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for drawing" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Delete drawing.excalidraw?",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "部分版本历史资源暂未清理完成",
+    );
+    expect(
+      screen.queryByRole("treeitem", { name: "drawing" }),
+    ).not.toBeInTheDocument();
   });
 });

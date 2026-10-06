@@ -1,0 +1,123 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/26.8.2/bin/node",
+      "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config",
+      "e2e/playwright.config.ts",
+      "e2e/tests/local-version-history-preview.spec.ts",
+      "--grep",
+      "distinguishes loading",
+      "--workers=1",
+      "--reporter=list,json",
+      "--output=/private/tmp/history-pending-copy-browser-retest-20261004"
+    ],
+    "configFile": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/playwright.config.ts",
+    "rootDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/private/tmp/history-pending-copy-browser-retest-20261004",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "browser-ui",
+        "name": "browser-ui",
+        "testDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "tests/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list"
+      ],
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/local-version-history-preview.spec.ts",
+      "file": "tests/local-version-history-preview.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "distinguishes loading, empty, processing, permission, conflict, unavailable, and error states",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1048,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T13:51:42.519Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "df5cc1858aad4f19d04b-5c3f77d09aafc76fcc81",
+          "file": "tests/local-version-history-preview.spec.ts",
+          "line": 124,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-04T13:51:42.353Z",
+    "duration": 1406.7839999999999,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

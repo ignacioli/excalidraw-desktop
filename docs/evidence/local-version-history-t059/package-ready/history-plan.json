@@ -1,0 +1,396 @@
+{
+  "schemaVersion": 2,
+  "checkpoint": "HISTORY",
+  "runId": "f7d8a6ff-7892-47b6-93d2-ce1deebd6380",
+  "productCommit": "c453f3f68c09cd70bd80c6efc3a8e1c5300ece90",
+  "packageManifest": {
+    "path": "/private/tmp/t059-sealed-20260929/package-manifest.json",
+    "sha256": "8a16e6f99006d39026fd08fb05a673d0045ac21f63e4ca039f2f9d7da853b192",
+    "artifactSha256": "c19071050bc73aa1a09c45e63993bb41d0be9d7db03346623a1549b09164df9d"
+  },
+  "historyScope": {
+    "registry": {
+      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/native/004-history-capture-fixtures.json",
+      "sha256": "4be175759ec56038894f53e1f15d5afdf1e845001b6528a73bf82e00759d6c08"
+    },
+    "highFi": {
+      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/design/local-version-history/high-fi/t048/manifest.json",
+      "sha256": "7e50c65e24b66df8eb0a2840e2bf7b714a26ebfbb0f6dc8f8e423eeb819dd8dc"
+    },
+    "lowFi": {
+      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/design/local-version-history/low-fi/manifest.json",
+      "sha256": "cf44bbb2d27f79918c70226991875c9851f8e8a5029672679624d8e6ab8c6907"
+    }
+  },
+  "harnessVersion": "004-history-capture-v1",
+  "normalizationAlgorithm": "lanczos3-srgb-v1",
+  "isolation": {
+    "mode": "backend-app-data-home-redirect",
+    "root": "/private/tmp/t059-history-ready-20260929",
+    "expectedAppDataRoot": "/private/tmp/t059-history-ready-20260929/profiles",
+    "evidence": "/private/tmp/t059-history-ready-20260929/isolation.json",
+    "webkitFilesystemIsolationClaimed": false
+  },
+  "fixture": {
+    "id": "004-history-capture-v1",
+    "manifestPath": "/private/tmp/t059-history-ready-20260929/fixture/fixture-manifest.json",
+    "digest": "f81121396dd552c61a0efbc4c390c34e807db9c34f86493119e9c5ab57b88060",
+    "workspaceRoot": "/private/tmp/t059-history-ready-20260929/fixture/workspace"
+  },
+  "screens": [
+    {
+      "gateId": "HISTORY-01",
+      "profileRoot": "/private/tmp/t059-history-ready-20260929/profiles/HISTORY-01",
+      "preparationMode": "operator-assisted",
+      "launchDocument": "/private/tmp/t059-history-ready-20260929/fixture/workspace/native-entrypoints/HISTORY-01/004-history-launch.excalidraw",
+      "launchDocumentSha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "manifestName": "T048 · 01 · History · Default · Light",
+      "designReference": {
+        "kind": "approved-high-fi-frame",
+        "shapeId": "da9cf473-5dad-8097-8008-b502ce235a48",
+        "name": "T048 · 01 · History · Default · Light"
+      },
+      "visualTarget": {
+        "summary": "T048 · 01 · History · Default · Light",
+        "operatorChecklist": [
+          "Open the 360 px right History drawer in Light mode",
+          "Check the separate Current Drawing card and readable filename, time, source, summary, Ready, and marked labels in saved versions",
+          "Check Preview and Restore remain visible without clipping"
+        ],
+        "humanLiveObservations": []
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HISTORY-02",
+      "profileRoot": "/private/tmp/t059-history-ready-20260929/profiles/HISTORY-02",
+      "preparationMode": "operator-assisted",
+      "launchDocument": "/private/tmp/t059-history-ready-20260929/fixture/workspace/native-entrypoints/HISTORY-02/004-history-launch.excalidraw",
+      "launchDocumentSha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "manifestName": "T048 · 02 · Row Actions · Light",
+      "designReference": {
+        "kind": "approved-high-fi-frame",
+        "shapeId": "b48ddf15-5062-8001-8008-b5753372b7f4",
+        "name": "T048 · 02 · Row Actions · Light"
+      },
+      "visualTarget": {
+        "summary": "T048 · 02 · Row Actions · Light",
+        "operatorChecklist": [
+          "Open row actions for a saved History version in Light mode",
+          "Check the 180 × 116 px menu, subtle version title, Mark/Unmark and Delete icon outlines, separator, and clipping"
+        ],
+        "humanLiveObservations": []
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HISTORY-03",
+      "profileRoot": "/private/tmp/t059-history-ready-20260929/profiles/HISTORY-03",
+      "preparationMode": "operator-assisted",
+      "launchDocument": "/private/tmp/t059-history-ready-20260929/fixture/workspace/native-entrypoints/HISTORY-03/004-history-launch.excalidraw",
+      "launchDocumentSha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "manifestName": "T048 · 03 · Version Preview · Light",
+      "designReference": {
+        "kind": "approved-high-fi-frame",
+        "shapeId": "b48ddf15-5062-8001-8008-b575525aee78",
+        "name": "T048 · 03 · Version Preview · Light"
+      },
+      "visualTarget": {
+        "summary": "T048 · 03 · Version Preview · Light",
+        "operatorChecklist": [
+          "Enter read-only version Preview in Light mode",
+          "Check preview is distinguishable from current drawing and Exit/Restore remain reachable"
+        ],
+        "humanLiveObservations": []
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HISTORY-04",
+      "profileRoot": "/private/tmp/t059-history-ready-20260929/profiles/HISTORY-04",
+      "preparationMode": "operator-assisted",
+      "launchDocument": "/private/tmp/t059-history-ready-20260929/fixture/workspace/native-entrypoints/HISTORY-04/004-history-launch.excalidraw",
+      "launchDocumentSha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "manifestName": "T048 · 04 · Restore Confirmation · Light",
+      "designReference": {
+        "kind": "approved-high-fi-frame",
+        "shapeId": "b48ddf15-5062-8001-8008-b5756178feb0",
+        "name": "T048 · 04 · Restore Confirmation · Light"
+      },
+      "visualTarget": {
+        "summary": "T048 · 04 · Restore Confirmation · Light",
+        "operatorChecklist": [
+          "Open Restore confirmation in Light mode",
+          "Check Cancel has visible initial focus and dialog text/actions are not clipped"
+        ],
+        "humanLiveObservations": [
+          "After closing the modal, visually check focus returns to its triggering control; record a separate reviewer verdict"
+        ]
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HISTORY-05",
+      "profileRoot": "/private/tmp/t059-history-ready-20260929/profiles/HISTORY-05",
+      "preparationMode": "operator-assisted",
+      "launchDocument": "/private/tmp/t059-history-ready-20260929/fixture/workspace/native-entrypoints/HISTORY-05/004-history-launch.excalidraw",
+      "launchDocumentSha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "manifestName": "T048 · 05 · Repeated Mark · Long List · Light",
+      "designReference": {
+        "kind": "approved-high-fi-frame",
+        "shapeId": "b48ddf15-5062-8001-8008-b5756dd21737",
+        "name": "T048 · 05 · Repeated Mark · Long List · Light"
+      },
+      "visualTarget": {
+        "summary": "T048 · 05 · Repeated Mark · Long List · Light",
+        "operatorChecklist": [
+          "Show a long History list after repeated Mark in Light mode",
+          "Check the selected existing version remains the Mark target, long-list scrolling, visible status, and feedback placement without clipping"
+        ],
+        "humanLiveObservations": []
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HISTORY-06",
+      "profileRoot": "/private/tmp/t059-history-ready-20260929/profiles/HISTORY-06",
+      "preparationMode": "operator-assisted",
+      "launchDocument": "/private/tmp/t059-history-ready-20260929/fixture/workspace/native-entrypoints/HISTORY-06/004-history-launch.excalidraw",
+      "launchDocumentSha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "manifestName": "T048 · 06 · History · Compact 300 · Dark",
+      "designReference": {
+        "kind": "approved-high-fi-frame",
+        "shapeId": "b48ddf15-5062-8001-8008-b57586ef024c",
+        "name": "T048 · 06 · History · Compact 300 · Dark"
+      },
+      "visualTarget": {
+        "summary": "T048 · 06 · History · Compact 300 · Dark",
+        "operatorChecklist": [
+          "In the 1280 × 760 window, use the History drawer left-edge resize separator to reduce its width from 360 px to 300 px, then show Dark mode",
+          "Check contrast, state labels, row/action readability, and horizontal clipping"
+        ],
+        "humanLiveObservations": []
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HISTORY-ERROR",
+      "profileRoot": "/private/tmp/t059-history-ready-20260929/profiles/HISTORY-ERROR",
+      "preparationMode": "operator-assisted",
+      "launchDocument": "/private/tmp/t059-history-ready-20260929/fixture/workspace/native-entrypoints/HISTORY-ERROR/004-history-launch.excalidraw",
+      "launchDocumentSha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "designReference": {
+        "kind": "approved-low-fi-state",
+        "state": "generic-error"
+      },
+      "visualTarget": {
+        "summary": "generic-error",
+        "operatorChecklist": [
+          "Show the generic History error state",
+          "Check error title, safe retry guidance, current drawing identity, and unclipped actions"
+        ],
+        "humanLiveObservations": []
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HISTORY-CONFLICT",
+      "profileRoot": "/private/tmp/t059-history-ready-20260929/profiles/HISTORY-CONFLICT",
+      "preparationMode": "operator-assisted",
+      "launchDocument": "/private/tmp/t059-history-ready-20260929/fixture/workspace/native-entrypoints/HISTORY-CONFLICT/004-history-launch.excalidraw",
+      "launchDocumentSha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "designReference": {
+        "kind": "approved-low-fi-state",
+        "state": "conflict"
+      },
+      "visualTarget": {
+        "summary": "conflict",
+        "operatorChecklist": [
+          "Show the History conflict state",
+          "Check conflict title, recovery guidance, current drawing identity, and unclipped safe actions"
+        ],
+        "humanLiveObservations": []
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HISTORY-PENDING",
+      "profileRoot": "/private/tmp/t059-history-ready-20260929/profiles/HISTORY-PENDING",
+      "preparationMode": "operator-assisted",
+      "launchDocument": "/private/tmp/t059-history-ready-20260929/fixture/workspace/native-entrypoints/HISTORY-PENDING/004-history-launch.excalidraw",
+      "launchDocumentSha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "designReference": {
+        "kind": "approved-low-fi-state",
+        "state": "pending"
+      },
+      "visualTarget": {
+        "summary": "pending",
+        "operatorChecklist": [
+          "Show the pending or processing state",
+          "Check status is readable and visually distinct from success; no action is clipped"
+        ],
+        "humanLiveObservations": []
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HISTORY-UNAVAILABLE",
+      "profileRoot": "/private/tmp/t059-history-ready-20260929/profiles/HISTORY-UNAVAILABLE",
+      "preparationMode": "operator-assisted",
+      "launchDocument": "/private/tmp/t059-history-ready-20260929/fixture/workspace/native-entrypoints/HISTORY-UNAVAILABLE/004-history-launch.excalidraw",
+      "launchDocumentSha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "designReference": {
+        "kind": "approved-low-fi-state",
+        "state": "resource-unavailable"
+      },
+      "visualTarget": {
+        "summary": "resource-unavailable",
+        "operatorChecklist": [
+          "Show a resource-unavailable History item",
+          "Check reason, safe exit or retry guidance, current drawing identity, and unclipped actions"
+        ],
+        "humanLiveObservations": []
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HISTORY-FOCUS",
+      "profileRoot": "/private/tmp/t059-history-ready-20260929/profiles/HISTORY-FOCUS",
+      "preparationMode": "operator-assisted",
+      "launchDocument": "/private/tmp/t059-history-ready-20260929/fixture/workspace/native-entrypoints/HISTORY-FOCUS/004-history-launch.excalidraw",
+      "launchDocumentSha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "designReference": {
+        "kind": "approved-low-fi-state",
+        "state": "visible-focus-and-return"
+      },
+      "visualTarget": {
+        "summary": "visible-focus-and-return",
+        "operatorChecklist": [
+          "Show a focused History row with its visible focus indicator in the capture"
+        ],
+        "humanLiveObservations": [
+          "Visually inspect focus indicators on More Actions, Preview, modal Cancel, and Close in separate live moments",
+          "After Escape or close, visually inspect focus returned to the triggering control",
+          "Record a separate reviewer verdict; T023 owns keyboard behavior"
+        ]
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    },
+    {
+      "gateId": "HISTORY-REDUCED-MOTION",
+      "profileRoot": "/private/tmp/t059-history-ready-20260929/profiles/HISTORY-REDUCED-MOTION",
+      "preparationMode": "operator-assisted",
+      "launchDocument": "/private/tmp/t059-history-ready-20260929/fixture/workspace/native-entrypoints/HISTORY-REDUCED-MOTION/004-history-launch.excalidraw",
+      "launchDocumentSha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+      "designReference": {
+        "kind": "approved-low-fi-state",
+        "state": "reduced-motion"
+      },
+      "visualTarget": {
+        "summary": "reduced-motion",
+        "operatorChecklist": [
+          "Enable macOS Reduce Motion before opening History",
+          "Check state and focus remain understandable with no transition hiding either"
+        ],
+        "humanLiveObservations": []
+      },
+      "operatorConfirmation": {
+        "mode": "terminal-exact-line",
+        "timeoutSeconds": 600
+      },
+      "nativeMasks": [],
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      }
+    }
+  ]
+}

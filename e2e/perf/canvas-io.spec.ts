@@ -15,6 +15,7 @@ import {
   assertReferenceEnvironment,
   collectCommit,
   collectEnvironmentMetadata,
+  collectPerformanceBinaryIdentity,
   DirectoryWriteObserver,
   executableAssociationTokens,
   percentile,
@@ -107,6 +108,7 @@ test("measures the 10k canvas and 60 second persistence workload", async () => {
     collectCommit(),
     resolveDesktopBinary(),
   ]);
+  const binary = await collectPerformanceBinaryIdentity(executable);
   const fixture = await createTenThousandElementFixture();
 
   if (referenceRun) {
@@ -117,6 +119,7 @@ test("measures the 10k canvas and 60 second persistence workload", async () => {
         schemaVersion: PERFORMANCE_REPORT_SCHEMA_VERSION,
         commit,
         ...environment,
+        binary,
         workload: WORKLOAD,
         samples: {},
         statistic: {},
@@ -280,6 +283,7 @@ test("measures the 10k canvas and 60 second persistence workload", async () => {
     schemaVersion: PERFORMANCE_REPORT_SCHEMA_VERSION,
     commit,
     ...environment,
+    binary,
     workload: WORKLOAD,
     processTreeAccounting: processTreeAccounting("excalidraw-desktop"),
     samples: {

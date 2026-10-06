@@ -2,17 +2,17 @@
 
 # Excalidraw Desktop 架构文档
 
-**最后更新**：2026-09-16
+**最后更新**：2026-09-24
 
-本文档描述 Excalidraw Desktop 的**当前**实现架构：分层视图、可靠性数据流、工作区条目变更、模块职责、依赖方向与信任边界、原生窗口边界与存储层。决策记录见 `docs/adr/`；视觉与交互契约见根目录 `DESIGN.md`（英文正文；中文见 `DESIGN.zh.md`）。公开 IPC 契约见 `docs/contracts/ipc-contracts.md`（v2）。
+本文档描述 Excalidraw Desktop 的**当前**实现架构：分层视图、可靠性数据流、工作区条目变更、模块职责、依赖方向与信任边界、原生窗口边界与存储层。决策记录见 `docs/adr/`；视觉与交互契约见根目录 `DESIGN.md`（英文正文；中文见 `DESIGN.zh.md`）。公开 IPC 契约见 `docs/contracts/ipc-contracts.md`（v3）。
 
-当前壳层是画布优先的 overlay/pinned 侧边栏、IPC v2 Workspace Entry 命令，以及统一的应用菜单/对话框。崩溃安全持久化（草稿、原子写、恢复快照、外部变更冲突）仍然有效。下文描述的是现行路径，不是已退休的 FileTree + `thumbnails/` 生产实现。
+当前壳层是画布优先的 overlay/pinned 侧边栏、IPC v3 Workspace Entry 与版本历史命令，以及统一的应用菜单/对话框。崩溃安全持久化（草稿、原子写、恢复快照、外部变更冲突）仍然有效。下文描述的是现行路径，不是已退休的 FileTree + `thumbnails/` 生产实现。
 
 Workspace 持久化将 mounted authority 与 Recent history 分开。已挂载记录进入路径策略、Workspace Entry 命令、索引与监听；只有唯一的 Current Workspace 进入 Sidebar 树。取消挂载会保留记录；重新挂载只在激活时校验保存的 root，而从 Recents 移除未挂载记录只改变应用历史。
 
 ## 1. 总体结构
 
-Tauri 2.x 双端布局：`src/` 为 React 19 + TypeScript strict 前端，`src-tauri/` 为 Rust 后端；两端经 IPC 契约边界通信（`docs/contracts/ipc-contracts.md`）。完整技术选型见 ADR-001（框架）、ADR-002/003（持久化）、ADR-004/006/007/008（参考性能测量与预算）、ADR-005（主题边界，其中「左侧文件管理 / 右侧画布」壳层布局与缩略图契约句已被 ADR-009 取代）、ADR-009（桌面 UI 交互：标题栏选择 A、画布优先侧边栏、缩略图退休、IPC v2 WorkspaceEntry、统一菜单/对话框）。
+Tauri 2.x 双端布局：`src/` 为 React 19 + TypeScript strict 前端，`src-tauri/` 为 Rust 后端；两端经 IPC 契约边界通信（`docs/contracts/ipc-contracts.md`）。完整技术选型见 ADR-001（框架）、ADR-002/003（持久化）、ADR-004/006/007/008（参考性能测量与预算）、ADR-005（主题边界，其中「左侧文件管理 / 右侧画布」壳层布局与缩略图契约句已被 ADR-009 取代）、ADR-009（桌面 UI 交互：标题栏选择 A、画布优先侧边栏、缩略图退休、v2 WorkspaceEntry 与 v3 版本历史命令、统一菜单/对话框）。
 
 ## 2. 分层视图
 
@@ -26,16 +26,17 @@ flowchart TB
         Editor["editor/ 官方 Excalidraw 公共集成"]
         Theme["app/theme/ 主题注册 · 偏好解析"]
         Prefs["版本化本地视图偏好：pinned 与展开集"]
-        IpcClient["ipc/ 强类型 v2 客户端 + 事件订阅"]
+        IpcClient["ipc/ 强类型 v3 客户端 + 事件订阅"]
     end
     subgraph boundary [IPC 信任边界]
-        Contracts["contracts v2：WorkspaceEntry 命令 · 结构化错误 · operationId"]
+        Contracts["contracts v3：WorkspaceEntry + History 命令 · 结构化错误 · operationId"]
     end
     subgraph backend [Rust 后端 Tauri 2.x]
         Commands["commands/ IPC 入口（薄层）"]
         EntryDomain["workspace_entries/ 名称 · 保护项 · 空性 · 废纸篓 · rename"]
         Security["security/ 路径规范化 + 工作区包含性"]
         DomainDocs["documents/ 原子写 · 草稿 · 恢复 · 冲突"]
+        HistoryDomain["history/ 不可变对象 · 受保护替换 · 重启协调"]
         Indexing["indexing/ 工作区异步索引"]
         Watcher["watcher/ notify 去抖 + 回声抑制"]
     end
@@ -43,6 +44,7 @@ flowchart TB
         Hot["热层 SQLite WAL：drafts / workspaces / file_index；file_meta 惰性残留"]
         Cold["冷层 文件系统：*.excalidraw（原子替换）"]
         Recovery["恢复快照：recovery/*.json 轮换"]
+        History["history SQLite + 不可变场景/资源对象"]
         Trash["操作系统废纸篓"]
     end
     AppShell --> Interaction
@@ -58,6 +60,7 @@ flowchart TB
     Commands --> Security
     Commands --> EntryDomain
     Commands --> DomainDocs
+    Commands --> HistoryDomain
     Commands --> Indexing
     Watcher --> Commands
     EntryDomain --> Indexing
@@ -66,6 +69,7 @@ flowchart TB
     DomainDocs --> Hot
     DomainDocs --> Cold
     DomainDocs --> Recovery
+    HistoryDomain --> History
     Indexing --> Hot
 ```
 
@@ -101,6 +105,32 @@ flowchart LR
 ```
 
 高频编辑路径不逐事件执行完整场景序列化、IPC 传输或磁盘写入：L1 内存态更新（不发 IPC）、L2 经 300ms 防抖写入 SQLite WAL 草稿、L3 checkpoint 触发时原子落盘到冷层 `.excalidraw` 文件，使绝大多数编辑事件不必立刻写冷文件。原子写流水线与故障验证点见 ADR-002。
+
+### 3.1 版本历史事务与进程故障边界
+
+版本历史是独立的持久化平面。受保护替换先发布不可变场景/资源对象及持久的保护/意图元数据，再复用共享文档锁和受保护的原子 rename，最后修复主草稿/索引状态。因此重启协调会独立观察当前文件、历史 SQLite 和对象存储；`after_rename_before_parent_sync` 的结果必须是 `pendingReconciliation`，不能因为目录同步未知就假定旧文件仍然存在。
+
+每个已保存图纸都有持久的历史 `documentId`，它独立于当前路径、前端 tab UUID 和版本 ID。生产存储位于 Tauri app-data 目录下的 `version-history/history.sqlite3`，旁边保存不可变场景与素材对象。应用内改名或祖先目录改名会迁移同一个身份；Save As 会创建没有历史继承的新身份。后端还记录文件系统身份（macOS 上使用 device/inode 及辅助 metadata），因此后来出现在旧路径的另一个文件不能继承旧历史。删除图纸后会保留 `deleting` 身份墓碑并移除语义版本，避免同路径新文件重新绑定旧文档。
+
+普通历史只由成功完成的冷 checkpoint 驱动。首次成功 checkpoint 建立持久的逐文档基线；至少 30 分钟后第一次包含变化的 checkpoint，使用该次保存的精确不可变场景和图片字节发布版本。手动版本和保护版本不推进这条基线，应用空闲时也没有历史专用 timer 追补。普通历史失败通过独立的 `history-issue` 状态／事件反馈，不能把已经成功的当前文件保存改写成失败。手动标记把点击时场景发布为不受上限影响的 `manual` 记录；相同字节可以复用对象，但不能合并语义记录。`automatic` 与 `protected` 继续共享最新 20 条池。
+
+画布清空与绘图导入复用恢复使用的同一个 `history_replace` 协调器。宿主在 Excalidraw 处理前捕获清空／导入快捷键及可能携带场景的文件拖放。PNG/SVG 拖放先解析：内嵌场景进入受保护替换；普通图片只转交 SDK 插入一次。素材库拖放和文本编辑仍由 SDK 处理。前端仅为当前文档采用后端确认完成的替换；结果不确定时保持该文档只读，等待协调。
+
+仅测试用的 `e2e-harness` 提供七个进程屏障。父进程等待精确 ready marker，验证 marker 中的目标路径仍在隔离根内，发送 `SIGKILL`，然后以同一隔离根启动全新的 probe。超时或 PID 仍存活均为失败。独立 fixture 只验证 marker 协议；事务证据则通过真实受保护替换服务覆盖对象发布、保护、意图、rename／目录同步、metadata／ack 以及 retention 淘汰边界。对象层使用 typed `ENOSPC`／`EACCES`，SQLite 在 commit 前使用 deterministic typed fault；缺失／损坏对象、并发、外部写入、响应丢失与旧排队 autosave 分别由 fresh-process 或精确 frontend driver readback 负责，不能相互替代。
+
+| 屏障                                    | 产品边界                        | 重启必须回答的问题                     |
+| --------------------------------------- | ------------------------------- | -------------------------------------- |
+| `object_publish`                        | 历史不可变对象发布              | 不接受部分目标字节或未登记对象         |
+| `protection_commit`                     | 持久保护记录                    | 保护失败时替换未应用                   |
+| `intent_commit`                         | 替换意图 SQLite 提交            | 按持久事实协调旧/新/待处理             |
+| `after_rename_before_parent_sync`       | 目标 rename 后、父目录同步前    | 同步未知时不把已发布身份报告为旧状态   |
+| `metadata_complete_before_frontend_ack` | 后端完成、前端确认前            | 响应丢失按 request-id 查询，不重放替换 |
+| `eviction_delete_gc`                    | retention 提交后、可达性 GC 前  | intent 前强退保留旧文件；GC 只删除真正不可达对象 |
+| `rename_delete_repair`                  | 重启时 rename/delete 元数据修复 | lifecycle 修复遵守持久身份与实际字节   |
+
+故障 harness 仅在 `--features e2e-harness` 且 `APP_E2E=1` 时编译和注册；生产构建必须没有这些命令及 harness 字符串。所有 native 运行使用新的 `excalidraw-desktop-e2e-*` 根，并记录平台、文件系统、二进制 digest、seed、屏障 marker、进程信号和重启后 hash。
+
+前端草稿调度 payload 携带捕获时的 session generation 与 revision。替换采用推进任一值后，旧 session 捕获的排队 callback 会在 `doc_save_draft` 或 checkpoint IPC 前被拒绝；native journey 还会核对冷文件与 clean draft 都没有采用 stale attempted scene。
 
 ## 4. 数据流图 2：外部变更 → 冲突消解
 
@@ -194,34 +224,37 @@ sequenceDiagram
 
 ### 前端（src/）
 
-| 模块 | 职责 |
-|------|------|
-| `app/AppShell.tsx` | 画布优先壳层；overlay 覆盖画布且不改变画布盒；pinned 进入布局；无空右侧栏 |
-| `app/sidebarController.ts` | 侧边栏 `hidden` / `overlay` / `pinned`；overlay 指针离开 500ms 延迟关闭；focus/menu/dialog/drag hold 暂停自动关闭 |
-| `app/interaction/` | 全局唯一菜单与对话框、焦点返回；命名/删除/阻断对话框；不使用 `window.prompt` / `window.confirm` |
-| `app/theme/` | 主题类型、registry、偏好解析、语义 token 与启动前应用（DESIGN.md）；与系统标题栏颜色解耦 |
-| `editor/` | ExcalidrawAdapter + 画布组件、场景序列化、导出、离线字体、IME 桥接；只走锁定包的公开 API |
-| `documents/` | DocumentManager：会话身份、标签顺序、dirty/orphan/conflict、关闭/激活队列、路径迁移、恢复 UI |
-| `workspaces/WorkspaceTree.tsx` | Current Workspace 及其后代的一棵连续虚拟化树；其他 workspace record 通过 Welcome/Recent 进入；无缩略图行 |
-| `ipc/` | 强类型 v2 命令绑定与事件订阅（`IPC_CONTRACT_VERSION = 2`） |
+| 模块                           | 职责                                                                                                              |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `app/AppShell.tsx`             | 画布优先壳层；overlay 覆盖画布且不改变画布盒；pinned 进入布局；无空右侧栏                                         |
+| `app/sidebarController.ts`     | 侧边栏 `hidden` / `overlay` / `pinned`；overlay 指针离开 500ms 延迟关闭；focus/menu/dialog/drag hold 暂停自动关闭 |
+| `app/interaction/`             | 全局唯一菜单与对话框、焦点返回；命名/删除/阻断对话框；不使用 `window.prompt` / `window.confirm`                   |
+| `app/theme/`                   | 主题类型、registry、偏好解析、语义 token 与启动前应用（DESIGN.md）；与系统标题栏颜色解耦                          |
+| `editor/`                      | ExcalidrawAdapter + 画布组件、场景序列化、导出、离线字体、IME 桥接；只走锁定包的公开 API                          |
+| `documents/`                   | DocumentManager：会话身份、标签顺序、dirty/orphan/conflict、关闭/激活队列、路径迁移、恢复 UI                      |
+| `workspaces/WorkspaceTree.tsx` | Current Workspace 及其后代的一棵连续虚拟化树；其他 workspace record 通过 Welcome/Recent 进入；无缩略图行          |
+| `ipc/`                         | 强类型 v3 命令绑定与事件订阅（`IPC_CONTRACT_VERSION = 3`）                                                        |
 
 ### 后端（src-tauri/）
 
-| 模块 | 职责 |
-|------|------|
-| `commands/` | IPC 命令入口（薄层：反序列化 → 校验 → 调领域服务） |
+| 模块                 | 职责                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| `commands/`          | IPC 命令入口（薄层：反序列化 → 校验 → 调领域服务）                                               |
 | `workspace_entries/` | Workspace Entry 领域：名称、扩展名、保护项、真实空性、冲突、Trash、rename 提交点、pathMigrations |
-| `documents/` | 原子写、恢复、校验、资产去重、会话锁 |
-| `database/` | 连接池、写线程、迁移、仓储 trait；运行时不再把 `file_meta` 当缩略图缓存读写 |
-| `indexing/` | 工作区异步扫描与增量索引 |
-| `watcher/` | notify 封装 + 去抖 + 回声抑制；复杂外部目录事件发 `invalidated` |
-| `security/` | 路径规范化、工作区 ACL 白名单、符号链接逃逸拒绝 |
+| `documents/`         | 原子写、恢复、校验、资产去重、会话锁                                                             |
+| `history/`           | 文档身份、不可变场景/资源、保留、受保护替换、操作状态与重启协调                                  |
+| `database/`          | 连接池、写线程、迁移、仓储 trait；运行时不再把 `file_meta` 当缩略图缓存读写                      |
+| `indexing/`          | 工作区异步扫描与增量索引                                                                         |
+| `watcher/`           | notify 封装 + 去抖 + 回声抑制；复杂外部目录事件发 `invalidated`                                  |
+| `security/`          | 路径规范化、工作区 ACL 白名单、符号链接逃逸拒绝                                                  |
 
 历史 `thumbnails/` 与前端 `FileTree` / `useThumbnails` **不是**当前生产路径。
 
 ## 8. IPC 信任边界
 
-- 契约：命令/事件 Schema + 错误分类 + 输入校验，唯一定义于 `docs/contracts/ipc-contracts.md`；TypeScript 源为 `src/ipc/contracts.ts`，Rust DTO 为 `src-tauri/src/commands/dto.rs`。前端不得绕过。当前 `IPC_CONTRACT_VERSION = 2`。
+- 契约：命令/事件 Schema + 错误分类 + 输入校验，唯一定义于 `docs/contracts/ipc-contracts.md`；TypeScript 源为 `src/ipc/contracts.ts`，Rust DTO 为 `src-tauri/src/commands/dto.rs`。前端不得绕过。当前 `IPC_CONTRACT_VERSION = 3`。
+- 版本历史命令为 `history_list`、`history_preview`、`history_mark`、`history_replace`、`history_operation_status` 和 `history_delete`。请求携带文档授权与 request identity，不携带 history-store 路径；`history_replace` 幂等，rename 后不确定结果保持 `pendingReconciliation`。
+- `history_delete` 在持有文档 history-operation lease 时删除一条语义版本。重复使用同一 `requestId` 是幂等的；仍被活动替换引用的版本会受到保护并返回结构化 busy 错误。metadata 事务之后的对象 GC 是 best effort，仍被其他文档共享或被操作 pin 的对象会保留。
 - 条目变更授权使用 `workspaceId + relativePath`（及创建/重命名的 `baseName`）。响应中的 `canonicalPath` 供打开与会话迁移使用，**不是**前端可提交的授权证据。
 - 所有路径在后端经 `security/` canonicalize + 工作区白名单校验；越界返回 `PATH_ACCESS_DENIED`。文档 JSON 视为不可信输入（结构校验 + 尺寸上限）。
 - 最小权限：Tauri Capabilities 为 `core:default` + `core:window:allow-destroy` + `dialog:allow-open` + `dialog:allow-save`（`src-tauri/capabilities/default.json`）。该窗口权限仅用于让原生关闭处理器在 app-exit checkpoint 完成后销毁主窗口。路径 ACL 在 Rust，不靠额外 fs capability 放开 WebView 任意文件系统。严格 CSP；asset protocol 仅限 `.excalidraw_assets` 图片。
@@ -231,23 +264,24 @@ sequenceDiagram
 
 配置与实现见 `src-tauri/tauri.conf.json`（窗口 `title`）与 `src-tauri/src/lib.rs`（无生产标题栏着色 / 置顶）。ADR-009 记录该选择。
 
-| 项 | 当前产品行为 |
-|----|----------------|
-| 窗口模型 | 普通装饰窗口；未配置 Overlay / Transparent / frameless |
-| 标题 | `Excalidraw Whiteboard` |
-| 标题栏颜色 | 由操作系统控制，不随内容 `light \| dark \| system` 强制 |
-| 内容主题 | 前端独立解析；`system` 跟随 `prefers-color-scheme` |
-| 层级 | 正常堆叠；可被其他应用覆盖、最小化、恢复 |
+| 项            | 当前产品行为                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------- |
+| 窗口模型      | 普通装饰窗口；未配置 Overlay / Transparent / frameless                                            |
+| 标题          | `Excalidraw Whiteboard`                                                                           |
+| 标题栏颜色    | 由操作系统控制，不随内容 `light \| dark \| system` 强制                                           |
+| 内容主题      | 前端独立解析；`system` 跟随 `prefers-color-scheme`                                                |
+| 层级          | 正常堆叠；可被其他应用覆盖、最小化、恢复                                                          |
 | always-on-top | 生产关闭。`e2e_harness` 仅在 `EXCALIDRAW_PERF_CONTROL_DIR` 存在时可为测量窗口置顶，不得泄漏到生产 |
 
 ## 10. 存储层
 
-| 层 | 载体 | 说明 |
-|----|------|------|
-| 热层 | SQLite WAL（drafts / workspaces / file_index） | 草稿与索引。v1 `file_meta` 表作为惰性兼容残留保留，不是活动缩略图缓存 |
-| 冷层 | 文件系统 `*.excalidraw`（原子替换）；支持识别 `.excalidraw.json` | 最终事实来源；新建图纸默认写入 `.excalidraw` |
-| 恢复 | `recovery/*.json` 轮换快照 + `session.lock` | 崩溃恢复 |
-| 废纸篓 | 操作系统 Trash | 空 Directory 与干净 Drawing 的删除提交点；无递归/永久删除命令 |
+| 层     | 载体                                                             | 说明                                                                  |
+| ------ | ---------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 热层   | SQLite WAL（drafts / workspaces / file_index）                   | 草稿与索引。v1 `file_meta` 表作为惰性兼容残留保留，不是活动缩略图缓存 |
+| 冷层   | 文件系统 `*.excalidraw`（原子替换）；支持识别 `.excalidraw.json` | 最终事实来源；新建图纸默认写入 `.excalidraw`                          |
+| 恢复   | `recovery/*.json` 轮换快照 + `session.lock`                      | 崩溃恢复                                                              |
+| 废纸篓 | 操作系统 Trash                                                   | 空 Directory 与干净 Drawing 的删除提交点；无递归/永久删除命令         |
+| 历史   | app-data `version-history/history.sqlite3` + 不可变场景/素材对象    | 持久文档身份、版本 metadata、受保护操作状态与可达性控制的 GC           |
 
 存储层设计细节见 ADR-002（双层持久化）与 ADR-003（SQLite-first 与 redb 触发条件）。热层保持 WAL 草稿，不改回就地覆盖冷文件，也不拆除恢复快照。
 
@@ -306,5 +340,5 @@ Collector 只拥有自己启动的 child process 与声明的 profile。缺少 i
 
 - ADR：ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 声明参考环境性能测量、ADR-005 主题边界（壳层布局/缩略图句见 ADR-009）、ADR-006/007/008 参考性能预算与测量序列、ADR-009 桌面 UI 交互
 - `DESIGN.md` / `DESIGN.zh.md`（视觉与交互契约）
-- `docs/quickstart.md` / `docs/quickstart.zh.md`（上手与验证）、`docs/contracts/ipc-contracts.md`（IPC 契约 v2）
+- `docs/quickstart.md` / `docs/quickstart.zh.md`（上手与验证）、`docs/contracts/ipc-contracts.md`（IPC 契约 v3）
 - `docs/evidence/`（原生验证矩阵、无障碍审计与验证汇总，VM 或物理机）

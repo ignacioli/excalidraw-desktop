@@ -1,0 +1,102 @@
+{
+  "productCommit": "2c13f5066490ca4e5a8dbbbdaedfee253559f779",
+  "packageSha256": "6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4",
+  "pid": 73019,
+  "environment": {
+    "macOS": "26.6.2",
+    "build": "25G83",
+    "window": {
+      "width": 1280,
+      "height": 760
+    },
+    "reduceMotion": true,
+    "reduceMotionVerification": "NSWorkspace accessibilityDisplayShouldReduceMotion true; defaults write reported could not write, not claimed successful"
+  },
+  "status": "PASS_WITH_SCOPED_FOLLOWUP",
+  "scope": "H4/T048; not T054 final acceptance",
+  "desktopAuthorization": "现在可以",
+  "observations": [
+    {
+      "id": "unavailable",
+      "status": "PASS",
+      "ownerResponse": "通过",
+      "scope": "Filename, unavailable reason, disabled Preview/Restore, no clipping or misleading success",
+      "recordedAt": "2026-10-04T13:23:52.732Z"
+    },
+    {
+      "id": "pending-error",
+      "status": "FAIL",
+      "ownerResponse": "有问题（请说明）",
+      "scope": "Pending/error filename, title, reconciliation reason and Try again readability",
+      "detail": "Awaiting owner description; no defect cause inferred",
+      "recordedAt": "2026-10-04T13:24:39.921Z",
+      "ownerDetail": "没看到“pending reconciliation 原因，Try again 不可见”",
+      "diagnosis": "AX confirmed empty state instead of pending/error; state preparation failure, not clipping. Isolated maintenance issue was absent after successful save.",
+      "retest": "PENDING after fixture reseed on saved document"
+    },
+    {
+      "id": "pending-error-retest",
+      "status": "FAIL",
+      "ownerResponse": "仍有问题（请说明）",
+      "detail": "Awaiting exact visible text or scoped visual diagnosis; no repeat reseed authorized by this result",
+      "recordedAt": "2026-10-04T13:28:52.922Z"
+    },
+    {
+      "id": "pending-error-user-screenshot",
+      "status": "DISPLAY_CONFIRMED_OWNER_ACCEPTANCE_PENDING",
+      "source": "/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/codex-clipboard-bccf8b4d-6f6d-4df8-8d05-58180aa32eae.png",
+      "observation": "User-provided image shows error heading, generic pending reconciliation message and Try again without visible clipping. Generic status is not a specific cause. Earlier prompt incorrectly called it a cause.",
+      "recordedAt": "2026-10-04T13:29:40.278Z",
+      "archivedImage": "pending-owner-screenshot.png",
+      "sha256": "d57104e5d3ea2bd972c660fa0e6b52e417de121f380114a791d38ad7ba265cb2"
+    },
+    {
+      "id": "conflict",
+      "status": "PASS",
+      "ownerResponse": "通过",
+      "scope": "Filename, explanation, three resolution choices, no clipping, initial focus visible",
+      "recordedAt": "2026-10-04T13:31:02.286Z"
+    },
+    {
+      "id": "light-main-path",
+      "status": "PASS",
+      "ownerResponse": "这一组全部通过",
+      "scope": [
+        "Light hierarchy and clipping",
+        "long-list top/middle/bottom and target",
+        "Mark current and row Mark/Unmark inline feedback with approx 3s restoration",
+        "readonly Preview and Exit",
+        "Restore confirmation/Cancel and focus appearance/return"
+      ],
+      "recordedAt": "2026-10-04T13:41:03.363Z"
+    },
+    {
+      "id": "dark-compact-reduced-motion",
+      "status": "PASS",
+      "ownerResponse": "最后一组通过。",
+      "scope": "Dark 300px readability, clipping, inline feedback, Preview/Cancel and focus under Reduce Motion",
+      "recordedAt": "2026-10-04T13:45:40.059Z"
+    }
+  ],
+  "pendingCopyDecision": {
+    "ownerResponse": "接受，关闭这项",
+    "selectedOption": "Omit only generic pending detail; preserve meaningful diagnostics",
+    "status": "ACCEPTED_IN_FOLLOWUP_PACKAGE",
+    "followup": "pending-copy/native-report.json"
+  },
+  "reduceMotionRestore": {
+    "original": false,
+    "ownerResponse": "已关闭",
+    "verification": "NSWorkspace.accessibilityDisplayShouldReduceMotion returned false",
+    "verifiedAt": "2026-10-04T13:48:22.566Z",
+    "automationFailurePreserved": "defaults write rejected by OS; owner restored manually",
+    "status": "RESTORED_VERIFIED",
+    "restoredValue": false
+  },
+  "closure": {
+    "H4": "PASS",
+    "basis": "All required groups accepted on 2c13f50; only generic pending body changed in eb961ca, confirmed by targeted native followup and explicit owner acceptance. Original observations retain their own package identity.",
+    "recovery": "Unchanged Recovery UI and persistence paths; existing T050/T038-T044 evidence reused per acceptance-contract impact rule",
+    "T054": "PENDING independent final acceptance"
+  }
+}

@@ -1,0 +1,327 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/26.8.2/bin/node",
+      "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config=e2e/playwright.config.ts",
+      "--project=browser-ui",
+      "--retries=0",
+      "e2e/tests/local-version-history-t048.spec.ts",
+      "--reporter=json"
+    ],
+    "configFile": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/playwright.config.ts",
+    "rootDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "browser-ui",
+        "name": "browser-ui",
+        "testDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "tests/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 7,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/local-version-history-t048.spec.ts",
+      "file": "tests/local-version-history-t048.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "keeps the 360 px history drawer and fixed selection usable in light",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "timedOut",
+                  "duration": 30673,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts",
+                        "column": 55,
+                        "line": 177
+                      },
+                      "message": "Error: locator.evaluate: Test timeout of 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' }).getByRole('region', { name: 'Read-only canvas preview' }).getByRole('button', { name: 'Restore this version' })\u001b[22m\n\n\n  175 |       name: \"Restore this version\",\n  176 |     });\n> 177 |     const previewRestoreColors = await previewRestore.evaluate((element) => {\n      |                                                       ^\n  178 |       const probe = document.createElement(\"span\");\n  179 |       probe.style.color = \"var(--accent)\";\n  180 |       element.append(probe);\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts:177:55"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:30:24.850Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-1ed79-d-selection-usable-in-light-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-1ed79-d-selection-usable-in-light-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-1ed79-d-selection-usable-in-light-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-1ed79-d-selection-usable-in-light-browser-ui/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-8c8e7f7a8690cdc6422e",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 47,
+          "column": 3
+        },
+        {
+          "title": "keeps the 360 px history drawer and fixed selection usable in dark",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "timedOut",
+                  "duration": 30626,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts",
+                        "column": 55,
+                        "line": 177
+                      },
+                      "message": "Error: locator.evaluate: Test timeout of 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' }).getByRole('region', { name: 'Read-only canvas preview' }).getByRole('button', { name: 'Restore this version' })\u001b[22m\n\n\n  175 |       name: \"Restore this version\",\n  176 |     });\n> 177 |     const previewRestoreColors = await previewRestore.evaluate((element) => {\n      |                                                       ^\n  178 |       const probe = document.createElement(\"span\");\n  179 |       probe.style.color = \"var(--accent)\";\n  180 |       element.append(probe);\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts:177:55"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:30:56.056Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-d3aa0-ed-selection-usable-in-dark-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-d3aa0-ed-selection-usable-in-dark-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-d3aa0-ed-selection-usable-in-dark-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-d3aa0-ed-selection-usable-in-dark-browser-ui/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-fcd27cb4b04a10c8e999",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 47,
+          "column": 3
+        },
+        {
+          "title": "resizes by drag and keyboard without changing the selected version",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 795,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:31:27.168Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-2838bc9c4fdb24ae7310",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 192,
+          "column": 1
+        },
+        {
+          "title": "keeps the 360 px default drawer inside a narrow viewport",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 735,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:31:28.052Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-51e49cece6d4a787ad3b",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 228,
+          "column": 1
+        },
+        {
+          "title": "honors reduced motion and keeps row focus visible with 50 versions",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 677,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-29T09:31:28.791Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c492f97780fbe6ec0681-22c4291db1cf5d5a8517",
+          "file": "tests/local-version-history-t048.spec.ts",
+          "line": 294,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-29T09:30:24.619Z",
+    "duration": 64879.604999999996,
+    "expected": 3,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "native-entrypoints",
+  "gateId": "T023b",
+  "route": "macos-accessibility",
+  "binding": {
+    "productCommit": "894228a76e062597dad80c4180a91aaff59c7ee7",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "2bd035aabcab548258eb390e82870d58aed7cb25a08a0bf6a6dd61f350b00d62",
+    "packageArtifactSha256": "031c50e6029c3ec660e7914a633d68da47bfaf06e0e7a397dfa7dc76b3568e8f",
+    "nativeEntrypointProfileSha256": "3670807e04e844aa92c005a88bb84cda3aa2c73bbb1ed1a0522cd1eed42998e3",
+    "productIdentity": {
+      "runtimeInputsSha256": "19bee5213c1948a9c04dba40d4fe403eabbc641c667a185f548f756e50fd431f",
+      "packageArtifactSha256": "031c50e6029c3ec660e7914a633d68da47bfaf06e0e7a397dfa7dc76b3568e8f",
+      "bundleIdentifier": "excalidraw-desktop",
+      "version": "0.3.0"
+    },
+    "validatorIdentity": {
+      "producer": "native-macos-validation",
+      "version": "4",
+      "sourceSha256": "f7755fa62f375ce02c19bff3722043aa5e8d447f7f8161d94b3d1456994e0be6",
+      "schemaVersion": 3
+    },
+    "attemptIdentity": {
+      "attemptId": "history-h4-fixes-entry-20260930",
+      "gate": "T023b",
+      "platform": "macos",
+      "inputSha256": "22a073148b8142ddff0316276d196f0c42505912ceb8b0234efb04ce77a2a2bf"
+    },
+    "namedChangeSincePreviousAttempt": {
+      "changeId": "history-feedback-hover-scrollbar-fixes",
+      "producer": "product",
+      "beforeSha256": "7ff19b788dcccc37ad6ad4626656eeeaa0dfbf444f02de2b2e54c9882001660e",
+      "afterSha256": "19bee5213c1948a9c04dba40d4fe403eabbc641c667a185f548f756e50fd431f"
+    },
+    "rootCauseClass": "UNKNOWN",
+    "consecutiveFailureCount": 0,
+    "proofScope": "history",
+    "remediationEpoch": 0,
+    "reopenDecision": null,
+    "repairTarget": null
+  },
+  "action": {
+    "checkId": "version-history-route",
+    "command": "versionHistory",
+    "validationId": 1,
+    "result": "PASS"
+  },
+  "targetDocumentBinding": {
+    "launchMode": "single-normal-open-argument",
+    "path": "/private/tmp/history-h4-fixes-entry-20260930/fixture/workspace/native-entrypoints/004-history-launch.excalidraw",
+    "sha256": "48179c1f5f1218ff453d7fbb3ad0c97a680dc4c9c0120101ab03a9437a1cf009",
+    "byteLength": 235,
+    "observationMethod": "ax-history-panel-filename",
+    "observedFileName": "004-history-launch.excalidraw",
+    "uniqueFileNameInFixture": true,
+    "panelObservation": {
+      "headingCount": 1,
+      "fileNameCount": 1,
+      "closeCount": 1,
+      "pass": true
+    }
+  },
+  "result": "PASS"
+}

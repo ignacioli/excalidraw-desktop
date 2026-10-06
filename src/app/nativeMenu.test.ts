@@ -9,21 +9,25 @@ describe("registerNativeMenuCommand", () => {
   it("delegates every supported command to the frontend owners", () => {
     const onSave = vi.fn();
     const onExportImage = vi.fn();
+    const onVersionHistory = vi.fn();
     const onAppearance = vi.fn();
     const handler = createNativeMenuCommandHandler({
       onSave,
       onExportImage,
+      onVersionHistory,
       onAppearance,
     });
 
     handler("save");
     handler("exportImage");
+    handler("versionHistory");
     handler("appearanceSystem");
     handler("appearanceLight");
     handler("appearanceDark");
 
     expect(onSave).toHaveBeenCalledOnce();
     expect(onExportImage).toHaveBeenCalledOnce();
+    expect(onVersionHistory).toHaveBeenCalledOnce();
     expect(onAppearance.mock.calls).toEqual([["system"], ["light"], ["dark"]]);
   });
 
@@ -55,6 +59,7 @@ describe("registerNativeMenuCommand", () => {
     );
     capturedHandler?.({ payload: { command: "save", validationId: 41 } });
     capturedHandler?.({ payload: { command: "exportImage" } });
+    capturedHandler?.({ payload: { command: "versionHistory" } });
     capturedHandler?.({ payload: { command: "appearanceSystem" } });
     capturedHandler?.({ payload: { command: "appearanceLight" } });
     capturedHandler?.({ payload: { command: "appearanceDark" } });
@@ -63,6 +68,7 @@ describe("registerNativeMenuCommand", () => {
     expect(onCommand.mock.calls.map(([command]) => command)).toEqual([
       "save",
       "exportImage",
+      "versionHistory",
       "appearanceSystem",
       "appearanceLight",
       "appearanceDark",

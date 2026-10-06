@@ -114,6 +114,9 @@ export async function installUs4Harness(
           if (command === "plugin:window|destroy") {
             return {};
           }
+          if (command === "native_menu_set_enabled") {
+            return {};
+          }
           if (command === "plugin:dialog|open") {
             return "/workspace";
           }
@@ -142,7 +145,14 @@ export async function installUs4Harness(
           }
           if (command === "workspace_recent_list") {
             return state.mounted
-              ? [{ id: "workspace-1", name: "Workspace", rootPath: "/workspace", createdAt: 1 }]
+              ? [
+                  {
+                    id: "workspace-1",
+                    name: "Workspace",
+                    rootPath: "/workspace",
+                    createdAt: 1,
+                  },
+                ]
               : [];
           }
           if (command === "workspace_add") {
@@ -293,4 +303,34 @@ export async function getHarnessState(
       openCount: state?.openCount ?? 0,
     };
   });
+}
+
+export async function getHarnessFile(
+  page: Page,
+  path: string,
+): Promise<string | null> {
+  return page.evaluate(
+    (filePath) =>
+      (
+        globalThis as {
+          __us4?: { state: { files: Map<string, string> } };
+        }
+      ).__us4?.state.files.get(filePath) ?? null,
+    path,
+  );
+}
+
+export async function getHarnessDraft(
+  page: Page,
+  path: string,
+): Promise<string | null> {
+  return page.evaluate(
+    (filePath) =>
+      (
+        globalThis as {
+          __us4?: { state: { drafts: Map<string, string> } };
+        }
+      ).__us4?.state.drafts.get(filePath) ?? null,
+    path,
+  );
 }

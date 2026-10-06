@@ -1,0 +1,18 @@
+{
+  "pid": 87264,
+  "productCommit": "70132ebdee6ddb6f475e6864bbc790286ba04a3b",
+  "packageSha256": "09659683e2dadc66e0a18d2216096894cca264b09559e0a22d12d9dc380570b5",
+  "executableSha256": "1e3e9f02a8d63e90d661f77d0424c264e235843df0b11da8f6868eb60c490c73",
+  "fixtureManifest": "/private/tmp/history-native-feedback-fixture-20260929.json",
+  "startedAt": "2026-09-30T04:06:26.981Z",
+  "status": "PARTIAL_OWNER_REVIEW",
+  "oldPid83748": "not running",
+  "actualWindowPid": 87264,
+  "checks": {
+    "markStability": "OWNER_DEFERRED_UNCONFIRMED_MOTION",
+    "tabFilenameTooltip": "PASS"
+  },
+  "ownerFeedback": "Tab title正常。Mark区域肉眼仍观察到小幅弹跳，不一定真实，可能是错觉；用户明确要求不再修复。",
+  "disposition": "Stop investigating or fixing Mark motion. Do not record it as fixed or as a confirmed runtime defect. Preserve prior reports.",
+  "newPriority": "Align History typography, hierarchy and layout with approved T048 high-fidelity baseline; owner supplied screenshot matching repeated-mark long-list design."
+}

@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "status": "APPROVED_HIGH_FIDELITY",
+  "approvedAt": "2026-10-03",
+  "ownerDecision": "Review通过，请保存并持久化screenshots到本地仓库。 2026-09-30追加批准：采用标题旁信息按钮。 2026-10-03：无背景行内短提示局部 Penpot Review通过。请继续。",
+  "scope": "Design approval only; implementation, native acceptance and incident review remain separate.",
+  "penpot": {
+    "fileId": "a5ac146a-5787-80fa-8008-b3c2d0b30bae",
+    "fileName": "excalidraw-desktop-uxui-redesign",
+    "pageId": "87d1db27-904b-80ba-8008-aeafe0fb388d",
+    "pageName": "05 · Local Version History · T004",
+    "liveRevisionBeforeExport": null,
+    "liveRevisionAfterExport": null,
+    "archiveInternalRevision": 108,
+    "revisionNote": "Current owner-supplied archive revision108 verified; live MCP revision not sampled for this download. Prior export live revisions retained in history."
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 760
+  },
+  "source": {
+    "path": "source/excalidraw-desktop-uxui-redesign.penpot",
+    "sha256": "c77a892a1a61eb439cab212a8c13aae0edf4d37ed43f12fe6a221d1f111ec7ec",
+    "bytes": 2657279,
+    "exportMethod": "Owner supplied official Chrome Penpot UI download: excalidraw-desktop-uxui-redesign-2026100301.penpot",
+    "archiveIntegrity": "PASS",
+    "filePageAndSevenBoardIds": "PASS",
+    "hiddenDuplicateEyebrows": 7,
+    "directExportAttempt": {
+      "result": "FAILED",
+      "error": "No matching clause: ",
+      "fallback": "Web UI download succeeded; no manual archive reconstruction."
+    },
+    "currentBackfillIncluded": true,
+    "componentAnatomyAnnotations": 425,
+    "historyInfoButtons": 7,
+    "archiveAnnotationNote": "Legacy shared anatomy mentions canvas feedback; the 2026-10-03 OWNER_APPROVED inline-feedback-delta on boards05/06 and implementation-map supersede it. Download archived byte-for-byte, no manual archive edits."
+  },
+  "frames": [
+    {
+      "name": "T048 · 01 · History · Default · Light",
+      "shapeId": "da9cf473-5dad-8097-8008-b502ce235a48",
+      "path": "screens/01-history-default-light.png",
+      "sha256": "3f51dbeba2cacfe0ede060dafea2545957318db9b718b0100b2878eb1fd1f6a4",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "T048 · 02 · Row Actions · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b5753372b7f4",
+      "path": "screens/02-row-actions-light.png",
+      "sha256": "0211a541d01c2c130456778329aa218fdbe934d22d533eac07fc74c73d0e5cdf",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "T048 · 03 · Version Preview · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b575525aee78",
+      "path": "screens/03-version-preview-light.png",
+      "sha256": "d2b271c924ac7ff0c656735908703d20d3a9401cfdc4077ece8db9e5be9c97d2",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "T048 · 04 · Restore Confirmation · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b5756178feb0",
+      "path": "screens/04-restore-confirmation-light.png",
+      "sha256": "e69db1037cc90bb1cee93c70dfca01d4f185574276dce5da01faadfaba8a1cac",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "T048 · 05 · Repeated Mark · Long List · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b5756dd21737",
+      "path": "screens/05-repeated-mark-long-list-light.png",
+      "sha256": "3d1cfa8a335998cfd0de6e78722e63b191489d5759ba07d30a7a144eed8920d0",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "T048 · 06 · History · Compact 300 · Dark",
+      "shapeId": "b48ddf15-5062-8001-8008-b57586ef024c",
+      "path": "screens/06-history-compact-dark.png",
+      "sha256": "7cc817c1ed3c10ff1c819d1b8dccaffc4cc5e4a95ee94bd68f33dd784091d23f",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "T048 · 07 · Unavailable Version · Light · Draft",
+      "shapeId": "b48ddf15-5062-8001-8008-b7699546bf4b",
+      "path": "screens/07-unavailable-version-light.png",
+      "sha256": "966b5dcd79648f8b3337e638df4ff4ef2624bf162c567a294ad27333da268b1c",
+      "width": 1280,
+      "height": 760
+    }
+  ],
+  "designDecisions": {
+    "typography": "Use shared platform-native fonts from DESIGN.md. Penpot Inter remains an explicitly documented rendering proxy; body/label/badge roles bind shared tokens.",
+    "header": "Main title, filename, owner-approved History info button and Close; duplicate eyebrow removed.",
+    "selectedActionWidthRatio": "146:174",
+    "unavailable": "Seventh state approved by this owner review; Draft suffix preserved from the exported source name.",
+    "feedback": "Owner-approved: transient target-version badge-slot text, secondary color, 11px medium, transparent background, no border/shadow/uppercase; latest-only 3000ms expiry restores persistent badge. Retention-removed Unmark and Delete retain existing canvas fallback.",
+    "historyInfo": "Hover opens without moving focus; entering popover keeps it open; click/keyboard and Escape remain available."
+  },
+  "validation": {
+    "pngCount": 7,
+    "pngDimensions": "7/7 are 1280x760",
+    "sha256": "Recorded per file",
+    "productionVisualAcceptance": "NOT_CLAIMED"
+  },
+  "feature": "local-version-history",
+  "task": "T048/T055",
+  "history": {
+    "storage": "Git history only",
+    "previousLayoutCommit": "45630f81c429ba30effe12118c200f193e713745",
+    "previousExportLiveRevision": {
+      "before": 102,
+      "after": 102
+    }
+  },
+  "tokens": {
+    "path": "tokens.json",
+    "sha256": "6495977e506b1cc690b0eae888ec8bd35ace99dff27c1278a7fdd47e1989f57b",
+    "basePath": "docs/design/desktop-shell/hf-2/tokens.json",
+    "baseSha256": "151826bbcea894cb64e59899ee85651ff13f2205df0b65768d048bf12c37b184"
+  },
+  "componentSpec": "docs/design/local-version-history/implementation-map.md"
+}

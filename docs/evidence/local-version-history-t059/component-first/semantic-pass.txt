@@ -1,0 +1,13 @@
+$ playwright test --config e2e/playwright.config.ts e2e/tests/local-version-history-preview.spec.ts --project=browser-ui --workers=1 --reporter=list
+
+Running 5 tests using 1 worker
+
+(node:67774) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:15:1 › lists history with 50/100 pagination and stable semantic metadata (948ms)
+  ✓  2 [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:44:1 › supports keyboard browsing, visible focus, preview exit, and trigger focus return (771ms)
+  ✓  3 [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:84:1 › keeps preview read-only and rejects a late response from another document tab (1.2s)
+  ✓  4 [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:124:1 › distinguishes loading, empty, processing, permission, conflict, unavailable, and error states (730ms)
+  ✓  5 [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:148:1 › reduces motion while preserving the visible focus contract (1.4s)
+
+  5 passed (5.3s)

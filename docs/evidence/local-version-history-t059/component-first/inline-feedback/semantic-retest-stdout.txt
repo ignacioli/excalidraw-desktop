@@ -1,0 +1,166 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/26.8.2/bin/node",
+      "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config",
+      "e2e/playwright.config.ts",
+      "e2e/tests/local-version-history-preview.spec.ts",
+      "-g",
+      "distinguishes loading",
+      "--workers=1",
+      "--reporter=json",
+      "--output=/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/semantic-retest-output"
+    ],
+    "configFile": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/playwright.config.ts",
+    "rootDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/semantic-retest-output",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "browser-ui",
+        "name": "browser-ui",
+        "testDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "tests/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/local-version-history-preview.spec.ts",
+      "file": "tests/local-version-history-preview.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "distinguishes loading, empty, processing, permission, conflict, unavailable, and error states",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 6170,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('complementary', { name: 'Version History' }).getByRole('status').filter({ has: getByRole('complementary', { name: 'Version History' }).getByRole('heading', { name: 'Loading version history', exact: true }) })\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveCount\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' }).getByRole('status').filter({ has: getByRole('complementary', { name: 'Version History' }).getByRole('heading', { name: 'Loading version history', exact: true }) })\u001b[22m\n\u001b[2m    14 × locator resolved to 0 elements\u001b[22m\n\u001b[2m       - unexpected value \"0\"\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('complementary', { name: 'Version History' }).getByRole('status').filter({ has: getByRole('complementary', { name: 'Version History' }).getByRole('heading', { name: 'Loading version history', exact: true }) })\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveCount\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' }).getByRole('status').filter({ has: getByRole('complementary', { name: 'Version History' }).getByRole('heading', { name: 'Loading version history', exact: true }) })\u001b[22m\n\u001b[2m    14 × locator resolved to 0 elements\u001b[22m\n\u001b[2m       - unexpected value \"0\"\u001b[22m\n\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:148:25",
+                    "location": {
+                      "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                      "column": 25,
+                      "line": 148
+                    },
+                    "snippet": "  146 |     const state = panel.getByRole(role).filter({ has: heading });\n  147 |     await expect(heading).toBeVisible();\n> 148 |     await expect(state).toHaveCount(1);\n      |                         ^\n  149 |     await expect(state).toContainText(title);\n  150 |     await expect(announcement).toBeEmpty();\n  151 |   }"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                        "column": 25,
+                        "line": 148
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('complementary', { name: 'Version History' }).getByRole('status').filter({ has: getByRole('complementary', { name: 'Version History' }).getByRole('heading', { name: 'Loading version history', exact: true }) })\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveCount\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' }).getByRole('status').filter({ has: getByRole('complementary', { name: 'Version History' }).getByRole('heading', { name: 'Loading version history', exact: true }) })\u001b[22m\n\u001b[2m    14 × locator resolved to 0 elements\u001b[22m\n\u001b[2m       - unexpected value \"0\"\u001b[22m\n\n\n  146 |     const state = panel.getByRole(role).filter({ has: heading });\n  147 |     await expect(heading).toBeVisible();\n> 148 |     await expect(state).toHaveCount(1);\n      |                         ^\n  149 |     await expect(state).toContainText(title);\n  150 |     await expect(announcement).toBeEmpty();\n  151 |   }\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:148:25"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:54:05.670Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/semantic-retest-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/semantic-retest-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/semantic-retest-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/semantic-retest-output/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts",
+                    "column": 25,
+                    "line": 148
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "df5cc1858aad4f19d04b-5c3f77d09aafc76fcc81",
+          "file": "tests/local-version-history-preview.spec.ts",
+          "line": 124,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-04T06:54:05.470Z",
+    "duration": 6789.714,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}
+[ELIFECYCLE] Command failed with exit code 1.

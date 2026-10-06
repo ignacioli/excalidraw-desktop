@@ -1,0 +1,123 @@
+# History component anatomy 与实现映射
+
+状态：2026-10-03 行内短提示的 Penpot 局部 Review 已通过，05 Light 与 06 Dark 300px 使用无背景的短提示；实现及定向 unit/browser 检查已完成，记录见[增量证据](../../evidence/local-version-history-t059/component-first/inline-feedback/README.md)。2026-09-30 H0–H3及反馈修复的历史结果保留；新包原生复查、H4其余观察与H5未完成，不代表T048整体PASS。
+
+## 权威与实施入口
+
+- 共享组件：[组件目录](../components.md)、[003组件合同](../desktop-shell/hf-2/components.md)、[DESIGN](../../../DESIGN.md)。系统UI字体继承003，不引入History字体体系；Penpot Inter/IBM Plex为设计渲染proxy。
+- 当前设计：[manifest](high-fi/manifest.json)、[组件tokens](high-fi/tokens.json)、[共享tokens](../desktop-shell/hf-2/tokens.json)、[交互](interaction.md)。每个组件的值从这些来源取，不从当前错误实现反向提取。
+- 文件/page：`a5ac146a-5787-80fa-8008-b3c2d0b30bae` / `87d1db27-904b-80ba-8008-aeafe0fb388d`。本轮已核对实际连接身份、Preview在画布侧、重复Mark反馈在画布侧、Unavailable原因在固定详情区。
+- 本文件是History专属anatomy唯一入口。后续feature只引用共享目录并声明reuse/extend/new；不复制History视觉数值成为另一套系统。
+- 当前英文文案保持已批准设计；后续语言支持通过统一formatter/copy角色扩展，不在本轮局部混改语言。
+
+## 实施输入与完成条件
+
+每项实现任务必须给组件ID、来源/本节、允许的variant、代表状态和DONE。优先生产组件+已有fixture，无新Storybook；组件验证后才进入页面组合抽检。H0/H1完成是进入H2的条件。
+
+| ID / 分类                       | 代码owner                              | 来源画板       | 关键验收                                                     |
+| ------------------------------- | -------------------------------------- | -------------- | ------------------------------------------------------------ |
+| HISTORY-PANEL / extend          | HistoryPanel、history.css              | 01/06          | header/body/footer顺序；360→300；只有列表区滚动              |
+| HISTORY-CURRENT / new组合       | HistoryPanel                           | 01/05          | Current卡与count/Mark同行；数量真实；反馈不占列表空位        |
+| HISTORY-ROW / new组合           | HistoryList、historyFormat             | 01/05/06/07    | summary→metadata→badge/瞬态短提示；选中accent；几何稳定       |
+| HISTORY-ACTIONS / extend        | HistoryPanel                           | 02             | 目标、Mark/Unmark、Delete顺序；键盘/焦点；不被scrollport裁切 |
+| HISTORY-DETAIL / new组合        | HistoryPanel                           | 01/05/07       | summary与ID分层；146:174按钮；Unavailable原因与禁用          |
+| HISTORY-PREVIEW / extend        | HistoryPreview、HistoryPanel、AppShell | 03             | 在画布区域独立只读展示；drawer保留；退出回焦点；零写入       |
+| HISTORY-CONFIRM / reuse+variant | ApplicationDialog、HistoryPanel        | 04             | 目标、说明、Cancel/Restore；初始Cancel焦点、返回             |
+| HISTORY-FEEDBACK / extend       | HistoryStates、AppShell、HistoryPanel  | 05/06/07+行为合同 | 目标行成功短提示；持续错误与移除fallback；标题旁信息入口  |
+
+## HISTORY-PANEL：框架与Header
+
+Anatomy：左边缘separator；header（标题、文件名、关闭）；flex body（当前卡、toolbar、列表/状态）；固定detail/actions。Preview不替代drawer内容。
+
+- 标题仅`Version History`，section20/semibold600；文件名label12/regular400，截断时保留完整accessible name与title。无重复eyebrow。
+- 默认360，用户拖动到300；不以窄viewport触发compact。键盘separator沿用现有10/20px及Home/End规则。Header/固定actions不随列表滚动。
+- 行和footer使用共享panel/surface；不靠默认h1/h2字重。留足聚焦ring，禁用/焦点规则继承共享合同。
+- 验收：360和300 geometry；标题层级/文件名；长列表bottom仍可操作；没有新增常驻保存栏。
+
+## HISTORY-CURRENT：当前卡与toolbar
+
+Anatomy：卡片label `CURRENT DRAWING` → 当前编辑器状态；随后一行 `N versions shown`（实际已加载数量） → `Mark current version`。
+
+- 卡59px；panel内水平边距16px；toolbar Mark30px；count剩余宽度可换行，按钮保持完整文案。compact不转成两个独立大段。
+- 没有可靠保存状态时只写`Open canvas`；不得复制样例`no content change`/`saved just now`。数量不冒充总量，单复数正确。
+- Mark busy保留几何，禁重复执行；结果null表示取消/切换目标，不产生成功反馈。void回调兼容现有组件调用，不能访问undefined.reused。
+- 新mark、row mark/unmark需有可见且无布局跳变的反馈；重复mark按HISTORY-FEEDBACK展示。变更后端行为不在本任务范围。
+
+## HISTORY-ROW：历史版本行
+
+Anatomy：content列依次summary → formatted time · source → status badge；trailing独立More Actions。版本ID放detail，不塞入summary。
+
+- summary：body14/600；不可靠时`Canvas changed`。单行省略保留完整可访问文本/悬停说明。metadata：label12/400；Today/Yesterday+时间，较早日期用短日期，完整日期放time title/dateTime；统一formatter处理无效值，不直接平铺原始时间戳。
+- 常规参考行82px/radius6，selected左3px accent+批准surface，无整圈accent替代。默认panel白/暗主题surface；More32px hit/icon16px。
+- READY/MARKED为badge；Unavailable优先，带警告图标与danger色，不用虚线表达。marked不重复显示`Manual · Marked`字段。保留marked的可访问语义，preview/当前等组合不得掩盖unavailable。
+- 2026-10-03 批准增量：正常 Mark/Unmark 成功时，在实际目标版本的 badge slot 暂时显示 `✓ Marked`、`✓ Unmarked` 或 `✓ Already marked · no new version`。使用共享 `font.size.micro`（11px）、`font.weight.medium`（500）及 `color.text.secondary`；无背景、边框或阴影，不使用 uppercase。复用原 slot 的高度与 padding，不增加行高、不推列表、不做动画。3秒后按真实数据恢复 READY/MARKED；Unavailable/Current/Preview 状态优先且不能被成功结果遮蔽，结果仍由 polite live region 公告。Light 与 Dark300 为代表状态。
+- 长文案不扩张横向scrollport；状态原因在detail显示完整；metadata可压缩/截断并保留完整文本，不为82px裁掉关键交互。
+- 不改变listbox/roving focus/Enter preview既有行为；unavailable仍可选中查看原因，但不能preview/restore。
+- 验收：slot顺序与字重；Ready/Marked/Unavailable代表；selected不改变外部尺寸；300px长文件/摘要无横向溢出；键盘语义沿用现有tests。
+
+## HISTORY-ACTIONS：行菜单
+
+Anatomy：目标身份/摘要 → Mark或Unmark → separator → Delete。引用共享menu/focus规则；不能仅提供图标而丢失可访问名称。
+
+- 180×116参考尺寸，menu title截断保留全名；危险动作用共享danger。
+- 目标绑定document+version，选择变化不能悄悄重定向已打开菜单；Escape返回触发器；顶部/底部行菜单均不被滚动区域裁切。
+- unavailable不意味着所有动作都禁用；沿用安全后端能力，preview/restore禁用，Mark/Delete按既有contract决定。
+
+## HISTORY-DETAIL：固定详情与动作
+
+Anatomy：`SELECTED VERSION · ACTION TARGET`（重复mark可用REUSED TARGET；Unavailable用UNAVAILABLE）→ summary → `v-NNN · time · source` → 可选完整Unavailable原因 → Preview/Restore。
+
+- 标题16/600、其他label12/400；正常参考160px，Unavailable参考176px但内容需要时可长高，列表让出空间。不可硬裁原因。
+- Preview/Restore为146:174比例、38px高、gap8；Restore accent/contrast，Preview panel/strong border。不是等宽，也不是按内容任意宽度。
+- selected不足/状态不可用时不伪造目标；unavailable显示具体后端原因（没有时使用批准概述）及当前画布未改变说明，两个动作明确disabled。
+- Ready无预览时保留直接Restore→确认的既有路径。Preview活跃时，所选目标必须与安全渲染的preview ID一致才可Restore；不要借用另一个版本的renderedVersionId放行。
+
+## HISTORY-PREVIEW：画布侧只读区域
+
+Anatomy：画布侧覆盖层 → toolbar（Preview · v-NNN · summary、只读说明）→ 独立snapshot → 退出入口；History drawer和选中detail保持可见。
+
+- approved03的Preview veil位于x0..920，toolbar56px；不是在360px drawer内部替换列表。生产布局跟随实际可用画布区域，不用整屏fixed覆盖tabs/sidebar。
+- 复用HistoryPreview/ReadonlyPreviewCanvas与已有安全scene加载；只变容器及展示，不把preview scene送入当前editor，不拆卸/覆盖其持久化状态。
+- Preview loading/error在独立surface显示；Exit/Escape回原触发行，Restore走同一确认。背景编辑器在preview时不可被指针/键盘误编辑，其他文档/退出路径仍明确。
+- 容器可用DOM portal连接AppShell canvas区域，保持HistoryPanel状态和dialog/focus owner；禁止依赖SDK私有DOM。
+- 验收：snapshot在main canvas而非drawer；drawer列表/target仍在；退出后原场景不变/零写入；loading/error与安全禁用；焦点返回。现有semantic测试若假定drawer内preview，更新容器预期，保留安全断言。
+
+## HISTORY-CONFIRM：恢复/删除确认
+
+复用ApplicationDialog。Restore anatomy：title →保护说明→目标卡→Cancel/Restore；410×276为参考，长文字可扩展。动作40px；Cancel初始聚焦，busy阻重复，失败仍在dialog可读，关闭返回触发控制。Delete沿用已确认目标和不可撤销文案，不新增回收站或恢复系统。
+
+## HISTORY-FEEDBACK：状态和提示
+
+- Mark/Unmark成功反馈：使用 HISTORY-ROW 的瞬态文字，绑定 `documentId` 与操作返回的 `versionId`，不能绑定当前 selection。覆盖 Mark current 新建/复用、行菜单 Mark/Unmark。新操作替换旧反馈并重新计时3000ms；旧 timer、迟到结果不得覆盖新状态。选择、文档切换、关闭及目标移除清理提示；正常异步刷新不能让新提示提前失效。复用既有选择/定位行为，不为反馈增加滚动或抢焦点。已移出可视区域的目标仍可通过独立、持续挂载的 polite live region 感知结果；公告带版本身份。持久 marked 语义独立于瞬态结果，Unmark 不留下错误 MARKED 状态。
+- 普通新mark/复用/row mark/retained unmark 不再调用 canvas success notice，避免重复视觉与公告。Unmark 返回 `retained=false` 时目标已移除，保留现有简短 canvas fallback，明确 retention 移除，不挂到下一行。Delete 沿用现有反馈；旧 void 回调无法提供 Mark current 目标时保留兼容 fallback，不伪造版本绑定。fallback 沿用4秒生命周期；error仍在操作上下文可读、持续，不随成功TTL自动隐藏。2026-09-30 的画布侧大通知设计作为历史保留，不再支配普通 Mark/Unmark 成功。
+- Loading/empty/processing/permissionDenied/conflict/resourceUnavailable/error复用HistoryStateView。title、body、可选Retry按统一text/button角色；没有retry回调不虚构操作，empty不出现Retry。processing避免断言尚未确认的磁盘结果。
+- 2026-10-04 owner允许删除无帮助的通用pending说明，或提供有事实依据的具体诊断。本轮选择最小文案修订：仅当pendingIssue为`HISTORY_OPERATION_PENDING`且message仍是`The history operation is pending reconciliation.`时省略正文，保留error标题、alert语义和Try again；后端协议不变，其他具体错误正文保留。HistoryStateView允许调用方用空字符串明确省略body，不渲染空段落。分类为已有设计文案修订，复用HISTORY-FEEDBACK并扩展可选body；没有新的token、组件或高保真屏幕。验证只覆盖此状态与错误信息保留，不使无关已验收项失效。
+- **保留策略已由owner选择标题旁信息按钮**：Header标题行右侧、Close左侧放32px低强调共享IconButton，accessible name/tooltip为`History info`。悬停显示锚定信息popover，鼠标移入popover保持，移出短暂延迟后关闭；保留点击/键盘打开（纯hover不抢焦点）。弹层标题`Version retention`，正文解释最新20条automatic/before-operation共享池、无按年龄过期、manual不自动删除。默认关闭，不挤占列表；按钮aria-expanded/aria-controls，Escape或再次点击关闭，键盘焦点返回入口；点击外部可关闭。Popover内容可选择/阅读，长文案在drawer内换行，不用hover-only tooltip承载完整规则。
+- 状态与错误按实际数据，不为像素一致修改业务语义。Recovery仅复用现有异常退出草稿流程。
+
+## 组件与组合验证记录
+
+本轮先执行组件定向unit/结构样式断言，再看一个包含上述组件的代表渲染；不能先打包交owner找错。组合抽检：默认Light完整drawer、300px Dark、Unavailable；Preview/confirmation检查新容器边界。必要平台范围见[acceptance contract](../../evidence/local-version-history-acceptance-contract.md)，不照搬003历史逐屏签字链。
+
+| 批次 | 当前状态               | 完成信号                                                |
+| ---- | ---------------------- | ------------------------------------------------------- |
+| H0   | DONE                   | 共享目录映射实际代码/来源                               |
+| H1   | DONE                   | 本anatomy+设计元数据回填；保留策略入口决定              |
+| H2   | PASS（含本轮定向修复） | 相关formatter/lint/typecheck/unit通过，代表组件视觉符合 |
+| H3   | PASS（含本轮定向修复） | 受影响页面组合抽检通过                                  |
+| H4   | PASS（2026-10-04）      | 原包集中owner体验+pending文案修订包定点接受；逐包身份见证据 |
+| H5   | DONE（2026-10-04）      | 证据入口、组件状态与T058/T048同步；owner已授权本轮private提交 |
+
+历史WIP记录：此前typecheck及5项unit失败，本轮尚未重跑。初始“等宽按钮”assertion已确认是错误oracle，不计产品缺陷。Tab tooltip已owner确认；Mark轻微肉眼弹跳不确定且owner停止调查，本轮不重开。
+
+本轮在线回填：7画板均有History info入口及规范链接，425个相关节点附组件anatomy ID。七屏PNG已保存并更新digest；source API导出失败后已通过Web UI同步，核对7个入口和425处元数据，详见high-fi manifest；不冒称组件或原生验证通过。
+
+H2/H3结果：[component-first记录](../../evidence/local-version-history-t059/component-first/README.md)。测试、primary渲染抽检与native owner验收分别记录，H4未完成。
+
+## H4 owner反馈后的定向修复（2026-09-30）
+
+owner报告两处成功提示同时常驻、Already marked位置不合适、原生粗滚动条，并要求History info支持hover。以上记录为本轮FAIL/变更，不将此前browser通过外推为native通过。滚动区复用左侧Workspace的thin及6px WebKit thumb/theme/hover/focus规则，不改系统滚动条偏好。修复完成后只复查提示生命周期/锚点、info hover/keyboard及细滚动条，继续保留未完成native项。
+
+## H4收尾记录（2026-10-04）
+
+所有必需观察已获owner明确接受；原包`2c13f50`的集中观察与文案修订包`eb961ca`的pending定点复验分开记录，见[owner记录](../../evidence/local-version-history-t059/component-first/inline-feedback/owner-walkthrough.json)。旧pending fixture在保存后清除、初轮browser缺少harness环境变量的失败原样保留；未将其写成产品样式故障。原包零AX窗口当前已恢复，未确认根因；文案修订后只有一次新package构建及一次启动，无逐屏collector或重复全套owner审批。该案例验证本次组件→组合→按影响native收尾流程可执行，不据此声称未来零返工或已证明通用效率收益。

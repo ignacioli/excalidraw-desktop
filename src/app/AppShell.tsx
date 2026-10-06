@@ -7,10 +7,12 @@ import {
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from "react";
 import {
   documentManager,
   registerDocumentFileChangeEvents,
+  registerDocumentHistoryEvents,
   useDocumentStore,
   type CloseOutcome,
   type DocumentSaveState,
@@ -24,6 +26,29 @@ import {
 } from "../documents/RecoveryStartup";
 import { ExcalidrawEditor } from "../editor/ExcalidrawEditor";
 import type { ExcalidrawAdapter } from "../editor/ExcalidrawAdapter";
+import {
+  HistoryCoordinator,
+  HistoryReplacementCancelledError,
+  type HistoryReplacementResult,
+} from "../history/historyCoordinator";
+import { deserializeSceneData } from "../editor/sceneSerializer";
+import {
+  createHistoryClient,
+  HistoryReplaceResponseLostError,
+  HistoryReplaceStatusError,
+} from "../history/historyClient";
+import {
+  HistoryPanel,
+  type HistoryPanelStatus,
+  type HistorySuccessNotice,
+} from "../history/HistoryPanel";
+import type { HistoryVersionView } from "../history/HistoryList";
+import { ReadonlyPreviewCanvas } from "../history/ReadonlyPreviewCanvas";
+import {
+  prepareImport,
+  type ImportSelection,
+} from "../history/importProtection";
+import type { ProtectedInputHandlers } from "../history/protectedInput";
 import {
   createTauriCommandInvoker,
   hasTauriCommandRuntime,
@@ -56,6 +81,7 @@ import { useAppStore } from "./store";
 import {
   createNativeMenuCommandHandler,
   registerNativeMenuCommand,
+  setNativeMenuCommandEnabled,
   type NativeMenuCommand,
 } from "./nativeMenu";
 import {
@@ -90,6 +116,17 @@ export function AppShell({
       }
     | undefined
   >(undefined);
+  const historyFrontendDriverRef = useRef<
+    | {
+        attachEditor(documentId: string, adapter: ExcalidrawAdapter): void;
+        start(): void;
+      }
+    | undefined
+  >(undefined);
+  const editorAdaptersRef = useRef(new Map<string, ExcalidrawAdapter>());
+  const [historyBusyDocumentIds, setHistoryBusyDocumentIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
   const readyEditorRef = useRef<
     | {
         documentId: string;
@@ -109,6 +146,73 @@ export function AppShell({
     | undefined
   >(undefined);
   const [exportDocumentId, setExportDocumentId] = useState<string | null>(null);
+  const [historyFeedback, setHistoryFeedback] = useState<string | null>(null);
+  const [historyNotice, setHistoryNotice] = useState<
+    (HistorySuccessNotice & { id: number }) | null
+  >(null);
+  const historyNoticeSequenceRef = useRef(0);
+  const historyNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyPanelWidth, setHistoryPanelWidth] = useState(360);
+  const [historyItems, setHistoryItems] = useState<HistoryVersionView[]>([]);
+  const [historySelectedVersionId, setHistorySelectedVersionId] = useState<
+    string | null
+  >(null);
+  const [historyPanelStatus, setHistoryPanelStatus] =
+    useState<HistoryPanelStatus>("empty");
+  const [historyPanelMessage, setHistoryPanelMessage] = useState<string>();
+  const [historyPreviewVersionId, setHistoryPreviewVersionId] = useState<
+    string | null
+  >(null);
+  const [historyPreviewState, setHistoryPreviewState] = useState<
+    "loading" | "ready" | "error"
+  >("ready");
+  const [historyPreviewRenderedVersionId, setHistoryPreviewRenderedVersionId] =
+    useState<string | null>(null);
+  const [historyPreviewContent, setHistoryPreviewContent] =
+    useState<ReactNode>(null);
+  const [historyPreviewHost, setHistoryPreviewHost] =
+    useState<HTMLDivElement | null>(null);
+  const clearHistoryNotice = useCallback(() => {
+    historyNoticeSequenceRef.current += 1;
+    if (historyNoticeTimerRef.current !== null) {
+      clearTimeout(historyNoticeTimerRef.current);
+      historyNoticeTimerRef.current = null;
+    }
+    setHistoryNotice(null);
+  }, []);
+  const showHistoryNotice = useCallback((notice: HistorySuccessNotice) => {
+    if (historyNoticeTimerRef.current !== null) {
+      clearTimeout(historyNoticeTimerRef.current);
+    }
+    const id = ++historyNoticeSequenceRef.current;
+    setHistoryNotice({ ...notice, id });
+    historyNoticeTimerRef.current = setTimeout(() => {
+      if (historyNoticeSequenceRef.current !== id) return;
+      historyNoticeTimerRef.current = null;
+      setHistoryNotice(null);
+    }, 4000);
+  }, []);
+  useEffect(
+    () => () => {
+      if (historyNoticeTimerRef.current !== null) {
+        clearTimeout(historyNoticeTimerRef.current);
+      }
+    },
+    [],
+  );
+  const historyPanelRequestRef = useRef(0);
+  const historyOpenRef = useRef(historyOpen);
+  historyOpenRef.current = historyOpen;
+  const [pendingHistory, setPendingHistory] = useState<
+    Readonly<Record<string, string>>
+  >({});
+  const retryInFlightRef = useRef(new Set<string>());
+  const [retryingHistory, setRetryingHistory] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [orphanCloseId, setOrphanCloseId] = useState<string | null>(null);
   const [preferences] = useState(() => new ShellPreferences());
   const [sidebarWidth, setSidebarWidth] = useState(
@@ -124,6 +228,30 @@ export function AppShell({
   const [workspaceInvoker] = useState(
     () => providedWorkspaceInvoker ?? createTauriCommandInvoker(),
   );
+  const [historyClient] = useState(() => createHistoryClient(workspaceInvoker));
+  const historyCoordinatorRef = useRef<HistoryCoordinator | null>(null);
+  useEffect(() => {
+    historyCoordinatorRef.current = new HistoryCoordinator(
+      documentManager,
+      historyClient,
+      async (scene, context) => {
+        const adapter = editorAdaptersRef.current.get(context.documentId);
+        if (adapter === undefined) return false;
+        await adapter.replaceScene(scene);
+        return context.commit(adapter.readScene());
+      },
+    );
+    return () => {
+      historyCoordinatorRef.current = null;
+    };
+  }, [historyClient]);
+  const requireHistoryCoordinator = (): HistoryCoordinator => {
+    const coordinator = historyCoordinatorRef.current;
+    if (coordinator === null) {
+      throw new Error("版本历史尚未就绪。");
+    }
+    return coordinator;
+  };
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(
     () => preferences.getSnapshot().currentWorkspaceId,
   );
@@ -229,7 +357,46 @@ export function AppShell({
   const activeDocumentId = useDocumentStore((state) => state.activeDocumentId);
   const activeSession =
     activeDocumentId === null ? undefined : sessionsById[activeDocumentId];
+  useEffect(() => {
+    if (activeDocumentId === null) return;
+    const coordinator = historyCoordinatorRef.current;
+    if (coordinator === null) return;
+    let cancelled = false;
+    void coordinator
+      .adoptDeferred(activeDocumentId)
+      .then((adopted) => {
+        if (!adopted || cancelled) return;
+        setHistoryBusyDocumentIds((current) => {
+          const next = new Set(current);
+          next.delete(activeDocumentId);
+          return next;
+        });
+        setPendingHistory((current) => {
+          const next = { ...current };
+          delete next[activeDocumentId];
+          return next;
+        });
+        const adapter = editorAdaptersRef.current.get(activeDocumentId);
+        const session =
+          documentManager.store.getState().sessionsById[activeDocumentId];
+        adapter?.setReadOnly(session?.saveState === "conflicted");
+        setHistoryFeedback("替换结果已核实，画布已更新。");
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setInteractionError(getErrorMessage(error));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDocumentId]);
   const documentSessions = Object.values(sessionsById);
+  useEffect(() => {
+    for (const documentId of editorAdaptersRef.current.keys()) {
+      if (sessionsById[documentId] === undefined) {
+        editorAdaptersRef.current.delete(documentId);
+      }
+    }
+  }, [sessionsById]);
   const exportReady =
     activeSession !== undefined && readyEditor?.documentId === activeSession.id;
   const startupRoute = deriveStartupRoute({
@@ -496,6 +663,196 @@ export function AppShell({
 
   const saveDocument = () =>
     runAction(() => documentManager.checkpointActive("manualSave"));
+  const prepareUnsavedHistoryDocument = async (capture: {
+    documentId: string;
+  }) => {
+    const session =
+      documentManager.store.getState().sessionsById[capture.documentId];
+    if (session === undefined) {
+      throw new Error("绘图已关闭。");
+    }
+    const path = await chooseSavePath(session.title);
+    if (path === null) return { status: "cancelled" as const };
+    if (
+      documentManager.store.getState().activeDocumentId !== capture.documentId
+    ) {
+      return { status: "cancelled" as const };
+    }
+    await documentManager.saveOrphanedAs(capture.documentId, path);
+    return { status: "saved" as const };
+  };
+  const runProtectedReplacement = async (
+    documentId: string,
+    replace: () => Promise<HistoryReplacementResult>,
+    successMessage: string,
+  ): Promise<void> => {
+    setHistoryFeedback(null);
+    const editor = editorAdaptersRef.current.get(documentId);
+    if (
+      editor === undefined ||
+      documentManager.store.getState().activeDocumentId !== documentId
+    ) {
+      throw new Error("当前绘图尚未就绪。");
+    }
+    setHistoryBusyDocumentIds((current) => new Set(current).add(documentId));
+    editor.setReadOnly(true);
+    try {
+      const result = await replace();
+      if (!result.adopted) {
+        setPendingHistory((current) => ({
+          ...current,
+          [documentId]: result.response.requestId,
+        }));
+        throw new Error("替换结果尚待核实，当前文档已暂停编辑。");
+      }
+      setPendingHistory((current) => {
+        const next = { ...current };
+        delete next[documentId];
+        return next;
+      });
+      setHistoryFeedback(successMessage);
+    } catch (error) {
+      if (error instanceof HistoryReplaceResponseLostError) {
+        setPendingHistory((current) => ({
+          ...current,
+          [documentId]: error.requestId,
+        }));
+      }
+      if (!(error instanceof HistoryReplacementCancelledError)) throw error;
+    } finally {
+      const current = documentManager.store.getState().sessionsById[documentId];
+      if (!documentManager.isHistoryFrozen(documentId)) {
+        setHistoryBusyDocumentIds((current) => {
+          const next = new Set(current);
+          next.delete(documentId);
+          return next;
+        });
+        if (editorAdaptersRef.current.get(documentId) === editor) {
+          editor.setReadOnly(current?.saveState === "conflicted");
+        }
+      }
+    }
+  };
+  const retryPendingHistory = async (): Promise<void> => {
+    const documentId = documentManager.store.getState().activeDocumentId;
+    if (documentId === null) return;
+    const requestId = pendingHistory[documentId];
+    if (requestId === undefined) return;
+    const retryKey = `${documentId}:${requestId}`;
+    if (retryInFlightRef.current.has(retryKey)) return;
+    retryInFlightRef.current.add(retryKey);
+    setRetryingHistory((current) => new Set(current).add(documentId));
+    try {
+      await runAction(async () => {
+        try {
+          const coordinator = requireHistoryCoordinator();
+          const adopted =
+            (await coordinator.adoptDeferred(documentId)) ||
+            (await coordinator.resolvePending(documentId, requestId)).adopted;
+          if (!adopted) {
+            throw new Error("替换结果仍待核实，请稍后重试。");
+          }
+          setPendingHistory((current) => {
+            const next = { ...current };
+            delete next[documentId];
+            return next;
+          });
+          setHistoryFeedback("替换结果已核实，画布已更新。");
+        } catch (error) {
+          if (error instanceof HistoryReplaceStatusError) {
+            setPendingHistory((current) => {
+              const next = { ...current };
+              delete next[documentId];
+              return next;
+            });
+          }
+          throw error;
+        } finally {
+          if (!documentManager.isHistoryFrozen(documentId)) {
+            setHistoryBusyDocumentIds((current) => {
+              const next = new Set(current);
+              next.delete(documentId);
+              return next;
+            });
+            const adapter = editorAdaptersRef.current.get(documentId);
+            const session =
+              documentManager.store.getState().sessionsById[documentId];
+            adapter?.setReadOnly(session?.saveState === "conflicted");
+          }
+        }
+      });
+    } finally {
+      retryInFlightRef.current.delete(retryKey);
+      setRetryingHistory((current) => {
+        const next = new Set(current);
+        next.delete(documentId);
+        return next;
+      });
+    }
+  };
+  const protectedInputFor = (documentId: string): ProtectedInputHandlers => ({
+    onClear: () =>
+      runAction(() =>
+        runProtectedReplacement(
+          documentId,
+          () =>
+            requireHistoryCoordinator().clear(documentId, undefined, {
+              prepareUnsaved: prepareUnsavedHistoryDocument,
+            }),
+          "已保存操作前版本并清空画布。",
+        ),
+      ),
+    onImportShortcut: () =>
+      runAction(async () => {
+        const files = await chooseImportFiles();
+        if (files === null) return;
+        await importIntoDocument(documentId, files);
+      }),
+    onSceneDrop: (drop) =>
+      runAction(async () => {
+        const prepared = await prepareImport(drop.files);
+        if (prepared.status === "ordinaryImage") {
+          if (
+            documentManager.store.getState().activeDocumentId !== documentId
+          ) {
+            throw new Error("图片解析完成前，当前绘图已切换。");
+          }
+          drop.forwardOrdinaryImage();
+          return;
+        }
+        await replacePreparedImport(documentId, prepared);
+      }),
+    onError: (error) => setInteractionError(getErrorMessage(error)),
+  });
+  const importIntoDocument = async (
+    documentId: string,
+    files: ImportSelection,
+  ): Promise<void> => {
+    await replacePreparedImport(documentId, await prepareImport(files));
+  };
+  const replacePreparedImport = async (
+    documentId: string,
+    prepared: Awaited<ReturnType<typeof prepareImport>>,
+  ): Promise<void> => {
+    if (prepared.status === "cancelled") return;
+    if (prepared.status === "multiple") {
+      throw new Error("一次只能导入一份绘图。");
+    }
+    if (prepared.status === "ordinaryImage") {
+      throw new Error("这张图片不含 Excalidraw 绘图。");
+    }
+    await runProtectedReplacement(
+      documentId,
+      () =>
+        requireHistoryCoordinator().replaceImportedScene(
+          documentId,
+          prepared.candidate,
+          undefined,
+          { prepareUnsaved: prepareUnsavedHistoryDocument },
+        ),
+      "已保存操作前版本并导入绘图。",
+    );
+  };
   const openExportDialog = (): void => {
     if (!exportReady || activeSession === undefined) {
       setInteractionError(
@@ -509,14 +866,275 @@ export function AppShell({
   const closeExportDialog = (): void => {
     setExportDocumentId(null);
   };
+
+  const loadHistoryPanel = useCallback(
+    async (preserveAvailableRows = false): Promise<void> => {
+      if (
+        !historyOpenRef.current ||
+        documentManager.store.getState().activeDocumentId !== activeDocumentId
+      )
+        return;
+      const session =
+        activeDocumentId === null
+          ? undefined
+          : documentManager.store.getState().sessionsById[activeDocumentId];
+      if (session === undefined || session.path.length === 0) {
+        setHistoryItems([]);
+        setHistoryPanelStatus("empty");
+        setHistoryPanelMessage(undefined);
+        return;
+      }
+      const request = ++historyPanelRequestRef.current;
+      setHistoryPanelStatus((current) =>
+        preserveAvailableRows && current === "available" ? current : "loading",
+      );
+      setHistoryPanelMessage(undefined);
+      try {
+        const response = await historyClient.list({
+          document: historyDocumentLocator(session),
+        });
+        if (
+          request !== historyPanelRequestRef.current ||
+          !historyOpenRef.current ||
+          documentManager.store.getState().activeDocumentId !== session.id
+        )
+          return;
+        setHistoryItems(
+          response.items.map((item) => ({
+            ...item,
+            summary: historySourceSummary(item.source, item.protectedAction),
+            summaryReliable: false,
+          })),
+        );
+        if (response.pendingIssue !== undefined) {
+          setHistoryPanelStatus("error");
+          const { code, message } = response.pendingIssue;
+          setHistoryPanelMessage(
+            code === "HISTORY_OPERATION_PENDING" &&
+              message === "The history operation is pending reconciliation."
+              ? ""
+              : message,
+          );
+        } else {
+          setHistoryPanelStatus(
+            response.items.length === 0 ? "empty" : "available",
+          );
+        }
+      } catch (error) {
+        if (
+          request !== historyPanelRequestRef.current ||
+          !historyOpenRef.current ||
+          documentManager.store.getState().activeDocumentId !== session.id
+        )
+          return;
+        setHistoryPanelStatus("error");
+        setHistoryPanelMessage(getErrorMessage(error));
+      }
+    },
+    [activeDocumentId, historyClient],
+  );
+
+  const openVersionHistory = useCallback((): void => {
+    const session =
+      activeDocumentId === null
+        ? undefined
+        : documentManager.store.getState().sessionsById[activeDocumentId];
+    if (session === undefined || session.path.length === 0) {
+      setInteractionError(
+        "Version history is available only for saved drawings.",
+      );
+      return;
+    }
+    setInteractionError(null);
+    clearHistoryNotice();
+    setHistoryOpen(true);
+  }, [activeDocumentId, clearHistoryNotice]);
+
+  const closeVersionHistory = useCallback((): void => {
+    historyPanelRequestRef.current += 1;
+    clearHistoryNotice();
+    setHistoryOpen(false);
+    setHistorySelectedVersionId(null);
+    setHistoryPreviewVersionId(null);
+    setHistoryPreviewState("ready");
+    setHistoryPreviewRenderedVersionId(null);
+    setHistoryPreviewContent(null);
+  }, [clearHistoryNotice]);
+
+  useEffect(() => {
+    if (!historyOpen) return;
+    setHistorySelectedVersionId(null);
+    setHistoryPreviewVersionId(null);
+    setHistoryPreviewState("ready");
+    setHistoryPreviewRenderedVersionId(null);
+    setHistoryPreviewContent(null);
+    void loadHistoryPanel();
+  }, [activeDocumentId, historyOpen, loadHistoryPanel]);
+
+  const previewHistoryVersion = useCallback(
+    (item: HistoryVersionView): void => {
+      const session =
+        activeDocumentId === null
+          ? undefined
+          : documentManager.store.getState().sessionsById[activeDocumentId];
+      if (session === undefined || session.path.length === 0) return;
+      const request = ++historyPanelRequestRef.current;
+      setHistoryPreviewVersionId(item.versionId);
+      setHistoryPreviewState("loading");
+      setHistoryPreviewRenderedVersionId(null);
+      setHistoryPanelMessage(undefined);
+      setHistoryPreviewContent(null);
+      void historyClient
+        .preview({
+          document: historyDocumentLocator(session),
+          versionId: item.versionId,
+        })
+        .then((response) => {
+          if (request !== historyPanelRequestRef.current) return;
+          const scene = deserializeSceneData(response.scene);
+          setHistoryPreviewContent(
+            <ReadonlyPreviewCanvas
+              onError={(error) => {
+                if (request !== historyPanelRequestRef.current) return;
+                setHistoryPreviewRenderedVersionId(null);
+                setHistoryPreviewState("error");
+                setHistoryPanelMessage(getErrorMessage(error));
+              }}
+              onRendered={() => {
+                if (request !== historyPanelRequestRef.current) return;
+                setHistoryPreviewRenderedVersionId(response.versionId);
+              }}
+              scene={scene}
+              theme={themeSnapshot.resolvedColorScheme}
+            />,
+          );
+          setHistoryPreviewState("ready");
+        })
+        .catch((error: unknown) => {
+          if (request !== historyPanelRequestRef.current) return;
+          setHistoryPreviewRenderedVersionId(null);
+          setHistoryPreviewState("error");
+          setHistoryPanelMessage(getErrorMessage(error));
+        });
+    },
+    [activeDocumentId, historyClient, themeSnapshot.resolvedColorScheme],
+  );
+
+  const restoreHistoryVersion = useCallback(
+    async (item: HistoryVersionView): Promise<void> => {
+      const documentId = documentManager.store.getState().activeDocumentId;
+      if (documentId === null) return;
+      await runProtectedReplacement(
+        documentId,
+        () =>
+          requireHistoryCoordinator().replace(documentId, {
+            kind: "restore",
+            versionId: item.versionId,
+          }),
+        "已恢复版本并保存到文件。",
+      );
+      setHistoryOpen(false);
+      setHistoryPreviewVersionId(null);
+      setHistoryPreviewRenderedVersionId(null);
+      await loadHistoryPanel();
+    },
+    [loadHistoryPanel],
+  );
+
+  const markCurrentHistoryVersion = useCallback(async () => {
+    const documentId = documentManager.store.getState().activeDocumentId;
+    if (documentId === null) return null;
+    const outcome = await requireHistoryCoordinator().mark(documentId, {
+      prepareUnsaved: prepareUnsavedHistoryDocument,
+    });
+    if (outcome.status === "cancelled") return null;
+    if (documentManager.store.getState().activeDocumentId !== documentId)
+      return null;
+    setHistorySelectedVersionId(outcome.response.versionId);
+    await loadHistoryPanel(true);
+    return {
+      versionId: outcome.response.versionId,
+      reused: outcome.response.reused,
+    };
+  }, [loadHistoryPanel]);
+
+  const deleteHistoryVersion = useCallback(
+    async (item: HistoryVersionView): Promise<void> => {
+      const session =
+        activeDocumentId === null
+          ? undefined
+          : documentManager.store.getState().sessionsById[activeDocumentId];
+      if (session === undefined || session.path.length === 0) return;
+      await historyClient.delete({
+        document: historyDocumentLocator(session),
+        requestId: createHistoryRequestId(),
+        versionId: item.versionId,
+      });
+      if (
+        !historyOpenRef.current ||
+        documentManager.store.getState().activeDocumentId !== session.id
+      )
+        return;
+      setHistoryPreviewVersionId(null);
+      setHistorySelectedVersionId((selected) =>
+        selected === item.versionId ? null : selected,
+      );
+      await loadHistoryPanel();
+    },
+    [activeDocumentId, historyClient, loadHistoryPanel],
+  );
+
+  const setHistoryVersionMarked = useCallback(
+    async (item: HistoryVersionView, marked: boolean) => {
+      const session =
+        activeDocumentId === null
+          ? undefined
+          : documentManager.store.getState().sessionsById[activeDocumentId];
+      if (session === undefined || session.path.length === 0) return;
+      const response = await historyClient.setMarked({
+        document: historyDocumentLocator(session),
+        requestId: createHistoryRequestId(),
+        versionId: item.versionId,
+        marked,
+      });
+      if (
+        !historyOpenRef.current ||
+        documentManager.store.getState().activeDocumentId !== session.id
+      )
+        return response;
+      if (!response.retained) {
+        setHistorySelectedVersionId((selected) =>
+          selected === item.versionId ? null : selected,
+        );
+      }
+      await loadHistoryPanel(true);
+      return response;
+    },
+    [activeDocumentId, historyClient, loadHistoryPanel],
+  );
+
   useEffect(() => {
     nativeMenuHandlerRef.current = createNativeMenuCommandHandler({
       onSave: () => void saveDocument(),
       onExportImage: openExportDialog,
+      onVersionHistory: openVersionHistory,
       onAppearance: (mode) =>
         void runAction(() => themeController.setModePreference(mode)),
     });
   });
+
+  const historyMenuEnabled =
+    hasNativeWindowRuntime() &&
+    activeSession !== undefined &&
+    activeSession.path.length > 0;
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) return;
+    void setNativeMenuCommandEnabled(
+      workspaceInvoker,
+      "versionHistory",
+      historyMenuEnabled,
+    ).catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+  }, [historyMenuEnabled, workspaceInvoker]);
   const applyCloseOutcome = (outcome: CloseOutcome) => {
     if (outcome.status === "orphaned") {
       setOrphanCloseId(outcome.documentId);
@@ -541,6 +1159,8 @@ export function AppShell({
         adapter,
         container,
       );
+      historyFrontendDriverRef.current?.attachEditor(documentId, adapter);
+      editorAdaptersRef.current.set(documentId, adapter);
       setReadyEditor({ documentId, adapter });
     },
     [],
@@ -564,6 +1184,30 @@ export function AppShell({
     return () => {
       disposed = true;
       unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (import.meta.env.VITE_E2E_HISTORY_FRONTEND !== "1") {
+      return;
+    }
+    let disposed = false;
+    void import("../e2e/historyFrontendDriver")
+      .then(({ nativeHistoryFrontendDriver }) => {
+        if (disposed) return;
+        historyFrontendDriverRef.current = nativeHistoryFrontendDriver;
+        nativeHistoryFrontendDriver.start();
+        const readyEditor = readyEditorRef.current;
+        if (readyEditor !== undefined) {
+          nativeHistoryFrontendDriver.attachEditor(
+            readyEditor.documentId,
+            readyEditor.adapter,
+          );
+        }
+      })
+      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+    return () => {
+      disposed = true;
     };
   }, []);
 
@@ -603,6 +1247,27 @@ export function AppShell({
     void registerExitCheckpoint(documentManager, (error) =>
       setInteractionError(getErrorMessage(error)),
     )
+      .then((nextUnlisten) => {
+        if (disposed) {
+          nextUnlisten();
+        } else {
+          unlisten = nextUnlisten;
+        }
+      })
+      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) {
+      return;
+    }
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void registerDocumentHistoryEvents(documentManager)
       .then((nextUnlisten) => {
         if (disposed) {
           nextUnlisten();
@@ -753,6 +1418,7 @@ export function AppShell({
       />
       <header
         className="app-shell-tabs"
+        data-history-open={historyOpen ? "true" : "false"}
         data-sidebar-mode={sidebarSnapshot.mode}
       >
         <div className="shell-left" aria-label="Shell navigation" role="group">
@@ -762,6 +1428,13 @@ export function AppShell({
             aria-label="Toggle workspace sidebar"
             className="icon-button shell-sidebar-toggle"
             onClick={() => {
+              if (historyOpen) {
+                closeVersionHistory();
+                if (sidebarSnapshot.mode === "hidden") {
+                  sidebarController.openOverlay();
+                }
+                return;
+              }
               if (sidebarSnapshot.mode === "hidden") {
                 sidebarController.openOverlay();
               } else if (sidebarSnapshot.mode === "overlay") {
@@ -797,6 +1470,19 @@ export function AppShell({
           />
         </div>
         <div className="app-commands" aria-live="polite">
+          {historyFeedback !== null ? (
+            <p role="status">{historyFeedback}</p>
+          ) : null}
+          {activeDocumentId !== null &&
+          pendingHistory[activeDocumentId] !== undefined ? (
+            <button
+              disabled={retryingHistory.has(activeDocumentId)}
+              onClick={() => void retryPendingHistory()}
+              type="button"
+            >
+              核实版本替换结果
+            </button>
+          ) : null}
           <p
             className={
               interactionError
@@ -836,14 +1522,22 @@ export function AppShell({
       ) : null}
 
       <div
-        className={
-          sidebarSnapshot.mode === "pinned"
-            ? "app-shell-body app-shell-body--pinned"
-            : "app-shell-body"
-        }
+        className={[
+          "app-shell-body",
+          sidebarSnapshot.mode === "pinned" && "app-shell-body--pinned",
+          historyOpen && "app-shell-body--history",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        data-history-open={historyOpen ? "true" : "false"}
         data-sidebar-mode={sidebarSnapshot.mode}
+        style={
+          {
+            "--history-panel-width": `${historyPanelWidth}px`,
+          } as CSSProperties & Record<"--history-panel-width", string>
+        }
       >
-        {sidebarSnapshot.mode === "hidden" ? (
+        {sidebarSnapshot.mode === "hidden" && !historyOpen ? (
           <div
             aria-hidden="true"
             className="sidebar-reveal-zone"
@@ -855,9 +1549,9 @@ export function AppShell({
         <aside
           aria-label="Files"
           className="file-sidebar"
-          hidden={sidebarSnapshot.mode === "hidden"}
+          hidden={sidebarSnapshot.mode === "hidden" || historyOpen}
           id="workspace-sidebar"
-          inert={sidebarSnapshot.mode === "hidden"}
+          inert={sidebarSnapshot.mode === "hidden" || historyOpen}
           style={
             sidebarSnapshot.mode === "overlay"
               ? { position: "absolute" }
@@ -916,53 +1610,115 @@ export function AppShell({
               : "canvas-region"
           }
         >
-          {startupState.status === "ready" &&
-          startupState.recoveredCount > 0 ? (
-            <RecoveryNotice count={startupState.recoveredCount} />
-          ) : null}
-          {showWelcome ? (
-            <WelcomeScreen
-              busy={welcomeBusy}
-              error={welcomeError}
-              errorVisuallyHidden={welcomeErrorVisuallyHidden}
-              unavailableWorkspaceId={unavailableWorkspaceId}
-              onNewDrawing={createWelcomeDrawing}
-              onOpenRecentWorkspace={openRecentWorkspace}
-              onOpenWorkspace={openWorkspace}
-              onRemoveRecentWorkspace={removeRecentWorkspace}
-              mountedWorkspaceIds={
-                new Set(mountedWorkspaces.map((workspace) => workspace.id))
-              }
-              workspaces={welcomeWorkspaces}
-            />
-          ) : documentSessions.length > 0 ? (
-            documentSessions.map((session) => (
-              <section
-                aria-labelledby={`tab-${session.id}`}
-                className="canvas-document"
-                hidden={session.id !== activeDocumentId}
-                id={`document-${session.id}`}
-                key={session.id}
-                role="tabpanel"
-              >
-                <ExcalidrawEditor
-                  documentId={session.id}
-                  initialScene={session.scene}
-                  onSceneChange={(scene) =>
-                    documentManager.updateScene(session.id, scene)
-                  }
-                  onReady={handleEditorReady}
-                  readOnly={session.saveState === "conflicted"}
-                  theme={themeSnapshot.resolvedColorScheme}
-                />
-              </section>
-            ))
-          ) : (
-            <div className="canvas-empty-state">
-              <p>Select a drawing to begin.</p>
+          <div
+            className="canvas-current-content"
+            inert={historyPreviewVersionId !== null}
+          >
+            {startupState.status === "ready" &&
+            startupState.recoveredCount > 0 ? (
+              <RecoveryNotice count={startupState.recoveredCount} />
+            ) : null}
+            {showWelcome ? (
+              <WelcomeScreen
+                busy={welcomeBusy}
+                error={welcomeError}
+                errorVisuallyHidden={welcomeErrorVisuallyHidden}
+                unavailableWorkspaceId={unavailableWorkspaceId}
+                onNewDrawing={createWelcomeDrawing}
+                onOpenRecentWorkspace={openRecentWorkspace}
+                onOpenWorkspace={openWorkspace}
+                onRemoveRecentWorkspace={removeRecentWorkspace}
+                mountedWorkspaceIds={
+                  new Set(mountedWorkspaces.map((workspace) => workspace.id))
+                }
+                workspaces={welcomeWorkspaces}
+              />
+            ) : documentSessions.length > 0 ? (
+              documentSessions.map((session) => (
+                <section
+                  aria-labelledby={`tab-${session.id}`}
+                  className="canvas-document"
+                  hidden={session.id !== activeDocumentId}
+                  id={`document-${session.id}`}
+                  key={session.id}
+                  role="tabpanel"
+                >
+                  <ExcalidrawEditor
+                    documentId={session.id}
+                    initialScene={session.scene}
+                    protectedInput={protectedInputFor(session.id)}
+                    onSceneChange={(scene) =>
+                      documentManager.updateScene(session.id, scene)
+                    }
+                    onReady={handleEditorReady}
+                    readOnly={
+                      session.saveState === "conflicted" ||
+                      historyBusyDocumentIds.has(session.id)
+                    }
+                    theme={themeSnapshot.resolvedColorScheme}
+                  />
+                </section>
+              ))
+            ) : (
+              <div className="canvas-empty-state">
+                <p>Select a drawing to begin.</p>
+              </div>
+            )}
+          </div>
+          {historyOpen &&
+          historyNotice !== null &&
+          activeSession !== undefined ? (
+            <div
+              aria-live="polite"
+              className="history-action-notice"
+              key={historyNotice.id}
+              role="status"
+            >
+              <strong>{historyNotice.title}</strong>
+              <span>{historyNotice.message}</span>
             </div>
-          )}
+          ) : null}
+          <div className="history-preview-root" ref={setHistoryPreviewHost} />
         </main>
+        {historyOpen && activeSession !== undefined ? (
+          <HistoryPanel
+            documentId={activeSession.id}
+            key={activeSession.id}
+            fileName={activeSession.title}
+            width={historyPanelWidth}
+            onWidthChange={setHistoryPanelWidth}
+            items={historyItems}
+            selectedVersionId={historySelectedVersionId}
+            onSelect={(item) => setHistorySelectedVersionId(item.versionId)}
+            onClose={closeVersionHistory}
+            onDelete={deleteHistoryVersion}
+            onExitPreview={() => {
+              historyPanelRequestRef.current += 1;
+              setHistoryPreviewVersionId(null);
+              setHistoryPreviewState("ready");
+              setHistoryPreviewRenderedVersionId(null);
+              setHistoryPreviewContent(null);
+            }}
+            onMark={markCurrentHistoryVersion}
+            onSuccessNotice={showHistoryNotice}
+            onClearSuccessNotice={clearHistoryNotice}
+            onSetMarked={setHistoryVersionMarked}
+            onPreview={previewHistoryVersion}
+            onRestore={restoreHistoryVersion}
+            previewContent={historyPreviewContent}
+            previewPortalContainer={historyPreviewHost}
+            previewErrorMessage={historyPanelMessage}
+            restoreEnabled={
+              historyPreviewRenderedVersionId === historyPreviewVersionId
+            }
+            previewState={historyPreviewState}
+            previewVersionId={historyPreviewVersionId}
+            processing={historyBusyDocumentIds.has(activeSession.id)}
+            status={historyPanelStatus}
+            statusMessage={historyPanelMessage}
+            onRetry={() => void loadHistoryPanel()}
+          />
+        ) : null}
       </div>
       {exportDocumentId !== null &&
       readyEditor?.documentId === exportDocumentId &&
@@ -1043,6 +1799,29 @@ function attachPerformanceEditor(
   driver?.attachEditor(documentId, adapter, container);
 }
 
+function historyDocumentLocator(session: {
+  path: string;
+  historyDocumentId?: string;
+}) {
+  return session.historyDocumentId === undefined
+    ? ({ kind: "path", path: session.path } as const)
+    : ({ kind: "handle", documentId: session.historyDocumentId } as const);
+}
+
+function historySourceSummary(
+  source: HistoryVersionView["source"],
+  protectedAction: HistoryVersionView["protectedAction"],
+): string {
+  if (source === "protected" && protectedAction !== undefined) {
+    return `Before ${protectedAction}`;
+  }
+  return source === "automatic" ? "Automatic checkpoint" : "Manual mark";
+}
+
+function createHistoryRequestId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `history-${Date.now()}`;
+}
+
 function getSaveStatus(saveState: DocumentSaveState | undefined): string {
   switch (saveState) {
     case "dirty":
@@ -1093,6 +1872,37 @@ async function chooseSavePath(defaultTitle: string): Promise<string | null> {
       },
     ],
     title: "Save drawing as",
+  });
+}
+
+function chooseImportFiles(): Promise<readonly File[] | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".excalidraw,.excalidraw.json,.png,.svg";
+    input.multiple = false;
+    input.hidden = true;
+    let settled = false;
+    let focusTimer: number | undefined;
+    const finish = (files: FileList | null) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("focus", onWindowFocus);
+      input.remove();
+      resolve(files === null ? null : Array.from(files));
+    };
+    const onWindowFocus = () => {
+      focusTimer = window.setTimeout(
+        () => finish(input.files?.length ? input.files : null),
+        300,
+      );
+    };
+    input.addEventListener("change", () => finish(input.files), { once: true });
+    input.addEventListener("cancel", () => finish(null), { once: true });
+    window.addEventListener("focus", onWindowFocus, { once: true });
+    document.body.append(input);
+    input.click();
   });
 }
 

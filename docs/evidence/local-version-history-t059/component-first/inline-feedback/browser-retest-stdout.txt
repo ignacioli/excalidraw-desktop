@@ -1,0 +1,158 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/26.8.2/bin/node",
+      "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config",
+      "e2e/playwright.config.ts",
+      "e2e/tests/local-version-history-t048-regression.spec.ts",
+      "-g",
+      "Mark feedback replaces",
+      "--workers=1",
+      "--reporter=json",
+      "--output=/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-retest-output"
+    ],
+    "configFile": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/playwright.config.ts",
+    "rootDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-retest-output",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "browser-ui",
+        "name": "browser-ui",
+        "testDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "tests/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/local-version-history-t048-regression.spec.ts",
+      "file": "tests/local-version-history-t048-regression.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Mark feedback replaces the row badge, preserves geometry and expires",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "timedOut",
+                  "duration": 30640,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts",
+                        "column": 69,
+                        "line": 414
+                      },
+                      "message": "Error: locator.click: Test timeout of 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' }).getByRole('button', { name: 'Exit version preview' })\u001b[22m\n\n\n  412 |   ).toContainText(\"Unmarked · v-001\");\n  413 |   await expect(page.locator(\".history-action-notice\")).toHaveCount(0);\n> 414 |   await panel.getByRole(\"button\", { name: \"Exit version preview\" }).click();\n      |                                                                     ^\n  415 |   await expect(inlineFeedback).toHaveText(\"Unmarked\");\n  416 |   await expect(targetRow).toHaveAccessibleName(/· Ready$/);\n  417 |\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts:414:69"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-04T06:54:06.788Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-retest-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-retest-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-retest-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/browser-retest-output/tests-local-version-histor-601eb-serves-geometry-and-expires-browser-ui/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "5571f674fdefad22bde9-313f6decf3fe32f0b9cb",
+          "file": "tests/local-version-history-t048-regression.spec.ts",
+          "line": 319,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-04T06:54:06.545Z",
+    "duration": 31234.109,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}
+[ELIFECYCLE] Command failed with exit code 1.

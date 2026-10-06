@@ -106,6 +106,26 @@ describe("TabBar", () => {
     ).toHaveAccessibleName("Close Beta");
   });
 
+  it("renders the full filename on hover or keyboard focus without native title tooltips", async () => {
+    const user = userEvent.setup();
+    const title =
+      "A long drawing filename that is truncated in the tab.excalidraw";
+    setDocumentSessions([
+      createSession("alpha", title, "/tmp/alpha.excalidraw", "clean"),
+    ]);
+    render(<TabBar />);
+    const tab = screen.getByRole("tab", { name: title });
+
+    await user.hover(tab);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(title);
+    await user.unhover(tab);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.focus(tab);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(title);
+    fireEvent.keyDown(tab, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
   it("exposes active, inactive, and unsaved Tab states without moving the close slot", () => {
     setDocumentSessions([
       createSession("alpha", "Alpha", "/tmp/alpha.excalidraw", "clean"),

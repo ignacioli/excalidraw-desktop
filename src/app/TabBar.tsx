@@ -6,6 +6,7 @@ import {
   type MouseEvent,
   type WheelEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { documentManager, useDocumentStore } from "../documents/documentStore";
 import { ingestWheel } from "../documents/tabActivationQueue";
 import { ContextMenu } from "./interaction/ContextMenu";
@@ -31,6 +32,28 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [menu, setMenu] = useState<TabMenuState | null>(null);
+  const [tooltip, setTooltip] = useState<TabMenuState | null>(null);
+  const tooltipSession =
+    tooltip === null ? undefined : sessionsById[tooltip.documentId];
+
+  const showFilename = (documentId: string, element: HTMLElement) => {
+    const bounds = element.getBoundingClientRect();
+    setTooltip({
+      documentId,
+      x: Math.max(8, Math.min(bounds.left, window.innerWidth - 200)),
+      y: bounds.bottom + 4,
+    });
+  };
+
+  useEffect(() => {
+    const dismiss = () => setTooltip(null);
+    window.addEventListener("blur", dismiss);
+    window.addEventListener("resize", dismiss);
+    return () => {
+      window.removeEventListener("blur", dismiss);
+      window.removeEventListener("resize", dismiss);
+    };
+  }, []);
   const ownedTabIds = tabOrder
     .filter((tabId) => sessionsById[tabId] !== undefined)
     .map((tabId) => `tab-${tabId}`)
@@ -210,8 +233,15 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
   })();
 
   return (
-    <nav className="tab-bar" aria-label="Open drawings" onWheel={handleWheel}>
-      <div className="tab-list">
+    <nav
+      className="tab-bar"
+      aria-label="Open drawings"
+      onWheel={handleWheel}
+      onKeyDownCapture={(event) => {
+        if (event.key === "Escape") setTooltip(null);
+      }}
+    >
+      <div className="tab-list" onScroll={() => setTooltip(null)}>
         <div
           aria-label="Drawing tabs"
           aria-owns={ownedTabIds.length > 0 ? ownedTabIds : undefined}
@@ -251,9 +281,16 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
                 setFocusedId((current) =>
                   current === session.id ? null : current,
                 );
+                setTooltip(null);
               }}
-              onFocus={() => setFocusedId(session.id)}
-              onMouseEnter={() => setHoveredId(session.id)}
+              onFocus={(event) => {
+                setFocusedId(session.id);
+                showFilename(session.id, event.currentTarget);
+              }}
+              onMouseEnter={(event) => {
+                setHoveredId(session.id);
+                showFilename(session.id, event.currentTarget);
+              }}
               onMouseLeave={(event) => {
                 const next = event.relatedTarget;
                 if (
@@ -265,6 +302,7 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
                 setHoveredId((current) =>
                   current === session.id ? null : current,
                 );
+                setTooltip(null);
               }}
               onAuxClick={(event) => handleAuxClick(event, session.id)}
               onClick={() => activateTab(session.id)}
@@ -275,6 +313,11 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
             >
               <div
                 aria-controls={`document-${session.id}`}
+                aria-describedby={
+                  tooltip?.documentId === session.id && menu === null
+                    ? "tab-filename-tooltip"
+                    : undefined
+                }
                 aria-label={`${session.title}${isDirty ? ", unsaved changes" : ""}${isOrphaned ? ", file unavailable" : ""}`}
                 aria-selected={isActive}
                 className={isActive ? "tab is-selected" : "tab"}
@@ -319,6 +362,23 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
           );
         })}
       </div>
+      {tooltip !== null && tooltipSession !== undefined && menu === null
+        ? createPortal(
+            <div
+              id="tab-filename-tooltip"
+              role="tooltip"
+              className="tab-filename-tooltip"
+              style={{
+                left: tooltip.x,
+                top: tooltip.y,
+                maxWidth: Math.min(480, window.innerWidth - tooltip.x - 8),
+              }}
+            >
+              {tooltipSession.title}
+            </div>,
+            document.body,
+          )
+        : null}
       {menu !== null ? (
         <ContextMenu
           label="Tab actions"

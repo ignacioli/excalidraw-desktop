@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-04T14:04:06.566Z",
+  "initialWrapperExitCode": 1,
+  "initialMetadataState": "running - wrapper exception prevented finalization",
+  "observedWrapperError": "Error: kill EPERM at stopOwnedGroup inside child close callback",
+  "changedPreflightFiles": [
+    "docs/design/local-version-history/implementation-map.md"
+  ],
+  "classification": "guard scope mismatch on authorized non-runtime documentation",
+  "action": "retain initial log and metadata; exclude authorized documentation; incrementally rebuild same target",
+  "documentExclusions": [
+    "docs/design/local-version-history/implementation-map.md",
+    "e2e/perf/local-version-history-baseline.md"
+  ],
+  "productSourceRegression": false
+}

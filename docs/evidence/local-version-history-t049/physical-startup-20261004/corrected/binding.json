@@ -1,0 +1,19 @@
+{
+  "baselineCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+  "baselineWorktree": "/Users/liyongqiang/.codex/worktrees/history-perf-baseline/local-version-history",
+  "binary": {
+    "path": "/private/tmp/t049-20261004-baseline-Oe9293/corrected/excalidraw-desktop",
+    "sha256": "c5e6cd8ed502a0a2b9f002bfb71441833d2d049607fb6a445af22a16eb0cee8b"
+  },
+  "buildBinding": "../../baseline-build-20261004/corrected-binding.json",
+  "reportSha256": "57208d410380280552e0475996261ca1976688f533127f342025b965085a68c6",
+  "runnerLogUncompressedSha256": "42f96fd1cc6998308a54bec53ad732e8effc43aa0f1a0857dbfe0a137d6c055a",
+  "runRoot": "/private/tmp/t049-20261004-baseline-physical-startup-002-corrected",
+  "exitCode": 0,
+  "status": "PASS_DIAGNOSTIC",
+  "coldSamples": 10,
+  "idleSamples": 61,
+  "baselineJSONUnmodified": true,
+  "priorInvalidPreserved": "../startup-idle.json",
+  "workloadOrAssertionChanges": false
+}

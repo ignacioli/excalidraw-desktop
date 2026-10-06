@@ -1,0 +1,50 @@
+{
+  "appDataDirectory": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/home/Library/Application Support/excalidraw-desktop",
+  "currentFile": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/workspace/History long list.excalidraw",
+  "currentFileSha256": "e1fcde65ac2ac3370d816cc8181f5ef9e8b6906bc6e92b9c80c25da4ff42f30a",
+  "database": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/home/Library/Application Support/excalidraw-desktop/excalidraw-desktop.sqlite3",
+  "documentId": "5b86c3ed-15f9-46bc-ada5-59666d0ee681",
+  "documents": {
+    "longList": {
+      "currentFile": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/workspace/History long list.excalidraw",
+      "documentId": "5b86c3ed-15f9-46bc-ada5-59666d0ee681",
+      "markedVersionCount": 50,
+      "versionCount": 50
+    },
+    "pendingIssue": {
+      "currentFile": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/workspace/History pending issue.excalidraw",
+      "documentId": "d1290225-4d06-47ab-9e94-1b7e11e3ae7f",
+      "pendingIssueCode": "HISTORY_OPERATION_PENDING",
+      "versionCount": 0
+    },
+    "unavailable": {
+      "availability": "unavailable",
+      "currentFile": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/workspace/History unavailable version.excalidraw",
+      "documentId": "37123f88-8db9-4c6c-a952-3da6424e7aea",
+      "previewErrorCode": "HISTORY_RESOURCE_MISSING",
+      "quarantinedScene": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/quarantine/bf7a0ecea96dbcc18750d78e5f9b4ce090fc941c332db02dd82b8f4e0137fc09.scene",
+      "sceneHash": "bf7a0ecea96dbcc18750d78e5f9b4ce090fc941c332db02dd82b8f4e0137fc09",
+      "versionCount": 1,
+      "versionId": "b9e2381e-e112-4c64-b263-0245ab86e363"
+    }
+  },
+  "historyDatabase": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/home/Library/Application Support/excalidraw-desktop/version-history/history.sqlite3",
+  "markedVersionCount": 50,
+  "nativeVerified": false,
+  "previewReadbackCount": 3,
+  "profileHome": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/home",
+  "root": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2",
+  "scenarios": [
+    "history-long-list-and-preview",
+    "history-pending-issue",
+    "history-unavailable-version"
+  ],
+  "versionCount": 50,
+  "workspace": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/workspace",
+  "workspaceId": "fbadff38-3db1-4d28-9876-ec95484b242f",
+  "preparationBinary": {
+    "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/debug/examples/prepare_history_visual_fixture",
+    "sha256": "51e830cf0edbe98ac6fb1cd79a4f924bb7df2be7c6fcd6ff042f0ff69c6ef9d6",
+    "scope": "Existing synthetic backend-only preparation tool; native readiness not claimed."
+  }
+}

@@ -16,6 +16,7 @@ The local persistence workflow is designed around the moments that matter:
 - **When the app is interrupted:** recovery snapshots can restore edits that had not yet reached the drawing file after a crash, force-quit, or power loss.
 - **When the drawing is saved:** the destination is validated before the new file replaces the old one, so an interrupted write does not leave a half-written `.excalidraw` file.
 - **When another program edits the file:** clean documents can reload; documents with local edits show a conflict choice instead of silently overwriting either version.
+- **When you need an earlier state:** local Version History keeps automatic, manual, and before-operation versions with a persistent document identity. Rename keeps that identity, Save As starts a separate history, and deleting a history entry leaves the current drawing unchanged.
 
 ## A canvas-first desktop workflow
 
@@ -30,6 +31,7 @@ Inside a workspace, **Current Workspace** is the single tree shown in the sideba
 - Browse folders and drawings from one continuous Current Workspace tree
 - Open multiple drawings in tabs and reuse the running app when opening files from Finder
 - Detect external file changes and resolve conflicts explicitly
+- Keep local Version History for automatic checkpoints, manual marks, and protected restore/clear/import operations
 - Export drawings as PNG or SVG, with the bundled font embedded in SVG output
 - Deduplicate repeated in-drawing images so repeated pastes do not multiply the stored asset data
 

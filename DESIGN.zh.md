@@ -91,6 +91,10 @@ accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍�
 
 ## 语义 Token
 
+既有与后续功能使用同一套共享 design system。UI 字体统一为 `-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`；等宽角色统一为 `ui-monospace, SFMono-Regular, Menlo, monospace`。这一系统字体标准同样适用于本地版本历史，并覆盖历史设计导出中的 Inter / IBM Plex Mono 字体名称；批准的字号、字重、行高、间距和组件几何保持有效。不得为单个功能另建字体或视觉风格；共享规范有冲突时，先修正共享规范再实现。
+
+修改 UI 前，先把组件角色、状态与布局映射到批准的共享 token 和组件契约；在编写依赖代码前解决缺失或冲突，并建立预期值直接来自设计来源的聚焦检查，不能以当前实现作为正确答案。渲染对照是最后检查，不替代这些开发约束。
+
 应用组件消费语义 Token，不直接使用调色板字面值。已批准的桌面壳层数值冻结在 `docs/design/desktop-shell/hf-2/tokens.json`。实现时必须将共享角色与锁定版本的 Excalidraw 包对齐并记录包版本；SDK 所有的编辑器样式继续使用上游公开变量，已批准的壳层角色不得被截图取色值或私有 SDK 内部样式静默替换。
 
 | Canonical token ID | 用途 |
@@ -120,7 +124,7 @@ accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍�
 - 模态对话框打开时焦点进入并被约束在其中；关闭后焦点返回触发控件。同一时刻只有一层对话框；不得使用 `window.prompt` 或 `window.confirm`。
 - 动效只服务于状态理解且保持短暂；必须尊重 reduced motion，避免画布周围发生动画布局跳动。
 - 阴影只表达浮动控件、菜单和对话框的层级；常驻面板使用边框或明度差分隔。
-- shell icon control 使用冻结的 16×16 icon 和 32×32 hit target。紧凑图标控件默认无填充、无边框，前景色为 secondary（Light `#5C5C5C`、Dark `#CED4DA`），仅在交互时使用语义 hover/pressed 表面与更高对比度。Current Workspace header 将 New Drawing、New Folder、Collapse-or-Expand-All 与 Refresh 保持为同一名称行上的紧凑控件。Row action 仅在 pointer 或 keyboard focus 存在时使用无边框 vertical ellipsis；Tab close 在预留槽位内视觉整合，不显示为单独的方框按钮。
+- shell icon control 使用冻结的 16×16 icon 和 32×32 hit target。紧凑图标控件默认无填充、无边框，前景色为 secondary（Light `#5C5C5C`、Dark `#CED4DA`），仅在交互时使用语义 hover/pressed 表面与更高对比度。Current Workspace header 将 New Drawing、New Folder、Collapse-or-Expand-All 与 Refresh 保持为同一名称行上的紧凑控件。Workspace Row action 仅在 pointer 或 keyboard focus 存在时使用无边框 vertical ellipsis；Local Version History 每条版本行始终显示 vertical ellipsis，使该版本的 Mark/Unmark 与 Delete 目标可发现。Tab close 在预留槽位内视觉整合，不显示为单独的方框按钮。
 - [`docs/design/desktop-shell/hf-2/components.md`](docs/design/desktop-shell/hf-2/components.md) 是 Icon Button/Back、Tab、Workspace Row 与 Welcome Action variant 的规范来源：其中的 2px theme focus ring、disabled-to-default state priority、可见的 non-colour cue、row-action tooltip/accessibility rule，以及 primary/secondary Welcome Action emphasis 与这些更广泛的 interaction rule 同时适用。
 
 ## 后续主题扩展
@@ -133,6 +137,8 @@ accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍�
 - 主题导入、主题编辑器、主题分享和公开主题文件格式不属于第一版。
 
 ## 验证契约
+
+以下六屏合同记录初始 desktop-shell 重设计的验收。后续视觉 feature 遵循[共享组件目录](docs/design/components.md)：实现前定义 component anatomy，先验收变更组件，再按风险抽检代表页面组合。未变组件复用适用证据；功能、平台与 owner 接受仍遵守各自 feature 合同。该流程不重开或改写历史 shell gate 结果。
 
 初始实现必须提供以下证据：
 

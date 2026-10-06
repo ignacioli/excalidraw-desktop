@@ -119,6 +119,10 @@ body {
   grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr) auto;
 }
 
+.app-shell-tabs[data-history-open="true"][data-sidebar-mode="pinned"] {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
 .shell-left,
 .shell-center {
   min-width: 0;
@@ -227,6 +231,21 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tab-filename-tooltip {
+  position: fixed;
+  z-index: 100;
+  width: max-content;
+  border: var(--border-default) solid var(--border-strong);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-primary);
+  background: var(--panel-background);
+  box-shadow: var(--shadow-floating);
+  font-size: var(--font-size-label, 12px);
+  overflow-wrap: anywhere;
+  pointer-events: none;
 }
 
 .tab-close {
@@ -428,6 +447,12 @@ body {
 
 .app-shell-body--pinned {
   grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr);
+}
+
+.app-shell-body--history {
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, min(var(--history-panel-width, 360px), 100vw));
 }
 
 .app-shell-body--pinned .canvas-region {
@@ -1272,6 +1297,11 @@ body {
 
 .canvas-region--welcome {
   background: var(--app-background);
+}
+
+.canvas-current-content {
+  position: absolute;
+  inset: 0;
 }
 
 .canvas-document,

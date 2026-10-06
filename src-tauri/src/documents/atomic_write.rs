@@ -62,14 +62,29 @@ pub enum AtomicWriteError {
     InvalidTarget(PathBuf),
 }
 
+/// Error returned only by the guarded replacement writer. Keeping this
+/// separate from `AtomicWriteError` preserves the existing save/export error
+/// contract while making the new pipeline's post-rename uncertainty explicit.
+#[derive(Debug, Error)]
+pub enum GuardedAtomicWriteError {
+    #[error(transparent)]
+    Atomic(#[from] AtomicWriteError),
+    #[error("target changed before atomic rename: {path}")]
+    Conflict { path: PathBuf },
+    #[error("atomic write published {path}, but durability is unknown after {phase}: {detail}")]
+    PublishedButDurabilityUnknown {
+        path: PathBuf,
+        phase: AtomicWriteFaultPoint,
+        detail: String,
+    },
+}
+
 pub trait AtomicWriteFaultInjector: Send + Sync {
     fn interrupt(&self, point: AtomicWriteFaultPoint) -> Result<(), AtomicWriteError>;
 }
 
-#[cfg(not(any(test, feature = "e2e-harness")))]
 struct NoFault;
 
-#[cfg(not(any(test, feature = "e2e-harness")))]
 impl AtomicWriteFaultInjector for NoFault {
     fn interrupt(&self, _point: AtomicWriteFaultPoint) -> Result<(), AtomicWriteError> {
         Ok(())
@@ -200,6 +215,46 @@ pub fn atomic_write_bytes_with_injector(
     atomic_write_with_injector_and_validator(target, contents, injector, &validate_bytes)
 }
 
+/// Atomically publish a JSON document after validating the current target at
+/// the last possible pre-rename boundary. The callback owns the document
+/// identity/base-hash policy; this module owns the ordering.
+pub fn atomic_write_with_pre_rename_validator(
+    target: &Path,
+    contents: &[u8],
+    validator: &dyn Fn(&Path) -> Result<(), GuardedAtomicWriteError>,
+) -> Result<(), GuardedAtomicWriteError> {
+    guarded_atomic_write_with_injector_and_validator(target, contents, &NoFault, validator)
+}
+
+/// Test/e2e-harness seam for the guarded publication path. Production code
+/// cannot select a fault point; the injector is only useful to focused tests
+/// and the existing test-only harness.
+#[cfg(any(test, feature = "e2e-harness"))]
+pub fn atomic_write_with_pre_rename_validator_and_injector(
+    target: &Path,
+    contents: &[u8],
+    validator: &dyn Fn(&Path) -> Result<(), GuardedAtomicWriteError>,
+    injector: &dyn AtomicWriteFaultInjector,
+) -> Result<(), GuardedAtomicWriteError> {
+    guarded_atomic_write_with_injector_and_validator(target, contents, injector, validator)
+}
+
+fn guarded_atomic_write_with_injector_and_validator(
+    target: &Path,
+    contents: &[u8],
+    injector: &dyn AtomicWriteFaultInjector,
+    validator: &dyn Fn(&Path) -> Result<(), GuardedAtomicWriteError>,
+) -> Result<(), GuardedAtomicWriteError> {
+    let parent = normalized_parent(target);
+    let temp_path = unique_temp_path(target).map_err(GuardedAtomicWriteError::Atomic)?;
+    let result =
+        guarded_write_and_publish(target, &temp_path, parent, contents, injector, validator);
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
+}
+
 fn atomic_write_with_injector_and_validator(
     target: &Path,
     contents: &[u8],
@@ -291,6 +346,117 @@ fn write_and_publish(
         .and_then(|directory| directory.sync_all())
         .map_err(|source| io_error("sync parent directory", parent, source))?;
     injector.interrupt(AtomicWriteFaultPoint::ParentSynced)?;
+    Ok(())
+}
+
+fn guarded_write_and_publish(
+    target: &Path,
+    temp_path: &Path,
+    parent: &Path,
+    contents: &[u8],
+    injector: &dyn AtomicWriteFaultInjector,
+    validator: &dyn Fn(&Path) -> Result<(), GuardedAtomicWriteError>,
+) -> Result<(), GuardedAtomicWriteError> {
+    let mut temp = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(temp_path)
+        .map_err(|source| {
+            GuardedAtomicWriteError::Atomic(io_error("create temporary file", temp_path, source))
+        })?;
+    injector
+        .interrupt(AtomicWriteFaultPoint::TempCreated)
+        .map_err(GuardedAtomicWriteError::Atomic)?;
+    let split = contents.len().div_ceil(2);
+    temp.write_all(&contents[..split]).map_err(|source| {
+        GuardedAtomicWriteError::Atomic(io_error(
+            "write first temporary segment",
+            temp_path,
+            source,
+        ))
+    })?;
+    injector
+        .interrupt(AtomicWriteFaultPoint::MidWrite)
+        .map_err(GuardedAtomicWriteError::Atomic)?;
+    temp.write_all(&contents[split..]).map_err(|source| {
+        GuardedAtomicWriteError::Atomic(io_error(
+            "write remaining temporary segment",
+            temp_path,
+            source,
+        ))
+    })?;
+    temp.flush().map_err(|source| {
+        GuardedAtomicWriteError::Atomic(io_error("flush temporary file", temp_path, source))
+    })?;
+    temp.sync_all().map_err(|source| {
+        GuardedAtomicWriteError::Atomic(io_error("sync temporary file", temp_path, source))
+    })?;
+    injector
+        .interrupt(AtomicWriteFaultPoint::TempSynced)
+        .map_err(GuardedAtomicWriteError::Atomic)?;
+    drop(temp);
+
+    let mut persisted = Vec::with_capacity(contents.len());
+    File::open(temp_path)
+        .and_then(|mut file| file.read_to_end(&mut persisted))
+        .map_err(|source| {
+            GuardedAtomicWriteError::Atomic(io_error("read temporary file", temp_path, source))
+        })?;
+    serde_json::from_slice::<serde_json::Value>(&persisted)
+        .map_err(AtomicWriteError::from)
+        .map_err(GuardedAtomicWriteError::Atomic)?;
+    injector
+        .interrupt(AtomicWriteFaultPoint::JsonValidated)
+        .map_err(GuardedAtomicWriteError::Atomic)?;
+    injector
+        .interrupt(AtomicWriteFaultPoint::BeforeRename)
+        .map_err(GuardedAtomicWriteError::Atomic)?;
+    #[cfg(feature = "e2e-harness")]
+    crate::e2e_harness::history_external_write_after_precommit(target).map_err(|source| {
+        GuardedAtomicWriteError::Atomic(io_error("inject external history write", target, source))
+    })?;
+    validator(target)?;
+    fs::rename(temp_path, target).map_err(|source| {
+        GuardedAtomicWriteError::Atomic(io_error("rename temporary file", target, source))
+    })?;
+    #[cfg(feature = "e2e-harness")]
+    if let Err(error) = crate::e2e_harness::history_fault_barrier_from_environment(
+        crate::e2e_harness::HistoryFaultStage::AfterRenameBeforeParentSync,
+    ) {
+        return Err(GuardedAtomicWriteError::PublishedButDurabilityUnknown {
+            path: target.to_path_buf(),
+            phase: AtomicWriteFaultPoint::BeforeParentSync,
+            detail: error,
+        });
+    }
+    if let Err(error) = injector.interrupt(AtomicWriteFaultPoint::AfterRename) {
+        return Err(GuardedAtomicWriteError::PublishedButDurabilityUnknown {
+            path: target.to_path_buf(),
+            phase: AtomicWriteFaultPoint::AfterRename,
+            detail: error.to_string(),
+        });
+    }
+    if let Err(error) = injector.interrupt(AtomicWriteFaultPoint::BeforeParentSync) {
+        return Err(GuardedAtomicWriteError::PublishedButDurabilityUnknown {
+            path: target.to_path_buf(),
+            phase: AtomicWriteFaultPoint::BeforeParentSync,
+            detail: error.to_string(),
+        });
+    }
+    if let Err(source) = File::open(parent).and_then(|directory| directory.sync_all()) {
+        return Err(GuardedAtomicWriteError::PublishedButDurabilityUnknown {
+            path: target.to_path_buf(),
+            phase: AtomicWriteFaultPoint::BeforeParentSync,
+            detail: source.to_string(),
+        });
+    }
+    if let Err(error) = injector.interrupt(AtomicWriteFaultPoint::ParentSynced) {
+        return Err(GuardedAtomicWriteError::PublishedButDurabilityUnknown {
+            path: target.to_path_buf(),
+            phase: AtomicWriteFaultPoint::ParentSynced,
+            detail: error.to_string(),
+        });
+    }
     Ok(())
 }
 

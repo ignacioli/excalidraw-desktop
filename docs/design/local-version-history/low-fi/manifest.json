@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "feature": "local-version-history",
+  "task": "T004",
+  "carrier": "OpenDesign",
+  "executionMode": "Local Codex",
+  "requestedModel": "gpt-5.6-luna",
+  "projectId": "excalidraw-desktop-history-low-fi",
+  "entryFile": "local-version-history-t004.html",
+  "artifactVersion": 6,
+  "source": "low-fi/local-version-history-t004.html",
+  "sourceSha256": "5e8a050936554723dc94e847328d10b8b2d6931e1546fe52e40c0da726766908",
+  "viewport": {
+    "width": 1280,
+    "height": 760
+  },
+  "drawer": {
+    "defaultWidth": 360,
+    "crampedFallbackWidth": 300
+  },
+  "ownerDecision": {
+    "lowFidelity": "APPROVED",
+    "approvedAt": "2026-09-23",
+    "highFidelity": "APPROVED",
+    "highFidelityApprovedAt": "2026-09-23",
+    "highFidelityManifest": "../high-fi/manifest.json"
+  },
+  "notes": [
+    "Preview and Restore remain visible.",
+    "Mark/Unmark and Delete version are under More version actions.",
+    "External recovery is never automatically deleted before explicit user action.",
+    "OpenDesign did not expose the resolved model or reasoning configuration."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "pid": 20365,
+  "productCommit": "eb961ca8c8b221c34a11989d5e4d37e9a9e8f537",
+  "packageSha256": "72498172d0526a6fbf0e9785e7860f9e8a8afe4f49b828628c709f3492830992",
+  "executablePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app/Contents/MacOS/excalidraw-desktop",
+  "profileHome": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/home",
+  "entryFile": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/workspace/History pending issue.excalidraw",
+  "stderrPath": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/history-inline-native-20261003-321fcaa2/pending-copy-native-stderr.txt",
+  "startedAt": "2026-10-04T13:59:21.945Z",
+  "scope": "Pending-copy focused native followup; prior groups retain original package identity"
+}

@@ -5,7 +5,8 @@ use std::{
 };
 
 use super::atomic_write::{
-    atomic_write_with_injector, AtomicWriteError, AtomicWriteFaultInjector, AtomicWriteFaultPoint,
+    atomic_write_with_injector, atomic_write_with_pre_rename_validator_and_injector,
+    AtomicWriteError, AtomicWriteFaultInjector, AtomicWriteFaultPoint, GuardedAtomicWriteError,
 };
 
 const FAULT_POINTS: [AtomicWriteFaultPoint; 8] = [
@@ -74,6 +75,34 @@ fn invalid_json_leaves_the_previous_document_and_no_temporary_file() {
         fs::read(&target).unwrap_or_else(|error| panic!("read target: {error}")),
         old
     );
+    assert!(tmp_files(&directory).is_empty());
+    fs::remove_dir_all(directory).unwrap_or_else(|error| panic!("remove test directory: {error}"));
+}
+
+#[test]
+fn guarded_writer_rejects_a_changed_target_at_the_last_pre_rename_boundary() {
+    let directory = test_directory("guarded-conflict");
+    let target = directory.join("drawing.excalidraw");
+    let old = br#"{"type":"excalidraw","version":2,"elements":[]}"#;
+    let new = br#"{"type":"excalidraw","version":2,"elements":[{"id":"new"}]}"#;
+    fs::write(&target, old).unwrap_or_else(|error| panic!("write fixture: {error}"));
+
+    let result = atomic_write_with_pre_rename_validator_and_injector(
+        &target,
+        new,
+        &|path| {
+            fs::write(path, b"external").expect("simulate external writer");
+            Err(GuardedAtomicWriteError::Conflict {
+                path: path.to_path_buf(),
+            })
+        },
+        &InterruptAt(AtomicWriteFaultPoint::ParentSynced),
+    );
+    assert!(matches!(
+        result,
+        Err(GuardedAtomicWriteError::Conflict { .. })
+    ));
+    assert_eq!(fs::read(&target).expect("read target"), b"external");
     assert!(tmp_files(&directory).is_empty());
     fs::remove_dir_all(directory).unwrap_or_else(|error| panic!("remove test directory: {error}"));
 }

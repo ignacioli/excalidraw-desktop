@@ -8,6 +8,7 @@ import {
 } from "../helpers/app";
 import {
   NativePerformanceControl,
+  NativePerformanceDriverError,
   RESULT_PUBLISH_SLACK_MS,
   type PerformanceCommandResult,
 } from "./helpers/nativePerformanceContract";
@@ -15,6 +16,7 @@ import {
   assertReferenceEnvironment,
   collectCommit,
   collectEnvironmentMetadata,
+  collectPerformanceBinaryIdentity,
   DirectoryWriteObserver,
   executableAssociationTokens,
   percentile,
@@ -118,6 +120,7 @@ test("measures 15 minute editing stability and subsequent quiescence", async () 
     collectCommit(),
     resolveDesktopBinary(),
   ]);
+  const binary = await collectPerformanceBinaryIdentity(executable);
   const fixture = await createTenThousandElementFixture();
   if (referenceRun) {
     try {
@@ -127,6 +130,7 @@ test("measures 15 minute editing stability and subsequent quiescence", async () 
         schemaVersion: PERFORMANCE_REPORT_SCHEMA_VERSION,
         commit,
         ...environment,
+        binary,
         workload: WORKLOAD,
         samples: {},
         statistic: {},
@@ -161,6 +165,7 @@ test("measures 15 minute editing stability and subsequent quiescence", async () 
   let soakResult: PerformanceCommandResult | undefined;
   let writeObservation: WriteObservation | undefined;
   let contractError: string | undefined;
+  let driverError: unknown;
   try {
     const ready = await control.waitForReady(READY_TIMEOUT_MS);
     if (ready.elementCount !== 10_000) {
@@ -169,32 +174,38 @@ test("measures 15 minute editing stability and subsequent quiescence", async () 
       );
     }
     await delay(WARM_UP_MS);
-    warmedBaselineSamples.push(
-      ...(await collectProcessTreeWindow({
-        rootPid: app.pid,
-        startedAtNs: app.startedAtNs,
-        associationTokens,
-        durationMs: BASELINE_WINDOW_MS,
-        intervalMs: SAMPLE_INTERVAL_MS,
-        webkitTracker: app.webkitTracker,
-      })),
-    );
+    await collectProcessTreeWindow({
+      rootPid: app.pid,
+      startedAtNs: app.startedAtNs,
+      associationTokens,
+      durationMs: BASELINE_WINDOW_MS,
+      intervalMs: SAMPLE_INTERVAL_MS,
+      webkitTracker: app.webkitTracker,
+      beforeSample: () => control.throwIfFailed(),
+      onSample: async (sample) => {
+        warmedBaselineSamples.push(sample);
+        await control.throwIfFailed();
+      },
+    });
 
     const command = await control.sendCommand({
       operation: "edit-soak",
       durationMs: editDurationMs,
       seed: 40_000,
     });
-    soakSamples.push(
-      ...(await collectProcessTreeWindow({
-        rootPid: app.pid,
-        startedAtNs: app.startedAtNs,
-        associationTokens,
-        durationMs: editDurationMs,
-        intervalMs: SOAK_SAMPLE_INTERVAL_MS,
-        webkitTracker: app.webkitTracker,
-      })),
-    );
+    await collectProcessTreeWindow({
+      rootPid: app.pid,
+      startedAtNs: app.startedAtNs,
+      associationTokens,
+      durationMs: editDurationMs,
+      intervalMs: SOAK_SAMPLE_INTERVAL_MS,
+      webkitTracker: app.webkitTracker,
+      beforeSample: () => control.throwIfFailed(),
+      onSample: async (sample) => {
+        soakSamples.push(sample);
+        await control.throwIfFailed();
+      },
+    });
     soakResult = await control.waitForResult(command, RESULT_PUBLISH_SLACK_MS);
     if (soakResult.eventCount === 0) {
       throw new Error(
@@ -213,20 +224,25 @@ test("measures 15 minute editing stability and subsequent quiescence", async () 
     ]);
     await observer.start();
     try {
-      quiescentSamples.push(
-        ...(await collectProcessTreeWindow({
-          rootPid: app.pid,
-          startedAtNs: app.startedAtNs,
-          associationTokens,
-          durationMs: QUIESCENT_WINDOW_MS,
-          intervalMs: SAMPLE_INTERVAL_MS,
-          webkitTracker: app.webkitTracker,
-        })),
-      );
+      await collectProcessTreeWindow({
+        rootPid: app.pid,
+        startedAtNs: app.startedAtNs,
+        associationTokens,
+        durationMs: QUIESCENT_WINDOW_MS,
+        intervalMs: SAMPLE_INTERVAL_MS,
+        webkitTracker: app.webkitTracker,
+        beforeSample: () => control.throwIfFailed(),
+        onSample: async (sample) => {
+          quiescentSamples.push(sample);
+          await control.throwIfFailed();
+        },
+      });
     } finally {
       writeObservation = await observer.stop();
     }
   } catch (error) {
+    if (error instanceof NativePerformanceDriverError)
+      driverError = error.driverError;
     contractError = describeAppError(error, app);
   } finally {
     await app.close();
@@ -236,6 +252,7 @@ test("measures 15 minute editing stability and subsequent quiescence", async () 
 
   const fullDuration = editDurationMs >= REQUIRED_SOAK_DURATION_MS;
   const diagnosticMeasurementsAvailable =
+    contractError === undefined &&
     warmedBaselineSamples.length > 0 &&
     soakSamples.length > 0 &&
     quiescentSamples.length > 0 &&
@@ -314,6 +331,7 @@ test("measures 15 minute editing stability and subsequent quiescence", async () 
     schemaVersion: PERFORMANCE_REPORT_SCHEMA_VERSION,
     commit,
     ...environment,
+    binary,
     workload: WORKLOAD,
     processTreeAccounting: processTreeAccounting("excalidraw-desktop"),
     samples: {
@@ -322,6 +340,7 @@ test("measures 15 minute editing stability and subsequent quiescence", async () 
       quiescent: quiescentSamples,
       soakResult,
       writeObservation,
+      driverError,
     },
     statistic,
     budget: BUDGET,

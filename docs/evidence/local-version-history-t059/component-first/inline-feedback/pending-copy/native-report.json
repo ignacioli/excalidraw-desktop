@@ -1,0 +1,41 @@
+{
+  "productCommit": "eb961ca8c8b221c34a11989d5e4d37e9a9e8f537",
+  "packageSha256": "72498172d0526a6fbf0e9785e7860f9e8a8afe4f49b828628c709f3492830992",
+  "pid": 20365,
+  "readinessAttempts": 4,
+  "geometry": {
+    "launch": {
+      "x": 276,
+      "y": 92,
+      "width": 800,
+      "height": 600
+    },
+    "requested": {
+      "x": 0,
+      "y": 30,
+      "width": 1280,
+      "height": 760
+    }
+  },
+  "menu": "Version History…\ttrue\t\t8",
+  "route": {
+    "validationId": 1,
+    "command": "versionHistory",
+    "stages": [
+      "applicationRoute",
+      "nativeEntry"
+    ]
+  },
+  "axText": "AX unreadable element count: 0\nBUTTON: Toggle workspace sidebar\nBUTTON: Back\nBUTTON: Close History pending issue.excalidraw\nRecovery draft saved; file has unsaved changes\nBUTTON: missing value\nTo move canvas, hold mouse wheel or spacebar while dragging, or use the hand tool\nShapes\n1\n2\n3\n4\n5\n6\n7\n8\n9\n0\nBUTTON: missing value\nLibrary\nCanvas actions\nBUTTON: Zoom out\nBUTTON: Reset zoom\nBUTTON: Zoom in\nBUTTON: Undo\nBUTTON: Redo\nBUTTON: Help\nDrawing canvas\nLeft Arrow moves the divider left and increases width by 10 pixels; Right Arrow moves it right and decreases width by 10 pixels. Home sets 300 pixels; End sets 360 pixels. Hold Shift to resize by 20 pixels.\nVersion History\nHistory pending issue.excalidraw\nBUTTON: History info\nBUTTON: Close version history\nCURRENT DRAWING\nOpen canvas\n1\nversion\nshown\nBUTTON: Mark current version\nVersion history could not be loaded\nBUTTON: Try again\nBUTTON: missing value\nBUTTON: missing value\nBUTTON: missing value\nExcalidraw Whiteboard",
+  "titleVisible": true,
+  "retryVisible": true,
+  "genericDetailAbsent": true,
+  "ownerVerdict": "PASS",
+  "stablePreparation": {
+    "at": "2026-10-04T14:00:17.390Z",
+    "action": "Save synthetic drawing; confirm All changes saved; restore isolated pending issue; click Try again",
+    "axText": "AX unreadable element count: 0\nBUTTON: Toggle workspace sidebar\nBUTTON: Back\nBUTTON: Close History pending issue.excalidraw\nAll changes saved\nBUTTON: missing value\nTo move canvas, hold mouse wheel or spacebar while dragging, or use the hand tool\nShapes\n1\n2\n3\n4\n5\n6\n7\n8\n9\n0\nBUTTON: missing value\nLibrary\nCanvas actions\nBUTTON: Zoom out\nBUTTON: Reset zoom\nBUTTON: Zoom in\nBUTTON: Undo\nBUTTON: Redo\nBUTTON: Help\nDrawing canvas\nLeft Arrow moves the divider left and increases width by 10 pixels; Right Arrow moves it right and decreases width by 10 pixels. Home sets 300 pixels; End sets 360 pixels. Hold Shift to resize by 20 pixels.\nVersion History\nHistory pending issue.excalidraw\nBUTTON: History info\nBUTTON: Close version history\nCURRENT DRAWING\nOpen canvas\n2\nversions\nshown\nBUTTON: Mark current version\nVersion history could not be loaded\nBUTTON: Try again\nBUTTON: missing value\nBUTTON: missing value\nBUTTON: missing value\nExcalidraw Whiteboard"
+  },
+  "ownerResponse": "接受，关闭这项",
+  "ownerAt": "2026-10-04T14:02:28.900Z"
+}

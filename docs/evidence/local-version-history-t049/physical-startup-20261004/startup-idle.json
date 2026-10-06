@@ -1,0 +1,891 @@
+{
+  "schemaVersion": "2.0.0",
+  "commit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+  "hardware": "Mac17,9 (Apple M5 Pro)",
+  "memory": {
+    "bytes": 51539607552,
+    "gibibytes": 48
+  },
+  "architecture": "arm64",
+  "logicalCores": 15,
+  "osVersion": "macOS 26.6.2 (25G83)",
+  "webviewVersion": "WebKit 21624.5.1.11.3",
+  "executionEnvironment": {
+    "type": "physical",
+    "hostHardware": "Mac17,9 (Apple M5 Pro)",
+    "virtualization": null
+  },
+  "workload": {
+    "name": "phase-3-startup-idle",
+    "dataState": "new isolated app-managed data and workspace directories for every launch",
+    "coldStart": {
+      "repetitions": 10,
+      "warmUp": "none; every repetition launches a new process and empty data root",
+      "clock": "process.hrtime.bigint monotonic clock",
+      "start": "immediately before spawning the Tauri executable",
+      "stop": "observation of ready.json proving Excalidraw API ready, editable=true, and an empty scene",
+      "statistic": "nearest-rank p95",
+      "expectedVariance": "individual samples may vary by 20 percent from scheduling and code-signing cache state; the absolute budget is unchanged"
+    },
+    "idle": {
+      "warmUpMs": 30000,
+      "sampleWindowMs": 60000,
+      "sampleIntervalMs": 1000,
+      "statistic": "process-tree RSS nearest-rank p95",
+      "expectedVariance": "up to 10 percent run-to-run before investigation; no automatic threshold adjustment"
+    }
+  },
+  "processTreeAccounting": {
+    "rootProcessName": "excalidraw-desktop",
+    "associationMethod": "recursive parent PID closure, plus WebView/GPU/Network auxiliary processes carrying an explicit app association token, plus launch-time-window attribution of WebKit-role processes re-parented to launchd (PID 1) that appeared after the app launch and were absent from the pre-launch snapshot",
+    "includedClasses": [
+      "Tauri main",
+      "descendants",
+      "associated WebView",
+      "GPU",
+      "Network"
+    ],
+    "exclusions": [
+      "unrelated system WebView/GPU processes",
+      "WebKit-role processes that already existed before the app launch"
+    ],
+    "platformLimitations": [
+      "macOS re-parents WKWebView auxiliary processes to launchd with no app token; launch-time-window attribution assumes no other same-user WebKit app is launched during the measurement window",
+      "ps etime has one-second granularity; a two-second slack is applied to the launch window",
+      "ps RSS can include shared pages charged independently to more than one process",
+      "ps CPU is an OS interval estimate normalized so 100 percent equals one logical core"
+    ]
+  },
+  "samples": {
+    "coldStartToEditableMs": [],
+    "coldStartProcessAliveMs": [
+      46.05
+    ],
+    "idleProcessTree": [
+      {
+        "monotonicMs": 45094.851,
+        "rssBytes": 193429504,
+        "cpuPercentOfOneLogicalCore": 8.4,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 46080.456,
+        "rssBytes": 193249280,
+        "cpuPercentOfOneLogicalCore": 0.7,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 47095.727,
+        "rssBytes": 193380352,
+        "cpuPercentOfOneLogicalCore": 6.8,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 48078.461,
+        "rssBytes": 193380352,
+        "cpuPercentOfOneLogicalCore": 3.5,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 49092.264,
+        "rssBytes": 193413120,
+        "cpuPercentOfOneLogicalCore": 3.1,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 50234.435,
+        "rssBytes": 193462272,
+        "cpuPercentOfOneLogicalCore": 7.4,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 51072.296,
+        "rssBytes": 192806912,
+        "cpuPercentOfOneLogicalCore": 1.5,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 52084.27,
+        "rssBytes": 192610304,
+        "cpuPercentOfOneLogicalCore": 3.7,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 53075.997,
+        "rssBytes": 192626688,
+        "cpuPercentOfOneLogicalCore": 4.2,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 54097.042,
+        "rssBytes": 192577536,
+        "cpuPercentOfOneLogicalCore": 3.1,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 55087.182,
+        "rssBytes": 192479232,
+        "cpuPercentOfOneLogicalCore": 3.5,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 56083.265,
+        "rssBytes": 192528384,
+        "cpuPercentOfOneLogicalCore": 5.2,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 57099.842,
+        "rssBytes": 169132032,
+        "cpuPercentOfOneLogicalCore": 6.8,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 58095.69,
+        "rssBytes": 157253632,
+        "cpuPercentOfOneLogicalCore": 0.2,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 59079.799,
+        "rssBytes": 157319168,
+        "cpuPercentOfOneLogicalCore": 2.3,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 60099.933,
+        "rssBytes": 157351936,
+        "cpuPercentOfOneLogicalCore": 5.9,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 61115.141,
+        "rssBytes": 157384704,
+        "cpuPercentOfOneLogicalCore": 7.7,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 62103.739,
+        "rssBytes": 157368320,
+        "cpuPercentOfOneLogicalCore": 7,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 63094.707,
+        "rssBytes": 157368320,
+        "cpuPercentOfOneLogicalCore": 3.1,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 64105.907,
+        "rssBytes": 157417472,
+        "cpuPercentOfOneLogicalCore": 5.9,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 65107.202,
+        "rssBytes": 157417472,
+        "cpuPercentOfOneLogicalCore": 2,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 66105.198,
+        "rssBytes": 157417472,
+        "cpuPercentOfOneLogicalCore": 0.1,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 67106.334,
+        "rssBytes": 157417472,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 68100.398,
+        "rssBytes": 157417472,
+        "cpuPercentOfOneLogicalCore": 0.6,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 69102.686,
+        "rssBytes": 157368320,
+        "cpuPercentOfOneLogicalCore": 0.7,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 70104.952,
+        "rssBytes": 157368320,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 71103.187,
+        "rssBytes": 157270016,
+        "cpuPercentOfOneLogicalCore": 0.3,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 72085.396,
+        "rssBytes": 157220864,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 73108.177,
+        "rssBytes": 157220864,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 74109.244,
+        "rssBytes": 158138368,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 75109.36,
+        "rssBytes": 158121984,
+        "cpuPercentOfOneLogicalCore": 0.5,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 76097.908,
+        "rssBytes": 158105600,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 77087.02,
+        "rssBytes": 158105600,
+        "cpuPercentOfOneLogicalCore": 0.7,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 78091.961,
+        "rssBytes": 158105600,
+        "cpuPercentOfOneLogicalCore": 2.2,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 79108.312,
+        "rssBytes": 158105600,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 80116.61,
+        "rssBytes": 158105600,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 81114.13,
+        "rssBytes": 158105600,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 82116.479,
+        "rssBytes": 158105600,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 83111.211,
+        "rssBytes": 158105600,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 84113.159,
+        "rssBytes": 158023680,
+        "cpuPercentOfOneLogicalCore": 0.1,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 85108.351,
+        "rssBytes": 158023680,
+        "cpuPercentOfOneLogicalCore": 0.1,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 86114.413,
+        "rssBytes": 158007296,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 87114.217,
+        "rssBytes": 158007296,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 88106.679,
+        "rssBytes": 157270016,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 89114.235,
+        "rssBytes": 157270016,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 90118.211,
+        "rssBytes": 157270016,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 91106.001,
+        "rssBytes": 158171136,
+        "cpuPercentOfOneLogicalCore": 5.8,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 92101.549,
+        "rssBytes": 158892032,
+        "cpuPercentOfOneLogicalCore": 4.4,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 93099.275,
+        "rssBytes": 159481856,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 94099.403,
+        "rssBytes": 159793152,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 95115.622,
+        "rssBytes": 159809536,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 96109.564,
+        "rssBytes": 159809536,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 97103.631,
+        "rssBytes": 159694848,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 98122.918,
+        "rssBytes": 159580160,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 99115.358,
+        "rssBytes": 159580160,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 100120.484,
+        "rssBytes": 159776768,
+        "cpuPercentOfOneLogicalCore": 1.2,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 101122.633,
+        "rssBytes": 159858688,
+        "cpuPercentOfOneLogicalCore": 2.6,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 102121.533,
+        "rssBytes": 159989760,
+        "cpuPercentOfOneLogicalCore": 2.7,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 103121.605,
+        "rssBytes": 159711232,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      },
+      {
+        "monotonicMs": 104113.9,
+        "rssBytes": 159711232,
+        "cpuPercentOfOneLogicalCore": 0,
+        "processCount": 4,
+        "processClasses": {
+          "tauri": 1,
+          "webview": 1,
+          "gpu": 1,
+          "network": 1,
+          "other": 0
+        }
+      }
+    ],
+    "idleWriteObservation": {
+      "method": "fs-watch-plus-metadata-snapshot",
+      "eventCount": 0,
+      "changedPathCount": 0,
+      "watchedRootCount": 5,
+      "limitations": [
+        "fs.watch may coalesce events; the before/after metadata snapshot detects persistent changes but not an ephemeral file created and removed between snapshots",
+        "write observation covers only the explicitly supplied application-managed data roots and mounted test workspaces"
+      ]
+    }
+  },
+  "statistic": {
+    "coldStartToEditableP95": null,
+    "coldStartProcessAliveP95": {
+      "value": 46.05,
+      "unit": "ms",
+      "statistic": "diagnostic nearest-rank p95"
+    },
+    "idleProcessTreeRssP95": {
+      "value": 193380352,
+      "unit": "bytes",
+      "statistic": "nearest-rank p95"
+    }
+  },
+  "budget": {
+    "coldStartToEditable": {
+      "value": 2000,
+      "unit": "ms",
+      "statistic": "nearest-rank p95 of 10 cold process launches"
+    },
+    "idleProcessTreeRss": {
+      "value": 500000000,
+      "unit": "bytes (500 decimal MB)",
+      "statistic": "nearest-rank p95"
+    }
+  },
+  "verdict": {
+    "overall": "not_evaluated",
+    "scope": "diagnostic T090 startup and idle RSS",
+    "reason": "The native editable-canvas contract was unavailable, so process-alive timing cannot substitute for startup readiness. Native performance contract did not publish ready.json within 15000 ms.",
+    "comparisons": {
+      "coldStartToEditable": false,
+      "idleProcessTreeRss": true
+    }
+  }
+}

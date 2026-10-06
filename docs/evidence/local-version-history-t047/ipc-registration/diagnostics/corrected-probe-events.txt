@@ -1,0 +1,2 @@
+EXCALIDRAW_NATIVE_MENU_VALIDATION {"stage":"nativeEntry","validationId":1,"command":"versionHistory"}
+EXCALIDRAW_NATIVE_MENU_VALIDATION {"stage":"applicationRoute","validationId":1,"command":"versionHistory"}

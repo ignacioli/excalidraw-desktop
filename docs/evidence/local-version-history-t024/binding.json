@@ -1,0 +1,20 @@
+{
+  "productCommit": "113e18b2aab7afb7d42363d753dcca16d0aeb555",
+  "platform": "macOS",
+  "osVersion": "26.6.2",
+  "osBuild": "25G83",
+  "architecture": "arm64",
+  "buildCommand": "VITE_E2E_HARNESS=1 VITE_E2E_HISTORY_FRONTEND=1 pnpm tauri build --features e2e-harness --no-bundle",
+  "binaryPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/excalidraw-desktop",
+  "binarySha256": "5fc8286101c28f5b8ca1d42099961712752fa959b300c782cddcdc55b8c14977",
+  "reportSha256": "41228342934d23077fa6b9928529588c39898fb13a901755396050aafeab2aa9",
+  "result": "PASS",
+  "tests": {
+    "passed": 1,
+    "failed": 0
+  },
+  "durationSeconds": 3.3,
+  "runDate": "2026-09-24",
+  "timezone": "America/Los_Angeles",
+  "boundary": "Test-only native process journey; not production packaging, visual acceptance, T025, or feature-wide closure."
+}

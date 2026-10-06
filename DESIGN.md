@@ -91,6 +91,10 @@ Saved preferences must be applied before the first user-visible UI. Startup must
 
 ## Semantic tokens
 
+The application uses one shared design system across existing and future features. UI typography uses `-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`; monospace roles use `ui-monospace, SFMono-Regular, Menlo, monospace`. These platform-native families also govern Local Version History and supersede the Inter/IBM Plex Mono family names in historical design exports. This does not change approved font sizes, weights, line heights, spacing, or component geometry. A feature must not introduce a separate typography or visual style; correct a shared design-system conflict before implementing it.
+
+Before changing a UI, map its component roles, states, and layout to the approved shared tokens and component contract. Resolve missing or conflicting roles before writing dependent code, and establish focused checks whose expected values come from that design source, not from the current implementation. Render comparison remains a final check, not a substitute for these implementation constraints.
+
 Application components consume semantic tokens and must not use palette literals directly. The approved desktop-shell values are frozen in `docs/design/desktop-shell/hf-2/tokens.json`. At implementation time, reconcile shared roles with the locked Excalidraw package and record its version; SDK-owned editor styling continues to use documented upstream variables, while approved shell roles must not be silently replaced by screenshot-picked values or private SDK internals.
 
 | Canonical token ID | Purpose |
@@ -120,7 +124,7 @@ The approved shell geometry uses a 4/8/12/16/24 px spacing scale; 8 px control a
 - When a modal dialog opens, focus moves into it and is constrained there; when it closes, focus returns to the triggering control. One dialog layer at a time; do not use `window.prompt` or `window.confirm`.
 - Motion exists only to aid state understanding and stays brief; respect reduced motion, and avoid animated layout jumps around the canvas.
 - Shadows express stacking only for floating controls, menus, and dialogs; persistent panels use borders or luminance difference.
-- Shell icon controls use the frozen 16×16 icons within 32×32 hit targets. Compact icon controls have transparent fill/border at rest and use secondary foreground colors (`#5C5C5C` Light, `#CED4DA` Dark), gaining the semantic hover/pressed surface and stronger contrast only through interaction. The Current Workspace header keeps New Drawing, New Folder, Collapse-or-Expand-All, and Refresh compact on its name row. Row actions use a borderless vertical ellipsis only while pointer or keyboard focus is present. Tab close stays visually integrated in its reserved slot rather than appearing as a separately boxed button.
+- Shell icon controls use the frozen 16×16 icons within 32×32 hit targets. Compact icon controls have transparent fill/border at rest and use secondary foreground colors (`#5C5C5C` Light, `#CED4DA` Dark), gaining the semantic hover/pressed surface and stronger contrast only through interaction. The Current Workspace header keeps New Drawing, New Folder, Collapse-or-Expand-All, and Refresh compact on its name row. Workspace row actions use a borderless vertical ellipsis only while pointer or keyboard focus is present. Local Version History rows use an always-visible vertical ellipsis so each version's Mark/Unmark and Delete target remains discoverable. Tab close stays visually integrated in its reserved slot rather than appearing as a separately boxed button.
 - [`docs/design/desktop-shell/hf-2/components.md`](docs/design/desktop-shell/hf-2/components.md) is normative for Icon Button/Back, Tab, Workspace Row, and Welcome Action variants: its 2px theme focus ring, disabled-to-default state priority, visible non-colour cues, row-action tooltip/accessibility rules, and primary/secondary Welcome Action emphasis apply alongside these broader interaction rules.
 
 ## Later theme expansion
@@ -133,6 +137,8 @@ Later built-in themes and user-defined themes extend the system through validate
 - Theme import, a theme editor, theme sharing, and a public theme file format are out of scope for the first version.
 
 ## Verification contract
+
+The following six-screen contract records the initial desktop-shell redesign. Subsequent visual feature work follows the [shared component catalog](docs/design/components.md): define component anatomy before implementation, validate changed components first, then sample representative page compositions by risk. Reuse applicable evidence for unchanged components; retain feature-specific functional, platform and owner acceptance requirements. This does not reopen or rewrite historical shell gate results.
 
 The initial implementation must provide evidence for:
 

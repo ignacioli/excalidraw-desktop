@@ -1,4 +1,5 @@
 import { defaultEventListener, type EventListener } from "../ipc/events";
+import type { CommandInvoker } from "../ipc/client";
 import type { EventPayload, NativeMenuCommand } from "../ipc/contracts";
 
 export type { NativeMenuCommand } from "../ipc/contracts";
@@ -13,12 +14,14 @@ export type NativeMenuValidationEmitter = (
 export interface NativeMenuCommandActions {
   onSave: () => void;
   onExportImage: () => void;
+  onVersionHistory: () => void;
   onAppearance: (mode: "system" | "light" | "dark") => void;
 }
 
 const nativeMenuCommands: readonly NativeMenuCommand[] = [
   "save",
   "exportImage",
+  "versionHistory",
   "appearanceSystem",
   "appearanceLight",
   "appearanceDark",
@@ -46,6 +49,7 @@ function isValidationId(value: unknown): value is number {
 export function createNativeMenuCommandHandler({
   onSave,
   onExportImage,
+  onVersionHistory,
   onAppearance,
 }: NativeMenuCommandActions): NativeMenuCommandHandler {
   return (command) => {
@@ -55,6 +59,9 @@ export function createNativeMenuCommandHandler({
         break;
       case "exportImage":
         onExportImage();
+        break;
+      case "versionHistory":
+        onVersionHistory();
         break;
       case "appearanceSystem":
         onAppearance("system");
@@ -67,6 +74,16 @@ export function createNativeMenuCommandHandler({
         break;
     }
   };
+}
+
+export function setNativeMenuCommandEnabled(
+  invoker: CommandInvoker,
+  command: NativeMenuCommand,
+  enabled: boolean,
+): Promise<void> {
+  return invoker
+    .invoke("native_menu_set_enabled", { command, enabled })
+    .then(() => undefined);
 }
 
 export function registerNativeMenuCommand(

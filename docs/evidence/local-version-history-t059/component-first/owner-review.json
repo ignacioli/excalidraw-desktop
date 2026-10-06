@@ -1,0 +1,24 @@
+{
+  "productCommit": "7562954f3f85e93c30345ceb237d56debf15b48a",
+  "pid": 73056,
+  "status": "FAIL",
+  "scope": "H4 first owner group",
+  "findings": [
+    "Already marked position and stale persistence after Unmark",
+    "Separate Version unmarked notice persists",
+    "History scrollbar too wide compared with shared sidebar"
+  ],
+  "approvedChanges": [
+    "Success feedback anchored near History at canvas bottom-right, auto-dismiss ~4 seconds and replace old feedback",
+    "History info hover, retaining click/keyboard"
+  ],
+  "otherGroups": "PENDING",
+  "followup": {
+    "productCommit": "894228a76e062597dad80c4180a91aaff59c7ee7",
+    "ownerDecision": "Mark/Unmark 提示位置没问题；当前状态也能接受；其他都没问题了。",
+    "scope": "本轮反馈位置/生命周期、滚动条、History info hover 定向复查",
+    "status": "PASS",
+    "nonBlocking": "行内短提示为后续设计优化，本轮保留当前通知；不阻塞已接受修复",
+    "remaining": "H4其他必要观察未全部确认；H5及T048整体未完成"
+  }
+}

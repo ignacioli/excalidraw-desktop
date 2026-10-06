@@ -85,4 +85,40 @@ describe("sceneSerializer", () => {
     expect(restored.appState).not.toHaveProperty("theme");
     expect(restored.appState.viewBackgroundColor).toBe("#ffffff");
   });
+
+  it("serializes the complete document app-state subset and excludes transient UI state", () => {
+    const serialized = serializeScene({
+      elements: [],
+      appState: {
+        gridModeEnabled: true,
+        gridSize: 20,
+        gridStep: 5,
+        viewBackgroundColor: "#eeeeee",
+        scrollX: 120,
+        scrollY: -80,
+        viewModeEnabled: true,
+        selectedElementIds: { transient: true },
+        openSidebar: { name: "history" },
+      },
+      files: {},
+    });
+    const json = JSON.parse(serialized) as {
+      appState?: Record<string, unknown>;
+    };
+
+    expect(json.appState).toEqual({
+      gridModeEnabled: true,
+      gridSize: 20,
+      gridStep: 5,
+      viewBackgroundColor: "#eeeeee",
+    });
+
+    const restored = deserializeScene(serialized);
+    expect(restored.appState).toEqual({
+      gridModeEnabled: true,
+      gridSize: 20,
+      gridStep: 5,
+      viewBackgroundColor: "#eeeeee",
+    });
+  });
 });

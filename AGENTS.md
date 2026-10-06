@@ -113,8 +113,15 @@ Validation must be proportional to risk. Once the required relevant checks for t
 - Playwright CLI flows for browser-visible UI behavior.
 - Manual macOS/Tauri checks for windows, menus, dialogs, permissions, filesystem behavior, Gatekeeper user override, and packaging that browser tests cannot prove. A recorded target-OS VM or physical machine is acceptable evidence; never claim unexecuted physical-device coverage.
 
+### Component-first visual implementation
+
+Before implementing or reviewing app-owned UI, read `DESIGN.md` and `docs/design/components.md`. For History changes, also read `docs/design/local-version-history/implementation-map.md` and the current `high-fi/manifest.json`, `tokens.json`, and affected screenshots in that feature directory. The implementation map defines component anatomy, content hierarchy, states, reuse boundaries, and verification ownership; tokens alone do not define the layout. Record the affected component IDs and representative states before edits, validate components first, then sample affected page compositions. Resolve conflicts with approved design before implementation; do not change design to legitimize drift. Browser/component PASS does not establish native or owner acceptance.
+
+Use the workflow selection table and minimal execution record in `docs/design/components.md` before edits. Classify from the requested design delta and applicable approved sources, not from labels such as “fix” or “new feature”; distinguish design revision, specification extraction, and implementation drift repair. State the rationale and reuse/extend/new scope without routine human confirmation. New visual design is reviewed before its component spec is finalized; an unchanged approved design does not need redesign or renewed approval. Ask only for material unresolved authority conflicts, ambiguity, or unapproved design decisions, and preserve required validation boundaries.
+
 ### UI debugging and visual-evidence efficiency
 
+- Computer Use is prohibited unless the human explicitly authorizes it for the current task. A visual gate, screenshot requirement, tool failure, or browser timeout does not grant that authorization. This restriction applies to every Computer Use tool and overrides any conditional allowance below.
 - Native evidence does not imply visual evidence. Use this evidence precedence, in order:
   1. shell, filesystem, package metadata, and other artifact inspection;
   2. semantic browser automation for WebView-owned UI;
@@ -132,6 +139,10 @@ Validation must be proportional to risk. Once the required relevant checks for t
 - Bind evidence to the exact product commit, package identity, and recorded environment. Keep automated results, independent visual-review verdicts, and product-owner decisions distinct; none substitutes for another.
 
 Never claim a check passed unless it actually ran successfully. If validation requires unavailable services, target operating systems, or declared VM configuration details, report the exact gap without weakening code or tests.
+
+### Penpot file downloads
+
+Use Playwright MCP with the official browser extension to download the whole `.penpot` file from the user-specified, logged-in Chrome tab via `Main menu → File → Download Penpot file (.penpot)` and save it to `./docs/designs` directory.
 
 ## Long-Running Tasks
 

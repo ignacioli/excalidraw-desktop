@@ -108,10 +108,18 @@ describe("RecoveryStartup", () => {
   it("counts only restored and saved-as-new documents after all decisions", async () => {
     const user = userEvent.setup();
     const candidates = [
-      { ...candidate, documentId: "restore", displayName: "restore.excalidraw" },
+      {
+        ...candidate,
+        documentId: "restore",
+        displayName: "restore.excalidraw",
+      },
       { ...candidate, documentId: "keep", displayName: "keep.excalidraw" },
       { ...candidate, documentId: "save", displayName: "save.excalidraw" },
-      { ...candidate, documentId: "discard", displayName: "discard.excalidraw" },
+      {
+        ...candidate,
+        documentId: "discard",
+        displayName: "discard.excalidraw",
+      },
     ];
     const manager = {
       start: vi.fn(async () => ({
@@ -161,7 +169,9 @@ describe("RecoveryStartup", () => {
       }),
     );
     await user.click(
-      await screen.findByRole("button", { name: "Save save.excalidraw as new" }),
+      await screen.findByRole("button", {
+        name: "Save save.excalidraw as new",
+      }),
     );
     await user.click(
       await screen.findByRole("button", {

@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "native-entrypoints",
+  "gateId": "T023b",
+  "route": "macos-accessibility",
+  "binding": {
+    "productCommit": "55458f23e4a50c02bff7d85de550b74dca163c37",
+    "hf2ManifestSha256": "b3676f5a8c623a84b9c9e714ec9e1ef436df329db9034873c695f32d4f7cb0f1",
+    "fixtureDigest": "530616604d34bfa36980c07ceca5ad099f053b2ca16179c5d8ebde4acd16e562",
+    "packageArtifactSha256": "f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f",
+    "nativeEntrypointProfileSha256": "f6247ae4aab6779acebcc2a6f9aae6f545523bff4c8995f43e426fe41cf4e79d",
+    "productIdentity": {
+      "runtimeInputsSha256": "973e32b052b73f1eae6abd4082f2d43027962f10e7e0bfcf2986e037165fa2e0",
+      "packageArtifactSha256": "f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f",
+      "bundleIdentifier": "excalidraw-desktop",
+      "version": "0.3.0"
+    },
+    "validatorIdentity": {
+      "producer": "native-macos-validation",
+      "version": "4",
+      "sourceSha256": "78fc272c0a24721ea5a7f1be9a60286f40f61add09c6b300d206b280d8509363",
+      "schemaVersion": 3
+    },
+    "attemptIdentity": {
+      "attemptId": "T047-history-001-dd14eee",
+      "gate": "T023b",
+      "platform": "macos",
+      "inputSha256": "f58b2401a5c23b67bfcea288df9cff51c3cf321fd1fc14864b9a15a2e755b0c0"
+    },
+    "namedChangeSincePreviousAttempt": {
+      "changeId": "T047-history-only-scope",
+      "producer": "native-macos-validation",
+      "beforeSha256": "c6cbe3c867d4c47dccc0e3beec1069d432264562c10d82ec14d169a138ac16f1",
+      "afterSha256": "78fc272c0a24721ea5a7f1be9a60286f40f61add09c6b300d206b280d8509363"
+    },
+    "rootCauseClass": "UNKNOWN",
+    "consecutiveFailureCount": 1,
+    "proofScope": "history",
+    "remediationEpoch": 0,
+    "reopenDecision": null,
+    "repairTarget": null
+  },
+  "productIdentity": {
+    "runtimeInputsSha256": "973e32b052b73f1eae6abd4082f2d43027962f10e7e0bfcf2986e037165fa2e0",
+    "packageArtifactSha256": "f753ffc97c1912a9d2d481ce11460bc90f1f25818dc73149ac1f4ce2706cf27f",
+    "bundleIdentifier": "excalidraw-desktop",
+    "version": "0.3.0"
+  },
+  "validatorIdentity": {
+    "producer": "native-macos-validation",
+    "version": "4",
+    "sourceSha256": "78fc272c0a24721ea5a7f1be9a60286f40f61add09c6b300d206b280d8509363",
+    "schemaVersion": 3
+  },
+  "attemptIdentity": {
+    "attemptId": "T047-history-001-dd14eee",
+    "gate": "T023b",
+    "platform": "macos",
+    "inputSha256": "f58b2401a5c23b67bfcea288df9cff51c3cf321fd1fc14864b9a15a2e755b0c0"
+  },
+  "proofScope": "history",
+  "remediationEpoch": 0,
+  "reopenDecision": null,
+  "os": "26.6.2",
+  "browserOrAppBuild": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app",
+  "fixture": "T023b-disposable-profile",
+  "collector": {
+    "tool": "native-macos-validation",
+    "version": "4",
+    "runIdentity": "T047-history-001-dd14eee"
+  },
+  "statePreparation": null
+}

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "role": "baseline",
+  "command": "pnpm",
+  "args": [
+    "exec",
+    "tauri",
+    "build",
+    "--no-bundle",
+    "--features",
+    "e2e-harness",
+    "--",
+    "--offline",
+    "--locked"
+  ],
+  "cwd": "/Users/liyongqiang/.codex/worktrees/history-perf-baseline/local-version-history",
+  "environment": {
+    "VITE_E2E_HARNESS": "1",
+    "CARGO_TARGET_DIR": "/private/tmp/t049-20261004-baseline-Oe9293/target"
+  },
+  "startedAt": "2026-10-04T14:17:04.923Z",
+  "status": "pass",
+  "timeoutMs": 1500000,
+  "exitCode": 0,
+  "signal": null,
+  "finishedAt": "2026-10-04T14:18:39.444Z"
+}

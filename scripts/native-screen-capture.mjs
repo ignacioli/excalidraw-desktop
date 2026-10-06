@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import readline from "node:readline";
 import {
   validateCapturePlan,
+  validateHistoryPlanScope,
   validateSemanticCollectorReport,
 } from "./native-screen-prepare.mjs";
 import { inspectBundle } from "./native-macos-validation.mjs";
@@ -19,6 +20,20 @@ const HF2_MANIFEST_PATH = path.join(
   REPO_ROOT,
   "docs/design/desktop-shell/hf-2/manifest.json",
 );
+const HISTORY_SCOPE_PATHS = {
+  registry: path.join(
+    REPO_ROOT,
+    "e2e/native/004-history-capture-fixtures.json",
+  ),
+  highFi: path.join(
+    REPO_ROOT,
+    "docs/design/local-version-history/high-fi/manifest.json",
+  ),
+  lowFi: path.join(
+    REPO_ROOT,
+    "docs/design/local-version-history/low-fi/manifest.json",
+  ),
+};
 const FINAL_GATES = [
   "HF2-01",
   "HF2-02",
@@ -191,13 +206,46 @@ export function operatorPreparationMessage(screen) {
     "OPERATOR_SETUP_REQUIRED",
     `Gate: ${screen.gateId}`,
     `Visual target: ${screen.visualTarget.summary}`,
+    ...(screen.launchDocument
+      ? [
+          `The app was launched with the gate-owned saved drawing: ${screen.launchDocument}`,
+          "Confirm this drawing is the active tab and File > Version History is enabled before preparing the visual state.",
+        ]
+      : []),
     ...screen.visualTarget.operatorChecklist.map((item) => `- ${item}`),
+    ...(screen.visualTarget.humanLiveObservations?.length
+      ? [
+          "Separate reviewer live observations (not proven by this capture):",
+          ...screen.visualTarget.humanLiveObservations.map(
+            (item) => `- ${item}`,
+          ),
+        ]
+      : []),
     "Operator actions establish state only; they are not interaction or visual evidence.",
   ].join("\n");
 }
 
 export function nativeMasksForScreen(screen) {
   return screen.nativeMasks;
+}
+
+function captureBinding(plan) {
+  return {
+    productCommit: plan.productCommit,
+    ...(plan.checkpoint === "HISTORY"
+      ? {
+          historyScope: Object.fromEntries(
+            Object.entries(plan.historyScope).map(([name, value]) => [
+              name,
+              value.sha256,
+            ]),
+          ),
+        }
+      : { hf2ManifestSha256: plan.hf2Manifest.sha256 }),
+    fixtureDigest: plan.fixture.digest,
+    harnessVersion: plan.harnessVersion,
+    packageArtifactSha256: plan.packageManifest.artifactSha256,
+  };
 }
 
 export async function observeBackendIsolation({
@@ -325,10 +373,35 @@ function observeOwnedWindow(pid, helper) {
   );
 }
 
-async function waitForStableOwnedWindow(pid, helper) {
+export async function waitForStableOwnedWindow(
+  pid,
+  helper,
+  observe = observeOwnedWindow,
+  pause = (milliseconds) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds)),
+) {
   let previous = null;
+  let lastZeroWindowError = null;
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const current = observeOwnedWindow(pid, helper);
+    let current;
+    try {
+      current = observe(pid, helper);
+    } catch (error) {
+      if (
+        !(error instanceof NativeScreenCaptureError) ||
+        !/^owned-window lookup failed: expected exactly one CoreGraphics owned window \(onscreen=0,/u.test(
+          error.message,
+        )
+      ) {
+        throw error;
+      }
+      // Activation and AX raise can precede CoreGraphics on-screen registration.
+      previous = null;
+      lastZeroWindowError = error;
+      if (attempt < 19) await pause(100);
+      continue;
+    }
+    lastZeroWindowError = null;
     if (
       previous &&
       previous.windowId === current.windowId &&
@@ -341,17 +414,29 @@ async function waitForStableOwnedWindow(pid, helper) {
       return { ...current, stableSamples: 2 };
     }
     previous = current;
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    if (attempt < 19) await pause(100);
   }
-  blocked("owned window did not provide two stable samples");
+  blocked(
+    lastZeroWindowError
+      ? `owned window did not provide two stable samples; last zero-window observation: ${lastZeroWindowError.message}`
+      : "owned window did not provide two stable samples",
+  );
 }
 
-function launchPackage(packageManifest, screen) {
-  return spawn(packageManifest.executablePath, [], {
-    cwd: path.dirname(packageManifest.executablePath),
-    env: { ...process.env, HOME: screen.profileRoot },
-    stdio: ["ignore", "ignore", "pipe"],
-  });
+export function launchArgumentsForPlan(plan, screen) {
+  return plan.checkpoint === "HISTORY" ? [screen.launchDocument] : [];
+}
+
+function launchPackage(packageManifest, screen, plan) {
+  return spawn(
+    packageManifest.executablePath,
+    launchArgumentsForPlan(plan, screen),
+    {
+      cwd: path.dirname(packageManifest.executablePath),
+      env: { ...process.env, HOME: screen.profileRoot },
+      stdio: ["ignore", "ignore", "pipe"],
+    },
+  );
 }
 
 async function resizeOwnedWindow(pid, helper) {
@@ -413,7 +498,35 @@ async function copyExclusive(source, destination) {
   await fsp.copyFile(source, destination, fsConstants.COPYFILE_EXCL);
 }
 
-async function loadInputs(planPath) {
+export async function validateHistoryLaunchDocument(
+  plan,
+  screen,
+  fixtureManifest,
+  runRoot,
+) {
+  const stats = await fsp.lstat(screen.launchDocument);
+  if (!stats.isFile() || stats.isSymbolicLink())
+    blocked("HISTORY launch document must be a real gate-owned file");
+  const launchPath = await fsp.realpath(screen.launchDocument);
+  if (!inside(runRoot, launchPath))
+    blocked("HISTORY launch document escapes the run root");
+  const relative = path
+    .relative(plan.fixture.workspaceRoot, screen.launchDocument)
+    .split(path.sep)
+    .join("/");
+  if (
+    fixtureManifest.fixtureId !== plan.fixture.id ||
+    fixtureManifest.files?.filter(
+      (file) =>
+        file.path === relative && file.sha256 === screen.launchDocumentSha256,
+    ).length !== 1 ||
+    (await sha256File(launchPath)) !== screen.launchDocumentSha256
+  )
+    blocked("HISTORY launch document fixture digest changed");
+  return launchPath;
+}
+
+async function loadInputs(planPath, gate) {
   const planBytes = await fsp.readFile(planPath);
   const plan = validateCapturePlan(JSON.parse(planBytes.toString("utf8")));
   const runRoot = await fsp.realpath(plan.isolation.root);
@@ -430,7 +543,30 @@ async function loadInputs(planPath) {
     if (!inside(runRoot, resolved))
       blocked(`${label} escapes the immutable run root`);
   }
-  if (path.resolve(plan.hf2Manifest.path) !== HF2_MANIFEST_PATH)
+  if (plan.checkpoint === "HISTORY") {
+    for (const [name, expected] of Object.entries(HISTORY_SCOPE_PATHS)) {
+      if (
+        plan.historyScope[name].path !== expected ||
+        (await sha256File(expected)) !== plan.historyScope[name].sha256
+      )
+        blocked(`HISTORY ${name} manifest identity changed`);
+    }
+    const registry = JSON.parse(
+      await fsp.readFile(HISTORY_SCOPE_PATHS.registry, "utf8"),
+    );
+    const highFi = JSON.parse(
+      await fsp.readFile(HISTORY_SCOPE_PATHS.highFi, "utf8"),
+    );
+    validateHistoryPlanScope(plan, registry, highFi);
+    for (const frame of highFi.frames) {
+      const screenPath = path.join(
+        path.dirname(HISTORY_SCOPE_PATHS.highFi),
+        frame.path,
+      );
+      if ((await sha256File(screenPath)) !== frame.sha256)
+        blocked(`HISTORY T048 screen digest changed: ${frame.name}`);
+    }
+  } else if (path.resolve(plan.hf2Manifest.path) !== HF2_MANIFEST_PATH)
     blocked("capture plan does not bind the repository HF-2 manifest");
   const packageBytes = await fsp.readFile(plan.packageManifest.path);
   const packageManifest = JSON.parse(packageBytes.toString("utf8"));
@@ -439,10 +575,28 @@ async function loadInputs(planPath) {
     plan.packageManifest.sha256
   )
     blocked("sealed package manifest digest changed");
-  if ((await sha256File(plan.hf2Manifest.path)) !== plan.hf2Manifest.sha256)
+  if (
+    plan.hf2Manifest &&
+    (await sha256File(plan.hf2Manifest.path)) !== plan.hf2Manifest.sha256
+  )
     blocked("HF-2 manifest digest changed");
   if ((await sha256File(plan.fixture.manifestPath)) !== plan.fixture.digest)
     blocked("fixture manifest digest changed");
+  if (plan.checkpoint === "HISTORY") {
+    const selectedScreen = plan.screens.find(
+      (screen) => screen.gateId === gate,
+    );
+    if (!selectedScreen) blocked(`capture plan is missing ${gate}`);
+    const fixtureManifest = JSON.parse(
+      await fsp.readFile(plan.fixture.manifestPath, "utf8"),
+    );
+    await validateHistoryLaunchDocument(
+      plan,
+      selectedScreen,
+      fixtureManifest,
+      runRoot,
+    );
+  }
   let semanticBytes = null;
   if (plan.semanticEvidence) {
     semanticBytes = await fsp.readFile(
@@ -488,7 +642,7 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
     blocked(`${screen.gateId} profile is not empty`);
 
   const windowHelper = await compileWindowHelper(inputs.runRoot);
-  const child = launchPackage(inputs.packageManifest, screen);
+  const child = launchPackage(inputs.packageManifest, screen, inputs.plan);
   let captureCount = 0;
   try {
     await resizeOwnedWindow(child.pid, windowHelper);
@@ -604,13 +758,7 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
       collectionId: `${screen.gateId}-native-capture`,
       gateId: screen.gateId,
       route: "fixed-capture-review",
-      binding: {
-        productCommit: inputs.plan.productCommit,
-        hf2ManifestSha256: inputs.plan.hf2Manifest.sha256,
-        fixtureDigest: inputs.plan.fixture.digest,
-        harnessVersion: inputs.plan.harnessVersion,
-        packageArtifactSha256: inputs.plan.packageManifest.artifactSha256,
-      },
+      binding: captureBinding(inputs.plan),
       os: process.platform,
       viewport: { width: 1280, height: 760 },
       browserOrAppBuild: inputs.packageManifest.appPath,
@@ -628,27 +776,36 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
       backingScale,
       normalizationAlgorithm: "lanczos3-srgb-v1",
     });
-    await fsp.writeFile(
-      path.join(collectionDir, "baseline.sha256"),
-      `${screen.baselinePath} ${screen.baselineSha256}\n`,
-      { encoding: "utf8", flag: "wx" },
-    );
+    if (inputs.plan.checkpoint === "HISTORY") {
+      await writeJson(path.join(collectionDir, "design-reference.json"), {
+        schemaVersion: 1,
+        gateId: screen.gateId,
+        reference: screen.designReference,
+        highFiManifestSha256: inputs.plan.historyScope.highFi.sha256,
+        lowFiManifestSha256: inputs.plan.historyScope.lowFi.sha256,
+        pixelBaselineAvailable: false,
+        visualVerdict: "PENDING_REVIEW",
+        humanLiveObservations: screen.visualTarget.humanLiveObservations,
+      });
+    } else {
+      await fsp.writeFile(
+        path.join(collectionDir, "baseline.sha256"),
+        `${screen.baselinePath} ${screen.baselineSha256}\n`,
+        { encoding: "utf8", flag: "wx" },
+      );
+    }
     await writeJson(path.join(collectionDir, "mask.json"), {
       schemaVersion: 1,
       collectionId: `${screen.gateId}-native-capture`,
       gateId: screen.gateId,
-      binding: {
-        productCommit: inputs.plan.productCommit,
-        hf2ManifestSha256: inputs.plan.hf2Manifest.sha256,
-        fixtureDigest: inputs.plan.fixture.digest,
-        harnessVersion: inputs.plan.harnessVersion,
-        packageArtifactSha256: inputs.plan.packageManifest.artifactSha256,
-      },
+      binding: captureBinding(inputs.plan),
       masks: nativeMasksForScreen(screen),
     });
     const artifactNames = [
       "actual.png",
-      "baseline.sha256",
+      inputs.plan.checkpoint === "HISTORY"
+        ? "design-reference.json"
+        : "baseline.sha256",
       "capture-plan.json",
       "capture-readiness.json",
       "environment.json",
@@ -669,13 +826,7 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
       collectionId: `${screen.gateId}-native-capture`,
       gateId: screen.gateId,
       route: "fixed-capture-review",
-      binding: {
-        productCommit: inputs.plan.productCommit,
-        hf2ManifestSha256: inputs.plan.hf2Manifest.sha256,
-        fixtureDigest: inputs.plan.fixture.digest,
-        harnessVersion: inputs.plan.harnessVersion,
-        packageArtifactSha256: inputs.plan.packageManifest.artifactSha256,
-      },
+      binding: captureBinding(inputs.plan),
       collector: {
         tool: "native-screen-capture",
         version: "4",
@@ -706,7 +857,7 @@ async function captureGate({ planPath, inputs, screen, collectionDir }) {
     await writeJson(path.join(collectionDir, "collector-report.json"), report);
     await fsp.writeFile(
       path.join(collectionDir, "collector-report.md"),
-      `# ${screen.gateId} native capture collection\n\n- Result: **PASS**\n- Schema: \`v2\`\n- Harness: \`003-native-capture-v4\`\n- Semantic collection: \`${inputs.plan.semanticEvidence?.collectionId ?? "NOT_REQUIRED"}\`\n- Semantic collection digest: \`${inputs.plan.semanticEvidence?.collectionDigest ?? "NOT_REQUIRED"}\`\n- Backend app-data isolation: \`PASS\`\n- WebKit filesystem isolation claimed: \`false\`\n- Operator confirmation: \`terminal-exact-line\`\n- Operator actions are evidence: \`false\`\n- Owned PID: \`${child.pid}\`\n- Window ID: \`${after.windowId}\`\n- Backing scale: \`${backingScale}\`\n- Capture count: \`${captureCount}\`\n- Normalization: \`lanczos3-srgb-v1\`\n- Application-state claims: none\n- Reviewer verdict: not authored by this collector\n`,
+      `# ${screen.gateId} native capture collection\n\n- Result: **PASS** (capture integrity only)\n- Schema: \`v2\`\n- Harness: \`${inputs.plan.harnessVersion}\`\n- Semantic collection: \`${inputs.plan.semanticEvidence?.collectionId ?? "NOT_REQUIRED"}\`\n- Semantic collection digest: \`${inputs.plan.semanticEvidence?.collectionDigest ?? "NOT_REQUIRED"}\`\n- Backend app-data isolation: \`PASS\`\n- WebKit filesystem isolation claimed: \`false\`\n- Operator confirmation: \`terminal-exact-line\`\n- Operator actions are evidence: \`false\`\n- Owned PID: \`${child.pid}\`\n- Window ID: \`${after.windowId}\`\n- Backing scale: \`${backingScale}\`\n- Capture count: \`${captureCount}\`\n- Normalization: \`lanczos3-srgb-v1\`\n- Application-state claims: none\n- Reviewer verdict: not authored by this collector\n`,
       { encoding: "utf8", flag: "wx" },
     );
     return report;
@@ -734,7 +885,7 @@ export async function captureNativeScreens({
 }) {
   if (typeof planPath !== "string" || !path.isAbsolute(planPath))
     invalid("--plan must be absolute");
-  const inputs = await loadInputs(planPath);
+  const inputs = await loadInputs(planPath, gate);
   const budget = createFailureBudget();
   if (allFinal) {
     if (
@@ -793,7 +944,7 @@ export async function captureNativeScreens({
 
 function usage() {
   console.log(
-    "Usage:\n  pnpm native:screen:capture -- --plan <absolute-plan> --gate VSL-001 --collection-dir <absolute-new-dir>\n  pnpm native:screen:capture -- --plan <absolute-final-plan> --all-final --collection-root <absolute-new-root>\nVSL plans bind one PASS T031 semantic collector report by file SHA and collection digest. Each gate prints the declared visual checklist and one exact CAPTURE <gate-id> <challenge> line; confirmation controls timing only and is not evidence. In Codex, forward the line to the agent-held collector PTY only after the operator replies ready. Backend app-data is checked inside the run root; WebKit filesystem isolation is not claimed.\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. Capture is owned-window-only; content-GUI automation, full-screen capture, coordinate search and visual repair are prohibited.",
+    "Usage:\n  pnpm native:screen:capture -- --plan <absolute-plan> --gate VSL-001|HISTORY-01|... --collection-dir <absolute-new-dir>\n  pnpm native:screen:capture -- --plan <absolute-final-plan> --all-final --collection-root <absolute-new-root>\nVSL plans bind one PASS T031 semantic collector report. HISTORY plans bind twelve declared visual targets without a pixel baseline or menu graph; each requires a separate capture and human review. Each gate prints the declared visual checklist and one exact CAPTURE <gate-id> <challenge> line; confirmation controls timing only and is not evidence. If a declared state cannot be established, leave it BLOCKED rather than confirming. In Codex, forward the line to the agent-held collector PTY only after the operator replies ready. Backend app-data is checked inside the run root; WebKit filesystem isolation is not claimed.\nExit codes: 0=PASS, 1=FAIL, 2=BLOCKED, 64=invalid invocation. Capture is owned-window-only; content-GUI automation, full-screen capture, coordinate search and visual repair are prohibited.",
   );
 }
 

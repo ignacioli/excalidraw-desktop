@@ -4,7 +4,10 @@ import {
   readHarnessDraft,
   readHarnessFile,
 } from "./browserTauriHarness";
-import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
+import {
+  openWorkspaceSidebar,
+  persistPinnedWorkspaceSidebar,
+} from "./workspaceSidebar";
 
 test("creates, checkpoints, and reopens a drawing with every asset local", async ({
   page,
@@ -24,16 +27,26 @@ test("creates, checkpoints, and reopens a drawing with every asset local", async
     }
     await route.continue();
   });
-  await installBrowserTauriHarness(page);
-  await persistPinnedWorkspaceSidebar(page);
+  await installBrowserTauriHarness(
+    page,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    false,
+  );
+  await persistPinnedWorkspaceSidebar(page, ["workspace-1"], "workspace-1");
   await page.goto("/");
 
-  await page.getByRole("button", { name: "New drawing" }).click();
+  await openWorkspaceSidebar(page);
+  await page.getByRole("button", { name: "New Drawing", exact: true }).click();
+  const namingDialog = page.getByRole("dialog", { name: "New drawing" });
+  await namingDialog.getByRole("textbox", { name: "Name" }).fill("us1-drawing");
+  await namingDialog.getByRole("button", { name: "Create" }).click();
   await expect(
     page.getByRole("tab", { name: "us1-drawing.excalidraw" }),
   ).toBeVisible();
   await expect(page.locator(".excalidraw-editor")).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Save/ })).toBeEnabled();
   await expect(page.getByRole("status")).toHaveText("All changes saved");
 
   const canvas = page.locator(".excalidraw__canvas.interactive");
@@ -82,7 +95,7 @@ test("creates, checkpoints, and reopens a drawing with every asset local", async
     })
     .toBe(1);
 
-  await page.getByRole("button", { name: /^Save/ }).click();
+  await page.keyboard.press("Meta+S");
   await expect(page.getByRole("status")).toHaveText("All changes saved");
   const savedScene = JSON.parse((await readHarnessFile(page)) ?? "null") as {
     elements?: Array<{ type?: string; text?: string }>;
@@ -98,7 +111,8 @@ test("creates, checkpoints, and reopens a drawing with every asset local", async
   expect(Object.keys(savedScene?.files ?? {})).toHaveLength(1);
 
   await page.reload();
-  await page.getByRole("button", { name: "Open drawing…" }).click();
+  await openWorkspaceSidebar(page);
+  await page.getByRole("treeitem", { name: "us1-drawing" }).click();
   await expect(
     page.getByRole("tab", { name: "us1-drawing.excalidraw" }),
   ).toBeVisible();
@@ -131,7 +145,7 @@ test("creates, checkpoints, and reopens a drawing with every asset local", async
       );
     })
     .toBe(true);
-  await page.getByRole("button", { name: /^Save/ }).click();
+  await page.keyboard.press("Meta+S");
   await expect(page.getByRole("status")).toHaveText("All changes saved");
 
   const reopenedScene = JSON.parse((await readHarnessFile(page)) ?? "null") as {

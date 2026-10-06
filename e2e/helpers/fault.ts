@@ -13,6 +13,81 @@ export const ATOMIC_WRITE_FAULT_POINTS = [
 
 export type AtomicWriteFaultPoint = (typeof ATOMIC_WRITE_FAULT_POINTS)[number];
 
+/** Shared process-level History transaction barriers owned by T015. */
+export const HISTORY_FAULT_STAGES = [
+  "object_publish",
+  "protection_commit",
+  "intent_commit",
+  "after_rename_before_parent_sync",
+  "metadata_complete_before_frontend_ack",
+  "eviction_delete_gc",
+  "rename_delete_repair",
+] as const;
+
+export type HistoryFaultStage = (typeof HISTORY_FAULT_STAGES)[number];
+
+/**
+ * Native process matrix metadata.  The stage is a real product barrier when
+ * reached from a replacement/reconciliation journey; the current standalone
+ * process fixture only proves that the barrier/kill/restart protocol itself is
+ * deterministic.  Keep this mapping data-only so tests cannot silently turn
+ * a barrier marker into a claimed replacement outcome.
+ */
+export const HISTORY_FAULT_MATRIX = [
+  {
+    stage: "object_publish",
+    boundary: "history object publication",
+  },
+  {
+    stage: "protection_commit",
+    boundary: "protection SQLite commit",
+  },
+  {
+    stage: "intent_commit",
+    boundary: "replacement intent SQLite commit",
+  },
+  {
+    stage: "after_rename_before_parent_sync",
+    boundary: "target rename before parent-directory sync",
+  },
+  {
+    stage: "metadata_complete_before_frontend_ack",
+    boundary: "metadata complete before frontend acknowledgement",
+  },
+  {
+    stage: "eviction_delete_gc",
+    boundary: "eviction delete / reachability GC",
+  },
+  {
+    stage: "rename_delete_repair",
+    boundary: "restart rename/delete metadata repair",
+  },
+] as const satisfies ReadonlyArray<{
+  stage: HistoryFaultStage;
+  boundary: string;
+}>;
+
+export interface HistoryFaultContext {
+  readonly operationId: string;
+  readonly documentId: string;
+  readonly targetPath: string;
+  readonly oldSha256?: string;
+  readonly newSha256?: string;
+}
+
+export interface HistoryFaultReadyMarker {
+  readonly scenario: "history-fault-kill";
+  readonly stage: HistoryFaultStage;
+  readonly seed: string;
+  readonly pid: number;
+  readonly context: HistoryFaultContext;
+}
+
+export interface HistoryFaultEnvironment extends HistoryFaultContext {
+  readonly stage: HistoryFaultStage;
+  readonly seed: string;
+}
+
 export const E2E_HARNESS_COMMANDS = [
   "e2e_set_atomic_write_fault",
   "e2e_clear_atomic_write_fault",
@@ -34,6 +109,7 @@ const E2E_HARNESS_ARTIFACT_TOKENS = [
   ...E2E_PERFORMANCE_COMMANDS,
   "--e2e-reliability-scenario",
   "EXCALIDRAW_PERF_CONTROL_DIR",
+  "history_fault_barrier",
 ] as const;
 
 export type Invoke = <T>(
@@ -45,6 +121,54 @@ export interface FaultHarness {
   setAtomicWriteFault(point: AtomicWriteFaultPoint): Promise<void>;
   clearAtomicWriteFault(): Promise<void>;
   corruptLatestSnapshot(documentPath: string): Promise<void>;
+}
+
+export function historyFaultEnvironment(
+  configuration: HistoryFaultEnvironment,
+): Readonly<NodeJS.ProcessEnv> {
+  return {
+    EXCALIDRAW_E2E_HISTORY_FAULT_ARMED: "1",
+    EXCALIDRAW_E2E_HISTORY_FAULT_STAGE: configuration.stage,
+    EXCALIDRAW_E2E_HISTORY_FAULT_SEED: configuration.seed,
+    EXCALIDRAW_E2E_HISTORY_OPERATION_ID: configuration.operationId,
+    EXCALIDRAW_E2E_HISTORY_DOCUMENT_ID: configuration.documentId,
+    EXCALIDRAW_E2E_HISTORY_TARGET_PATH: configuration.targetPath,
+    ...(configuration.oldSha256 === undefined
+      ? {}
+      : { EXCALIDRAW_E2E_HISTORY_OLD_SHA256: configuration.oldSha256 }),
+    ...(configuration.newSha256 === undefined
+      ? {}
+      : { EXCALIDRAW_E2E_HISTORY_NEW_SHA256: configuration.newSha256 }),
+  };
+}
+
+export function isHistoryFaultReadyMarker(
+  value: unknown,
+): value is HistoryFaultReadyMarker {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const context = record.context;
+  if (typeof context !== "object" || context === null) {
+    return false;
+  }
+  const contextRecord = context as Record<string, unknown>;
+  return (
+    record.scenario === "history-fault-kill" &&
+    typeof record.stage === "string" &&
+    (HISTORY_FAULT_STAGES as readonly string[]).includes(record.stage) &&
+    typeof record.seed === "string" &&
+    typeof record.pid === "number" &&
+    Number.isInteger(record.pid) &&
+    typeof contextRecord.operationId === "string" &&
+    typeof contextRecord.documentId === "string" &&
+    typeof contextRecord.targetPath === "string" &&
+    (contextRecord.oldSha256 === undefined ||
+      typeof contextRecord.oldSha256 === "string") &&
+    (contextRecord.newSha256 === undefined ||
+      typeof contextRecord.newSha256 === "string")
+  );
 }
 
 export function createFaultHarness(invoke: Invoke): FaultHarness {

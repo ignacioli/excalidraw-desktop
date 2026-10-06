@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f4f3">
+  <title>T048 · Approved History low-fidelity interaction · Review only</title>
+  <style>
+    :root { color-scheme: light; --bg:#f4f4f3; --panel:#fff; --ink:#222; --muted:#686864; --line:#c9c9c4; --soft:#ededeb; --focus:#6f3fb5; --mono:ui-monospace,SFMono-Regular,Menlo,monospace; font:13px/1.4 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); }
+    button { color:inherit; font:inherit; touch-action:manipulation; }
+    button:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+    .app { width:min(1280px,100vw); height:min(760px,100vh); min-height:540px; margin:auto; position:relative; overflow:hidden; display:grid; grid-template-columns:52px 1fr; background:#f7f7f6; }
+    .rail { border-right:1px solid var(--line); background:#ededeb; padding:10px; display:flex; flex-direction:column; gap:10px; }
+    .rail-mark { font-weight:700; padding:6px; }
+    .workspace { min-width:0; display:grid; grid-template-rows:38px 1fr 28px; }
+    .tabs,.status { background:#ededeb; border-bottom:1px solid var(--line); padding:9px 14px; color:var(--muted); font-size:11px; }
+    .status { border:0; border-top:1px solid var(--line); display:flex; justify-content:space-between; }
+    .canvas { position:relative; background-color:#fafaf9; background-image:linear-gradient(#e8e8e5 1px,transparent 1px),linear-gradient(90deg,#e8e8e5 1px,transparent 1px); background-size:28px 28px; }
+    .canvas::after { content:"Canvas · schematic only"; position:absolute; left:20px; bottom:20px; color:#8b8b86; font:11px var(--mono); }
+    .sketch { position:absolute; left:20%; top:18%; width:46%; height:44%; border:1px solid #888; transform:rotate(-1deg); opacity:.65; }
+    .sketch::before,.sketch::after { content:""; position:absolute; border:1px solid #888; transform:rotate(18deg); }
+    .sketch::before { width:120px; height:80px; left:48px; top:42px; }
+    .sketch::after { width:190px; left:32px; top:160px; transform:rotate(-12deg); }
+    .review-tag { position:absolute; top:12px; left:64px; z-index:3; background:#fff; border:1px solid var(--ink); padding:5px 8px; font:10px var(--mono); letter-spacing:.04em; }
+    .drawer { position:absolute; z-index:2; right:0; top:0; bottom:0; width:360px; background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; box-shadow:-8px 0 18px #0000000c; }
+    .drawer-head { padding:15px 16px 12px; border-bottom:1px solid var(--line); }
+    .head-row { display:flex; justify-content:space-between; gap:10px; align-items:start; }
+    .eyebrow { color:var(--muted); font:10px var(--mono); letter-spacing:.06em; text-transform:uppercase; }
+    h1 { margin:2px 0 0; font-size:19px; line-height:1.25; }
+    h2 { margin:2px 0 4px; font-size:15px; line-height:1.3; overflow-wrap:anywhere; }
+    .filename { color:var(--muted); font:11px var(--mono); margin-top:3px; }
+    .icon { flex:none; width:30px; height:30px; border:1px solid var(--line); background:#fff; border-radius:4px; cursor:pointer; }
+    .current-drawing { margin:12px 16px 8px; padding:9px 10px; border:1px solid var(--line); background:#f4f4f2; }
+    .current-drawing strong { display:block; font-size:12px; }
+    .current-drawing span { display:block; margin-top:2px; color:var(--muted); font-size:11px; }
+    .toolbar { display:flex; align-items:center; justify-content:space-between; gap:6px; padding:4px 16px 8px; }
+    .count { color:var(--muted); font-size:11px; }
+    .button { min-height:30px; padding:4px 9px; border:1px solid #999; border-radius:4px; background:#fff; cursor:pointer; }
+    .button:hover { background:#ececea; }
+    .button.primary { background:#272726; color:#fff; border-color:#272726; }
+    .button.primary:hover { background:#454542; }
+    .button.small { min-height:27px; padding:3px 7px; font-size:10px; white-space:nowrap; }
+    .scroller { overflow:auto; min-height:0; flex:1; padding:0 12px; overscroll-behavior:contain; }
+    .history-list { list-style:none; padding:0; margin:0; border-top:1px solid var(--line); }
+    .version { min-height:68px; display:grid; grid-template-columns:minmax(0,1fr) 30px; gap:8px; align-items:center; border-bottom:1px solid var(--line); padding:7px 5px 7px 8px; position:relative; }
+    .version.selected { background:#efefed; box-shadow:inset 3px 0 #333; }
+    .identity { min-width:0; width:100%; border:0; background:transparent; text-align:left; padding:4px; cursor:pointer; }
+    .identity:hover { background:#e7e7e4; }
+    .summary { display:block; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .metadata { display:block; color:var(--muted); margin-top:2px; font-size:10px; }
+    .badges { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+    .badge { border:1px solid #999; padding:0 4px; border-radius:3px; color:#444; font:9px/1.5 var(--mono); white-space:nowrap; }
+    .badge.marked { font-weight:700; }
+    .menu-wrap { position:relative; }
+    .menu-trigger { width:28px; height:28px; border:1px solid transparent; border-radius:4px; background:transparent; cursor:pointer; font-size:19px; line-height:1; }
+    .menu-trigger:hover,.menu-trigger[aria-expanded="true"] { border-color:#aaa; background:#fff; }
+    .menu { position:absolute; z-index:5; top:30px; right:0; width:168px; padding:4px; border:1px solid #999; background:#fff; box-shadow:2px 3px 7px #0002; }
+    .menu[hidden] { display:none; }
+    .menu button { width:100%; min-height:34px; text-align:left; border:0; background:#fff; padding:5px 8px; cursor:pointer; }
+    .menu button:hover,.menu button:focus-visible { background:#ededeb; }
+    .menu button.danger { border-top:1px solid var(--line); margin-top:3px; color:#542d2d; }
+    .detail { flex:none; border-top:1px solid #999; padding:10px 16px 13px; background:#fff; }
+    .detail-label { margin-bottom:5px; }
+    .detail-target { color:var(--muted); font:10px/1.5 var(--mono); overflow-wrap:anywhere; }
+    .detail-actions { display:flex; gap:8px; margin-top:9px; }
+    .detail-actions .button { flex:1; }
+    .drawer-foot { border-top:1px solid var(--line); padding:7px 16px; color:var(--muted); font-size:10px; }
+    .toast { position:absolute; z-index:10; right:376px; bottom:18px; max-width:280px; padding:9px 12px; border:1px solid #777; background:#fff; box-shadow:2px 2px #0002; }
+    .toast[hidden] { display:none; }
+    .scrim { position:absolute; z-index:7; inset:0; background:#0003; }
+    .dialog { position:absolute; z-index:8; left:50%; top:50%; transform:translate(-50%,-50%); width:min(410px,calc(100% - 30px)); background:#fff; border:1px solid #777; padding:16px; box-shadow:4px 4px #0002; }
+    .dialog[hidden],.scrim[hidden] { display:none; }
+    .dialog h2 { margin-top:4px; font-size:17px; }
+    .dialog p { color:#555; margin:8px 0; }
+    .confirm-target { padding:8px; background:#f0f0ee; font:11px/1.5 var(--mono); overflow-wrap:anywhere; }
+    .dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
+    .compact .drawer { width:300px; }
+    .compact .current-drawing { margin:9px 12px 6px; }
+    .compact .drawer-head,.compact .detail { padding-left:12px; padding-right:12px; }
+    .compact .toolbar { padding-left:12px; padding-right:12px; flex-wrap:wrap; }
+    .compact .drawer-foot { padding-left:12px; }
+    .compact .toast { right:310px; }
+    @media (max-width:720px) { .app { grid-template-columns:36px 1fr; } .drawer { width:min(360px,calc(100vw - 36px)); } .review-tag { left:44px; } .toast { right:calc(min(360px,100vw - 36px) + 10px); } }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; animation:none !important; transition:none !important; } }
+  </style>
+</head>
+<body>
+  <main class="app" id="app" aria-label="T048 approved History low-fidelity interaction">
+    <nav class="rail" aria-label="Workspace"><span class="rail-mark" aria-hidden="true">E</span><span aria-hidden="true">☰</span></nav>
+    <section class="workspace" aria-label="Editor">
+      <div class="tabs">Untitled.excalidraw</div>
+      <div class="canvas" aria-label="Schematic canvas"><div class="sketch" aria-hidden="true"></div></div>
+      <div class="status"><span>Local file · saved just now</span><span>100%</span></div>
+    </section>
+    <div class="review-tag">T048 LOW-FIDELITY APPROVED · HIGH-FIDELITY PENDING</div>
+    <aside class="drawer" aria-labelledby="drawer-title">
+      <header class="drawer-head">
+        <div class="head-row"><div><div class="eyebrow">File › Version History</div><h1 id="drawer-title">Version History</h1><div class="filename">Research-board.excalidraw</div></div><button class="icon" type="button" aria-label="Close Version History">×</button></div>
+      </header>
+      <section class="current-drawing" aria-label="Current drawing status">
+        <strong>Current drawing · saved just now</strong>
+        <span>This is the open canvas. History rows below are saved versions.</span>
+      </section>
+      <div class="toolbar"><span class="count" id="count" aria-live="polite">50 versions · 1–8 shown</span><button class="button small" id="mark-current" type="button">Mark current version</button><button class="button small" id="stress" type="button">Long list</button></div>
+      <div class="scroller" id="scroller" tabindex="0" aria-label="Version list scroll region">
+        <ul class="history-list" id="history-list" aria-label="Saved versions"></ul>
+      </div>
+      <section class="detail" aria-labelledby="selected-title" aria-live="polite">
+        <div class="eyebrow detail-label">Selected version · action target</div>
+        <h2 id="selected-title">Loading…</h2>
+        <div class="detail-target" id="selected-target"></div>
+        <div class="detail-actions"><button class="button" id="preview" type="button">Preview</button><button class="button primary" id="restore" type="button">Restore</button></div>
+      </section>
+      <footer class="drawer-foot">Local only · selection remains visible while the list scrolls</footer>
+    </aside>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <div class="scrim" id="scrim" hidden></div>
+    <section class="dialog" id="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-copy" hidden>
+      <div class="eyebrow" id="dialog-kind">Confirmation</div><h2 id="dialog-title"></h2><p id="dialog-copy"></p><div class="confirm-target" id="confirm-target"></div>
+      <div class="dialog-actions"><button class="button" id="cancel-dialog" type="button">Cancel</button><button class="button primary" id="confirm-dialog" type="button"></button></div>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const app = document.getElementById('app');
+      const list = document.getElementById('history-list');
+      const scroller = document.getElementById('scroller');
+      const toast = document.getElementById('toast');
+      const dialog = document.getElementById('dialog');
+      const state = { rows: [], selectedId: null, sceneRevision: 1, nextId: 51, stress: false, returnFocus: null, toastTimer: 0, dialogAction: null };
+      const initial = [
+        ['v-050','Canvas spacing pass','14:32','Today','Automatic',false,1],
+        ['v-049','Add onboarding sketch','13:58','Today','Manual',true,1],
+        ['v-048','Board layout before restore','12:11','Today','Before restore',false,1],
+        ['v-047','Canvas changed','18:40','Yesterday','Automatic',false,1],
+        ['v-046','Rename swimlane labels','16:04','Yesterday','Manual',true,1],
+        ['v-045','Initial board structure','15:20','Yesterday','Automatic',false,1],
+        ['v-044','Research notes and links','11:05','Yesterday','Manual',false,1],
+        ['v-043','Canvas changed','10:34','Yesterday','Automatic',false,1]
+      ];
+      state.rows = initial.map(([id,summary,time,day,source,marked,revision]) => ({id,summary,time,day,source,marked,revision}));
+      state.selectedId = 'v-050';
+      const selected = () => state.rows.find(row => row.id === state.selectedId) ?? state.rows[0] ?? null;
+      const escape = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+      const targetText = row => row ? `${row.id} · ${row.day}, ${row.time} · ${row.source}` : 'No version selected';
+      function announce(message) {
+        window.clearTimeout(state.toastTimer);
+        toast.textContent = message;
+        toast.hidden = false;
+        state.toastTimer = window.setTimeout(() => { toast.hidden = true; }, 4500);
+      }
+      function render() {
+        app.classList.toggle('compact', window.innerWidth < 1100);
+        list.innerHTML = state.rows.map(row => `
+          <li class="version${row.id === state.selectedId ? ' selected' : ''}" data-version="${escape(row.id)}">
+            <button class="identity" type="button" aria-pressed="${row.id === state.selectedId}" aria-label="Select ${escape(row.summary)}, ${escape(targetText(row))}">
+              <span class="summary">${escape(row.summary)}</span>
+              <span class="metadata">${escape(row.day)} · ${escape(row.time)} · ${escape(row.source)} · ${escape(row.id)}</span>
+              <span class="badges"><span class="badge">READY</span>${row.marked ? '<span class="badge marked">MARKED</span>' : ''}</span>
+            </button>
+            <div class="menu-wrap"><button class="menu-trigger" type="button" aria-label="Actions for ${escape(row.summary)}, ${escape(targetText(row))}" aria-haspopup="menu" aria-expanded="false">⋮</button>
+              <div class="menu" role="menu" aria-label="Actions for ${escape(row.id)}" hidden>
+                <button role="menuitem" type="button" data-action="mark">${row.marked ? 'Unmark version' : 'Mark version'}</button>
+                <button role="menuitem" type="button" data-action="delete" class="danger">Delete version</button>
+              </div>
+            </div>
+          </li>`).join('');
+        const row = selected();
+        document.getElementById('selected-title').textContent = row?.summary ?? 'No saved versions';
+        document.getElementById('selected-target').textContent = targetText(row);
+        document.getElementById('preview').disabled = !row;
+        document.getElementById('restore').disabled = !row;
+        document.getElementById('count').textContent = state.stress
+          ? `${state.rows.length} versions · all shown`
+          : `${state.rows.length} versions · 1–${state.rows.length} shown`;
+      }
+      function closeMenus(returnFocus = false) {
+        const trigger = document.querySelector('.menu-trigger[aria-expanded="true"]');
+        document.querySelectorAll('.menu').forEach(menu => { menu.hidden = true; });
+        document.querySelectorAll('.menu-trigger').forEach(button => button.setAttribute('aria-expanded','false'));
+        if (returnFocus) trigger?.focus();
+      }
+      function openDialog(kind, row, returnFocus) {
+        state.returnFocus = returnFocus;
+        state.dialogAction = kind === 'delete' ? () => deleteRow(row) : () => announce(`Restore requested for ${row.id}; this is an interaction mockup.`);
+        const isDelete = kind === 'delete';
+        document.getElementById('dialog-kind').textContent = isDelete ? 'Delete confirmation' : 'Restore confirmation';
+        document.getElementById('dialog-title').textContent = isDelete ? 'Delete this version?' : 'Restore this version?';
+        document.getElementById('dialog-copy').textContent = isDelete
+          ? 'Only this saved history record will be removed. The current drawing and other versions stay unchanged.'
+          : 'The current drawing will be replaced after a protected snapshot is created.';
+        document.getElementById('confirm-target').textContent = `Target: ${targetText(row)} · ${row.summary}`;
+        document.getElementById('confirm-dialog').textContent = isDelete ? 'Delete version' : 'Restore version';
+        document.getElementById('confirm-dialog').classList.toggle('danger', isDelete);
+        dialog.hidden = false;
+        document.getElementById('scrim').hidden = false;
+        document.getElementById('cancel-dialog').focus();
+      }
+      function closeDialog() {
+        dialog.hidden = true;
+        document.getElementById('scrim').hidden = true;
+        const target = state.returnFocus;
+        state.returnFocus = null;
+        target?.focus();
+      }
+      function deleteRow(row) {
+        const index = state.rows.findIndex(item => item.id === row.id);
+        if (index < 0) return;
+        state.rows.splice(index,1);
+        if (state.selectedId === row.id) state.selectedId = state.rows[Math.min(index,state.rows.length - 1)]?.id ?? null;
+        render();
+        const trigger = document.querySelector(`[data-version="${CSS.escape(state.selectedId ?? '')}"] .menu-trigger`);
+        (trigger ?? document.getElementById('stress')).focus();
+        announce(`Deleted ${row.id} · ${row.summary}.`);
+      }
+      function markRow(row, trigger) {
+        const existing = state.rows.find(item => item.marked && item.revision === state.sceneRevision);
+        if (row.marked) {
+          row.marked = false;
+          render();
+          document.querySelector(`[data-version="${CSS.escape(row.id)}"] .menu-trigger`)?.focus();
+          announce(`Unmarked ${row.id}.`);
+          return;
+        }
+        if (existing) {
+          state.selectedId = existing.id;
+          render();
+          const item = document.querySelector(`[data-version="${CSS.escape(existing.id)}"]`);
+          item?.scrollIntoView({block:'nearest'});
+          const identity = item?.querySelector('.identity');
+          identity?.focus();
+          announce(`Already marked as ${existing.id}; focused the existing version.`);
+          return;
+        }
+        row.marked = true;
+        row.revision = state.sceneRevision;
+        render();
+        document.querySelector(`[data-version="${CSS.escape(row.id)}"] .menu-trigger`)?.focus();
+        announce(`Marked ${row.id}.`);
+      }
+      function markCurrent() {
+        const existing = state.rows.find(row => row.marked && row.revision === state.sceneRevision);
+        if (existing) {
+          state.selectedId = existing.id;
+          render();
+          const item = document.querySelector(`[data-version="${CSS.escape(existing.id)}"]`);
+          item?.scrollIntoView({block:'nearest'});
+          item?.querySelector('.identity')?.focus();
+          announce(`Already marked as ${existing.id}; focused the existing version.`);
+          return;
+        }
+        const number = String(state.nextId++).padStart(3,'0');
+        const row = {id:`v-${number}`, summary:`Manual snapshot ${number}`, time:'Now', day:'Today', source:'Manual', marked:true, revision:state.sceneRevision};
+        state.rows.unshift(row);
+        state.selectedId = row.id;
+        render();
+        document.querySelector(`[data-version="${CSS.escape(row.id)}"] .identity`)?.focus();
+        announce(`Created marked version ${row.id}.`);
+      }
+      document.getElementById('stress').addEventListener('click', event => {
+        state.stress = !state.stress;
+        if (state.stress) {
+          const stressRows = Array.from({length:42},(_,index) => {
+            const n = String(42-index).padStart(3,'0');
+            return {id:`v-${n}`, summary:index % 3 === 0 ? 'Canvas changed' : `Research revision ${n}`, time:`${String(9 + (index % 8)).padStart(2,'0')}:${String((index * 7) % 60).padStart(2,'0')}`, day:index < 12 ? 'Yesterday' : 'Sep 24', source:index % 4 === 0 ? 'Manual' : 'Automatic', marked:false, revision:0};
+          });
+          state.rows = [...state.rows,...stressRows];
+          event.currentTarget.textContent = 'Reset list';
+        } else {
+          state.rows = state.rows.slice(0,8);
+          event.currentTarget.textContent = 'Long list';
+          scroller.scrollTop = 0;
+        }
+        render();
+      });
+      document.getElementById('mark-current').addEventListener('click', markCurrent);
+      document.getElementById('preview').addEventListener('click', () => { const row = selected(); if (row) announce(`Previewing ${row.id} · ${row.summary}; current drawing remains separate.`); });
+      document.getElementById('restore').addEventListener('click', event => { const row = selected(); if (row) openDialog('restore',row,event.currentTarget); });
+      document.getElementById('confirm-dialog').addEventListener('click', () => { const action = state.dialogAction; closeDialog(); action?.(); });
+      document.getElementById('cancel-dialog').addEventListener('click', closeDialog);
+      document.getElementById('scrim').addEventListener('click', closeDialog);
+      list.addEventListener('click', event => {
+        const trigger = event.target.closest('.menu-trigger');
+        const item = event.target.closest('.version');
+        const action = event.target.closest('[data-action]');
+        if (trigger) {
+          const wasOpen = trigger.getAttribute('aria-expanded') === 'true';
+          closeMenus();
+          if (!wasOpen) {
+            trigger.setAttribute('aria-expanded','true');
+            const menu = trigger.parentElement.querySelector('.menu');
+            menu.hidden = false;
+            menu.querySelector('[role="menuitem"]')?.focus();
+          } else trigger.focus();
+          return;
+        }
+        if (action && item) {
+          const row = state.rows.find(candidate => candidate.id === item.dataset.version);
+          const menuTrigger = item.querySelector('.menu-trigger');
+          closeMenus();
+          if (!row) return;
+          if (action.dataset.action === 'mark') markRow(row,menuTrigger);
+          if (action.dataset.action === 'delete') openDialog('delete',row,menuTrigger);
+          return;
+        }
+        const identity = event.target.closest('.identity');
+        if (identity && item) { state.selectedId = item.dataset.version; render(); document.querySelector(`[data-version="${CSS.escape(state.selectedId)}"] .identity`)?.focus(); }
+      });
+      document.addEventListener('click', event => { if (!event.target.closest('.menu-wrap')) closeMenus(); });
+      document.addEventListener('keydown', event => {
+        if (!dialog.hidden) {
+          if (event.key === 'Escape') { event.preventDefault(); closeDialog(); return; }
+          if (event.key === 'Tab') {
+            const controls = [document.getElementById('cancel-dialog'),document.getElementById('confirm-dialog')];
+            const index = controls.indexOf(document.activeElement);
+            const next = (index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length;
+            event.preventDefault(); controls[next].focus();
+          }
+          return;
+        }
+        const menu = document.querySelector('.menu:not([hidden])');
+        if (!menu) return;
+        if (event.key === 'Escape') { event.preventDefault(); closeMenus(true); }
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          const items = [...menu.querySelectorAll('[role="menuitem"]')];
+          const index = items.indexOf(document.activeElement);
+          const delta = event.key === 'ArrowDown' ? 1 : -1;
+          event.preventDefault(); items[(index + delta + items.length) % items.length].focus();
+        }
+      });
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && dialog.hidden && document.querySelector('.menu:not([hidden])')) closeMenus(true);
+      });
+      window.addEventListener('keydown', event => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'm') { event.preventDefault(); markCurrent(); }
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'e') { state.sceneRevision++; announce('Canvas content changed in this mockup. Mark current again to create a new snapshot.'); }
+      });
+      window.addEventListener('resize', () => app.classList.toggle('compact',window.innerWidth < 1100));
+      render();
+    })();
+  </script>
+</body>
+</html>

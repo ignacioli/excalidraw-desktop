@@ -1,0 +1,228 @@
+{
+  "schemaVersion": "2.0.0",
+  "commit": "91c5d7b36266935c64bd855a9956e8ae0526d73d",
+  "hardware": "Mac17,9 (Apple M5 Pro)",
+  "memory": {
+    "bytes": 51539607552,
+    "gibibytes": 48
+  },
+  "architecture": "arm64",
+  "logicalCores": 15,
+  "osVersion": "macOS 26.6.2 (25G83)",
+  "webviewVersion": "WebKit 21624.5.1.11.3",
+  "executionEnvironment": {
+    "type": "physical",
+    "hostHardware": "Mac17,9 (Apple M5 Pro)",
+    "virtualization": null
+  },
+  "binary": {
+    "path": "/private/tmp/t049-20261004-history-target-849b1ff/release/excalidraw-desktop",
+    "sha256": "e8e703560193ef907a6922eeceb311f0e13773535d84615932c8bc1d474534cd",
+    "kind": "e2e-harness",
+    "pathScope": "absolute"
+  },
+  "workload": {
+    "name": "feature-004-local-version-history-restart",
+    "kind": "history-specific-native-reliability",
+    "fixture": "deterministic text/shape/image A→B history fixture",
+    "seed": "deterministic history-restart fixture",
+    "operations": [
+      "seed 20 pooled versions and one protected prior state",
+      "fresh-process preview and adopt version B",
+      "fresh-process verify version B and its protected resources",
+      "fresh-process preview and adopt version A",
+      "fresh-process verify version A and its protected resources",
+      "run retention and GC probe while preserving the adopted target"
+    ],
+    "clock": "process.hrtime.bigint monotonic wall clock",
+    "warmUpJourneys": 1,
+    "measuredJourneys": 3,
+    "sampleWindow": "three independent complete A→B→A journeys, each with a fresh isolated application root and six native process phases",
+    "statistic": "nearest-rank p95 of three complete journey durations; descriptive only",
+    "expectedVariance": "process launch, WebKit initialization and filesystem scheduling may vary between journeys; investigate changes above 20 percent without adjusting a budget"
+  },
+  "processTreeAccounting": {
+    "rootProcessName": "excalidraw-desktop",
+    "associationMethod": "not sampled by this history-specific reliability workload; use T090/T108 process-tree reports",
+    "includedClasses": [],
+    "exclusions": [
+      "Tauri main, WebView, GPU and Network RSS/CPU are owned by startup-idle, canvas-io and edit-soak"
+    ],
+    "platformLimitations": [
+      "This report does not establish a process-tree performance verdict."
+    ]
+  },
+  "samples": {
+    "lifecycle": [
+      {
+        "attempt": 1,
+        "durationMs": 1558.379125,
+        "versionCount": 20,
+        "retainedVersionCount": 20,
+        "listedVersionCounts": {
+          "frontendB": 20,
+          "verifyB": 20,
+          "frontendA": 20,
+          "verifyA": 20
+        },
+        "sceneSha256": {
+          "initial": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4",
+          "versionA": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4",
+          "versionB": "e140cb016de1a62825d0791d0a2e90c83a68cbb26a7696b605719dcc262ec57c",
+          "verifiedB": "e140cb016de1a62825d0791d0a2e90c83a68cbb26a7696b605719dcc262ec57c",
+          "verifiedA": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4"
+        },
+        "resourceFacts": {
+          "assetSha256": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+          "versionBObjectExists": true,
+          "versionBAssetExists": true,
+          "versionAObjectExists": true,
+          "versionAAssetExists": true,
+          "gcPreservedTargetObject": true,
+          "gcPreservedTargetAsset": true,
+          "gcDeletedTarget": false,
+          "targetRetainedSceneReferences": 0,
+          "targetRetainedAssetReferences": 0
+        },
+        "recoveryFacts": {
+          "frontendBAdopted": true,
+          "frontendAAdopted": true,
+          "verifyBStatus": "Completed",
+          "verifyAStatus": "Completed",
+          "frontendBStaleAutosaveRejected": true,
+          "frontendAStaleAutosaveRejected": true,
+          "evictionStatus": "Completed"
+        }
+      },
+      {
+        "attempt": 2,
+        "durationMs": 1573.335958,
+        "versionCount": 20,
+        "retainedVersionCount": 20,
+        "listedVersionCounts": {
+          "frontendB": 20,
+          "verifyB": 20,
+          "frontendA": 20,
+          "verifyA": 20
+        },
+        "sceneSha256": {
+          "initial": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4",
+          "versionA": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4",
+          "versionB": "e140cb016de1a62825d0791d0a2e90c83a68cbb26a7696b605719dcc262ec57c",
+          "verifiedB": "e140cb016de1a62825d0791d0a2e90c83a68cbb26a7696b605719dcc262ec57c",
+          "verifiedA": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4"
+        },
+        "resourceFacts": {
+          "assetSha256": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+          "versionBObjectExists": true,
+          "versionBAssetExists": true,
+          "versionAObjectExists": true,
+          "versionAAssetExists": true,
+          "gcPreservedTargetObject": true,
+          "gcPreservedTargetAsset": true,
+          "gcDeletedTarget": false,
+          "targetRetainedSceneReferences": 0,
+          "targetRetainedAssetReferences": 0
+        },
+        "recoveryFacts": {
+          "frontendBAdopted": true,
+          "frontendAAdopted": true,
+          "verifyBStatus": "Completed",
+          "verifyAStatus": "Completed",
+          "frontendBStaleAutosaveRejected": true,
+          "frontendAStaleAutosaveRejected": true,
+          "evictionStatus": "Completed"
+        }
+      },
+      {
+        "attempt": 3,
+        "durationMs": 1564.361667,
+        "versionCount": 20,
+        "retainedVersionCount": 20,
+        "listedVersionCounts": {
+          "frontendB": 20,
+          "verifyB": 20,
+          "frontendA": 20,
+          "verifyA": 20
+        },
+        "sceneSha256": {
+          "initial": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4",
+          "versionA": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4",
+          "versionB": "e140cb016de1a62825d0791d0a2e90c83a68cbb26a7696b605719dcc262ec57c",
+          "verifiedB": "e140cb016de1a62825d0791d0a2e90c83a68cbb26a7696b605719dcc262ec57c",
+          "verifiedA": "d26776a171af9fb433658f97e73c0112f0097f9704d61f5aebd3870e4fa3d8f4"
+        },
+        "resourceFacts": {
+          "assetSha256": "207ec2682a6a97243715b7b46e0c93eee7dad74cc7f42b825295a8261684a463",
+          "versionBObjectExists": true,
+          "versionBAssetExists": true,
+          "versionAObjectExists": true,
+          "versionAAssetExists": true,
+          "gcPreservedTargetObject": true,
+          "gcPreservedTargetAsset": true,
+          "gcDeletedTarget": false,
+          "targetRetainedSceneReferences": 0,
+          "targetRetainedAssetReferences": 0
+        },
+        "recoveryFacts": {
+          "frontendBAdopted": true,
+          "frontendAAdopted": true,
+          "verifyBStatus": "Completed",
+          "verifyAStatus": "Completed",
+          "frontendBStaleAutosaveRejected": true,
+          "frontendAStaleAutosaveRejected": true,
+          "evictionStatus": "Completed"
+        }
+      }
+    ]
+  },
+  "statistic": {
+    "lifecycleDurationP95": {
+      "value": 1573.335958,
+      "unit": "ms",
+      "statistic": "nearest-rank p95 of three independent complete journeys"
+    },
+    "versionCounts": [
+      20,
+      20,
+      20
+    ],
+    "retainedVersionCounts": [
+      20,
+      20,
+      20
+    ],
+    "listedVersionCounts": [
+      {
+        "frontendB": 20,
+        "verifyB": 20,
+        "frontendA": 20,
+        "verifyA": 20
+      },
+      {
+        "frontendB": 20,
+        "verifyB": 20,
+        "frontendA": 20,
+        "verifyA": 20
+      },
+      {
+        "frontendB": 20,
+        "verifyB": 20,
+        "frontendA": 20,
+        "verifyA": 20
+      }
+    ]
+  },
+  "budget": {
+    "lifecycleDuration": {
+      "value": null,
+      "unit": "ms",
+      "statistic": "descriptive nearest-rank p95 of three journeys; not evaluated"
+    }
+  },
+  "verdict": {
+    "overall": "not_evaluated",
+    "scope": "history-specific absolute facts and descriptive timing",
+    "reason": "No standalone local-version-history timing or memory budget is approved; T090/T108 own generic performance verdicts."
+  }
+}

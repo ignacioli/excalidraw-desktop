@@ -1,0 +1,43 @@
+{
+  "observedAt": "2026-10-04T14:12:55.475Z",
+  "baselineCommit": "babc027d64c2c50e6922482b416ef1099ea9d07e",
+  "baselineWorktree": "/Users/liyongqiang/.codex/worktrees/history-perf-baseline/local-version-history",
+  "binary": {
+    "path": "/private/tmp/t049-20261004-baseline-Oe9293/target/release/excalidraw-desktop",
+    "sha256": "4f6a1469ad69536253be3287882751e933e75e911a56920bcd2c64d932387063"
+  },
+  "buildBinding": "../baseline-build-20261004/binding.json",
+  "report": {
+    "path": "startup-idle.json",
+    "sha256": "60bda5d0ba907838b8ecaa08610caa052e585526602eafbaf1b62f762cac205d"
+  },
+  "runnerLog": {
+    "path": "runner.log.gz",
+    "uncompressedSha256": "f57e7a158763a96cf2935b52facbdef9b3e81f17d7bab05bad949f3555b48baf"
+  },
+  "exitCode": 1,
+  "runRoot": "/private/tmp/t049-20261004-baseline-physical-startup-001",
+  "command": {
+    "PERF_TEST": "1",
+    "APP_E2E": "1",
+    "PERF_REFERENCE_RUN": "0",
+    "PERF_EXECUTION_ENVIRONMENT": "physical",
+    "PERF_HOST_HARDWARE": "Mac17,9 (Apple M5 Pro)",
+    "PLAYWRIGHT_SKIP_WEBSERVER": "1",
+    "TMPDIR": "/private/tmp/t049-20261004-baseline-physical-startup-001/tmp",
+    "spec": "e2e/perf/startup-idle.spec.ts",
+    "workers": 1,
+    "retries": 0
+  },
+  "status": "INVALID_NOT_EVALUATED",
+  "counts": {
+    "coldStartToEditable": 0,
+    "requiredColdStarts": 10,
+    "processAlive": 1,
+    "idleSamples": 60
+  },
+  "reason": "First cold start failed to publish ready.json within unchanged 15000ms; idle editable readiness also not established",
+  "automaticRetries": 0,
+  "rootCause": "CONFIRMED BUILD-PREPARATION ERROR: raw Cargo build omitted Tauri custom-protocol, tauri fingerprint reports cargo:dev=true and binary uses configured localhost:1420 devUrl rather than embedding dist.",
+  "correction": "Rebuild both test-only binaries with project Tauri CLI --no-bundle --features e2e-harness in isolated targets; keep this run INVALID; retry only after corrected-mode verification with unchanged runtime assertions/timeouts."
+}

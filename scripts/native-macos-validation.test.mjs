@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import {
   EXPECTED_MENU_ITEMS,
   EXPECTED_WINDOW_SIZE,
+  HISTORY_MENU_READY_TIMEOUT_MS,
   NATIVE_ACTION_STEPS,
   PHYSICAL_COMMAND_S_TIMEOUT_MS,
   PROOF_SCOPES,
@@ -22,6 +23,7 @@ import {
   compareManifest,
   compareMenuObservation,
   commandSConfirmationLine,
+  historyPanelObservationAppleScript,
   completeExportDialogAppleScript,
   decodeAXModifiers,
   inspectMenuItemAppleScript,
@@ -33,6 +35,7 @@ import {
   parseWindowGeometryOutput,
   parseNativeValidationEvents,
   parseNativeValidationLine,
+  parseHistoryPanelObservation,
   resolveMenuItemAppleScript,
   runtimeProductIdentitySha256,
   sha256Path,
@@ -41,6 +44,14 @@ import {
   validateStopReopenDecision,
   validatePreparedNativeProfile,
   validationPair,
+  VERSION_HISTORY_MENU_ITEM,
+  uniqueHistoryTargetFileName,
+  waitForHistoryMenuReady,
+  waitForUniqueHistoryWindow,
+  parseHistoryReadiness,
+  historyReadinessAppleScript,
+  windowCountAppleScript,
+  sealProductionBundle,
   windowGeometryAppleScript,
   writeNativeValidationCollection,
 } from "./native-macos-validation.mjs";
@@ -96,6 +107,231 @@ function nativeBinding(overrides = {}) {
 }
 
 describe("native macOS validation helpers", () => {
+  it("waits for a real unique window and blocks ambiguous or absent windows", async () => {
+    let time = 0;
+    const options = {
+      timeoutMs: 500,
+      now: () => time,
+      delay: async (ms) => {
+        time += ms;
+      },
+    };
+    let attempts = 0;
+    const result = await waitForUniqueHistoryWindow(
+      () => (++attempts === 1 ? 0 : 1),
+      options,
+    );
+    assert.equal(result.status, "PASS");
+    assert.equal(result.attempts, 2);
+    assert.equal(
+      (await waitForUniqueHistoryWindow(() => 2, options)).status,
+      "BLOCKED",
+    );
+    time = 0;
+    const absent = await waitForUniqueHistoryWindow(() => 0, options);
+    assert.equal(absent.status, "BLOCKED");
+    assert.match(absent.error, /no AX window/u);
+  });
+
+  it("blocks missing UI state and dirty drawings despite seeded backend fixtures", () => {
+    const pending = [1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0];
+    assert.equal(
+      parseHistoryReadiness(pending.join("\t"), "pendingIssue").status,
+      "PASS",
+    );
+    for (const index of [1, 3, 5, 6]) {
+      const missing = [...pending];
+      missing[index] = 0;
+      assert.equal(
+        parseHistoryReadiness(missing.join("\t"), "pendingIssue").status,
+        "BLOCKED",
+      );
+    }
+    const dirty = [...pending];
+    dirty[4] = 1;
+    assert.equal(
+      parseHistoryReadiness(dirty.join("\t"), "pendingIssue").status,
+      "BLOCKED",
+    );
+    const unavailable = [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0];
+    assert.equal(
+      parseHistoryReadiness(unavailable.join("\t"), "unavailable").status,
+      "PASS",
+    );
+    unavailable[9] = 0;
+    assert.equal(
+      parseHistoryReadiness(unavailable.join("\t"), "unavailable").status,
+      "BLOCKED",
+    );
+    const list = [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 50, 0, 1, 1];
+    assert.equal(
+      parseHistoryReadiness(list.join("\t"), "longList").status,
+      "PASS",
+    );
+    const shortList = [...list];
+    shortList[11] = 2;
+    assert.equal(
+      parseHistoryReadiness(shortList.join("\t"), "longList", 50).status,
+      "BLOCKED",
+    );
+    assert.equal(
+      parseHistoryReadiness(list.join("\t"), "longList", 51).status,
+      "BLOCKED",
+    );
+    list[12] = 1;
+    assert.equal(
+      parseHistoryReadiness(list.join("\t"), "longList").status,
+      "BLOCKED",
+    );
+  });
+
+  it(
+    "reuses a docs-dirty package without building and blocks runtime dirtiness or package tampering",
+    { skip: process.platform !== "darwin" },
+    async () => {
+      const root = await fs.mkdtemp(
+        path.join(os.tmpdir(), "native-seal-reuse-"),
+      );
+      const git = (...args) => {
+        const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+        assert.equal(result.status, 0, result.stderr);
+        return result.stdout.trim();
+      };
+      try {
+        git("init");
+        git("config", "user.email", "fixture@example.test");
+        git("config", "user.name", "Fixture");
+        for (const dir of ["src", "src-tauri", "docs", "e2e/visual"])
+          await fs.mkdir(path.join(root, dir), { recursive: true });
+        await fs.writeFile(
+          path.join(root, "src/app.ts"),
+          "export const app = 1;\n",
+        );
+        await fs.writeFile(path.join(root, "docs/proof.md"), "initial\n");
+        await fs.writeFile(
+          path.join(root, "src-tauri/build.rs"),
+          "fn main() {}\n",
+        );
+        await fs.writeFile(
+          path.join(root, "e2e/visual/003EvidenceOwnership.json"),
+          JSON.stringify({
+            productIdentity: {
+              pathPrefixes: ["src/", "src-tauri/tauri.conf.json"],
+            },
+          }),
+        );
+        await fs.writeFile(
+          path.join(root, "src-tauri/tauri.conf.json"),
+          JSON.stringify({
+            productName: "Fixture",
+            identifier: "fixture",
+            version: "1",
+            mainBinaryName: "fixture",
+          }),
+        );
+        git("add", ".");
+        git("commit", "-m", "initial");
+        const manifest = {
+          schemaVersion: 1,
+          repositoryRoot: root,
+          gitCommit: git("rev-parse", "HEAD"),
+          appPath: path.join(
+            root,
+            "src-tauri/target/release/bundle/macos/Fixture.app",
+          ),
+          bundleIdentifier: "fixture",
+          version: "1",
+          buildVersion: "1",
+          executable: "fixture",
+          executableSha256: "aa".repeat(32),
+          packageSha256: "bb".repeat(32),
+          artifactSha256: "bb".repeat(32),
+          buildCommand: ["pnpm", ...PRODUCTION_APP_BUILD_ARGS],
+          artifacts: [],
+        };
+        const manifestPath = path.join(root, "manifest.json");
+        await fs.writeFile(manifestPath, JSON.stringify(manifest));
+        await fs.writeFile(path.join(root, "docs/proof.md"), "revised\n");
+        let builds = 0;
+        const options = {
+          repoRoot: root,
+          manifestPath,
+          build: () => {
+            builds += 1;
+            return { status: 1 };
+          },
+          inspect: async () => manifest,
+        };
+        assert.equal((await sealProductionBundle(options)).status, "PASS");
+        assert.equal(builds, 0);
+        await fs.writeFile(
+          path.join(root, "src-tauri/build.rs"),
+          'fn main() { println!("changed"); }\n',
+        );
+        const dirtyBuild = await sealProductionBundle(options);
+        assert.equal(dirtyBuild.status, "BLOCKED");
+        assert.match(
+          dirtyBuild.checks[0].error,
+          /Uncommitted runtime inputs: src-tauri\/build.rs/u,
+        );
+        await fs.writeFile(
+          path.join(root, "src-tauri/build.rs"),
+          "fn main() {}\n",
+        );
+        await fs.writeFile(
+          path.join(root, "src/app.ts"),
+          "export const app = 2;\n",
+        );
+        const dirty = await sealProductionBundle(options);
+        assert.equal(dirty.status, "BLOCKED");
+        assert.match(dirty.checks[0].error, /Uncommitted runtime/u);
+        await fs.writeFile(
+          path.join(root, "src/app.ts"),
+          "export const app = 1;\n",
+        );
+        const tampered = await sealProductionBundle({
+          ...options,
+          inspect: async () => ({ ...manifest, packageSha256: "changed" }),
+        });
+        assert.equal(tampered.status, "BLOCKED");
+        assert.equal(builds, 0);
+        assert.equal(
+          await fs.readFile(manifestPath, "utf8"),
+          JSON.stringify(manifest),
+        );
+        await fs.writeFile(manifestPath, "{invalid");
+        assert.equal((await sealProductionBundle(options)).status, "BLOCKED");
+        assert.equal(builds, 0);
+        assert.equal(await fs.readFile(manifestPath, "utf8"), "{invalid");
+        await fs.writeFile(manifestPath, JSON.stringify(manifest));
+        await fs.writeFile(
+          path.join(root, "src-tauri/build.rs"),
+          'fn main() { println!("changed"); }\n',
+        );
+        git("add", "src-tauri/build.rs");
+        git("commit", "-m", "change Tauri build script");
+        // The legacy runtime digest still matches; the independent build
+        // input guard must reject reuse despite that digest match.
+        assert.equal(
+          runtimeProductIdentitySha256(root, manifest.gitCommit),
+          runtimeProductIdentitySha256(root, git("rev-parse", "HEAD")),
+        );
+        const committedBuild = await sealProductionBundle(options);
+        assert.equal(committedBuild.status, "BLOCKED");
+        assert.match(
+          committedBuild.checks[0].error,
+          /Build inputs changed.*build.rs/u,
+        );
+        assert.equal(builds, 0);
+        assert.equal(
+          await fs.readFile(manifestPath, "utf8"),
+          JSON.stringify(manifest),
+        );
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    },
+  );
   it("seals only the production app bundle required by native validation", () => {
     assert.deepEqual(PRODUCTION_APP_BUILD_ARGS, [
       "tauri",
@@ -105,7 +341,7 @@ describe("native macOS validation helpers", () => {
     ]);
   });
 
-  it("keeps qualification minimal while final preserves all seven actions", () => {
+  it("keeps qualification minimal while final preserves the 003 graph and adds history entry inspection", () => {
     assert.equal(PHYSICAL_COMMAND_S_TIMEOUT_MS, 600_000);
     assert.deepEqual(
       nativeActionsForScope(PROOF_SCOPES.QUALIFICATION).map(({ id }) => id),
@@ -124,7 +360,80 @@ describe("native macOS validation helpers", () => {
       ],
     );
     assert.equal(nativeMenuItemsForScope(PROOF_SCOPES.QUALIFICATION).length, 1);
-    assert.equal(nativeMenuItemsForScope(PROOF_SCOPES.FINAL).length, 5);
+    assert.equal(nativeMenuItemsForScope(PROOF_SCOPES.FINAL).length, 6);
+    assert.deepEqual(
+      nativeMenuItemsForScope(PROOF_SCOPES.FINAL).at(-1),
+      VERSION_HISTORY_MENU_ITEM,
+    );
+    assert.deepEqual(nativeActionsForScope(PROOF_SCOPES.HISTORY), []);
+    assert.deepEqual(nativeMenuItemsForScope(PROOF_SCOPES.HISTORY), [
+      VERSION_HISTORY_MENU_ITEM,
+    ]);
+  });
+
+  it("waits for the actual History menu enabled state and fails at a bounded deadline", async () => {
+    assert.equal(HISTORY_MENU_READY_TIMEOUT_MS, 15_000);
+    let time = 0;
+    const observed = (enabled) => ({
+      label: "Version History…",
+      enabled,
+      keyboard: { character: "", modifiers: [] },
+    });
+    let count = 0;
+    const ready = await waitForHistoryMenuReady(() => observed(++count >= 3), {
+      timeoutMs: 500,
+      now: () => time,
+      delay: async (ms) => {
+        time += ms;
+      },
+    });
+    assert.equal(ready.status, "PASS");
+    assert.equal(ready.attempts, 3);
+    time = 0;
+    const timedOut = await waitForHistoryMenuReady(() => observed(false), {
+      timeoutMs: 500,
+      now: () => time,
+      delay: async (ms) => {
+        time += ms;
+      },
+    });
+    assert.equal(timedOut.status, "FAIL");
+    assert.equal(timedOut.item.observed.enabled, false);
+    const wrongLabel = await waitForHistoryMenuReady(
+      () => ({ ...observed(true), label: "History" }),
+      { timeoutMs: 500, now: () => 0 },
+    );
+    assert.equal(wrongLabel.status, "FAIL");
+    assert.equal(wrongLabel.attempts, 1);
+  });
+
+  it("requires a fixture-unique History filename and a complete AX panel observation", () => {
+    const fixtureFiles = [
+      { path: "flows/Checkout Flow.excalidraw" },
+      { path: "flows/Overview.excalidraw" },
+    ];
+    const launchDocument = "/tmp/workspace/flows/Checkout Flow.excalidraw";
+    assert.equal(
+      uniqueHistoryTargetFileName(fixtureFiles, launchDocument),
+      "Checkout Flow.excalidraw",
+    );
+    assert.equal(
+      uniqueHistoryTargetFileName(
+        [...fixtureFiles, { path: "other/Checkout Flow.excalidraw" }],
+        launchDocument,
+      ),
+      null,
+    );
+    assert.match(
+      historyPanelObservationAppleScript(123, 'a "quoted".excalidraw'),
+      /a \\"quoted\\"\.excalidraw/u,
+    );
+    assert.equal(parseHistoryPanelObservation("1\t1\t1").pass, true);
+    assert.equal(parseHistoryPanelObservation("1\t0\t1").pass, false);
+    assert.throws(
+      () => parseHistoryPanelObservation("1\tbad\t1"),
+      NativeValidationBlockedError,
+    );
   });
 
   it("accepts one exact nonce confirmation and rejects mismatch or duplication", () => {
@@ -354,7 +663,10 @@ describe("native macOS validation helpers", () => {
         const scripts = [
           resolveMenuItemAppleScript(123, ["File", "Save"], "click targetItem"),
           inspectMenuItemAppleScript(123, EXPECTED_MENU_ITEMS[0]),
+          inspectMenuItemAppleScript(123, VERSION_HISTORY_MENU_ITEM),
           windowGeometryAppleScript(123),
+          windowCountAppleScript(123),
+          historyReadinessAppleScript(123, "History pending issue.excalidraw"),
           completeExportDialogAppleScript(123, "png", "/tmp/out/Test.png"),
           completeExportDialogAppleScript(123, "svg", "/tmp/out/Test.svg"),
         ];
@@ -389,6 +701,12 @@ describe("native macOS validation helpers", () => {
         'EXCALIDRAW_NATIVE_MENU_VALIDATION {"stage":"nativeEntry","validationId":0,"command":"save"}',
       ),
       null,
+    );
+    assert.deepEqual(
+      parseNativeValidationLine(
+        'EXCALIDRAW_NATIVE_MENU_VALIDATION {"stage":"applicationRoute","validationId":8,"command":"versionHistory"}',
+      ),
+      { stage: "applicationRoute", validationId: 8, command: "versionHistory" },
     );
   });
 
@@ -447,6 +765,14 @@ describe("native macOS validation helpers", () => {
         keyboard: { character: "e", modifiers: 1 },
       }).pass,
       false,
+    );
+    assert.equal(
+      compareMenuObservation(VERSION_HISTORY_MENU_ITEM, {
+        label: "Version History…",
+        enabled: true,
+        keyboard: { character: "", modifiers: 8 },
+      }).pass,
+      true,
     );
   });
 
@@ -607,6 +933,21 @@ describe("native macOS validation helpers", () => {
         ].map(([id, command, validationId]) =>
           makeCheck(id, id, "PASS", { command, validationId }),
         ),
+        makeCheck(
+          "version-history-route",
+          "native Version History menu route for the launched document",
+          "PASS",
+          {
+            command: "versionHistory",
+            validationId: 8,
+            targetDocumentBinding: {
+              launchMode: "single-normal-open-argument",
+              path: "/tmp/Architecture.excalidraw",
+              sha256: "89".repeat(32),
+              byteLength: 128,
+            },
+          },
+        ),
       ],
     });
     const adapted = adaptNativeValidationReport(report, binding);
@@ -619,6 +960,24 @@ describe("native macOS validation helpers", () => {
     );
     assert.equal("filesystemOutcomes" in adapted, false);
     assert.equal(adapted.routeAcknowledgements.result, "PASS");
+    assert.equal(adapted.versionHistoryEntry.result, "PASS");
+    assert.equal(adapted.versionHistoryEntry.action.validationId, 8);
+    assert.equal(
+      adapted.versionHistoryEntry.targetDocumentBinding.path,
+      "/tmp/Architecture.excalidraw",
+    );
+    const missingTargetBinding = adaptNativeValidationReport(
+      {
+        ...report,
+        checks: report.checks.map((check) =>
+          check.id === "version-history-route"
+            ? { ...check, targetDocumentBinding: undefined }
+            : check,
+        ),
+      },
+      binding,
+    );
+    assert.equal(missingTargetBinding.versionHistoryEntry.result, "BLOCKED");
     assert.equal(
       adapted.environment.statePreparation.sha256Before,
       adapted.environment.statePreparation.sha256After,
@@ -653,10 +1012,49 @@ describe("native macOS validation helpers", () => {
       qualificationBinding,
     );
     assert.equal(qualification.routeAcknowledgements.result, "PASS");
+    assert.equal(qualification.versionHistoryEntry, null);
     assert.deepEqual(
       qualification.routeAcknowledgements.actions.map(({ checkId }) => checkId),
       ["save-menu", "save-keyboard"],
     );
+
+    const historyBinding = nativeBinding({ proofScope: PROOF_SCOPES.HISTORY });
+    const historyReport = structuredClone(report);
+    historyReport.checks = historyReport.checks.filter((check) =>
+      new Set([
+        "native-menu",
+        "window-geometry",
+        "state-preparation",
+        "version-history-route",
+      ]).has(check.id),
+    );
+    const historyRoute = historyReport.checks.find(
+      (check) => check.id === "version-history-route",
+    );
+    Object.assign(historyRoute.targetDocumentBinding, {
+      observationMethod: "ax-history-panel-filename",
+      observedFileName: "Architecture.excalidraw",
+      uniqueFileNameInFixture: true,
+      panelObservation: {
+        headingCount: 1,
+        fileNameCount: 1,
+        closeCount: 1,
+        pass: true,
+      },
+    });
+    const history = adaptNativeValidationReport(historyReport, historyBinding);
+    assert.deepEqual(history.routeAcknowledgements.actions, []);
+    assert.equal(history.routeAcknowledgements.result, "PASS");
+    assert.equal(history.versionHistoryEntry.result, "PASS");
+    const launchOnlyReport = structuredClone(historyReport);
+    delete launchOnlyReport.checks.find(
+      (check) => check.id === "version-history-route",
+    ).targetDocumentBinding.observationMethod;
+    const launchOnly = adaptNativeValidationReport(
+      launchOnlyReport,
+      historyBinding,
+    );
+    assert.equal(launchOnly.versionHistoryEntry.result, "BLOCKED");
 
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "excalidraw-native-adapter-"),
@@ -674,6 +1072,16 @@ describe("native macOS validation helpers", () => {
           await fs.readFile(path.join(collection, "environment.json"), "utf8"),
         ).productIdentity.packageArtifactSha256,
         binding.productIdentity.packageArtifactSha256,
+      );
+      assert.deepEqual(
+        JSON.parse(
+          await fs.readFile(
+            path.join(collection, "version-history-entry.json"),
+            "utf8",
+          ),
+        ).targetDocumentBinding,
+        report.checks.find((check) => check.id === "version-history-route")
+          .targetDocumentBinding,
       );
       await assert.rejects(
         fs.access(path.join(collection, "filesystem-outcomes.json")),
@@ -728,6 +1136,100 @@ describe("native macOS validation helpers", () => {
     );
     assert.equal(adapted.routeAcknowledgements.result, "BLOCKED");
     assert.equal("filesystemOutcomes" in adapted, false);
+  });
+
+  it("collects an early process-safety BLOCKED report with its verified profile identity", async () => {
+    const binding = nativeBinding();
+    const report = buildReport({
+      command: "validate",
+      manifest: {
+        artifactSha256: binding.packageArtifactSha256,
+        bundleIdentifier: binding.productIdentity.bundleIdentifier,
+        version: binding.productIdentity.version,
+      },
+      checks: [
+        makeCheck("disposable-profile", "prepared profile", "PASS", {
+          nativeEntrypointProfileSha256: binding.nativeEntrypointProfileSha256,
+        }),
+        makeCheck("process-safety", "no ambiguous app process", "BLOCKED", {
+          processes: ["9395 /tmp/excalidraw-desktop"],
+        }),
+      ],
+    });
+    assert.equal(report.nativeEntrypointProfileSha256, undefined);
+    assert.equal(report.status, "BLOCKED");
+
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "excalidraw-native-early-block-"),
+    );
+    try {
+      const collection = path.join(root, "collection");
+      const collectorReport = await writeNativeValidationCollection(
+        collection,
+        report,
+        binding,
+      );
+      assert.equal(collectorReport.result, "BLOCKED");
+      assert.equal(collectorReport.claims[0].result, "BLOCKED");
+      assert.equal(
+        JSON.parse(
+          await fs.readFile(
+            path.join(collection, "route-acknowledgements.json"),
+            "utf8",
+          ),
+        ).result,
+        "BLOCKED",
+      );
+      assert.equal(
+        JSON.parse(
+          await fs.readFile(
+            path.join(
+              root,
+              "attempts",
+              binding.attemptIdentity.attemptId,
+              "attempt.json",
+            ),
+            "utf8",
+          ),
+        ).verdict,
+        "BLOCKED",
+      );
+      assert.throws(
+        () =>
+          adaptNativeValidationReport(
+            {
+              ...report,
+              checks: [
+                {
+                  ...report.checks[0],
+                  nativeEntrypointProfileSha256: "00".repeat(32),
+                },
+                report.checks[1],
+              ],
+            },
+            binding,
+          ),
+        /identity does not match/u,
+      );
+      assert.throws(
+        () =>
+          adaptNativeValidationReport(
+            { ...report, checks: [report.checks[1]] },
+            binding,
+          ),
+        /identity does not match/u,
+      );
+      assert.throws(
+        () =>
+          adaptNativeValidationReport(
+            { ...report, nativeEntrypointProfileSha256: "00".repeat(32) },
+            binding,
+          ),
+        /identity does not match/u,
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 
   it("normalizes failure identity independently of PID, path, timestamp, and wording", () => {

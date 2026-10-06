@@ -7,6 +7,10 @@ use excalidraw_desktop_lib::{
         workspace::WorkspaceService,
     },
     database::repository::SqliteRepository,
+    history::{
+        identity::{IdentityError, IdentityStoreError},
+        store::HistoryStore,
+    },
     workspace_entries::{WorkspaceEntryService, WorkspaceMutationGate},
 };
 
@@ -151,6 +155,81 @@ async fn workspace_contract_retains_unmounted_history_and_reuses_its_identity() 
         .await
         .unwrap();
     assert_eq!(remounted.id, mounted.id);
+}
+
+#[tokio::test]
+async fn workspace_contract_reauthorizes_remount_without_rebinding_history_identity() {
+    let fixture = Fixture::new().await;
+    let drawing = fixture.workspace.join("drawing.excalidraw");
+    fs::write(&drawing, "scene-a").unwrap();
+    let history =
+        HistoryStore::open_version_history_root(&fixture.root.join("version-history")).unwrap();
+    let original_identity = history
+        .resolve_document_identity_for_open(&drawing, 1)
+        .unwrap();
+
+    let mounted = fixture
+        .workspaces
+        .add(WorkspaceAddRequest {
+            root_path: fixture.workspace.display().to_string(),
+            name: None,
+        })
+        .await
+        .unwrap();
+    fixture
+        .workspaces
+        .remove(WorkspaceRemoveRequest {
+            workspace_id: mounted.id.clone(),
+        })
+        .await
+        .unwrap();
+
+    let remounted = fixture
+        .workspaces
+        .remount(mounted.id.clone())
+        .await
+        .unwrap();
+    assert_eq!(remounted.id, mounted.id);
+
+    let remounted_identity = history
+        .resolve_document_identity_for_open(&drawing, 2)
+        .unwrap();
+    assert_eq!(
+        remounted_identity.document_id,
+        original_identity.document_id
+    );
+    assert_eq!(
+        remounted_identity.canonical_path,
+        original_identity.canonical_path
+    );
+    assert!(remounted_identity
+        .filesystem_identity
+        .refers_to_same_file(&original_identity.filesystem_identity));
+
+    fixture
+        .workspaces
+        .remove(WorkspaceRemoveRequest {
+            workspace_id: mounted.id,
+        })
+        .await
+        .unwrap();
+    let replacement = drawing.with_extension("tmp");
+    fs::write(&replacement, "scene-a").unwrap();
+    fs::rename(&replacement, &drawing).unwrap();
+
+    fixture.workspaces.remount(remounted.id).await.unwrap();
+    let error = history
+        .resolve_document_identity_for_open(&drawing, 3)
+        .expect_err("same-path replacement must not inherit remounted history");
+    assert!(matches!(
+        error,
+        IdentityStoreError::Identity(IdentityError::ExternalReplacement { .. })
+    ));
+    let persisted = history
+        .load_active_document_identity(&original_identity.canonical_path)
+        .unwrap()
+        .unwrap();
+    assert_eq!(persisted.document_id, original_identity.document_id);
 }
 
 #[tokio::test]

@@ -1,0 +1,88 @@
+{
+  "role": "candidate",
+  "scenario": "soak",
+  "runRoot": "/private/tmp/t049-20261004-resume-candidate-soak-002",
+  "runnerCheckout": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history",
+  "runnerCommit": "91c5d7b36266935c64bd855a9956e8ae0526d73d",
+  "productSourceCommit": "eb961ca8c8b221c34a11989d5e4d37e9a9e8f537",
+  "buildCheckoutCommit": "711ce26ff94976e91d48ad39970b7ca46e22152a",
+  "binary": {
+    "path": "/private/tmp/t049-20261004-candidate-QF5bUb/corrected/excalidraw-desktop",
+    "sha256": "3b641885ffa43a439f99ca16ad8c424830fb2a16f2ec16cbcc932bd66d95fe99",
+    "sizeBytes": 35820000
+  },
+  "buildBinding": "../../candidate-build-20261004/corrected-binding.json",
+  "reportSha256": "018facd928b9abd34e10be5045686b1e47b3341cfdf1144f25e4db2f848bca6c",
+  "runnerLogUncompressedSha256": "69ef2b95eddc25d1ebd4711f056de3d1102434bea0a52c6cf6dd2b51ec5bdd2b",
+  "exitCode": 1,
+  "runnerHashes": [
+    {
+      "path": "e2e/perf/edit-soak.spec.ts",
+      "sha256": "ebd231ab172d5e6caf1308466f681c136fd027fb150f730fa7db9b9427b443bb"
+    },
+    {
+      "path": "e2e/perf/helpers/processMetrics.ts",
+      "sha256": "88f0d66d54ccc8c411c5fe386276cf871bf28ce69d81e69b167be43ec94fb30f"
+    },
+    {
+      "path": "e2e/perf/helpers/workloads.ts",
+      "sha256": "53aef4d9712dffd350739e857e0989d520ebb53018d7e50c5c993ddfd17b4375"
+    },
+    {
+      "path": "e2e/perf/helpers/nativePerformanceContract.ts",
+      "sha256": "982960e39c71ab6cef8cb9c9795b0657c0cf49d4f393835f7695025db67b8210"
+    },
+    {
+      "path": "e2e/helpers/app.ts",
+      "sha256": "f10cc0f63a6da9839ebec82803e531d513f0d4f98b6397e695d5a83b89c98e27"
+    },
+    {
+      "path": "e2e/helpers/webkitProcesses.ts",
+      "sha256": "c4ab25b7af56fbd104dcb551d4e0b197a0bef101f1a5947bccb6f1c8bc63b8af"
+    },
+    {
+      "path": "e2e/playwright.config.ts",
+      "sha256": "3c4779f3f225fa13980f8c15b9452763e51a054b71dccd0dd1004d75ee91a73e"
+    }
+  ],
+  "command": [
+    "/usr/bin/caffeinate",
+    "-di",
+    "pnpm",
+    "exec",
+    "playwright",
+    "test",
+    "--config",
+    "e2e/playwright.config.ts",
+    "e2e/perf/edit-soak.spec.ts",
+    "--workers=1",
+    "--retries=0",
+    "--reporter=line",
+    "--output=/private/tmp/t049-20261004-resume-candidate-soak-002/playwright"
+  ],
+  "environment": {
+    "PERF_TEST": "1",
+    "APP_E2E": "1",
+    "PERF_REFERENCE_RUN": "0",
+    "PERF_EXECUTION_ENVIRONMENT": "physical",
+    "PERF_HOST_HARDWARE": "Mac17,9 (Apple M5 Pro)",
+    "EXCALIDRAW_E2E_BINARY": "/private/tmp/t049-20261004-candidate-QF5bUb/corrected/excalidraw-desktop",
+    "TMPDIR": "/private/tmp/t049-20261004-resume-candidate-soak-002/tmp",
+    "reportPath": "/private/tmp/t049-20261004-resume-candidate-soak-002/edit-soak.json",
+    "PERF_DIAGNOSTIC_SOAK_DURATION_MS": null
+  },
+  "rawReportUnmodified": true,
+  "verdict": {
+    "overall": "not_evaluated",
+    "scope": "diagnostic T108 soak",
+    "reason": "The 15-minute native editing contract was unavailable or incomplete. Tauri root process 79895 is not running.",
+    "comparisons": null
+  },
+  "healthSha256": "06ced44c1ab2f1a45fde6f08feaf1e62fae534938f07181b89f359513510f552",
+  "measurementValidity": "INTERRUPTED_FOR_TASK_REVIEW",
+  "pairedComparisonEligible": false,
+  "interruption": "review-interruption.json",
+  "productFailure": false,
+  "assertions": "awake-assertions.txt",
+  "assertionsReleasedAfterRun": true
+}

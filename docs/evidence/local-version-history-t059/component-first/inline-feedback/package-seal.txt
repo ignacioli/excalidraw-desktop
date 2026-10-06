@@ -1,0 +1,267 @@
+$ node scripts/native-macos-validation.mjs seal -- --manifest /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/package-manifest.json
+$ tauri build --bundles app
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `pnpm build`
+$ pnpm typecheck && vite build
+$ tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+vite v8.2.1 building client environment for production...
+[2Ktransforming...✓ 2389 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                           0.60 kB │ gzip:   0.35 kB
+dist/assets/Assistant-SemiBold-SCI4bEL9.woff2            20.21 kB
+dist/assets/Assistant-Regular-DVxZuzxb.woff2             20.23 kB
+dist/assets/Assistant-Medium-DrcxCXg3.woff2              20.32 kB
+dist/assets/Assistant-Bold-gm-uSS1B.woff2                20.38 kB
+dist/assets/index-CLzXf4Ci.css                            1.59 kB │ gzip:   0.61 kB
+dist/assets/App-Bam5cuqJ.css                            181.48 kB │ gzip:  28.54 kB
+dist/assets/percentages-BXMCSKIN-OYVqOfk_.js              0.09 kB │ gzip:   0.09 kB
+dist/assets/image-GAAHSSAO-UskicqA8.js                    0.09 kB │ gzip:   0.09 kB
+dist/assets/array-BifhSqXX.js                             0.10 kB │ gzip:   0.11 kB
+dist/assets/channel-V597XcEY.js                           0.11 kB │ gzip:   0.12 kB
+dist/assets/pie-RZYD4A2V-BRmGgsWi.js                      0.12 kB │ gzip:   0.13 kB
+dist/assets/info-DKCQHKI2-By53wkIw.js                     0.12 kB │ gzip:   0.13 kB
+dist/assets/radar-I7S5WNFK-BnHGSCDt.js                    0.12 kB │ gzip:   0.13 kB
+dist/assets/packet-7NZHBO7P-DDxp8Akx.js                   0.12 kB │ gzip:   0.13 kB
+dist/assets/cynefin-VYW2F7L2-DLcppDvt.js                  0.12 kB │ gzip:   0.13 kB
+dist/assets/treemap-6X3UGDF4-DUyJ8LUl.js                  0.12 kB │ gzip:   0.13 kB
+dist/assets/wardley-OPB4EBWU-C23_bUfv.js                  0.12 kB │ gzip:   0.13 kB
+dist/assets/gitGraph-TEB2WS4Q-DIODOqhE.js                 0.12 kB │ gzip:   0.13 kB
+dist/assets/railroad-3IZDKUUU-BPFJQfBR.js                 0.12 kB │ gzip:   0.13 kB
+dist/assets/treeView-QDETBFTQ-DhtuaJqH.js                 0.12 kB │ gzip:   0.13 kB
+dist/assets/railroad-peg-LSFZ7HO6-BVygkuKy.js             0.13 kB │ gzip:   0.13 kB
+dist/assets/architecture-TIHT7OUA-InbWChrn.js             0.13 kB │ gzip:   0.13 kB
+dist/assets/railroad-abnf-AHOZXSZD-DM36VIY_.js            0.13 kB │ gzip:   0.13 kB
+dist/assets/railroad-ebnf-EBAXGLYW-DT13FfW8.js            0.13 kB │ gzip:   0.13 kB
+dist/assets/eventmodeling-45OFAUF4-DPzrCF6p.js            0.13 kB │ gzip:   0.13 kB
+dist/assets/init-C-OQMol4.js                              0.14 kB │ gzip:   0.12 kB
+dist/assets/chunk-Y2CYZVJY-DsF7k-Jl.js                    0.15 kB │ gzip:   0.14 kB
+dist/assets/subset-shared.chunk-B-q9og1W.js               0.17 kB │ gzip:   0.15 kB
+dist/assets/chunk-2Q5K7J3B-C1jixKkw.js                    0.19 kB │ gzip:   0.16 kB
+dist/assets/chunk-JWPE2WC7-DVXcaiue.js                    0.22 kB │ gzip:   0.17 kB
+dist/assets/chunk-XXDRQBXY-BvKO0v-W.js                    0.26 kB │ gzip:   0.22 kB
+dist/assets/dist-js-kUTipges.js                           0.29 kB │ gzip:   0.18 kB
+dist/assets/subset-worker.chunk-C8S7rlIe.js               0.34 kB │ gzip:   0.27 kB
+dist/assets/chunk-5VM5RSS4-ZNzvKenW.js                    0.36 kB │ gzip:   0.27 kB
+dist/assets/file-open-7c801643-DZtJT5zp.js                0.44 kB │ gzip:   0.31 kB
+dist/assets/file-open-002ab408-BHUWm0Sh.js                0.52 kB │ gzip:   0.32 kB
+dist/assets/flowDiagram-UKHOOZJN-OuAoE2Vz.js              0.56 kB │ gzip:   0.30 kB
+dist/assets/chunk-KBJHAD2P-43C7Vt0Q.js                    0.57 kB │ gzip:   0.39 kB
+dist/assets/directory-open-01563666-D4xXyWb_.js           0.58 kB │ gzip:   0.36 kB
+dist/assets/infoDiagram-6WML65LV-BaS4qSsB.js              0.64 kB │ gzip:   0.41 kB
+dist/assets/file-save-3189631c-CO9S4HFW.js                0.69 kB │ gzip:   0.44 kB
+dist/assets/classDiagram-JCYQIIEL-BetpcQh9.js             0.77 kB │ gzip:   0.44 kB
+dist/assets/classDiagram-v2-OCEON4UE-BetpcQh9.js          0.77 kB │ gzip:   0.44 kB
+dist/assets/stateDiagram-v2-UEYNNEHI-D7efbLdI.js          0.77 kB │ gzip:   0.44 kB
+dist/assets/swimlanesDiagram-ULZ7WXOC-CCpodonr.js         0.82 kB │ gzip:   0.47 kB
+dist/assets/file-save-745eba88-Bwdfz6OZ.js                0.85 kB │ gzip:   0.49 kB
+dist/assets/en-B4ZKOASM-CUYyIdxY.js                       0.85 kB │ gzip:   0.45 kB
+dist/assets/sizeCapture-X5ZJPWSS-B0uUizjq.js              0.87 kB │ gzip:   0.51 kB
+dist/assets/line-BNZ10asP.js                              0.94 kB │ gzip:   0.47 kB
+dist/assets/chunk-UBXNYLIW-HrTIUq-b.js                    0.96 kB │ gzip:   0.59 kB
+dist/assets/rolldown-runtime-Dd_uD5pT.js                  1.10 kB │ gzip:   0.62 kB
+dist/assets/ordinal-BDEzSJ7C.js                           1.17 kB │ gzip:   0.56 kB
+dist/assets/core-D_BxB4GX.js                              1.17 kB │ gzip:   0.56 kB
+dist/assets/event-DSZgsr9M.js                             1.37 kB │ gzip:   0.65 kB
+dist/assets/directory-open-4ed118d0-1i309Asm.js           1.51 kB │ gzip:   0.76 kB
+dist/assets/railroadDiagram-AXF67PYL-DQ6LmChI.js          1.66 kB │ gzip:   0.77 kB
+dist/assets/abnfDiagram-N423BO3Z-BGC1WN7S.js              1.84 kB │ gzip:   0.89 kB
+dist/assets/chunk-W5SLKNZC-0kq-cdWg.js                    1.84 kB │ gzip:   0.90 kB
+dist/assets/chunk-2GRJ4B5K-zD5od2hR.js                    1.97 kB │ gzip:   0.88 kB
+dist/assets/pegDiagram-VL7TDLO6-Ds7ewfsp.js               2.00 kB │ gzip:   0.94 kB
+dist/assets/ebnfDiagram-BXEA7PRR-BEvt7gis.js              2.06 kB │ gzip:   0.89 kB
+dist/assets/chunk-7BUUIJ7U-Bb538aSH.js                    2.10 kB │ gzip:   0.82 kB
+dist/assets/dist-B_J_HbC0.js                              2.17 kB │ gzip:   0.97 kB
+dist/assets/path-fybaL0A-.js                              2.27 kB │ gzip:   0.98 kB
+dist/assets/roundRect-D01gJrlt.js                         2.87 kB │ gzip:   0.99 kB
+dist/assets/arc-DgcGdgmL.js                               3.47 kB │ gzip:   1.46 kB
+dist/assets/diagram-LBJQPF4R-pouyyUZ6.js                  4.27 kB │ gzip:   1.84 kB
+dist/assets/defaultLocale-BFoDCU3G.js                     4.63 kB │ gzip:   2.12 kB
+dist/assets/map-BaFkSB1l.js                               5.03 kB │ gzip:   2.05 kB
+dist/assets/linear-n-3HSMUF.js                            5.51 kB │ gzip:   2.25 kB
+dist/assets/chunk-4I5QYGJK-CkINaD2H.js                    5.83 kB │ gzip:   2.68 kB
+dist/assets/diagram-UB23O5K3-BxpI84KJ.js                  6.06 kB │ gzip:   2.56 kB
+dist/assets/pieDiagram-7S7Q4E2Y-bE_Jzdkk.js               6.20 kB │ gzip:   2.59 kB
+dist/assets/chunk-RYQCIY6F-D-a0zH8K.js                    7.02 kB │ gzip:   2.68 kB
+dist/assets/diagram-7IWD3JNH-Cjy-DZ2O.js                  8.30 kB │ gzip:   3.71 kB
+dist/assets/si-LK-N5RQ5JYF-gXg1umQK.js                    8.57 kB │ gzip:   3.35 kB
+dist/assets/az-AZ-76LH7QW2-C_5qCh52.js                    8.60 kB │ gzip:   3.58 kB
+dist/assets/dagre-VZM6K2ZE-DhwJ_d2N.js                    8.81 kB │ gzip:   3.41 kB
+dist/assets/zh-HK-E62DVLB3-DNCVjmcJ.js                    9.07 kB │ gzip:   4.09 kB
+dist/assets/cynefinDiagram-MW4NZA55-CqRhD9K2.js           9.93 kB │ gzip:   3.51 kB
+dist/assets/kk-KZ-P5N5QNE5-DB6NwhBK.js                   10.11 kB │ gzip:   4.18 kB
+dist/assets/kaa-6HZHGXH3-O7p_I43G.js                     10.15 kB │ gzip:   4.17 kB
+dist/assets/stateDiagram-OKZ733FA-Bxu5oKOo.js            10.63 kB │ gzip:   3.74 kB
+dist/assets/diagram-B4RE2ZJO-OIGxkVCa.js                 10.66 kB │ gzip:   4.12 kB
+dist/assets/lt-LT-XHIRWOB4-C3DLDilc.js                   12.49 kB │ gzip:   5.36 kB
+dist/assets/window-auUQFHIV.js                           13.01 kB │ gzip:   3.14 kB
+dist/assets/vi-VN-M7AON7JQ-DWoKLWU0.js                   13.85 kB │ gzip:   5.78 kB
+dist/assets/da-DK-5WZEPLOC-nz3Jergg.js                   14.40 kB │ gzip:   6.07 kB
+dist/assets/th-TH-HPSO5L25-BCGIMwPW.js                   15.51 kB │ gzip:   5.17 kB
+dist/assets/chunk-6Q2QTUOP-BZFz5XRd.js                   15.63 kB │ gzip:   4.34 kB
+dist/assets/diagram-Q27KOJAE-D2wvde8C.js                 15.74 kB │ gzip:   5.52 kB
+dist/assets/nn-NO-6E72VCQL-BhDfH3tM.js                   15.94 kB │ gzip:   6.71 kB
+dist/assets/mermaid-parser.core-DVh6SYry.js              16.58 kB │ gzip:   3.92 kB
+dist/assets/nl-NL-IS3SIHDZ-CNRaK2Hq.js                   16.72 kB │ gzip:   6.91 kB
+dist/assets/ishikawaDiagram-WSZJBQD7-DutWLWC5.js         17.30 kB │ gzip:   6.52 kB
+dist/assets/my-MM-5M5IBNSE-D_EXd8AR.js                   17.56 kB │ gzip:   5.28 kB
+dist/assets/hu-HU-A5ZG7DT2-mPee9v9u.js                   18.07 kB │ gzip:   7.57 kB
+dist/assets/fi-FI-Z5N7JZ37-BIl4rbcJ.js                   18.39 kB │ gzip:   7.52 kB
+dist/assets/kab-KAB-ZGHBKWFO-C7puY07R.js                 18.77 kB │ gzip:   7.54 kB
+dist/assets/zh-TW-RAJ6MFWO-OvBgzt4a.js                   18.98 kB │ gzip:   8.85 kB
+dist/assets/zh-CN-LNUGB5OW-Cv7qDPaN.js                   19.04 kB │ gzip:   8.86 kB
+dist/assets/lv-LV-5QDEKY6T-C6q__rc9.js                   19.13 kB │ gzip:   7.78 kB
+dist/assets/gl-ES-HMX3MZ6V-Bl7coJNU.js                   19.37 kB │ gzip:   7.72 kB
+dist/assets/tr-TR-DEFEU3FU-DnAyf4Yd.js                   19.49 kB │ gzip:   7.95 kB
+dist/assets/cs-CZ-2BRQDIVT-Cfy8UukX.js                   19.51 kB │ gzip:   8.39 kB
+dist/assets/pt-PT-UZXXM6DQ-DJSGF-st.js                   19.64 kB │ gzip:   7.79 kB
+dist/assets/id-ID-SAP4L64H-Do0Nt5wy.js                   19.67 kB │ gzip:   7.67 kB
+dist/assets/ca-ES-6MX7JW3Y-CDvcXj8x.js                   19.78 kB │ gzip:   7.89 kB
+dist/assets/oc-FR-POXYY2M6-C6l5Br_0.js                   19.83 kB │ gzip:   7.79 kB
+dist/assets/nb-NO-T6EIAALU-Dy2RwAPE.js                   20.09 kB │ gzip:   8.18 kB
+dist/assets/kanban-definition-27J2QSJJ-DVShbLcD.js       20.21 kB │ gzip:   7.12 kB
+dist/assets/he-IL-6SHJWFNN-VlBLMfLQ.js                   20.31 kB │ gzip:   7.53 kB
+dist/assets/bg-BG-XCXSNQG7-AWSXJJBA.js                   20.75 kB │ gzip:   7.38 kB
+dist/assets/pt-BR-5N22H2LF-Dwa9mn05.js                   21.03 kB │ gzip:   8.21 kB
+dist/assets/eu-ES-A7QVB2H4-BO27qspU.js                   21.19 kB │ gzip:   8.22 kB
+dist/assets/es-ES-U4NZUMDT-CJ_679JF.js                   21.34 kB │ gzip:   8.49 kB
+dist/assets/sl-SI-NN7IZMDC-DexeK9iI.js                   21.35 kB │ gzip:   8.58 kB
+dist/assets/sv-SE-XGPEYMSR-CVZpbMQg.js                   21.50 kB │ gzip:   8.55 kB
+dist/assets/it-IT-JPQ66NNP-BjgGldVd.js                   22.05 kB │ gzip:   8.57 kB
+dist/assets/sk-SK-C5VTKIMK-CXDOlc6Q.js                   22.30 kB │ gzip:   9.10 kB
+dist/assets/pl-PL-T2D74RX3-DHPxsYAp.js                   22.49 kB │ gzip:   9.22 kB
+dist/assets/sankeyDiagram-W5VNT64P-DdYwku3x.js           22.79 kB │ gzip:   8.25 kB
+dist/assets/ro-RO-JPDTUUEW-B_RW7E4t.js                   23.13 kB │ gzip:   8.93 kB
+dist/assets/journeyDiagram-NVQOT4AX-DI-79v1M.js          23.15 kB │ gzip:   8.15 kB
+dist/assets/de-DE-XR44H4JA-ByzlBlZD.js                   23.33 kB │ gzip:   8.96 kB
+dist/assets/ja-JP-DBVTYXUO-DJXQxZ4b.js                   23.39 kB │ gzip:   8.78 kB
+dist/assets/mindmap-definition-FAOFIHXS-BdN2uSX6.js      23.43 kB │ gzip:   8.01 kB
+dist/assets/fr-FR-RHASNOE6-BuL6dM-U.js                   23.44 kB │ gzip:   8.86 kB
+dist/assets/bn-BD-2XOGV67Q-BHTIianW.js                   23.59 kB │ gzip:   6.67 kB
+dist/assets/ko-KR-MTYHY66A-DI7nZSPs.js                   23.87 kB │ gzip:   9.17 kB
+dist/assets/graphlib-DS17s2tU.js                         23.90 kB │ gzip:   8.31 kB
+dist/assets/fa-IR-HGAKTJCU-DvkpmEeh.js                   24.23 kB │ gzip:   8.43 kB
+dist/assets/wardleyDiagram-T6FBY63Y-CbkRhybJ.js          25.19 kB │ gzip:   6.55 kB
+dist/assets/ar-SA-G6X2FPQ2-B3QmRIbu.js                   25.66 kB │ gzip:   9.10 kB
+dist/assets/erDiagram-JOGREHBK-DgOPe8gl.js               27.09 kB │ gzip:   9.43 kB
+dist/assets/rough.esm-Dy-Kn_BL.js                        27.10 kB │ gzip:   8.85 kB
+dist/assets/pa-IN-N4M65BXN-8_GXSIkl.js                   27.96 kB │ gzip:   7.97 kB
+dist/assets/gitGraphDiagram-DS77QQ5N-WLrcQLU5.js         29.01 kB │ gzip:   8.57 kB
+dist/assets/ku-TR-6OUDTVRD-5gFyPmpB.js                   29.31 kB │ gzip:   9.26 kB
+dist/assets/el-GR-BZB4AONW-Vj9pkqBJ.js                   29.66 kB │ gzip:   9.59 kB
+dist/assets/timeline-definition-Z64GVDOM-Coa4b0vY.js     30.36 kB │ gzip:   9.96 kB
+dist/assets/ru-RU-B4JR7IUQ-T7ybN1qt.js                   30.73 kB │ gzip:   9.85 kB
+dist/assets/chunk-NSK5VX7P-Dzq-mqZv.js                   30.75 kB │ gzip:   8.50 kB
+dist/assets/requirementDiagram-LRYGKXZP-B54eaWKk.js      30.99 kB │ gzip:   9.76 kB
+dist/assets/uk-UA-QMV73CPH-BTaYC-Kt.js                   31.63 kB │ gzip:  10.10 kB
+dist/assets/pica-xkWDouSg.js                             31.80 kB │ gzip:  12.47 kB
+dist/assets/dagre-Buvkdvvj.js                            32.06 kB │ gzip:  11.58 kB
+dist/assets/hi-IN-IWLTKZ5I-2GiR5foL.js                   32.34 kB │ gzip:   9.07 kB
+dist/assets/quadrantDiagram-CIZ2JOQS-CX01K3hz.js         33.51 kB │ gzip:   9.73 kB
+dist/assets/chunk-7Z6QIM7H-CD68pOo2.js                   33.95 kB │ gzip:   7.31 kB
+dist/assets/ta-IN-2NMHFXQM-DPfZV6Vv.js                   35.25 kB │ gzip:   8.49 kB
+dist/assets/km-KH-HSX4SM5Z-Cx420sDm.js                   36.63 kB │ gzip:   9.20 kB
+dist/assets/chunk-5RXB4S5H-C8LWePKC.js                   37.67 kB │ gzip:  12.28 kB
+dist/assets/vennDiagram-T6HMQDX7-CWd6iIsY.js             41.15 kB │ gzip:  15.10 kB
+dist/assets/xychartDiagram-ELKLHX3M-wk5XLF1R.js          41.59 kB │ gzip:  11.68 kB
+dist/assets/mr-IN-CRQNXWMA-DhEIPv3o.js                   42.23 kB │ gzip:  10.66 kB
+dist/assets/image-blob-reduce.esm-Dj7YBvMv.js            45.41 kB │ gzip:  16.30 kB
+dist/assets/src-oBChb5qS.js                              45.68 kB │ gzip:  16.00 kB
+dist/assets/chunk-WRU74C26-B7qCwaF0.js                   46.83 kB │ gzip:  14.74 kB
+dist/assets/chunk-GF5L2VYU-XC1YhA2t.js                   48.77 kB │ gzip:  15.75 kB
+dist/assets/chunk-JQJVKLGR-DgfIicpl.js                   60.10 kB │ gzip:  19.52 kB
+dist/assets/c4Diagram-5PPSVZJV-B1ikQDOq.js               69.16 kB │ gzip:  19.33 kB
+dist/assets/ganttDiagram-PKOTCBZU-NP9Qtx6b.js            69.35 kB │ gzip:  22.74 kB
+dist/assets/blockDiagram-VBNYF7ZC-BLukZ3Fz.js            72.71 kB │ gzip:  20.71 kB
+dist/assets/cose-bilkent-JH36ORCC-Cm_QF_yb.js            81.26 kB │ gzip:  21.55 kB
+dist/assets/chunk-QR6OTTB3-BdSdpYgG.js                  101.85 kB │ gzip:  24.82 kB
+dist/assets/swimlanes-SLNWSIFB-DppRBgxX.js              114.10 kB │ gzip:  39.16 kB
+dist/assets/sequenceDiagram-SI44F4Z6-C_upUwCf.js        115.73 kB │ gzip:  30.57 kB
+dist/assets/dist-P9kbmvCl.js                            132.58 kB │ gzip:  44.45 kB
+dist/assets/architectureDiagram-T3A2C74G-BkGE4gLK.js    148.91 kB │ gzip:  41.14 kB
+dist/assets/index-7ZR6kNAP.js                           204.08 kB │ gzip:  63.78 kB
+dist/assets/chunk-I66GZJ75-YS0dx2dd.js                  234.93 kB │ gzip:  37.81 kB
+dist/assets/katex-CXMH3UgJ.js                           258.69 kB │ gzip:  77.44 kB
+dist/assets/cytoscape.esm-B-NFISlW.js                   434.76 kB │ gzip: 137.77 kB
+dist/assets/chunk-KEIR6QF5-BICK3FdT.js                  662.09 kB │ gzip: 143.15 kB
+dist/assets/App-Bb54mY9J.js                           1,285.19 kB │ gzip: 400.10 kB
+dist/assets/chunk-EIO257PC-DU9DXMRt.js                1,821.02 kB │ gzip: 744.21 kB
+
+✓ built in 552ms
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+   Compiling excalidraw-desktop v0.3.0 (/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri)
+    Finished `release` profile [optimized] target(s) in 1m 18s
+       Built application at: /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/excalidraw-desktop
+    Bundling Excalidraw.app (/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app)
+    Finished 1 bundle at:
+        /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app
+
+{
+  "schemaVersion": 1,
+  "command": "seal",
+  "status": "PASS",
+  "startedAt": "2026-10-04T07:05:43.093Z",
+  "finishedAt": "2026-10-04T07:07:04.972Z",
+  "manifestPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/package-manifest.json",
+  "checks": [
+    {
+      "id": "clean-commit",
+      "label": "clean git commit",
+      "gitCommit": "2c13f5066490ca4e5a8dbbbdaedfee253559f779",
+      "status": "PASS"
+    },
+    {
+      "id": "production-build",
+      "label": "pnpm tauri build --bundles app",
+      "status": "PASS"
+    },
+    {
+      "id": "manifest",
+      "label": "sealed package manifest",
+      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/docs/evidence/local-version-history-t059/component-first/inline-feedback/package-manifest.json",
+      "status": "PASS"
+    }
+  ],
+  "manifest": {
+    "schemaVersion": 1,
+    "gitCommit": "2c13f5066490ca4e5a8dbbbdaedfee253559f779",
+    "buildCommand": [
+      "pnpm",
+      "tauri",
+      "build",
+      "--bundles",
+      "app"
+    ],
+    "builtAt": "2026-10-04T07:07:04.972Z",
+    "repositoryRoot": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history",
+    "expectedWindowSize": {
+      "width": 1280,
+      "height": 760
+    },
+    "buildEnvironment": {
+      "productVersion": "26.6.2",
+      "architecture": "arm64"
+    },
+    "appPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app",
+    "bundleIdentifier": "excalidraw-desktop",
+    "version": "0.3.0",
+    "buildVersion": "0.3.0",
+    "executable": "excalidraw-desktop",
+    "executablePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app/Contents/MacOS/excalidraw-desktop",
+    "executableSha256": "49dd92314e1639cf8188e520affb52d0d522079b18ef3229ccba33da28657e2c",
+    "packageSha256": "6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4",
+    "artifactSha256": "6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4",
+    "artifacts": [
+      {
+        "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app",
+        "sha256": "6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4",
+        "kind": "app"
+      }
+    ],
+    "repositoryCommit": "2c13f5066490ca4e5a8dbbbdaedfee253559f779"
+  }
+}

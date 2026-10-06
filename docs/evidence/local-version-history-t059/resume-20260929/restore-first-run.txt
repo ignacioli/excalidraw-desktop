@@ -1,0 +1,230 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/26.8.2/bin/node",
+      "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config",
+      "e2e/playwright.config.ts",
+      "e2e/tests/local-version-history-t048-regression.spec.ts",
+      "--reporter=json"
+    ],
+    "configFile": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/playwright.config.ts",
+    "rootDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "browser-ui",
+        "name": "browser-ui",
+        "testDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "tests/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 7,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/local-version-history-t048-regression.spec.ts",
+      "file": "tests/local-version-history-t048-regression.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "workspace sidebar toggle remains effective while History is open",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1071,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:43:51.181Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5571f674fdefad22bde9-39513c2d80d7369f78a3",
+          "file": "tests/local-version-history-t048-regression.spec.ts",
+          "line": 46,
+          "column": 1
+        },
+        {
+          "title": "read-only version preview hides the SDK main-menu trigger and actions",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 705,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:43:52.433Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5571f674fdefad22bde9-9b0798125ad71167347f",
+          "file": "tests/local-version-history-t048-regression.spec.ts",
+          "line": 78,
+          "column": 1
+        },
+        {
+          "title": "production AppShell asks before replacing the selected history version",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 6155,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('dialog', { name: 'Restore this version?' }).getByRole('alert')\nExpected: \u001b[32m\"fixture restore should not commit\"\u001b[39m\nReceived: \u001b[31m\"The outcome of history replacement fa7168cc-3abc-49a2-9e04-e2689a0c7624 could not be verified.\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: 'Restore this version?' }).getByRole('alert')\u001b[22m\n\u001b[2m    14 × locator resolved to <p id=\"_r_5_\" role=\"alert\" class=\"conflict-dialog-error\">The outcome of history replacement fa7168cc-3abc-…</p>\u001b[22m\n\u001b[2m       - unexpected value \"The outcome of history replacement fa7168cc-3abc-49a2-9e04-e2689a0c7624 could not be verified.\"\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('dialog', { name: 'Restore this version?' }).getByRole('alert')\nExpected: \u001b[32m\"fixture restore should not commit\"\u001b[39m\nReceived: \u001b[31m\"The outcome of history replacement fa7168cc-3abc-49a2-9e04-e2689a0c7624 could not be verified.\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: 'Restore this version?' }).getByRole('alert')\u001b[22m\n\u001b[2m    14 × locator resolved to <p id=\"_r_5_\" role=\"alert\" class=\"conflict-dialog-error\">The outcome of history replacement fa7168cc-3abc-…</p>\u001b[22m\n\u001b[2m       - unexpected value \"The outcome of history replacement fa7168cc-3abc-49a2-9e04-e2689a0c7624 could not be verified.\"\u001b[22m\n\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts:150:49",
+                    "location": {
+                      "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts",
+                      "column": 49,
+                      "line": 150
+                    },
+                    "snippet": "  148 |   });\n  149 |   await confirmation.getByRole(\"button\", { name: \"Restore version\" }).click();\n> 150 |   await expect(confirmation.getByRole(\"alert\")).toHaveText(\n      |                                                 ^\n  151 |     \"fixture restore should not commit\",\n  152 |   );\n  153 |   expect(await readHistoryRestoreCalls(page)).toEqual(["
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts",
+                        "column": 49,
+                        "line": 150
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('dialog', { name: 'Restore this version?' }).getByRole('alert')\nExpected: \u001b[32m\"fixture restore should not commit\"\u001b[39m\nReceived: \u001b[31m\"The outcome of history replacement fa7168cc-3abc-49a2-9e04-e2689a0c7624 could not be verified.\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: 'Restore this version?' }).getByRole('alert')\u001b[22m\n\u001b[2m    14 × locator resolved to <p id=\"_r_5_\" role=\"alert\" class=\"conflict-dialog-error\">The outcome of history replacement fa7168cc-3abc-…</p>\u001b[22m\n\u001b[2m       - unexpected value \"The outcome of history replacement fa7168cc-3abc-49a2-9e04-e2689a0c7624 could not be verified.\"\u001b[22m\n\n\n  148 |   });\n  149 |   await confirmation.getByRole(\"button\", { name: \"Restore version\" }).click();\n> 150 |   await expect(confirmation.getByRole(\"alert\")).toHaveText(\n      |                                                 ^\n  151 |     \"fixture restore should not commit\",\n  152 |   );\n  153 |   expect(await readHistoryRestoreCalls(page)).toEqual([\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts:150:49"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:43:53.142Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-dc827-he-selected-history-version-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-dc827-he-selected-history-version-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-dc827-he-selected-history-version-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-dc827-he-selected-history-version-browser-ui/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts",
+                    "column": 49,
+                    "line": 150
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "5571f674fdefad22bde9-ba6e2c89efb0d986cb74",
+          "file": "tests/local-version-history-t048-regression.spec.ts",
+          "line": 125,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-30T02:43:50.934Z",
+    "duration": 8648.362,
+    "expected": 2,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}
+[ELIFECYCLE] Command failed with exit code 1.

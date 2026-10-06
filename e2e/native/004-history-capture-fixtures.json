@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "fixtureVersion": "004-history-capture-v1",
+  "screens": [
+    {
+      "gateId": "HISTORY-01",
+      "manifestName": "T048 · 01 · History · Default · Light",
+      "shapeId": "da9cf473-5dad-8097-8008-b502ce235a48",
+      "checklist": [
+        "Open the 360 px right History drawer in Light mode",
+        "Check the separate Current Drawing card and readable filename, time, source, summary, Ready, and marked labels in saved versions",
+        "Check Preview and Restore remain visible without clipping"
+      ]
+    },
+    {
+      "gateId": "HISTORY-02",
+      "manifestName": "T048 · 02 · Row Actions · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b5753372b7f4",
+      "checklist": [
+        "Open row actions for a saved History version in Light mode",
+        "Check the 180 × 116 px menu, subtle version title, Mark/Unmark and Delete icon outlines, separator, and clipping"
+      ]
+    },
+    {
+      "gateId": "HISTORY-03",
+      "manifestName": "T048 · 03 · Version Preview · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b575525aee78",
+      "checklist": [
+        "Enter read-only version Preview in Light mode",
+        "Check preview is distinguishable from current drawing and Exit/Restore remain reachable"
+      ]
+    },
+    {
+      "gateId": "HISTORY-04",
+      "manifestName": "T048 · 04 · Restore Confirmation · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b5756178feb0",
+      "checklist": [
+        "Open Restore confirmation in Light mode",
+        "Check Cancel has visible initial focus and dialog text/actions are not clipped"
+      ],
+      "humanLiveObservations": [
+        "After closing the modal, visually check focus returns to its triggering control; record a separate reviewer verdict"
+      ]
+    },
+    {
+      "gateId": "HISTORY-05",
+      "manifestName": "T048 · 05 · Repeated Mark · Long List · Light",
+      "shapeId": "b48ddf15-5062-8001-8008-b5756dd21737",
+      "checklist": [
+        "Show a long History list after repeated Mark in Light mode",
+        "Check the selected existing version remains the Mark target, long-list scrolling, visible status, and feedback placement without clipping"
+      ]
+    },
+    {
+      "gateId": "HISTORY-06",
+      "manifestName": "T048 · 06 · History · Compact 300 · Dark",
+      "shapeId": "b48ddf15-5062-8001-8008-b57586ef024c",
+      "checklist": [
+        "In the 1280 × 760 window, use the History drawer left-edge resize separator to reduce its width from 360 px to 300 px, then show Dark mode",
+        "Check contrast, state labels, row/action readability, and horizontal clipping"
+      ]
+    },
+    {
+      "gateId": "HISTORY-ERROR",
+      "state": "generic-error",
+      "checklist": [
+        "Show the generic History error state",
+        "Check error title, safe retry guidance, current drawing identity, and unclipped actions"
+      ]
+    },
+    {
+      "gateId": "HISTORY-CONFLICT",
+      "state": "conflict",
+      "checklist": [
+        "Show the History conflict state",
+        "Check conflict title, recovery guidance, current drawing identity, and unclipped safe actions"
+      ]
+    },
+    {
+      "gateId": "HISTORY-PENDING",
+      "state": "pending",
+      "checklist": [
+        "Show the pending or processing state",
+        "Check status is readable and visually distinct from success; no action is clipped"
+      ]
+    },
+    {
+      "gateId": "HISTORY-UNAVAILABLE",
+      "state": "resource-unavailable",
+      "checklist": [
+        "Show a resource-unavailable History item",
+        "Check reason, safe exit or retry guidance, current drawing identity, and unclipped actions"
+      ]
+    },
+    {
+      "gateId": "HISTORY-FOCUS",
+      "state": "visible-focus-and-return",
+      "checklist": [
+        "Show a focused History row with its visible focus indicator in the capture"
+      ],
+      "humanLiveObservations": [
+        "Visually inspect focus indicators on More Actions, Preview, modal Cancel, and Close in separate live moments",
+        "After Escape or close, visually inspect focus returned to the triggering control",
+        "Record a separate reviewer verdict; T023 owns keyboard behavior"
+      ]
+    },
+    {
+      "gateId": "HISTORY-REDUCED-MOTION",
+      "state": "reduced-motion",
+      "checklist": [
+        "Enable macOS Reduce Motion before opening History",
+        "Check state and focus remain understandable with no transition hiding either"
+      ]
+    }
+  ]
+}

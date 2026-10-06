@@ -1,0 +1,13 @@
+$ playwright test --config e2e/playwright.config.ts e2e/tests/local-version-history-t048.spec.ts e2e/tests/local-version-history-production-preview.spec.ts --project=browser-ui --workers=1 '--grep=opens from the saved|keeps the 360 px history drawer|matches approved History|unavailable selection' --reporter=list
+
+Running 5 tests using 1 worker
+
+(node:65547) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [browser-ui] › e2e/tests/local-version-history-production-preview.spec.ts:22:3 › production HistoryPanel preview › opens from the saved active document and keeps the current draft unchanged (2.1s)
+  ✓  2 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:49:3 › keeps the 360 px history drawer and fixed selection usable in light (753ms)
+  ✓  3 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:49:3 › keeps the 360 px history drawer and fixed selection usable in dark (825ms)
+  ✓  4 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:309:1 › matches approved History hierarchy and typography before native packaging (704ms)
+  ✓  5 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:650:1 › unavailable selection explains the failure and prevents preview and restore (767ms)
+
+  5 passed (5.5s)

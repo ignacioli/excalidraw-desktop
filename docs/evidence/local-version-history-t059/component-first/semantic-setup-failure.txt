@@ -1,0 +1,233 @@
+$ playwright test --config e2e/playwright.config.ts e2e/tests/local-version-history-preview.spec.ts --project=browser-ui --workers=1 --reporter=list
+
+Running 5 tests using 1 worker
+
+(node:67434) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:15:1 › lists history with 50/100 pagination and stable semantic metadata (5.9s)
+(node:67507) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  2 [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:44:1 › supports keyboard browsing, visible focus, preview exit, and trigger focus return (5.8s)
+(node:67526) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  3 [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:84:1 › keeps preview read-only and rejects a late response from another document tab (5.8s)
+(node:67551) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  4 [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:124:1 › distinguishes loading, empty, processing, permission, conflict, unavailable, and error states (5.8s)
+(node:67578) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  5 [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:148:1 › reduces motion while preserving the visible focus contract (5.8s)
+
+
+  1) [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:15:1 › lists history with 50/100 pagination and stable semantic metadata 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('complementary', { name: 'Version History' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('complementary', { name: 'Version History' })
+
+
+      10 |   await expect(
+      11 |     page.getByRole("complementary", { name: "Version History" }),
+    > 12 |   ).toBeVisible();
+         |     ^
+      13 | });
+      14 |
+      15 | test("lists history with 50/100 pagination and stable semantic metadata", async ({
+        at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-d858e-nd-stable-semantic-metadata-browser-ui/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-d858e-nd-stable-semantic-metadata-browser-ui/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e/test-results/tests-local-version-histor-d858e-nd-stable-semantic-metadata-browser-ui/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-d858e-nd-stable-semantic-metadata-browser-ui/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace e2e/test-results/tests-local-version-histor-d858e-nd-stable-semantic-metadata-browser-ui/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:44:1 › supports keyboard browsing, visible focus, preview exit, and trigger focus return 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('complementary', { name: 'Version History' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('complementary', { name: 'Version History' })
+
+
+      10 |   await expect(
+      11 |     page.getByRole("complementary", { name: "Version History" }),
+    > 12 |   ).toBeVisible();
+         |     ^
+      13 | });
+      14 |
+      15 | test("lists history with 50/100 pagination and stable semantic metadata", async ({
+        at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-b449c-it-and-trigger-focus-return-browser-ui/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-b449c-it-and-trigger-focus-return-browser-ui/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e/test-results/tests-local-version-histor-b449c-it-and-trigger-focus-return-browser-ui/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-b449c-it-and-trigger-focus-return-browser-ui/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace e2e/test-results/tests-local-version-histor-b449c-it-and-trigger-focus-return-browser-ui/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:84:1 › keeps preview read-only and rejects a late response from another document tab 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('complementary', { name: 'Version History' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('complementary', { name: 'Version History' })
+
+
+      10 |   await expect(
+      11 |     page.getByRole("complementary", { name: "Version History" }),
+    > 12 |   ).toBeVisible();
+         |     ^
+      13 | });
+      14 |
+      15 | test("lists history with 50/100 pagination and stable semantic metadata", async ({
+        at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-336ba-e-from-another-document-tab-browser-ui/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-336ba-e-from-another-document-tab-browser-ui/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e/test-results/tests-local-version-histor-336ba-e-from-another-document-tab-browser-ui/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-336ba-e-from-another-document-tab-browser-ui/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace e2e/test-results/tests-local-version-histor-336ba-e-from-another-document-tab-browser-ui/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:124:1 › distinguishes loading, empty, processing, permission, conflict, unavailable, and error states 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('complementary', { name: 'Version History' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('complementary', { name: 'Version History' })
+
+
+      10 |   await expect(
+      11 |     page.getByRole("complementary", { name: "Version History" }),
+    > 12 |   ).toBeVisible();
+         |     ^
+      13 | });
+      14 |
+      15 | test("lists history with 50/100 pagination and stable semantic metadata", async ({
+        at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e/test-results/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace e2e/test-results/tests-local-version-histor-8daaa-navailable-and-error-states-browser-ui/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:148:1 › reduces motion while preserving the visible focus contract 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('complementary', { name: 'Version History' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('complementary', { name: 'Version History' })
+
+
+      10 |   await expect(
+      11 |     page.getByRole("complementary", { name: "Version History" }),
+    > 12 |   ).toBeVisible();
+         |     ^
+      13 | });
+      14 |
+      15 | test("lists history with 50/100 pagination and stable semantic metadata", async ({
+        at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-preview.spec.ts:12:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-509a4--the-visible-focus-contract-browser-ui/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-509a4--the-visible-focus-contract-browser-ui/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e/test-results/tests-local-version-histor-509a4--the-visible-focus-contract-browser-ui/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-509a4--the-visible-focus-contract-browser-ui/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace e2e/test-results/tests-local-version-histor-509a4--the-visible-focus-contract-browser-ui/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5 failed
+    [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:15:1 › lists history with 50/100 pagination and stable semantic metadata 
+    [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:44:1 › supports keyboard browsing, visible focus, preview exit, and trigger focus return 
+    [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:84:1 › keeps preview read-only and rejects a late response from another document tab 
+    [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:124:1 › distinguishes loading, empty, processing, permission, conflict, unavailable, and error states 
+    [browser-ui] › e2e/tests/local-version-history-preview.spec.ts:148:1 › reduces motion while preserving the visible focus contract 
+[ELIFECYCLE] Command failed with exit code 1.

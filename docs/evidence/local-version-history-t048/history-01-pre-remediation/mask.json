@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "collectionId": "HISTORY-01-native-capture",
+  "gateId": "HISTORY-01",
+  "binding": {
+    "productCommit": "e873aac208e0271641cb2434f49daa4a6d2e01fd",
+    "historyScope": {
+      "registry": "db9b07be7858c8469b527b2a4083abe0ef51136c83752fea3342a41f13f61ca8",
+      "highFi": "c683e53541a146908a21befec66863516168f6aba0aadb1351cb261a75b8557c",
+      "lowFi": "cf44bbb2d27f79918c70226991875c9851f8e8a5029672679624d8e6ab8c6907"
+    },
+    "fixtureDigest": "4411f44b2cc7f5a11bb746ae68edc12790260d391f564c3dea184468d7b8fd7f",
+    "harnessVersion": "004-history-capture-v1",
+    "packageArtifactSha256": "ef7ce6a97ad7c00da4d5524e36e8b1635e8c2ea8ee74d1798b84b067c8eaf162"
+  },
+  "masks": []
+}

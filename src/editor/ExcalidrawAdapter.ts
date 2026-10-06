@@ -5,7 +5,12 @@ import type {
   NormalizedZoomValue,
 } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
-import type { SceneSnapshot } from "./sceneSerializer";
+import { documentAppState, type SceneSnapshot } from "./sceneSerializer";
+import { adoptSceneAssets } from "../history/assetAdoption";
+import {
+  installProtectedInput,
+  type ProtectedInputHandlers,
+} from "../history/protectedInput";
 
 export type SceneChangeListener = (scene: SceneSnapshot) => void;
 export type AssetFileResolver = (files: BinaryFiles) => Promise<BinaryFiles>;
@@ -13,6 +18,7 @@ export type AssetFileResolver = (files: BinaryFiles) => Promise<BinaryFiles>;
 export class ExcalidrawAdapter {
   private readonly api: ExcalidrawImperativeAPI;
   private readonly subscriptions = new Set<() => void>();
+  private readonly protectedInputDisposers = new Set<() => void>();
   private readonly resolveFiles: AssetFileResolver | undefined;
 
   constructor(api: ExcalidrawImperativeAPI, resolveFiles?: AssetFileResolver) {
@@ -32,18 +38,32 @@ export class ExcalidrawAdapter {
     const files = this.resolveFiles
       ? await this.resolveFiles(scene.files)
       : scene.files;
-    this.api.updateScene({ elements: scene.elements });
-    if (scene.appState.viewBackgroundColor !== undefined) {
+    const adopted = await adoptSceneAssets({ ...scene, files });
+
+    // Excalidraw keeps the first file registered for an SDK file ID. Register
+    // content-derived files before applying elements so a restored image can
+    // never render stale bytes from a previous scene.
+    this.api.addFiles(Object.values(adopted.files));
+    this.api.updateScene({ elements: adopted.elements });
+    const documentState = documentAppState(adopted.appState);
+    if (documentState.gridModeEnabled !== undefined) {
+      this.api.updateScene({
+        appState: { gridModeEnabled: documentState.gridModeEnabled },
+      });
+    }
+    if (documentState.gridSize !== undefined) {
+      this.api.updateScene({ appState: { gridSize: documentState.gridSize } });
+    }
+    if (documentState.gridStep !== undefined) {
+      this.api.updateScene({ appState: { gridStep: documentState.gridStep } });
+    }
+    if (documentState.viewBackgroundColor !== undefined) {
       this.api.updateScene({
         appState: {
-          viewBackgroundColor: scene.appState.viewBackgroundColor,
+          viewBackgroundColor: documentState.viewBackgroundColor,
         },
       });
     }
-    if (scene.appState.name !== undefined) {
-      this.api.updateScene({ appState: { name: scene.appState.name } });
-    }
-    this.api.addFiles(Object.values(files));
   }
 
   setReadOnly(readOnly: boolean): void {
@@ -110,12 +130,37 @@ export class ExcalidrawAdapter {
   }
 
   dispose(): void {
+    this.protectedInputDisposers.forEach((dispose) => dispose());
+    this.protectedInputDisposers.clear();
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();
   }
 
   refresh(): void {
     this.api.refresh();
+  }
+
+  /**
+   * Attach host-owned guards before the SDK's container handlers run.  The
+   * adapter owns lifecycle disposal so replacing an editor cannot leave a
+   * stale coordinator callback attached to the old canvas.
+   */
+  installProtectedInput(
+    container: HTMLElement,
+    handlers: ProtectedInputHandlers,
+  ): () => void {
+    const remove = installProtectedInput(container, handlers);
+    let disposed = false;
+    const dispose = () => {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
+      remove();
+      this.protectedInputDisposers.delete(dispose);
+    };
+    this.protectedInputDisposers.add(dispose);
+    return dispose;
   }
 }
 

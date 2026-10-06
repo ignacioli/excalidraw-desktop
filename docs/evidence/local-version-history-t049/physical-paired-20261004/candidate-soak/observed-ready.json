@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "1.0.0",
+  "scenario": "edit-soak",
+  "editorReady": true,
+  "editable": true,
+  "elementCount": 10000,
+  "visibilityState": "visible"
+}

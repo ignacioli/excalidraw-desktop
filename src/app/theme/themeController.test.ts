@@ -183,7 +183,10 @@ describe("ThemeController", () => {
     controller.setModePreference("dark");
 
     expect(
-      geometryVariables.map((name) => [name, root.style.getPropertyValue(name)]),
+      geometryVariables.map((name) => [
+        name,
+        root.style.getPropertyValue(name),
+      ]),
     ).toEqual(lightGeometry);
     expect(root.style.getPropertyValue("--app-background")).toBe("#121212");
     expect(root.style.getPropertyValue("--accent")).toBe("#BBB8FF");

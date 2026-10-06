@@ -1,4 +1,14 @@
-export const IPC_CONTRACT_VERSION = 2 as const;
+export const IPC_CONTRACT_VERSION = 3 as const;
+/** The activated history boundary; retained as an explicit version marker. */
+export const RESERVED_HISTORY_CONTRACT_VERSION = 3 as const;
+
+/** History paging is an API bound, not a retention limit. */
+export const HISTORY_DEFAULT_PAGE_LIMIT = 50 as const;
+export const HISTORY_MAX_PAGE_LIMIT = 100 as const;
+export const HISTORY_MAX_SCENE_BYTES = 256 * 1024 * 1024;
+export const HISTORY_MAX_IDENTIFIER_LENGTH = 128 as const;
+export const HISTORY_MAX_CURSOR_LENGTH = 4096 as const;
+export const HISTORY_MAX_PATH_LENGTH = 4096 as const;
 
 export type ErrorCode =
   | "PATH_ACCESS_DENIED"
@@ -18,6 +28,11 @@ export type ErrorCode =
   | "DISK_FULL"
   | "IO_ERROR"
   | "DB_ERROR"
+  | "HISTORY_UNAVAILABLE"
+  | "HISTORY_RESOURCE_MISSING"
+  | "HISTORY_STALE_DOCUMENT"
+  | "HISTORY_OPERATION_PENDING"
+  | "HISTORY_BUSY"
   | "INTERNAL";
 
 export interface IpcError {
@@ -30,7 +45,13 @@ export interface IpcError {
 export type SceneData = unknown;
 export type ColorScheme = "light" | "dark";
 export type CheckpointReason =
-  "manualSave" | "tabSwitch" | "tabClose" | "idle" | "appExit" | "maxWait";
+  | "manualSave"
+  | "saveAsNew"
+  | "tabSwitch"
+  | "tabClose"
+  | "idle"
+  | "appExit"
+  | "maxWait";
 
 export interface AppHandshakeResponse {
   contractVersion: number;
@@ -111,6 +132,7 @@ export interface EntryDeleteResult {
   operationId: string;
   kind: WorkspaceEntryKind;
   oldRelativePath: string;
+  historyMaintenance?: "pendingReplay" | "cleanupPending";
 }
 
 export interface ExportOptions {
@@ -119,12 +141,196 @@ export interface ExportOptions {
   theme?: ColorScheme;
 }
 
+/**
+ * A history request is authorized by the current document authority. It must
+ * never contain an app-data/history-store path. The opaque handle variant is
+ * reserved for the persistent identity service; path remains useful while a
+ * document is being resolved by the existing direct-file authority.
+ */
+export type HistoryDocumentLocator =
+  { kind: "path"; path: string } | { kind: "handle"; documentId: string };
+
+export type HistoryVersionSource = "automatic" | "manual" | "protected";
+export type HistoryProtectedAction = "restore" | "clear" | "import";
+
+export type HistoryVersionAvailability =
+  { status: "available" } | { status: "unavailable"; error: IpcError };
+
+export interface HistoryVersionItem {
+  versionId: string;
+  source: HistoryVersionSource;
+  marked: boolean;
+  protectedAction?: HistoryProtectedAction;
+  recordedAt: number;
+  sequence: number;
+  contentHash: string;
+  availability: HistoryVersionAvailability;
+}
+
+export interface HistoryListRequest {
+  document: HistoryDocumentLocator;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface HistoryListResponse {
+  documentId: string;
+  items: HistoryVersionItem[];
+  nextCursor?: string;
+  pendingIssue?: IpcError;
+  listRevision: number;
+}
+
+export interface HistoryPreviewRequest {
+  document: HistoryDocumentLocator;
+  versionId: string;
+}
+
+export interface HistoryPreviewResponse {
+  versionId: string;
+  scene: SceneData;
+}
+
+export interface HistoryMarkRequest {
+  document: HistoryDocumentLocator;
+  requestId: string;
+  sessionGeneration: number;
+  revision: number;
+  currentSceneJson: string;
+}
+
+export interface HistoryMarkResponse {
+  versionId: string;
+  recordedAt: number;
+  source: HistoryVersionSource;
+  contentHash: string;
+  /** True when this document already retained the same complete marked scene. */
+  reused: boolean;
+}
+
+/** Changes whether an existing version is pinned as a manual mark. */
+export interface HistorySetMarkedRequest {
+  document: HistoryDocumentLocator;
+  requestId: string;
+  versionId: string;
+  marked: boolean;
+}
+
+export interface HistorySetMarkedResponse {
+  versionId: string;
+  marked: boolean;
+  /** False when unmarking immediately prunes the target from the ordinary pool. */
+  retained: boolean;
+}
+
+export type HistoryReplaceTarget =
+  | { kind: "restore"; versionId: string }
+  | { kind: "clear" }
+  | { kind: "import"; candidateSceneJson: string };
+
+export interface HistoryReplaceRequest {
+  document: HistoryDocumentLocator;
+  requestId: string;
+  sessionGeneration: number;
+  revision: number;
+  expectedBaseHash: string;
+  currentSceneJson: string;
+  target: HistoryReplaceTarget;
+}
+
+export type HistoryOperationState =
+  | "preparing"
+  | "protected"
+  | "intentCommitted"
+  | "targetObserved"
+  | "targetPublished"
+  | "metadataCommitted"
+  | "completed"
+  | "aborted"
+  | "reconcile"
+  | "conflict"
+  | "pendingReconciliation";
+
+export type HistoryReplaceResponse =
+  | {
+      status: "completed";
+      requestId: string;
+      replacementCommitted: true;
+      protectionVersionId: string;
+      adoptedScene: SceneData;
+      newBaseHash: string;
+      newSessionGeneration: number;
+    }
+  | {
+      status: "pendingReconciliation";
+      requestId: string;
+      replacementCommitted: null;
+      operationState: "pendingReconciliation";
+    };
+
+export interface HistoryOperationStatusRequest {
+  document: HistoryDocumentLocator;
+  requestId: string;
+}
+
+export interface HistoryOperationStatusResponse {
+  requestId: string;
+  state: HistoryOperationState;
+  replacementCommitted: boolean | null;
+  protectionVersionId?: string;
+  adoptedScene?: SceneData;
+  newBaseHash?: string;
+  newSessionGeneration?: number;
+}
+
+export interface HistoryDeleteRequest {
+  document: HistoryDocumentLocator;
+  requestId: string;
+  versionId: string;
+}
+
+export interface HistoryDeleteResponse {
+  deletedVersionId: string;
+}
+
+export type HistoryOperationKind = "mark" | "replace" | "delete" | "reconcile";
+export type HistoryIssueSource =
+  "automatic" | "manual" | "protected" | "reconciliation";
+export type HistoryChangeKind =
+  | "automatic"
+  | "manual"
+  | "protected"
+  | "deleted"
+  | "reconciled"
+  | "invalidated";
+export type HistoryCurrentFileSaveOutcome =
+  "notAttempted" | "succeeded" | "failed" | "pending";
+
+export interface HistoryChangedEvent {
+  documentId: string;
+  requestId?: string;
+  listRevision: number;
+  change: HistoryChangeKind;
+}
+
+export interface HistoryIssueEvent {
+  documentId: string;
+  operation?: HistoryOperationKind;
+  source: HistoryIssueSource;
+  error: IpcError;
+  currentFileSaveOutcome?: HistoryCurrentFileSaveOutcome;
+}
+
 export interface CommandContract {
   request: unknown;
   response: unknown;
 }
 
 export interface IpcCommands {
+  native_menu_set_enabled: {
+    request: { command: NativeMenuCommand; enabled: boolean };
+    response: Record<string, never>;
+  };
   app_handshake: {
     request: Record<string, never>;
     response: AppHandshakeResponse;
@@ -238,9 +444,38 @@ export interface IpcCommands {
     };
     response: { writtenPath: string };
   };
+  history_list: {
+    request: HistoryListRequest;
+    response: HistoryListResponse;
+  };
+  history_preview: {
+    request: HistoryPreviewRequest;
+    response: HistoryPreviewResponse;
+  };
+  history_mark: {
+    request: HistoryMarkRequest;
+    response: HistoryMarkResponse;
+  };
+  history_set_marked: {
+    request: HistorySetMarkedRequest;
+    response: HistorySetMarkedResponse;
+  };
+  history_replace: {
+    request: HistoryReplaceRequest;
+    response: HistoryReplaceResponse;
+  };
+  history_operation_status: {
+    request: HistoryOperationStatusRequest;
+    response: HistoryOperationStatusResponse;
+  };
+  history_delete: {
+    request: HistoryDeleteRequest;
+    response: HistoryDeleteResponse;
+  };
 }
 
 export type CommandName = keyof IpcCommands;
+export type HistoryCommandName = Extract<CommandName, `history_${string}`>;
 export type CommandRequest<Name extends CommandName> =
   IpcCommands[Name]["request"];
 export type CommandResponse<Name extends CommandName> =
@@ -269,6 +504,8 @@ export interface IpcEvents {
     localDraftUpdatedAt: number;
   };
   "open-file-request": { paths: string[] };
+  "history-changed": HistoryChangedEvent;
+  "history-issue": HistoryIssueEvent;
 }
 
 export interface WorkspaceEntriesChangedEvent {
@@ -282,6 +519,7 @@ export interface WorkspaceEntriesChangedEvent {
 export type NativeMenuCommand =
   | "save"
   | "exportImage"
+  | "versionHistory"
   | "appearanceSystem"
   | "appearanceLight"
   | "appearanceDark";

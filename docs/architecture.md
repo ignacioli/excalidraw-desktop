@@ -2,17 +2,17 @@
 
 # Excalidraw Desktop architecture
 
-**Last updated**: 2026-09-16
+**Last updated**: 2026-09-24
 
-This document describes the **current** implementation architecture of Excalidraw Desktop: layered view, reliability data flows, workspace-entry mutations, module responsibilities, dependency direction and trust boundaries, native-window boundary, and storage. Decision records live in `docs/adr/`. The visual and interaction contract is the root `DESIGN.md` (English; Chinese: `DESIGN.zh.md`). The public IPC contract is `docs/contracts/ipc-contracts.md` (v2).
+This document describes the **current** implementation architecture of Excalidraw Desktop: layered view, reliability data flows, workspace-entry mutations, module responsibilities, dependency direction and trust boundaries, native-window boundary, and storage. Decision records live in `docs/adr/`. The visual and interaction contract is the root `DESIGN.md` (English; Chinese: `DESIGN.zh.md`). The public IPC contract is `docs/contracts/ipc-contracts.md` (v3).
 
-The current shell is a canvas-first overlay/pinned sidebar, IPC v2 Workspace Entry commands, and unified in-app menus/dialogs. Crash-safe persistence (drafts, atomic writes, recovery snapshots, external-change conflicts) still applies. What follows is the current path, not the retired FileTree + `thumbnails/` production implementation.
+The current shell is a canvas-first overlay/pinned sidebar, IPC v3 Workspace Entry and version-history commands, and unified in-app menus/dialogs. Crash-safe persistence (drafts, atomic writes, recovery snapshots, external-change conflicts) still applies. What follows is the current path, not the retired FileTree + `thumbnails/` production implementation.
 
 Workspace persistence separates mounted authority from Recent history. Mounted records feed path policy, Workspace Entry commands, indexing, and watching; only the single Current Workspace feeds the Sidebar tree. Unmounting retains the record; remount validates the stored root on activation, while removing an unmounted record from Recents changes application history only.
 
 ## 1. Overall structure
 
-Tauri 2.x dual-process layout: `src/` is the React 19 + TypeScript strict frontend; `src-tauri/` is the Rust backend. The two sides communicate across an IPC contract boundary (`docs/contracts/ipc-contracts.md`). Full technology choices: ADR-001 (framework), ADR-002/003 (persistence), ADR-004/006/007/008 (reference performance measurement and budgets), ADR-005 (theme boundary; the “file manager on the left / canvas on the right” shell layout and thumbnail-contract sentences are superseded by ADR-009), ADR-009 (desktop UI interactions: title-bar option A, canvas-first sidebar, thumbnail retirement, IPC v2 WorkspaceEntry, unified menus/dialogs).
+Tauri 2.x dual-process layout: `src/` is the React 19 + TypeScript strict frontend; `src-tauri/` is the Rust backend. The two sides communicate across an IPC contract boundary (`docs/contracts/ipc-contracts.md`). Full technology choices: ADR-001 (framework), ADR-002/003 (persistence), ADR-004/006/007/008 (reference performance measurement and budgets), ADR-005 (theme boundary; the “file manager on the left / canvas on the right” shell layout and thumbnail-contract sentences are superseded by ADR-009), ADR-009 (desktop UI interactions: title-bar option A, canvas-first sidebar, thumbnail retirement, v2 WorkspaceEntry plus v3 version-history commands, unified menus/dialogs).
 
 ## 2. Layered view
 
@@ -26,16 +26,17 @@ flowchart TB
         Editor["editor/ official Excalidraw public integration"]
         Theme["app/theme/ theme registry · preference resolution"]
         Prefs["versioned local view prefs: pinned and expanded sets"]
-        IpcClient["ipc/ typed v2 client + event subscription"]
+        IpcClient["ipc/ typed v3 client + event subscription"]
     end
     subgraph boundary [IPC trust boundary]
-        Contracts["contracts v2: WorkspaceEntry commands · structured errors · operationId"]
+        Contracts["contracts v3: WorkspaceEntry + History commands · structured errors · operationId"]
     end
     subgraph backend [Rust backend Tauri 2.x]
         Commands["commands/ IPC entry (thin layer)"]
         EntryDomain["workspace_entries/ names · protected items · emptiness · Trash · rename"]
         Security["security/ path canonicalize + workspace containment"]
         DomainDocs["documents/ atomic write · drafts · recovery · conflict"]
+        HistoryDomain["history/ immutable objects · protected replacement · reconciliation"]
         Indexing["indexing/ async workspace index"]
         Watcher["watcher/ notify debounce + echo suppression"]
     end
@@ -43,6 +44,7 @@ flowchart TB
         Hot["hot tier SQLite WAL: drafts / workspaces / file_index; file_meta leftover"]
         Cold["cold tier filesystem: *.excalidraw (atomic replace)"]
         Recovery["recovery snapshots: recovery/*.json rotation"]
+        History["history SQLite + immutable scene/assets objects"]
         Trash["OS Trash"]
     end
     AppShell --> Interaction
@@ -58,6 +60,7 @@ flowchart TB
     Commands --> Security
     Commands --> EntryDomain
     Commands --> DomainDocs
+    Commands --> HistoryDomain
     Commands --> Indexing
     Watcher --> Commands
     EntryDomain --> Indexing
@@ -66,6 +69,7 @@ flowchart TB
     DomainDocs --> Hot
     DomainDocs --> Cold
     DomainDocs --> Recovery
+    HistoryDomain --> History
     Indexing --> Hot
 ```
 
@@ -101,6 +105,80 @@ flowchart LR
 ```
 
 The high-frequency edit path does not serialize the full scene, send IPC, or write disk on every event: L1 updates in-memory state (no IPC), L2 writes a SQLite WAL draft after a 300ms debounce, and L3 atomically lands the cold `.excalidraw` file when a checkpoint fires, so most edit events never write the cold file immediately. The atomic-write pipeline and fault-injection points are in ADR-002.
+
+### 3.1 Version-history transaction and process-fault boundary
+
+Version history is a separate durability plane. A protected replacement first
+publishes immutable scene/assets objects and durable protection/intent metadata,
+then uses the shared document lock and guarded atomic rename before repairing
+the main draft/index state. The current file, history SQLite store, and object
+store are therefore observed independently during restart reconciliation; an
+`after_rename_before_parent_sync` result is `pendingReconciliation`, not an
+assumption that the old file survived.
+
+Each saved drawing has a persistent history `documentId` that is independent
+of its current path, frontend tab UUID, and version IDs. The production store
+lives below the Tauri app-data directory at `version-history/history.sqlite3`
+with immutable scene and asset objects beside it. Application-owned file and
+ancestor-directory renames migrate the same identity; Save As creates a new
+identity with no inherited versions. The backend also records filesystem
+identity (on macOS, device/inode plus supporting metadata), so a different
+file later appearing at the old path cannot inherit the old history. A deleted
+drawing leaves a deleting identity tombstone while semantic versions are
+removed, preventing same-path reuse from attaching to the old document.
+
+Ordinary history is driven only by a successfully completed cold checkpoint.
+The first successful checkpoint establishes a durable per-document baseline;
+the first changed checkpoint at least 30 minutes later publishes the exact
+immutable scene and asset bytes from that save. Manual and protected versions
+do not move this baseline, and no history-only timer catches up while the app
+is idle. Automatic-history failure is reported through the independent
+`history-issue` state/event and never rewrites a successful current-file save
+as failed. Manual marks publish the click-time scene as an uncapped `manual`
+record; equal bytes may reuse objects without collapsing semantic records.
+Automatic and protected records continue to share the newest-20 pool.
+
+Canvas clear and drawing import use the same `history_replace` coordinator as
+restore. The host captures clear/import shortcuts and possible scene-file drops
+before Excalidraw handles them. A dropped PNG/SVG is parsed before dispatch:
+embedded scenes enter protected replacement; ordinary images resume the SDK's
+single-insertion path. Library drops and text editing stay SDK-owned. The
+frontend only adopts a backend-confirmed replacement for the current document;
+an uncertain result keeps that document read-only until reconciliation.
+
+The test-only `e2e-harness` exposes seven process barriers. The parent process
+waits for the exact ready marker, verifies the marker's isolated target path,
+sends `SIGKILL`, and starts a fresh probe with the same isolated root. A
+timeout or a still-live PID is a failure. Standalone fixtures validate the
+marker protocol only; operation evidence runs the real protected-replacement
+service for object publication, protection, intent, rename/directory sync,
+metadata/acknowledgement, and retention-eviction boundaries. Deterministic
+typed object (`ENOSPC`/`EACCES`) and SQLite pre-commit faults remain test-only,
+while missing/corrupt objects, concurrent requests, external writes, response
+loss, and stale queued autosaves are checked through fresh-process or exact
+frontend-driver readback. Each evidence owner stays separate.
+
+| Barrier                                 | Product boundary                                 | Required restart question                                                |
+| --------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------ |
+| `object_publish`                        | immutable history object publication             | no partial target bytes or untracked object is accepted                  |
+| `protection_commit`                     | durable protection record                        | failed protection leaves replacement unapplied                           |
+| `intent_commit`                         | replacement intent record                        | restart reconciles old/new/pending from durable facts                    |
+| `after_rename_before_parent_sync`       | target rename before parent sync                 | published identity is not reported as old merely because sync is unknown |
+| `metadata_complete_before_frontend_ack` | backend complete before frontend acknowledgement | response loss is recovered by request-id status, without replay          |
+| `eviction_delete_gc`                    | retention commit before reachability GC          | pre-intent crash keeps the old file; GC removes only genuinely unreachable objects |
+| `rename_delete_repair`                  | restart draft/index repair                       | lifecycle repair follows durable identity and bytes                      |
+
+The fault harness is compiled and registered only with `--features e2e-harness`
+and `APP_E2E=1`; production builds must omit the commands and harness strings.
+All native runs use a fresh `excalidraw-desktop-e2e-*` root and record the
+platform, filesystem, binary digest, seed, barrier marker, process signal, and
+post-restart hashes.
+
+Frontend draft scheduling carries the captured session generation and revision.
+After replacement adoption advances either value, a queued callback captured
+from the old session is rejected before `doc_save_draft` or checkpoint IPC.
+The native journey additionally verifies that the cold target and clean draft
+do not contain the stale attempted scene.
 
 ## 4. Data-flow 2: external change → conflict resolution
 
@@ -194,34 +272,37 @@ Closing an orphaned document must not send a checkpoint that requires the missin
 
 ### Frontend (`src/`)
 
-| Module | Responsibility |
-|--------|----------------|
-| `app/AppShell.tsx` | Canvas-first shell; overlay covers the canvas without changing the canvas box; pinned enters the layout; no empty right pane |
-| `app/sidebarController.ts` | Sidebar `hidden` / `overlay` / `pinned`; overlay auto-closes 500ms after pointer leave; focus/menu/dialog/drag hold pauses auto-close |
-| `app/interaction/` | One global menu and dialog, focus return; naming/delete/blocker dialogs; no `window.prompt` / `window.confirm` |
-| `app/theme/` | Theme types, registry, preference resolution, semantic tokens, and pre-startup apply (DESIGN.md); decoupled from system title-bar color |
-| `editor/` | ExcalidrawAdapter + canvas, scene serialization, export, offline fonts, IME bridge; only the locked package's public API |
-| `documents/` | DocumentManager: session identity, tab order, dirty/orphan/conflict, close/activation queues, path migration, recovery UI |
+| Module                         | Responsibility                                                                                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `app/AppShell.tsx`             | Canvas-first shell; overlay covers the canvas without changing the canvas box; pinned enters the layout; no empty right pane                                 |
+| `app/sidebarController.ts`     | Sidebar `hidden` / `overlay` / `pinned`; overlay auto-closes 500ms after pointer leave; focus/menu/dialog/drag hold pauses auto-close                        |
+| `app/interaction/`             | One global menu and dialog, focus return; naming/delete/blocker dialogs; no `window.prompt` / `window.confirm`                                               |
+| `app/theme/`                   | Theme types, registry, preference resolution, semantic tokens, and pre-startup apply (DESIGN.md); decoupled from system title-bar color                      |
+| `editor/`                      | ExcalidrawAdapter + canvas, scene serialization, export, offline fonts, IME bridge; only the locked package's public API                                     |
+| `documents/`                   | DocumentManager: session identity, tab order, dirty/orphan/conflict, close/activation queues, path migration, recovery UI                                    |
 | `workspaces/WorkspaceTree.tsx` | One continuous virtualized tree for the Current Workspace and its descendants; other workspace records are reached through Welcome/Recent; no thumbnail rows |
-| `ipc/` | Typed v2 command bindings and event subscription (`IPC_CONTRACT_VERSION = 2`) |
+| `ipc/`                         | Typed v3 command bindings and event subscription (`IPC_CONTRACT_VERSION = 3`)                                                                                |
 
 ### Backend (`src-tauri/`)
 
-| Module | Responsibility |
-|--------|----------------|
-| `commands/` | IPC command entry (thin layer: deserialize → validate → call domain services) |
+| Module               | Responsibility                                                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `commands/`          | IPC command entry (thin layer: deserialize → validate → call domain services)                                                    |
 | `workspace_entries/` | Workspace Entry domain: names, extension, protected items, real emptiness, conflicts, Trash, rename commit point, pathMigrations |
-| `documents/` | Atomic write, recovery, validation, asset dedup, session lock |
-| `database/` | Connection pool, writer thread, migrations, repository traits; runtime no longer reads/writes `file_meta` as a thumbnail cache |
-| `indexing/` | Async workspace scan and incremental index |
-| `watcher/` | notify wrapper + debounce + echo suppression; complex external directory events emit `invalidated` |
-| `security/` | Path canonicalize, workspace ACL allowlist, symlink-escape rejection |
+| `documents/`         | Atomic write, recovery, validation, asset dedup, session lock                                                                    |
+| `history/`           | Document identity, immutable scene/assets, retention, guarded replacement, operation status, and restart reconciliation          |
+| `database/`          | Connection pool, writer thread, migrations, repository traits; runtime no longer reads/writes `file_meta` as a thumbnail cache   |
+| `indexing/`          | Async workspace scan and incremental index                                                                                       |
+| `watcher/`           | notify wrapper + debounce + echo suppression; complex external directory events emit `invalidated`                               |
+| `security/`          | Path canonicalize, workspace ACL allowlist, symlink-escape rejection                                                             |
 
 Historical `thumbnails/` and frontend `FileTree` / `useThumbnails` are **not** the current production path.
 
 ## 8. IPC trust boundary
 
-- Contract: command/event schemas + error taxonomy + input validation are defined only in `docs/contracts/ipc-contracts.md`. The TypeScript source is `src/ipc/contracts.ts`; Rust DTOs are `src-tauri/src/commands/dto.rs`. The frontend must not bypass them. Current `IPC_CONTRACT_VERSION = 2`.
+- Contract: command/event schemas + error taxonomy + input validation are defined only in `docs/contracts/ipc-contracts.md`. The TypeScript source is `src/ipc/contracts.ts`; Rust DTOs are `src-tauri/src/commands/dto.rs`. The frontend must not bypass them. Current `IPC_CONTRACT_VERSION = 3`.
+- Version-history commands are `history_list`, `history_preview`, `history_mark`, `history_replace`, `history_operation_status`, and `history_delete`. They carry document authorization and request identity, never history-store paths; `history_replace` is idempotent and an uncertain post-rename result remains `pendingReconciliation`.
+- `history_delete` removes one semantic version while holding the document history-operation lease. Repeating the same `requestId` is idempotent; a version referenced by an active replacement remains protected and returns a structured busy error. Object garbage collection is best effort after the metadata transaction and preserves objects still shared or pinned by another operation.
 - Entry-mutation authorization uses `workspaceId + relativePath` (plus `baseName` for create/rename). `canonicalPath` in the response is for opening and session migration. It is **not** authorization evidence the frontend may submit.
 - Every path is canonicalized in the backend by `security/` and checked against the workspace allowlist. Escape returns `PATH_ACCESS_DENIED`. Document JSON is untrusted input (structure validation + size cap).
 - Least privilege: Tauri capabilities are `core:default` + `core:window:allow-destroy` + `dialog:allow-open` + `dialog:allow-save` (`src-tauri/capabilities/default.json`). The window permission lets the native close handler destroy the main window only after its app-exit checkpoint completes. Path ACL lives in Rust; extra fs capabilities are not used to give the WebView arbitrary filesystem access. Strict CSP; the asset protocol is limited to `.excalidraw_assets` images.
@@ -231,23 +312,24 @@ Historical `thumbnails/` and frontend `FileTree` / `useThumbnails` are **not** t
 
 Configuration and implementation: `src-tauri/tauri.conf.json` (window `title`) and `src-tauri/src/lib.rs` (no production title-bar tint / always-on-top). ADR-009 records the choice.
 
-| Item | Current product behavior |
-|------|--------------------------|
-| Window model | Ordinary decorated window; Overlay / Transparent / frameless are not configured |
-| Title | `Excalidraw Whiteboard` |
-| Title-bar color | OS-controlled; not forced by content `light \| dark \| system` |
-| Content theme | Frontend resolves independently; `system` follows `prefers-color-scheme` |
-| Stacking | Normal z-order; other apps can cover it; it can minimize and restore |
-| always-on-top | Off in production. `e2e_harness` may pin the measurement window only when `EXCALIDRAW_PERF_CONTROL_DIR` exists; that must not leak into production |
+| Item            | Current product behavior                                                                                                                           |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Window model    | Ordinary decorated window; Overlay / Transparent / frameless are not configured                                                                    |
+| Title           | `Excalidraw Whiteboard`                                                                                                                            |
+| Title-bar color | OS-controlled; not forced by content `light \| dark \| system`                                                                                     |
+| Content theme   | Frontend resolves independently; `system` follows `prefers-color-scheme`                                                                           |
+| Stacking        | Normal z-order; other apps can cover it; it can minimize and restore                                                                               |
+| always-on-top   | Off in production. `e2e_harness` may pin the measurement window only when `EXCALIDRAW_PERF_CONTROL_DIR` exists; that must not leak into production |
 
 ## 10. Storage
 
-| Tier | Carrier | Notes |
-|------|---------|-------|
-| Hot | SQLite WAL (`drafts` / `workspaces` / `file_index`) | Drafts and index. The v1 `file_meta` table is a lazy compatibility leftover, not an active thumbnail cache |
-| Cold | Filesystem `*.excalidraw` (atomic replace); `.excalidraw.json` is recognized | Source of truth; new drawings default to `.excalidraw` |
-| Recovery | `recovery/*.json` rotating snapshots + `session.lock` | Crash recovery |
-| Trash | OS Trash | Commit point for empty Directory and clean Drawing deletes; no recursive / permanent-delete command |
+| Tier     | Carrier                                                                      | Notes                                                                                                      |
+| -------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Hot      | SQLite WAL (`drafts` / `workspaces` / `file_index`)                          | Drafts and index. The v1 `file_meta` table is a lazy compatibility leftover, not an active thumbnail cache |
+| Cold     | Filesystem `*.excalidraw` (atomic replace); `.excalidraw.json` is recognized | Source of truth; new drawings default to `.excalidraw`                                                     |
+| Recovery | `recovery/*.json` rotating snapshots + `session.lock`                        | Crash recovery                                                                                             |
+| Trash    | OS Trash                                                                     | Commit point for empty Directory and clean Drawing deletes; no recursive / permanent-delete command        |
+| History  | App-data `version-history/history.sqlite3` + immutable scene/asset objects  | Persistent document identity, version metadata, protected operation state, and reachability-controlled GC  |
 
 Storage design detail is in ADR-002 (two-tier persistence) and ADR-003 (SQLite-first and the redb trigger). The hot tier keeps WAL drafts. Do not switch back to in-place cold-file overwrites, and do not remove recovery snapshots.
 
@@ -306,5 +388,5 @@ The collector owns only its child process and declared profile. Missing isolatio
 
 - ADRs: ADR-001 framework choice, ADR-002 two-tier persistence, ADR-003 SQLite-first and redb trigger, ADR-004 declared reference-environment performance measurement, ADR-005 theme boundary (shell-layout / thumbnail sentences: see ADR-009), ADR-006/007/008 reference performance budgets and measurement series, ADR-009 desktop UI interactions
 - `DESIGN.md` / `DESIGN.zh.md` (visual and interaction contract)
-- `docs/quickstart.md` / `docs/quickstart.zh.md` (getting started and verification), `docs/contracts/ipc-contracts.md` (IPC contract v2)
+- `docs/quickstart.md` / `docs/quickstart.zh.md` (getting started and verification), `docs/contracts/ipc-contracts.md` (IPC contract v3)
 - `docs/evidence/` (native verification matrix, accessibility audit, and validation summary; VM or physical machine)

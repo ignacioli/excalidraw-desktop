@@ -1,0 +1,164 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/26.8.2/bin/node",
+      "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config",
+      "e2e/playwright.config.ts",
+      "e2e/tests/local-version-history-t048-regression.spec.ts",
+      "--grep",
+      "Mark version preserves the action focus while History refreshes",
+      "--reporter=json"
+    ],
+    "configFile": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/playwright.config.ts",
+    "rootDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "browser-ui",
+        "name": "browser-ui",
+        "testDir": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "tests/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 7,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/local-version-history-t048-regression.spec.ts",
+      "file": "tests/local-version-history-t048-regression.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Mark version preserves the action focus while History refreshes",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "browser-ui",
+              "projectName": "browser-ui",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 6301,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeFocused\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('complementary', { name: 'Version History' }).getByRole('button', { name: /More actions for v-001/ })\nExpected: focused\nReceived: inactive\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeFocused\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' }).getByRole('button', { name: /More actions for v-001/ })\u001b[22m\n\u001b[2m    5 × locator resolved to <button disabled type=\"button\" aria-haspopup=\"menu\" aria-expanded=\"false\" class=\"history-actions-trigger\" aria-label=\"More actions for v-001 · Canvas changed\">…</button>\u001b[22m\n\u001b[2m      - unexpected value \"inactive\"\u001b[22m\n\u001b[2m    9 × locator resolved to <button type=\"button\" aria-haspopup=\"menu\" aria-expanded=\"false\" class=\"history-actions-trigger\" aria-label=\"More actions for v-001 · Canvas changed\">…</button>\u001b[22m\n\u001b[2m      - unexpected value \"inactive\"\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeFocused\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('complementary', { name: 'Version History' }).getByRole('button', { name: /More actions for v-001/ })\nExpected: focused\nReceived: inactive\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeFocused\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' }).getByRole('button', { name: /More actions for v-001/ })\u001b[22m\n\u001b[2m    5 × locator resolved to <button disabled type=\"button\" aria-haspopup=\"menu\" aria-expanded=\"false\" class=\"history-actions-trigger\" aria-label=\"More actions for v-001 · Canvas changed\">…</button>\u001b[22m\n\u001b[2m      - unexpected value \"inactive\"\u001b[22m\n\u001b[2m    9 × locator resolved to <button type=\"button\" aria-haspopup=\"menu\" aria-expanded=\"false\" class=\"history-actions-trigger\" aria-label=\"More actions for v-001 · Canvas changed\">…</button>\u001b[22m\n\u001b[2m      - unexpected value \"inactive\"\u001b[22m\n\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts:140:31",
+                    "location": {
+                      "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts",
+                      "column": 31,
+                      "line": 140
+                    },
+                    "snippet": "  138 |   await expect(panel.getByRole(\"option\")).toBeVisible();\n  139 |   await expect(panel).not.toContainText(\"Loading version history\");\n> 140 |   await expect(actionTrigger).toBeFocused();\n      |                               ^\n  141 |\n  142 |   await expect\n  143 |     .poll(async () => (await readHistoryMarkProbe(page)).listRefreshPending)"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts",
+                        "column": 31,
+                        "line": 140
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeFocused\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('complementary', { name: 'Version History' }).getByRole('button', { name: /More actions for v-001/ })\nExpected: focused\nReceived: inactive\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeFocused\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Version History' }).getByRole('button', { name: /More actions for v-001/ })\u001b[22m\n\u001b[2m    5 × locator resolved to <button disabled type=\"button\" aria-haspopup=\"menu\" aria-expanded=\"false\" class=\"history-actions-trigger\" aria-label=\"More actions for v-001 · Canvas changed\">…</button>\u001b[22m\n\u001b[2m      - unexpected value \"inactive\"\u001b[22m\n\u001b[2m    9 × locator resolved to <button type=\"button\" aria-haspopup=\"menu\" aria-expanded=\"false\" class=\"history-actions-trigger\" aria-label=\"More actions for v-001 · Canvas changed\">…</button>\u001b[22m\n\u001b[2m      - unexpected value \"inactive\"\u001b[22m\n\n\n  138 |   await expect(panel.getByRole(\"option\")).toBeVisible();\n  139 |   await expect(panel).not.toContainText(\"Loading version history\");\n> 140 |   await expect(actionTrigger).toBeFocused();\n      |                               ^\n  141 |\n  142 |   await expect\n  143 |     .poll(async () => (await readHistoryMarkProbe(page)).listRefreshPending)\n    at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts:140:31"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:27:48.544Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-48c49-cus-while-History-refreshes-browser-ui/test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-48c49-cus-while-History-refreshes-browser-ui/video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-48c49-cus-while-History-refreshes-browser-ui/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/test-results/tests-local-version-histor-48c49-cus-while-History-refreshes-browser-ui/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048-regression.spec.ts",
+                    "column": 31,
+                    "line": 140
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "5571f674fdefad22bde9-a1e28ba248f11a6ba0ce",
+          "file": "tests/local-version-history-t048-regression.spec.ts",
+          "line": 125,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-30T03:27:48.323Z",
+    "duration": 6995.0070000000005,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}
+[ELIFECYCLE] Command failed with exit code 1.

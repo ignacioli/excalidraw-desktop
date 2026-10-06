@@ -1,0 +1,45 @@
+{
+  "appDataDirectory": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/tmp.wgtqf0rCjD/fixture/home/Library/Application Support/excalidraw-desktop",
+  "currentFile": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/tmp.wgtqf0rCjD/fixture/workspace/History long list.excalidraw",
+  "currentFileSha256": "e1fcde65ac2ac3370d816cc8181f5ef9e8b6906bc6e92b9c80c25da4ff42f30a",
+  "database": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/tmp.wgtqf0rCjD/fixture/home/Library/Application Support/excalidraw-desktop/excalidraw-desktop.sqlite3",
+  "documentId": "93434139-58b7-411e-b2f2-ce0d700d6fbe",
+  "documents": {
+    "longList": {
+      "currentFile": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/tmp.wgtqf0rCjD/fixture/workspace/History long list.excalidraw",
+      "documentId": "93434139-58b7-411e-b2f2-ce0d700d6fbe",
+      "markedVersionCount": 50,
+      "versionCount": 50
+    },
+    "pendingIssue": {
+      "currentFile": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/tmp.wgtqf0rCjD/fixture/workspace/History pending issue.excalidraw",
+      "documentId": "7ad4214e-e6ec-4b86-be84-47a6e6675f01",
+      "pendingIssueCode": "HISTORY_OPERATION_PENDING",
+      "versionCount": 0
+    },
+    "unavailable": {
+      "availability": "unavailable",
+      "currentFile": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/tmp.wgtqf0rCjD/fixture/workspace/History unavailable version.excalidraw",
+      "documentId": "cef069bd-fdd6-427a-a9af-07edb33c55e2",
+      "previewErrorCode": "HISTORY_RESOURCE_MISSING",
+      "quarantinedScene": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/tmp.wgtqf0rCjD/fixture/quarantine/bf7a0ecea96dbcc18750d78e5f9b4ce090fc941c332db02dd82b8f4e0137fc09.scene",
+      "sceneHash": "bf7a0ecea96dbcc18750d78e5f9b4ce090fc941c332db02dd82b8f4e0137fc09",
+      "versionCount": 1,
+      "versionId": "b297b125-dda3-4dae-8c6f-1120ddf6419b"
+    }
+  },
+  "historyDatabase": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/tmp.wgtqf0rCjD/fixture/home/Library/Application Support/excalidraw-desktop/version-history/history.sqlite3",
+  "markedVersionCount": 50,
+  "nativeVerified": false,
+  "previewReadbackCount": 3,
+  "profileHome": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/tmp.wgtqf0rCjD/fixture/home",
+  "root": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/tmp.wgtqf0rCjD/fixture",
+  "scenarios": [
+    "history-long-list-and-preview",
+    "history-pending-issue",
+    "history-unavailable-version"
+  ],
+  "versionCount": 50,
+  "workspace": "/private/var/folders/xm/lf7020f924g8h8qf_k899b6c0000gn/T/tmp.wgtqf0rCjD/fixture/workspace",
+  "workspaceId": "7d998bd5-6217-4a32-8088-97f991b46328"
+}

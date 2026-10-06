@@ -1,0 +1,256 @@
+$ playwright test --config e2e/playwright.config.ts e2e/tests/local-version-history-t048.spec.ts e2e/tests/local-version-history-t048-regression.spec.ts e2e/tests/local-version-history-production-preview.spec.ts --project=browser-ui --workers=1 --reporter=list
+
+Running 15 tests using 1 worker
+
+(node:64476) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘   1 [browser-ui] › e2e/tests/local-version-history-production-preview.spec.ts:22:3 › production HistoryPanel preview › opens from the saved active document and keeps the current draft unchanged (17.2s)
+(node:64524) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   2 [browser-ui] › e2e/tests/local-version-history-production-preview.spec.ts:67:3 › production HistoryPanel preview › ignores a stale preview response after switching the active document (1.7s)
+  ✓   3 [browser-ui] › e2e/tests/local-version-history-t048-regression.spec.ts:46:1 › workspace sidebar toggle remains effective while History is open (805ms)
+  ✓   4 [browser-ui] › e2e/tests/local-version-history-t048-regression.spec.ts:78:1 › read-only version preview hides the SDK main-menu trigger and actions (783ms)
+  ✓   5 [browser-ui] › e2e/tests/local-version-history-t048-regression.spec.ts:136:1 › Mark version preserves the action focus while History refreshes (1.7s)
+  ✓   6 [browser-ui] › e2e/tests/local-version-history-t048-regression.spec.ts:164:1 › production AppShell asks before replacing the selected history version (857ms)
+  ✘   7 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:49:3 › keeps the 360 px history drawer and fixed selection usable in light (999ms)
+(node:64561) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘   8 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:49:3 › keeps the 360 px history drawer and fixed selection usable in dark (1.1s)
+(node:64569) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   9 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:168:1 › resizes by drag and keyboard without changing the selected version (1.1s)
+  ✓  10 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:210:1 › keeps the 360 px default drawer inside a narrow viewport (946ms)
+  ✓  11 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:276:1 › honors reduced motion and keeps row focus visible with 50 versions (808ms)
+  ✘  12 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:309:1 › matches approved History hierarchy and typography before native packaging (978ms)
+(node:64592) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+MARK_GEOMETRY [{"action":"current","calls":["history_mark","history_list"],"scrolls":1,"samples":[[0,0,203,241,480,4433]],"done":true},{"action":"current","calls":["history_mark","history_list"],"scrolls":0,"samples":[[0,0,203,241,480,4433]],"done":true},{"action":"row","calls":["history_set_marked","history_list"],"scrolls":0,"samples":[[0,0,203,241,480,4433]],"done":true}]
+  ✓  13 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:409:1 › keeps populated History geometry stable through both Mark paths (4.5s)
+  ✓  14 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:630:1 › History info explains retention without displacing the version list (898ms)
+  ✘  15 [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:651:1 › unavailable selection explains the failure and prevents preview and restore (30.8s)
+
+
+  1) [browser-ui] › e2e/tests/local-version-history-production-preview.spec.ts:22:3 › production HistoryPanel preview › opens from the saved active document and keeps the current draft unchanged 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator: locator('[aria-label="Read-only version canvas"]')
+    Expected: "true"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveAttribute" with timeout 15000ms
+      - waiting for locator('[aria-label="Read-only version canvas"]')
+
+
+      48 |     await expect(
+      49 |       page.locator('[aria-label="Read-only version canvas"]'),
+    > 50 |     ).toHaveAttribute("data-preview-rendered", "true", { timeout: 15_000 });
+         |       ^
+      51 |     await expect(restore).toBeEnabled();
+      52 |     await expect(
+      53 |       page.getByRole("region", { name: "Version preview", exact: true }),
+        at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-production-preview.spec.ts:50:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-0cccf-the-current-draft-unchanged-browser-ui/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-0cccf-the-current-draft-unchanged-browser-ui/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e/test-results/tests-local-version-histor-0cccf-the-current-draft-unchanged-browser-ui/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-0cccf-the-current-draft-unchanged-browser-ui/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace e2e/test-results/tests-local-version-histor-0cccf-the-current-draft-unchanged-browser-ui/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:49:3 › keeps the 360 px history drawer and fixed selection usable in light 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rgb(206, 212, 218)"
+    Received: "rgb(233, 236, 239)"
+
+      91 |       colorScheme === "light" ? "rgb(255, 255, 255)" : "rgb(35, 35, 41)",
+      92 |     );
+    > 93 |     expect(panelGeometry.borderColor).toBe(
+         |                                       ^
+      94 |       colorScheme === "light" ? "rgb(206, 212, 218)" : "rgb(92, 92, 92)",
+      95 |     );
+      96 |     await expect(resizeHandle).toHaveAttribute("aria-valuenow", "360");
+        at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts:93:39
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-1ed79-d-selection-usable-in-light-browser-ui/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-1ed79-d-selection-usable-in-light-browser-ui/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e/test-results/tests-local-version-histor-1ed79-d-selection-usable-in-light-browser-ui/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-1ed79-d-selection-usable-in-light-browser-ui/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace e2e/test-results/tests-local-version-histor-1ed79-d-selection-usable-in-light-browser-ui/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:49:3 › keeps the 360 px history drawer and fixed selection usable in dark 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rgb(92, 92, 92)"
+    Received: "rgb(54, 53, 65)"
+
+      91 |       colorScheme === "light" ? "rgb(255, 255, 255)" : "rgb(35, 35, 41)",
+      92 |     );
+    > 93 |     expect(panelGeometry.borderColor).toBe(
+         |                                       ^
+      94 |       colorScheme === "light" ? "rgb(206, 212, 218)" : "rgb(92, 92, 92)",
+      95 |     );
+      96 |     await expect(resizeHandle).toHaveAttribute("aria-valuenow", "360");
+        at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts:93:39
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-d3aa0-ed-selection-usable-in-dark-browser-ui/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-d3aa0-ed-selection-usable-in-dark-browser-ui/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e/test-results/tests-local-version-histor-d3aa0-ed-selection-usable-in-dark-browser-ui/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-d3aa0-ed-selection-usable-in-dark-browser-ui/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace e2e/test-results/tests-local-version-histor-d3aa0-ed-selection-usable-in-dark-browser-ui/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:309:1 › matches approved History hierarchy and typography before native packaging 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 4
+    + Received  + 4
+
+    @@ -1,17 +1,17 @@
+      Object {
+        "actionHeights": Array [
+    -     38,
+    -     38,
+    +     45,
+    +     45,
+        ],
+    -   "actionWidthRatio": 0.84,
+    +   "actionWidthRatio": 0.86,
+        "countAndMarkInline": true,
+        "currentCardHeight": 59,
+        "filenameSize": 12,
+        "fontFamilies": Array [
+          "-apple-system",
+    -     "BlinkMacSystemFont",
+    +     "system-ui",
+          "Segoe UI",
+          "sans-serif",
+        ],
+        "fontsReady": true,
+        "headingSize": 20,
+
+      401 |     contentType: "application/json",
+      402 |   });
+    > 403 |   expect(actual).toEqual(expected);
+          |                  ^
+      404 |   await page.screenshot({
+      405 |     path: testInfo.outputPath("history-default-light.png"),
+      406 |   });
+        at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts:403:18
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-48a2d-phy-before-native-packaging-browser-ui/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: video (video/webm) ──────────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-48a2d-phy-before-native-packaging-browser-ui/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e/test-results/tests-local-version-histor-48a2d-phy-before-native-packaging-browser-ui/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-48a2d-phy-before-native-packaging-browser-ui/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace e2e/test-results/tests-local-version-histor-48a2d-phy-before-native-packaging-browser-ui/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:651:1 › unavailable selection explains the failure and prevents preview and restore 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('complementary', { name: 'Version History' }).getByRole('option').first()
+        - locator resolved to <button tabindex="0" role="option" type="button" aria-selected="true" aria-disabled="true" class="history-list-row-select" aria-label="Automatic · Jan 1, 2025 · Canvas changed · Unavailable">…</button>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not enabled
+        - retrying click action
+        - waiting 20ms
+        2 × waiting for element to be visible, enabled and stable
+          - element is not enabled
+        - retrying click action
+          - waiting 100ms
+        58 × waiting for element to be visible, enabled and stable
+           - element is not enabled
+         - retrying click action
+           - waiting 500ms
+
+
+      695 |   });
+      696 |   const panel = historyPanel(page);
+    > 697 |   await panel.getByRole("option").first().click();
+          |                                           ^
+      698 |   const detail = panel.getByRole("region", {
+      699 |     name: "Selected version actions",
+      700 |   });
+        at /Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/e2e/tests/local-version-history-t048.spec.ts:697:43
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-2aaa2-revents-preview-and-restore-browser-ui/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-2aaa2-revents-preview-and-restore-browser-ui/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e/test-results/tests-local-version-histor-2aaa2-revents-preview-and-restore-browser-ui/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e/test-results/tests-local-version-histor-2aaa2-revents-preview-and-restore-browser-ui/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace e2e/test-results/tests-local-version-histor-2aaa2-revents-preview-and-restore-browser-ui/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5 failed
+    [browser-ui] › e2e/tests/local-version-history-production-preview.spec.ts:22:3 › production HistoryPanel preview › opens from the saved active document and keeps the current draft unchanged 
+    [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:49:3 › keeps the 360 px history drawer and fixed selection usable in light 
+    [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:49:3 › keeps the 360 px history drawer and fixed selection usable in dark 
+    [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:309:1 › matches approved History hierarchy and typography before native packaging 
+    [browser-ui] › e2e/tests/local-version-history-t048.spec.ts:651:1 › unavailable selection explains the failure and prevents preview and restore 
+  10 passed (1.1m)
+[ELIFECYCLE] Command failed with exit code 1.

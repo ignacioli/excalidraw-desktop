@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "gitCommit": "ce6e746d4d12cde55a498da83f45b3563c556e71",
+  "buildCommand": [
+    "pnpm",
+    "tauri",
+    "build",
+    "--bundles",
+    "app"
+  ],
+  "builtAt": "2026-09-30T03:41:34.314Z",
+  "repositoryRoot": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history",
+  "expectedWindowSize": {
+    "width": 1280,
+    "height": 760
+  },
+  "buildEnvironment": {
+    "productVersion": "26.6.2",
+    "architecture": "arm64"
+  },
+  "appPath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app",
+  "bundleIdentifier": "excalidraw-desktop",
+  "version": "0.3.0",
+  "buildVersion": "0.3.0",
+  "executable": "excalidraw-desktop",
+  "executablePath": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app/Contents/MacOS/excalidraw-desktop",
+  "executableSha256": "c5551d70b607e8adf88fb83d3916f17a4c633bee5d493dcdd48661bac79861c1",
+  "packageSha256": "fbdf374efd0bb9ff3b60ac1485dcc0b35c9d8d87bcd6bd5e8b2e6d983fe412cc",
+  "artifactSha256": "fbdf374efd0bb9ff3b60ac1485dcc0b35c9d8d87bcd6bd5e8b2e6d983fe412cc",
+  "artifacts": [
+    {
+      "path": "/Users/liyongqiang/gitrepo/ignacioli/excalidraw-desktop/.worktrees/local-version-history/src-tauri/target/release/bundle/macos/Excalidraw.app",
+      "sha256": "fbdf374efd0bb9ff3b60ac1485dcc0b35c9d8d87bcd6bd5e8b2e6d983fe412cc",
+      "kind": "app"
+    }
+  ],
+  "repositoryCommit": "ce6e746d4d12cde55a498da83f45b3563c556e71"
+}

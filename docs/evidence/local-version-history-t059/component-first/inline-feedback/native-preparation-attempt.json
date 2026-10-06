@@ -1,0 +1,32 @@
+{
+  "status": "BLOCKED",
+  "scope": "I5/H4 native preparation; no T058 or owner verdict",
+  "session": "native-owner-session.json",
+  "productCommit": "2c13f5066490ca4e5a8dbbbdaedfee253559f779",
+  "packageSha256": "6f0b5067b2b2b031deb7d4aad49e720511a310c80891646140f834030d0051c4",
+  "pid": 73019,
+  "observations": [
+    {
+      "step": "launch",
+      "result": "Owned process started; History menu readiness check returned PASS before geometry query"
+    },
+    {
+      "step": "window geometry",
+      "result": "AppleScript exited 1: Can’t get window 1 of application process \"excalidraw-desktop\". Invalid index. (-1719)"
+    },
+    {
+      "step": "post-failure inspection",
+      "result": "Owned PID alive; process visible=true; Accessibility window count=0"
+    },
+    {
+      "step": "targeted normal activation",
+      "result": "Set owned process frontmost=true; after one second Accessibility window count still=0"
+    }
+  ],
+  "classification": "Native preparation blocked; cause unresolved between application window lifecycle, Accessibility exposure and launch environment. No product defect verdict.",
+  "historyMenuInvoked": false,
+  "ownerVisualDecision": null,
+  "rebuildCountThisAttempt": 0,
+  "repeatLaunchCount": 0,
+  "nextStep": "Identify why the owned package exposes no AX window before inviting owner walkthrough; do not repeat unchanged attempts or widen the native acceptance scope."
+}

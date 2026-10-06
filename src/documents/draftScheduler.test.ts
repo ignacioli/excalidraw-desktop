@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DraftScheduler, type DraftSchedulerOptions } from "./draftScheduler";
+import {
+  DocumentOperationQueue,
+  DraftScheduler,
+  type DraftSchedulerOptions,
+} from "./draftScheduler";
 
 function createScheduler(overrides: Partial<DraftSchedulerOptions> = {}) {
   const persistDraft = vi.fn(async () => undefined);
@@ -79,5 +83,24 @@ describe("DraftScheduler", () => {
     expect(persistDraft).not.toHaveBeenCalled();
     expect(checkpoint).not.toHaveBeenCalled();
     scheduler.dispose();
+  });
+
+  it("continues with the next document operation after a failure", async () => {
+    const queue = new DocumentOperationQueue();
+    const started: string[] = [];
+    const first = queue.enqueue(async () => {
+      started.push("first");
+      throw new Error("first failed");
+    });
+    const second = queue.enqueue(async () => {
+      started.push("second");
+      return "ok";
+    });
+
+    await expect(first).rejects.toThrow("first failed");
+    await expect(second).resolves.toBe("ok");
+    expect(started).toEqual(["first", "second"]);
+    await queue.drain();
+    queue.dispose();
   });
 });

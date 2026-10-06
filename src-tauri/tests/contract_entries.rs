@@ -75,10 +75,10 @@ impl Drop for Fixture {
 }
 
 #[test]
-fn workspace_entry_dto_and_error_codes_match_the_v2_wire_contract() {
+fn workspace_entry_dto_and_error_codes_match_the_v3_wire_contract() {
     assert_eq!(
-        IPC_CONTRACT_VERSION, 2,
-        "handshake advertises IPC contract version 2 after the listing and thumbnail cutover"
+        IPC_CONTRACT_VERSION, 3,
+        "history list and preview activate the v3 public contract"
     );
     assert_eq!(
         serde_json::to_value(WorkspaceEntryKind::Drawing)

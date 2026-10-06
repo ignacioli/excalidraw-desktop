@@ -4,11 +4,15 @@ import { expect, test } from "@playwright/test";
 
 import { runTauriReliabilityScenario } from "../helpers/reliability";
 import {
+  armBrowserTauriCheckpointFailure,
   installBrowserTauriHarness,
   readHarnessDraft,
   readHarnessFile,
 } from "./browserTauriHarness";
-import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
+import {
+  openWorkspaceSidebar,
+  persistPinnedWorkspaceSidebar,
+} from "./workspaceSidebar";
 
 test("disk-full checkpoint preserves the file and recoverable draft", async () => {
   const testInfo = test.info();
@@ -52,10 +56,18 @@ test("disk-full checkpoint preserves the file and recoverable draft", async () =
 test("disk-full IPC feedback keeps the editor open with its recovery draft", async ({
   page,
 }) => {
-  await installBrowserTauriHarness(page, undefined, undefined, undefined, 1);
-  await persistPinnedWorkspaceSidebar(page);
+  await installBrowserTauriHarness(
+    page,
+    undefined,
+    undefined,
+    undefined,
+    1,
+    true,
+  );
+  await persistPinnedWorkspaceSidebar(page, ["workspace-1"], "workspace-1");
   await page.goto("/");
-  await page.getByRole("button", { name: "New drawing" }).click();
+  await openWorkspaceSidebar(page);
+  await page.getByRole("treeitem", { name: "us1-drawing" }).click();
   await expect(
     page.getByRole("tab", { name: "us1-drawing.excalidraw" }),
   ).toBeVisible();
@@ -76,7 +88,8 @@ test("disk-full IPC feedback keeps the editor open with its recovery draft", asy
     .poll(async () => sceneHasRectangle(await readHarnessDraft(page)))
     .toBe(true);
 
-  await page.getByRole("button", { name: /^Save/ }).click();
+  await armBrowserTauriCheckpointFailure(page);
+  await page.keyboard.press("Meta+S");
   await expect(page.getByRole("status")).toHaveText(
     "The disk is full. Your recovery draft is still available.",
   );

@@ -4,7 +4,10 @@ import {
   readHarnessDraft,
   readHarnessFile,
 } from "./browserTauriHarness";
-import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
+import {
+  openWorkspaceSidebar,
+  persistPinnedWorkspaceSidebar,
+} from "./workspaceSidebar";
 
 const OFFICIAL_FIXTURE = JSON.stringify({
   type: "excalidraw",
@@ -47,10 +50,18 @@ const OFFICIAL_FIXTURE = JSON.stringify({
 test("round-trips an official scene through the locked official loader", async ({
   page,
 }) => {
-  await installBrowserTauriHarness(page, undefined, OFFICIAL_FIXTURE);
-  await persistPinnedWorkspaceSidebar(page);
+  await installBrowserTauriHarness(
+    page,
+    undefined,
+    OFFICIAL_FIXTURE,
+    undefined,
+    undefined,
+    true,
+  );
+  await persistPinnedWorkspaceSidebar(page, ["workspace-1"], "workspace-1");
   await page.goto("/");
-  await page.getByRole("button", { name: "Open drawing…" }).click();
+  await openWorkspaceSidebar(page);
+  await page.getByRole("treeitem", { name: "us1-drawing" }).click();
   await expect(page.locator(".excalidraw-editor")).toBeVisible();
 
   const canvas = page.locator(".excalidraw__canvas.interactive");
@@ -78,7 +89,7 @@ test("round-trips an official scene through the locked official loader", async (
       );
     })
     .toBe(true);
-  await page.getByRole("button", { name: /^Save/ }).click();
+  await page.keyboard.press("Meta+S");
 
   await expect
     .poll(async () => {
