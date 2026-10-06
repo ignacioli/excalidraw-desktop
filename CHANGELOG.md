@@ -2,6 +2,23 @@
 
 User-visible changes to Excalidraw Desktop, newest first.
 
+## [0.4.0] - 2026-10-05
+
+### Added
+
+- Local Version History for automatic checkpoints, manual marks, and protected restore, clear, and import operations.
+- A resizable history drawer with read-only previews, explicit restore confirmation, and per-version Mark, Unmark, and Delete actions.
+- Persistent document history across renames, with separate history for Save As copies and explicit feedback when a stored version is unavailable.
+
+### Fixed
+
+- Repeatedly marking unchanged content reuses its existing marked version and shows feedback on that row.
+- History selection, scrolling, and keyboard focus remain stable during marking and preview/confirmation flows.
+
+### Known limitations
+
+- Physical large-drawing benchmarks showed increased memory use and editing latency; startup and sustained-editing memory-growth targets were also exceeded. These diagnostic results remain under investigation and are not reported as passing performance budgets.
+
 ## [0.3.0] - 2026-09-16
 
 ### Added
@@ -44,6 +61,7 @@ Canvas-first desktop shell. Implemented in [#1](https://github.com/ignacioli/exc
 
 - GitHub Releases for unsigned, unnotarized macOS universal `.dmg` and best-effort Linux AppImage, deb, and rpm.
 
+[0.4.0]: https://github.com/ignacioli/excalidraw-desktop/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ignacioli/excalidraw-desktop/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ignacioli/excalidraw-desktop/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/ignacioli/excalidraw-desktop/releases/tag/v0.1.1
