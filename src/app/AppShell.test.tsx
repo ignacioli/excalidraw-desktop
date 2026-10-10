@@ -18,6 +18,7 @@ import {
 import type { CommandInvoker } from "../ipc/client";
 import type { NativeMenuCommand } from "../ipc/contracts";
 import { LocaleController } from "../i18n";
+import { en } from "../i18n/messages/en.ts";
 import { AppShell } from "./AppShell";
 import {
   SHELL_PREFERENCES_STORAGE_KEY,
@@ -332,7 +333,11 @@ describe("AppShell", () => {
       if (command === "workspace_recent_list")
         return [workspace, otherWorkspace];
       if (command === "workspace_remount") {
-        throw new Error("Workspace is no longer accessible.");
+        throw {
+          code: "PATH_ACCESS_DENIED",
+          message: "Workspace is no longer accessible.",
+          retriable: false,
+        };
       }
       if (command === "workspace_recent_remove") return {};
       throw new Error(`Unexpected command ${command}`);
@@ -357,7 +362,7 @@ describe("AppShell", () => {
     });
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Workspace is no longer accessible.",
+      en["error.PATH_ACCESS_DENIED"],
     );
     expect(
       screen.getByRole("button", { name: "Open workspace Missing workspace" }),
@@ -401,7 +406,11 @@ describe("AppShell", () => {
       if (command === "workspace_remount") {
         attempts += 1;
         if (attempts === 1) {
-          throw new Error("Workspace is no longer accessible.");
+          throw {
+            code: "PATH_ACCESS_DENIED",
+            message: "Workspace is no longer accessible.",
+            retriable: false,
+          };
         }
         return workspace;
       }
@@ -442,10 +451,18 @@ describe("AppShell", () => {
       if (command === "workspace_list") return [];
       if (command === "workspace_recent_list") return [workspace];
       if (command === "workspace_remount") {
-        throw new Error("Workspace is no longer accessible.");
+        throw {
+          code: "PATH_ACCESS_DENIED",
+          message: "Workspace is no longer accessible.",
+          retriable: false,
+        };
       }
       if (command === "workspace_recent_remove") {
-        throw new Error("Recent history could not be removed.");
+        throw {
+          code: "DB_ERROR",
+          message: "Recent history could not be removed.",
+          retriable: false,
+        };
       }
       throw new Error(`Unexpected command ${command}`);
     }) as CommandInvoker["invoke"];
@@ -467,7 +484,7 @@ describe("AppShell", () => {
       }),
     );
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Recent history could not be removed.",
+      en["error.DB_ERROR"],
     );
     expect(screen.getByRole("alert")).toBeVisible();
     expect(screen.getByText("Folder unavailable")).toBeVisible();
@@ -486,7 +503,11 @@ describe("AppShell", () => {
       if (command === "workspace_list") return [];
       if (command === "workspace_recent_list") return [workspace];
       if (command === "workspace_remount") {
-        throw new Error("Workspace is no longer accessible.");
+        throw {
+          code: "PATH_ACCESS_DENIED",
+          message: "Workspace is no longer accessible.",
+          retriable: false,
+        };
       }
       throw new Error(`Unexpected command ${command}`);
     }) as CommandInvoker["invoke"];
@@ -685,7 +706,11 @@ describe("AppShell", () => {
     ]);
     const checkpoint = vi
       .spyOn(documentManager, "checkpointActive")
-      .mockRejectedValue(new Error("native save failed"));
+      .mockRejectedValue({
+        code: "DISK_FULL",
+        message: "native save failed",
+        retriable: false,
+      });
 
     const view = render(<AppShell />);
     await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
@@ -694,7 +719,7 @@ describe("AppShell", () => {
     expect(checkpoint).toHaveBeenCalledWith("manualSave");
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent(
-        "native save failed",
+        en["error.DISK_FULL"],
       ),
     );
     expect(

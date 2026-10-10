@@ -94,6 +94,11 @@ import {
 } from "./theme/themeController";
 import { createNativeMenuSync } from "./nativeMenuSync";
 import {
+  DescribedError,
+  describeError,
+  LocalizedError,
+} from "../i18n/describeError";
+import {
   initializeBrowserLocaleController,
   type LocaleController,
 } from "../i18n";
@@ -263,7 +268,7 @@ export function AppShell({
   const requireHistoryCoordinator = (): HistoryCoordinator => {
     const coordinator = historyCoordinatorRef.current;
     if (coordinator === null) {
-      throw new Error("版本历史尚未就绪。");
+      throw new LocalizedError("history.error.notReady");
     }
     return coordinator;
   };
@@ -398,7 +403,10 @@ export function AppShell({
         setHistoryFeedback("替换结果已核实，画布已更新。");
       })
       .catch((error: unknown) => {
-        if (!cancelled) setInteractionError(getErrorMessage(error));
+        if (!cancelled)
+          setInteractionError(
+            describeError(error, "error.fileOperationFailed"),
+          );
       });
     return () => {
       cancelled = true;
@@ -441,7 +449,7 @@ export function AppShell({
   }, []);
   const reportWelcomeError = useCallback(
     (error: unknown, visuallyHidden = false): void => {
-      setWelcomeError(getErrorMessage(error));
+      setWelcomeError(describeError(error, "error.fileOperationFailed"));
       setWelcomeErrorVisuallyHidden(visuallyHidden);
     },
     [],
@@ -451,7 +459,7 @@ export function AppShell({
     try {
       await action();
     } catch (error) {
-      setInteractionError(getErrorMessage(error));
+      setInteractionError(describeError(error, "error.fileOperationFailed"));
     }
   };
 
@@ -459,11 +467,9 @@ export function AppShell({
     const tabOrder = documentManager.store.getState().tabOrder;
     const outcome = await documentManager.closeMany(tabOrder);
     if (outcome.status !== "closed") {
-      throw new Error(
-        outcome.status === "failed"
-          ? outcome.message
-          : "Close or save the open drawings before switching workspaces.",
-      );
+      throw outcome.status === "failed"
+        ? new DescribedError(outcome.message)
+        : new LocalizedError("error.closeBeforeWorkspaceSwitch");
     }
   };
 
@@ -689,7 +695,7 @@ export function AppShell({
     const session =
       documentManager.store.getState().sessionsById[capture.documentId];
     if (session === undefined) {
-      throw new Error("绘图已关闭。");
+      throw new LocalizedError("history.error.drawingClosed");
     }
     const path = await chooseSavePath(session.title);
     if (path === null) return { status: "cancelled" as const };
@@ -712,7 +718,7 @@ export function AppShell({
       editor === undefined ||
       documentManager.store.getState().activeDocumentId !== documentId
     ) {
-      throw new Error("当前绘图尚未就绪。");
+      throw new LocalizedError("history.error.drawingNotReady");
     }
     setHistoryBusyDocumentIds((current) => new Set(current).add(documentId));
     editor.setReadOnly(true);
@@ -723,7 +729,7 @@ export function AppShell({
           ...current,
           [documentId]: result.response.requestId,
         }));
-        throw new Error("替换结果尚待核实，当前文档已暂停编辑。");
+        throw new LocalizedError("history.error.replacementUnverified");
       }
       setPendingHistory((current) => {
         const next = { ...current };
@@ -770,7 +776,9 @@ export function AppShell({
             (await coordinator.adoptDeferred(documentId)) ||
             (await coordinator.resolvePending(documentId, requestId)).adopted;
           if (!adopted) {
-            throw new Error("替换结果仍待核实，请稍后重试。");
+            throw new LocalizedError(
+              "history.error.replacementStillUnverified",
+            );
           }
           setPendingHistory((current) => {
             const next = { ...current };
@@ -835,14 +843,17 @@ export function AppShell({
           if (
             documentManager.store.getState().activeDocumentId !== documentId
           ) {
-            throw new Error("图片解析完成前，当前绘图已切换。");
+            throw new LocalizedError(
+              "history.error.drawingSwitchedDuringImage",
+            );
           }
           drop.forwardOrdinaryImage();
           return;
         }
         await replacePreparedImport(documentId, prepared);
       }),
-    onError: (error) => setInteractionError(getErrorMessage(error)),
+    onError: (error) =>
+      setInteractionError(describeError(error, "error.fileOperationFailed")),
   });
   const importIntoDocument = async (
     documentId: string,
@@ -856,10 +867,10 @@ export function AppShell({
   ): Promise<void> => {
     if (prepared.status === "cancelled") return;
     if (prepared.status === "multiple") {
-      throw new Error("一次只能导入一份绘图。");
+      throw new LocalizedError("error.importMultipleDrawings");
     }
     if (prepared.status === "ordinaryImage") {
-      throw new Error("这张图片不含 Excalidraw 绘图。");
+      throw new LocalizedError("history.error.imageHasNoDrawing");
     }
     await runProtectedReplacement(
       documentId,
@@ -948,7 +959,9 @@ export function AppShell({
         )
           return;
         setHistoryPanelStatus("error");
-        setHistoryPanelMessage(getErrorMessage(error));
+        setHistoryPanelMessage(
+          describeError(error, "error.fileOperationFailed"),
+        );
       }
     },
     [activeDocumentId, historyClient],
@@ -1018,7 +1031,9 @@ export function AppShell({
                 if (request !== historyPanelRequestRef.current) return;
                 setHistoryPreviewRenderedVersionId(null);
                 setHistoryPreviewState("error");
-                setHistoryPanelMessage(getErrorMessage(error));
+                setHistoryPanelMessage(
+                  describeError(error, "error.fileOperationFailed"),
+                );
               }}
               onRendered={() => {
                 if (request !== historyPanelRequestRef.current) return;
@@ -1034,7 +1049,9 @@ export function AppShell({
           if (request !== historyPanelRequestRef.current) return;
           setHistoryPreviewRenderedVersionId(null);
           setHistoryPreviewState("error");
-          setHistoryPanelMessage(getErrorMessage(error));
+          setHistoryPanelMessage(
+            describeError(error, "error.fileOperationFailed"),
+          );
         });
     },
     [activeDocumentId, historyClient, themeSnapshot.resolvedColorScheme],
@@ -1193,7 +1210,9 @@ export function AppShell({
       snap: activePreferences?.snap ?? false,
       zen: activePreferences?.zen ?? false,
       viewMode: activePreferences?.viewMode ?? forcedReadOnly,
-    }).catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+    }).catch((error: unknown) =>
+      setInteractionError(describeError(error, "error.fileOperationFailed")),
+    );
   }, [
     activePreferences,
     activeSession,
@@ -1213,7 +1232,9 @@ export function AppShell({
       workspaceInvoker,
       "versionHistory",
       historyMenuEnabled,
-    ).catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+    ).catch((error: unknown) =>
+      setInteractionError(describeError(error, "error.fileOperationFailed")),
+    );
   }, [historyMenuEnabled, workspaceInvoker]);
   const applyCloseOutcome = (outcome: CloseOutcome) => {
     if (outcome.status === "orphaned") {
@@ -1260,7 +1281,9 @@ export function AppShell({
           unlisten = nextUnlisten;
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(describeError(error, "error.fileOperationFailed")),
+      );
     return () => {
       disposed = true;
       unlisten?.();
@@ -1285,7 +1308,9 @@ export function AppShell({
           );
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(describeError(error, "error.fileOperationFailed")),
+      );
     return () => {
       disposed = true;
     };
@@ -1312,7 +1337,9 @@ export function AppShell({
           );
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(describeError(error, "error.fileOperationFailed")),
+      );
     return () => {
       disposed = true;
     };
@@ -1325,7 +1352,7 @@ export function AppShell({
     let disposed = false;
     let unlisten: (() => void) | undefined;
     void registerExitCheckpoint(documentManager, (error) =>
-      setInteractionError(getErrorMessage(error)),
+      setInteractionError(describeError(error, "error.fileOperationFailed")),
     )
       .then((nextUnlisten) => {
         if (disposed) {
@@ -1334,7 +1361,9 @@ export function AppShell({
           unlisten = nextUnlisten;
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(describeError(error, "error.fileOperationFailed")),
+      );
     return () => {
       disposed = true;
       unlisten?.();
@@ -1355,7 +1384,9 @@ export function AppShell({
           unlisten = nextUnlisten;
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(describeError(error, "error.fileOperationFailed")),
+      );
     return () => {
       disposed = true;
       unlisten?.();
@@ -1369,7 +1400,8 @@ export function AppShell({
     let disposed = false;
     let unlisten: (() => void) | undefined;
     void registerOpenFileHandler(documentManager, {
-      onError: (error) => setInteractionError(getErrorMessage(error)),
+      onError: (error) =>
+        setInteractionError(describeError(error, "error.fileOperationFailed")),
     })
       .then((nextUnlisten) => {
         if (disposed) {
@@ -1378,7 +1410,9 @@ export function AppShell({
           unlisten = nextUnlisten;
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(describeError(error, "error.fileOperationFailed")),
+      );
     return () => {
       disposed = true;
       unlisten?.();
@@ -1399,7 +1433,9 @@ export function AppShell({
           unlisten = nextUnlisten;
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(describeError(error, "error.fileOperationFailed")),
+      );
     return () => {
       disposed = true;
       unlisten?.();
@@ -1421,7 +1457,9 @@ export function AppShell({
           unlisten = nextUnlisten;
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(describeError(error, "error.fileOperationFailed")),
+      );
     return () => {
       disposed = true;
       unlisten?.();
@@ -1937,22 +1975,6 @@ function getSaveStatus(saveState: DocumentSaveState | undefined): string {
     default:
       return "No drawing open";
   }
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === "object" && error !== null) {
-    const code = "code" in error ? error.code : undefined;
-    if (code === "DISK_FULL") {
-      return "The disk is full. Your recovery draft is still available.";
-    }
-    if ("message" in error && typeof error.message === "string") {
-      return error.message;
-    }
-  }
-  return "The requested file operation could not be completed.";
 }
 
 async function chooseSavePath(defaultTitle: string): Promise<string | null> {

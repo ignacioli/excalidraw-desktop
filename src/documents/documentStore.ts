@@ -20,6 +20,7 @@ import { DocumentOperationQueue, DraftScheduler } from "./draftScheduler";
 import { createDocumentGateway, type DocumentGateway } from "./documentGateway";
 import { bindActivateRunner, requestActivate } from "./tabActivationQueue";
 import { defaultEventListener, type EventListener } from "../ipc/events";
+import { describeError } from "../i18n/describeError";
 
 export type DocumentSaveState =
   | "clean"
@@ -599,7 +600,7 @@ export class DocumentManager {
         return {
           status: "failed",
           documentId,
-          message: getErrorMessage(error),
+          message: describeError(error, "error.saveFailed"),
         };
       }
     }
@@ -663,7 +664,7 @@ export class DocumentManager {
       return {
         status: "failed",
         documentId,
-        message: getErrorMessage(error),
+        message: describeError(error, "error.saveFailed"),
       };
     }
 
@@ -1057,7 +1058,7 @@ export class DocumentManager {
       onError: (error) => {
         this.patchSession(id, {
           saveState: "error",
-          errorMessage: getErrorMessage(error),
+          errorMessage: describeError(error, "error.saveFailed"),
         });
       },
     });
@@ -1261,21 +1262,6 @@ function haveSameFiles(
     previousIds.length === nextIds.length &&
     previousIds.every((id) => previous[id] === next[id])
   );
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  return "The drawing could not be saved.";
 }
 
 export const documentManager = new DocumentManager(

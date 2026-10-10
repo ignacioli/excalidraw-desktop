@@ -3,6 +3,7 @@ import type { AppHandshakeResponse, RecoveryCandidate } from "../ipc/contracts";
 import { documentManager, type DocumentManager } from "./documentStore";
 import { RecoveryDialog, type RecoveryDecision } from "./RecoveryDialog";
 import { recoveryManager, type RecoveryManager } from "./recoveryManager";
+import { describeError, LocalizedError } from "../i18n/describeError";
 
 interface RecoveryStartupProps {
   enabled: boolean;
@@ -104,7 +105,7 @@ export function RecoveryStartup({
             candidates: [],
             recoveredCount: 0,
           });
-          setStartupError(getErrorMessage(error));
+          setStartupError(describeError(error, "error.recoveryFailed"));
         }
       });
     return () => {
@@ -124,7 +125,7 @@ export function RecoveryStartup({
       (item) => item.documentId === decision.documentId,
     );
     if (candidate === undefined) {
-      throw new Error("The selected recovery snapshot is no longer available.");
+      throw new LocalizedError("recovery.error.snapshotUnavailable");
     }
 
     let appliedDecision = decision;
@@ -208,19 +209,4 @@ async function chooseRecoveryPath(
     ],
     title: "Save recovered drawing",
   });
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  return "Unknown recovery error";
 }

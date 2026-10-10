@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { describeError } from "../i18n/describeError";
 
 export type ConflictResolution = "takeExternal" | "keepLocal" | "saveAsNew";
 
@@ -74,7 +75,7 @@ export function ConflictDialog({
         await onResolve(resolution, selectedPath);
       }
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      setErrorMessage(describeError(error, "error.conflictFailed"));
     } finally {
       setBusy(false);
     }
@@ -186,19 +187,4 @@ function formatTimestamp(seconds: number): string {
     return "at an unknown time";
   }
   return timestamp.toLocaleString();
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  return "The conflict could not be resolved.";
 }

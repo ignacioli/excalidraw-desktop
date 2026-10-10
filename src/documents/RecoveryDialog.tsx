@@ -4,6 +4,7 @@ import type {
   RecoveryAction,
   RecoveryCandidate,
 } from "../ipc/contracts";
+import { describeError } from "../i18n/describeError";
 
 export type RecoveryApplyResponse = CommandResponse<"recovery_apply">;
 
@@ -88,7 +89,7 @@ export function RecoveryDialog({
         ...(saveAsPath === undefined ? {} : { saveAsPath }),
       });
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      setErrorMessage(describeError(error, "error.recoveryFailed"));
     } finally {
       setBusyDocumentId(null);
     }
@@ -207,19 +208,4 @@ function formatTimestamp(seconds: number): string {
     return "at an unknown time";
   }
   return timestamp.toLocaleString();
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  return "The recovery action could not be completed.";
 }
