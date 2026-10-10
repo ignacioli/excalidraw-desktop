@@ -58,6 +58,7 @@ describe("registerOpenFileHandler", () => {
             appVersion: "0.1.0",
             abnormalExit: false,
             pendingOpenPaths: ["/startup.excalidraw"],
+            preferredLanguages: [],
           };
         }
         throw new Error(`Unexpected command ${command}`);
@@ -91,6 +92,7 @@ describe("registerOpenFileHandler", () => {
         appVersion: "0.1.0",
         abnormalExit: false,
         pendingOpenPaths: [],
+        preferredLanguages: [],
       })),
     };
 

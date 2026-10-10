@@ -25,6 +25,7 @@ function createGateway(
       appVersion: "0.1.0",
       abnormalExit: false,
       pendingOpenPaths: [],
+      preferredLanguages: [],
     })),
     list: vi.fn(async () => []),
     apply: vi.fn(async () => ({ scene: undefined, newPath: undefined })),
@@ -51,6 +52,7 @@ describe("RecoveryManager", () => {
         appVersion: "0.1.0",
         abnormalExit: true,
         pendingOpenPaths: [],
+        preferredLanguages: [],
       })),
       list: vi.fn(async () => [candidate()]),
       apply: vi.fn(async () => ({ scene, newPath: undefined })),
@@ -80,6 +82,7 @@ describe("RecoveryManager", () => {
         appVersion: "0.1.0",
         abnormalExit: true,
         pendingOpenPaths: [],
+        preferredLanguages: [],
       })),
       list: vi.fn(async () => [candidate()]),
     });
@@ -120,6 +123,7 @@ describe("RecoveryManager", () => {
           appVersion: "0.1.0",
           abnormalExit: false,
           pendingOpenPaths: [],
+          preferredLanguages: [],
         };
       }),
       apply,

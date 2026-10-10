@@ -349,10 +349,12 @@ async function installHistoryProbe(page: Page): Promise<void> {
           appVersion: string;
           abnormalExit: boolean;
           pendingOpenPaths: string[];
+          preferredLanguages: string[];
         };
         return {
           ...response,
           pendingOpenPaths: ["/virtual/history-import.excalidraw"],
+          preferredLanguages: [],
         };
       }
       if (command === "history_replace") {

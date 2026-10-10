@@ -242,6 +242,7 @@ async function installRecoveryHarness(page: Page): Promise<void> {
             appVersion: "0.1.0",
             abnormalExit: true,
             pendingOpenPaths: [],
+            preferredLanguages: [],
           };
         }
         if (command === "recovery_list") {

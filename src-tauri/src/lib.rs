@@ -9,6 +9,7 @@ mod e2e_performance;
 mod e2e_performance_test;
 pub mod history;
 pub mod indexing;
+pub mod locale;
 mod native_menu;
 pub mod security;
 mod watcher;

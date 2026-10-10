@@ -139,6 +139,7 @@ export async function installUs4Harness(
               appVersion: "0.1.0",
               abnormalExit: false,
               pendingOpenPaths: [],
+              preferredLanguages: [],
             };
           }
           if (command === "workspace_list") {

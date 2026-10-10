@@ -292,10 +292,12 @@ async function installHistoryProbe(
             appVersion: string;
             abnormalExit: boolean;
             pendingOpenPaths: string[];
+            preferredLanguages: string[];
           };
           return {
             ...response,
             pendingOpenPaths: pendingPath === null ? [] : [pendingPath],
+            preferredLanguages: [],
           };
         }
         if (command === "plugin:dialog|open") {

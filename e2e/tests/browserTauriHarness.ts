@@ -9,6 +9,7 @@ export async function installBrowserTauriHarness(
   dialogPaths: readonly string[] = [documentPath],
   checkpointFailureAfter?: number,
   seedWorkspaceEntries?: boolean,
+  preferredLanguages: readonly string[] = [],
 ): Promise<void> {
   await page.addInitScript(
     ({
@@ -18,6 +19,7 @@ export async function installBrowserTauriHarness(
       paths,
       failCheckpointAfter,
       seedEntries,
+      systemLanguages,
     }) => {
       type BrowserStorage = {
         getItem(key: string): string | null;
@@ -169,6 +171,7 @@ export async function installBrowserTauriHarness(
               appVersion: "0.2.0-e2e",
               abnormalExit: false,
               pendingOpenPaths: [],
+              preferredLanguages: systemLanguages,
             };
           }
           if (command === "recovery_list") {
@@ -316,6 +319,7 @@ export async function installBrowserTauriHarness(
       paths: [...dialogPaths],
       failCheckpointAfter: checkpointFailureAfter,
       seedEntries: seedWorkspaceEntries,
+      systemLanguages: [...preferredLanguages],
       initialScene: initialSceneJson,
       emptyScene: JSON.stringify({
         type: "excalidraw",

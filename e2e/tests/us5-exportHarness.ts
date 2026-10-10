@@ -114,6 +114,7 @@ export async function installExportHarness(
               appVersion: "0.2.0-e2e",
               abnormalExit: false,
               pendingOpenPaths: [],
+              preferredLanguages: [],
             };
           }
           if (command === "recovery_list") {

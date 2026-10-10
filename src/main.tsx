@@ -1,6 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { initializeBrowserThemeController } from "./app/theme/themeController";
+import { initializeBrowserLocaleController } from "./i18n";
+import { readSystemLanguages } from "./i18n/systemLanguages";
 import {
   configureExcalidrawAssets,
   loadBundledCjkFont,
@@ -20,6 +22,8 @@ async function renderApplication() {
   void loadBundledCjkFont().catch((error: unknown) => {
     console.warn("Bundled CJK font could not be preloaded.", error);
   });
+  // The UI language must be known before the first render.
+  initializeBrowserLocaleController(await readSystemLanguages());
   const { default: App } = await import("./App");
 
   ReactDOM.createRoot(applicationRoot).render(

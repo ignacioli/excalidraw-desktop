@@ -77,8 +77,8 @@ impl Drop for Fixture {
 #[test]
 fn workspace_entry_dto_and_error_codes_match_the_v3_wire_contract() {
     assert_eq!(
-        IPC_CONTRACT_VERSION, 3,
-        "history list and preview activate the v3 public contract"
+        IPC_CONTRACT_VERSION, 4,
+        "the handshake language list activates v4; the entry DTOs are unchanged since v3"
     );
     assert_eq!(
         serde_json::to_value(WorkspaceEntryKind::Drawing)

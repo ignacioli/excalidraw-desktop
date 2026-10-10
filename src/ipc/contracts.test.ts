@@ -76,7 +76,7 @@ describe("IPC v3 history contract", () => {
   });
 
   it("types Workspace Entry commands and proves migrated legacy callers are gone", () => {
-    expect(IPC_CONTRACT_VERSION).toBe(3);
+    expect(IPC_CONTRACT_VERSION).toBe(4);
     expectTypeOf<CommandRequest<"workspace_entry_list">>().toEqualTypeOf<{
       workspaceId: string;
       parentRelativePath: string;

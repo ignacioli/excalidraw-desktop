@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "@excalidraw/excalidraw/index.css";
 import type { ResolvedColorScheme } from "../app/theme/types";
 import { documentManager } from "../documents/documentStore";
+import { useI18n } from "../i18n";
 import { ExcalidrawAdapter } from "./ExcalidrawAdapter";
 import { resolveAssetFiles } from "./assetResolver";
 import { ImeBridge } from "./imeBridge";
@@ -34,6 +35,7 @@ export function ExcalidrawEditor({
   protectedInput,
   onReady,
 }: ExcalidrawEditorProps) {
+  const { resolvedLanguage } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const adapterRef = useRef<ExcalidrawAdapter | undefined>(undefined);
   const imeBridgeRef = useRef<ImeBridge | undefined>(undefined);
@@ -156,6 +158,7 @@ export function ExcalidrawEditor({
         autoFocus
         excalidrawAPI={receiveApi}
         initialData={initialData}
+        langCode={resolvedLanguage}
         onChange={handleSceneChange}
         theme={theme}
         validateEmbeddable={false}

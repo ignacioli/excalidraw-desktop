@@ -17,6 +17,7 @@ use super::{
 pub struct SessionState {
     abnormal_exit: bool,
     pending_open_paths: Vec<String>,
+    preferred_languages: Vec<String>,
     lock: Mutex<Option<SessionLock>>,
 }
 
@@ -29,6 +30,7 @@ impl SessionState {
         Ok(Self {
             abnormal_exit: lock.abnormal_exit(),
             pending_open_paths,
+            preferred_languages: crate::locale::preferred_languages(),
             lock: Mutex::new(Some(lock)),
         })
     }
@@ -39,6 +41,7 @@ impl SessionState {
             app_version: env!("CARGO_PKG_VERSION").to_owned(),
             abnormal_exit: self.abnormal_exit,
             pending_open_paths: self.pending_open_paths.clone(),
+            preferred_languages: self.preferred_languages.clone(),
         }
     }
 

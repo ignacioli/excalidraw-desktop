@@ -1,4 +1,4 @@
-export const IPC_CONTRACT_VERSION = 3 as const;
+export const IPC_CONTRACT_VERSION = 4 as const;
 /** The activated history boundary; retained as an explicit version marker. */
 export const RESERVED_HISTORY_CONTRACT_VERSION = 3 as const;
 
@@ -58,6 +58,8 @@ export interface AppHandshakeResponse {
   appVersion: string;
   abnormalExit: boolean;
   pendingOpenPaths: string[];
+  /** System UI languages (raw BCP-47 tags, at most 16), read once at startup. */
+  preferredLanguages: string[];
 }
 
 export interface RecoveryCandidate {

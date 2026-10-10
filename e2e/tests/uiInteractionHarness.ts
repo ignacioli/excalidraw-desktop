@@ -229,6 +229,7 @@ export async function installUiInteractionHarness(
               appVersion: "0.2.0-e2e",
               abnormalExit: startup.abnormalExit,
               pendingOpenPaths: [],
+              preferredLanguages: [],
             };
           }
           if (command === "recovery_list") {
