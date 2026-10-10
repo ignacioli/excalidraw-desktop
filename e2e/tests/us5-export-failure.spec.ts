@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { installExportHarness } from "./us5-exportHarness";
+import { emitBrowserTauriEvent } from "./browserTauriHarness";
+import { EXPORT_WORKSPACE, installExportHarness } from "./us5-exportHarness";
 import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
 
 const READONLY_TARGET = "/readonly/export.png";
@@ -12,15 +13,21 @@ test("shows a clear error after a failed export and leaves no partial file", asy
     exportPaths: [READONLY_TARGET, WRITABLE_TARGET],
     failReadonlyTarget: READONLY_TARGET,
   });
-  await persistPinnedWorkspaceSidebar(page);
+  await persistPinnedWorkspaceSidebar(
+    page,
+    [EXPORT_WORKSPACE.id],
+    EXPORT_WORKSPACE.id,
+  );
   await page.goto("/");
-  await page.getByRole("button", { name: "Open drawing…" }).click();
+  await page.getByRole("treeitem", { name: "drawing", exact: true }).click();
   await expect(page.locator(".excalidraw-editor")).toBeVisible();
   await drawRectangle(page);
 
   const dialog = page.getByRole("dialog", { name: "Export drawing" });
-  await page.getByRole("button", { name: "Export…" }).click();
-  await expect(dialog).toBeVisible();
+  await emitBrowserTauriEvent(page, "native-menu-command", {
+    command: "exportImage",
+  });
+  await expect(dialog).toBeVisible({ timeout: 15_000 });
   await dialog.getByRole("button", { name: "Export…" }).click();
 
   await expect(dialog.getByRole("alert")).toHaveText(
@@ -44,9 +51,9 @@ test("shows a clear error after a failed export and leaves no partial file", asy
 
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Export…" }),
-  ).toBeFocused();
+  // Export is reached from the native menu; the shell has no top-level Export
+  // control to return focus to.
+  await expect(page.getByRole("button", { name: "Export…" })).toHaveCount(0);
 });
 
 async function drawRectangle(page: Page): Promise<void> {

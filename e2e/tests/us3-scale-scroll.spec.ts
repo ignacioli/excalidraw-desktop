@@ -6,7 +6,8 @@ const FIXTURE_FILE_COUNT = 10_000;
 const BASELINE_FILE_COUNT = 1_000;
 const FIXTURE_DIRECTORY = "bulk";
 const FIXTURE_SEED = 58_000;
-const ROW_HEIGHT_PX = 32;
+// DESIGN.md approved shell geometry: 28 px Workspace rows.
+const ROW_HEIGHT_PX = 28;
 const SCROLL_SAMPLE_DURATION_MS = 1_000;
 const MIN_SCROLL_FPS = 50;
 const MIN_SCROLL_DISTANCE_PX = 50;

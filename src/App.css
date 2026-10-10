@@ -682,7 +682,8 @@ body {
 }
 
 .workspace-tree-row[data-pointer-focus="true"] .workspace-tree-action,
-.workspace-tree-row:focus-within .workspace-tree-action {
+.workspace-tree-row:focus-within .workspace-tree-action,
+.workspace-tree-action[data-menu-open="true"] {
   visibility: visible;
 }
 

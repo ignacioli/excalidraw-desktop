@@ -6,7 +6,10 @@ import {
   installUiInteractionHarness,
   setUiInteractionHarnessFailure,
 } from "./uiInteractionHarness";
-import { openWorkspaceSidebar } from "./workspaceSidebar";
+import {
+  openWorkspaceSidebar,
+  persistCurrentWorkspace,
+} from "./workspaceSidebar";
 
 const workspace = {
   id: "workspace-1",
@@ -34,6 +37,7 @@ test("tab close button, context menu, middle-click, and Cmd/Ctrl+W close Open Do
       drawing("five.excalidraw", "five"),
     ],
   });
+  await persistCurrentWorkspace(page, workspace.id);
   await page.goto("/");
   await openDrawings(page, ["one", "two", "three", "four", "five"]);
 
@@ -84,6 +88,7 @@ test("Close Others and Close Tabs to the Right stop at the first failure", async
       drawing("later.excalidraw", "later"),
     ],
   });
+  await persistCurrentWorkspace(page, workspace.id);
   await page.goto("/");
   await openDrawings(page, ["keep", "fail", "later"]);
   await setUiInteractionHarnessFailure(page, "doc_close", CLOSE_FAILURE);
@@ -126,6 +131,7 @@ test("orphan close dialog offers Save As, Close Without Saving, and Cancel, and 
     ],
   });
   await installUiInteractionFileEvents(page);
+  await persistCurrentWorkspace(page, workspace.id);
   await page.goto("/");
   await openDrawings(page, ["alive", "gone", "after"]);
   await emitUiInteractionFileChanged(page, {
@@ -178,6 +184,7 @@ test("Close Without Saving continues a batch to the next orphaned drawing", asyn
     ],
   });
   await installUiInteractionFileEvents(page);
+  await persistCurrentWorkspace(page, workspace.id);
   await page.goto("/");
   await openDrawings(page, ["alive", "gone", "after"]);
   await emitUiInteractionFileChanged(page, {
@@ -225,6 +232,7 @@ test("closing the last drawing tab keeps the window shell and Files sidebar", as
     workspaces: [workspace],
     entries: [drawing("solo.excalidraw", "solo")],
   });
+  await persistCurrentWorkspace(page, workspace.id);
   await page.goto("/");
   await openDrawings(page, ["solo"]);
   await expect(page.locator(".app-shell")).toBeVisible();
@@ -258,6 +266,7 @@ test("vertical wheel on the tab bar cycles one tab per notch and ignores horizon
       drawing("four.excalidraw", "four"),
     ],
   });
+  await persistCurrentWorkspace(page, workspace.id);
   await page.goto("/");
   await openDrawings(page, ["one", "two", "three", "four"]);
 

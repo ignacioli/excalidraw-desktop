@@ -85,7 +85,7 @@
 - `pnpm typecheck`：运行独立的严格 TypeScript 门禁。
 - `pnpm test`：运行 Vitest 单元套件。
 - `APP_E2E=1 pnpm e2e`：运行 Playwright 套件；原生 shell 与故障注入用例需要 E2E fixture 描述的测试专用 Tauri 构建。
-- **Codex managed macOS 沙箱**：运行浏览器可见的 Playwright 用例时，不得让 Playwright 在沙箱内启动其配置的 `webServer`。先在沙箱外启动 `pnpm dev --host 127.0.0.1` 并等待 ready URL，再设置 `PLAYWRIGHT_SKIP_WEBSERVER=1` 运行 Playwright；使用非默认端口时同时设置 `PLAYWRIGHT_BASE_URL`。普通开发者 shell 与 CI 仍可继续使用配置中的 `webServer`。
+- **Codex managed macOS 沙箱**：运行浏览器可见的 Playwright 用例时，不得让 Playwright 在沙箱内启动其配置的 `webServer`。先在沙箱外启动 `pnpm dev --host 127.0.0.1` 并等待 ready URL，再设置 `PLAYWRIGHT_SKIP_WEBSERVER=1` 运行 Playwright；使用非默认端口时同时设置 `PLAYWRIGHT_BASE_URL`。History 面板 Harness 用例在独立 project 中运行，需另起 `VITE_E2E_HARNESS=1 pnpm dev --host 127.0.0.1 --port 1422`（可用 `PLAYWRIGHT_HISTORY_HARNESS_BASE_URL` 覆盖）；主 server 不得带该变量启动，因为它还会启动其他浏览器 Harness 拒绝的原生性能驱动。普通开发者 shell 与 CI 仍可继续使用配置中的 `webServer`。
 - `pnpm fonts:build`：从已获授权的本地源字体构建内置 CJK 手写字体。
 - `pnpm tauri dev`：通过 package script 运行 Tauri 开发应用。
 - `pnpm tauri build`：通过 package script 构建当前 Tauri 包。

@@ -42,9 +42,13 @@ export function ContextMenu({
   useEffect(() => {
     const returnFocusTarget = triggerRef?.current;
     restoreFocusRef.current = true;
+    // Triggers that are hidden until their row has focus stay visible while
+    // the menu owns focus, so focus can return to them on dismissal.
+    returnFocusTarget?.setAttribute("data-menu-open", "true");
     firstEnabledItem(menuRef.current)?.focus();
     return () => {
       if (restoreFocusRef.current) returnFocusTarget?.focus();
+      returnFocusTarget?.removeAttribute("data-menu-open");
     };
   }, [triggerRef]);
 

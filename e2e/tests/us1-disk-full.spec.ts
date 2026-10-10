@@ -15,6 +15,14 @@ import {
 } from "./workspaceSidebar";
 
 test("disk-full checkpoint preserves the file and recoverable draft", async () => {
+  test.skip(
+    !nativeReliabilityBuildConfigured(),
+    "Native US1 reliability tests require APP_E2E=1 and EXCALIDRAW_E2E_BINARY pointing at the e2e-harness Tauri build.",
+  );
+  if (!nativeReliabilityBuildConfigured()) {
+    return;
+  }
+
   const testInfo = test.info();
   const run = await runTauriReliabilityScenario("disk-full-checkpoint");
 
@@ -107,5 +115,13 @@ function sceneHasRectangle(sceneJson: string | null): boolean {
   };
   return (
     scene.elements?.some((element) => element.type === "rectangle") ?? false
+  );
+}
+
+// An implicit src-tauri/target binary may be a production build without the
+// e2e-harness feature; it would ignore the scenario flag and never emit evidence.
+function nativeReliabilityBuildConfigured(): boolean {
+  return (
+    process.env.APP_E2E === "1" && Boolean(process.env.EXCALIDRAW_E2E_BINARY)
   );
 }

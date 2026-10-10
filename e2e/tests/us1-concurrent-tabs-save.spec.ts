@@ -14,6 +14,14 @@ import {
 } from "./workspaceSidebar";
 
 test("two concurrent document checkpoints remain independent", async () => {
+  test.skip(
+    !nativeReliabilityBuildConfigured(),
+    "Native US1 reliability tests require APP_E2E=1 and EXCALIDRAW_E2E_BINARY pointing at the e2e-harness Tauri build.",
+  );
+  if (!nativeReliabilityBuildConfigured()) {
+    return;
+  }
+
   const testInfo = test.info();
   const run = await runTauriReliabilityScenario("concurrent-checkpoints");
 
@@ -162,5 +170,13 @@ function sceneElementTypes(sceneJson: string | null): string[] {
   };
   return (scene.elements ?? []).flatMap((element) =>
     typeof element.type === "string" ? [element.type] : [],
+  );
+}
+
+// An implicit src-tauri/target binary may be a production build without the
+// e2e-harness feature; it would ignore the scenario flag and never emit evidence.
+function nativeReliabilityBuildConfigured(): boolean {
+  return (
+    process.env.APP_E2E === "1" && Boolean(process.env.EXCALIDRAW_E2E_BINARY)
   );
 }

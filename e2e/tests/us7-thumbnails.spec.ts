@@ -3,7 +3,10 @@ import {
   getUiInteractionHarnessState,
   installUiInteractionHarness,
 } from "./uiInteractionHarness";
-import { openWorkspaceSidebar } from "./workspaceSidebar";
+import {
+  openWorkspaceSidebar,
+  persistCurrentWorkspace,
+} from "./workspaceSidebar";
 
 const WORKSPACE = {
   id: "workspace-1",
@@ -31,6 +34,7 @@ test("drawing rows stay icon-only and opening one performs exactly one document 
     workspaces: [WORKSPACE],
     entries: [DRAWING],
   });
+  await persistCurrentWorkspace(page, WORKSPACE.id);
   await page.goto("/");
   await openWorkspaceSidebar(page);
 
@@ -82,6 +86,7 @@ test("mounting, expanding, and revisiting a Workspace never starts thumbnail wor
     workspaces: [WORKSPACE],
     entries,
   });
+  await persistCurrentWorkspace(page, WORKSPACE.id);
   await page.goto("/");
   await openWorkspaceSidebar(page);
 
