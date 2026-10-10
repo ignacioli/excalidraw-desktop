@@ -11,10 +11,14 @@ export async function openWorkspaceSidebar(
   names = { files: "Files", toggle: "Toggle workspace sidebar" },
 ): Promise<void> {
   const sidebar = page.getByRole("complementary", { name: names.files });
+  const toggle = page.getByRole("button", { name: names.toggle, exact: true });
+  // Wait for the shell first: a pinned sidebar renders with it, and toggling
+  // before then would close it.
+  await expect(toggle).toBeVisible();
   if (await sidebar.isVisible()) {
     return;
   }
-  await page.getByRole("button", { name: names.toggle, exact: true }).click();
+  await toggle.click();
   await expect(sidebar).toBeVisible();
 }
 
