@@ -223,7 +223,12 @@ export class DocumentManager {
       scene,
       sceneVersion,
       revision: session.revision + 1,
-      saveState: session.saveState === "orphaned" ? "orphaned" : "dirty",
+      // A conflict stays open until the user decides; the scheduler holds
+      // the change. Grid stays toggleable while the document is read-only.
+      saveState:
+        session.saveState === "orphaned" || session.saveState === "conflicted"
+          ? session.saveState
+          : "dirty",
       errorMessage: null,
       lastReloadedAt: null,
     });
@@ -1238,7 +1243,8 @@ function hasPersistedSceneChange(
     previousState.viewBackgroundColor !== nextState.viewBackgroundColor ||
     previousState.gridModeEnabled !== nextState.gridModeEnabled ||
     previousState.gridSize !== nextState.gridSize ||
-    previousState.gridStep !== nextState.gridStep
+    previousState.gridStep !== nextState.gridStep ||
+    previousState.objectsSnapModeEnabled !== nextState.objectsSnapModeEnabled
   );
 }
 

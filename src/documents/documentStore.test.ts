@@ -675,6 +675,30 @@ describe("DocumentManager", () => {
     manager.dispose();
   });
 
+  it("keeps a conflict open when a saved canvas preference changes", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/drawing.excalidraw");
+    const initial = manager.store.getState().sessionsById[documentId]?.scene;
+    manager.beginConflict(documentId, {
+      externalMtime: 1,
+      localDraftUpdatedAt: 2,
+    });
+
+    // Grid stays available while the document is forced read-only.
+    manager.updateScene(documentId, {
+      ...initial!,
+      appState: { ...initial!.appState, gridModeEnabled: true },
+    });
+
+    const session = manager.store.getState().sessionsById[documentId];
+    expect(session?.saveState).toBe("conflicted");
+    expect(session?.scene.appState.gridModeEnabled).toBe(true);
+    expect(gateway.saveDraft).not.toHaveBeenCalled();
+    expect(gateway.checkpoint).not.toHaveBeenCalled();
+    manager.dispose();
+  });
+
   it("resolves takeExternal by adopting the external scene as clean", async () => {
     const gateway = createGateway();
     const manager = new DocumentManager(gateway);

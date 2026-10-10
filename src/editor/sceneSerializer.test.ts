@@ -19,20 +19,44 @@ vi.mock("@excalidraw/excalidraw", () => ({
     appState: scene.appState ?? {},
     files: scene.files ?? {},
   }),
+  // Like the SDK's "local" export, which drops objectsSnapModeEnabled
+  // (APP_STATE_STORAGE_CONF: export false).
   serializeAsJSON: (
     elements: ReadonlyArray<Record<string, unknown>>,
     appState: Record<string, unknown>,
     files: Record<string, unknown>,
   ) =>
-    JSON.stringify({
+    JSON.stringify(
+      {
+        type: "excalidraw",
+        version: 2,
+        source: "https://excalidraw.com",
+        elements,
+        appState: Object.fromEntries(
+          Object.entries(appState).filter(
+            ([key]) => key !== "objectsSnapModeEnabled",
+          ),
+        ),
+        files,
+      },
+      null,
+      2,
+    ),
+}));
+
+const sdkLocalJson = (appState: Record<string, unknown>) =>
+  JSON.stringify(
+    {
       type: "excalidraw",
       version: 2,
       source: "https://excalidraw.com",
-      elements,
+      elements: [],
       appState,
-      files,
-    }),
-}));
+      files: {},
+    },
+    null,
+    2,
+  );
 
 describe("sceneSerializer", () => {
   it("writes standard Excalidraw JSON and restores the scene", () => {
@@ -119,6 +143,51 @@ describe("sceneSerializer", () => {
       gridSize: 20,
       gridStep: 5,
       viewBackgroundColor: "#eeeeee",
+      objectsSnapModeEnabled: false,
+    });
+  });
+  describe("Snap to objects", () => {
+    const appState = { gridSize: 20, gridStep: 5, viewBackgroundColor: "#fff" };
+
+    it("writes objectsSnapModeEnabled only when it is on", () => {
+      const json = JSON.parse(
+        serializeScene({
+          elements: [],
+          appState: { ...appState, objectsSnapModeEnabled: true },
+          files: {},
+        }),
+      ) as { appState: Record<string, unknown> };
+
+      expect(json.appState.objectsSnapModeEnabled).toBe(true);
+    });
+
+    it.each([false, undefined])(
+      "keeps the existing bytes when Snap is %s",
+      (objectsSnapModeEnabled) => {
+        expect(
+          serializeScene({
+            elements: [],
+            appState: { ...appState, objectsSnapModeEnabled },
+            files: {},
+          }),
+        ).toBe(sdkLocalJson(appState));
+      },
+    );
+
+    it("restores Snap from a saved file and treats a missing key as off", () => {
+      const withSnap = serializeScene({
+        elements: [],
+        appState: { ...appState, objectsSnapModeEnabled: true },
+        files: {},
+      });
+
+      expect(deserializeScene(withSnap).appState.objectsSnapModeEnabled).toBe(
+        true,
+      );
+      expect(
+        deserializeScene(sdkLocalJson(appState)).appState
+          .objectsSnapModeEnabled,
+      ).toBe(false);
     });
   });
 });

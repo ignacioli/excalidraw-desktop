@@ -128,6 +128,44 @@ describe("ThemeController", () => {
     expect(controller.getSnapshot().resolvedColorScheme).toBe("light");
   });
 
+  it.each([
+    [true, "light"],
+    [false, "dark"],
+  ] as const)(
+    "toggleFixed flips the displayed scheme from System (systemDark=%s) to a fixed %s mode",
+    (systemDark, expected) => {
+      const { controller, storage } = createController({ systemDark });
+
+      controller.toggleFixed();
+
+      expect(controller.getSnapshot()).toEqual({
+        preference: {
+          version: THEME_PREFERENCE_VERSION,
+          themeId: "excalidraw",
+          modePreference: expected,
+        },
+        resolvedColorScheme: expected,
+      });
+      expect(storage.values.get(THEME_PREFERENCE_STORAGE_KEY)).toBe(
+        preference(expected),
+      );
+    },
+  );
+
+  it("keeps a toggled fixed mode when the system appearance changes", () => {
+    const { controller, media, root } = createController({ systemDark: true });
+
+    controller.toggleFixed();
+    media.setMatches(false);
+    expect(controller.getSnapshot().resolvedColorScheme).toBe("light");
+
+    controller.toggleFixed();
+    media.setMatches(true);
+    media.setMatches(false);
+    expect(controller.getSnapshot().preference.modePreference).toBe("dark");
+    expect(root.dataset.colorScheme).toBe("dark");
+  });
+
   it("restores a versioned preference", () => {
     const { controller } = createController({ stored: preference("dark") });
 

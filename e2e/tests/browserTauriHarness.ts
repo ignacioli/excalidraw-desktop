@@ -287,6 +287,13 @@ export async function installBrowserTauriHarness(
           if (command === "doc_close") {
             return {};
           }
+          // Only "Keep local changes" is modelled; it rebases without writing.
+          if (
+            command === "doc_resolve_conflict" &&
+            args.resolution === "keepLocal"
+          ) {
+            return { newBaseHash: "external-base" };
+          }
           throw new Error(`Unexpected browser harness command: ${command}`);
         },
       };

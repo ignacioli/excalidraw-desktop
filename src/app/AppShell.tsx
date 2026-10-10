@@ -24,7 +24,11 @@ import {
   RecoveryStartup,
   type RecoveryStartupState,
 } from "../documents/RecoveryStartup";
-import { ExcalidrawEditor } from "../editor/ExcalidrawEditor";
+import type { EditorPreferences } from "../editor/CanvasMainMenu";
+import {
+  ExcalidrawEditor,
+  type EditorControls,
+} from "../editor/ExcalidrawEditor";
 import type { ExcalidrawAdapter } from "../editor/ExcalidrawAdapter";
 import {
   HistoryCoordinator,
@@ -131,6 +135,10 @@ export function AppShell({
     | undefined
   >(undefined);
   const editorAdaptersRef = useRef(new Map<string, ExcalidrawAdapter>());
+  const editorControlsRef = useRef(new Map<string, EditorControls>());
+  const [canvasPreferencesById, setCanvasPreferencesById] = useState<
+    Readonly<Record<string, EditorPreferences>>
+  >({});
   const [historyBusyDocumentIds, setHistoryBusyDocumentIds] = useState<
     ReadonlySet<string>
   >(() => new Set());
@@ -1133,8 +1141,38 @@ export function AppShell({
       onAppearance: (mode) =>
         void runAction(() => themeController.setModePreference(mode)),
       onLanguage: (preference) => localeController.setPreference(preference),
+      onHelp: () => activeEditorControls()?.openHelp(),
+      onTogglePreference: (preference) =>
+        activeEditorControls()?.togglePreference(preference),
     });
   });
+
+  // Help and preference commands are ignored when no document is active.
+  const activeEditorControls = () => {
+    const documentId = documentManager.store.getState().activeDocumentId;
+    return documentId === null
+      ? undefined
+      : editorControlsRef.current.get(documentId);
+  };
+  const handleEditorControlsReady = useCallback(
+    (documentId: string, controls: EditorControls) => {
+      editorControlsRef.current.set(documentId, controls);
+    },
+    [],
+  );
+  const handleEditorPreferencesChange = useCallback(
+    (documentId: string, preferences: EditorPreferences) => {
+      setCanvasPreferencesById((current) => ({
+        ...current,
+        [documentId]: preferences,
+      }));
+    },
+    [],
+  );
+  const activePreferences =
+    activeSession === undefined
+      ? undefined
+      : canvasPreferencesById[activeSession.id];
 
   const [syncNativeMenu] = useState(() =>
     createNativeMenuSync(workspaceInvoker),
@@ -1150,14 +1188,14 @@ export function AppShell({
       appearance: themeSnapshot.preference.modePreference,
       hasDocument: activeSession !== undefined,
       forcedReadOnly,
-      // The per-tab canvas preferences are fed in with the canvas menu.
-      toolLock: false,
-      grid: false,
-      snap: false,
-      zen: false,
-      viewMode: false,
+      toolLock: activePreferences?.toolLock ?? false,
+      grid: activePreferences?.grid ?? false,
+      snap: activePreferences?.snap ?? false,
+      zen: activePreferences?.zen ?? false,
+      viewMode: activePreferences?.viewMode ?? forcedReadOnly,
     }).catch((error: unknown) => setInteractionError(getErrorMessage(error)));
   }, [
+    activePreferences,
     activeSession,
     forcedReadOnly,
     localeSnapshot,
@@ -1689,12 +1727,23 @@ export function AppShell({
                   role="tabpanel"
                 >
                   <ExcalidrawEditor
+                    appearance={themeSnapshot.preference.modePreference}
                     documentId={session.id}
                     initialScene={session.scene}
                     protectedInput={protectedInputFor(session.id)}
                     onSceneChange={(scene) =>
                       documentManager.updateScene(session.id, scene)
                     }
+                    onAppearanceChange={(mode) =>
+                      void runAction(() =>
+                        themeController.setModePreference(mode),
+                      )
+                    }
+                    onControlsReady={handleEditorControlsReady}
+                    onLanguageChange={(preference) =>
+                      localeController.setPreference(preference)
+                    }
+                    onPreferencesChange={handleEditorPreferencesChange}
                     onReady={handleEditorReady}
                     readOnly={
                       session.saveState === "conflicted" ||

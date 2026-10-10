@@ -1,13 +1,13 @@
 # 画布主菜单 component anatomy 与实现映射
 
-状态：2026-10-09 高保真 Review 通过（[README](high-fi/README.md)）。实现尚未开始；本文件是 CANVAS-MAIN-MENU 的唯一 anatomy 入口。
+状态：2026-10-09 高保真 Review 通过（[README](high-fi/README.md)）。2026-10-10 已实现并通过浏览器验证；原生菜单联动和视觉验收另行记录。本文件是 CANVAS-MAIN-MENU 的唯一 anatomy 入口。
 
 ## 权威与实施入口
 
 - 共享来源：[组件目录](../components.md) `DSC-SDK-001`（扩展）、[DESIGN：Canvas main menu / Interface language](../../../DESIGN.md#canvas-main-menu)。
 - 当前设计：[manifest](high-fi/manifest.json) 与 6 张画板。数值取自锁定 SDK 0.18.1 的实测，不从实现反推。
-- 代码 owner：[ExcalidrawEditor.tsx](../../../src/editor/ExcalidrawEditor.tsx)，作为 `<Excalidraw>` 的子组件渲染 `<MainMenu>`。宿主样式只覆盖语言下拉和不可用项，放在编辑器自己的 CSS 中。
-- 边界：只用 SDK 公开 API（`MainMenu`、`MainMenu.DefaultItems.*`、`MainMenu.Item`、`MainMenu.ItemCustom`、`MainMenu.Group`、`MainMenu.Separator`、`langCode`）。不读取、不依赖、不借用私有 SDK DOM 或 CSS 类名。
+- 代码 owner：[CanvasMainMenu.tsx](../../../src/editor/CanvasMainMenu.tsx) 组合菜单，[ExcalidrawEditor.tsx](../../../src/editor/ExcalidrawEditor.tsx) 把它作为 `<Excalidraw>` 的子组件渲染。宿主样式只覆盖语言下拉和不可用项，放在 [App.css](../../../src/App.css)。
+- 边界：只用 SDK 公开 API（`MainMenu`、`MainMenu.DefaultItems.*`、`MainMenu.Item`、`MainMenu.ItemCustom`、`MainMenu.Group`、`MainMenu.Separator`、`langCode`）。不读取、不依赖、不借用私有 SDK DOM 或 CSS 类名。SDK 的菜单触发按钮原本没有可访问名称，由依赖补丁补上 `aria-label`（「Menu」/「菜单」，负责人 2026-10-10 决定，见 [patches/README](../../../patches/README.md)）。
 
 ## 部件顺序与文案来源
 
@@ -68,5 +68,5 @@
 影响范围：DSC-SDK-001 扩展（MainMenu 组合、langCode、ToggleTheme）；新增 feature-owned CANVAS-MAIN-MENU；消费者为 ExcalidrawEditor；同步 components.md 索引行。
 设计决定：沿用 SDK 菜单视觉与 HF-2 壳层；新增已批准的 selected 底色、单行语言下拉（上下双 chevron，宿主样式）、40% 不透明度不可用态、SDK zh-CN 语言包补丁；快捷键提示随 macOS 写作 Cmd / Option（2026-10-10）。
 实施与验证：条目集合/顺序按可访问名称断言（en/zh）；选中、互斥、强制只读真值表单测；浏览器 e2e 覆盖切换语言后的菜单文案；SDK 语言包覆盖率单测；不依赖私有 SDK DOM。
-结果：设计批准完成；实现与验证未开始。
+结果：设计批准完成；2026-10-10 实现完成。条目顺序、选中、强制只读和语言文案由单测与浏览器 e2e 覆盖。
 ```
