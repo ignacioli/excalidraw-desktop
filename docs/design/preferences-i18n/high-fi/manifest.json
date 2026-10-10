@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "status": "APPROVED_HIGH_FIDELITY",
+  "approvedAt": "2026-10-09",
+  "ownerDecision": "2026-10-09：SDK 中文缺翻译「同意采用方案 D」；语言下拉箭头「采用B」；整套画板「Review通过」。",
+  "scope": "Canvas main menu local high fidelity only (expanded and forced read-only states, English/简体中文, Light/Dark). Implementation, browser and native acceptance remain separate.",
+  "penpot": {
+    "fileId": "a5ac146a-5787-80fa-8008-b3c2d0b30bae",
+    "fileName": "excalidraw-desktop-uxui-redesign",
+    "pageId": "61581637-ab2a-807b-8008-c414802509bf",
+    "pageName": "06 · Preferences & Language Menu · 005 T004",
+    "liveRevisionSampled": 127,
+    "archiveInternalRevision": 128,
+    "decisionBoardId": "61581637-ab2a-807b-8008-c41f041f4540",
+    "reviewNoteId": "61581637-ab2a-807b-8008-c41c589fcba9"
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 760
+  },
+  "source": {
+    "path": "source/excalidraw-desktop-uxui-redesign.penpot",
+    "sha256": "dde71db45d2fbdec0602c065c335c8f9b937a8b40dfd0dcb8044271ab8f730c7",
+    "bytes": 3140811,
+    "exportMethod": "Owner supplied official Penpot Web UI download (Main menu → File → Download Penpot file): excalidraw-desktop-uxui-redesign-1791596924.penpot; archived byte-for-byte.",
+    "archiveIntegrity": "PASS",
+    "filePageAndBoardIds": "PASS",
+    "contentChecks": "6 boards carry the host up/down select chevrons and no SDK caret; zh boards carry 在画布上查找/主题; forced read-only boards carry disabled rows."
+  },
+  "measurementBasis": "Menu geometry, colours, type and icons measured from the live @excalidraw/excalidraw 0.18.1 MainMenu in Chromium at 1280×760; SDK icons copied as SVG, not redrawn. Shell top layer reused from approved HF-2 boards 02 (Light) and 06 (Dark, re-laid out to Hidden sidebar) as a 2x raster.",
+  "fontProxy": "Penpot lacks PingFang SC; Chinese text uses Noto Sans SC as a rendering proxy. The SDK menu font is Assistant; WebKit falls back to the system CJK font at runtime.",
+  "frames": [
+    {
+      "name": "005 · CANVAS-MAIN-MENU · Expanded · English · Light",
+      "shapeId": "61581637-ab2a-807b-8008-c4173022cd39",
+      "path": "screens/01-expanded-en-light.png",
+      "sha256": "2c151d7ab42e34c9fe1e12cec45f93fc4dc61168cc526d1ef27292ef68ec8a90",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "005 · CANVAS-MAIN-MENU · Expanded · 简体中文 · Light",
+      "shapeId": "61581637-ab2a-807b-8008-c4173c006b88",
+      "path": "screens/02-expanded-zh-light.png",
+      "sha256": "72c8f0e3d27f8f9ce4e1ac2f264ec40c651375643e0c0622734b0ac5599dc0f9",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "005 · CANVAS-MAIN-MENU · Expanded · English · Dark",
+      "shapeId": "61581637-ab2a-807b-8008-c417e3befba1",
+      "path": "screens/03-expanded-en-dark.png",
+      "sha256": "d1e7fae0570e47631786d22ee580fe315d0d391db16fe50a19a746ab640b7638",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "005 · CANVAS-MAIN-MENU · Expanded · 简体中文 · Dark",
+      "shapeId": "61581637-ab2a-807b-8008-c417e41b97cb",
+      "path": "screens/04-expanded-zh-dark.png",
+      "sha256": "670c149d924dc08c173817a2e8becd162eb12559c7e17bd57d78318d4a109144",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "005 · CANVAS-MAIN-MENU · Forced read-only · English · Light",
+      "shapeId": "61581637-ab2a-807b-8008-c421954b6c59",
+      "path": "screens/05-forced-readonly-en-light.png",
+      "sha256": "c7783d5e523c33b4caebb8b8261ec510ad092e2cdf779800520ac8ef8033e736",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "005 · CANVAS-MAIN-MENU · Forced read-only · 简体中文 · Dark",
+      "shapeId": "61581637-ab2a-807b-8008-c421968162b4",
+      "path": "screens/06-forced-readonly-zh-dark.png",
+      "sha256": "40dd388ed70bd0c6f80299fa89777834184861ef7f49ecc83248af363ab5fc6b",
+      "width": 1280,
+      "height": 760
+    }
+  ]
+}
