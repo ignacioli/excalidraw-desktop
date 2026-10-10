@@ -86,6 +86,7 @@ export const en = {
   "error.HISTORY_BUSY": "Version history is busy. Try again shortly.",
   "error.INTERNAL": "Something went wrong inside Excalidraw.",
   "error.unknown": "Something went wrong (error {code}).",
+  "error.saveLocationRequired": "Choose where to save the drawing.",
   "error.generic": "The requested operation could not be completed.",
   "error.fileOperationFailed":
     "The requested file operation could not be completed.",

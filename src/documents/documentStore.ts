@@ -20,6 +20,7 @@ import { DocumentOperationQueue, DraftScheduler } from "./draftScheduler";
 import { createDocumentGateway, type DocumentGateway } from "./documentGateway";
 import { bindActivateRunner, requestActivate } from "./tabActivationQueue";
 import { defaultEventListener, type EventListener } from "../ipc/events";
+import { t } from "../i18n";
 import { describeError } from "../i18n/describeError";
 
 export type DocumentSaveState =
@@ -591,7 +592,7 @@ export class DocumentManager {
         return {
           status: "failed",
           documentId,
-          message: "A save location is required.",
+          message: t("error.saveLocationRequired"),
         };
       }
       try {

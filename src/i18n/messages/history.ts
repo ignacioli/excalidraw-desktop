@@ -152,6 +152,12 @@ export const historyEn = {
     "The selected version could not be deleted.",
   "history.panel.error.restoreFailed":
     "The selected version could not be restored.",
+  "history.import.error.unsupported":
+    "Only .excalidraw drawings and PNG/SVG files are supported.",
+  "history.import.error.invalidDrawing":
+    "The selected Excalidraw drawing is invalid.",
+  "history.import.error.noScene":
+    "The selected {format} does not contain an Excalidraw scene.",
 } as const;
 
 export const historyZhCN: Record<keyof typeof historyEn, string> = {
@@ -282,4 +288,8 @@ export const historyZhCN: Record<keyof typeof historyEn, string> = {
   "history.panel.error.updateFailed": "无法更新所选版本。",
   "history.panel.error.deleteFailed": "无法删除所选版本。",
   "history.panel.error.restoreFailed": "无法恢复所选版本。",
+  "history.import.error.unsupported":
+    "仅支持 .excalidraw 绘图和 PNG/SVG 文件。",
+  "history.import.error.invalidDrawing": "所选 Excalidraw 绘图无效。",
+  "history.import.error.noScene": "所选 {format} 文件不包含 Excalidraw 场景。",
 };

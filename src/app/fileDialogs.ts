@@ -2,6 +2,7 @@ import {
   documentManager,
   type DocumentManager,
 } from "../documents/documentStore";
+import { t } from "../i18n";
 
 export interface FileDialogAdapter {
   openDrawing(): Promise<string | null>;
@@ -13,9 +14,9 @@ export interface FileDialogActions {
   openDocument(): Promise<string | null>;
 }
 
-const drawingFilters = [
+const drawingFilters = () => [
   {
-    name: "Excalidraw drawing",
+    name: t("shell.dialog.drawingFilter"),
     extensions: ["excalidraw", "excalidraw.json"],
   },
 ];
@@ -27,17 +28,17 @@ export function createTauriFileDialogAdapter(): FileDialogAdapter {
       const selected = await open({
         directory: false,
         multiple: false,
-        filters: drawingFilters,
-        title: "Open drawing",
+        filters: drawingFilters(),
+        title: t("shell.dialog.openDrawing"),
       });
       return typeof selected === "string" ? selected : null;
     },
     async chooseNewDrawingPath() {
       const { save } = await import("@tauri-apps/plugin-dialog");
       return save({
-        defaultPath: "Untitled.excalidraw",
-        filters: drawingFilters,
-        title: "New drawing",
+        defaultPath: `${t("tabs.untitled")}.excalidraw`,
+        filters: drawingFilters(),
+        title: t("shell.dialog.newDrawing"),
       });
     },
   };

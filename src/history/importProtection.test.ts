@@ -115,7 +115,10 @@ describe("importProtection", () => {
 
     await expect(
       prepareImport(file("broken.png", "bytes", "image/png")),
-    ).rejects.toThrow("does not contain an Excalidraw scene");
+    ).rejects.toMatchObject({
+      key: "history.import.error.noScene",
+      params: { format: "PNG" },
+    });
   });
 
   it("adopts embedded import bytes through the shared content-derived asset path", async () => {

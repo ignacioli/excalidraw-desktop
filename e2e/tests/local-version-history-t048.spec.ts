@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { en } from "../../src/i18n/messages/en.ts";
 import historyDesign from "../../docs/design/local-version-history/high-fi/tokens.json" with { type: "json" };
 import shellDesign from "../../docs/design/desktop-shell/hf-2/tokens.json" with { type: "json" };
 import {
@@ -706,7 +707,7 @@ test("unavailable selection explains the failure and prevents preview and restor
   const detail = panel.getByRole("region", {
     name: "Selected version actions",
   });
-  await expect(detail).toContainText("Image bytes are missing.");
+  await expect(detail).toContainText(en["error.HISTORY_RESOURCE_MISSING"]);
   await expect(detail.locator(".history-selection-eyebrow")).toContainText(
     /unavailable/i,
   );

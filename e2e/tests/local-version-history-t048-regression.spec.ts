@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { en } from "../../src/i18n/messages/en.ts";
 import {
   emitBrowserTauriEvent,
   installBrowserTauriHarness,
@@ -187,7 +188,7 @@ test("production AppShell asks before replacing the selected history version", a
   });
   await confirmation.getByRole("button", { name: "Restore version" }).click();
   await expect(confirmation.getByRole("alert")).toContainText(
-    "could not be verified",
+    en["history.error.replacementUnverified"],
   );
   expect(await readHistoryRestoreCalls(page)).toEqual([
     { documentPath: DOCUMENT_PATH, versionId: "v-001" },

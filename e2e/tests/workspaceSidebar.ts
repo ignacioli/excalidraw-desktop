@@ -6,14 +6,15 @@ const SHELL_PREFERENCES_STORAGE_KEY = "excalidraw-desktop.shell";
  * The Workspace Sidebar starts hidden (canvas-first overlay). Open it before
  * looking for tree rows, Mount folder, or New drawing.
  */
-export async function openWorkspaceSidebar(page: Page): Promise<void> {
-  const sidebar = page.getByRole("complementary", { name: "Files" });
+export async function openWorkspaceSidebar(
+  page: Page,
+  names = { files: "Files", toggle: "Toggle workspace sidebar" },
+): Promise<void> {
+  const sidebar = page.getByRole("complementary", { name: names.files });
   if (await sidebar.isVisible()) {
     return;
   }
-  await page
-    .getByRole("button", { name: "Toggle workspace sidebar", exact: true })
-    .click();
+  await page.getByRole("button", { name: names.toggle, exact: true }).click();
   await expect(sidebar).toBeVisible();
 }
 

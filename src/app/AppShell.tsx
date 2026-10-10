@@ -772,6 +772,11 @@ export function AppShell({
           ...current,
           [documentId]: error.requestId,
         }));
+        throw new LocalizedError(
+          "history.error.replacementUnverified",
+          undefined,
+          { cause: error },
+        );
       }
       if (!(error instanceof HistoryReplacementCancelledError)) throw error;
     } finally {

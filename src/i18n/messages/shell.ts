@@ -43,8 +43,11 @@ export const shellEn = {
   "shell.dialog.drawingFilter": "Excalidraw drawing",
   "shell.dialog.saveDrawingAs": "Save drawing as",
   "shell.dialog.openWorkspace": "Open workspace",
+  "shell.dialog.openDrawing": "Open drawing",
+  "shell.dialog.newDrawing": "New drawing",
 
   "tabs.close": "Close",
+  "tabs.untitled": "Untitled",
   "tabs.closeOthers": "Close Others",
   "tabs.closeToRight": "Close Tabs to the Right",
   "tabs.openDrawings": "Open drawings",
@@ -163,7 +166,10 @@ export const shellZhCN: Record<keyof typeof shellEn, string> = {
   "shell.dialog.drawingFilter": "Excalidraw 绘图",
   "shell.dialog.saveDrawingAs": "将绘图另存为",
   "shell.dialog.openWorkspace": "打开工作区",
+  "shell.dialog.openDrawing": "打开绘图",
+  "shell.dialog.newDrawing": "新建绘图",
 
+  "tabs.untitled": "未命名",
   "tabs.close": "关闭",
   "tabs.closeOthers": "关闭其他标签页",
   "tabs.closeToRight": "关闭右侧标签页",

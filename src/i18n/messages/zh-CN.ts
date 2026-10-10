@@ -81,6 +81,7 @@ export const zhCN: Record<MessageKey, string> = {
   "error.HISTORY_BUSY": "版本历史正忙，请稍后重试。",
   "error.INTERNAL": "Excalidraw 内部出错。",
   "error.unknown": "出错了（错误代码 {code}）。",
+  "error.saveLocationRequired": "请选择绘图的保存位置。",
   "error.generic": "无法完成请求的操作。",
   "error.fileOperationFailed": "无法完成请求的文件操作。",
   "error.saveFailed": "无法保存绘图。",

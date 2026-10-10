@@ -6,8 +6,8 @@ export class LocalizedError extends Error {
   readonly key: MessageKey;
   readonly params?: MessageParams;
 
-  constructor(key: MessageKey, params?: MessageParams) {
-    super(key);
+  constructor(key: MessageKey, params?: MessageParams, options?: ErrorOptions) {
+    super(key, options);
     this.name = "LocalizedError";
     this.key = key;
     this.params = params;
