@@ -1,10 +1,50 @@
-# 验证证据汇总（004 实施中；003 已完成；001/002 历史）
+# 验证证据汇总（005 实施中；004 已接受；003 已完成；001/002 历史）
 
 **2026-10-04负责人最终接受记录：** Feature 004的T049完整物理测量已归档；owner在获知诊断性能FAIL与历史原始记录字段缺口后明确回复“接受”，T054及Phase 7关闭。准确范围见[唯一当前索引](local-version-history-validation-index.md)。该接受允许继续本地准备0.4.0，不表示全部性能预算PASS或已发布。
 
 Feature 004 的唯一当前状态见[本地版本历史验证索引](local-version-history-validation-index.md)，包括 T048/T058、T049、T052/T054 的当前结论、证据身份和缺口。
 
 本文件保留实际验证运行、命令、历史问题和其他 feature 的证据。Feature 004 的旧状态段落是其标注日期时的记录，不代表当前状态；更新当前结论时只改验证索引。
+
+## Feature 005 Polish 验证（T051/T052，2026-10-10）
+
+范围：双语界面、精选画布偏好、macOS 原生菜单。门禁绑定产品提交 `0d9aba5`（分支 `feat/preferences-i18n-menu`）；物理机 Mac17,9（Apple M5 Pro，48 GB），macOS 26.6.2（25G83），WebKit 21624.5.1.11.3。均为物理机诊断运行，**不是**声明的参考 VM 运行；参考 VM 测量为缺口。
+
+### T051 门禁
+
+| 门禁 | 结果 |
+|------|------|
+| `pnpm lint` / `pnpm typecheck` | PASS |
+| `pnpm test` | PASS，73 files / 592 tests |
+| `pnpm build` | PASS（仅既有 chunk-size 警告） |
+| `cargo fmt --check` / `cargo clippy --all-targets -D warnings` | PASS |
+| `cargo test` | PASS，252 tests |
+| `APP_E2E=1 pnpm e2e`（完整浏览器套件） | 142 passed / 21 failed / 78 skipped；21 个失败与 `origin/main` 上同样失败的用例逐一相同（History 预览 harness 未设 `VITE_E2E_HARNESS=1`、可靠性用例选中非 harness 二进制、单一 Current Workspace 设计后的过时断言），无新增回归 |
+| `pnpm native:menu:check`（debug 构建 `pnpm tauri build --debug --no-bundle`） | `(en-US, zh-Hans)`、`(zh-Hans-CN, en-US)`、`(fr-FR)` 三组各 `PASS 95 checks`，exit 0，无残留进程 |
+
+首轮完整 e2e 曾出现第 22 个失败（`preferences-i18n-language.spec.ts` 回退英文用例）：pin 侧栏后 reload，`openWorkspaceSidebar` 在 shell 渲染前判断侧栏不可见并点击 toggle，反而关闭了随后渲染出的已 pin 侧栏。修复在 `0d9aba5`（helper 先等 toggle 可见再判断），受影响 spec 8 workers 并发 62/62 PASS，完整套件复跑恢复为上表结果。
+
+### T052 启动测量
+
+**(a) 增量（handshake 等待）**：`src/main.tsx` 在 `readSystemLanguages()` 前后打 `performance.mark`，dev 构建经 Vite dev server 打印 `[startup-measure] language-handshake`。dev 变体 debug 二进制（commit `0d9aba5`）在临时 `HOME` 下冷启动 40 次（首批 10 次 + 复查 30 次），全部取得读数、无挂起：3 ms ×13、4 ms ×21、5 ms ×5、7 ms ×1；**nearest-rank P95：首批 10 次 4.0 ms，40 次合计 5.0 ms，≤ 20 ms，PASS**。WKWebView 计时精度为 1 ms。
+
+**(b) 预算记录（`e2e/perf/startup-idle.spec.ts`，诊断，不作回退判定）**：两侧均为 `VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness --no-bundle`，候选运行显式设置 `EXCALIDRAW_E2E_BINARY`。
+
+| 运行 | 二进制 SHA-256（前 12 位） | verdict | 冷启动→可编辑 P95 | 空闲进程树 RSS P95 |
+|------|------|------|------|------|
+| main-1（`a9d01f8`） | `796425ae8a37` | pass | 1382 ms | 330 MB |
+| main-2 | 同上 | pass | 653 ms | 334 MB |
+| main-3 | 同上 | pass | 622 ms | 333 MB |
+| candidate-1（`0d9aba5`） | `589d1476d990` | not_evaluated | —（第 2 次启动 15 s 内未发布 ready.json） | 330 MB |
+| candidate-2 | 同上 | pass | 1051 ms | 193 MB |
+| candidate-3 | 同上 | pass | 627 ms | 316 MB |
+| candidate-4 | 同上 | pass | 630 ms | 331 MB |
+
+预算：冷启动 ≤ 2 s、空闲 RSS ≤ 500 MB。所有完成的运行两项均 pass。按本 feature 约定不建证据封存目录，原始 JSON 报告未入库。
+
+另有一次候选尝试作废、未计入：未设 `EXCALIDRAW_E2E_BINARY` 时，`resolveDesktopBinary` 优先选中了 `target/release/bundle/macos/Excalidraw.app` 中先前遗留的旧包，而非本次 `--no-bundle` 产物。
+
+**candidate-1 的 ready 超时未归因**：同一候选二进制其余 3 次运行 30/30 冷启动全部就绪；40 次 handshake 冷启动无挂起；Feature 004 的物理基线也曾出现同类间歇性 ready 超时（见下方 2026-09-29 快照）。测量期间操作员在同机工作，窗口可能被遮挡，但无法对应到样本，因此既不记为产品性能失败，也不能排除候选特有的间歇性启动问题。残余风险：首屏渲染等待 `app_handshake` 且无超时，若该 IPC 不返回则不会渲染；本轮未观察到此情况。
 
 ## Feature 004 historical validation snapshots (through 2026-09-29)
 

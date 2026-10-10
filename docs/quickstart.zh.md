@@ -209,7 +209,7 @@ pnpm e2e e2e/tests/local-version-history-lifecycle.spec.ts \
    pnpm native:menu:check -- --languages "(fr-FR)"
    ```
 
-   - 预期：每次运行会启动应用两次，逐项输出菜单与路由检查的 `PASS`/`FAIL` 行，最后输出 `PASS <n> checks` 且退出码为 0（`FAIL` 为 1，`BLOCKED` 为 2）。第一组解析为英文，第二组解析为简体中文，第三组（没有受支持的语言）回退到英文。运行前先退出已打开的 Excalidraw Desktop。该检查只读取并驱动原生菜单项；保存与导出的文件系统结果仍由进程级套件覆盖。撰写本指南时未运行该命令。
+   - 预期：每次运行会启动应用两次，逐项输出菜单与路由检查的 `PASS`/`FAIL` 行，最后输出 `PASS <n> checks` 且退出码为 0（`FAIL` 为 1，`BLOCKED` 为 2）。第一组解析为英文，第二组解析为简体中文，第三组（没有受支持的语言）回退到英文。运行前先退出已打开的 Excalidraw Desktop。该检查只读取并驱动原生菜单项；保存与导出的文件系统结果仍由进程级套件覆盖。
 
 5. Ubuntu 24.04 Desktop 可选安装 AppImage/deb；rpm 为 best-effort 产物，不要求其他 Linux 发行版验收。
    - 预期：应用菜单入口 + 文件图标关联生效。

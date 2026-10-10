@@ -214,7 +214,7 @@ The focused browser checks can prove frontend routing and panel behavior. Filesy
    pnpm native:menu:check -- --languages "(fr-FR)"
    ```
 
-   - Expected: each run launches the app twice, prints `PASS`/`FAIL` lines per menu item and routing check, and ends with `PASS <n> checks` and exit code 0 (`FAIL` is 1, `BLOCKED` is 2). The first set resolves to English, the second to Simplified Chinese, and the third (no supported language) falls back to English. Quit any running Excalidraw Desktop first. The check only reads and drives native menu entries; filesystem save and export outcomes remain covered by the process-level suites. This command was not run while writing this guide.
+   - Expected: each run launches the app twice, prints `PASS`/`FAIL` lines per menu item and routing check, and ends with `PASS <n> checks` and exit code 0 (`FAIL` is 1, `BLOCKED` is 2). The first set resolves to English, the second to Simplified Chinese, and the third (no supported language) falls back to English. Quit any running Excalidraw Desktop first. The check only reads and drives native menu entries; filesystem save and export outcomes remain covered by the process-level suites.
 
 5. Optionally install AppImage/deb on Ubuntu 24.04 Desktop. rpm is a best-effort artifact; other Linux distros are not required for acceptance.
    - Expected: the application-menu entry and file-icon association work.
