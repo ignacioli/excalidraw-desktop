@@ -1,6 +1,6 @@
-# IPC Contracts: Excalidraw Desktop（v3）
+# IPC Contracts: Excalidraw Desktop（v4）
 
-**Date**: 2026-09-22 | **架构**: [../architecture.md](../architecture.md)
+**Date**: 2026-10-10 | **架构**: [../architecture.md](../architecture.md)
 
 本文件定义前端 ↔ Rust 后端的**当前**公开 IPC 边界（Tauri commands + events）。契约为强类型、显式、版本可感知。TypeScript 类型置于 `src/ipc/contracts.ts`，Rust 对应类型置于 `src-tauri/src/commands/dto.rs` 与 `src-tauri/src/commands/error.rs`，两侧字段名以本文件与 `contracts.ts` 为准（serde `camelCase`）。
 
@@ -10,10 +10,11 @@ v1 的 `dir_list` / `file_create` / `file_rename` / `file_delete` / `thumb_looku
 
 ### 版本与演进
 
-- 契约版本常量 `IPC_CONTRACT_VERSION = 3`（TS/Rust），随 `app_handshake` 返回；不兼容变更须递增版本并在本文件记录迁移说明。
+- 契约版本常量 `IPC_CONTRACT_VERSION = 4`（TS/Rust），随 `app_handshake` 返回；不兼容变更须递增版本并在本文件记录迁移说明。
 - 字段演进规则：新增可选字段 = 兼容；删除/改类型/改语义 = 不兼容。
 - v1 → v2 不兼容变更：删除缩略图命令；用统一 Workspace Entry 命令替换 `dir_list` 与 `file_*`；`doc_close` 改为显式 `mode`（可丢弃失联文档而不再授权已缺失路径）。
 - v3 当前公开 history command 为 `history_list`、`history_preview`、`history_mark`、`history_set_marked`、`history_replace`、`history_operation_status` 和 `history_delete`。v2 客户端不兼容此握手版本。
+- v4 新增：`app_handshake` 响应字段 `preferredLanguages`（系统 UI 语言原始 BCP-47 标签）；命令 `native_menu_sync`（前端向 Rust 同步本地化菜单标签与菜单状态）；`native-menu-command` 事件新增语言、外观、画布偏好与帮助命令值。既有命令 `native_menu_set_enabled` 保留。详见 §1.1、§1.7 与 §2。
 
 ### 信任边界规则（所有命令统一执行）
 
@@ -66,7 +67,7 @@ Rust 侧以 `thiserror` 枚举实现并映射到该形状；`unwrap`/`expect` �
 
 | 命令 | 请求 | 响应 | 说明 |
 |------|------|------|------|
-| `app_handshake` | `{}` | `AppHandshakeResponse` | `contractVersion` 为 3；`abnormalExit=true` 时进入恢复；`pendingOpenPaths` 为本次启动文件关联/单实例转交路径 |
+| `app_handshake` | `{}` | `AppHandshakeResponse` | `contractVersion` 为 4；`abnormalExit=true` 时进入恢复；`pendingOpenPaths` 为本次启动文件关联/单实例转交路径；`preferredLanguages` 为系统 UI 语言列表 |
 | `recovery_list` | `{}` | `RecoveryCandidate[]` | 列出可恢复草稿 |
 | `recovery_apply` | `{ documentId; action; saveAsPath? }` | `{ scene?; newPath? }` | `action`: `restore` \| `keepDisk` \| `saveAsNew` \| `discard` |
 
@@ -76,6 +77,7 @@ interface AppHandshakeResponse {
   appVersion: string;
   abnormalExit: boolean;
   pendingOpenPaths: string[];
+  preferredLanguages: string[]; // 原始 BCP-47 标签，用户顺序，最多 16 项
 }
 
 interface RecoveryCandidate {
@@ -87,6 +89,10 @@ interface RecoveryCandidate {
   snapshotNewer: boolean;
 }
 ```
+
+`preferredLanguages` 在应用启动时由 Rust 读取一次（`src-tauri/src/locale.rs`）：macOS 取 `NSLocale.preferredLanguages`；其他平台取 `LC_ALL`，为空时取 `LANG`，转换为 BCP-47 后至多一项（`C`/`POSIX` 或畸形值不产出标签）。Rust 只转发原始标签，不决定 UI 语言；前端 `readSystemLanguages` 在首次渲染前读取，过滤非字符串项并截断到 16 项，握手失败或不在桌面壳内则为空列表。
+
+UI 语言只由前端 `resolveLanguage` 决定：用户偏好为 `en` 或 `zh-CN` 时直接采用；偏好为 `system` 时按 `preferredLanguages` 顺序取第一个可识别标签——`en*` 解析为 English；`zh` 在无脚本且无地区、脚本为 `Hans`、或地区为 `CN`/`SG` 时解析为简体中文，其他 `zh` 标签（如 `zh-TW`、`zh-Hant`）与其他语言被跳过；无匹配时为 English。用户偏好 `system | en | zh-CN` 持久化在 WebView `localStorage` 键 `excalidraw-desktop.language`（版本化记录 `{ version: 1, preference }`），不经过 Rust。
 
 ### 1.2 工作区挂载
 
@@ -282,6 +288,76 @@ pre-rename 核对与目标发布之间发生外部写入，结果必须是 `HIST
 
 React/WebView 的 session、theme、Sidebar、workspace、selection、expanded rows、fonts、tokens、geometry 与 interaction facts 由 semantic browser evidence 证明；native collector 只记录 package/isolation/window/capture integrity。`CAPTURE <gate-id> <challenge>` 只控制 capture 时机，不构成交互或 UI 状态证据。详见 `contracts/native-screen-capture-contract.md` 与 `docs/quickstart.md`。
 
+### 1.7 v4 原生菜单同步
+
+原生菜单的标签文本由前端本地化后提供，Rust 只持有最近一次有效的标签与状态快照（`NativeMenuStore`）。应用启动时 Rust 先安装内置英文菜单（`install_menu`），前端首次同步后再替换。
+
+| 命令 | 请求 | 响应 | 说明 |
+|------|------|------|------|
+| `native_menu_sync` | `NativeMenuSyncRequest` | `{}` | 同步本地化标签与菜单 checked/enabled 状态 |
+| `native_menu_set_enabled` | `{ command: NativeMenuCommand; enabled: boolean }` | `{}` | 保留。仅 `command = "versionHistory"` 被接受，其他值被拒绝（该命令在 Rust 侧返回 `tauri::Result`，错误不走 `IpcError` 形状）；用于 Version History 项的可用状态，该状态在后续 `native_menu_sync` 重建/更新菜单时被保留 |
+
+```typescript
+interface NativeMenuSyncRequest {
+  labels: Record<NativeMenuLabelId, string>; // 完整集合，含 predefined 项文本
+  state: NativeMenuSyncState;
+}
+
+interface NativeMenuSyncState {
+  language: "system" | "en" | "zh-CN";
+  appearance: "system" | "light" | "dark";
+  hasDocument: boolean;
+  forcedReadOnly: boolean;
+  toolLock: boolean;
+  grid: boolean;
+  snap: boolean;
+  zen: boolean;
+  viewMode: boolean; // 用户 View mode，不含强制只读
+}
+```
+
+`NativeMenuLabelId` 共 37 个，类型见 `src/ipc/contracts.ts`，Rust 侧权威列表为 `native_menu_spec.rs` 的 `LABEL_IDS`。每个 ID `x` 对应前端语言资源键 `menu.native.x`，仅 `app.languageEn`、`app.languageZhCn` 取自 `language.autonym.*`。
+
+**Rust 信任边界校验**
+
+- `labels` 必须恰好包含全部必需 ID：缺失或未知 ID 都被拒绝；每个值去除空白后非空、不超过 64 个字符、不含控制字符。
+- `state` 的字段集合固定（`deny_unknown_fields`），`language`、`appearance` 只接受上表枚举值。
+- 校验失败返回 `INTERNAL`；菜单保持上一次有效状态。菜单重建/更新失败时，Rust 回滚模型到同步前的标签与状态并返回 `INTERNAL`。
+- 标签相对上次有变化 → 重建整个菜单；仅 `state` 变化 → 原地更新各项 `checked`/`enabled`。
+
+**前端发送规则**（`src/app/nativeMenuSync.ts`、`src/app/AppShell.tsx`）
+
+- 仅在桌面壳内发送；每次发送的是完整快照（标签 + 状态）。
+- 与上一次**成功**发送序列化后完全相同的请求被跳过，因此普通画布编辑不会触达菜单；发送失败时清除去重记录，下一次相同快照会重试。
+- 触发输入包括解析后的语言、语言偏好、外观偏好、活动文档是否存在、强制只读（冲突或 history 操作占用）以及活动文档的 toolLock/grid/snap/zen/viewMode。
+
+**菜单项状态规则**（`item_state`，`hasDocument` 记为 D，`forcedReadOnly` 记为 R）
+
+| 菜单项 | 可用 | 选中 |
+|--------|------|------|
+| Save、Help | D | — |
+| Export Image | 始终 | — |
+| Version History | 由 `native_menu_set_enabled` 设置（前端在存在带路径的活动文档时启用） | — |
+| Language ×3、Appearance ×3 | 始终 | 等于 `state.language` / `state.appearance` |
+| Grid、Zen | D | `grid` / `zen` |
+| Tool Lock、Snap | D 且非 R | `toolLock` / `snap` |
+| View Mode | D 且非 R | `forcedReadOnly \|\| viewMode` |
+
+点击 check 项时系统会自行翻转选中态；Rust 先把已同步的状态重新应用到菜单，再发出 `native-menu-command`，由前端决定新状态并通过下一次 `native_menu_sync` 回写。
+
+#### 1.7.1 按键归属
+
+每个按键只有一个 owner。原生菜单只为 Save 和 Export Image 注册 accelerator（`native_menu_spec.rs` 的 `registers_only_save_and_export_accelerators` 测试断言集合恰为这两项）。
+
+| 按键 | Owner | 说明 |
+|------|-------|------|
+| Cmd/Ctrl+S | 原生菜单 Save | 桌面壳内前端不再监听该 keydown，避免一次按键保存两次；无原生窗口运行时（浏览器测试环境）由 window keydown 处理 |
+| Cmd/Ctrl+Alt+E | 原生菜单 Export Image | 不与 SDK 的 Cmd/Ctrl+Shift+E 重合 |
+| Q、Cmd+'、Alt+S、Alt+Z、? | Excalidraw SDK | 原生菜单对应的 Tool Lock、Grid、Snap、Zen、Help 项不注册 accelerator |
+| Shift+Alt+D | Excalidraw SDK | 切换主题；编辑器宿主把 SDK 发起的主题变化写回应用外观偏好，原生 Appearance 子菜单不注册 accelerator |
+| Alt+R | 编辑器宿主（`ExcalidrawEditor`） | 切换用户 View mode；SDK 自身的该快捷键因 `viewModeEnabled` 为受控 prop 而关闭；View Mode 菜单项不注册 accelerator |
+| Edit 菜单（Undo/Redo/Cut/Copy/Paste/Select All） | 系统预定义菜单项 | 使用系统 predefined item，不由本契约自定义 accelerator |
+
 ## 2. 事件契约（后端 → 前端）
 
 | 事件 | 载荷 | 触发 |
@@ -292,6 +368,7 @@ React/WebView 的 session、theme、Sidebar、workspace、selection、expanded r
 | `draft-saved` | `{ path; savedAt }` | 热层写入成功 |
 | `conflict-detected` | `{ path; externalMtime; localDraftUpdatedAt }` | 变更命中 isDirty 文档 |
 | `open-file-request` | `{ paths: string[] }` | 单实例二次启动/系统文件关联转发 |
+| `native-menu-command` | `{ command: NativeMenuCommand; validationId? }` | 用户激活原生菜单项（仅 Rust 拥有的项）；Rust 只发给 `main` 窗口 |
 
 ```typescript
 interface WorkspaceEntriesChangedEvent {
@@ -306,6 +383,17 @@ interface WorkspaceEntriesChangedEvent {
 应用发起的变更加命令响应为权威；匹配 `operationId` 的事件是 watcher 回声，必须幂等。无法自信配对的外部目录批处理对最近已知父目录发 `invalidated`，不虚构精确 rename。
 
 事件只通知状态事实，不携带业务决策。
+
+```typescript
+type NativeMenuCommand =
+  | "save" | "exportImage" | "versionHistory"
+  | "appearanceSystem" | "appearanceLight" | "appearanceDark"
+  | "languageSystem" | "languageEn" | "languageZhCn"
+  | "help"
+  | "toggleToolLock" | "toggleGrid" | "toggleSnap" | "toggleZen" | "toggleViewMode";
+```
+
+v4 之前的值为 `save`、`exportImage`、`versionHistory`、`appearanceSystem`、`appearanceLight`、`appearanceDark`；v4 新增 `languageSystem`、`languageEn`、`languageZhCn`、`help` 与五个 `toggle*`。前端处理：语言/外观命令写入各自的偏好控制器；`toggle*` 命令作用于活动编辑器；`help` 打开活动编辑器的帮助。`validationId` 仅在原生 macOS 验收 harness 启动的包中出现，用于关联原生事件与前端路由，不是产品 IPC 命令；生产路径不依赖它。事件只表达“用户激活了哪个菜单项”，状态变更由前端裁决后经 `native_menu_sync` 回写。
 
 ### 2.1 v3 版本历史事件结构
 
@@ -348,3 +436,5 @@ asset protocol 与 `.excalidraw_assets` 仍用于图纸内嵌图片，与缩略�
 - TS 侧以 Vitest 对 `contracts.ts` 做类型级与序列化往返测试。
 - 契约变更必须同步更新本文件；CI 校验 `IPC_CONTRACT_VERSION` 与握手返回值一致。
 - 生产与 e2e 生产路径不得注册缩略图命令；bundle 不得包含缩略图 worker chunk。
+- v4 握手：`src-tauri/src/commands/dto.rs` 的序列化测试断言 `contractVersion` 为 4 且 `preferredLanguages` 以 camelCase 往返；`src-tauri/src/locale.rs` 测试 POSIX locale → BCP-47 转换与 16 项上限；前端 `src/i18n/systemLanguages.test.ts`、`resolveLanguage.test.ts`、`localeController.test.ts` 覆盖语言列表读取、解析规则与偏好持久化。
+- v4 原生菜单：`src-tauri/src/native_menu_spec.rs` 测试覆盖菜单项 ID 集合、check 项、仅 Save/Export Image 注册 accelerator、标签集合校验（缺失/未知/空/过长/控制字符）、`NativeMenuSyncState` 反序列化与各文档状态下的 enabled/checked；`src-tauri/src/native_menu.rs` 测试覆盖前端 `native_menu_sync` / `native_menu_set_enabled` 调用名与已注册 Tauri 命令一致、事件载荷序列化与 Export Image accelerator 不占用 SDK 键；前端 `src/app/nativeMenuSync.test.ts` 覆盖完整标签集本地化、相同快照不重发、语言变化重发、失败后重试，`src/app/nativeMenu.test.ts` 覆盖命令路由。
