@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { zhCN } from "../../src/i18n/messages/zh-CN.ts";
 import {
   emitBrowserTauriEvent,
   installBrowserTauriHarness,
@@ -952,4 +953,110 @@ test("reduced motion keeps overlay usable without depending on animation", async
   await expect(
     page.getByRole("complementary", { name: "Files" }),
   ).not.toBeVisible();
+});
+
+/** Persist a Simplified Chinese UI preference before any app module runs. */
+async function installChinesePreference(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    globalThis.localStorage.setItem(
+      "excalidraw-desktop.language",
+      JSON.stringify({ version: 1, preference: "zh-CN" }),
+    );
+  });
+}
+
+const ZH_SIDEBAR = {
+  files: zhCN["shell.files"],
+  toggle: zhCN["shell.toggleSidebar"],
+};
+
+test.describe("Simplified Chinese UI", () => {
+  for (const theme of ["light", "dark"] as const) {
+    test(`shell chrome is axe-clean in ${theme} theme`, async ({ page }) => {
+      await installShellHarness(page);
+      await installChinesePreference(page);
+      if (theme === "dark") await installDarkPreference(page);
+      await page.goto("/");
+      await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-color-scheme",
+        theme,
+      );
+      await expectAxeClean(
+        page,
+        `zh-CN shell empty state ${theme}`,
+        SHELL_CHROME,
+        EDITOR_EXCLUDE,
+      );
+      await page
+        .getByTestId("welcome-screen")
+        .getByRole("button", { name: zhCN["welcome.newDrawing"] })
+        .click();
+      await expect(page.locator(".excalidraw-editor")).toBeVisible();
+      await openWorkspaceSidebar(page, ZH_SIDEBAR);
+      await expectAxeClean(
+        page,
+        `zh-CN shell with drawing ${theme}`,
+        SHELL_CHROME_WITH_SIDEBAR,
+        EDITOR_EXCLUDE,
+      );
+    });
+  }
+
+  test("recovery dialog is axe-clean", async ({ page }) => {
+    await installRecoveryHarness(page);
+    await installChinesePreference(page);
+    await page.goto("/");
+    await expect(
+      page.getByRole("dialog", { name: zhCN["recovery.title"] }),
+    ).toBeVisible();
+    await expectAxeClean(page, "zh-CN recovery dialog", [
+      ".recovery-dialog-backdrop",
+    ]);
+  });
+
+  test("export dialog is axe-clean", async ({ page }) => {
+    await installExportHarness(page, "ok");
+    await installChinesePreference(page);
+    await page.goto("/");
+    await page
+      .getByTestId("welcome-screen")
+      .getByRole("button", { name: zhCN["welcome.newDrawing"] })
+      .click();
+    await expect(page.locator(".excalidraw-editor")).toBeVisible();
+    await emitBrowserTauriEvent(page, "native-menu-command", {
+      command: "exportImage",
+    });
+    await expect(
+      page.getByRole("dialog", { name: zhCN["export.title"] }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expectAxeClean(page, "zh-CN export dialog", [
+      ".export-dialog-backdrop",
+    ]);
+  });
+
+  test("entry naming dialog is axe-clean", async ({ page }) => {
+    await installUiInteractionHarness(page, {
+      workspaces: [A11Y_WORKSPACE],
+      entries: [a11yDrawing("drawing.excalidraw", "drawing")],
+    });
+    await installChinesePreference(page);
+    await persistPinnedWorkspaceSidebar(
+      page,
+      [A11Y_WORKSPACE.id],
+      A11Y_WORKSPACE.id,
+    );
+    await page.goto("/");
+    await openWorkspaceSidebar(page, ZH_SIDEBAR);
+    await page
+      .getByRole("toolbar", { name: zhCN["workspace.actionsLabel"] })
+      .getByRole("button", { name: zhCN["workspace.newDrawing"] })
+      .click();
+    await expect(
+      page.getByRole("dialog", { name: zhCN["entry.naming.newDrawing"] }),
+    ).toBeVisible();
+    await expectAxeClean(page, "zh-CN new drawing dialog", [
+      ".application-dialog-backdrop",
+    ]);
+  });
 });
