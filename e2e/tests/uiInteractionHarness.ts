@@ -439,6 +439,7 @@ export async function installUiInteractionHarness(
             };
           }
           if (command === "doc_close") return {};
+          if (command === "native_menu_set_enabled") return {};
           const message = `Unexpected UI interaction harness command: ${command}`;
           state.errors.push(message);
           throw new Error(message);
