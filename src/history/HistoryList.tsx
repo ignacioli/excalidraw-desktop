@@ -4,9 +4,11 @@ import {
   type RefCallback,
   type ReactNode,
 } from "react";
+import { useI18n } from "../i18n";
 import type { HistoryVersionItem } from "./types";
 import {
   formatHistoryTimestamp,
+  historyDefaultSummary,
   historyAccessibleTimestamp,
   historyDateTime,
   historySourceLabel,
@@ -49,6 +51,7 @@ export function HistoryList({
   onRegisterRow,
   renderRowActions,
 }: HistoryListProps) {
+  const { t } = useI18n();
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const registerRow = (versionId: string): RefCallback<HTMLButtonElement> => {
@@ -104,7 +107,11 @@ export function HistoryList({
   };
 
   return (
-    <ul aria-label="Version history" className="history-list" role="listbox">
+    <ul
+      aria-label={t("history.list.label")}
+      className="history-list"
+      role="listbox"
+    >
       {items.map((item, index) => {
         const selected = item.versionId === selectedVersionId;
         const current = item.versionId === currentVersionId;
@@ -116,17 +123,17 @@ export function HistoryList({
           item.summaryReliable === false ||
           item.summary === undefined ||
           item.summary === ""
-            ? "Canvas changed"
+            ? historyDefaultSummary()
             : item.summary;
         const statusLabel = unavailable
-          ? "Unavailable"
+          ? t("history.status.unavailable")
           : current
-            ? "Current"
+            ? t("history.status.current")
             : preview
-              ? "Preview"
+              ? t("history.status.preview")
               : item.marked
-                ? "Marked"
-                : "Ready";
+                ? t("history.status.marked")
+                : t("history.status.ready");
         const accessibleLabel = [
           source,
           formatHistoryTimestamp(item.recordedAt),
@@ -188,7 +195,7 @@ export function HistoryList({
                         <circle cx="12" cy="12" r="9" />
                         <path d="M12 7v6m0 4h.01" />
                       </svg>
-                      Unavailable
+                      {t("history.status.unavailable")}
                     </span>
                   ) : successFeedback?.versionId === item.versionId &&
                     !current &&

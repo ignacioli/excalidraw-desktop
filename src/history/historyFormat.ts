@@ -1,49 +1,43 @@
+import { formatDateTime, t, type MessageKey } from "../i18n";
 import type { HistoryVersionItem } from "./types";
 
-const SOURCE_LABELS: Record<HistoryVersionItem["source"], string> = {
-  automatic: "Automatic",
-  manual: "Manual",
-  protected: "Protected",
+const SOURCE_LABELS: Record<HistoryVersionItem["source"], MessageKey> = {
+  automatic: "history.source.automatic",
+  manual: "history.source.manual",
+  protected: "history.source.protected",
 };
 
 const PROTECTED_ACTION_LABELS: Record<
   NonNullable<HistoryVersionItem["protectedAction"]>,
-  string
+  MessageKey
 > = {
-  restore: "Before restore",
-  clear: "Before clear",
-  import: "Before import",
+  restore: "history.source.beforeRestore",
+  clear: "history.source.beforeClear",
+  import: "history.source.beforeImport",
 };
 
 export function historySourceLabel(item: HistoryVersionItem): string {
   if (item.source === "protected" && item.protectedAction !== undefined) {
-    return PROTECTED_ACTION_LABELS[item.protectedAction];
+    return t(PROTECTED_ACTION_LABELS[item.protectedAction]);
   }
-  return SOURCE_LABELS[item.source];
+  return t(SOURCE_LABELS[item.source]);
 }
 
 export function formatHistoryTimestamp(recordedAt: number): string {
   const date = historyDate(recordedAt);
-  if (date === undefined) return "Unknown time";
+  if (date === undefined) return t("history.time.unknown");
   const today = new Date();
   const dayDifference = calendarDayDifference(today, date);
-  const time = new Intl.DateTimeFormat(undefined, {
-    timeStyle: "short",
-  }).format(date);
-  if (dayDifference === 0) return `Today · ${time}`;
-  if (dayDifference === 1) return `Yesterday · ${time}`;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
-    date,
-  );
+  const time = formatDateTime(date, { timeStyle: "short" });
+  if (dayDifference === 0) return t("history.time.today", { time });
+  if (dayDifference === 1) return t("history.time.yesterday", { time });
+  return formatDateTime(date, { dateStyle: "medium" });
 }
 
 export function historyAccessibleTimestamp(recordedAt: number): string {
   const date = historyDate(recordedAt);
-  if (date === undefined) return "Unknown time";
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "full",
-    timeStyle: "long",
-  }).format(date);
+  if (date === undefined) return t("history.time.unknown");
+  return formatDateTime(date, { dateStyle: "full", timeStyle: "long" });
 }
 
 function calendarDayDifference(today: Date, date: Date): number {
@@ -68,4 +62,14 @@ function historyDate(recordedAt: number): Date | undefined {
 
 export function historyDateTime(recordedAt: number): string | undefined {
   return historyDate(recordedAt)?.toISOString();
+}
+
+/** Coarse summary used when the caller has no reliable canvas description. */
+export function historyDefaultSummary(): string {
+  return t("history.summary.canvasChanged");
+}
+
+/** `v-001` style identity; a notation, not translated copy. */
+export function historyVersionLabel(sequence: number): string {
+  return `v-${String(sequence).padStart(3, "0")}`;
 }

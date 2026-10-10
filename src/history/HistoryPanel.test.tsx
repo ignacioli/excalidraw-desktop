@@ -2,6 +2,7 @@ import { createRef } from "react";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { en } from "../i18n/messages/en.ts";
 import { HistoryPanel } from "./HistoryPanel";
 import type { HistoryVersionView } from "./HistoryList";
 
@@ -590,7 +591,9 @@ describe("HistoryPanel", () => {
     expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
     expect(
       screen.getByRole("region", { name: "Selected version actions" }),
-    ).toHaveTextContent("Missing resource Your current drawing is unchanged.");
+    ).toHaveTextContent(
+      `${en["error.HISTORY_RESOURCE_MISSING"]} Your current drawing is unchanged.`,
+    );
     expect(
       screen.getByRole("region", { name: "Selected version actions" }),
     ).toHaveTextContent("Selected version · unavailable");
@@ -1048,9 +1051,13 @@ describe("HistoryPanel", () => {
         );
         await Promise.resolve();
       });
-      expect(screen.getByRole("alert")).toHaveTextContent("Mark failed");
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        en["history.panel.error.markFailed"],
+      );
       act(() => vi.advanceTimersByTime(30_000));
-      expect(screen.getByRole("alert")).toHaveTextContent("Mark failed");
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        en["history.panel.error.markFailed"],
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -1337,7 +1344,9 @@ describe("HistoryPanel", () => {
   it("keeps the panel usable and reports a failed mark inline", async () => {
     const user = userEvent.setup();
     const onMark = vi.fn(async () => {
-      throw new Error("History is unavailable.");
+      throw Object.assign(new Error("raw backend text"), {
+        code: "HISTORY_UNAVAILABLE",
+      });
     });
     render(
       <HistoryPanel
@@ -1352,7 +1361,7 @@ describe("HistoryPanel", () => {
     );
 
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "History is unavailable.",
+      en["error.HISTORY_UNAVAILABLE"],
     );
     expect(
       screen.getByRole("button", { name: "Mark current version" }),
@@ -1452,7 +1461,9 @@ describe("HistoryPanel", () => {
   it("reports a failed deletion without changing the selection", async () => {
     const user = userEvent.setup();
     const onDelete = vi.fn(async () => {
-      throw new Error("Version is in use.");
+      throw Object.assign(new Error("raw backend text"), {
+        code: "HISTORY_BUSY",
+      });
     });
     render(
       <HistoryPanel
@@ -1468,7 +1479,9 @@ describe("HistoryPanel", () => {
     );
     await user.click(screen.getByRole("menuitem", { name: "Delete version" }));
     await user.click(screen.getByRole("button", { name: /^Delete$/ }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Version is in use.");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      en["error.HISTORY_BUSY"],
+    );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByRole("option")).toHaveAttribute("aria-selected", "true");
   });

@@ -7,6 +7,8 @@ import {
 } from "../editor/exportService";
 import { serializeScene } from "../editor/sceneSerializer";
 import type { ColorScheme, CommandResponse } from "../ipc/contracts";
+import { describeError, errorCodeOf } from "../i18n/describeError";
+import { t as translateNow, useI18n, type MessageKey } from "../i18n";
 import { createTauriCommandInvoker, type CommandInvoker } from "../ipc/client";
 
 type ExportScale = 1 | 2 | 3;
@@ -29,13 +31,16 @@ export function ExportDialog({
   invoker = createTauriCommandInvoker(),
   onClose,
 }: ExportDialogProps) {
+  const { t } = useI18n();
   const dialogRef = useRef<HTMLDivElement>(null);
   const [format, setFormat] = useState<ExportFormat>("png");
   const [scale, setScale] = useState<ExportScale>(2);
   const [background, setBackground] = useState<ExportBackground>("transparent");
   const [theme, setTheme] = useState<ColorScheme>(defaultTheme);
   const [busy, setBusy] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ error: unknown } | null>(null);
+  const errorMessage =
+    failure === null ? null : getExportErrorMessage(failure.error);
   const [writtenPath, setWrittenPath] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,7 +77,7 @@ export function ExportDialog({
       return;
     }
     setBusy(true);
-    setErrorMessage(null);
+    setFailure(null);
     setWrittenPath(null);
     try {
       const scene = adapter.readScene();
@@ -99,7 +104,7 @@ export function ExportDialog({
       );
       setWrittenPath(response.writtenPath);
     } catch (error) {
-      setErrorMessage(getExportErrorMessage(error));
+      setFailure({ error });
     } finally {
       setBusy(false);
     }
@@ -121,8 +126,8 @@ export function ExportDialog({
         className="export-dialog"
         role="dialog"
       >
-        <h1 id="export-dialog-title">Export drawing</h1>
-        <p>Choose the format and appearance, then pick a destination.</p>
+        <h1 id="export-dialog-title">{t("export.title")}</h1>
+        <p>{t("export.description")}</p>
         <form
           aria-describedby={
             errorMessage !== null ? "export-dialog-error" : undefined
@@ -133,7 +138,7 @@ export function ExportDialog({
           }}
         >
           <fieldset className="export-option-group">
-            <legend>Format</legend>
+            <legend>{t("export.format")}</legend>
             <label>
               <input
                 checked={format === "png"}
@@ -142,7 +147,7 @@ export function ExportDialog({
                 type="radio"
                 value="png"
               />
-              <span>PNG image</span>
+              <span>{t("export.formatPng")}</span>
             </label>
             <label>
               <input
@@ -152,12 +157,12 @@ export function ExportDialog({
                 type="radio"
                 value="svg"
               />
-              <span>SVG image</span>
+              <span>{t("export.formatSvg")}</span>
             </label>
           </fieldset>
 
           <fieldset className="export-option-group">
-            <legend>Scale</legend>
+            <legend>{t("export.scale")}</legend>
             {[1, 2, 3].map((value) => (
               <label key={value}>
                 <input
@@ -167,13 +172,13 @@ export function ExportDialog({
                   type="radio"
                   value={value}
                 />
-                <span>{value}x</span>
+                <span>{t("export.scaleOption", { value })}</span>
               </label>
             ))}
           </fieldset>
 
           <fieldset className="export-option-group">
-            <legend>Background</legend>
+            <legend>{t("export.background")}</legend>
             <label>
               <input
                 checked={background === "transparent"}
@@ -182,7 +187,7 @@ export function ExportDialog({
                 type="radio"
                 value="transparent"
               />
-              <span>Transparent</span>
+              <span>{t("export.backgroundTransparent")}</span>
             </label>
             <label>
               <input
@@ -192,12 +197,12 @@ export function ExportDialog({
                 type="radio"
                 value="solid"
               />
-              <span>Solid</span>
+              <span>{t("export.backgroundSolid")}</span>
             </label>
           </fieldset>
 
           <fieldset className="export-option-group">
-            <legend>Theme</legend>
+            <legend>{t("export.theme")}</legend>
             {(["light", "dark"] as const).map((value) => (
               <label key={value}>
                 <input
@@ -207,7 +212,11 @@ export function ExportDialog({
                   type="radio"
                   value={value}
                 />
-                <span>{value === "light" ? "Light" : "Dark"}</span>
+                <span>
+                  {t(
+                    value === "light" ? "appearance.light" : "appearance.dark",
+                  )}
+                </span>
               </label>
             ))}
           </fieldset>
@@ -224,7 +233,7 @@ export function ExportDialog({
           ) : null}
           {writtenPath !== null ? (
             <p className="export-dialog-success" role="status">
-              Exported to {writtenPath}
+              {t("export.success", { path: writtenPath })}
             </p>
           ) : null}
 
@@ -235,10 +244,10 @@ export function ExportDialog({
               disabled={busy}
               type="submit"
             >
-              {busy ? "Exporting…" : "Export…"}
+              {busy ? t("export.exporting") : t("export.action")}
             </button>
             <button disabled={busy} onClick={onClose} type="button">
-              Cancel
+              {t("dialog.cancel")}
             </button>
           </div>
         </form>
@@ -278,30 +287,22 @@ async function chooseExportPath(
   return save({
     defaultPath: `${baseName}.${extension}`,
     filters: [{ name: extension.toUpperCase(), extensions: [extension] }],
-    title: `Export ${format.toUpperCase()}`,
+    title: translateNow("export.saveDialogTitle", {
+      format: format.toUpperCase(),
+    }),
   });
 }
 
+const EXPORT_ERROR_KEYS: Readonly<Record<string, MessageKey>> = {
+  DISK_FULL: "export.error.diskFull",
+  IO_ERROR: "export.error.ioError",
+  PATH_ACCESS_DENIED: "export.error.pathAccessDenied",
+};
+
 function getExportErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === "object" && error !== null) {
-    if ("code" in error && typeof error.code === "string") {
-      switch (error.code) {
-        case "DISK_FULL":
-          return "The destination disk is full. No file was written.";
-        case "IO_ERROR":
-          return "The destination could not be written. No partial file was left behind.";
-        case "PATH_ACCESS_DENIED":
-          return "The destination is outside the allowed locations.";
-        default:
-          break;
-      }
-    }
-    if ("message" in error && typeof error.message === "string") {
-      return error.message;
-    }
-  }
-  return "The export could not be completed. No file was written.";
+  const code = errorCodeOf(error);
+  const contextual = code === undefined ? undefined : EXPORT_ERROR_KEYS[code];
+  return contextual !== undefined
+    ? translateNow(contextual)
+    : describeError(error, "export.error.failed");
 }

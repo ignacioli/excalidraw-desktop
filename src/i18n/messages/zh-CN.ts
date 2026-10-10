@@ -1,8 +1,15 @@
 // Keep this file to TypeScript syntax that Node can strip directly:
 // scripts/native-menu-check.mjs imports it.
+import { documentsZhCN } from "./documents.ts";
 import type { MessageKey } from "./en.ts";
+import { historyZhCN } from "./history.ts";
+import { shellZhCN } from "./shell.ts";
 
 export const zhCN: Record<MessageKey, string> = {
+  ...shellZhCN,
+  ...documentsZhCN,
+  ...historyZhCN,
+
   "language.autonym.en": "English",
   "language.autonym.zhCN": "简体中文",
 

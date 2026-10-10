@@ -12,10 +12,14 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { ApplicationDialog } from "../app/interaction/ApplicationDialog";
+import { t, useI18n, type MessageKey } from "../i18n";
+import { describeError } from "../i18n/describeError";
 import { HistoryList, type HistoryVersionView } from "./HistoryList";
 import {
   formatHistoryTimestamp,
   historyDateTime,
+  historyDefaultSummary,
+  historyVersionLabel,
   historyAccessibleTimestamp,
   historySourceLabel,
 } from "./historyFormat";
@@ -30,11 +34,42 @@ export interface HistorySuccessNotice {
   message: string;
 }
 
+/**
+ * Feedback text kept as data so it re-translates when the UI language changes.
+ * Caller-provided strings are shown as given.
+ */
+type FeedbackText =
+  | { kind: "text"; text: string }
+  | { kind: "key"; key: MessageKey }
+  | { kind: "error"; error: unknown; fallback: MessageKey };
+
+function resolveFeedbackText(
+  t: (key: MessageKey) => string,
+  feedback: FeedbackText,
+): string {
+  switch (feedback.kind) {
+    case "text":
+      return feedback.text;
+    case "key":
+      return t(feedback.key);
+    case "error":
+      return describeError(feedback.error, feedback.fallback);
+  }
+}
+
+type InlineMarkKind = "marked" | "alreadyMarked" | "unmarked";
+
+const INLINE_MARK_KEYS: Record<InlineMarkKind, MessageKey> = {
+  marked: "history.panel.feedback.marked",
+  alreadyMarked: "history.panel.feedback.alreadyMarked",
+  unmarked: "history.panel.feedback.unmarked",
+};
+
 interface InlineMarkFeedback {
   documentId: string;
   versionId: string;
-  message: string;
-  announcement: string;
+  kind: InlineMarkKind;
+  identity: string;
   announcementId: number;
   itemsAtCommit: readonly HistoryVersionView[];
 }
@@ -127,14 +162,15 @@ export function HistoryPanel({
   onClearSuccessNotice,
   onSetMarked,
   markProcessing = false,
-  markSuccessMessage = "Version marked and saved to history.",
+  markSuccessMessage,
   markErrorMessage,
   deleteProcessing = false,
-  deleteSuccessMessage = "Version deleted from history.",
+  deleteSuccessMessage,
   deleteErrorMessage,
   moreActions,
   triggerRef,
 }: HistoryPanelProps) {
+  const { t } = useI18n();
   const activeDocumentKey = documentId ?? fileName;
   const onClearSuccessNoticeRef = useRef(onClearSuccessNotice);
   const activeDocumentRef = useRef(activeDocumentKey);
@@ -155,11 +191,10 @@ export function HistoryPanel({
   const [internalPreviewId, setInternalPreviewId] = useState<string | null>(
     previewVersionId ?? null,
   );
-  const [markFeedback, setMarkFeedback] = useState<
-    | { status: "success"; message: string }
-    | { status: "error"; message: string }
-    | null
-  >(null);
+  const [markFeedback, setMarkFeedback] = useState<{
+    status: "success" | "error";
+    text: FeedbackText;
+  } | null>(null);
   const [inlineMarkFeedback, setInlineMarkFeedback] =
     useState<InlineMarkFeedback | null>(null);
   const [reusedTargetId, setReusedTargetId] = useState<string | null>(null);
@@ -168,7 +203,7 @@ export function HistoryPanel({
   const markIsProcessing = markProcessing || markBusy || setMarkedBusy;
   const [deleteFeedback, setDeleteFeedback] = useState<{
     status: "error";
-    message: string;
+    text: FeedbackText;
   } | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const deleteIsProcessing = deleteProcessing || deleteBusy;
@@ -177,9 +212,8 @@ export function HistoryPanel({
     item: HistoryVersionView;
     upward: boolean;
   } | null>(null);
-  const [actionsTargetError, setActionsTargetError] = useState<string | null>(
-    null,
-  );
+  const [actionsTargetError, setActionsTargetError] =
+    useState<MessageKey | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{
     documentId: string;
     item: HistoryVersionView;
@@ -195,7 +229,7 @@ export function HistoryPanel({
   const selectedRestoreRef = useRef<HTMLButtonElement>(null);
   const restoreInFlightRef = useRef(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
-  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<FeedbackText | null>(null);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
   const deleteCancelRef = useRef<HTMLButtonElement>(null);
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -325,8 +359,8 @@ export function HistoryPanel({
   const showInlineMarkFeedback = (
     generation: number,
     versionId: string,
-    message: string,
-    announcement: string,
+    kind: InlineMarkKind,
+    identity: string,
   ) => {
     if (generation !== actionNoticeGenerationRef.current) return;
     if (localSuccessTimerRef.current !== null) {
@@ -340,8 +374,8 @@ export function HistoryPanel({
     setInlineMarkFeedback({
       documentId: activeDocumentKey,
       versionId,
-      message,
-      announcement,
+      kind,
+      identity,
       announcementId,
       itemsAtCommit: items,
     });
@@ -355,15 +389,18 @@ export function HistoryPanel({
 
   const showActionSuccessNotice = (
     generation: number,
-    notice: HistorySuccessNotice,
-    fallbackMessage: string,
+    titleKey: MessageKey,
+    text: FeedbackText,
   ) => {
     if (generation !== actionNoticeGenerationRef.current) return;
     if (onSuccessNotice !== undefined) {
-      onSuccessNotice(notice);
+      onSuccessNotice({
+        title: t(titleKey),
+        message: resolveFeedbackText(t, text),
+      });
       return;
     }
-    setMarkFeedback({ status: "success", message: fallbackMessage });
+    setMarkFeedback({ status: "success", text });
     if (localSuccessTimerRef.current !== null) {
       clearTimeout(localSuccessTimerRef.current);
     }
@@ -434,31 +471,40 @@ export function HistoryPanel({
     visibleRestoreTarget === null
       ? null
       : status !== "available"
-        ? "Version history is changing. Cancel and reopen Restore when the list is ready."
+        ? t("history.panel.guard.restoreChanging")
         : !restoreEnabled ||
             (activePreviewId !== null &&
               (selectedItem?.versionId !== activePreviewId ||
                 visibleRestoreTarget.item.versionId !== activePreviewId ||
                 previewState !== "ready"))
-          ? "A safe preview of this version is no longer available. Cancel and preview it again before restoring."
+          ? t("history.panel.guard.restorePreviewUnavailable")
           : items.some(
                 (item) =>
                   item.versionId === visibleRestoreTarget.item.versionId &&
                   item.availability.status === "available",
               )
             ? null
-            : "This version is no longer available. Cancel and choose an available version.";
-  const restoreDialogError = restoreTargetInvalidMessage ?? restoreError;
+            : t("history.panel.guard.restoreVersionUnavailable");
+  const restoreDialogError =
+    restoreTargetInvalidMessage ??
+    (restoreError === null ? null : resolveFeedbackText(t, restoreError));
   const openTargetUnavailableMessage =
     openActionsTarget === null
       ? null
       : openActionsTarget.documentId !== activeDocumentKey
-        ? "The history document changed. Reopen the version menu before acting."
+        ? t("history.panel.guard.documentChanged")
         : items.some(
               (item) => item.versionId === openActionsTarget.item.versionId,
             )
           ? null
-          : "This version is no longer available. Reopen the history menu to choose an available version.";
+          : t("history.panel.guard.menuVersionUnavailable");
+  const actionsTargetBannerMessage =
+    actionsTargetError !== null
+      ? t(actionsTargetError)
+      : (openTargetUnavailableMessage ??
+        (deleteDocumentChanged
+          ? t("history.panel.guard.documentChanged")
+          : null));
 
   useEffect(() => {
     if (activePreviewId === null && previewReturnIdRef.current !== null) {
@@ -642,16 +688,16 @@ export function HistoryPanel({
         showInlineMarkFeedback(
           noticeGeneration,
           outcome.versionId,
-          outcome.reused ? "Already marked · no new version" : "Marked",
-          outcome.reused
-            ? `Already marked · no new version · ${announcementIdentity}`
-            : `Marked · ${announcementIdentity}`,
+          outcome.reused ? "alreadyMarked" : "marked",
+          announcementIdentity,
         );
       } else {
         showActionSuccessNotice(
           noticeGeneration,
-          { title: "Version marked", message: markSuccessMessage },
-          markSuccessMessage,
+          "history.panel.notice.markedTitle",
+          markSuccessMessage === undefined
+            ? { kind: "key", key: "history.panel.notice.markedMessage" }
+            : { kind: "text", text: markSuccessMessage },
         );
       }
     } catch (error) {
@@ -660,12 +706,17 @@ export function HistoryPanel({
         operationDocumentKey !== activeDocumentRef.current
       )
         return;
-      const message =
-        markErrorMessage ??
-        (error instanceof Error
-          ? error.message
-          : "The current version could not be marked.");
-      setMarkFeedback({ status: "error", message });
+      setMarkFeedback({
+        status: "error",
+        text:
+          markErrorMessage !== undefined
+            ? { kind: "text", text: markErrorMessage }
+            : {
+                kind: "error",
+                error,
+                fallback: "history.panel.error.markFailed",
+              },
+      });
     } finally {
       setMarkBusy(false);
     }
@@ -695,11 +746,13 @@ export function HistoryPanel({
         exitPreview();
       }
       if (result !== undefined && result.retained === false) {
-        const message = "Version unmarked and removed by the retention policy.";
         showActionSuccessNotice(
           noticeGeneration,
-          { title: "Version unmarked", message },
-          message,
+          "history.panel.notice.unmarkedTitle",
+          {
+            kind: "key",
+            key: "history.panel.notice.unmarkedRemoved",
+          },
         );
       } else if (result !== undefined) {
         const identity = items.find(
@@ -709,12 +762,11 @@ export function HistoryPanel({
           identity === undefined
             ? result.versionId
             : `v-${String(identity).padStart(3, "0")}`;
-        const message = marked ? "Marked" : "Unmarked";
         showInlineMarkFeedback(
           noticeGeneration,
           result.versionId,
-          message,
-          `${message} · ${announcementIdentity}`,
+          marked ? "marked" : "unmarked",
+          announcementIdentity,
         );
       } else {
         const identity = items.find(
@@ -727,8 +779,8 @@ export function HistoryPanel({
         showInlineMarkFeedback(
           noticeGeneration,
           item.versionId,
-          marked ? "Marked" : "Unmarked",
-          `${marked ? "Marked" : "Unmarked"} · ${announcementIdentity}`,
+          marked ? "marked" : "unmarked",
+          announcementIdentity,
         );
       }
     } catch (error) {
@@ -737,12 +789,17 @@ export function HistoryPanel({
         operationDocumentKey !== activeDocumentRef.current
       )
         return;
-      const message =
-        markErrorMessage ??
-        (error instanceof Error
-          ? error.message
-          : "The selected version could not be updated.");
-      setMarkFeedback({ status: "error", message });
+      setMarkFeedback({
+        status: "error",
+        text:
+          markErrorMessage !== undefined
+            ? { kind: "text", text: markErrorMessage }
+            : {
+                kind: "error",
+                error,
+                fallback: "history.panel.error.updateFailed",
+              },
+      });
     } finally {
       setSetMarkedBusy(false);
     }
@@ -785,9 +842,7 @@ export function HistoryPanel({
       !items.some((candidate) => candidate.versionId === item.versionId)
     ) {
       setDeleteTarget(null);
-      setActionsTargetError(
-        "This version is no longer available. Reopen the history menu to choose an available version.",
-      );
+      setActionsTargetError("history.panel.guard.menuVersionUnavailable");
       return;
     }
     setDeleteFeedback(null);
@@ -799,18 +854,25 @@ export function HistoryPanel({
       deleteReturnFocusRef.current = closeButtonRef.current;
       showActionSuccessNotice(
         noticeGeneration,
-        { title: "Version deleted", message: deleteSuccessMessage },
-        deleteSuccessMessage,
+        "history.panel.notice.deletedTitle",
+        deleteSuccessMessage === undefined
+          ? { kind: "key", key: "history.panel.notice.deletedMessage" }
+          : { kind: "text", text: deleteSuccessMessage },
       );
       setDeleteTarget(null);
     } catch (error) {
       if (noticeGeneration !== actionNoticeGenerationRef.current) return;
-      const message =
-        deleteErrorMessage ??
-        (error instanceof Error
-          ? error.message
-          : "The selected version could not be deleted.");
-      setDeleteFeedback({ status: "error", message });
+      setDeleteFeedback({
+        status: "error",
+        text:
+          deleteErrorMessage !== undefined
+            ? { kind: "text", text: deleteErrorMessage }
+            : {
+                kind: "error",
+                error,
+                fallback: "history.panel.error.deleteFailed",
+              },
+      });
     } finally {
       setDeleteBusy(false);
     }
@@ -858,11 +920,11 @@ export function HistoryPanel({
       await onRestore(target.item);
       setRestoreTarget(null);
     } catch (error) {
-      setRestoreError(
-        error instanceof Error
-          ? error.message
-          : "The selected version could not be restored.",
-      );
+      setRestoreError({
+        kind: "error",
+        error,
+        fallback: "history.panel.error.restoreFailed",
+      });
     } finally {
       restoreInFlightRef.current = false;
       setRestoreBusy(false);
@@ -915,9 +977,7 @@ export function HistoryPanel({
       (candidate) => candidate.versionId === targetItem.versionId,
     );
     if (openActionsTarget.documentId !== activeDocumentKey || !targetExists) {
-      setActionsTargetError(
-        "This version is no longer available. Reopen the history menu to choose an available version.",
-      );
+      setActionsTargetError("history.panel.guard.menuVersionUnavailable");
       setOpenActionsTarget(null);
       return;
     }
@@ -975,7 +1035,9 @@ export function HistoryPanel({
           aria-expanded={isTargetOpen}
           aria-haspopup="menu"
           aria-disabled={markIsProcessing || undefined}
-          aria-label={`More actions for ${historyTargetLabel(item)}`}
+          aria-label={t("history.panel.moreActionsFor", {
+            target: historyTargetLabel(item),
+          })}
           className="history-actions-trigger"
           disabled={processing || deleteIsProcessing}
           onClick={(event) => {
@@ -989,7 +1051,7 @@ export function HistoryPanel({
         </button>
         {menuTarget !== null ? (
           <div
-            aria-label="More version actions"
+            aria-label={t("history.panel.moreActions")}
             className={`history-actions-menu${openActionsTarget?.upward ? " is-upward" : ""}`}
             onClick={handleActionsMenuClick}
             onKeyDown={handleActionsMenuKeyDown}
@@ -1013,7 +1075,7 @@ export function HistoryPanel({
                 type="button"
               >
                 <BookmarkIcon />
-                Unmark version
+                {t("history.panel.unmark")}
               </button>
             ) : onSetMarked !== undefined ? (
               <button
@@ -1024,7 +1086,7 @@ export function HistoryPanel({
                 type="button"
               >
                 <BookmarkIcon />
-                Mark version
+                {t("history.panel.mark")}
               </button>
             ) : null}
             {moreActions}
@@ -1045,7 +1107,7 @@ export function HistoryPanel({
                   type="button"
                 >
                   <TrashIcon />
-                  Delete version
+                  {t("history.panel.delete")}
                 </button>
               </>
             ) : null}
@@ -1084,7 +1146,7 @@ export function HistoryPanel({
     >
       <div
         aria-describedby="history-panel-resize-help"
-        aria-label="Resize version history panel"
+        aria-label={t("history.panel.resizeLabel")}
         aria-orientation="vertical"
         aria-valuemax={360}
         aria-valuemin={300}
@@ -1102,13 +1164,11 @@ export function HistoryPanel({
         tabIndex={0}
       />
       <span className="visually-hidden" id="history-panel-resize-help">
-        Left Arrow moves the divider left and increases width by 10 pixels;
-        Right Arrow moves it right and decreases width by 10 pixels. Home sets
-        300 pixels; End sets 360 pixels. Hold Shift to resize by 20 pixels.
+        {t("history.panel.resizeHelp")}
       </span>
       <header className="history-panel-header">
         <div>
-          <h1 id="history-panel-title">Version History</h1>
+          <h1 id="history-panel-title">{t("history.panel.title")}</h1>
           <p className="history-panel-file-name" title={fileName}>
             {fileName}
           </p>
@@ -1117,7 +1177,7 @@ export function HistoryPanel({
           <button
             aria-controls="history-retention-info"
             aria-expanded={retentionInfoOpen}
-            aria-label="History info"
+            aria-label={t("history.panel.infoLabel")}
             className="history-info-trigger"
             onPointerEnter={() => {
               cancelRetentionInfoClose();
@@ -1150,21 +1210,23 @@ export function HistoryPanel({
               }
             }}
             ref={infoButtonRef}
-            title="History info"
+            title={t("history.panel.infoLabel")}
             type="button"
           >
             <InfoIcon />
           </button>
           <div className="history-close-anchor">
             <button
-              aria-label="Close version history"
+              aria-label={t("history.panel.closeLabel")}
               className="icon-button"
               onClick={closePanel}
               ref={closeButtonRef}
               type="button"
             >
               <CloseIcon />
-              <span className="visually-hidden">Close</span>
+              <span className="visually-hidden">
+                {t("history.panel.close")}
+              </span>
             </button>
           </div>
         </div>
@@ -1176,7 +1238,10 @@ export function HistoryPanel({
         role="status"
       >
         {inlineMarkFeedback?.documentId === activeDocumentKey
-          ? inlineMarkFeedback.announcement
+          ? t("history.panel.feedback.announce", {
+              message: t(INLINE_MARK_KEYS[inlineMarkFeedback.kind]),
+              identity: inlineMarkFeedback.identity,
+            })
           : ""}
       </p>
       <div
@@ -1190,39 +1255,34 @@ export function HistoryPanel({
         role="region"
         tabIndex={-1}
       >
-        <h2 id="history-retention-heading">Version retention</h2>
-        <p>
-          Automatic and before-operation versions share the newest 20 entries.
-          They do not expire by age. Manual marks stay until you delete them.
-        </p>
+        <h2 id="history-retention-heading">
+          {t("history.panel.retention.title")}
+        </h2>
+        <p>{t("history.panel.retention.body")}</p>
       </div>
 
       <div className="history-panel-main">
         <div className="history-panel-body">
-          {(actionsTargetError ??
-          openTargetUnavailableMessage ??
-          (deleteDocumentChanged
-            ? "The history document changed. Reopen the version menu before acting."
-            : null)) ? (
-            <p role="alert">
-              {actionsTargetError ??
-                openTargetUnavailableMessage ??
-                "The history document changed. Reopen the version menu before acting."}
-            </p>
+          {actionsTargetBannerMessage !== null ? (
+            <p role="alert">{actionsTargetBannerMessage}</p>
           ) : null}
           {onMark !== undefined ? (
             <section
-              aria-label="Current drawing"
+              aria-label={t("history.panel.current.region")}
               className="history-current-actions"
             >
               <div className="history-current-card">
-                <span>Current drawing</span>
-                <p>Open canvas</p>
+                <span>{t("history.panel.current.title")}</span>
+                <p>{t("history.panel.current.canvas")}</p>
               </div>
               <div className="history-version-toolbar">
                 <span className="history-version-count">
-                  {items.length} {items.length === 1 ? "version" : "versions"}{" "}
-                  shown
+                  {t(
+                    items.length === 1
+                      ? "history.panel.count.one"
+                      : "history.panel.count.other",
+                    { count: items.length },
+                  )}
                 </span>
                 <button
                   className="history-mark-current"
@@ -1231,8 +1291,8 @@ export function HistoryPanel({
                   type="button"
                 >
                   {markIsProcessing
-                    ? "Marking current version…"
-                    : "Mark current version"}
+                    ? t("history.panel.markingCurrent")
+                    : t("history.panel.markCurrent")}
                 </button>
               </div>
             </section>
@@ -1245,7 +1305,7 @@ export function HistoryPanel({
               className={`history-mark-feedback is-${markFeedback.status}`}
               role={markFeedback.status === "error" ? "alert" : "status"}
             >
-              {markFeedback.message}
+              {resolveFeedbackText(t, markFeedback.text)}
             </p>
           ) : null}
           {previewItem !== undefined && previewPortalContainer === undefined ? (
@@ -1253,7 +1313,7 @@ export function HistoryPanel({
               {previewElement}
               {deleteFeedback?.status === "error" && deleteTarget === null ? (
                 <p aria-live="assertive" role="alert">
-                  {deleteFeedback.message}
+                  {resolveFeedbackText(t, deleteFeedback.text)}
                 </p>
               ) : null}
             </>
@@ -1268,7 +1328,12 @@ export function HistoryPanel({
                     items={items}
                     successFeedback={
                       inlineMarkFeedback?.documentId === activeDocumentKey
-                        ? inlineMarkFeedback
+                        ? {
+                            versionId: inlineMarkFeedback.versionId,
+                            message: t(
+                              INLINE_MARK_KEYS[inlineMarkFeedback.kind],
+                            ),
+                          }
                         : null
                     }
                     onPreview={openPreview}
@@ -1295,15 +1360,15 @@ export function HistoryPanel({
       </div>
       {selectedItem !== undefined && status === "available" ? (
         <section
-          aria-label="Selected version actions"
+          aria-label={t("history.panel.selected.region")}
           className="history-selection-actions"
         >
           <p className="history-selection-eyebrow">
             {selectedItem.availability.status === "unavailable"
-              ? "Selected version · unavailable"
+              ? t("history.panel.selected.eyebrowUnavailable")
               : selectedItem.versionId === reusedTargetId
-                ? "Selected version · reused target"
-                : "Selected version · action target"}
+                ? t("history.panel.selected.eyebrowReused")
+                : t("history.panel.selected.eyebrowTarget")}
           </p>
           <h2
             className="history-selection-title"
@@ -1312,7 +1377,7 @@ export function HistoryPanel({
             {historySummaryLabel(selectedItem)}
           </h2>
           <p className="history-selection-metadata">
-            v-{String(selectedItem.sequence).padStart(3, "0")}
+            {historyVersionLabel(selectedItem.sequence)}
             {" · "}
             <time
               dateTime={historyDateTime(selectedItem.recordedAt)}
@@ -1325,8 +1390,9 @@ export function HistoryPanel({
           </p>
           {selectedItem.availability.status === "unavailable" ? (
             <p className="history-selection-unavailable-reason">
-              {selectedItem.availability.error.message} Your current drawing is
-              unchanged.
+              {t("history.panel.selected.unavailableReason", {
+                reason: describeError(selectedItem.availability.error),
+              })}
             </p>
           ) : null}
           <div>
@@ -1337,11 +1403,11 @@ export function HistoryPanel({
               onClick={() => openPreview(selectedItem)}
               type="button"
             >
-              Preview
+              {t("history.panel.selected.preview")}
             </button>
             <button
               className="primary-action"
-              aria-label="Restore this version"
+              aria-label={t("history.panel.selected.restoreLabel")}
               disabled={
                 processing ||
                 selectedItem.availability.status !== "available" ||
@@ -1353,12 +1419,12 @@ export function HistoryPanel({
               ref={selectedRestoreRef}
               type="button"
             >
-              Restore
+              {t("history.panel.selected.restore")}
             </button>
           </div>
           {deleteFeedback?.status === "error" && deleteTarget === null ? (
             <p aria-live="assertive" role="alert">
-              {deleteFeedback.message}
+              {resolveFeedbackText(t, deleteFeedback.text)}
             </p>
           ) : null}
         </section>
@@ -1366,16 +1432,22 @@ export function HistoryPanel({
       {visibleDeleteTarget !== null ? (
         <ApplicationDialog
           busy={deleteIsProcessing}
-          description={`Delete the ${sourceLabel(visibleDeleteTarget.item)} version from history? This cannot be undone.`}
+          description={t("history.panel.deleteDialog.description", {
+            source: sourceLabel(visibleDeleteTarget.item),
+          })}
           errorMessage={
-            deleteFeedback?.status === "error" ? deleteFeedback.message : null
+            deleteFeedback?.status === "error"
+              ? resolveFeedbackText(t, deleteFeedback.text)
+              : null
           }
           initialFocusRef={deleteCancelRef}
           onDismiss={() => {
             if (!deleteIsProcessing) setDeleteTarget(null);
           }}
           returnFocusRef={deleteReturnFocusRef}
-          title={`Delete v-${String(visibleDeleteTarget.item.sequence).padStart(3, "0")}?`}
+          title={t("history.panel.deleteDialog.title", {
+            version: historyVersionLabel(visibleDeleteTarget.item.sequence),
+          })}
         >
           <div className="application-dialog-actions conflict-dialog-actions">
             <button
@@ -1384,14 +1456,16 @@ export function HistoryPanel({
               ref={deleteCancelRef}
               type="button"
             >
-              Cancel
+              {t("history.panel.cancel")}
             </button>
             <button
               disabled={deleteIsProcessing}
               onClick={() => void handleDelete(visibleDeleteTarget.item)}
               type="button"
             >
-              {deleteIsProcessing ? "Deleting…" : "Delete"}
+              {deleteIsProcessing
+                ? t("history.panel.deleteDialog.deleting")
+                : t("history.panel.deleteDialog.delete")}
             </button>
           </div>
         </ApplicationDialog>
@@ -1399,7 +1473,7 @@ export function HistoryPanel({
       {visibleRestoreTarget !== null ? (
         <ApplicationDialog
           busy={restoreBusy}
-          description="The current drawing will be replaced after a protected snapshot is created."
+          description={t("history.panel.restoreDialog.description")}
           errorMessage={restoreDialogError}
           initialFocusRef={restoreCancelRef}
           onDismiss={() => {
@@ -1408,12 +1482,13 @@ export function HistoryPanel({
             }
           }}
           returnFocusRef={restoreReturnFocusRef}
-          title="Restore this version?"
+          title={t("history.panel.restoreDialog.title")}
         >
           <p className="history-restore-target">
-            Target: v-
-            {String(visibleRestoreTarget.item.sequence).padStart(3, "0")} ·{" "}
-            {historyTargetSummary(visibleRestoreTarget.item)}
+            {t("history.panel.restoreDialog.target", {
+              version: historyVersionLabel(visibleRestoreTarget.item.sequence),
+              summary: historyTargetSummary(visibleRestoreTarget.item),
+            })}
           </p>
           <div className="application-dialog-actions conflict-dialog-actions">
             <button
@@ -1424,7 +1499,7 @@ export function HistoryPanel({
               ref={restoreCancelRef}
               type="button"
             >
-              Cancel
+              {t("history.panel.cancel")}
             </button>
             <button
               className="primary-action"
@@ -1436,7 +1511,9 @@ export function HistoryPanel({
               onClick={() => void handleRestore()}
               type="button"
             >
-              {restoreBusy ? "Restoring…" : "Restore version"}
+              {restoreBusy
+                ? t("history.panel.restoreDialog.restoring")
+                : t("history.panel.restoreDialog.restore")}
             </button>
           </div>
         </ApplicationDialog>
@@ -1453,31 +1530,31 @@ function historyTargetSummary(item: HistoryVersionView): string {
     item.summary !== "" &&
     item.summaryReliable !== false
     ? item.summary
-    : "Canvas changed";
+    : historyDefaultSummary();
 }
 
 function sourceLabel(item: HistoryVersionView): string {
   if (item.source === "protected" && item.protectedAction !== undefined) {
-    return {
-      restore: "Before restore",
-      clear: "Before clear",
-      import: "Before import",
-    }[item.protectedAction];
+    return historySourceLabel(item);
   }
-  return item.source === "manual" ? "manual" : "automatic";
+  return t(
+    item.source === "manual"
+      ? "history.deleteSource.manual"
+      : "history.deleteSource.automatic",
+  );
 }
 
 function historyTargetLabel(item: HistoryVersionView): string {
   const summary =
     item.summaryReliable === false || !item.summary
-      ? "Canvas changed"
+      ? historyDefaultSummary()
       : item.summary;
-  return `v-${String(item.sequence).padStart(3, "0")} · ${summary}`;
+  return `${historyVersionLabel(item.sequence)} · ${summary}`;
 }
 
 function historySummaryLabel(item: HistoryVersionView): string {
   return item.summaryReliable === false || !item.summary
-    ? "Canvas changed"
+    ? historyDefaultSummary()
     : item.summary;
 }
 

@@ -1,5 +1,6 @@
 import newDrawingIcon from "../../docs/design/desktop-shell/hf-2/icons/new-drawing.svg";
 import folderIcon from "../assets/folder.svg";
+import { useI18n } from "../i18n";
 import type { Workspace } from "../ipc/contracts";
 
 export interface WelcomeScreenProps {
@@ -27,6 +28,7 @@ export function WelcomeScreen({
   busy = false,
   error = null,
 }: WelcomeScreenProps) {
+  const { t } = useI18n();
   const recentWorkspaces = [...workspaces].sort(
     (left, right) =>
       right.createdAt - left.createdAt || right.id.localeCompare(left.id),
@@ -39,12 +41,9 @@ export function WelcomeScreen({
       data-testid="welcome-screen"
     >
       <div className="welcome-content">
-        <p className="welcome-eyebrow">Excalidraw Desktop</p>
-        <h1 id="welcome-title">Draw locally. Keep every workspace close.</h1>
-        <p className="welcome-description">
-          Open an existing workspace or start a drawing. Your files stay local,
-          recoverable, and ready across sessions.
-        </p>
+        <p className="welcome-eyebrow">{t("welcome.eyebrow")}</p>
+        <h1 id="welcome-title">{t("welcome.title")}</h1>
+        <p className="welcome-description">{t("welcome.description")}</p>
         <div aria-busy={busy || undefined} className="welcome-actions">
           <button
             className="welcome-action primary-action"
@@ -53,7 +52,7 @@ export function WelcomeScreen({
             type="button"
           >
             <img alt="" aria-hidden="true" src={newDrawingIcon} />
-            New Drawing
+            {t("welcome.newDrawing")}
           </button>
           <button
             className="welcome-action"
@@ -62,7 +61,7 @@ export function WelcomeScreen({
             type="button"
           >
             <img alt="" aria-hidden="true" src={folderIcon} />
-            Open Workspace
+            {t("welcome.openWorkspace")}
           </button>
         </div>
         {error !== null ? (
@@ -82,11 +81,14 @@ export function WelcomeScreen({
           aria-labelledby="recent-workspaces-title"
           className="recent-workspaces"
         >
-          <h2 id="recent-workspaces-title">Recent Workspaces</h2>
+          <h2 id="recent-workspaces-title">{t("welcome.recentWorkspaces")}</h2>
           <p className="recent-workspaces-description">
-            Continue where you left off
+            {t("welcome.continue")}
           </p>
-          <ul aria-label="Recent Workspaces" className="recent-workspace-list">
+          <ul
+            aria-label={t("welcome.recentWorkspaces")}
+            className="recent-workspace-list"
+          >
             {recentWorkspaces.map((workspace) => (
               <li
                 className={`recent-workspace-row${
@@ -98,7 +100,7 @@ export function WelcomeScreen({
                 key={workspace.id}
               >
                 <button
-                  aria-label={`Open workspace ${workspace.name}`}
+                  aria-label={t("welcome.openNamed", { name: workspace.name })}
                   aria-describedby={
                     unavailableWorkspaceId === workspace.id
                       ? `recent-workspace-error-${workspace.id}`
@@ -121,11 +123,13 @@ export function WelcomeScreen({
                   {!mountedWorkspaceIds.has(workspace.id) &&
                   onRemoveRecentWorkspace !== undefined ? (
                     <button
-                      aria-label={`Remove ${workspace.name} from Recents`}
+                      aria-label={t("welcome.removeNamed", {
+                        name: workspace.name,
+                      })}
                       className="recent-workspace-remove"
                       disabled={busy}
                       onClick={() => void onRemoveRecentWorkspace(workspace)}
-                      title="Remove from Recents"
+                      title={t("welcome.removeFromRecents")}
                       type="button"
                     >
                       <span aria-hidden="true">×</span>
@@ -137,7 +141,7 @@ export function WelcomeScreen({
                     className="recent-workspace-error"
                     id={`recent-workspace-error-${workspace.id}`}
                   >
-                    Folder unavailable
+                    {t("welcome.folderUnavailable")}
                   </span>
                 ) : null}
               </li>
@@ -145,10 +149,7 @@ export function WelcomeScreen({
           </ul>
         </section>
       ) : null}
-      <p className="welcome-session-note">
-        No recoverable session · Welcome is a document state, not an extra
-        permanent tab.
-      </p>
+      <p className="welcome-session-note">{t("welcome.sessionNote")}</p>
     </section>
   );
 }

@@ -4,6 +4,8 @@ import type {
   NonDeletedExcalidrawElement,
 } from "@excalidraw/excalidraw/element/types";
 import { useEffect, useRef, useState } from "react";
+import { LocalizedError } from "../i18n/describeError";
+import { useI18n } from "../i18n";
 import type { ResolvedColorScheme } from "../app/theme/types";
 import type { SceneSnapshot } from "../editor/sceneSerializer";
 import { createReadonlyPreviewInitialData } from "./previewAdapter";
@@ -36,6 +38,7 @@ export function ReadonlyPreviewCanvas({
   onRendered,
   onError,
 }: ReadonlyPreviewCanvasProps) {
+  const { t } = useI18n();
   const [prepared, setPrepared] = useState<PreparedPreview | null>(null);
   const [renderError, setRenderError] = useState<{
     source: SceneSnapshot;
@@ -117,14 +120,14 @@ export function ReadonlyPreviewCanvas({
   if (sceneRenderError !== null) {
     return (
       <p className="history-preview-placeholder" role="alert">
-        This version could not be rendered safely.
+        {t("history.preview.renderFailed")}
       </p>
     );
   }
   if (!isPreparedForScene || previewUrl === null) {
     return (
       <p className="history-preview-placeholder" role="status">
-        Preparing version preview…
+        {t("history.preview.preparing")}
       </p>
     );
   }
@@ -136,12 +139,12 @@ export function ReadonlyPreviewCanvas({
       style={{ height: "100%", width: "100%" }}
     >
       <img
-        alt="Read-only version canvas"
+        alt={t("history.preview.imageAlt")}
         onError={() => {
           if (activeSceneRef.current !== scene || preview?.source !== scene) {
             return;
           }
-          const error = new Error("The static version preview could not load.");
+          const error = new LocalizedError("history.preview.staticLoadFailed");
           URL.revokeObjectURL(previewUrl);
           setPreview(null);
           setRenderError({ source: scene, error });

@@ -122,8 +122,8 @@ export function CanvasMainMenu({
             >
               <option value="system">{t("menu.canvas.languageSystem")}</option>
               {/* Language self-names stay untranslated in both UI languages. */}
-              <option value="en">English</option>
-              <option value="zh-CN">简体中文</option>
+              <option value="en">{t("language.autonym.en")}</option>
+              <option value="zh-CN">{t("language.autonym.zhCN")}</option>
             </select>
             <svg
               aria-hidden="true"

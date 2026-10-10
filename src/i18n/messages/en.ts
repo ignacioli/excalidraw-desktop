@@ -1,6 +1,14 @@
 // English is the source of every message key. Keep this file to TypeScript
 // syntax that Node can strip directly: scripts/native-menu-check.mjs imports it.
+import { documentsEn } from "./documents.ts";
+import { historyEn } from "./history.ts";
+import { shellEn } from "./shell.ts";
+
 export const en = {
+  ...shellEn,
+  ...documentsEn,
+  ...historyEn,
+
   "language.autonym.en": "English",
   "language.autonym.zhCN": "简体中文",
 

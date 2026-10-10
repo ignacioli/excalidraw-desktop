@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { useI18n, type MessageKey } from "../i18n";
 import type { ThemeController } from "./theme/themeController";
 import type { ModePreference } from "./theme/types";
 
@@ -8,14 +9,15 @@ interface AppearanceControlProps {
 
 const options: ReadonlyArray<{
   value: ModePreference;
-  label: string;
+  label: MessageKey;
 }> = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "System" },
+  { value: "light", label: "appearance.light" },
+  { value: "dark", label: "appearance.dark" },
+  { value: "system", label: "appearance.system" },
 ];
 
 export function AppearanceControl({ controller }: AppearanceControlProps) {
+  const { t } = useI18n();
   const snapshot = useSyncExternalStore(
     controller.subscribe,
     controller.getSnapshot,
@@ -24,7 +26,7 @@ export function AppearanceControl({ controller }: AppearanceControlProps) {
 
   return (
     <fieldset className="appearance-control">
-      <legend>Appearance</legend>
+      <legend>{t("appearance.legend")}</legend>
       <div className="appearance-options">
         {options.map((option) => (
           <label className="appearance-option" key={option.value}>
@@ -35,7 +37,7 @@ export function AppearanceControl({ controller }: AppearanceControlProps) {
               type="radio"
               value={option.value}
             />
-            <span>{option.label}</span>
+            <span>{t(option.label)}</span>
           </label>
         ))}
       </div>

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useI18n, type MessageKey } from "../i18n";
 
 export type HistoryStateKind =
   | "loading"
@@ -18,50 +19,45 @@ export interface HistoryStateViewProps {
 }
 
 interface StateCopy {
-  title: string;
-  message: string;
+  title: MessageKey;
+  message: MessageKey;
   role: "status" | "alert";
 }
 
 const STATE_COPY: Record<HistoryStateKind, StateCopy> = {
   loading: {
-    title: "Loading version history",
-    message: "Retrieving saved versions…",
+    title: "history.state.loading.title",
+    message: "history.state.loading.message",
     role: "status",
   },
   empty: {
-    title: "No saved versions",
-    message: "Versions will appear here after this drawing is saved.",
+    title: "history.state.empty.title",
+    message: "history.state.empty.message",
     role: "status",
   },
   processing: {
-    title: "Updating version history",
-    message:
-      "This operation is still being processed. The current file is unchanged.",
+    title: "history.state.processing.title",
+    message: "history.state.processing.message",
     role: "status",
   },
   permissionDenied: {
-    title: "Version history access denied",
-    message:
-      "This file does not allow access to its version history. Check its permissions and try again.",
+    title: "history.state.permissionDenied.title",
+    message: "history.state.permissionDenied.message",
     role: "alert",
   },
   conflict: {
-    title: "Version history conflict",
-    message:
-      "The file changed outside Excalidraw Desktop. Resolve the conflict before restoring a version.",
+    title: "history.state.conflict.title",
+    message: "history.state.conflict.message",
     role: "alert",
   },
   resourceUnavailable: {
-    title: "Version resource unavailable",
-    message:
-      "A saved version or one of its resources is unavailable. The current file has not changed.",
+    title: "history.state.resourceUnavailable.title",
+    message: "history.state.resourceUnavailable.message",
     role: "alert",
   },
   error: {
-    title: "Version history could not be loaded",
-    message:
-      "Your current file is unchanged. Try loading version history again.",
+    title: "history.state.error.title",
+    message: "history.state.error.message",
     role: "alert",
   },
 };
@@ -75,11 +71,12 @@ export function HistoryStateView({
   state,
   message,
   onRetry,
-  retryLabel = "Try again",
+  retryLabel,
   children,
 }: HistoryStateViewProps) {
+  const { t } = useI18n();
   const copy = STATE_COPY[state];
-  const announcement = message ?? copy.message;
+  const announcement = message ?? t(copy.message);
 
   return (
     <section
@@ -88,12 +85,12 @@ export function HistoryStateView({
       className={`history-state history-state--${state}`}
       role={copy.role}
     >
-      <h2>{copy.title}</h2>
+      <h2>{t(copy.title)}</h2>
       {announcement.length > 0 ? <p>{announcement}</p> : null}
       {children}
       {onRetry !== undefined && state !== "empty" ? (
         <button className="primary-action" onClick={onRetry} type="button">
-          {retryLabel}
+          {retryLabel ?? t("history.state.retry")}
         </button>
       ) : null}
     </section>
