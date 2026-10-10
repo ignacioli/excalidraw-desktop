@@ -48,6 +48,42 @@ describe("ContextMenu", () => {
     expect(triggerRef.current).toHaveFocus();
   });
 
+  it("marks the trigger open until focus has returned to it on Escape", async () => {
+    const user = userEvent.setup();
+    const triggerRef = createRef<HTMLButtonElement>();
+    const trigger = (
+      <button ref={triggerRef} type="button">
+        Actions for notes
+      </button>
+    );
+    const { rerender } = render(
+      <>
+        {trigger}
+        <ContextMenu
+          anchor={{ x: 40, y: 50 }}
+          items={[{ id: "rename", label: "Rename", onSelect: vi.fn() }]}
+          label="Actions for notes"
+          onDismiss={vi.fn()}
+          triggerRef={triggerRef}
+        />
+      </>,
+    );
+    const button = triggerRef.current;
+    if (button === null) throw new Error("trigger did not render");
+    expect(button).toHaveAttribute("data-menu-open", "true");
+    const markedWhenFocused: (string | null)[] = [];
+    button.addEventListener("focus", () =>
+      markedWhenFocused.push(button.getAttribute("data-menu-open")),
+    );
+
+    await user.keyboard("{Escape}");
+    rerender(trigger);
+
+    expect(button).toHaveFocus();
+    expect(markedWhenFocused).toEqual(["true"]);
+    expect(button).not.toHaveAttribute("data-menu-open");
+  });
+
   it("dismisses on Tab without restoring the trigger so focus can leave", async () => {
     const user = userEvent.setup();
     const triggerRef = createRef<HTMLButtonElement>();
