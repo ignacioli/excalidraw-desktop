@@ -8,7 +8,7 @@ Feature 004 的唯一当前状态见[本地版本历史验证索引](local-versi
 
 ## Feature 005 Polish 验证（T051/T052，2026-10-10）
 
-范围：双语界面、精选画布偏好、macOS 原生菜单。门禁绑定产品提交 `0d9aba5`（分支 `feat/preferences-i18n-menu`）；物理机 Mac17,9（Apple M5 Pro，48 GB），macOS 26.6.2（25G83），WebKit 21624.5.1.11.3。均为物理机诊断运行，**不是**声明的参考 VM 运行；参考 VM 测量为缺口。
+范围：双语界面、精选画布偏好、macOS 原生菜单。门禁绑定产品提交 `0d9aba5`（分支 `feat/preferences-i18n-menu`；完整 e2e 另在合并 main 后复跑）；物理机 Mac17,9（Apple M5 Pro，48 GB），macOS 26.6.2（25G83），WebKit 21624.5.1.11.3。均为物理机诊断运行，**不是**声明的参考 VM 运行；参考 VM 测量为缺口。
 
 ### T051 门禁
 
@@ -19,7 +19,7 @@ Feature 004 的唯一当前状态见[本地版本历史验证索引](local-versi
 | `pnpm build` | PASS（仅既有 chunk-size 警告） |
 | `cargo fmt --check` / `cargo clippy --all-targets -D warnings` | PASS |
 | `cargo test` | PASS，252 tests |
-| `APP_E2E=1 pnpm e2e`（完整浏览器套件） | 142 passed / 21 failed / 78 skipped；21 个失败与 `origin/main` 上同样失败的用例逐一相同（History 预览 harness 未设 `VITE_E2E_HARNESS=1`、可靠性用例选中非 harness 二进制、单一 Current Workspace 设计后的过时断言），无新增回归 |
+| `APP_E2E=1 pnpm e2e`（完整浏览器套件） | 合并 `origin/main`（含 e2e 基线修复与树行菜单焦点修复）后：161 passed / 0 failed / 80 skipped（原生与可靠性用例按明示原因跳过）。合并前在 `0d9aba5` 为 142 passed / 21 failed，21 个均为 main 上同样失败的过时用例 |
 | `pnpm native:menu:check`（debug 构建 `pnpm tauri build --debug --no-bundle`） | `(en-US, zh-Hans)`、`(zh-Hans-CN, en-US)`、`(fr-FR)` 三组各 `PASS 95 checks`，exit 0，无残留进程 |
 
 首轮完整 e2e 曾出现第 22 个失败（`preferences-i18n-language.spec.ts` 回退英文用例）：pin 侧栏后 reload，`openWorkspaceSidebar` 在 shell 渲染前判断侧栏不可见并点击 toggle，反而关闭了随后渲染出的已 pin 侧栏。修复在 `0d9aba5`（helper 先等 toggle 可见再判断），受影响 spec 8 workers 并发 62/62 PASS，完整套件复跑恢复为上表结果。

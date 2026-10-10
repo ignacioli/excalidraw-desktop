@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { en } from "../../src/i18n/messages/en.ts";
 import {
   emitUiInteractionFileChanged,
   getUiInteractionHarnessState,
@@ -55,7 +56,10 @@ test("tab close button, context menu, middle-click, and Cmd/Ctrl+W close Open Do
     menu.getByRole("menuitem", { name: "Close Others", exact: true }),
   ).toBeVisible();
   await expect(
-    menu.getByRole("menuitem", { name: "Close Tabs to the Right", exact: true }),
+    menu.getByRole("menuitem", {
+      name: "Close Tabs to the Right",
+      exact: true,
+    }),
   ).toBeVisible();
   await menu.getByRole("menuitem", { name: "Close", exact: true }).click();
   await expect(two).toHaveCount(0);
@@ -103,7 +107,8 @@ test("Close Others and Close Tabs to the Right stop at the first failure", async
   await expect(tabNamed(page, "fail")).toBeVisible();
   await expect(tabNamed(page, "later")).toBeVisible();
   await expect(page.getByRole("tab")).toHaveCount(3);
-  await expect(page.getByRole("status")).toContainText(CLOSE_FAILURE.message);
+  // IPC errors are shown by code, never by the backend message.
+  await expect(page.getByRole("status")).toContainText(en["error.IO_ERROR"]);
   expect(await closeInvocations(page)).toHaveLength(1);
 
   const closeOthers = (await openTabContextMenu(page, "keep")).getByRole(
@@ -247,7 +252,9 @@ test("closing the last drawing tab keeps the window shell and Files sidebar", as
   await expect(
     page.getByRole("navigation", { name: "Open drawings" }),
   ).toBeVisible();
-  await expect(page.getByRole("tablist", { name: "Drawing tabs" })).toBeVisible();
+  await expect(
+    page.getByRole("tablist", { name: "Drawing tabs" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("complementary", { name: "Files" }),
   ).toBeAttached();
@@ -282,7 +289,10 @@ test("vertical wheel on the tab bar cycles one tab per notch and ignores horizon
   await expect(tabNamed(page, "two")).toHaveAttribute("aria-selected", "true");
 
   await dispatchTabBarWheel(page, { deltaX: 0, deltaY: 120 });
-  await expect(tabNamed(page, "three")).toHaveAttribute("aria-selected", "true");
+  await expect(tabNamed(page, "three")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await waitForWheelCooldown(page);
 
   await dispatchTabBarWheel(page, { deltaX: 0, deltaY: 120 });
@@ -339,7 +349,9 @@ async function openDrawings(page: Page, displayNames: readonly string[]) {
     await workspaceRow.click();
   }
   for (const displayName of displayNames) {
-    await page.getByRole("treeitem", { name: displayName, exact: true }).click();
+    await page
+      .getByRole("treeitem", { name: displayName, exact: true })
+      .click();
     await expect(tabNamed(page, displayName)).toBeVisible();
   }
 }
@@ -374,8 +386,9 @@ async function dispatchTabBarWheel(
     shiftKey?: boolean;
   },
 ) {
-  await page.getByRole("navigation", { name: "Open drawings" }).evaluate(
-    (element, eventInit) => {
+  await page
+    .getByRole("navigation", { name: "Open drawings" })
+    .evaluate((element, eventInit) => {
       element.dispatchEvent(
         new WheelEvent("wheel", {
           deltaX: eventInit.deltaX,
@@ -388,9 +401,7 @@ async function dispatchTabBarWheel(
           cancelable: true,
         }),
       );
-    },
-    init,
-  );
+    }, init);
 }
 
 async function waitForWheelCooldown(page: Page) {
