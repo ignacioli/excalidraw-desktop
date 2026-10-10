@@ -11,6 +11,7 @@ pub mod history;
 pub mod indexing;
 pub mod locale;
 mod native_menu;
+mod native_menu_spec;
 pub mod security;
 mod watcher;
 pub mod workspace_entries;
@@ -222,8 +223,7 @@ pub fn run() {
         tauri::async_runtime::block_on(watcher_service.start_existing(app.handle().clone()))?;
         app.on_menu_event(crate::native_menu::handle_menu_event);
         crate::native_menu::register_validation_listener(app.handle());
-        let menu = crate::native_menu::build_menu(app.handle())?;
-        app.set_menu(menu)?;
+        crate::native_menu::install_menu(app.handle())?;
         // rAF-driven performance workloads stall when the window is
         // occluded (WebKit throttles occluded views); keep the test-only
         // measurement window unoccluded on busy diagnostic hosts.
@@ -240,6 +240,7 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_handshake,
         crate::native_menu::set_native_menu_enabled,
+        crate::native_menu::sync_native_menu,
         history_list,
         history_preview,
         history_mark,
@@ -284,6 +285,7 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_handshake,
         crate::native_menu::set_native_menu_enabled,
+        crate::native_menu::sync_native_menu,
         history_list,
         history_preview,
         history_mark,

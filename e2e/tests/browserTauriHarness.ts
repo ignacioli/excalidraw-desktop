@@ -41,6 +41,7 @@ export async function installBrowserTauriHarness(
         };
         __browserTauriEmit?: (event: string, payload: unknown) => void;
         __browserTauriArmCheckpointFailure?: () => void;
+        __browserTauriNativeMenuSync?: Record<string, unknown>;
         addEventListener(
           type: "keydown",
           listener: (event: {
@@ -163,6 +164,10 @@ export async function installBrowserTauriHarness(
             return {};
           }
           if (command === "native_menu_set_enabled") {
+            return {};
+          }
+          if (command === "native_menu_sync") {
+            browser.__browserTauriNativeMenuSync = args;
             return {};
           }
           if (command === "app_handshake") {

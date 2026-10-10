@@ -124,7 +124,10 @@ export async function installUs4Harness(
           if (command === "plugin:window|destroy") {
             return {};
           }
-          if (command === "native_menu_set_enabled") {
+          if (
+            command === "native_menu_set_enabled" ||
+            command === "native_menu_sync"
+          ) {
             return {};
           }
           if (command === "plugin:dialog|open") {

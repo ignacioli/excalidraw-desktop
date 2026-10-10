@@ -88,6 +88,11 @@ import {
   initializeBrowserThemeController,
   type ThemeController,
 } from "./theme/themeController";
+import { createNativeMenuSync } from "./nativeMenuSync";
+import {
+  initializeBrowserLocaleController,
+  type LocaleController,
+} from "../i18n";
 
 interface AppShellProps {
   onCreateDocument?: () => void | Promise<void>;
@@ -95,6 +100,7 @@ interface AppShellProps {
   workspaceInvoker?: CommandInvoker;
   selectWorkspaceDirectory?: () => Promise<string | null>;
   themeController?: ThemeController;
+  localeController?: LocaleController;
 }
 
 export function AppShell({
@@ -103,6 +109,7 @@ export function AppShell({
   workspaceInvoker: providedWorkspaceInvoker,
   selectWorkspaceDirectory = selectNativeWorkspaceDirectory,
   themeController = initializeBrowserThemeController(),
+  localeController = initializeBrowserLocaleController([]),
 }: AppShellProps) {
   const [interactionError, setInteractionError] = useState<string | null>(null);
   const performanceDriverRef = useRef<
@@ -414,6 +421,11 @@ export function AppShell({
     themeController.subscribe,
     themeController.getSnapshot,
     themeController.getSnapshot,
+  );
+  const localeSnapshot = useSyncExternalStore(
+    localeController.subscribe,
+    localeController.getSnapshot,
+    localeController.getSnapshot,
   );
   const clearWelcomeError = useCallback((): void => {
     setWelcomeError(null);
@@ -1120,8 +1132,38 @@ export function AppShell({
       onVersionHistory: openVersionHistory,
       onAppearance: (mode) =>
         void runAction(() => themeController.setModePreference(mode)),
+      onLanguage: (preference) => localeController.setPreference(preference),
     });
   });
+
+  const [syncNativeMenu] = useState(() =>
+    createNativeMenuSync(workspaceInvoker),
+  );
+  const forcedReadOnly =
+    activeSession !== undefined &&
+    (activeSession.saveState === "conflicted" ||
+      historyBusyDocumentIds.has(activeSession.id));
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) return;
+    void syncNativeMenu(localeSnapshot.resolvedLanguage, {
+      language: localeSnapshot.preference,
+      appearance: themeSnapshot.preference.modePreference,
+      hasDocument: activeSession !== undefined,
+      forcedReadOnly,
+      // The per-tab canvas preferences are fed in with the canvas menu.
+      toolLock: false,
+      grid: false,
+      snap: false,
+      zen: false,
+      viewMode: false,
+    }).catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+  }, [
+    activeSession,
+    forcedReadOnly,
+    localeSnapshot,
+    syncNativeMenu,
+    themeSnapshot.preference.modePreference,
+  ]);
 
   const historyMenuEnabled =
     hasNativeWindowRuntime() &&

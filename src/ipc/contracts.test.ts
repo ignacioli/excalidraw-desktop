@@ -158,7 +158,16 @@ describe("IPC v3 history contract", () => {
         | "versionHistory"
         | "appearanceSystem"
         | "appearanceLight"
-        | "appearanceDark";
+        | "appearanceDark"
+        | "languageSystem"
+        | "languageEn"
+        | "languageZhCn"
+        | "help"
+        | "toggleToolLock"
+        | "toggleGrid"
+        | "toggleSnap"
+        | "toggleZen"
+        | "toggleViewMode";
       validationId?: number;
     }>();
     expectTypeOf<

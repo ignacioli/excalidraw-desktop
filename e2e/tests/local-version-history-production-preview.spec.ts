@@ -217,7 +217,11 @@ async function installProductionHistoryHarness(
           >;
           return { ...response, pendingOpenPaths: [pendingPath] };
         }
-        if (command === "native_menu_set_enabled") return {};
+        if (
+          command === "native_menu_set_enabled" ||
+          command === "native_menu_sync"
+        )
+          return {};
         if (
           command === "history_replace" ||
           command === "history_mark" ||

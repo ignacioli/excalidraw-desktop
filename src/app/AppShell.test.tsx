@@ -16,6 +16,8 @@ import {
   type DocumentSession,
 } from "../documents/documentStore";
 import type { CommandInvoker } from "../ipc/client";
+import type { NativeMenuCommand } from "../ipc/contracts";
+import { LocaleController } from "../i18n";
 import { AppShell } from "./AppShell";
 import {
   SHELL_PREFERENCES_STORAGE_KEY,
@@ -25,17 +27,7 @@ import { useAppStore } from "./store";
 import { initializeBrowserThemeController } from "./theme/themeController";
 
 const nativeMenuHarness = vi.hoisted(() => ({
-  handler: undefined as
-    | ((
-        command:
-          | "save"
-          | "exportImage"
-          | "versionHistory"
-          | "appearanceSystem"
-          | "appearanceLight"
-          | "appearanceDark",
-      ) => void)
-    | undefined,
+  handler: undefined as ((command: NativeMenuCommand) => void) | undefined,
   cleanup: vi.fn(),
 }));
 const nativeRuntimeHarness = vi.hoisted(() => ({ enabled: false }));
@@ -777,7 +769,11 @@ describe("AppShell", () => {
       if (command === "workspace_list" || command === "workspace_recent_list") {
         return [];
       }
-      if (command === "native_menu_set_enabled") return {};
+      if (
+        command === "native_menu_set_enabled" ||
+        command === "native_menu_sync"
+      )
+        return {};
       if (command === "history_list") {
         return {
           documentId: "drawing",
@@ -827,6 +823,60 @@ describe("AppShell", () => {
     });
   });
 
+  it("switches the language from the native menu and syncs localized menu labels", async () => {
+    nativeRuntimeHarness.enabled = true;
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "clean"),
+    ]);
+    const storage = new Map<string, string>();
+    const localeController = new LocaleController({
+      storage: {
+        getItem: (key) => storage.get(key) ?? null,
+        setItem: (key, value) => {
+          storage.set(key, value);
+        },
+      },
+      preferredLanguages: ["en-US"],
+    });
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list" || command === "workspace_recent_list") {
+        return [];
+      }
+      if (
+        command === "native_menu_set_enabled" ||
+        command === "native_menu_sync"
+      )
+        return {};
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    const syncCalls = () =>
+      vi
+        .mocked(invoke)
+        .mock.calls.filter(([command]) => command === "native_menu_sync");
+
+    render(
+      <AppShell
+        localeController={localeController}
+        workspaceInvoker={{ invoke }}
+      />,
+    );
+    await waitFor(() => expect(syncCalls()).toHaveLength(1));
+    expect(syncCalls()[0]?.[1]).toMatchObject({
+      labels: { "file.save": "Save" },
+      state: { language: "system", hasDocument: true, forcedReadOnly: false },
+    });
+
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+    act(() => nativeMenuHarness.handler?.("languageZhCn"));
+
+    expect(localeController.getSnapshot().resolvedLanguage).toBe("zh-CN");
+    await waitFor(() => expect(syncCalls()).toHaveLength(2));
+    expect(syncCalls()[1]?.[1]).toMatchObject({
+      labels: { "file.save": "保存", "edit.undo": "撤销" },
+      state: { language: "zh-CN" },
+    });
+  });
+
   it("hides only the generic pending history explanation and preserves diagnostics", async () => {
     const user = userEvent.setup();
     nativeRuntimeHarness.enabled = true;
@@ -837,7 +887,11 @@ describe("AppShell", () => {
     const invoker = vi.fn(async (command: string) => {
       if (command === "workspace_list" || command === "workspace_recent_list")
         return [];
-      if (command === "native_menu_set_enabled") return {};
+      if (
+        command === "native_menu_set_enabled" ||
+        command === "native_menu_sync"
+      )
+        return {};
       if (command === "history_list") {
         listCount += 1;
         return {
@@ -897,7 +951,11 @@ describe("AppShell", () => {
     const invoker = vi.fn(async (command: string, args?: unknown) => {
       if (command === "workspace_list" || command === "workspace_recent_list")
         return [];
-      if (command === "native_menu_set_enabled") return {};
+      if (
+        command === "native_menu_set_enabled" ||
+        command === "native_menu_sync"
+      )
+        return {};
       if (command === "history_list") {
         const path = (args as { document: { path: string } }).document.path;
         if (path === "/tmp/a.excalidraw") {
@@ -1005,7 +1063,11 @@ describe("AppShell", () => {
     const invoker = vi.fn(async (command: string) => {
       if (command === "workspace_list" || command === "workspace_recent_list")
         return [];
-      if (command === "native_menu_set_enabled") return {};
+      if (
+        command === "native_menu_set_enabled" ||
+        command === "native_menu_sync"
+      )
+        return {};
       if (command === "history_list") {
         return { documentId: "drawing", items: [existing], listRevision: 1 };
       }
@@ -1106,7 +1168,11 @@ describe("AppShell", () => {
       if (command === "workspace_list" || command === "workspace_recent_list") {
         return [];
       }
-      if (command === "native_menu_set_enabled") return {};
+      if (
+        command === "native_menu_set_enabled" ||
+        command === "native_menu_sync"
+      )
+        return {};
       if (command === "history_list") {
         return {
           documentId: "drawing",
