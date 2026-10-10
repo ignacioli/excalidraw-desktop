@@ -4,7 +4,11 @@ import {
   type UiHarnessWorkspace,
   type UiHarnessWorkspaceEntry,
 } from "./uiInteractionHarness";
-import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
+import {
+  openWorkspaceSidebar,
+  persistCurrentWorkspace,
+  persistPinnedWorkspaceSidebar,
+} from "./workspaceSidebar";
 
 const WORKSPACES: readonly UiHarnessWorkspace[] = [
   {
@@ -56,7 +60,7 @@ const WORKSPACE_ENTRIES = WORKSPACES.flatMap((workspace) => [
   entry(workspace, "drawing", "anchor.excalidraw", "notes"),
 ]);
 
-test("three Workspaces render as one bounded native-scroll tree without overlap", async ({
+test("the Current Workspace renders as one bounded native-scroll tree without stacked roots or overlap", async ({
   page,
 }) => {
   await installUiInteractionHarness(page, {
@@ -66,6 +70,7 @@ test("three Workspaces render as one bounded native-scroll tree without overlap"
   await persistPinnedWorkspaceSidebar(
     page,
     WORKSPACES.map((workspace) => workspace.id),
+    WORKSPACES[0].id,
   );
   await page.goto("/");
 
@@ -73,10 +78,20 @@ test("three Workspaces render as one bounded native-scroll tree without overlap"
   const tree = workspaceRegion.getByRole("tree");
   await expect(tree).toHaveCount(1);
   await expect(tree).toBeVisible();
-  for (const workspace of WORKSPACES) {
+  await expect(
+    tree.getByRole("treeitem", { name: WORKSPACES[0].name, exact: true }),
+  ).toBeVisible();
+  await expect(
+    tree.getByRole("treeitem", { name: "notes", exact: true }),
+  ).toBeVisible();
+  await expect(
+    tree.getByRole("treeitem", { name: "drawing", exact: true }),
+  ).toBeVisible();
+  // Multiple mounted Workspace roots never stack in the Sidebar.
+  for (const workspace of WORKSPACES.slice(1)) {
     await expect(
       workspaceRegion.getByRole("treeitem", { name: workspace.name }),
-    ).toBeVisible();
+    ).toHaveCount(0);
   }
 
   const scrollMetrics = await tree.evaluate((element) => {
@@ -135,14 +150,18 @@ test("Workspace and entry menus support keyboard navigation, dismissal, and view
   await persistPinnedWorkspaceSidebar(
     page,
     WORKSPACES.map((workspace) => workspace.id),
+    WORKSPACES[0].id,
   );
   await page.goto("/");
 
   const workspaceRegion = page.getByRole("region", { name: "Workspaces" });
   const tree = workspaceRegion.getByRole("tree");
+  const notesRow = tree.getByRole("treeitem", { name: "notes", exact: true });
   const entryActions = workspaceRegion.getByRole("button", {
     name: "Actions for notes",
   }).first();
+  // Row actions are revealed only while the row has keyboard or pointer focus.
+  await notesRow.focus();
   await expect(entryActions).toBeVisible();
   await entryActions.focus();
   await entryActions.press("Enter");
@@ -176,11 +195,19 @@ test("Workspace and entry menus support keyboard navigation, dismissal, and view
 
   await entryActions.click();
   await expect(menu).toBeVisible();
-  await page.getByRole("main", { name: "Drawing canvas" }).click({
-    position: { x: 12, y: 12 },
+  // At this viewport the collision-adjusted menu covers the canvas top-left.
+  const canvas = page.getByRole("main", { name: "Drawing canvas" });
+  const canvasBox = await canvas.boundingBox();
+  expect(canvasBox).not.toBeNull();
+  await canvas.click({
+    position: {
+      x: (canvasBox?.width ?? 24) - 12,
+      y: (canvasBox?.height ?? 24) - 12,
+    },
   });
   await expect(menu).not.toBeVisible();
 
+  await notesRow.hover();
   await entryActions.click();
   await expect(menu).toBeVisible();
   await tree.evaluate((element) => {
@@ -196,13 +223,14 @@ test("Workspace and entry menus support keyboard navigation, dismissal, and view
   const workspaceActions = page.getByRole("button", {
     name: "Actions for Alpha",
   });
+  await tree.getByRole("treeitem", { name: "Alpha", exact: true }).hover();
   await workspaceActions.click();
   await expect(page.getByRole("menu")).toBeVisible();
   await page.getByRole("treeitem", { name: "Alpha" }).click();
   await expect(page.getByRole("menu")).not.toBeVisible();
 });
 
-test("refresh keeps the first surviving scroll anchor and restart restores tree focus at the top", async ({
+test("refresh keeps the first surviving scroll anchor and a restarted overlay focuses the tree at the top", async ({
   page,
 }) => {
   const rows = Array.from({ length: 80 }, (_, index) =>
@@ -216,7 +244,11 @@ test("refresh keeps the first surviving scroll anchor and restart restores tree 
     workspaces: [WORKSPACES[0]],
     entries: rows,
   });
-  await persistPinnedWorkspaceSidebar(page, [WORKSPACES[0].id]);
+  await persistPinnedWorkspaceSidebar(
+    page,
+    [WORKSPACES[0].id],
+    WORKSPACES[0].id,
+  );
   await installWorkspaceEventHarness(page);
   await page.goto("/");
 
@@ -267,7 +299,11 @@ test("refresh keeps the first surviving scroll anchor and restart restores tree 
     0,
   );
 
+  // A Pinned Sidebar never takes startup focus from the canvas; the tree
+  // captures focus when the Sidebar opens as an Overlay.
+  await persistCurrentWorkspace(page, WORKSPACES[0].id);
   await page.reload();
+  await openWorkspaceSidebar(page);
   const restartedTree = page.getByRole("tree");
   await expect(restartedTree).toBeVisible();
   await expect(restartedTree).toBeFocused();

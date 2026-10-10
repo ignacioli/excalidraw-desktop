@@ -23,6 +23,38 @@ export async function persistPinnedWorkspaceSidebar(
   expandedWorkspaceIds: readonly string[] = [],
   currentWorkspaceId: string | null = null,
 ): Promise<void> {
+  await persistShellPreferences(page, {
+    sidebarPinned: true,
+    expandedWorkspaceIds,
+    currentWorkspaceId,
+  });
+}
+
+/**
+ * Select the Current Workspace while keeping the default hidden Sidebar. Without
+ * a Current Workspace the shell starts on Welcome with an empty tree. Call
+ * before `goto`.
+ */
+export async function persistCurrentWorkspace(
+  page: Page,
+  currentWorkspaceId: string,
+  expandedWorkspaceIds: readonly string[] = [currentWorkspaceId],
+): Promise<void> {
+  await persistShellPreferences(page, {
+    sidebarPinned: false,
+    expandedWorkspaceIds,
+    currentWorkspaceId,
+  });
+}
+
+async function persistShellPreferences(
+  page: Page,
+  preferences: {
+    sidebarPinned: boolean;
+    expandedWorkspaceIds: readonly string[];
+    currentWorkspaceId: string | null;
+  },
+): Promise<void> {
   await page.addInitScript(
     ({ key, snapshot }) => {
       localStorage.setItem(key, snapshot);
@@ -31,10 +63,10 @@ export async function persistPinnedWorkspaceSidebar(
       key: SHELL_PREFERENCES_STORAGE_KEY,
       snapshot: JSON.stringify({
         version: 1,
-        sidebarPinned: true,
+        sidebarPinned: preferences.sidebarPinned,
         sidebarWidth: 360,
-        expandedWorkspaceIds: [...expandedWorkspaceIds],
-        currentWorkspaceId,
+        expandedWorkspaceIds: [...preferences.expandedWorkspaceIds],
+        currentWorkspaceId: preferences.currentWorkspaceId,
       }),
     },
   );
