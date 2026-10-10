@@ -106,3 +106,33 @@ for (const preference of PREFERENCES) {
     await closeCanvasMenu(page);
   });
 }
+
+test("native Help opens the SDK help dialog and Escape returns focus to the editor", async ({
+  page,
+}) => {
+  await focusCanvas(page);
+  await emitNativeCommand(page, "help");
+  // The SDK help dialog is unnamed; identify it by its Help heading.
+  const help = page.getByRole("dialog").filter({
+    has: page.getByRole("heading", { name: "Help", level: 2 }),
+  });
+  await expect(help).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(help).toHaveCount(0);
+  await expect
+    .poll(() =>
+      activeEditor(page).evaluate((editor) =>
+        editor.contains(document.activeElement),
+      ),
+    )
+    .toBe(true);
+});
+
+test("native Help is ignored without an open document", async ({ page }) => {
+  await page.getByRole("button", { name: "Close Untitled" }).first().click();
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  await emitNativeCommand(page, "help");
+  await page.waitForTimeout(200);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
