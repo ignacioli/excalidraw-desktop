@@ -56,11 +56,22 @@ The shell removes rather than restyles old chrome. All visible counts below must
 - A visible tab-strip scrollbar, a thick or persistent Sidebar scrollbar, a permanently visible horizontal ellipsis, and triangle, letter, diamond, or Unicode placeholder glyphs for directory/drawing identity;
 - Header-action overflow that hides the Current Workspace's compact `New Drawing`, `New Folder`, Collapse-or-Expand-All, or Refresh actions.
 
-Accessible names, tooltips, keyboard operation, hidden semantic labels, and error copy remain required; the zero count applies only to visible obsolete or duplicate chrome. `New Drawing` is a compact Current Workspace-header action and targets the selected directory or the workspace root. `Save To` and `Export Image` retain their SDK or application/menu-level owner; no duplicate top-level Export is introduced. Appearance remains an application/menu-level preference, not standalone shell chrome.
+Accessible names, tooltips, keyboard operation, hidden semantic labels, and error copy remain required; the zero count applies only to visible obsolete or duplicate chrome. `New Drawing` is a compact Current Workspace-header action and targets the selected directory or the workspace root. `Save To` and `Export Image` retain their SDK or application/menu-level owner; no duplicate top-level Export is introduced. Appearance remains an application/menu-level preference, not standalone shell chrome; the canvas main menu Theme control and the native View > Appearance menu write the same application preference.
 
-Application-shell UI copy is English in this version.
+### Interface language
 
-The first version does not recreate the official PWA main menu, browser/PWA title bar, Excalidraw+ entry points, account UI, realtime collaboration, or cloud-service controls.
+The application supports two interface languages: English and Simplified Chinese (简体中文). The language preference is `Follow system`, `English`, or `简体中文`, and first launch defaults to `Follow system`.
+
+- `Follow system` uses the first supported language in the macOS preferred-language list and falls back to English when the list has none. A change to the macOS preferred languages takes effect at the next launch.
+- A manual choice applies immediately to the application shell, the canvas editor, and the application-controlled native menus, and persists across restarts.
+- Language is application-local preference, never document content.
+- System-owned dialogs and panels (open/save panels, permission prompts) follow macOS and are not controlled by the application.
+
+### Canvas main menu
+
+The canvas main menu is composed only through the SDK's public `MainMenu` API: SDK default items for Find on canvas, Help, Theme, and Canvas background, plus a flat `Preferences` group (Tool lock, Toggle grid, Snap to objects, Zen mode, View mode, Language). It uses the SDK's own menu visuals; the approved layout lives in `docs/design/preferences-i18n/`.
+
+The application does not recreate the rest of the official PWA main menu (Open, Save to, Export, Reset canvas, Excalidraw links), the browser/PWA title bar, Excalidraw+ entry points, sign-in or account UI, realtime collaboration, or cloud-service controls.
 
 ## Official Excalidraw boundary
 

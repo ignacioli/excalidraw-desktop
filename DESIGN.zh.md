@@ -56,11 +56,22 @@
 - 可见 tab-strip scrollbar、粗大或常驻 Sidebar scrollbar、永久可见的 horizontal ellipsis，以及用于目录/图纸 identity 的三角、字母、菱形或 Unicode placeholder glyph；
 - 使 Current Workspace 紧凑 `New Drawing`、`New Folder`、Collapse-or-Expand-All 或 Refresh action 不可见的 header-action overflow。
 
-accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍是必须项；零计数仅针对可见的 obsolete 或 duplicate chrome。`New Drawing` 是紧凑的 Current Workspace-header action，目标是 selected directory 或 workspace root。`Save To` 与 `Export Image` 保持由 SDK 或 application/menu-level owner 负责；不得新增重复 top-level Export。Appearance 是 application/menu-level preference，不是独立 shell chrome。
+accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍是必须项；零计数仅针对可见的 obsolete 或 duplicate chrome。`New Drawing` 是紧凑的 Current Workspace-header action，目标是 selected directory 或 workspace root。`Save To` 与 `Export Image` 保持由 SDK 或 application/menu-level owner 负责；不得新增重复 top-level Export。Appearance 是 application/menu-level preference，不是独立 shell chrome；画布主菜单的 Theme 控件与原生 View > Appearance 菜单写入同一个应用偏好。
 
-本版本应用壳层界面文案为英文。
+### 界面语言
 
-第一版不复刻官方 PWA 主菜单、浏览器/PWA 标题栏、Excalidraw+ 入口、账号界面、实时协作或云服务控件。
+应用支持两种界面语言：English 与简体中文。语言偏好取值为「跟随系统」「English」「简体中文」，首次启动默认「跟随系统」。
+
+- 「跟随系统」取 macOS 首选语言列表中第一个受支持的语言，列表中没有受支持语言时使用 English。macOS 首选语言的变化在下次启动时生效。
+- 手动选择立即作用于应用壳层、画布编辑器和应用控制的原生菜单，并跨重启保留。
+- 语言是应用本地偏好，不写入文档。
+- 系统拥有的对话框和面板（打开/保存面板、权限提示）跟随 macOS，不受应用控制。
+
+### 画布主菜单
+
+画布主菜单只通过 SDK 公开的 `MainMenu` API 组合：SDK 默认项 Find on canvas、Help、Theme、Canvas background，加上平铺的 `Preferences` 分组（Tool lock、Toggle grid、Snap to objects、Zen mode、View mode、Language）。它使用 SDK 自带的菜单视觉；已批准的布局见 `docs/design/preferences-i18n/`。
+
+应用不复刻官方 PWA 主菜单的其余部分（Open、Save to、Export、Reset canvas、Excalidraw links）、浏览器/PWA 标题栏、Excalidraw+ 入口、登录或账号界面、实时协作或云服务控件。
 
 ## 官方 Excalidraw 边界
 
