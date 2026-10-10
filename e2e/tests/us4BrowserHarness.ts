@@ -43,6 +43,16 @@ export async function installUs4Harness(
           state: Us4State;
           emit(event: string, payload: unknown): void;
         };
+        addEventListener(
+          type: "keydown",
+          listener: (event: {
+            key: string;
+            metaKey: boolean;
+            ctrlKey: boolean;
+            altKey: boolean;
+            preventDefault(): void;
+          }) => void,
+        ): void;
       };
 
       interface Us4State {
@@ -234,6 +244,18 @@ export async function installUs4Harness(
         },
       };
       browser.__us4 = { state, emit };
+      // The desktop shell leaves Command-S to the native File > Save
+      // accelerator; deliver it the way the native menu does.
+      browser.addEventListener("keydown", (event) => {
+        if (
+          event.key.toLowerCase() === "s" &&
+          (event.metaKey || event.ctrlKey) &&
+          !event.altKey
+        ) {
+          event.preventDefault();
+          emit("native-menu-command", { command: "save" });
+        }
+      });
     },
     { files: [...initialFiles], emptyScene: EMPTY_SCENE },
   );

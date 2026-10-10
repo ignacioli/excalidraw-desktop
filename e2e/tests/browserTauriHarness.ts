@@ -39,6 +39,16 @@ export async function installBrowserTauriHarness(
         };
         __browserTauriEmit?: (event: string, payload: unknown) => void;
         __browserTauriArmCheckpointFailure?: () => void;
+        addEventListener(
+          type: "keydown",
+          listener: (event: {
+            key: string;
+            metaKey: boolean;
+            ctrlKey: boolean;
+            altKey: boolean;
+            preventDefault(): void;
+          }) => void,
+        ): void;
       };
 
       const browser = globalThis as unknown as HarnessWindow;
@@ -286,6 +296,20 @@ export async function installBrowserTauriHarness(
       browser.__browserTauriArmCheckpointFailure = () => {
         checkpointFailureArmed = true;
       };
+      // The desktop shell leaves Command-S to the native File > Save
+      // accelerator; deliver it the way the native menu does.
+      browser.addEventListener("keydown", (event) => {
+        if (
+          event.key.toLowerCase() === "s" &&
+          (event.metaKey || event.ctrlKey) &&
+          !event.altKey
+        ) {
+          event.preventDefault();
+          browser.__browserTauriEmit?.("native-menu-command", {
+            command: "save",
+          });
+        }
+      });
     },
     {
       path: documentPath,

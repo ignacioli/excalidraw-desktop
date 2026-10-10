@@ -712,6 +712,42 @@ describe("AppShell", () => {
     expect(nativeMenuHarness.cleanup).toHaveBeenCalledOnce();
   });
 
+  it("leaves Command-S to the native Save menu so one press saves once", async () => {
+    const user = userEvent.setup();
+    nativeRuntimeHarness.enabled = true;
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "dirty"),
+    ]);
+    const checkpoint = vi
+      .spyOn(documentManager, "checkpointActive")
+      .mockResolvedValue();
+
+    render(<AppShell />);
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+    await user.keyboard("{Meta>}s{/Meta}");
+    expect(checkpoint).not.toHaveBeenCalled();
+
+    nativeMenuHarness.handler?.("save");
+    expect(checkpoint).toHaveBeenCalledOnce();
+    expect(checkpoint).toHaveBeenCalledWith("manualSave");
+  });
+
+  it("saves once from the Command-S keydown outside the native runtime", async () => {
+    const user = userEvent.setup();
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "dirty"),
+    ]);
+    const checkpoint = vi
+      .spyOn(documentManager, "checkpointActive")
+      .mockResolvedValue();
+
+    render(<AppShell />);
+    await user.keyboard("{Meta>}s{/Meta}");
+
+    expect(checkpoint).toHaveBeenCalledOnce();
+    expect(checkpoint).toHaveBeenCalledWith("manualSave");
+  });
+
   it("reports native export as unavailable until an active editor is ready", async () => {
     nativeRuntimeHarness.enabled = true;
     setDocumentSessions([

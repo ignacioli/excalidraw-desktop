@@ -1349,6 +1349,9 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
+    // The native File > Save accelerator owns Command-S in the desktop shell;
+    // handling the keydown as well would save twice per press.
+    if (hasNativeWindowRuntime()) return;
     const handleSaveShortcut = (event: KeyboardEvent) => {
       if (
         event.key.toLowerCase() === "s" &&
