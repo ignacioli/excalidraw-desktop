@@ -1,4 +1,4 @@
-# 验证证据汇总（005 实施中；004 已接受；003 已完成；001/002 历史）
+# 验证证据汇总（005 已接受；004 已接受；003 已完成；001/002 历史）
 
 **2026-10-04负责人最终接受记录：** Feature 004的T049完整物理测量已归档；owner在获知诊断性能FAIL与历史原始记录字段缺口后明确回复“接受”，T054及Phase 7关闭。准确范围见[唯一当前索引](local-version-history-validation-index.md)。该接受允许继续本地准备0.4.0，不表示全部性能预算PASS或已发布。
 
@@ -43,6 +43,8 @@ Feature 004 的唯一当前状态见[本地版本历史验证索引](local-versi
 预算：冷启动 ≤ 2 s、空闲 RSS ≤ 500 MB。所有完成的运行两项均 pass。按本 feature 约定不建证据封存目录，原始 JSON 报告未入库。
 
 另有一次候选尝试作废、未计入：未设 `EXCALIDRAW_E2E_BINARY` 时，`resolveDesktopBinary` 优先选中了 `target/release/bundle/macos/Excalidraw.app` 中先前遗留的旧包，而非本次 `--no-bundle` 产物。
+
+**负责人体验后的最终候选（2026-10-11，`dddab2f`）**：三项壳层改进（共享菜单与版本历史行菜单改用 SDK 下拉菜单度量、Tab 菜单 Close All、行悬停显示路径）及浮层侧栏去阴影完成后复跑：`pnpm lint`/`typecheck` PASS，`pnpm test` 74 files / 597 tests PASS，完整浏览器 e2e 162 passed / 0 failed / 80 skipped；负责人在该 build 上复验通过。这些改动不涉及原生菜单与启动路径，`native:menu:check` 与 T052 测量未重跑。
 
 **candidate-1 的 ready 超时未归因**：同一候选二进制其余 3 次运行 30/30 冷启动全部就绪；40 次 handshake 冷启动无挂起；Feature 004 的物理基线也曾出现同类间歇性 ready 超时（见下方 2026-09-29 快照）。测量期间操作员在同机工作，窗口可能被遮挡，但无法对应到样本，因此既不记为产品性能失败，也不能排除候选特有的间歇性启动问题。残余风险：首屏渲染等待 `app_handshake` 且无超时，若该 IPC 不返回则不会渲染；本轮未观察到此情况。
 

@@ -75,6 +75,6 @@
 
 负责人集中体验（2026-10-11，候选 build `cf33b4b`，production `.app`，二进制 SHA-256 前缀 `94c2ccbb3f29f965`）：**接受**。体验覆盖首次启动跟随系统语言、中文输入法组合中切换语言、画布菜单与原生 Appearance 三态主题和 `Shift+Option+D`、两个 Tab 的画布偏好切换/保存重开/重启、外部修改冲突强制 View mode、中英文菜单文案与 Help。
 
-同次体验提出三项壳层改进（不属于本 feature 的验收缺陷，作为同一 PR 内的后续修复另行验证）：浅色模式下侧栏底色与 Excalidraw PWA 的色差；工作区树行 ⋮ 菜单与 Tab 右键菜单的视觉与版本历史行菜单不一致，Tab 右键菜单缺少 Close All；侧栏行悬停显示文件路径。
+同次体验提出三项壳层改进（不属于本 feature 的验收缺陷，在同一 PR 内修复）：浅色模式下侧栏底色与 Excalidraw PWA 的色差；工作区树行 ⋮ 菜单与 Tab 右键菜单的视觉，Tab 右键菜单缺少 Close All；侧栏行悬停显示文件路径。结论（2026-10-11，负责人在候选 `dddab2f` 上复验通过）：侧栏底色经 DOM 计算样式核实已是 `#ffffff`，未改；壳层菜单与版本历史行菜单统一采用 SDK 下拉菜单度量；新增 Close All；行悬停以原生 tooltip 显示完整路径（home 缩写 `~`）；另按负责人要求去掉浮层侧栏阴影。
 
 本记录为负责人体验结论，与自动门禁结果（见 `docs/evidence/validation-summary.md`）分开。
