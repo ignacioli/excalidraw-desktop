@@ -59,7 +59,7 @@ Anatomy：content列依次summary → formatted time · source → status badge�
 
 Anatomy：目标身份/摘要 → Mark或Unmark → separator → Delete。引用共享menu/focus规则；不能仅提供图标而丢失可访问名称。
 
-- 180×116参考尺寸，menu title截断保留全名；危险动作用共享danger。
+- 宽 180px，度量采用 Excalidraw SDK 下拉菜单（面板内边距与圆角 0.5rem、菜单项 2rem、字号 0.875rem、island 阴影，无边框）；menu title截断保留全名；危险动作用共享danger。2026-10-11 负责人决定以此取代高保真的 180×116 / 40px 菜单项，与壳层 `ContextMenu` 一致；高保真截图中的菜单尺寸不再作为验收依据。
 - 目标绑定document+version，选择变化不能悄悄重定向已打开菜单；Escape返回触发器；顶部/底部行菜单均不被滚动区域裁切。
 - unavailable不意味着所有动作都禁用；沿用安全后端能力，preview/restore禁用，Mark/Delete按既有contract决定。
 

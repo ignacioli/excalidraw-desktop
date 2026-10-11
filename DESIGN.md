@@ -130,7 +130,7 @@ The approved shell geometry uses a 4/8/12/16/24 px spacing scale; 8 px control a
 - Prefer semantic HTML and controls that match platform conventions. Every interactive element must have an accessible name and a visible focus indicator.
 - hover, active, selected, disabled, loading, empty, error, conflict, permission-denied, and offline are part of the component definition.
 - Tabs must show the file name and must not rely on icons alone; unsaved state uses both a visible marker and accessible text. The close-control slot stays reserved so titles do not jump.
-- At most one context menu is open. The same trigger toggles it; another trigger replaces it. Shell context menus use the Excalidraw SDK dropdown metrics (0.5rem panel padding and radius, 2rem items, 0.875rem text, island shadow); destructive items use the danger color after a separator.
+- At most one context menu is open. The same trigger toggles it; another trigger replaces it. Shell context menus and the Local Version History row menu use the Excalidraw SDK dropdown metrics (0.5rem panel padding and radius, 2rem items, 0.875rem text, island shadow); destructive items use the danger color after a separator.
 - File hierarchy, the active document, selection, warnings, and conflicts must not be expressed by color alone. Drawing rows in the Workspace Sidebar use a file icon, never a canvas thumbnail or a literal text dot.
 - When a modal dialog opens, focus moves into it and is constrained there; when it closes, focus returns to the triggering control. One dialog layer at a time; do not use `window.prompt` or `window.confirm`.
 - Motion exists only to aid state understanding and stays brief; respect reduced motion, and avoid animated layout jumps around the canvas.

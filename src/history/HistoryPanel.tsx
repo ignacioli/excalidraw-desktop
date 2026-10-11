@@ -27,6 +27,9 @@ import { HistoryPreview, type HistoryPreviewState } from "./HistoryPreview";
 import { HistoryStateView, type HistoryStateKind } from "./HistoryStates";
 import "./history.css";
 
+// Tallest row menu (title, two items, separator) under the SDK menu metrics.
+const ACTIONS_MENU_HEIGHT = 120;
+
 export type HistoryPanelStatus = HistoryStateKind | "available";
 
 export interface HistorySuccessNotice {
@@ -1008,7 +1011,7 @@ export function HistoryPanel({
       scrollport !== null &&
       scrollport.getBoundingClientRect().bottom -
         trigger.getBoundingClientRect().top <
-        116;
+        ACTIONS_MENU_HEIGHT;
     setOpenActionsTarget(
       isTargetOpen ? null : { documentId: activeDocumentKey, item, upward },
     );

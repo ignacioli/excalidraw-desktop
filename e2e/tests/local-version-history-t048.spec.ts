@@ -253,6 +253,22 @@ test("keeps the 360 px default drawer inside a narrow viewport", async ({
   }
   await expect(menu).toBeVisible();
   await expect(menu).toContainText("v-049");
+  // The row menu uses the SDK dropdown metrics; Delete is unfocused.
+  const deleteStyle = await menu
+    .getByRole("menuitem", { name: "Delete version" })
+    .evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        background: style.backgroundColor,
+        height: style.height,
+        fontSize: style.fontSize,
+      };
+    });
+  expect(deleteStyle).toEqual({
+    background: "rgba(0, 0, 0, 0)",
+    height: "32px",
+    fontSize: "14px",
+  });
   expect(menuBox.x).toBeGreaterThanOrEqual(panelBox.x);
   expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(
     panelBox.x + panelBox.width,
