@@ -130,11 +130,11 @@ accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍�
 - 优先使用语义化 HTML 和符合平台认知的控件。每个交互元素必须具有 accessible name 和可见焦点。
 - hover、active、selected、disabled、loading、empty、error、conflict、permission-denied 与 offline 都是组件定义的一部分。
 - 标签页必须显示文件名，不得只依赖图标；未保存状态同时使用可见标记与无障碍文本。关闭控件位置始终预留，标题不得因此跳动。
-- 同一时刻最多打开一个上下文菜单。同一触发器切换开关；另一触发器直接替换。壳层上下文菜单沿用本地版本历史行菜单的构造：3px 内边距面板、40px 菜单项、悬停底色，破坏性操作以 danger 色置于分隔线之后。
+- 同一时刻最多打开一个上下文菜单。同一触发器切换开关；另一触发器直接替换。壳层上下文菜单采用 Excalidraw SDK 下拉菜单的度量（面板内边距与圆角 0.5rem、菜单项 2rem、字号 0.875rem、island 阴影）；破坏性操作以 danger 色置于分隔线之后。
 - 文件层级、活动文档、选中、警告和冲突不得只用颜色表达。工作区侧边栏中的图纸行使用文件图标，不得使用画布缩略图或文字圆点。
 - 模态对话框打开时焦点进入并被约束在其中；关闭后焦点返回触发控件。同一时刻只有一层对话框；不得使用 `window.prompt` 或 `window.confirm`。
 - 动效只服务于状态理解且保持短暂；必须尊重 reduced motion，避免画布周围发生动画布局跳动。
-- 阴影只表达浮动控件、菜单和对话框的层级；常驻面板使用边框或明度差分隔。
+- 阴影只表达浮动控件、菜单和对话框的层级；常驻面板使用边框或明度差分隔。Overlay Sidebar 只用边框，不加阴影。
 - shell icon control 使用冻结的 16×16 icon 和 32×32 hit target。紧凑图标控件默认无填充、无边框，前景色为 secondary（Light `#5C5C5C`、Dark `#CED4DA`），仅在交互时使用语义 hover/pressed 表面与更高对比度。Current Workspace header 将 New Drawing、New Folder、Collapse-or-Expand-All 与 Refresh 保持为同一名称行上的紧凑控件。Workspace Row action 仅在 pointer 或 keyboard focus 存在时使用无边框 vertical ellipsis；Local Version History 每条版本行始终显示 vertical ellipsis，使该版本的 Mark/Unmark 与 Delete 目标可发现。Tab close 在预留槽位内视觉整合，不显示为单独的方框按钮。
 - [`docs/design/desktop-shell/hf-2/components.md`](docs/design/desktop-shell/hf-2/components.md) 是 Icon Button/Back、Tab、Workspace Row 与 Welcome Action variant 的规范来源：其中的 2px theme focus ring、disabled-to-default state priority、可见的 non-colour cue、row-action tooltip/accessibility rule，以及 primary/secondary Welcome Action emphasis 与这些更广泛的 interaction rule 同时适用。
 
