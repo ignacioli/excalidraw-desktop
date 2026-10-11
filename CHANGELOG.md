@@ -2,6 +2,21 @@
 
 User-visible changes to Excalidraw Desktop, newest first.
 
+## [0.5.0] - 2026-10-11
+
+### Added
+
+- English and Simplified Chinese (简体中文) interface. First launch follows the macOS preferred languages and falls back to English; the Language choice (Follow system, English, 简体中文) is available from the app menu and the canvas main menu, applies immediately to the app, canvas editor, and native menus, and is remembered across restarts.
+- A Preferences group in the canvas main menu with Tool lock, Toggle grid, Snap to objects, Zen mode, and View mode, mirrored by the native View menu and its Appearance submenu.
+- A full macOS menu bar (App, File, Edit, View, Window, Help) whose labels follow the interface language; File provides Save, Export Image, and Version History.
+- `Shift+Option+D` switches the theme from the keyboard.
+- Close All in the tab context menu, and hovering a workspace tree row shows the item's full path.
+
+### Changed
+
+- Workspace and tab context menus and the version history row menu now share the canvas editor's dropdown menu style, with destructive actions separated at the end.
+- The unpinned (overlay) sidebar no longer casts a shadow.
+
 ## [0.4.0] - 2026-10-05
 
 ### Added
