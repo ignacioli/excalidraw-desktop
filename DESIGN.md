@@ -4,7 +4,7 @@
 
 **Status**: Reconciled canonical contract — approved by product owner
 
-**Last updated**: 2026-09-03
+**Last updated**: 2026-10-11
 
 **Scope**: Application shell, desktop-specific UI, and the embedded Excalidraw editor
 
@@ -43,9 +43,9 @@ The window is an ordinary decorated native window titled **Excalidraw Whiteboard
 - **Current Workspace** is the single workspace used by the sidebar tree and its header actions. A missing or invalid saved id falls back to an available workspace without creating a new workspace record.
 - **Back** returns to the previous valid browsing location within the Current Workspace. It is disabled when the browsing stack is empty and does not close open documents.
 
-**Workspace tree.** The Current Workspace root and its visible descendants form one continuous virtualized tree of Workspace Entries; multiple mounted workspace roots never stack in the Sidebar. Other workspace records remain available through Welcome/Recent or an explicit workspace-open flow. Drawing rows use a file icon. There is no FileTree, no production `dir_list` listing, and no canvas-content thumbnail worker or `thumb_*` IPC.
+**Workspace tree.** The Current Workspace root and its visible descendants form one continuous virtualized tree of Workspace Entries; multiple mounted workspace roots never stack in the Sidebar. Other workspace records remain available through Welcome/Recent or an explicit workspace-open flow. Drawing rows use a file icon. Hovering a row shows its full path as a native tooltip, with the home directory abbreviated as `~`. There is no FileTree, no production `dir_list` listing, and no canvas-content thumbnail worker or `thumb_*` IPC.
 
-**Tabs.** Every tab reserves a close-control slot. The tab context menu provides **Close**, **Close Others**, and **Close Tabs to the Right**. Middle-click closes the pointed tab. Cmd+W (macOS) and Ctrl+W (supported Linux) close the active drawing tab in the application shell. A predominantly vertical wheel gesture over the tab bar switches tabs and coalesces to the latest intent; overflow tabs use the nearest-visible compact strategy without a visible tab-strip scrollbar or smooth scrolling when reduced motion is requested. Closing an Orphaned Document offers **Save As**, **Close Without Saving**, and **Cancel**.
+**Tabs.** Every tab reserves a close-control slot. The tab context menu provides **Close**, **Close Others**, **Close Tabs to the Right**, and **Close All**; batch closes stop at the first failure or a cancelled Orphaned Document prompt. Middle-click closes the pointed tab. Cmd+W (macOS) and Ctrl+W (supported Linux) close the active drawing tab in the application shell. A predominantly vertical wheel gesture over the tab bar switches tabs and coalesces to the latest intent; overflow tabs use the nearest-visible compact strategy without a visible tab-strip scrollbar or smooth scrolling when reduced motion is requested. Closing an Orphaned Document offers **Save As**, **Close Without Saving**, and **Cancel**.
 
 ### Action ownership and legacy removal
 
@@ -130,7 +130,7 @@ The approved shell geometry uses a 4/8/12/16/24 px spacing scale; 8 px control a
 - Prefer semantic HTML and controls that match platform conventions. Every interactive element must have an accessible name and a visible focus indicator.
 - hover, active, selected, disabled, loading, empty, error, conflict, permission-denied, and offline are part of the component definition.
 - Tabs must show the file name and must not rely on icons alone; unsaved state uses both a visible marker and accessible text. The close-control slot stays reserved so titles do not jump.
-- At most one context menu is open. The same trigger toggles it; another trigger replaces it.
+- At most one context menu is open. The same trigger toggles it; another trigger replaces it. Shell context menus share the Local Version History row-menu anatomy: 3px inset panel, 40px items, hover surface, and destructive items in the danger color after a separator.
 - File hierarchy, the active document, selection, warnings, and conflicts must not be expressed by color alone. Drawing rows in the Workspace Sidebar use a file icon, never a canvas thumbnail or a literal text dot.
 - When a modal dialog opens, focus moves into it and is constrained there; when it closes, focus returns to the triggering control. One dialog layer at a time; do not use `window.prompt` or `window.confirm`.
 - Motion exists only to aid state understanding and stays brief; respect reduced motion, and avoid animated layout jumps around the canvas.

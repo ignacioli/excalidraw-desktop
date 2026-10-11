@@ -273,13 +273,15 @@ test("leaves no English in app-owned UI under Simplified Chinese", async ({
         continue;
       found.push(text);
     }
+    // Row tooltips show file paths, which are data rather than UI copy.
+    const isPath = (value: string) => /^[/~]/u.test(value);
     for (const element of document.body.querySelectorAll(
       "[aria-label], [title], [alt], [placeholder]",
     )) {
       if (excluded(element)) continue;
       for (const name of ["aria-label", "title", "alt", "placeholder"]) {
         const value = element.getAttribute(name)?.trim();
-        if (value) found.push(value);
+        if (value && !isPath(value)) found.push(value);
       }
     }
     return found;

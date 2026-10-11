@@ -4,7 +4,7 @@
 
 **状态**：已对账的 canonical contract，已获产品负责人批准
 
-**最后更新**：2026-09-03
+**最后更新**：2026-10-11
 
 **适用范围**：应用壳层、桌面专属界面与内嵌 Excalidraw 编辑器
 
@@ -43,9 +43,9 @@
 - **Current Workspace** 是侧边栏树和标题行操作唯一使用的工作区。保存的 id 缺失或无效时回退到可用工作区，不创建新的工作区记录。
 - **Back** 返回 Current Workspace 内上一个有效浏览位置。浏览栈为空时禁用 Back，且 Back 不关闭已打开文档。
 
-**工作区树。** Current Workspace root 及其可见后代组成一棵连续虚拟化的 Workspace Entries 树；多个 mounted Workspace root 不得堆叠在同一 Sidebar。其他 workspace record 通过 Welcome/Recent 或明确的 workspace-open flow 提供。图纸行使用文件图标。没有 FileTree，没有生产环境 `dir_list` 列举，也没有画布内容缩略图 worker 或 `thumb_*` IPC。
+**工作区树。** Current Workspace root 及其可见后代组成一棵连续虚拟化的 Workspace Entries 树；多个 mounted Workspace root 不得堆叠在同一 Sidebar。其他 workspace record 通过 Welcome/Recent 或明确的 workspace-open flow 提供。图纸行使用文件图标。悬停行时以原生 tooltip 显示其完整路径，home 目录缩写为 `~`。没有 FileTree，没有生产环境 `dir_list` 列举，也没有画布内容缩略图 worker 或 `thumb_*` IPC。
 
-**标签。** 每个标签预留关闭控件位置。标签上下文菜单提供 **Close**、**Close Others** 和 **Close Tabs to the Right**。中键关闭所指标签。应用壳层内，macOS 的 Cmd+W 与受支持 Linux 的 Ctrl+W 关闭活动图纸标签。标签栏上以垂直方向为主的滚轮手势切换标签，并合并到最新意图；溢出标签使用最近可见的紧凑策略，不显示可见 tab-strip scrollbar，且 reduced motion 时不使用平滑滚动。关闭孤立文档时提供 **Save As**、**Close Without Saving** 与 **Cancel**。
+**标签。** 每个标签预留关闭控件位置。标签上下文菜单提供 **Close**、**Close Others**、**Close Tabs to the Right** 和 **Close All**；批量关闭在首个失败或孤儿文档提示被取消时停止。中键关闭所指标签。应用壳层内，macOS 的 Cmd+W 与受支持 Linux 的 Ctrl+W 关闭活动图纸标签。标签栏上以垂直方向为主的滚轮手势切换标签，并合并到最新意图；溢出标签使用最近可见的紧凑策略，不显示可见 tab-strip scrollbar，且 reduced motion 时不使用平滑滚动。关闭孤立文档时提供 **Save As**、**Close Without Saving** 与 **Cancel**。
 
 ### 动作归属与 legacy 移除
 
@@ -130,7 +130,7 @@ accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍�
 - 优先使用语义化 HTML 和符合平台认知的控件。每个交互元素必须具有 accessible name 和可见焦点。
 - hover、active、selected、disabled、loading、empty、error、conflict、permission-denied 与 offline 都是组件定义的一部分。
 - 标签页必须显示文件名，不得只依赖图标；未保存状态同时使用可见标记与无障碍文本。关闭控件位置始终预留，标题不得因此跳动。
-- 同一时刻最多打开一个上下文菜单。同一触发器切换开关；另一触发器直接替换。
+- 同一时刻最多打开一个上下文菜单。同一触发器切换开关；另一触发器直接替换。壳层上下文菜单沿用本地版本历史行菜单的构造：3px 内边距面板、40px 菜单项、悬停底色，破坏性操作以 danger 色置于分隔线之后。
 - 文件层级、活动文档、选中、警告和冲突不得只用颜色表达。工作区侧边栏中的图纸行使用文件图标，不得使用画布缩略图或文字圆点。
 - 模态对话框打开时焦点进入并被约束在其中；关闭后焦点返回触发控件。同一时刻只有一层对话框；不得使用 `window.prompt` 或 `window.confirm`。
 - 动效只服务于状态理解且保持短暂；必须尊重 reduced motion，避免画布周围发生动画布局跳动。

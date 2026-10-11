@@ -445,6 +445,9 @@ export async function installUiInteractionHarness(
             command === "native_menu_set_enabled"
           )
             return {};
+          // `homeDir()` for the row path tooltips.
+          if (command === "plugin:path|resolve_directory")
+            return "/Users/tester";
           const message = `Unexpected UI interaction harness command: ${command}`;
           state.errors.push(message);
           throw new Error(message);

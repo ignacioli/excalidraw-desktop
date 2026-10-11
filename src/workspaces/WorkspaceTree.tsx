@@ -3,6 +3,7 @@ import type { KeyboardEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { interactionStore } from "../app/interaction";
 import { useI18n } from "../i18n";
+import { abbreviateHome, useHomeDirectory } from "./displayPath";
 import type { Workspace, WorkspaceEntry } from "../ipc/contracts";
 import {
   buildWorkspaceTreeRows,
@@ -75,6 +76,7 @@ export function WorkspaceTree({
   captureFocus = true,
 }: WorkspaceTreeProps) {
   const { t } = useI18n();
+  const homeDirectory = useHomeDirectory();
   const scrollRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const pendingFocusKey = useRef<string | null>(null);
@@ -399,6 +401,7 @@ export function WorkspaceTree({
           <WorkspaceTreeRowView
             key={row.key}
             row={row}
+            homeDirectory={homeDirectory}
             rowHeight={rowHeight}
             start={start}
             expanded={
@@ -427,6 +430,7 @@ export function WorkspaceTree({
 
 interface WorkspaceTreeRowViewProps {
   row: WorkspaceTreeRow;
+  homeDirectory: string | null;
   rowHeight: number;
   start: number;
   focused: boolean;
@@ -442,6 +446,7 @@ interface WorkspaceTreeRowViewProps {
 
 function WorkspaceTreeRowView({
   row,
+  homeDirectory,
   rowHeight,
   start,
   expanded,
@@ -477,7 +482,7 @@ function WorkspaceTreeRowView({
       data-row-key={row.key}
       data-kind={row.kind}
       tabIndex={focused ? 0 : -1}
-      title={row.displayName}
+      title={abbreviateHome(row.canonicalPath, homeDirectory)}
       onPointerEnter={() => setPointerFocused(true)}
       onPointerLeave={() => setPointerFocused(false)}
       onPointerDown={(event) => {

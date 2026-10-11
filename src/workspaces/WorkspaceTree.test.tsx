@@ -61,7 +61,7 @@ describe("WorkspaceTree", () => {
     ).toBeGreaterThan(0);
     expect(screen.getByRole("treeitem", { name: "Drawing 0" })).toHaveAttribute(
       "title",
-      "Drawing 0",
+      "/workspace/sketches/drawing-0.excalidraw",
     );
 
     await waitFor(() =>
@@ -178,6 +178,11 @@ describe("WorkspaceTree", () => {
     expect(drawingRow).toHaveAttribute("data-kind", "drawing");
     expect(drawingRow).toHaveAttribute("aria-selected", "true");
     expect(drawingRow).toHaveClass("is-active");
+    // Outside the desktop shell there is no home directory to abbreviate.
+    expect(drawingRow).toHaveAttribute(
+      "title",
+      "/workspace/sketches/notes/child.excalidraw",
+    );
     expect(
       drawingRow.querySelector(".workspace-tree-active-indicator"),
     ).toBeInTheDocument();

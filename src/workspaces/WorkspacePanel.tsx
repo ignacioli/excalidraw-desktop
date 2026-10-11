@@ -876,6 +876,7 @@ export function WorkspacePanel({
         {
           id: "delete",
           label: t("workspace.menu.delete"),
+          destructive: true,
           onSelect: () => {
             void requestDelete(row.workspaceId, row.entry);
           },
@@ -897,6 +898,7 @@ export function WorkspacePanel({
       {
         id: "delete",
         label: t("workspace.menu.delete"),
+        destructive: true,
         onSelect: () => {
           void requestDelete(row.workspaceId, row.entry);
         },

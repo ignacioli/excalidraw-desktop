@@ -720,22 +720,58 @@ body {
   gap: var(--space-1);
 }
 
+/* Same anatomy as the Local Version History row menu. */
 .application-context-menu {
   position: fixed;
   z-index: 20;
   display: grid;
-  min-width: 11rem;
-  gap: 1px;
-  border: 1px solid var(--border-strong);
+  min-width: 180px;
+  border: var(--border-default) solid var(--border-subtle);
   border-radius: var(--radius-control);
-  padding: var(--space-1);
+  padding: 3px;
   background: var(--panel-background);
-  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 18%);
+  box-shadow: var(--shadow-menu, 0 8px 24px rgb(0 0 0 / 18%));
 }
 
 .application-context-menu [role="menu"] {
   display: grid;
-  gap: 1px;
+}
+
+.application-context-menu-item {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  align-items: center;
+  appearance: none;
+  border: 0;
+  border-radius: calc(var(--radius-control) - 1px);
+  padding: 0 var(--space-2);
+  color: var(--text-primary);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.application-context-menu-item:hover,
+.application-context-menu-item:focus-visible {
+  background: var(--surface-hover);
+}
+
+.application-context-menu-item.is-destructive {
+  color: var(--danger);
+}
+
+.application-context-menu-item:disabled {
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+.application-context-menu-separator {
+  height: 1px;
+  margin: 0 var(--space-2);
+  background: var(--border-subtle);
 }
 
 .application-context-menu-description {

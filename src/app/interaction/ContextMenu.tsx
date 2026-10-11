@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useId,
   useEffect,
   useLayoutEffect,
@@ -14,6 +15,8 @@ export interface ContextMenuItem {
   id: string;
   label: string;
   disabled?: boolean;
+  /** Irreversible actions, shown last after a separator. */
+  destructive?: boolean;
   onSelect(): void;
 }
 
@@ -130,19 +133,32 @@ export function ContextMenu({
         aria-label={label}
         role="menu"
       >
-        {items.map((item) => (
-          <button
-            key={item.id}
-            disabled={item.disabled}
-            onClick={() => {
-              item.onSelect();
-              onDismiss("action");
-            }}
-            role="menuitem"
-            type="button"
-          >
-            {item.label}
-          </button>
+        {items.map((item, index) => (
+          <Fragment key={item.id}>
+            {item.destructive && index > 0 && !items[index - 1]?.destructive ? (
+              <div
+                aria-hidden="true"
+                className="application-context-menu-separator"
+                role="separator"
+              />
+            ) : null}
+            <button
+              className={
+                item.destructive
+                  ? "application-context-menu-item is-destructive"
+                  : "application-context-menu-item"
+              }
+              disabled={item.disabled}
+              onClick={() => {
+                item.onSelect();
+                onDismiss("action");
+              }}
+              role="menuitem"
+              type="button"
+            >
+              {item.label}
+            </button>
+          </Fragment>
         ))}
       </div>
     </div>

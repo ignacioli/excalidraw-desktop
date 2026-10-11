@@ -61,6 +61,9 @@ test("tab close button, context menu, middle-click, and Cmd/Ctrl+W close Open Do
       exact: true,
     }),
   ).toBeVisible();
+  await expect(
+    menu.getByRole("menuitem", { name: "Close All", exact: true }),
+  ).toBeVisible();
   await menu.getByRole("menuitem", { name: "Close", exact: true }).click();
   await expect(two).toHaveCount(0);
   await expect(page.getByRole("tab")).toHaveCount(4);
@@ -228,6 +231,34 @@ test("Close Without Saving continues a batch to the next orphaned drawing", asyn
   await expect(dialog).toHaveCount(0);
   await expect(tabNamed(page, "alive")).toBeVisible();
   await expect(page.getByRole("tab")).toHaveCount(1);
+});
+
+test("Close All closes every Open Document and keeps the window shell", async ({
+  page,
+}) => {
+  await installUiInteractionHarness(page, {
+    workspaces: [workspace],
+    entries: [
+      drawing("one.excalidraw", "one"),
+      drawing("two.excalidraw", "two"),
+      drawing("three.excalidraw", "three"),
+    ],
+  });
+  await persistCurrentWorkspace(page, workspace.id);
+  await page.goto("/");
+  await openDrawings(page, ["one", "two", "three"]);
+
+  await (
+    await openTabContextMenu(page, "two")
+  )
+    .getByRole("menuitem", { name: "Close All", exact: true })
+    .click();
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  expect(await closeInvocations(page)).toHaveLength(3);
+  await expect(page.locator(".app-shell")).toBeVisible();
+  await expect(
+    page.getByRole("tablist", { name: "Drawing tabs" }),
+  ).toBeVisible();
 });
 
 test("closing the last drawing tab keeps the window shell and Files sidebar", async ({

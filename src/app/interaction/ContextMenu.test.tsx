@@ -198,4 +198,36 @@ describe("ContextMenu", () => {
     if (innerHeight) Object.defineProperty(window, "innerHeight", innerHeight);
     menuRect.mockRestore();
   });
+  it("separates destructive items and marks them for the danger style", () => {
+    render(
+      <ContextMenu
+        anchor={{ x: 40, y: 50 }}
+        items={[
+          { id: "rename", label: "Rename", onSelect: vi.fn() },
+          {
+            id: "delete",
+            label: "Delete",
+            destructive: true,
+            onSelect: vi.fn(),
+          },
+        ]}
+        label="Drawing actions"
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    const menu = screen.getByRole("menu");
+    const children = [...menu.children];
+    expect(children.map((child) => child.getAttribute("role"))).toEqual([
+      "menuitem",
+      "separator",
+      "menuitem",
+    ]);
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toHaveClass(
+      "is-destructive",
+    );
+    expect(screen.getByRole("menuitem", { name: "Rename" })).not.toHaveClass(
+      "is-destructive",
+    );
+  });
 });

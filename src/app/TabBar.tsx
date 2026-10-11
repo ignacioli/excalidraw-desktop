@@ -234,6 +234,11 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
         label: t("tabs.closeToRight"),
         onSelect: () => closeMany(toTheRight),
       },
+      {
+        id: "close-all",
+        label: t("tabs.closeAll"),
+        onSelect: () => closeMany(tabOrder),
+      },
     ];
   })();
 
