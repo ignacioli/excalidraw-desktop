@@ -1,4 +1,4 @@
-export const IPC_CONTRACT_VERSION = 3 as const;
+export const IPC_CONTRACT_VERSION = 4 as const;
 /** The activated history boundary; retained as an explicit version marker. */
 export const RESERVED_HISTORY_CONTRACT_VERSION = 3 as const;
 
@@ -58,6 +58,8 @@ export interface AppHandshakeResponse {
   appVersion: string;
   abnormalExit: boolean;
   pendingOpenPaths: string[];
+  /** System UI languages (raw BCP-47 tags, at most 16), read once at startup. */
+  preferredLanguages: string[];
 }
 
 export interface RecoveryCandidate {
@@ -331,6 +333,10 @@ export interface IpcCommands {
     request: { command: NativeMenuCommand; enabled: boolean };
     response: Record<string, never>;
   };
+  native_menu_sync: {
+    request: NativeMenuSyncRequest;
+    response: Record<string, never>;
+  };
   app_handshake: {
     request: Record<string, never>;
     response: AppHandshakeResponse;
@@ -522,7 +528,74 @@ export type NativeMenuCommand =
   | "versionHistory"
   | "appearanceSystem"
   | "appearanceLight"
-  | "appearanceDark";
+  | "appearanceDark"
+  | "languageSystem"
+  | "languageEn"
+  | "languageZhCn"
+  | "help"
+  | "toggleToolLock"
+  | "toggleGrid"
+  | "toggleSnap"
+  | "toggleZen"
+  | "toggleViewMode";
+
+/** Every localized native menu label, including predefined item text. */
+export type NativeMenuLabelId =
+  | "app.about"
+  | "app.language"
+  | "app.languageSystem"
+  | "app.languageEn"
+  | "app.languageZhCn"
+  | "app.services"
+  | "app.hide"
+  | "app.hideOthers"
+  | "app.quit"
+  | "file"
+  | "file.save"
+  | "file.exportImage"
+  | "file.versionHistory"
+  | "file.closeWindow"
+  | "edit"
+  | "edit.undo"
+  | "edit.redo"
+  | "edit.cut"
+  | "edit.copy"
+  | "edit.paste"
+  | "edit.selectAll"
+  | "view"
+  | "view.appearance"
+  | "view.appearanceSystem"
+  | "view.appearanceLight"
+  | "view.appearanceDark"
+  | "view.toolLock"
+  | "view.grid"
+  | "view.snap"
+  | "view.zen"
+  | "view.viewMode"
+  | "view.fullscreen"
+  | "window"
+  | "window.minimize"
+  | "window.zoom"
+  | "help"
+  | "help.excalidrawHelp";
+
+export interface NativeMenuSyncState {
+  language: "system" | "en" | "zh-CN";
+  appearance: "system" | "light" | "dark";
+  hasDocument: boolean;
+  forcedReadOnly: boolean;
+  toolLock: boolean;
+  grid: boolean;
+  snap: boolean;
+  zen: boolean;
+  /** The user's View mode, excluding forced read-only. */
+  viewMode: boolean;
+}
+
+export interface NativeMenuSyncRequest {
+  labels: Record<NativeMenuLabelId, string>;
+  state: NativeMenuSyncState;
+}
 
 export interface NativeMenuCommandEvent {
   command: NativeMenuCommand;

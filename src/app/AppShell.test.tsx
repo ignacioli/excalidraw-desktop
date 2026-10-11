@@ -16,6 +16,9 @@ import {
   type DocumentSession,
 } from "../documents/documentStore";
 import type { CommandInvoker } from "../ipc/client";
+import type { NativeMenuCommand } from "../ipc/contracts";
+import { LocaleController } from "../i18n";
+import { en } from "../i18n/messages/en.ts";
 import { AppShell } from "./AppShell";
 import {
   SHELL_PREFERENCES_STORAGE_KEY,
@@ -25,17 +28,7 @@ import { useAppStore } from "./store";
 import { initializeBrowserThemeController } from "./theme/themeController";
 
 const nativeMenuHarness = vi.hoisted(() => ({
-  handler: undefined as
-    | ((
-        command:
-          | "save"
-          | "exportImage"
-          | "versionHistory"
-          | "appearanceSystem"
-          | "appearanceLight"
-          | "appearanceDark",
-      ) => void)
-    | undefined,
+  handler: undefined as ((command: NativeMenuCommand) => void) | undefined,
   cleanup: vi.fn(),
 }));
 const nativeRuntimeHarness = vi.hoisted(() => ({ enabled: false }));
@@ -340,7 +333,11 @@ describe("AppShell", () => {
       if (command === "workspace_recent_list")
         return [workspace, otherWorkspace];
       if (command === "workspace_remount") {
-        throw new Error("Workspace is no longer accessible.");
+        throw {
+          code: "PATH_ACCESS_DENIED",
+          message: "Workspace is no longer accessible.",
+          retriable: false,
+        };
       }
       if (command === "workspace_recent_remove") return {};
       throw new Error(`Unexpected command ${command}`);
@@ -365,7 +362,7 @@ describe("AppShell", () => {
     });
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Workspace is no longer accessible.",
+      en["error.PATH_ACCESS_DENIED"],
     );
     expect(
       screen.getByRole("button", { name: "Open workspace Missing workspace" }),
@@ -409,7 +406,11 @@ describe("AppShell", () => {
       if (command === "workspace_remount") {
         attempts += 1;
         if (attempts === 1) {
-          throw new Error("Workspace is no longer accessible.");
+          throw {
+            code: "PATH_ACCESS_DENIED",
+            message: "Workspace is no longer accessible.",
+            retriable: false,
+          };
         }
         return workspace;
       }
@@ -450,10 +451,18 @@ describe("AppShell", () => {
       if (command === "workspace_list") return [];
       if (command === "workspace_recent_list") return [workspace];
       if (command === "workspace_remount") {
-        throw new Error("Workspace is no longer accessible.");
+        throw {
+          code: "PATH_ACCESS_DENIED",
+          message: "Workspace is no longer accessible.",
+          retriable: false,
+        };
       }
       if (command === "workspace_recent_remove") {
-        throw new Error("Recent history could not be removed.");
+        throw {
+          code: "DB_ERROR",
+          message: "Recent history could not be removed.",
+          retriable: false,
+        };
       }
       throw new Error(`Unexpected command ${command}`);
     }) as CommandInvoker["invoke"];
@@ -475,7 +484,7 @@ describe("AppShell", () => {
       }),
     );
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Recent history could not be removed.",
+      en["error.DB_ERROR"],
     );
     expect(screen.getByRole("alert")).toBeVisible();
     expect(screen.getByText("Folder unavailable")).toBeVisible();
@@ -494,7 +503,11 @@ describe("AppShell", () => {
       if (command === "workspace_list") return [];
       if (command === "workspace_recent_list") return [workspace];
       if (command === "workspace_remount") {
-        throw new Error("Workspace is no longer accessible.");
+        throw {
+          code: "PATH_ACCESS_DENIED",
+          message: "Workspace is no longer accessible.",
+          retriable: false,
+        };
       }
       throw new Error(`Unexpected command ${command}`);
     }) as CommandInvoker["invoke"];
@@ -693,7 +706,11 @@ describe("AppShell", () => {
     ]);
     const checkpoint = vi
       .spyOn(documentManager, "checkpointActive")
-      .mockRejectedValue(new Error("native save failed"));
+      .mockRejectedValue({
+        code: "DISK_FULL",
+        message: "native save failed",
+        retriable: false,
+      });
 
     const view = render(<AppShell />);
     await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
@@ -702,7 +719,7 @@ describe("AppShell", () => {
     expect(checkpoint).toHaveBeenCalledWith("manualSave");
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent(
-        "native save failed",
+        en["error.DISK_FULL"],
       ),
     );
     expect(
@@ -710,6 +727,42 @@ describe("AppShell", () => {
     ).not.toBeInTheDocument();
     view.unmount();
     expect(nativeMenuHarness.cleanup).toHaveBeenCalledOnce();
+  });
+
+  it("leaves Command-S to the native Save menu so one press saves once", async () => {
+    const user = userEvent.setup();
+    nativeRuntimeHarness.enabled = true;
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "dirty"),
+    ]);
+    const checkpoint = vi
+      .spyOn(documentManager, "checkpointActive")
+      .mockResolvedValue();
+
+    render(<AppShell />);
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+    await user.keyboard("{Meta>}s{/Meta}");
+    expect(checkpoint).not.toHaveBeenCalled();
+
+    nativeMenuHarness.handler?.("save");
+    expect(checkpoint).toHaveBeenCalledOnce();
+    expect(checkpoint).toHaveBeenCalledWith("manualSave");
+  });
+
+  it("saves once from the Command-S keydown outside the native runtime", async () => {
+    const user = userEvent.setup();
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "dirty"),
+    ]);
+    const checkpoint = vi
+      .spyOn(documentManager, "checkpointActive")
+      .mockResolvedValue();
+
+    render(<AppShell />);
+    await user.keyboard("{Meta>}s{/Meta}");
+
+    expect(checkpoint).toHaveBeenCalledOnce();
+    expect(checkpoint).toHaveBeenCalledWith("manualSave");
   });
 
   it("reports native export as unavailable until an active editor is ready", async () => {
@@ -741,7 +794,11 @@ describe("AppShell", () => {
       if (command === "workspace_list" || command === "workspace_recent_list") {
         return [];
       }
-      if (command === "native_menu_set_enabled") return {};
+      if (
+        command === "native_menu_set_enabled" ||
+        command === "native_menu_sync"
+      )
+        return {};
       if (command === "history_list") {
         return {
           documentId: "drawing",
@@ -791,6 +848,60 @@ describe("AppShell", () => {
     });
   });
 
+  it("switches the language from the native menu and syncs localized menu labels", async () => {
+    nativeRuntimeHarness.enabled = true;
+    setDocumentSessions([
+      createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "clean"),
+    ]);
+    const storage = new Map<string, string>();
+    const localeController = new LocaleController({
+      storage: {
+        getItem: (key) => storage.get(key) ?? null,
+        setItem: (key, value) => {
+          storage.set(key, value);
+        },
+      },
+      preferredLanguages: ["en-US"],
+    });
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list" || command === "workspace_recent_list") {
+        return [];
+      }
+      if (
+        command === "native_menu_set_enabled" ||
+        command === "native_menu_sync"
+      )
+        return {};
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    const syncCalls = () =>
+      vi
+        .mocked(invoke)
+        .mock.calls.filter(([command]) => command === "native_menu_sync");
+
+    render(
+      <AppShell
+        localeController={localeController}
+        workspaceInvoker={{ invoke }}
+      />,
+    );
+    await waitFor(() => expect(syncCalls()).toHaveLength(1));
+    expect(syncCalls()[0]?.[1]).toMatchObject({
+      labels: { "file.save": "Save" },
+      state: { language: "system", hasDocument: true, forcedReadOnly: false },
+    });
+
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+    act(() => nativeMenuHarness.handler?.("languageZhCn"));
+
+    expect(localeController.getSnapshot().resolvedLanguage).toBe("zh-CN");
+    await waitFor(() => expect(syncCalls()).toHaveLength(2));
+    expect(syncCalls()[1]?.[1]).toMatchObject({
+      labels: { "file.save": "保存", "edit.undo": "撤销" },
+      state: { language: "zh-CN" },
+    });
+  });
+
   it("hides only the generic pending history explanation and preserves diagnostics", async () => {
     const user = userEvent.setup();
     nativeRuntimeHarness.enabled = true;
@@ -801,7 +912,11 @@ describe("AppShell", () => {
     const invoker = vi.fn(async (command: string) => {
       if (command === "workspace_list" || command === "workspace_recent_list")
         return [];
-      if (command === "native_menu_set_enabled") return {};
+      if (
+        command === "native_menu_set_enabled" ||
+        command === "native_menu_sync"
+      )
+        return {};
       if (command === "history_list") {
         listCount += 1;
         return {
@@ -861,7 +976,11 @@ describe("AppShell", () => {
     const invoker = vi.fn(async (command: string, args?: unknown) => {
       if (command === "workspace_list" || command === "workspace_recent_list")
         return [];
-      if (command === "native_menu_set_enabled") return {};
+      if (
+        command === "native_menu_set_enabled" ||
+        command === "native_menu_sync"
+      )
+        return {};
       if (command === "history_list") {
         const path = (args as { document: { path: string } }).document.path;
         if (path === "/tmp/a.excalidraw") {
@@ -969,7 +1088,11 @@ describe("AppShell", () => {
     const invoker = vi.fn(async (command: string) => {
       if (command === "workspace_list" || command === "workspace_recent_list")
         return [];
-      if (command === "native_menu_set_enabled") return {};
+      if (
+        command === "native_menu_set_enabled" ||
+        command === "native_menu_sync"
+      )
+        return {};
       if (command === "history_list") {
         return { documentId: "drawing", items: [existing], listRevision: 1 };
       }
@@ -1070,7 +1193,11 @@ describe("AppShell", () => {
       if (command === "workspace_list" || command === "workspace_recent_list") {
         return [];
       }
-      if (command === "native_menu_set_enabled") return {};
+      if (
+        command === "native_menu_set_enabled" ||
+        command === "native_menu_sync"
+      )
+        return {};
       if (command === "history_list") {
         return {
           documentId: "drawing",

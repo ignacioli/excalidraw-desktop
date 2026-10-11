@@ -229,6 +229,7 @@ export async function installUiInteractionHarness(
               appVersion: "0.2.0-e2e",
               abnormalExit: startup.abnormalExit,
               pendingOpenPaths: [],
+              preferredLanguages: [],
             };
           }
           if (command === "recovery_list") {
@@ -439,7 +440,14 @@ export async function installUiInteractionHarness(
             };
           }
           if (command === "doc_close") return {};
-          if (command === "native_menu_set_enabled") return {};
+          if (
+            command === "native_menu_sync" ||
+            command === "native_menu_set_enabled"
+          )
+            return {};
+          // `homeDir()` for the row path tooltips.
+          if (command === "plugin:path|resolve_directory")
+            return "/Users/tester";
           const message = `Unexpected UI interaction harness command: ${command}`;
           state.errors.push(message);
           throw new Error(message);

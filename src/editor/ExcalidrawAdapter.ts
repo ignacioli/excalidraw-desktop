@@ -13,6 +13,8 @@ import {
 } from "../history/protectedInput";
 
 export type SceneChangeListener = (scene: SceneSnapshot) => void;
+export type CanvasPreference = "toolLock" | "grid" | "snap" | "zen";
+export type CanvasPreferences = Record<CanvasPreference, boolean>;
 export type AssetFileResolver = (files: BinaryFiles) => Promise<BinaryFiles>;
 
 export class ExcalidrawAdapter {
@@ -64,6 +66,77 @@ export class ExcalidrawAdapter {
         },
       });
     }
+    if (documentState.objectsSnapModeEnabled !== undefined) {
+      this.api.updateScene({
+        appState: {
+          objectsSnapModeEnabled: documentState.objectsSnapModeEnabled,
+        },
+      });
+    }
+  }
+
+  readPreferences(): CanvasPreferences {
+    const appState = this.api.getAppState();
+    return {
+      toolLock: appState.activeTool.locked,
+      grid: appState.gridModeEnabled,
+      snap: appState.objectsSnapModeEnabled,
+      zen: appState.zenModeEnabled,
+    };
+  }
+
+  /**
+   * The single host entry for the canvas preferences, shared by the canvas
+   * menu and the native View menu. Grid and Snap to objects are mutually
+   * exclusive, as in the SDK's own shortcuts.
+   */
+  togglePreference(preference: CanvasPreference): void {
+    const current = this.readPreferences();
+    switch (preference) {
+      case "toolLock": {
+        const { activeTool } = this.api.getAppState();
+        const locked = !activeTool.locked;
+        if (activeTool.type === "custom") {
+          if (activeTool.customType !== null) {
+            this.api.setActiveTool({
+              type: "custom",
+              customType: activeTool.customType,
+              locked,
+            });
+          }
+        } else {
+          this.api.setActiveTool({ type: activeTool.type, locked });
+        }
+        break;
+      }
+      case "grid":
+        this.api.updateScene({
+          appState: {
+            gridModeEnabled: !current.grid,
+            objectsSnapModeEnabled: current.grid ? current.snap : false,
+          },
+        });
+        break;
+      case "snap":
+        this.api.updateScene({
+          appState: {
+            objectsSnapModeEnabled: !current.snap,
+            gridModeEnabled: current.snap ? current.grid : false,
+          },
+        });
+        break;
+      case "zen":
+        this.api.updateScene({ appState: { zenModeEnabled: !current.zen } });
+        break;
+    }
+  }
+
+  openHelp(): void {
+    this.api.updateScene({ appState: { openDialog: { name: "help" } } });
+  }
+
+  closeMainMenu(): void {
+    this.api.updateScene({ appState: { openMenu: null } });
   }
 
   setReadOnly(readOnly: boolean): void {

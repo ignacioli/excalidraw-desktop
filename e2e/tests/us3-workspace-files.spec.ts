@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { en } from "../../src/i18n/messages/en.ts";
 import { openWorkspaceSidebar } from "./workspaceSidebar";
 
 test("workspace file management closes the mount/create/rename/trash loop", async ({
@@ -217,7 +218,7 @@ test("an inaccessible Recent Workspace errors only on activation and remains rem
   });
   await recent.click();
   await expect(page.getByRole("alert")).toContainText(
-    "Workspace is no longer accessible.",
+    en["error.PATH_ACCESS_DENIED"],
   );
   await expect(page.getByText("Folder unavailable")).toBeVisible();
   await expect(recent).toBeVisible();
@@ -321,7 +322,7 @@ test("keeps Welcome actions visually stable while an inaccessible remount is pen
     browser.__releaseRecentRemount?.();
   });
   await expect(page.getByRole("alert")).toContainText(
-    "Workspace is no longer accessible.",
+    en["error.PATH_ACCESS_DENIED"],
   );
   await expect(welcomeActions).not.toHaveAttribute("aria-busy", "true");
   const after = await readWelcomeActionStyle(page);
@@ -615,7 +616,11 @@ async function installMissingRecentHarness(
               browser.__releaseRecentRemount = resolve;
             });
           }
-          throw new Error("Workspace is no longer accessible.");
+          throw {
+            code: "PATH_ACCESS_DENIED",
+            message: "Workspace is no longer accessible.",
+            retriable: false,
+          };
         }
         if (command === "workspace_recent_remove") {
           retained = false;

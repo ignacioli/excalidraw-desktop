@@ -11,11 +11,17 @@ describe("registerNativeMenuCommand", () => {
     const onExportImage = vi.fn();
     const onVersionHistory = vi.fn();
     const onAppearance = vi.fn();
+    const onLanguage = vi.fn();
+    const onHelp = vi.fn();
+    const onTogglePreference = vi.fn();
     const handler = createNativeMenuCommandHandler({
       onSave,
       onExportImage,
       onVersionHistory,
       onAppearance,
+      onLanguage,
+      onHelp,
+      onTogglePreference,
     });
 
     handler("save");
@@ -24,11 +30,29 @@ describe("registerNativeMenuCommand", () => {
     handler("appearanceSystem");
     handler("appearanceLight");
     handler("appearanceDark");
+    handler("languageSystem");
+    handler("languageEn");
+    handler("languageZhCn");
+    handler("help");
+    handler("toggleToolLock");
+    handler("toggleGrid");
+    handler("toggleSnap");
+    handler("toggleZen");
+    handler("toggleViewMode");
 
     expect(onSave).toHaveBeenCalledOnce();
     expect(onExportImage).toHaveBeenCalledOnce();
     expect(onVersionHistory).toHaveBeenCalledOnce();
     expect(onAppearance.mock.calls).toEqual([["system"], ["light"], ["dark"]]);
+    expect(onLanguage.mock.calls).toEqual([["system"], ["en"], ["zh-CN"]]);
+    expect(onHelp).toHaveBeenCalledOnce();
+    expect(onTogglePreference.mock.calls).toEqual([
+      ["toolLock"],
+      ["grid"],
+      ["snap"],
+      ["zen"],
+      ["viewMode"],
+    ]);
   });
 
   it("registers the native event and forwards only the supported commands", async () => {

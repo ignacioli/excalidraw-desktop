@@ -1,0 +1,4 @@
+# Local patches to locked dependencies. Each patch is described, with its
+# guard test and removal condition, in patches/README.md.
+patchedDependencies:
+  '@excalidraw/excalidraw@0.18.1': patches/@excalidraw__excalidraw@0.18.1.patch

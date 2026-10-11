@@ -34,8 +34,17 @@ Welcome 页面提供 **New Drawing**、**Open Workspace** 和 **Recent Workspace
 - 为 automatic checkpoint、manual 标记以及受保护的 restore/clear/import 操作保留本地 Version History
 - 将图纸导出为 PNG 或 SVG；SVG 输出会内嵌捆绑字体
 - 对图纸内重复图片去重，避免重复粘贴导致存储的资源数据倍增
+- 以英文或简体中文使用界面，并可在画布主菜单或原生菜单栏中调整常用画布偏好
 
-本版本桌面壳层 UI 为英文。中文 README 只是文档翻译，不表示应用界面已经本地化。
+## 语言、偏好与菜单
+
+**界面语言。** 应用提供英文和简体中文两种界面语言。首次启动时跟随 macOS 的首选语言列表，列表中没有受支持的语言时回退到英文。可随时通过应用菜单中的 **Language（语言）** 子菜单，或画布主菜单中的 **Language** 项切换（跟随系统、English、简体中文）。选择会立即应用到应用界面、画布编辑器和原生菜单，并在重启后保留。macOS 首选语言的变化在下次启动时生效。系统自有的对话框（如打开、保存面板）遵循 macOS。
+
+**画布偏好。** 画布主菜单中有 **Preferences（偏好设置）** 分组，包含 Tool lock（工具锁定）、Toggle grid（切换网格）、Snap to objects（吸附至对象）、Zen mode（禅模式）和 View mode（查看模式），另有 Language 项与 Theme（主题）控件。原生 **View（显示）** 菜单提供相同的开关，并带有 **Appearance（外观）** 子菜单（跟随系统、浅色、深色）。二者写入同一份应用偏好。当图纸被强制只读时，Tool lock、Snap to objects 和 View mode 不可用。
+
+**主题快捷键。** 按 `Shift+Option+D` 可用键盘切换主题。
+
+**原生菜单栏。** macOS 菜单栏提供 App、File、Edit、View、Window 和 Help 菜单，菜单文案跟随界面语言。File 包含 Save、Export Image 和 Version History；Save 为 `Cmd+S`，Export Image 为 `Cmd+Option+E`。
 
 ## 平台
 

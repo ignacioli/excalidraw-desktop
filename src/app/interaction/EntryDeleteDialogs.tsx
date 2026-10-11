@@ -1,4 +1,5 @@
 import { useRef, type RefObject } from "react";
+import { useI18n } from "../../i18n";
 import { ApplicationDialog } from "./ApplicationDialog";
 
 interface DeleteConfirmationDialogProps {
@@ -18,6 +19,7 @@ export function EntryDeleteConfirmationDialog({
   onCancel,
   onDelete,
 }: DeleteConfirmationDialogProps) {
+  const { t } = useI18n();
   const cancelRef = useRef<HTMLButtonElement>(null);
   return (
     <ApplicationDialog
@@ -28,9 +30,9 @@ export function EntryDeleteConfirmationDialog({
         if (!busy) onCancel();
       }}
       returnFocusRef={returnFocusRef}
-      title={`Delete ${displayName}?`}
+      title={t("entry.delete.title", { name: displayName })}
     >
-      <p>This item will be moved to the operating-system Trash.</p>
+      <p>{t("entry.delete.body")}</p>
       <div className="application-dialog-actions conflict-dialog-actions">
         <button
           ref={cancelRef}
@@ -38,10 +40,10 @@ export function EntryDeleteConfirmationDialog({
           onClick={onCancel}
           type="button"
         >
-          Cancel
+          {t("dialog.cancel")}
         </button>
         <button disabled={busy} onClick={onDelete} type="button">
-          Delete
+          {t("entry.delete.confirm")}
         </button>
       </div>
     </ApplicationDialog>
@@ -63,6 +65,7 @@ export function DirectoryNotEmptyDialog({
   onCancel,
   onReveal,
 }: DirectoryNotEmptyDialogProps) {
+  const { t } = useI18n();
   const cancelRef = useRef<HTMLButtonElement>(null);
   return (
     <ApplicationDialog
@@ -73,12 +76,9 @@ export function DirectoryNotEmptyDialog({
         if (!busy) onCancel();
       }}
       returnFocusRef={returnFocusRef}
-      title="Folder isn’t empty"
+      title={t("entry.notEmpty.title")}
     >
-      <p>
-        Hidden or unsupported items may exist. Excalidraw Desktop never deletes
-        non-empty folders.
-      </p>
+      <p>{t("entry.notEmpty.body")}</p>
       <div className="application-dialog-actions conflict-dialog-actions">
         <button
           ref={cancelRef}
@@ -86,10 +86,10 @@ export function DirectoryNotEmptyDialog({
           onClick={onCancel}
           type="button"
         >
-          Cancel
+          {t("dialog.cancel")}
         </button>
         <button disabled={busy} onClick={onReveal} type="button">
-          Open in Finder
+          {t("entry.notEmpty.reveal")}
         </button>
       </div>
     </ApplicationDialog>

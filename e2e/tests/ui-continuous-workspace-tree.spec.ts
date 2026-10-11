@@ -157,9 +157,11 @@ test("Workspace and entry menus support keyboard navigation, dismissal, and view
   const workspaceRegion = page.getByRole("region", { name: "Workspaces" });
   const tree = workspaceRegion.getByRole("tree");
   const notesRow = tree.getByRole("treeitem", { name: "notes", exact: true });
-  const entryActions = workspaceRegion.getByRole("button", {
-    name: "Actions for notes",
-  }).first();
+  const entryActions = workspaceRegion
+    .getByRole("button", {
+      name: "Actions for notes",
+    })
+    .first();
   // Row actions are revealed only while the row has keyboard or pointer focus.
   await notesRow.focus();
   await expect(entryActions).toBeVisible();
@@ -170,6 +172,23 @@ test("Workspace and entry menus support keyboard navigation, dismissal, and view
   await expect(menu).toBeVisible();
   const items = menu.getByRole("menuitem");
   await expect(items).toHaveCount(4);
+  // Sidebar button styles must not leak into menu items. The first item
+  // has focus and shows the hover surface, so check an unfocused one.
+  const itemStyle = await items.nth(1).evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      borderColor: style.borderTopColor,
+      height: style.height,
+      fontSize: style.fontSize,
+    };
+  });
+  expect(itemStyle).toEqual({
+    background: "rgba(0, 0, 0, 0)",
+    borderColor: "rgba(0, 0, 0, 0)",
+    height: "32px",
+    fontSize: "14px",
+  });
   await expect(items.first()).toBeFocused();
   await page.keyboard.press("End");
   await expect(items.last()).toBeFocused();

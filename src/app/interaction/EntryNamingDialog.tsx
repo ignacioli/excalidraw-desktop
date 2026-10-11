@@ -6,7 +6,8 @@ import {
   useState,
   type RefObject,
 } from "react";
-import type { IpcError } from "../../ipc/contracts";
+import { describeError, errorCodeOf } from "../../i18n/describeError";
+import { t as translateNow, useI18n, type MessageKey } from "../../i18n";
 import { ApplicationDialog } from "./ApplicationDialog";
 
 export type EntryNamingMode =
@@ -27,6 +28,7 @@ export function EntryNamingDialog({
   onCancel,
   onSubmit,
 }: EntryNamingDialogProps) {
+  const { t } = useI18n();
   const drawing = mode === "newDrawing" || mode === "renameDrawing";
   const suffix = drawing ? drawingSuffix(currentName) : "";
   const initial = useMemo(
@@ -41,7 +43,7 @@ export function EntryNamingDialog({
     [currentName, drawing, mode],
   );
   const [value, setValue] = useState(initial);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ reason: unknown } | null>(null);
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
@@ -53,23 +55,25 @@ export function EntryNamingDialog({
 
   const submit = async () => {
     setBusy(true);
-    setError(null);
+    setFailure(null);
     try {
       await onSubmit(value);
     } catch (reason) {
-      setError(namingDialogError(reason));
+      setFailure({ reason });
       setBusy(false);
     }
   };
 
-  const title =
+  const title = t(
     mode === "newDrawing"
-      ? "New drawing"
+      ? "entry.naming.newDrawing"
       : mode === "newDirectory"
-        ? "New folder"
+        ? "entry.naming.newFolder"
         : mode === "renameDrawing"
-          ? "Rename drawing"
-          : "Rename folder";
+          ? "entry.naming.renameDrawing"
+          : "entry.naming.renameFolder",
+  );
+  const error = failure === null ? null : namingDialogError(failure.reason);
 
   return (
     <ApplicationDialog
@@ -88,7 +92,7 @@ export function EntryNamingDialog({
           if (!busy) void submit();
         }}
       >
-        <label htmlFor={inputId}>Name</label>
+        <label htmlFor={inputId}>{t("entry.naming.name")}</label>
         <span className="entry-name-input-row">
           <input
             ref={inputRef}
@@ -99,17 +103,24 @@ export function EntryNamingDialog({
             value={value}
           />
           {drawing ? (
-            <span id={extensionId} aria-label={`Fixed extension ${suffix}`}>
+            <span
+              id={extensionId}
+              aria-label={t("entry.naming.fixedExtension", { suffix })}
+            >
               {suffix}
             </span>
           ) : null}
         </span>
         <div className="application-dialog-actions conflict-dialog-actions">
           <button disabled={busy} onClick={onCancel} type="button">
-            Cancel
+            {t("dialog.cancel")}
           </button>
           <button disabled={busy} type="submit">
-            {mode.startsWith("new") ? "Create" : "Rename"}
+            {t(
+              mode.startsWith("new")
+                ? "entry.naming.create"
+                : "entry.naming.rename",
+            )}
           </button>
         </div>
       </form>
@@ -117,32 +128,18 @@ export function EntryNamingDialog({
   );
 }
 
+const NAMING_ERROR_KEYS: Readonly<Record<string, MessageKey>> = {
+  NAME_CONFLICT: "entry.naming.error.nameConflict",
+  INVALID_NAME: "entry.naming.error.invalidName",
+  PATH_ACCESS_DENIED: "entry.naming.error.outsideWorkspace",
+};
+
 function namingDialogError(reason: unknown): string {
-  if (reason !== null && typeof reason === "object" && "code" in reason) {
-    const code = (reason as Partial<IpcError>).code;
-    if (code === "NAME_CONFLICT") {
-      return "An entry with that name already exists.";
-    }
-    if (code === "INVALID_NAME") {
-      return "Enter a valid name.";
-    }
-    if (code === "PATH_ACCESS_DENIED") {
-      return "This location is outside the Workspace.";
-    }
-  }
-  if (reason instanceof Error && reason.message.length > 0) {
-    return reason.message;
-  }
-  if (
-    reason !== null &&
-    typeof reason === "object" &&
-    "message" in reason &&
-    typeof reason.message === "string" &&
-    reason.message.length > 0
-  ) {
-    return reason.message;
-  }
-  return "The entry could not be saved.";
+  const code = errorCodeOf(reason);
+  const contextual = code === undefined ? undefined : NAMING_ERROR_KEYS[code];
+  return contextual !== undefined
+    ? translateNow(contextual)
+    : describeError(reason, "entry.naming.error.saveFailed");
 }
 
 function drawingSuffix(name: string | undefined): string {

@@ -1,4 +1,6 @@
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useI18n } from "../i18n";
+import { historyDefaultSummary, historyVersionLabel } from "./historyFormat";
 import { HistoryStateView } from "./HistoryStates";
 import type { HistoryVersionView } from "./HistoryList";
 
@@ -22,6 +24,7 @@ export function HistoryPreview({
   processing = false,
   onExit,
 }: HistoryPreviewProps) {
+  const { t } = useI18n();
   const exitButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -37,7 +40,7 @@ export function HistoryPreview({
 
   return (
     <section
-      aria-label="Version preview"
+      aria-label={t("history.preview.label")}
       aria-readonly="true"
       className="history-preview"
       data-history-preview-readonly="true"
@@ -46,29 +49,30 @@ export function HistoryPreview({
       <div className="history-preview-header">
         <div>
           <h2>
-            Preview · v-{String(item.sequence).padStart(3, "0")} ·{" "}
-            {formatPreviewTitle(item)}
+            {t("history.preview.title", {
+              version: historyVersionLabel(item.sequence),
+              summary: formatPreviewTitle(item),
+            })}
           </h2>
           <p className="history-preview-separation">
-            Read-only snapshot. The current drawing remains separate and
-            unchanged.
+            {t("history.preview.separation")}
           </p>
         </div>
         <button
-          aria-label="Exit version preview"
+          aria-label={t("history.preview.exitLabel")}
           className="icon-button"
           onClick={onExit}
           ref={exitButtonRef}
           type="button"
         >
           <CloseIcon />
-          <span className="visually-hidden">Exit preview</span>
+          <span className="visually-hidden">{t("history.preview.exit")}</span>
         </button>
       </div>
 
       <div
         aria-busy={state === "loading" || processing}
-        aria-label="Read-only canvas preview"
+        aria-label={t("history.preview.canvasRegion")}
         className="history-preview-content"
         role="region"
       >
@@ -79,7 +83,7 @@ export function HistoryPreview({
         ) : (
           (content ?? (
             <p className="history-preview-placeholder">
-              Preview content is ready.
+              {t("history.preview.ready")}
             </p>
           ))
         )}
@@ -93,7 +97,7 @@ function formatPreviewTitle(item: HistoryVersionView): string {
     item.summary !== "" &&
     item.summaryReliable !== false
     ? item.summary
-    : "Canvas changed";
+    : historyDefaultSummary();
 }
 
 function CloseIcon() {

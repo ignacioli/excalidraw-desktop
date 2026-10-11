@@ -199,7 +199,7 @@ describe("TabBar", () => {
     );
   });
 
-  it("offers Close, Close Others, and Close Tabs to the Right from the tab context menu", async () => {
+  it("offers Close, Close Others, Close Tabs to the Right, and Close All from the tab context menu", async () => {
     const user = userEvent.setup();
     setDocumentSessions([
       createSession("alpha", "Alpha", "/tmp/alpha.excalidraw", "clean"),
@@ -217,8 +217,15 @@ describe("TabBar", () => {
       within(menu).getByRole("menuitem", { name: "Close Others" }),
     ).toBeInTheDocument();
     expect(
-      within(menu).getByRole("menuitem", { name: "Close Tabs to the Right" }),
-    ).toBeInTheDocument();
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "Close",
+      "Close Others",
+      "Close Tabs to the Right",
+      "Close All",
+    ]);
 
     await user.click(within(menu).getByRole("menuitem", { name: "Close" }));
     expect(documentManager.close).toHaveBeenCalledWith("beta");
@@ -237,6 +244,21 @@ describe("TabBar", () => {
     fireEvent.contextMenu(screen.getByRole("tab", { name: "Beta" }));
     await user.click(screen.getByRole("menuitem", { name: "Close Others" }));
     expect(closeMany).toHaveBeenCalledWith(["alpha", "gamma"]);
+  });
+
+  it("closes every tab in visual order from Close All", async () => {
+    const user = userEvent.setup();
+    const closeMany = stubCloseMany();
+    setDocumentSessions([
+      createSession("alpha", "Alpha", "/tmp/alpha.excalidraw", "clean"),
+      createSession("beta", "Beta", "/tmp/beta.excalidraw", "clean"),
+      createSession("gamma", "Gamma", "/tmp/gamma.excalidraw", "clean"),
+    ]);
+    render(<TabBar />);
+
+    fireEvent.contextMenu(screen.getByRole("tab", { name: "Beta" }));
+    await user.click(screen.getByRole("menuitem", { name: "Close All" }));
+    expect(closeMany).toHaveBeenCalledWith(["alpha", "beta", "gamma"]);
   });
 
   it("closes tabs to the right in visual order", async () => {

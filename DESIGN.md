@@ -4,7 +4,7 @@
 
 **Status**: Reconciled canonical contract — approved by product owner
 
-**Last updated**: 2026-09-03
+**Last updated**: 2026-10-11
 
 **Scope**: Application shell, desktop-specific UI, and the embedded Excalidraw editor
 
@@ -43,9 +43,9 @@ The window is an ordinary decorated native window titled **Excalidraw Whiteboard
 - **Current Workspace** is the single workspace used by the sidebar tree and its header actions. A missing or invalid saved id falls back to an available workspace without creating a new workspace record.
 - **Back** returns to the previous valid browsing location within the Current Workspace. It is disabled when the browsing stack is empty and does not close open documents.
 
-**Workspace tree.** The Current Workspace root and its visible descendants form one continuous virtualized tree of Workspace Entries; multiple mounted workspace roots never stack in the Sidebar. Other workspace records remain available through Welcome/Recent or an explicit workspace-open flow. Drawing rows use a file icon. There is no FileTree, no production `dir_list` listing, and no canvas-content thumbnail worker or `thumb_*` IPC.
+**Workspace tree.** The Current Workspace root and its visible descendants form one continuous virtualized tree of Workspace Entries; multiple mounted workspace roots never stack in the Sidebar. Other workspace records remain available through Welcome/Recent or an explicit workspace-open flow. Drawing rows use a file icon. Hovering a row shows its full path as a native tooltip, with the home directory abbreviated as `~`. There is no FileTree, no production `dir_list` listing, and no canvas-content thumbnail worker or `thumb_*` IPC.
 
-**Tabs.** Every tab reserves a close-control slot. The tab context menu provides **Close**, **Close Others**, and **Close Tabs to the Right**. Middle-click closes the pointed tab. Cmd+W (macOS) and Ctrl+W (supported Linux) close the active drawing tab in the application shell. A predominantly vertical wheel gesture over the tab bar switches tabs and coalesces to the latest intent; overflow tabs use the nearest-visible compact strategy without a visible tab-strip scrollbar or smooth scrolling when reduced motion is requested. Closing an Orphaned Document offers **Save As**, **Close Without Saving**, and **Cancel**.
+**Tabs.** Every tab reserves a close-control slot. The tab context menu provides **Close**, **Close Others**, **Close Tabs to the Right**, and **Close All**; batch closes stop at the first failure or a cancelled Orphaned Document prompt. Middle-click closes the pointed tab. Cmd+W (macOS) and Ctrl+W (supported Linux) close the active drawing tab in the application shell. A predominantly vertical wheel gesture over the tab bar switches tabs and coalesces to the latest intent; overflow tabs use the nearest-visible compact strategy without a visible tab-strip scrollbar or smooth scrolling when reduced motion is requested. Closing an Orphaned Document offers **Save As**, **Close Without Saving**, and **Cancel**.
 
 ### Action ownership and legacy removal
 
@@ -56,11 +56,22 @@ The shell removes rather than restyles old chrome. All visible counts below must
 - A visible tab-strip scrollbar, a thick or persistent Sidebar scrollbar, a permanently visible horizontal ellipsis, and triangle, letter, diamond, or Unicode placeholder glyphs for directory/drawing identity;
 - Header-action overflow that hides the Current Workspace's compact `New Drawing`, `New Folder`, Collapse-or-Expand-All, or Refresh actions.
 
-Accessible names, tooltips, keyboard operation, hidden semantic labels, and error copy remain required; the zero count applies only to visible obsolete or duplicate chrome. `New Drawing` is a compact Current Workspace-header action and targets the selected directory or the workspace root. `Save To` and `Export Image` retain their SDK or application/menu-level owner; no duplicate top-level Export is introduced. Appearance remains an application/menu-level preference, not standalone shell chrome.
+Accessible names, tooltips, keyboard operation, hidden semantic labels, and error copy remain required; the zero count applies only to visible obsolete or duplicate chrome. `New Drawing` is a compact Current Workspace-header action and targets the selected directory or the workspace root. `Save To` and `Export Image` retain their SDK or application/menu-level owner; no duplicate top-level Export is introduced. Appearance remains an application/menu-level preference, not standalone shell chrome; the canvas main menu Theme control and the native View > Appearance menu write the same application preference.
 
-Application-shell UI copy is English in this version.
+### Interface language
 
-The first version does not recreate the official PWA main menu, browser/PWA title bar, Excalidraw+ entry points, account UI, realtime collaboration, or cloud-service controls.
+The application supports two interface languages: English and Simplified Chinese (简体中文). The language preference is `Follow system`, `English`, or `简体中文`, and first launch defaults to `Follow system`.
+
+- `Follow system` uses the first supported language in the macOS preferred-language list and falls back to English when the list has none. A change to the macOS preferred languages takes effect at the next launch.
+- A manual choice applies immediately to the application shell, the canvas editor, and the application-controlled native menus, and persists across restarts.
+- Language is application-local preference, never document content.
+- System-owned dialogs and panels (open/save panels, permission prompts) follow macOS and are not controlled by the application.
+
+### Canvas main menu
+
+The canvas main menu is composed only through the SDK's public `MainMenu` API: SDK default items for Find on canvas, Help, Theme, and Canvas background, plus a flat `Preferences` group (Tool lock, Toggle grid, Snap to objects, Zen mode, View mode, Language). It uses the SDK's own menu visuals; the approved layout lives in `docs/design/preferences-i18n/`.
+
+The application does not recreate the rest of the official PWA main menu (Open, Save to, Export, Reset canvas, Excalidraw links), the browser/PWA title bar, Excalidraw+ entry points, sign-in or account UI, realtime collaboration, or cloud-service controls.
 
 ## Official Excalidraw boundary
 
@@ -119,11 +130,11 @@ The approved shell geometry uses a 4/8/12/16/24 px spacing scale; 8 px control a
 - Prefer semantic HTML and controls that match platform conventions. Every interactive element must have an accessible name and a visible focus indicator.
 - hover, active, selected, disabled, loading, empty, error, conflict, permission-denied, and offline are part of the component definition.
 - Tabs must show the file name and must not rely on icons alone; unsaved state uses both a visible marker and accessible text. The close-control slot stays reserved so titles do not jump.
-- At most one context menu is open. The same trigger toggles it; another trigger replaces it.
+- At most one context menu is open. The same trigger toggles it; another trigger replaces it. Shell context menus and the Local Version History row menu use the Excalidraw SDK dropdown metrics (0.5rem panel padding and radius, 2rem items, 0.875rem text, island shadow); destructive items use the danger color after a separator.
 - File hierarchy, the active document, selection, warnings, and conflicts must not be expressed by color alone. Drawing rows in the Workspace Sidebar use a file icon, never a canvas thumbnail or a literal text dot.
 - When a modal dialog opens, focus moves into it and is constrained there; when it closes, focus returns to the triggering control. One dialog layer at a time; do not use `window.prompt` or `window.confirm`.
 - Motion exists only to aid state understanding and stays brief; respect reduced motion, and avoid animated layout jumps around the canvas.
-- Shadows express stacking only for floating controls, menus, and dialogs; persistent panels use borders or luminance difference.
+- Shadows express stacking only for floating controls, menus, and dialogs; persistent panels use borders or luminance difference. The Overlay Sidebar uses its border only, without a shadow.
 - Shell icon controls use the frozen 16×16 icons within 32×32 hit targets. Compact icon controls have transparent fill/border at rest and use secondary foreground colors (`#5C5C5C` Light, `#CED4DA` Dark), gaining the semantic hover/pressed surface and stronger contrast only through interaction. The Current Workspace header keeps New Drawing, New Folder, Collapse-or-Expand-All, and Refresh compact on its name row. Workspace row actions use a borderless vertical ellipsis only while pointer or keyboard focus is present. Local Version History rows use an always-visible vertical ellipsis so each version's Mark/Unmark and Delete target remains discoverable. Tab close stays visually integrated in its reserved slot rather than appearing as a separately boxed button.
 - [`docs/design/desktop-shell/hf-2/components.md`](docs/design/desktop-shell/hf-2/components.md) is normative for Icon Button/Back, Tab, Workspace Row, and Welcome Action variants: its 2px theme focus ring, disabled-to-default state priority, visible non-colour cues, row-action tooltip/accessibility rules, and primary/secondary Welcome Action emphasis apply alongside these broader interaction rules.
 

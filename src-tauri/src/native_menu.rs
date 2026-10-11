@@ -1,18 +1,22 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{
         atomic::{AtomicU64, Ordering},
-        Mutex, OnceLock,
+        Mutex, MutexGuard, OnceLock,
     },
 };
 
 use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{
-        Menu, MenuBuilder, MenuEvent, MenuItem, MenuItemKind, PredefinedMenuItem, SubmenuBuilder,
+        CheckMenuItem, IsMenuItem, Menu, MenuEvent, MenuItem, MenuItemKind, PredefinedMenuItem,
+        Submenu,
     },
-    AppHandle, Emitter, Listener, Runtime,
+    AppHandle, Emitter, Listener, Manager, Runtime, State,
 };
+
+use crate::commands::error::{AppError, IpcError};
+pub use crate::native_menu_spec::*;
 
 /// Event delivered to the main webview when an application menu command is
 /// activated. The frontend owns the corresponding document/export/theme
@@ -25,25 +29,6 @@ static NATIVE_MENU_VALIDATION_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static PENDING_NATIVE_MENU_VALIDATIONS: OnceLock<Mutex<HashMap<u64, NativeMenuCommand>>> =
     OnceLock::new();
 
-pub const SAVE_MENU_ID: &str = "native-menu.save";
-pub const EXPORT_IMAGE_MENU_ID: &str = "native-menu.export-image";
-pub const VERSION_HISTORY_MENU_ID: &str = "native-menu.version-history";
-pub const APPEARANCE_SYSTEM_MENU_ID: &str = "native-menu.appearance.system";
-pub const APPEARANCE_LIGHT_MENU_ID: &str = "native-menu.appearance.light";
-pub const APPEARANCE_DARK_MENU_ID: &str = "native-menu.appearance.dark";
-
-const SAVE_MENU_ACCELERATOR: &str = "CmdOrCtrl+S";
-const EXPORT_IMAGE_MENU_ACCELERATOR: &str = "CmdOrCtrl+Alt+E";
-
-const FILE_SUBMENU_ID: &str = "native-menu.file";
-const EDIT_SUBMENU_ID: &str = "native-menu.edit";
-const VIEW_SUBMENU_ID: &str = "native-menu.view";
-const APPEARANCE_SUBMENU_ID: &str = "native-menu.appearance";
-const WINDOW_SUBMENU_ID: &str = "native-menu.window";
-const HELP_SUBMENU_ID: &str = "native-menu.help";
-#[cfg(target_os = "macos")]
-const APPLICATION_SUBMENU_ID: &str = "native-menu.application";
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NativeMenuCommand {
@@ -53,18 +38,59 @@ pub enum NativeMenuCommand {
     AppearanceSystem,
     AppearanceLight,
     AppearanceDark,
+    LanguageSystem,
+    LanguageEn,
+    LanguageZhCn,
+    Help,
+    ToggleToolLock,
+    ToggleGrid,
+    ToggleSnap,
+    ToggleZen,
+    ToggleViewMode,
 }
 
 impl NativeMenuCommand {
+    const ALL: [Self; 15] = [
+        Self::Save,
+        Self::ExportImage,
+        Self::VersionHistory,
+        Self::AppearanceSystem,
+        Self::AppearanceLight,
+        Self::AppearanceDark,
+        Self::LanguageSystem,
+        Self::LanguageEn,
+        Self::LanguageZhCn,
+        Self::Help,
+        Self::ToggleToolLock,
+        Self::ToggleGrid,
+        Self::ToggleSnap,
+        Self::ToggleZen,
+        Self::ToggleViewMode,
+    ];
+
     pub fn from_menu_id(id: &str) -> Option<Self> {
-        match id {
-            SAVE_MENU_ID => Some(Self::Save),
-            EXPORT_IMAGE_MENU_ID => Some(Self::ExportImage),
-            VERSION_HISTORY_MENU_ID => Some(Self::VersionHistory),
-            APPEARANCE_SYSTEM_MENU_ID => Some(Self::AppearanceSystem),
-            APPEARANCE_LIGHT_MENU_ID => Some(Self::AppearanceLight),
-            APPEARANCE_DARK_MENU_ID => Some(Self::AppearanceDark),
-            _ => None,
+        Self::ALL
+            .into_iter()
+            .find(|command| command.menu_id() == id)
+    }
+
+    fn menu_id(self) -> &'static str {
+        match self {
+            Self::Save => SAVE_MENU_ID,
+            Self::ExportImage => EXPORT_IMAGE_MENU_ID,
+            Self::VersionHistory => VERSION_HISTORY_MENU_ID,
+            Self::AppearanceSystem => APPEARANCE_SYSTEM_MENU_ID,
+            Self::AppearanceLight => APPEARANCE_LIGHT_MENU_ID,
+            Self::AppearanceDark => APPEARANCE_DARK_MENU_ID,
+            Self::LanguageSystem => LANGUAGE_SYSTEM_MENU_ID,
+            Self::LanguageEn => LANGUAGE_EN_MENU_ID,
+            Self::LanguageZhCn => LANGUAGE_ZH_CN_MENU_ID,
+            Self::Help => HELP_MENU_ID,
+            Self::ToggleToolLock => TOOL_LOCK_MENU_ID,
+            Self::ToggleGrid => GRID_MENU_ID,
+            Self::ToggleSnap => SNAP_MENU_ID,
+            Self::ToggleZen => ZEN_MENU_ID,
+            Self::ToggleViewMode => VIEW_MODE_MENU_ID,
         }
     }
 }
@@ -92,112 +118,212 @@ struct NativeMenuValidationObservation {
     command: NativeMenuCommand,
 }
 
-/// Build the app-wide menu using Tauri's native menu APIs.
+/// Last valid labels and state, kept so a label change can rebuild the menu
+/// and a state-only change can update items in place.
+struct NativeMenuModel {
+    labels: NativeMenuLabels,
+    state: NativeMenuSyncState,
+    version_history_enabled: bool,
+}
+
+pub struct NativeMenuStore(Mutex<NativeMenuModel>);
+
+impl NativeMenuStore {
+    fn lock(&self) -> MutexGuard<'_, NativeMenuModel> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+/// Build the English bootstrap menu, install it, and keep its model.
 ///
 /// Every fallible menu construction operation is returned to the caller so a
 /// setup failure aborts application setup instead of leaving a partially
 /// configured shell running.
-pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
-    let save = MenuItem::with_id(app, SAVE_MENU_ID, "Save", true, Some(SAVE_MENU_ACCELERATOR))?;
-    let export_image = MenuItem::with_id(
-        app,
-        EXPORT_IMAGE_MENU_ID,
-        "Export Image",
-        true,
-        Some(EXPORT_IMAGE_MENU_ACCELERATOR),
-    )?;
-    // History is available only after the frontend has an active saved
-    // document. Start disabled so the native menu cannot advertise an
-    // operation before the document authority has been established.
-    let version_history = MenuItem::with_id(
-        app,
-        VERSION_HISTORY_MENU_ID,
-        "Version History…",
-        false,
-        None::<&str>,
-    )?;
+pub fn install_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    let model = NativeMenuModel {
+        labels: NativeMenuLabels::english(&app.package_info().name),
+        state: NativeMenuSyncState::default(),
+        // History is available only after the frontend has an active saved
+        // document. Start disabled so the native menu cannot advertise an
+        // operation before the document authority has been established.
+        version_history_enabled: false,
+    };
+    let menu = build_menu(app, &model)?;
+    app.manage(NativeMenuStore(Mutex::new(model)));
+    app.set_menu(menu)?;
+    Ok(())
+}
 
-    let appearance_system =
-        MenuItem::with_id(app, APPEARANCE_SYSTEM_MENU_ID, "System", true, None::<&str>)?;
-    let appearance_light =
-        MenuItem::with_id(app, APPEARANCE_LIGHT_MENU_ID, "Light", true, None::<&str>)?;
-    let appearance_dark =
-        MenuItem::with_id(app, APPEARANCE_DARK_MENU_ID, "Dark", true, None::<&str>)?;
-    let appearance = SubmenuBuilder::with_id(app, APPEARANCE_SUBMENU_ID, "Appearance")
-        .items(&[&appearance_system, &appearance_light, &appearance_dark])
-        .build()?;
+fn build_menu<R: Runtime>(app: &AppHandle<R>, model: &NativeMenuModel) -> tauri::Result<Menu<R>> {
+    let items = build_entries(app, &menu_spec(), model)?;
+    Menu::with_items(app, &as_item_refs(&items))
+}
 
-    #[allow(unused_mut)]
-    let mut file = SubmenuBuilder::with_id(app, FILE_SUBMENU_ID, "File").items(&[
-        &save,
-        &export_image,
-        &version_history,
-    ]);
-    #[cfg(not(target_os = "macos"))]
-    {
-        file = file
-            .separator()
-            .item(&PredefinedMenuItem::close_window(app, None)?)
-            .item(&PredefinedMenuItem::quit(app, None)?);
+fn as_item_refs<R: Runtime>(items: &[MenuItemKind<R>]) -> Vec<&dyn IsMenuItem<R>> {
+    items
+        .iter()
+        .map(|item| item as &dyn IsMenuItem<R>)
+        .collect()
+}
+
+fn build_entries<R: Runtime>(
+    app: &AppHandle<R>,
+    entries: &[MenuEntry],
+    model: &NativeMenuModel,
+) -> tauri::Result<Vec<MenuItemKind<R>>> {
+    let mut items = Vec::with_capacity(entries.len());
+    for entry in entries {
+        items.push(match entry {
+            MenuEntry::Submenu {
+                id,
+                label,
+                children,
+            } => {
+                let text = match label {
+                    SubmenuLabel::Id(label) => model.labels.get(label).to_owned(),
+                    SubmenuLabel::AppName => app.package_info().name.clone(),
+                };
+                let children = build_entries(app, children, model)?;
+                MenuItemKind::Submenu(Submenu::with_id_and_items(
+                    app,
+                    *id,
+                    text,
+                    true,
+                    &as_item_refs(&children),
+                )?)
+            }
+            MenuEntry::Item {
+                id,
+                label,
+                check,
+                accelerator,
+            } => {
+                let text = model.labels.get(label);
+                let state = item_state(id, &model.state, model.version_history_enabled);
+                let enabled = state.is_none_or(|state| state.enabled);
+                if *check {
+                    let checked = state.and_then(|state| state.checked).unwrap_or(false);
+                    MenuItemKind::Check(CheckMenuItem::with_id(
+                        app,
+                        *id,
+                        text,
+                        enabled,
+                        checked,
+                        *accelerator,
+                    )?)
+                } else {
+                    MenuItemKind::MenuItem(MenuItem::with_id(
+                        app,
+                        *id,
+                        text,
+                        enabled,
+                        *accelerator,
+                    )?)
+                }
+            }
+            MenuEntry::System { kind, label } => {
+                MenuItemKind::Predefined(system_item(app, *kind, model.labels.get(label))?)
+            }
+            MenuEntry::Separator => MenuItemKind::Predefined(PredefinedMenuItem::separator(app)?),
+        });
     }
-    let file = file.build()?;
-    let edit = SubmenuBuilder::with_id(app, EDIT_SUBMENU_ID, "Edit")
-        .undo()
-        .redo()
-        .separator()
-        .cut()
-        .copy()
-        .paste()
-        .select_all()
-        .build()?;
-    let mut view = SubmenuBuilder::with_id(app, VIEW_SUBMENU_ID, "View").item(&appearance);
-    #[cfg(target_os = "macos")]
-    {
-        view = view
-            .separator()
-            .item(&PredefinedMenuItem::fullscreen(app, None)?);
+    Ok(items)
+}
+
+fn system_item<R: Runtime>(
+    app: &AppHandle<R>,
+    kind: SystemItem,
+    text: &str,
+) -> tauri::Result<PredefinedMenuItem<R>> {
+    let text = Some(text);
+    match kind {
+        SystemItem::About => PredefinedMenuItem::about(app, text, None),
+        SystemItem::Services => PredefinedMenuItem::services(app, text),
+        SystemItem::Hide => PredefinedMenuItem::hide(app, text),
+        SystemItem::HideOthers => PredefinedMenuItem::hide_others(app, text),
+        SystemItem::Quit => PredefinedMenuItem::quit(app, text),
+        SystemItem::CloseWindow => PredefinedMenuItem::close_window(app, text),
+        SystemItem::Undo => PredefinedMenuItem::undo(app, text),
+        SystemItem::Redo => PredefinedMenuItem::redo(app, text),
+        SystemItem::Cut => PredefinedMenuItem::cut(app, text),
+        SystemItem::Copy => PredefinedMenuItem::copy(app, text),
+        SystemItem::Paste => PredefinedMenuItem::paste(app, text),
+        SystemItem::SelectAll => PredefinedMenuItem::select_all(app, text),
+        SystemItem::Minimize => PredefinedMenuItem::minimize(app, text),
+        SystemItem::Zoom => PredefinedMenuItem::maximize(app, text),
+        SystemItem::Fullscreen => PredefinedMenuItem::fullscreen(app, text),
     }
-    let view = view.build()?;
+}
 
-    let window = SubmenuBuilder::with_id(app, WINDOW_SUBMENU_ID, "Window")
-        .minimize()
-        .maximize()
-        .separator()
-        .item(&PredefinedMenuItem::close_window(app, None)?)
-        .build()?;
-
-    #[cfg(target_os = "macos")]
-    let application =
-        SubmenuBuilder::with_id(app, APPLICATION_SUBMENU_ID, app.package_info().name.clone())
-            .item(&PredefinedMenuItem::about(app, None, None)?)
-            .separator()
-            .item(&PredefinedMenuItem::services(app, None)?)
-            .separator()
-            .item(&PredefinedMenuItem::hide(app, None)?)
-            .item(&PredefinedMenuItem::hide_others(app, None)?)
-            .separator()
-            .item(&PredefinedMenuItem::quit(app, None)?)
-            .build()?;
-
-    #[cfg(not(target_os = "macos"))]
-    let help = SubmenuBuilder::with_id(app, HELP_SUBMENU_ID, "Help")
-        .item(&PredefinedMenuItem::about(app, None, None)?)
-        .build()?;
-    #[cfg(target_os = "macos")]
-    let help = SubmenuBuilder::with_id(app, HELP_SUBMENU_ID, "Help").build()?;
-
-    let mut menu = MenuBuilder::new(app);
-    #[cfg(target_os = "macos")]
-    {
-        menu = menu.item(&application);
+/// Push the model's enabled/checked flags onto the installed menu items.
+fn apply_menu_state<R: Runtime>(
+    items: &[MenuItemKind<R>],
+    model: &NativeMenuModel,
+) -> tauri::Result<()> {
+    for item in items {
+        let state = item_state(
+            item.id().as_ref(),
+            &model.state,
+            model.version_history_enabled,
+        );
+        match (item, state) {
+            (MenuItemKind::MenuItem(menu_item), Some(state)) => {
+                menu_item.set_enabled(state.enabled)?;
+            }
+            (MenuItemKind::Check(check_item), Some(state)) => {
+                check_item.set_enabled(state.enabled)?;
+                check_item.set_checked(state.checked.unwrap_or(false))?;
+            }
+            (MenuItemKind::Submenu(submenu), _) => apply_menu_state(&submenu.items()?, model)?,
+            _ => {}
+        }
     }
-    menu = menu
-        .item(&file)
-        .item(&edit)
-        .item(&view)
-        .item(&window)
-        .item(&help);
-    menu.build()
+    Ok(())
+}
+
+fn reapply_installed_state<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    let (Some(menu), Some(store)) = (app.menu(), app.try_state::<NativeMenuStore>()) else {
+        return Ok(());
+    };
+    let model = store.lock();
+    apply_menu_state(&menu.items()?, &model)
+}
+
+/// Apply the frontend's localized labels and state. A label change rebuilds
+/// the menu; a state-only change updates the existing items. Invalid labels
+/// are rejected and the last valid menu stays installed.
+#[tauri::command(rename = "native_menu_sync")]
+pub fn sync_native_menu<R: Runtime>(
+    app: AppHandle<R>,
+    store: State<'_, NativeMenuStore>,
+    labels: BTreeMap<String, String>,
+    state: NativeMenuSyncState,
+) -> Result<(), IpcError> {
+    let labels = NativeMenuLabels::validate(labels).map_err(AppError::Internal)?;
+    let mut model = store.lock();
+    let rebuild = labels != model.labels;
+    let previous = (model.labels.clone(), model.state);
+    model.labels = labels;
+    model.state = state;
+    let result = if rebuild {
+        build_menu(&app, &model).and_then(|menu| app.set_menu(menu).map(|_| ()))
+    } else {
+        match app.menu() {
+            Some(menu) => menu
+                .items()
+                .and_then(|items| apply_menu_state(&items, &model)),
+            None => Ok(()),
+        }
+    };
+    if let Err(error) = result {
+        (model.labels, model.state) = previous;
+        return Err(
+            AppError::Internal(format!("failed to update the native menu: {error}")).into(),
+        );
+    }
+    Ok(())
 }
 
 /// Synchronize the discoverability state of the history entry with the
@@ -219,6 +345,9 @@ pub fn set_native_menu_enabled<R: Runtime>(
     let menu = app.menu().ok_or_else(|| {
         std::io::Error::new(std::io::ErrorKind::NotFound, "native menu is not installed")
     })?;
+    if let Some(store) = app.try_state::<NativeMenuStore>() {
+        store.lock().version_history_enabled = enabled;
+    }
     if !set_menu_item_enabled(&menu.items()?, command.menu_id(), enabled)? {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
@@ -227,19 +356,6 @@ pub fn set_native_menu_enabled<R: Runtime>(
         .into());
     }
     Ok(())
-}
-
-impl NativeMenuCommand {
-    fn menu_id(self) -> &'static str {
-        match self {
-            Self::VersionHistory => VERSION_HISTORY_MENU_ID,
-            Self::Save => SAVE_MENU_ID,
-            Self::ExportImage => EXPORT_IMAGE_MENU_ID,
-            Self::AppearanceSystem => APPEARANCE_SYSTEM_MENU_ID,
-            Self::AppearanceLight => APPEARANCE_LIGHT_MENU_ID,
-            Self::AppearanceDark => APPEARANCE_DARK_MENU_ID,
-        }
-    }
 }
 
 fn set_menu_item_enabled<R: Runtime>(
@@ -269,6 +385,13 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
     let Some(command) = NativeMenuCommand::from_menu_id(event.id().as_ref()) else {
         return;
     };
+
+    // AppKit toggles a check item when it is clicked. The frontend decides
+    // the new state and syncs it back, so restore the last synced flags first
+    // (otherwise clicking the already-selected language would clear it).
+    if let Err(error) = reapply_installed_state(app) {
+        eprintln!("failed to restore native menu state: {error}");
+    }
 
     let validation_id = register_pending_validation(command);
     if let Some(validation_id) = validation_id {
@@ -397,6 +520,16 @@ mod tests {
     }
 
     #[test]
+    fn registered_sync_command_matches_frontend_invoke() {
+        let registered_name = __tauri_command_name_sync_native_menu!();
+        let frontend = include_str!("../../src/app/nativeMenuSync.ts");
+        assert!(
+            frontend.contains(&format!(".invoke(\"{registered_name}\",")),
+            "frontend invoke must match registered Tauri command {registered_name}"
+        );
+    }
+
+    #[test]
     fn maps_only_owned_menu_ids_to_commands() {
         let cases = [
             (SAVE_MENU_ID, NativeMenuCommand::Save),
@@ -408,12 +541,30 @@ mod tests {
             ),
             (APPEARANCE_LIGHT_MENU_ID, NativeMenuCommand::AppearanceLight),
             (APPEARANCE_DARK_MENU_ID, NativeMenuCommand::AppearanceDark),
+            (LANGUAGE_SYSTEM_MENU_ID, NativeMenuCommand::LanguageSystem),
+            (LANGUAGE_EN_MENU_ID, NativeMenuCommand::LanguageEn),
+            (LANGUAGE_ZH_CN_MENU_ID, NativeMenuCommand::LanguageZhCn),
+            (HELP_MENU_ID, NativeMenuCommand::Help),
+            (TOOL_LOCK_MENU_ID, NativeMenuCommand::ToggleToolLock),
+            (GRID_MENU_ID, NativeMenuCommand::ToggleGrid),
+            (SNAP_MENU_ID, NativeMenuCommand::ToggleSnap),
+            (ZEN_MENU_ID, NativeMenuCommand::ToggleZen),
+            (VIEW_MODE_MENU_ID, NativeMenuCommand::ToggleViewMode),
         ];
 
         for (id, command) in cases {
             assert_eq!(NativeMenuCommand::from_menu_id(id), Some(command));
         }
         assert_eq!(NativeMenuCommand::from_menu_id("close-window"), None);
+        assert_eq!(
+            NativeMenuCommand::from_menu_id("native-menu.help-menu"),
+            None
+        );
+        assert_eq!(
+            serde_json::to_value(NativeMenuCommand::LanguageZhCn)
+                .unwrap_or_else(|error| panic!("serialize command: {error}")),
+            serde_json::json!("languageZhCn")
+        );
     }
 
     #[test]

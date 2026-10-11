@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { describeError } from "../i18n/describeError";
+import { t, useI18n } from "../i18n";
 
 export type ConflictResolution = "takeExternal" | "keepLocal" | "saveAsNew";
 
@@ -24,9 +26,12 @@ export function ConflictDialog({
   onDismiss,
   requestSaveAsPath = chooseConflictSaveAsPath,
 }: ConflictDialogProps) {
+  const { t, formatDateTime } = useI18n();
   const dialogRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<{ error: unknown } | null>(
+    null,
+  );
 
   useEffect(() => {
     dialogRef.current
@@ -74,7 +79,7 @@ export function ConflictDialog({
         await onResolve(resolution, selectedPath);
       }
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      setErrorMessage({ error });
     } finally {
       setBusy(false);
     }
@@ -90,20 +95,17 @@ export function ConflictDialog({
       role="dialog"
     >
       <section className="conflict-dialog" role="document">
-        <h1 id="conflict-dialog-title">File changed on disk</h1>
+        <h1 id="conflict-dialog-title">{t("conflict.title")}</h1>
         <h2>{title}</h2>
         <p className="conflict-dialog-path">{path}</p>
-        <p>
-          The file was changed outside this app while it had unsaved changes.
-          Nothing is written to the file until you choose what to do.
-        </p>
+        <p>{t("conflict.description")}</p>
         <dl className="conflict-version-times">
           <div>
-            <dt>External version changed</dt>
+            <dt>{t("conflict.externalChanged")}</dt>
             <dd>{formatTimestamp(externalMtime)}</dd>
           </div>
           <div>
-            <dt>Local draft last saved</dt>
+            <dt>{t("conflict.localSaved")}</dt>
             <dd>{formatTimestamp(localDraftUpdatedAt)}</dd>
           </div>
         </dl>
@@ -113,7 +115,7 @@ export function ConflictDialog({
             className="conflict-dialog-error"
             role="alert"
           >
-            {errorMessage}
+            {describeError(errorMessage.error, "error.conflictFailed")}
           </p>
         ) : null}
         <div className="conflict-dialog-actions">
@@ -123,26 +125,34 @@ export function ConflictDialog({
             onClick={() => void resolve("takeExternal")}
             type="button"
           >
-            Use external version
+            {t("conflict.useExternal")}
           </button>
           <button
             disabled={busy}
             onClick={() => void resolve("keepLocal")}
             type="button"
           >
-            Keep local changes
+            {t("conflict.keepLocal")}
           </button>
           <button
             disabled={busy}
             onClick={() => void resolve("saveAsNew")}
             type="button"
           >
-            Save local changes as new…
+            {t("conflict.saveAsNew")}
           </button>
         </div>
       </section>
     </div>
   );
+
+  function formatTimestamp(seconds: number): string {
+    const timestamp = new Date(seconds * 1_000);
+    if (Number.isNaN(timestamp.getTime())) {
+      return t("conflict.unknownTime");
+    }
+    return formatDateTime(timestamp);
+  }
 
   function trapFocus(event: KeyboardEvent<HTMLDivElement>) {
     const focusable = Array.from(
@@ -172,33 +182,10 @@ async function chooseConflictSaveAsPath(title: string): Promise<string | null> {
     defaultPath: title,
     filters: [
       {
-        name: "Excalidraw drawing",
+        name: t("conflict.saveDialog.filterName"),
         extensions: ["excalidraw", "excalidraw.json"],
       },
     ],
-    title: "Save local changes as a new drawing",
+    title: t("conflict.saveDialog.title"),
   });
-}
-
-function formatTimestamp(seconds: number): string {
-  const timestamp = new Date(seconds * 1_000);
-  if (Number.isNaN(timestamp.getTime())) {
-    return "at an unknown time";
-  }
-  return timestamp.toLocaleString();
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  return "The conflict could not be resolved.";
 }

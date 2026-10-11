@@ -117,6 +117,13 @@ export class ThemeController {
     this.update(preference);
   }
 
+  /** Flips the displayed scheme and pins it as a fixed Light or Dark mode. */
+  toggleFixed(): void {
+    this.setModePreference(
+      this.snapshot.resolvedColorScheme === "dark" ? "light" : "dark",
+    );
+  }
+
   dispose(): void {
     this.colorSchemeMedia.removeEventListener(
       "change",

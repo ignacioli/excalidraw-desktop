@@ -20,6 +20,8 @@ import { DocumentOperationQueue, DraftScheduler } from "./draftScheduler";
 import { createDocumentGateway, type DocumentGateway } from "./documentGateway";
 import { bindActivateRunner, requestActivate } from "./tabActivationQueue";
 import { defaultEventListener, type EventListener } from "../ipc/events";
+import { t } from "../i18n";
+import { describeError } from "../i18n/describeError";
 
 export type DocumentSaveState =
   | "clean"
@@ -223,7 +225,12 @@ export class DocumentManager {
       scene,
       sceneVersion,
       revision: session.revision + 1,
-      saveState: session.saveState === "orphaned" ? "orphaned" : "dirty",
+      // A conflict stays open until the user decides; the scheduler holds
+      // the change. Grid stays toggleable while the document is read-only.
+      saveState:
+        session.saveState === "orphaned" || session.saveState === "conflicted"
+          ? session.saveState
+          : "dirty",
       errorMessage: null,
       lastReloadedAt: null,
     });
@@ -585,7 +592,7 @@ export class DocumentManager {
         return {
           status: "failed",
           documentId,
-          message: "A save location is required.",
+          message: t("error.saveLocationRequired"),
         };
       }
       try {
@@ -594,7 +601,7 @@ export class DocumentManager {
         return {
           status: "failed",
           documentId,
-          message: getErrorMessage(error),
+          message: describeError(error, "error.saveFailed"),
         };
       }
     }
@@ -658,7 +665,7 @@ export class DocumentManager {
       return {
         status: "failed",
         documentId,
-        message: getErrorMessage(error),
+        message: describeError(error, "error.saveFailed"),
       };
     }
 
@@ -1052,7 +1059,7 @@ export class DocumentManager {
       onError: (error) => {
         this.patchSession(id, {
           saveState: "error",
-          errorMessage: getErrorMessage(error),
+          errorMessage: describeError(error, "error.saveFailed"),
         });
       },
     });
@@ -1238,7 +1245,8 @@ function hasPersistedSceneChange(
     previousState.viewBackgroundColor !== nextState.viewBackgroundColor ||
     previousState.gridModeEnabled !== nextState.gridModeEnabled ||
     previousState.gridSize !== nextState.gridSize ||
-    previousState.gridStep !== nextState.gridStep
+    previousState.gridStep !== nextState.gridStep ||
+    previousState.objectsSnapModeEnabled !== nextState.objectsSnapModeEnabled
   );
 }
 
@@ -1255,21 +1263,6 @@ function haveSameFiles(
     previousIds.length === nextIds.length &&
     previousIds.every((id) => previous[id] === next[id])
   );
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  return "The drawing could not be saved.";
 }
 
 export const documentManager = new DocumentManager(

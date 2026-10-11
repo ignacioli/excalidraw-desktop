@@ -4,6 +4,8 @@ import type {
   RecoveryAction,
   RecoveryCandidate,
 } from "../ipc/contracts";
+import { describeError, LocalizedError } from "../i18n/describeError";
+import { useI18n } from "../i18n";
 
 export type RecoveryApplyResponse = CommandResponse<"recovery_apply">;
 
@@ -28,9 +30,12 @@ export function RecoveryDialog({
   onCancel,
   requestSaveAsPath,
 }: RecoveryDialogProps) {
+  const { t, formatDateTime } = useI18n();
   const dialogRef = useRef<HTMLDivElement>(null);
   const [busyDocumentId, setBusyDocumentId] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<{
+    error: unknown;
+  } | null>(null);
 
   useEffect(() => {
     const firstButton = dialogRef.current?.querySelector<HTMLButtonElement>(
@@ -71,9 +76,9 @@ export function RecoveryDialog({
       let saveAsPath: string | undefined;
       if (action === "saveAsNew") {
         if (requestSaveAsPath === undefined) {
-          setErrorMessage(
-            "Choose a destination before saving the recovery as a new drawing.",
-          );
+          setErrorMessage({
+            error: new LocalizedError("recovery.error.chooseDestination"),
+          });
           return;
         }
         const selectedPath = await requestSaveAsPath(candidate);
@@ -88,7 +93,7 @@ export function RecoveryDialog({
         ...(saveAsPath === undefined ? {} : { saveAsPath }),
       });
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      setErrorMessage({ error });
     } finally {
       setBusyDocumentId(null);
     }
@@ -104,22 +109,19 @@ export function RecoveryDialog({
       role="dialog"
     >
       <section className="recovery-dialog" role="document">
-        <h1 id="recovery-dialog-title">Recover unsaved drawings</h1>
-        <p>
-          Excalidraw Desktop found recovery snapshots from an interrupted
-          session. Choose what to do with each drawing.
-        </p>
+        <h1 id="recovery-dialog-title">{t("recovery.title")}</h1>
+        <p>{t("recovery.description")}</p>
         {errorMessage !== null ? (
           <p
             aria-live="assertive"
             className="recovery-dialog-error"
             role="alert"
           >
-            {errorMessage}
+            {describeError(errorMessage.error, "error.recoveryFailed")}
           </p>
         ) : null}
         <ul
-          aria-label="Recovery candidates"
+          aria-label={t("recovery.candidatesLabel")}
           className="recovery-candidate-list"
         >
           {candidates.map((candidate) => {
@@ -128,18 +130,24 @@ export function RecoveryDialog({
                 <div className="recovery-candidate-details">
                   <h2>{candidate.displayName}</h2>
                   <p>
-                    Snapshot saved {formatTimestamp(candidate.snapshotSavedAt)}
+                    {t("recovery.snapshotSaved", {
+                      time: formatTimestamp(candidate.snapshotSavedAt),
+                    })}
                   </p>
                   {candidate.originalPath !== null ? (
                     <p className="recovery-candidate-path">
                       {candidate.originalPath}
                     </p>
                   ) : (
-                    <p className="recovery-candidate-path">Untitled drawing</p>
+                    <p className="recovery-candidate-path">
+                      {t("recovery.untitled")}
+                    </p>
                   )}
                 </div>
                 <div
-                  aria-label={`Actions for ${candidate.displayName}`}
+                  aria-label={t("recovery.actionsFor", {
+                    name: candidate.displayName,
+                  })}
                   className="recovery-candidate-actions"
                 >
                   <button
@@ -147,28 +155,28 @@ export function RecoveryDialog({
                     onClick={() => void applyDecision(candidate, "restore")}
                     type="button"
                   >
-                    Restore {candidate.displayName}
+                    {t("recovery.restore", { name: candidate.displayName })}
                   </button>
                   <button
                     disabled={busyDocumentId !== null}
                     onClick={() => void applyDecision(candidate, "keepDisk")}
                     type="button"
                   >
-                    Keep disk version for {candidate.displayName}
+                    {t("recovery.keepDisk", { name: candidate.displayName })}
                   </button>
                   <button
                     disabled={busyDocumentId !== null}
                     onClick={() => void applyDecision(candidate, "saveAsNew")}
                     type="button"
                   >
-                    Save {candidate.displayName} as new
+                    {t("recovery.saveAsNew", { name: candidate.displayName })}
                   </button>
                   <button
                     disabled={busyDocumentId !== null}
                     onClick={() => void applyDecision(candidate, "discard")}
                     type="button"
                   >
-                    Discard recovery for {candidate.displayName}
+                    {t("recovery.discard", { name: candidate.displayName })}
                   </button>
                 </div>
               </li>
@@ -178,6 +186,14 @@ export function RecoveryDialog({
       </section>
     </div>
   );
+
+  function formatTimestamp(seconds: number): string {
+    const timestamp = new Date(seconds * 1_000);
+    if (Number.isNaN(timestamp.getTime())) {
+      return t("recovery.unknownTime");
+    }
+    return formatDateTime(timestamp);
+  }
 
   function trapFocus(event: KeyboardEvent<HTMLDivElement>) {
     const focusable = Array.from(
@@ -199,27 +215,4 @@ export function RecoveryDialog({
       first.focus();
     }
   }
-}
-
-function formatTimestamp(seconds: number): string {
-  const timestamp = new Date(seconds * 1_000);
-  if (Number.isNaN(timestamp.getTime())) {
-    return "at an unknown time";
-  }
-  return timestamp.toLocaleString();
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  return "The recovery action could not be completed.";
 }

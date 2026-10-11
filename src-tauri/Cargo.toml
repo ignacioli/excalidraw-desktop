@@ -35,15 +35,18 @@ trash = "5"
 uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-# Test-only: keeps rAF-driven performance measurements running while the
-# window is occluded (App Nap suspension). Never part of a production build.
+# NSLocale reads the system language list for the handshake. NSProcessInfo is
+# used only by the test-only e2e harness (App Nap suspension during
+# performance measurements).
 objc2-foundation = { version = "0.3", features = [
+  "NSArray",
+  "NSLocale",
   "NSProcessInfo",
   "NSString",
-], optional = true }
+] }
 
 [features]
-e2e-harness = ["dep:objc2-foundation"]
+e2e-harness = []
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

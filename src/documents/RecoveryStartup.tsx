@@ -3,6 +3,8 @@ import type { AppHandshakeResponse, RecoveryCandidate } from "../ipc/contracts";
 import { documentManager, type DocumentManager } from "./documentStore";
 import { RecoveryDialog, type RecoveryDecision } from "./RecoveryDialog";
 import { recoveryManager, type RecoveryManager } from "./recoveryManager";
+import { describeError, LocalizedError } from "../i18n/describeError";
+import { t, useI18n } from "../i18n";
 
 interface RecoveryStartupProps {
   enabled: boolean;
@@ -17,6 +19,9 @@ interface RecoveryNoticeProps {
   durationMs?: number;
 }
 
+type StartupError =
+  { kind: "check"; error: unknown } | { kind: "resolveFirst" };
+
 export type RecoveryStartupStatus = "checking" | "dialog" | "ready" | "error";
 
 export interface RecoveryStartupState {
@@ -30,6 +35,7 @@ export function RecoveryNotice({
   count,
   durationMs = 5_000,
 }: RecoveryNoticeProps) {
+  const { t } = useI18n();
   const [dismissedCount, setDismissedCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -42,7 +48,9 @@ export function RecoveryNotice({
   return (
     <p className="recovery-notice" role="status">
       <span aria-hidden="true" className="recovery-notice-dot" />
-      Recovered · {count} {count === 1 ? "drawing" : "drawings"} restored
+      {t(count === 1 ? "recovery.notice.one" : "recovery.notice.other", {
+        count,
+      })}
     </p>
   );
 }
@@ -54,8 +62,9 @@ export function RecoveryStartup({
   requestSaveAsPath = chooseRecoveryPath,
   onStateChange,
 }: RecoveryStartupProps) {
+  const { t } = useI18n();
   const [candidates, setCandidates] = useState<RecoveryCandidate[]>([]);
-  const [startupError, setStartupError] = useState<string | null>(null);
+  const [startupError, setStartupError] = useState<StartupError | null>(null);
   const [recoveredCount, setRecoveredCount] = useState(0);
   const handshakeRef = useRef<AppHandshakeResponse | null>(null);
   const startupPromiseRef = useRef<ReturnType<RecoveryManager["start"]> | null>(
@@ -104,7 +113,7 @@ export function RecoveryStartup({
             candidates: [],
             recoveredCount: 0,
           });
-          setStartupError(getErrorMessage(error));
+          setStartupError({ kind: "check", error });
         }
       });
     return () => {
@@ -124,7 +133,7 @@ export function RecoveryStartup({
       (item) => item.documentId === decision.documentId,
     );
     if (candidate === undefined) {
-      throw new Error("The selected recovery snapshot is no longer available.");
+      throw new LocalizedError("recovery.error.snapshotUnavailable");
     }
 
     let appliedDecision = decision;
@@ -177,7 +186,14 @@ export function RecoveryStartup({
     <>
       {startupError !== null ? (
         <p className="recovery-startup-error" role="alert">
-          Recovery snapshots could not be checked: {startupError}
+          {startupError.kind === "check"
+            ? t("recovery.error.startupCheck", {
+                reason: describeError(
+                  startupError.error,
+                  "error.recoveryFailed",
+                ),
+              })
+            : t("recovery.error.resolveFirst")}
         </p>
       ) : null}
       {candidates.length > 0 ? (
@@ -185,7 +201,7 @@ export function RecoveryStartup({
           candidates={candidates}
           onApply={apply}
           onCancel={() => {
-            setStartupError("Resolve recovery candidates before continuing.");
+            setStartupError({ kind: "resolveFirst" });
           }}
           requestSaveAsPath={requestSaveAsPath}
         />
@@ -202,25 +218,10 @@ async function chooseRecoveryPath(
     defaultPath: candidate.displayName,
     filters: [
       {
-        name: "Excalidraw drawing",
+        name: t("recovery.saveDialog.filterName"),
         extensions: ["excalidraw", "excalidraw.json"],
       },
     ],
-    title: "Save recovered drawing",
+    title: t("recovery.saveDialog.title"),
   });
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  return "Unknown recovery error";
 }

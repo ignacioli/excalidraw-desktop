@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { en } from "../../src/i18n/messages/en.ts";
 
 import {
   installBrowserTauriHarness,
@@ -48,7 +49,7 @@ test.describe("Phase 5 protected input keyboard paths", () => {
       )
       .toEqual([]);
     await expect(page.locator(".app-commands")).toContainText(
-      "已保存操作前版本并清空画布。",
+      en["shell.history.clearSaved"],
     );
   });
 
@@ -292,10 +293,12 @@ async function installHistoryProbe(
             appVersion: string;
             abnormalExit: boolean;
             pendingOpenPaths: string[];
+            preferredLanguages: string[];
           };
           return {
             ...response,
             pendingOpenPaths: pendingPath === null ? [] : [pendingPath],
+            preferredLanguages: [],
           };
         }
         if (command === "plugin:dialog|open") {

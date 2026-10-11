@@ -37,6 +37,103 @@ const OLD_FILE_ID = "sdk-file-id";
 const OLD_BYTES = "data:image/png;base64,cmVk";
 const NEW_BYTES = "data:image/png;base64,Ymx1ZQ==";
 
+describe("ExcalidrawAdapter canvas preferences", () => {
+  function preferenceApi(initial: Partial<AppState>) {
+    let appState = {
+      viewModeEnabled: false,
+      gridModeEnabled: false,
+      objectsSnapModeEnabled: false,
+      zenModeEnabled: false,
+      activeTool: { type: "rectangle", locked: false, customType: null },
+      ...initial,
+    } as AppState;
+    const setActiveTool = vi.fn((tool: { type: string; locked?: boolean }) => {
+      appState = {
+        ...appState,
+        activeTool: { ...appState.activeTool, ...tool },
+      } as AppState;
+    });
+    const updateScene = vi.fn((data: { appState?: Partial<AppState> }) => {
+      appState = { ...appState, ...data.appState } as AppState;
+    });
+    const api = {
+      ...fakeApi(),
+      getAppState: () => appState,
+      setActiveTool,
+      updateScene,
+    } as unknown as ExcalidrawImperativeAPI;
+    return { api, setActiveTool, updateScene };
+  }
+
+  it("turns Snap off when Grid turns on, and Grid off when Snap turns on", () => {
+    const { api } = preferenceApi({ objectsSnapModeEnabled: true });
+    const adapter = new ExcalidrawAdapter(api);
+
+    adapter.togglePreference("grid");
+    expect(adapter.readPreferences()).toMatchObject({
+      grid: true,
+      snap: false,
+    });
+
+    adapter.togglePreference("snap");
+    expect(adapter.readPreferences()).toMatchObject({
+      grid: false,
+      snap: true,
+    });
+
+    adapter.togglePreference("snap");
+    expect(adapter.readPreferences()).toMatchObject({
+      grid: false,
+      snap: false,
+    });
+  });
+
+  it("toggles Tool lock through setActiveTool, keeping the current tool", () => {
+    const { api, setActiveTool } = preferenceApi({});
+    const adapter = new ExcalidrawAdapter(api);
+
+    adapter.togglePreference("toolLock");
+
+    expect(setActiveTool).toHaveBeenCalledWith({
+      type: "rectangle",
+      locked: true,
+    });
+    expect(adapter.readPreferences().toolLock).toBe(true);
+  });
+
+  it("toggles Zen mode through updateScene", () => {
+    const { api, updateScene } = preferenceApi({});
+    const adapter = new ExcalidrawAdapter(api);
+
+    adapter.togglePreference("zen");
+
+    expect(updateScene).toHaveBeenCalledWith({
+      appState: { zenModeEnabled: true },
+    });
+    expect(adapter.readPreferences().zen).toBe(true);
+  });
+
+  it("opens the SDK Help dialog", () => {
+    const { api, updateScene } = preferenceApi({});
+
+    new ExcalidrawAdapter(api).openHelp();
+
+    expect(updateScene).toHaveBeenCalledWith({
+      appState: { openDialog: { name: "help" } },
+    });
+  });
+
+  it("closes the canvas main menu", () => {
+    const { api, updateScene } = preferenceApi({});
+
+    new ExcalidrawAdapter(api).closeMainMenu();
+
+    expect(updateScene).toHaveBeenCalledWith({
+      appState: { openMenu: null },
+    });
+  });
+});
+
 describe("ExcalidrawAdapter scene adoption", () => {
   it("registers content-derived files before adopting elements", async () => {
     const calls: string[] = [];

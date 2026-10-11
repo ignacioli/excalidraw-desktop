@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { interactionStore } from "../app/interaction";
+import { useI18n } from "../i18n";
+import { abbreviateHome, useHomeDirectory } from "./displayPath";
 import type { Workspace, WorkspaceEntry } from "../ipc/contracts";
 import {
   buildWorkspaceTreeRows,
@@ -67,12 +69,14 @@ export function WorkspaceTree({
   onScroll,
   focusRequestKey = null,
   onFocusRequestApplied,
-  ariaLabel = "Workspace files",
+  ariaLabel,
   className,
   rowHeight = DEFAULT_ROW_HEIGHT,
   overscan = DEFAULT_OVERSCAN,
   captureFocus = true,
 }: WorkspaceTreeProps) {
+  const { t } = useI18n();
+  const homeDirectory = useHomeDirectory();
   const scrollRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const pendingFocusKey = useRef<string | null>(null);
@@ -372,7 +376,7 @@ export function WorkspaceTree({
       ref={scrollRef}
       className={className ? `workspace-tree ${className}` : "workspace-tree"}
       role="tree"
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? t("workspace.tree.label")}
       tabIndex={0}
       onKeyDown={handleTreeKeyDown}
       onScroll={() => onScroll?.()}
@@ -397,6 +401,7 @@ export function WorkspaceTree({
           <WorkspaceTreeRowView
             key={row.key}
             row={row}
+            homeDirectory={homeDirectory}
             rowHeight={rowHeight}
             start={start}
             expanded={
@@ -425,6 +430,7 @@ export function WorkspaceTree({
 
 interface WorkspaceTreeRowViewProps {
   row: WorkspaceTreeRow;
+  homeDirectory: string | null;
   rowHeight: number;
   start: number;
   focused: boolean;
@@ -440,6 +446,7 @@ interface WorkspaceTreeRowViewProps {
 
 function WorkspaceTreeRowView({
   row,
+  homeDirectory,
   rowHeight,
   start,
   expanded,
@@ -449,6 +456,7 @@ function WorkspaceTreeRowView({
   onAction,
   registerRef,
 }: WorkspaceTreeRowViewProps) {
+  const { t } = useI18n();
   const isExpandable = row.kind === "workspace" || row.kind === "directory";
   const iconSrc =
     row.kind === "workspace"
@@ -474,7 +482,7 @@ function WorkspaceTreeRowView({
       data-row-key={row.key}
       data-kind={row.kind}
       tabIndex={focused ? 0 : -1}
-      title={row.displayName}
+      title={abbreviateHome(row.canonicalPath, homeDirectory)}
       onPointerEnter={() => setPointerFocused(true)}
       onPointerLeave={() => setPointerFocused(false)}
       onPointerDown={(event) => {
@@ -578,7 +586,7 @@ function WorkspaceTreeRowView({
           aria-hidden="true"
           className="workspace-tree-active-indicator"
           data-slot="workspace-tree-active-indicator"
-          title="Active drawing"
+          title={t("workspace.tree.activeDrawing")}
         />
       ) : null}
       <span
@@ -593,7 +601,7 @@ function WorkspaceTreeRowView({
       >
         <button
           type="button"
-          aria-label={`Actions for ${row.displayName}`}
+          aria-label={t("workspace.menu.actionsFor", { name: row.displayName })}
           className="workspace-tree-action"
           onPointerDown={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
@@ -606,7 +614,7 @@ function WorkspaceTreeRowView({
             onAction(event.currentTarget);
           }}
           tabIndex={-1}
-          title={`Actions for ${row.displayName}`}
+          title={t("workspace.menu.actionsFor", { name: row.displayName })}
           style={{ minWidth: "2rem" }}
         >
           <img alt="" aria-hidden="true" src={moreVerticalIcon} />

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { en } from "../../src/i18n/messages/en.ts";
 import type { SceneSnapshot } from "../../src/editor/sceneSerializer";
 
 import {
@@ -71,7 +72,7 @@ test.describe("Phase 5 protected import paths", () => {
         )
         .toEqual(["import"]);
       await expect(page.locator(".app-commands")).toContainText(
-        "已保存操作前版本并导入绘图。",
+        en["shell.history.importSaved"],
       );
       await expect
         .poll(async () =>
@@ -349,10 +350,12 @@ async function installHistoryProbe(page: Page): Promise<void> {
           appVersion: string;
           abnormalExit: boolean;
           pendingOpenPaths: string[];
+          preferredLanguages: string[];
         };
         return {
           ...response,
           pendingOpenPaths: ["/virtual/history-import.excalidraw"],
+          preferredLanguages: [],
         };
       }
       if (command === "history_replace") {

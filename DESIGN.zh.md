@@ -4,7 +4,7 @@
 
 **状态**：已对账的 canonical contract，已获产品负责人批准
 
-**最后更新**：2026-09-03
+**最后更新**：2026-10-11
 
 **适用范围**：应用壳层、桌面专属界面与内嵌 Excalidraw 编辑器
 
@@ -43,9 +43,9 @@
 - **Current Workspace** 是侧边栏树和标题行操作唯一使用的工作区。保存的 id 缺失或无效时回退到可用工作区，不创建新的工作区记录。
 - **Back** 返回 Current Workspace 内上一个有效浏览位置。浏览栈为空时禁用 Back，且 Back 不关闭已打开文档。
 
-**工作区树。** Current Workspace root 及其可见后代组成一棵连续虚拟化的 Workspace Entries 树；多个 mounted Workspace root 不得堆叠在同一 Sidebar。其他 workspace record 通过 Welcome/Recent 或明确的 workspace-open flow 提供。图纸行使用文件图标。没有 FileTree，没有生产环境 `dir_list` 列举，也没有画布内容缩略图 worker 或 `thumb_*` IPC。
+**工作区树。** Current Workspace root 及其可见后代组成一棵连续虚拟化的 Workspace Entries 树；多个 mounted Workspace root 不得堆叠在同一 Sidebar。其他 workspace record 通过 Welcome/Recent 或明确的 workspace-open flow 提供。图纸行使用文件图标。悬停行时以原生 tooltip 显示其完整路径，home 目录缩写为 `~`。没有 FileTree，没有生产环境 `dir_list` 列举，也没有画布内容缩略图 worker 或 `thumb_*` IPC。
 
-**标签。** 每个标签预留关闭控件位置。标签上下文菜单提供 **Close**、**Close Others** 和 **Close Tabs to the Right**。中键关闭所指标签。应用壳层内，macOS 的 Cmd+W 与受支持 Linux 的 Ctrl+W 关闭活动图纸标签。标签栏上以垂直方向为主的滚轮手势切换标签，并合并到最新意图；溢出标签使用最近可见的紧凑策略，不显示可见 tab-strip scrollbar，且 reduced motion 时不使用平滑滚动。关闭孤立文档时提供 **Save As**、**Close Without Saving** 与 **Cancel**。
+**标签。** 每个标签预留关闭控件位置。标签上下文菜单提供 **Close**、**Close Others**、**Close Tabs to the Right** 和 **Close All**；批量关闭在首个失败或孤儿文档提示被取消时停止。中键关闭所指标签。应用壳层内，macOS 的 Cmd+W 与受支持 Linux 的 Ctrl+W 关闭活动图纸标签。标签栏上以垂直方向为主的滚轮手势切换标签，并合并到最新意图；溢出标签使用最近可见的紧凑策略，不显示可见 tab-strip scrollbar，且 reduced motion 时不使用平滑滚动。关闭孤立文档时提供 **Save As**、**Close Without Saving** 与 **Cancel**。
 
 ### 动作归属与 legacy 移除
 
@@ -56,11 +56,22 @@
 - 可见 tab-strip scrollbar、粗大或常驻 Sidebar scrollbar、永久可见的 horizontal ellipsis，以及用于目录/图纸 identity 的三角、字母、菱形或 Unicode placeholder glyph；
 - 使 Current Workspace 紧凑 `New Drawing`、`New Folder`、Collapse-or-Expand-All 或 Refresh action 不可见的 header-action overflow。
 
-accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍是必须项；零计数仅针对可见的 obsolete 或 duplicate chrome。`New Drawing` 是紧凑的 Current Workspace-header action，目标是 selected directory 或 workspace root。`Save To` 与 `Export Image` 保持由 SDK 或 application/menu-level owner 负责；不得新增重复 top-level Export。Appearance 是 application/menu-level preference，不是独立 shell chrome。
+accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍是必须项；零计数仅针对可见的 obsolete 或 duplicate chrome。`New Drawing` 是紧凑的 Current Workspace-header action，目标是 selected directory 或 workspace root。`Save To` 与 `Export Image` 保持由 SDK 或 application/menu-level owner 负责；不得新增重复 top-level Export。Appearance 是 application/menu-level preference，不是独立 shell chrome；画布主菜单的 Theme 控件与原生 View > Appearance 菜单写入同一个应用偏好。
 
-本版本应用壳层界面文案为英文。
+### 界面语言
 
-第一版不复刻官方 PWA 主菜单、浏览器/PWA 标题栏、Excalidraw+ 入口、账号界面、实时协作或云服务控件。
+应用支持两种界面语言：English 与简体中文。语言偏好取值为「跟随系统」「English」「简体中文」，首次启动默认「跟随系统」。
+
+- 「跟随系统」取 macOS 首选语言列表中第一个受支持的语言，列表中没有受支持语言时使用 English。macOS 首选语言的变化在下次启动时生效。
+- 手动选择立即作用于应用壳层、画布编辑器和应用控制的原生菜单，并跨重启保留。
+- 语言是应用本地偏好，不写入文档。
+- 系统拥有的对话框和面板（打开/保存面板、权限提示）跟随 macOS，不受应用控制。
+
+### 画布主菜单
+
+画布主菜单只通过 SDK 公开的 `MainMenu` API 组合：SDK 默认项 Find on canvas、Help、Theme、Canvas background，加上平铺的 `Preferences` 分组（Tool lock、Toggle grid、Snap to objects、Zen mode、View mode、Language）。它使用 SDK 自带的菜单视觉；已批准的布局见 `docs/design/preferences-i18n/`。
+
+应用不复刻官方 PWA 主菜单的其余部分（Open、Save to、Export、Reset canvas、Excalidraw links）、浏览器/PWA 标题栏、Excalidraw+ 入口、登录或账号界面、实时协作或云服务控件。
 
 ## 官方 Excalidraw 边界
 
@@ -119,11 +130,11 @@ accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍�
 - 优先使用语义化 HTML 和符合平台认知的控件。每个交互元素必须具有 accessible name 和可见焦点。
 - hover、active、selected、disabled、loading、empty、error、conflict、permission-denied 与 offline 都是组件定义的一部分。
 - 标签页必须显示文件名，不得只依赖图标；未保存状态同时使用可见标记与无障碍文本。关闭控件位置始终预留，标题不得因此跳动。
-- 同一时刻最多打开一个上下文菜单。同一触发器切换开关；另一触发器直接替换。
+- 同一时刻最多打开一个上下文菜单。同一触发器切换开关；另一触发器直接替换。壳层上下文菜单与本地版本历史行菜单采用 Excalidraw SDK 下拉菜单的度量（面板内边距与圆角 0.5rem、菜单项 2rem、字号 0.875rem、island 阴影）；破坏性操作以 danger 色置于分隔线之后。
 - 文件层级、活动文档、选中、警告和冲突不得只用颜色表达。工作区侧边栏中的图纸行使用文件图标，不得使用画布缩略图或文字圆点。
 - 模态对话框打开时焦点进入并被约束在其中；关闭后焦点返回触发控件。同一时刻只有一层对话框；不得使用 `window.prompt` 或 `window.confirm`。
 - 动效只服务于状态理解且保持短暂；必须尊重 reduced motion，避免画布周围发生动画布局跳动。
-- 阴影只表达浮动控件、菜单和对话框的层级；常驻面板使用边框或明度差分隔。
+- 阴影只表达浮动控件、菜单和对话框的层级；常驻面板使用边框或明度差分隔。Overlay Sidebar 只用边框，不加阴影。
 - shell icon control 使用冻结的 16×16 icon 和 32×32 hit target。紧凑图标控件默认无填充、无边框，前景色为 secondary（Light `#5C5C5C`、Dark `#CED4DA`），仅在交互时使用语义 hover/pressed 表面与更高对比度。Current Workspace header 将 New Drawing、New Folder、Collapse-or-Expand-All 与 Refresh 保持为同一名称行上的紧凑控件。Workspace Row action 仅在 pointer 或 keyboard focus 存在时使用无边框 vertical ellipsis；Local Version History 每条版本行始终显示 vertical ellipsis，使该版本的 Mark/Unmark 与 Delete 目标可发现。Tab close 在预留槽位内视觉整合，不显示为单独的方框按钮。
 - [`docs/design/desktop-shell/hf-2/components.md`](docs/design/desktop-shell/hf-2/components.md) 是 Icon Button/Back、Tab、Workspace Row 与 Welcome Action variant 的规范来源：其中的 2px theme focus ring、disabled-to-default state priority、可见的 non-colour cue、row-action tooltip/accessibility rule，以及 primary/secondary Welcome Action emphasis 与这些更广泛的 interaction rule 同时适用。
 

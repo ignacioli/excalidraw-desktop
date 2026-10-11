@@ -6,6 +6,8 @@ import {
   serializeScene,
   type SceneSnapshot,
 } from "../editor/sceneSerializer";
+import { LocalizedError } from "../i18n/describeError";
+import type { MessageKey, MessageParams } from "../i18n";
 
 export type ImportFile = Blob & { readonly name?: string };
 export type ImportSelection =
@@ -31,9 +33,9 @@ export type ImportPreparation =
       readonly candidate: ImportedSceneCandidate;
     };
 
-export class ImportProtectionError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
+export class ImportProtectionError extends LocalizedError {
+  constructor(key: MessageKey, params?: MessageParams, options?: ErrorOptions) {
+    super(key, params, options);
     this.name = "ImportProtectionError";
   }
 }
@@ -53,9 +55,7 @@ export async function prepareImport(
 
   const format = formatFor(file.file);
   if (format === undefined) {
-    throw new ImportProtectionError(
-      "Only .excalidraw drawings and PNG/SVG files are supported.",
-    );
+    throw new ImportProtectionError("history.import.error.unsupported");
   }
 
   if (format === "png" || format === "svg") {
@@ -89,9 +89,7 @@ export async function parseImportCandidate(
 > {
   const format = formatFor(file);
   if (format === undefined) {
-    throw new ImportProtectionError(
-      "Only .excalidraw drawings and PNG/SVG files are supported.",
-    );
+    throw new ImportProtectionError("history.import.error.unsupported");
   }
   if (format === "excalidraw") {
     return parseExcalidraw(file);
@@ -174,7 +172,8 @@ async function parseExcalidraw(
     scene = deserializeScene(await file.text());
   } catch (error) {
     throw new ImportProtectionError(
-      "The selected Excalidraw drawing is invalid.",
+      "history.import.error.invalidDrawing",
+      undefined,
       { cause: error },
     );
   }
@@ -200,7 +199,8 @@ async function parseEmbeddedScene(
     restored = await loadFromBlob(file, null, null);
   } catch (error) {
     throw new ImportProtectionError(
-      `The selected ${format.toUpperCase()} does not contain an Excalidraw scene.`,
+      "history.import.error.noScene",
+      { format: format.toUpperCase() },
       { cause: error },
     );
   }

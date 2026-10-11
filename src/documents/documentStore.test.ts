@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "../app/store";
+import { en } from "../i18n/messages/en.ts";
 import type { SceneSnapshot } from "../editor/sceneSerializer";
 import type { ExpectedOpenDocument, HistoryIssueEvent } from "../ipc/contracts";
 import type { DocumentGateway } from "./documentGateway";
@@ -675,6 +676,30 @@ describe("DocumentManager", () => {
     manager.dispose();
   });
 
+  it("keeps a conflict open when a saved canvas preference changes", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/drawing.excalidraw");
+    const initial = manager.store.getState().sessionsById[documentId]?.scene;
+    manager.beginConflict(documentId, {
+      externalMtime: 1,
+      localDraftUpdatedAt: 2,
+    });
+
+    // Grid stays available while the document is forced read-only.
+    manager.updateScene(documentId, {
+      ...initial!,
+      appState: { ...initial!.appState, gridModeEnabled: true },
+    });
+
+    const session = manager.store.getState().sessionsById[documentId];
+    expect(session?.saveState).toBe("conflicted");
+    expect(session?.scene.appState.gridModeEnabled).toBe(true);
+    expect(gateway.saveDraft).not.toHaveBeenCalled();
+    expect(gateway.checkpoint).not.toHaveBeenCalled();
+    manager.dispose();
+  });
+
   it("resolves takeExternal by adopting the external scene as clean", async () => {
     const gateway = createGateway();
     const manager = new DocumentManager(gateway);
@@ -913,14 +938,16 @@ describe("DocumentManager", () => {
       const manager = new DocumentManager(gateway);
       const documentId = await manager.open("/tmp/drawing.excalidraw");
       markDirty(manager, documentId);
-      vi.mocked(gateway.checkpoint).mockRejectedValueOnce(
-        new Error("disk is full"),
-      );
+      vi.mocked(gateway.checkpoint).mockRejectedValueOnce({
+        code: "DISK_FULL",
+        message: "disk is full",
+        retriable: false,
+      });
 
       await expect(manager.close(documentId)).resolves.toEqual({
         status: "failed",
         documentId,
-        message: expect.stringMatching(/disk is full/i),
+        message: en["error.DISK_FULL"],
       });
       expect(gateway.close).not.toHaveBeenCalled();
       expect(manager.store.getState().sessionsById[documentId]).toBeDefined();
@@ -1063,7 +1090,11 @@ describe("DocumentManager", () => {
       vi.mocked(gateway.checkpoint).mockImplementation(
         async (path, _scene, reason) => {
           if (path === "/tmp/b.excalidraw" && reason === "tabClose") {
-            throw new Error("checkpoint failed");
+            throw {
+              code: "IO_ERROR",
+              message: "checkpoint failed",
+              retriable: false,
+            };
           }
           return { newBaseHash: "next", mtime: 1 };
         },
@@ -1074,7 +1105,7 @@ describe("DocumentManager", () => {
       ).resolves.toEqual({
         status: "failed",
         documentId: secondId,
-        message: expect.stringMatching(/checkpoint failed/i),
+        message: en["error.IO_ERROR"],
       });
       expect(manager.store.getState().tabOrder).toEqual([secondId, thirdId]);
       expect(gateway.close).toHaveBeenCalledWith(

@@ -8,6 +8,8 @@
  * image/library drops remain SDK-owned.
  */
 
+import { LocalizedError } from "../i18n/describeError";
+
 export type ProtectedInputAction = "clear" | "import-shortcut";
 
 export interface ProtectedSceneDrop {
@@ -102,7 +104,7 @@ export function installProtectedInput(
       }
     }
     if (files.length === 0) {
-      handlers.onError?.(new Error("拖放内容缺少可读取的绘图数据。"));
+      handlers.onError?.(new LocalizedError("history.input.dropMissingData"));
       return;
     }
     const target = event.target;
@@ -117,9 +119,7 @@ export function installProtectedInput(
             if (forwardedOnce) return;
             const file = files[0];
             if (!(target instanceof Node) || !root.contains(target) || !file) {
-              throw new Error(
-                "The dropped image's canvas is no longer available.",
-              );
+              throw new LocalizedError("history.input.dropCanvasUnavailable");
             }
             forwardedOnce = true;
             const transfer = new DataTransfer();

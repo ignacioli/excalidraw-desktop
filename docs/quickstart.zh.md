@@ -200,7 +200,18 @@ pnpm e2e e2e/tests/local-version-history-lifecycle.spec.ts \
 3. 检查原生窗口契约（见 ADR-009）。
    - 预期：标题为 `Excalidraw Whiteboard`；普通装饰 `Visible` 窗口；标题栏颜色由系统控制；可被其他应用遮挡、最小化、恢复；生产不是 always-on-top。`e2e_harness` 在 `EXCALIDRAW_PERF_CONTROL_DIR` 下的置顶不得出现在生产构建。首次启动侧边栏默认隐藏；**Workspace sidebar** 打开 overlay，不改变画布盒；固定后进入布局；指针离开 500ms 后关闭 overlay，除非 focus/menu/dialog/drag 仍将其保持；Escape 关闭 overlay（除非对话框或菜单已消费 Escape）。
 
-4. Ubuntu 24.04 Desktop 可选安装 AppImage/deb；rpm 为 best-effort 产物，不要求其他 Linux 发行版验收。
+4. 检查原生菜单栏（macOS，在仓库根目录运行；需要已构建的二进制，运行期间操作者不得触碰鼠标或键盘）。
+
+   ```bash
+   pnpm tauri build --debug --no-bundle
+   pnpm native:menu:check -- --languages "(en-US, zh-Hans)"
+   pnpm native:menu:check -- --languages "(zh-Hans-CN, en-US)"
+   pnpm native:menu:check -- --languages "(fr-FR)"
+   ```
+
+   - 预期：每次运行会启动应用两次，逐项输出菜单与路由检查的 `PASS`/`FAIL` 行，最后输出 `PASS <n> checks` 且退出码为 0（`FAIL` 为 1，`BLOCKED` 为 2）。第一组解析为英文，第二组解析为简体中文，第三组（没有受支持的语言）回退到英文。运行前先退出已打开的 Excalidraw Desktop。该检查只读取并驱动原生菜单项；保存与导出的文件系统结果仍由进程级套件覆盖。
+
+5. Ubuntu 24.04 Desktop 可选安装 AppImage/deb；rpm 为 best-effort 产物，不要求其他 Linux 发行版验收。
    - 预期：应用菜单入口 + 文件图标关联生效。
 
 第 3 步的系统着色标题栏与窗口管理是物理 macOS 证据。静态读取 `tauri.conf.json` 只能核对标题字符串，不能代替目视标题栏。

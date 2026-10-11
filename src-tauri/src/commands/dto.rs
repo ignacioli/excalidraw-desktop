@@ -19,7 +19,7 @@ use crate::history::types::{
     HistoryValidationError,
 };
 
-pub const IPC_CONTRACT_VERSION: u32 = 3;
+pub const IPC_CONTRACT_VERSION: u32 = 4;
 /// Reserved history contract version marker retained for compatibility with
 /// code that needs to distinguish the activated v3 boundary.
 pub const RESERVED_HISTORY_CONTRACT_VERSION: u32 = 3;
@@ -34,6 +34,9 @@ pub struct AppHandshakeResponse {
     /// forwarded by a single-instance handoff. Populated before the first
     /// render so the frontend can open them without racing an event.
     pub pending_open_paths: Vec<String>,
+    /// System UI languages as raw BCP-47 tags in the user's order (at most
+    /// 16), read once at startup. The frontend resolves the UI language.
+    pub preferred_languages: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -600,10 +603,15 @@ mod tests {
             app_version: "0.1.0".to_owned(),
             abnormal_exit: false,
             pending_open_paths: vec!["/tmp/drawing.excalidraw".to_owned()],
+            preferred_languages: vec!["zh-Hans-CN".to_owned(), "en-US".to_owned()],
         };
         let value = serde_json::to_value(response)
             .unwrap_or_else(|error| panic!("serialize handshake: {error}"));
-        assert_eq!(value["contractVersion"], 3);
+        assert_eq!(value["contractVersion"], 4);
+        assert_eq!(
+            value["preferredLanguages"],
+            serde_json::json!(["zh-Hans-CN", "en-US"])
+        );
         assert_eq!(value["abnormalExit"], false);
         assert_eq!(value["pendingOpenPaths"][0], "/tmp/drawing.excalidraw");
 

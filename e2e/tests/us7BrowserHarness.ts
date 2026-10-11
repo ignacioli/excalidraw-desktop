@@ -85,6 +85,7 @@ export async function installUs7Harness(
               appVersion: "0.1.0",
               abnormalExit: false,
               pendingOpenPaths: [],
+              preferredLanguages: [],
             };
           if (command === "workspace_list") return state.mountedWorkspaces;
           if (command === "workspace_recent_list") return state.mountedWorkspaces;

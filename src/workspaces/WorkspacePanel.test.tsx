@@ -16,6 +16,7 @@ import {
 } from "../app/shellPreferences";
 import type { Workspace, WorkspaceEntry } from "../ipc/contracts";
 import { documentManager } from "../documents/documentStore";
+import { en } from "../i18n/messages/en.ts";
 import { WorkspacePanel } from "./WorkspacePanel";
 
 vi.mock("@excalidraw/excalidraw", () => ({
@@ -706,7 +707,11 @@ describe("WorkspacePanel", () => {
           );
         }
         if (command === "workspace_remove") {
-          throw new Error("Workspace is still in use.");
+          throw {
+            code: "IO_ERROR",
+            message: "Workspace is still in use.",
+            retriable: false,
+          };
         }
         throw new Error(`Unexpected command ${command}`);
       },
@@ -732,7 +737,7 @@ describe("WorkspacePanel", () => {
       within(dialog).getByRole("button", { name: "Remove Workspace" }),
     );
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
-      "Workspace is still in use.",
+      en["error.IO_ERROR"],
     );
     expect(screen.getAllByRole("alert")).toHaveLength(1);
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
@@ -945,7 +950,7 @@ describe("WorkspacePanel", () => {
     );
     expect(screen.getByRole("treeitem", { name: "Sketches" })).toHaveFocus();
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "版本历史清理仍待完成，稍后会重试",
+      en["workspace.notice.historyCleanupPending"],
     );
   });
 
@@ -1007,7 +1012,7 @@ describe("WorkspacePanel", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "部分版本历史资源暂未清理完成",
+      en["workspace.notice.historyResourcesPending"],
     );
     expect(
       screen.queryByRole("treeitem", { name: "drawing" }),

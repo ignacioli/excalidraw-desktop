@@ -205,7 +205,18 @@ The focused browser checks can prove frontend routing and panel behavior. Filesy
 3. Check the native-window contract (see ADR-009).
    - Expected: title is `Excalidraw Whiteboard`; ordinary decorated `Visible` window; title-bar color is system-controlled; other apps can occlude it; it can minimize and restore; production is not always-on-top. `e2e_harness` always-on-top under `EXCALIDRAW_PERF_CONTROL_DIR` must not appear in production. On first launch the sidebar is hidden; **Workspace sidebar** opens as overlay and does not change the canvas box; pin enters the layout; overlay closes 500ms after the pointer leaves unless focus/menu/dialog/drag still holds it; Escape closes overlay unless a dialog or menu already consumed Escape.
 
-4. Optionally install AppImage/deb on Ubuntu 24.04 Desktop. rpm is a best-effort artifact; other Linux distros are not required for acceptance.
+4. Check the native menu bar (macOS, run from the repository root; needs a built binary and the operator must not touch the mouse or keyboard while it runs).
+
+   ```bash
+   pnpm tauri build --debug --no-bundle
+   pnpm native:menu:check -- --languages "(en-US, zh-Hans)"
+   pnpm native:menu:check -- --languages "(zh-Hans-CN, en-US)"
+   pnpm native:menu:check -- --languages "(fr-FR)"
+   ```
+
+   - Expected: each run launches the app twice, prints `PASS`/`FAIL` lines per menu item and routing check, and ends with `PASS <n> checks` and exit code 0 (`FAIL` is 1, `BLOCKED` is 2). The first set resolves to English, the second to Simplified Chinese, and the third (no supported language) falls back to English. Quit any running Excalidraw Desktop first. The check only reads and drives native menu entries; filesystem save and export outcomes remain covered by the process-level suites.
+
+5. Optionally install AppImage/deb on Ubuntu 24.04 Desktop. rpm is a best-effort artifact; other Linux distros are not required for acceptance.
    - Expected: the application-menu entry and file-icon association work.
 
 Step 3's system-tinted title bar and window management are physical macOS evidence. Statically reading `tauri.conf.json` can only check the title string; it does not replace looking at the title bar.

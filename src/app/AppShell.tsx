@@ -24,7 +24,11 @@ import {
   RecoveryStartup,
   type RecoveryStartupState,
 } from "../documents/RecoveryStartup";
-import { ExcalidrawEditor } from "../editor/ExcalidrawEditor";
+import type { EditorPreferences } from "../editor/CanvasMainMenu";
+import {
+  ExcalidrawEditor,
+  type EditorControls,
+} from "../editor/ExcalidrawEditor";
 import type { ExcalidrawAdapter } from "../editor/ExcalidrawAdapter";
 import {
   HistoryCoordinator,
@@ -88,6 +92,38 @@ import {
   initializeBrowserThemeController,
   type ThemeController,
 } from "./theme/themeController";
+import { createNativeMenuSync } from "./nativeMenuSync";
+import {
+  DescribedError,
+  describeError,
+  LocalizedError,
+} from "../i18n/describeError";
+import {
+  initializeBrowserLocaleController,
+  t as translateNow,
+  useI18n,
+  type LocaleController,
+  type MessageKey,
+} from "../i18n";
+
+/**
+ * User-facing shell status kept in React state as data, so it re-translates
+ * when the UI language changes instead of freezing the language at set time.
+ */
+type ShellMessage =
+  | { readonly key: MessageKey }
+  | { readonly error: unknown; readonly fallback: MessageKey }
+  | { readonly text: string };
+
+function fileOperationError(error: unknown): ShellMessage {
+  return { error, fallback: "error.fileOperationFailed" };
+}
+
+function renderShellMessage(message: ShellMessage): string {
+  if ("key" in message) return translateNow(message.key);
+  if ("text" in message) return message.text;
+  return describeError(message.error, message.fallback);
+}
 
 interface AppShellProps {
   onCreateDocument?: () => void | Promise<void>;
@@ -95,6 +131,7 @@ interface AppShellProps {
   workspaceInvoker?: CommandInvoker;
   selectWorkspaceDirectory?: () => Promise<string | null>;
   themeController?: ThemeController;
+  localeController?: LocaleController;
 }
 
 export function AppShell({
@@ -103,8 +140,12 @@ export function AppShell({
   workspaceInvoker: providedWorkspaceInvoker,
   selectWorkspaceDirectory = selectNativeWorkspaceDirectory,
   themeController = initializeBrowserThemeController(),
+  localeController = initializeBrowserLocaleController([]),
 }: AppShellProps) {
-  const [interactionError, setInteractionError] = useState<string | null>(null);
+  useI18n();
+  const [interactionError, setInteractionError] = useState<ShellMessage | null>(
+    null,
+  );
   const performanceDriverRef = useRef<
     | {
         attachEditor(
@@ -124,6 +165,10 @@ export function AppShell({
     | undefined
   >(undefined);
   const editorAdaptersRef = useRef(new Map<string, ExcalidrawAdapter>());
+  const editorControlsRef = useRef(new Map<string, EditorControls>());
+  const [canvasPreferencesById, setCanvasPreferencesById] = useState<
+    Readonly<Record<string, EditorPreferences>>
+  >({});
   const [historyBusyDocumentIds, setHistoryBusyDocumentIds] = useState<
     ReadonlySet<string>
   >(() => new Set());
@@ -146,7 +191,9 @@ export function AppShell({
     | undefined
   >(undefined);
   const [exportDocumentId, setExportDocumentId] = useState<string | null>(null);
-  const [historyFeedback, setHistoryFeedback] = useState<string | null>(null);
+  const [historyFeedback, setHistoryFeedback] = useState<MessageKey | null>(
+    null,
+  );
   const [historyNotice, setHistoryNotice] = useState<
     (HistorySuccessNotice & { id: number }) | null
   >(null);
@@ -162,7 +209,8 @@ export function AppShell({
   >(null);
   const [historyPanelStatus, setHistoryPanelStatus] =
     useState<HistoryPanelStatus>("empty");
-  const [historyPanelMessage, setHistoryPanelMessage] = useState<string>();
+  const [historyPanelMessage, setHistoryPanelMessage] =
+    useState<ShellMessage>();
   const [historyPreviewVersionId, setHistoryPreviewVersionId] = useState<
     string | null
   >(null);
@@ -248,7 +296,7 @@ export function AppShell({
   const requireHistoryCoordinator = (): HistoryCoordinator => {
     const coordinator = historyCoordinatorRef.current;
     if (coordinator === null) {
-      throw new Error("版本历史尚未就绪。");
+      throw new LocalizedError("history.error.notReady");
     }
     return coordinator;
   };
@@ -259,7 +307,7 @@ export function AppShell({
   const [mountedWorkspaces, setMountedWorkspaces] = useState<Workspace[]>([]);
   const workspaceRevisionRef = useRef(0);
   const [welcomeBusy, setWelcomeBusy] = useState(false);
-  const [welcomeError, setWelcomeError] = useState<string | null>(null);
+  const [welcomeError, setWelcomeError] = useState<ShellMessage | null>(null);
   const [welcomeErrorVisuallyHidden, setWelcomeErrorVisuallyHidden] =
     useState(false);
   const [unavailableWorkspaceId, setUnavailableWorkspaceId] = useState<
@@ -380,15 +428,19 @@ export function AppShell({
         const session =
           documentManager.store.getState().sessionsById[activeDocumentId];
         adapter?.setReadOnly(session?.saveState === "conflicted");
-        setHistoryFeedback("替换结果已核实，画布已更新。");
+        setHistoryFeedback("shell.history.replacementVerified");
       })
       .catch((error: unknown) => {
-        if (!cancelled) setInteractionError(getErrorMessage(error));
+        if (!cancelled) setInteractionError(fileOperationError(error));
       });
     return () => {
       cancelled = true;
     };
   }, [activeDocumentId]);
+  const historyPanelText =
+    historyPanelMessage === undefined
+      ? undefined
+      : renderShellMessage(historyPanelMessage);
   const documentSessions = Object.values(sessionsById);
   useEffect(() => {
     for (const documentId of editorAdaptersRef.current.keys()) {
@@ -415,13 +467,18 @@ export function AppShell({
     themeController.getSnapshot,
     themeController.getSnapshot,
   );
+  const localeSnapshot = useSyncExternalStore(
+    localeController.subscribe,
+    localeController.getSnapshot,
+    localeController.getSnapshot,
+  );
   const clearWelcomeError = useCallback((): void => {
     setWelcomeError(null);
     setWelcomeErrorVisuallyHidden(false);
   }, []);
   const reportWelcomeError = useCallback(
     (error: unknown, visuallyHidden = false): void => {
-      setWelcomeError(getErrorMessage(error));
+      setWelcomeError(fileOperationError(error));
       setWelcomeErrorVisuallyHidden(visuallyHidden);
     },
     [],
@@ -431,7 +488,7 @@ export function AppShell({
     try {
       await action();
     } catch (error) {
-      setInteractionError(getErrorMessage(error));
+      setInteractionError(fileOperationError(error));
     }
   };
 
@@ -439,11 +496,9 @@ export function AppShell({
     const tabOrder = documentManager.store.getState().tabOrder;
     const outcome = await documentManager.closeMany(tabOrder);
     if (outcome.status !== "closed") {
-      throw new Error(
-        outcome.status === "failed"
-          ? outcome.message
-          : "Close or save the open drawings before switching workspaces.",
-      );
+      throw outcome.status === "failed"
+        ? new DescribedError(outcome.message)
+        : new LocalizedError("error.closeBeforeWorkspaceSwitch");
     }
   };
 
@@ -669,7 +724,7 @@ export function AppShell({
     const session =
       documentManager.store.getState().sessionsById[capture.documentId];
     if (session === undefined) {
-      throw new Error("绘图已关闭。");
+      throw new LocalizedError("history.error.drawingClosed");
     }
     const path = await chooseSavePath(session.title);
     if (path === null) return { status: "cancelled" as const };
@@ -684,7 +739,7 @@ export function AppShell({
   const runProtectedReplacement = async (
     documentId: string,
     replace: () => Promise<HistoryReplacementResult>,
-    successMessage: string,
+    successMessage: MessageKey,
   ): Promise<void> => {
     setHistoryFeedback(null);
     const editor = editorAdaptersRef.current.get(documentId);
@@ -692,7 +747,7 @@ export function AppShell({
       editor === undefined ||
       documentManager.store.getState().activeDocumentId !== documentId
     ) {
-      throw new Error("当前绘图尚未就绪。");
+      throw new LocalizedError("history.error.drawingNotReady");
     }
     setHistoryBusyDocumentIds((current) => new Set(current).add(documentId));
     editor.setReadOnly(true);
@@ -703,7 +758,7 @@ export function AppShell({
           ...current,
           [documentId]: result.response.requestId,
         }));
-        throw new Error("替换结果尚待核实，当前文档已暂停编辑。");
+        throw new LocalizedError("history.error.replacementUnverified");
       }
       setPendingHistory((current) => {
         const next = { ...current };
@@ -717,6 +772,11 @@ export function AppShell({
           ...current,
           [documentId]: error.requestId,
         }));
+        throw new LocalizedError(
+          "history.error.replacementUnverified",
+          undefined,
+          { cause: error },
+        );
       }
       if (!(error instanceof HistoryReplacementCancelledError)) throw error;
     } finally {
@@ -750,14 +810,16 @@ export function AppShell({
             (await coordinator.adoptDeferred(documentId)) ||
             (await coordinator.resolvePending(documentId, requestId)).adopted;
           if (!adopted) {
-            throw new Error("替换结果仍待核实，请稍后重试。");
+            throw new LocalizedError(
+              "history.error.replacementStillUnverified",
+            );
           }
           setPendingHistory((current) => {
             const next = { ...current };
             delete next[documentId];
             return next;
           });
-          setHistoryFeedback("替换结果已核实，画布已更新。");
+          setHistoryFeedback("shell.history.replacementVerified");
         } catch (error) {
           if (error instanceof HistoryReplaceStatusError) {
             setPendingHistory((current) => {
@@ -799,7 +861,7 @@ export function AppShell({
             requireHistoryCoordinator().clear(documentId, undefined, {
               prepareUnsaved: prepareUnsavedHistoryDocument,
             }),
-          "已保存操作前版本并清空画布。",
+          "shell.history.clearSaved",
         ),
       ),
     onImportShortcut: () =>
@@ -815,14 +877,16 @@ export function AppShell({
           if (
             documentManager.store.getState().activeDocumentId !== documentId
           ) {
-            throw new Error("图片解析完成前，当前绘图已切换。");
+            throw new LocalizedError(
+              "history.error.drawingSwitchedDuringImage",
+            );
           }
           drop.forwardOrdinaryImage();
           return;
         }
         await replacePreparedImport(documentId, prepared);
       }),
-    onError: (error) => setInteractionError(getErrorMessage(error)),
+    onError: (error) => setInteractionError(fileOperationError(error)),
   });
   const importIntoDocument = async (
     documentId: string,
@@ -836,10 +900,10 @@ export function AppShell({
   ): Promise<void> => {
     if (prepared.status === "cancelled") return;
     if (prepared.status === "multiple") {
-      throw new Error("一次只能导入一份绘图。");
+      throw new LocalizedError("error.importMultipleDrawings");
     }
     if (prepared.status === "ordinaryImage") {
-      throw new Error("这张图片不含 Excalidraw 绘图。");
+      throw new LocalizedError("history.error.imageHasNoDrawing");
     }
     await runProtectedReplacement(
       documentId,
@@ -850,14 +914,12 @@ export function AppShell({
           undefined,
           { prepareUnsaved: prepareUnsavedHistoryDocument },
         ),
-      "已保存操作前版本并导入绘图。",
+      "shell.history.importSaved",
     );
   };
   const openExportDialog = (): void => {
     if (!exportReady || activeSession === undefined) {
-      setInteractionError(
-        "Export is unavailable until the active drawing is ready.",
-      );
+      setInteractionError({ key: "shell.exportUnavailable" });
       return;
     }
     setInteractionError(null);
@@ -902,19 +964,20 @@ export function AppShell({
         setHistoryItems(
           response.items.map((item) => ({
             ...item,
-            summary: historySourceSummary(item.source, item.protectedAction),
+            summary: "",
             summaryReliable: false,
           })),
         );
         if (response.pendingIssue !== undefined) {
           setHistoryPanelStatus("error");
           const { code, message } = response.pendingIssue;
-          setHistoryPanelMessage(
-            code === "HISTORY_OPERATION_PENDING" &&
+          setHistoryPanelMessage({
+            text:
+              code === "HISTORY_OPERATION_PENDING" &&
               message === "The history operation is pending reconciliation."
-              ? ""
-              : message,
-          );
+                ? ""
+                : message,
+          });
         } else {
           setHistoryPanelStatus(
             response.items.length === 0 ? "empty" : "available",
@@ -928,7 +991,7 @@ export function AppShell({
         )
           return;
         setHistoryPanelStatus("error");
-        setHistoryPanelMessage(getErrorMessage(error));
+        setHistoryPanelMessage(fileOperationError(error));
       }
     },
     [activeDocumentId, historyClient],
@@ -940,9 +1003,7 @@ export function AppShell({
         ? undefined
         : documentManager.store.getState().sessionsById[activeDocumentId];
     if (session === undefined || session.path.length === 0) {
-      setInteractionError(
-        "Version history is available only for saved drawings.",
-      );
+      setInteractionError({ key: "shell.historySavedOnly" });
       return;
     }
     setInteractionError(null);
@@ -998,7 +1059,7 @@ export function AppShell({
                 if (request !== historyPanelRequestRef.current) return;
                 setHistoryPreviewRenderedVersionId(null);
                 setHistoryPreviewState("error");
-                setHistoryPanelMessage(getErrorMessage(error));
+                setHistoryPanelMessage(fileOperationError(error));
               }}
               onRendered={() => {
                 if (request !== historyPanelRequestRef.current) return;
@@ -1014,7 +1075,7 @@ export function AppShell({
           if (request !== historyPanelRequestRef.current) return;
           setHistoryPreviewRenderedVersionId(null);
           setHistoryPreviewState("error");
-          setHistoryPanelMessage(getErrorMessage(error));
+          setHistoryPanelMessage(fileOperationError(error));
         });
     },
     [activeDocumentId, historyClient, themeSnapshot.resolvedColorScheme],
@@ -1031,7 +1092,7 @@ export function AppShell({
             kind: "restore",
             versionId: item.versionId,
           }),
-        "已恢复版本并保存到文件。",
+        "shell.history.restored",
       );
       setHistoryOpen(false);
       setHistoryPreviewVersionId(null);
@@ -1120,8 +1181,70 @@ export function AppShell({
       onVersionHistory: openVersionHistory,
       onAppearance: (mode) =>
         void runAction(() => themeController.setModePreference(mode)),
+      onLanguage: (preference) => localeController.setPreference(preference),
+      onHelp: () => activeEditorControls()?.openHelp(),
+      onTogglePreference: (preference) =>
+        activeEditorControls()?.togglePreference(preference),
     });
   });
+
+  // Help and preference commands are ignored when no document is active.
+  const activeEditorControls = () => {
+    const documentId = documentManager.store.getState().activeDocumentId;
+    return documentId === null
+      ? undefined
+      : editorControlsRef.current.get(documentId);
+  };
+  const handleEditorControlsReady = useCallback(
+    (documentId: string, controls: EditorControls) => {
+      editorControlsRef.current.set(documentId, controls);
+    },
+    [],
+  );
+  const handleEditorPreferencesChange = useCallback(
+    (documentId: string, preferences: EditorPreferences) => {
+      setCanvasPreferencesById((current) => ({
+        ...current,
+        [documentId]: preferences,
+      }));
+    },
+    [],
+  );
+  const activePreferences =
+    activeSession === undefined
+      ? undefined
+      : canvasPreferencesById[activeSession.id];
+
+  const [syncNativeMenu] = useState(() =>
+    createNativeMenuSync(workspaceInvoker),
+  );
+  const forcedReadOnly =
+    activeSession !== undefined &&
+    (activeSession.saveState === "conflicted" ||
+      historyBusyDocumentIds.has(activeSession.id));
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) return;
+    void syncNativeMenu(localeSnapshot.resolvedLanguage, {
+      language: localeSnapshot.preference,
+      appearance: themeSnapshot.preference.modePreference,
+      hasDocument: activeSession !== undefined,
+      forcedReadOnly,
+      toolLock: activePreferences?.toolLock ?? false,
+      grid: activePreferences?.grid ?? false,
+      snap: activePreferences?.snap ?? false,
+      zen: activePreferences?.zen ?? false,
+      viewMode: activePreferences?.viewMode ?? forcedReadOnly,
+    }).catch((error: unknown) =>
+      setInteractionError(fileOperationError(error)),
+    );
+  }, [
+    activePreferences,
+    activeSession,
+    forcedReadOnly,
+    localeSnapshot,
+    syncNativeMenu,
+    themeSnapshot.preference.modePreference,
+  ]);
 
   const historyMenuEnabled =
     hasNativeWindowRuntime() &&
@@ -1133,7 +1256,7 @@ export function AppShell({
       workspaceInvoker,
       "versionHistory",
       historyMenuEnabled,
-    ).catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+    ).catch((error: unknown) => setInteractionError(fileOperationError(error)));
   }, [historyMenuEnabled, workspaceInvoker]);
   const applyCloseOutcome = (outcome: CloseOutcome) => {
     if (outcome.status === "orphaned") {
@@ -1141,7 +1264,7 @@ export function AppShell({
       return;
     }
     if (outcome.status === "failed") {
-      setInteractionError(outcome.message);
+      setInteractionError({ text: outcome.message });
       return;
     }
     setOrphanCloseId(null);
@@ -1180,7 +1303,9 @@ export function AppShell({
           unlisten = nextUnlisten;
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
     return () => {
       disposed = true;
       unlisten?.();
@@ -1205,7 +1330,9 @@ export function AppShell({
           );
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
     return () => {
       disposed = true;
     };
@@ -1232,7 +1359,9 @@ export function AppShell({
           );
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
     return () => {
       disposed = true;
     };
@@ -1245,7 +1374,7 @@ export function AppShell({
     let disposed = false;
     let unlisten: (() => void) | undefined;
     void registerExitCheckpoint(documentManager, (error) =>
-      setInteractionError(getErrorMessage(error)),
+      setInteractionError(fileOperationError(error)),
     )
       .then((nextUnlisten) => {
         if (disposed) {
@@ -1254,7 +1383,9 @@ export function AppShell({
           unlisten = nextUnlisten;
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
     return () => {
       disposed = true;
       unlisten?.();
@@ -1275,7 +1406,9 @@ export function AppShell({
           unlisten = nextUnlisten;
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
     return () => {
       disposed = true;
       unlisten?.();
@@ -1289,7 +1422,7 @@ export function AppShell({
     let disposed = false;
     let unlisten: (() => void) | undefined;
     void registerOpenFileHandler(documentManager, {
-      onError: (error) => setInteractionError(getErrorMessage(error)),
+      onError: (error) => setInteractionError(fileOperationError(error)),
     })
       .then((nextUnlisten) => {
         if (disposed) {
@@ -1298,7 +1431,9 @@ export function AppShell({
           unlisten = nextUnlisten;
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
     return () => {
       disposed = true;
       unlisten?.();
@@ -1319,7 +1454,9 @@ export function AppShell({
           unlisten = nextUnlisten;
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
     return () => {
       disposed = true;
       unlisten?.();
@@ -1341,7 +1478,9 @@ export function AppShell({
           unlisten = nextUnlisten;
         }
       })
-      .catch((error: unknown) => setInteractionError(getErrorMessage(error)));
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
     return () => {
       disposed = true;
       unlisten?.();
@@ -1349,6 +1488,9 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
+    // The native File > Save accelerator owns Command-S in the desktop shell;
+    // handling the keydown as well would save twice per press.
+    if (hasNativeWindowRuntime()) return;
     const handleSaveShortcut = (event: KeyboardEvent) => {
       if (
         event.key.toLowerCase() === "s" &&
@@ -1421,11 +1563,15 @@ export function AppShell({
         data-history-open={historyOpen ? "true" : "false"}
         data-sidebar-mode={sidebarSnapshot.mode}
       >
-        <div className="shell-left" aria-label="Shell navigation" role="group">
+        <div
+          className="shell-left"
+          aria-label={translateNow("shell.navigation")}
+          role="group"
+        >
           <button
             aria-expanded={sidebarSnapshot.mode !== "hidden"}
             aria-controls="workspace-sidebar"
-            aria-label="Toggle workspace sidebar"
+            aria-label={translateNow("shell.toggleSidebar")}
             className="icon-button shell-sidebar-toggle"
             onClick={() => {
               if (historyOpen) {
@@ -1446,17 +1592,17 @@ export function AppShell({
                 preferences.setSidebarPinned(false);
               }
             }}
-            title="Toggle workspace sidebar"
+            title={translateNow("shell.toggleSidebar")}
             type="button"
           >
             <img alt="" aria-hidden="true" src={sidebarIcon} />
           </button>
           <button
-            aria-label="Back"
+            aria-label={translateNow("shell.back")}
             className="icon-button shell-back-button"
             disabled={!canGoBack}
             onClick={goBack}
-            title="Back"
+            title={translateNow("shell.back")}
             type="button"
           >
             <img alt="" aria-hidden="true" src={backIcon} />
@@ -1471,7 +1617,7 @@ export function AppShell({
         </div>
         <div className="app-commands" aria-live="polite">
           {historyFeedback !== null ? (
-            <p role="status">{historyFeedback}</p>
+            <p role="status">{translateNow(historyFeedback)}</p>
           ) : null}
           {activeDocumentId !== null &&
           pendingHistory[activeDocumentId] !== undefined ? (
@@ -1480,7 +1626,7 @@ export function AppShell({
               onClick={() => void retryPendingHistory()}
               type="button"
             >
-              核实版本替换结果
+              {translateNow("shell.history.verifyReplacement")}
             </button>
           ) : null}
           <p
@@ -1492,14 +1638,16 @@ export function AppShell({
             role="status"
             aria-live="polite"
           >
-            {interactionError ?? getSaveStatus(activeSession?.saveState)}
+            {interactionError !== null
+              ? renderShellMessage(interactionError)
+              : getSaveStatus(activeSession?.saveState)}
           </p>
         </div>
       </header>
 
       {activeSession !== undefined && activeSession.lastReloadedAt !== null ? (
         <p className="reload-notice" role="status">
-          Reloaded from disk
+          {translateNow("shell.reloaded")}
         </p>
       ) : null}
 
@@ -1547,7 +1695,7 @@ export function AppShell({
           />
         ) : null}
         <aside
-          aria-label="Files"
+          aria-label={translateNow("shell.files")}
           className="file-sidebar"
           hidden={sidebarSnapshot.mode === "hidden" || historyOpen}
           id="workspace-sidebar"
@@ -1585,7 +1733,7 @@ export function AppShell({
           ) : null}
           {sidebarSnapshot.mode === "pinned" ? (
             <div
-              aria-label="Resize workspace sidebar"
+              aria-label={translateNow("shell.resizeSidebar")}
               aria-orientation="vertical"
               aria-valuemax={sidebarMaximum}
               aria-valuemin={SIDEBAR_WIDTH_MIN}
@@ -1603,7 +1751,7 @@ export function AppShell({
         </aside>
 
         <main
-          aria-label="Drawing canvas"
+          aria-label={translateNow("shell.canvas")}
           className={
             showWelcome
               ? "canvas-region canvas-region--welcome"
@@ -1621,7 +1769,11 @@ export function AppShell({
             {showWelcome ? (
               <WelcomeScreen
                 busy={welcomeBusy}
-                error={welcomeError}
+                error={
+                  welcomeError === null
+                    ? null
+                    : renderShellMessage(welcomeError)
+                }
                 errorVisuallyHidden={welcomeErrorVisuallyHidden}
                 unavailableWorkspaceId={unavailableWorkspaceId}
                 onNewDrawing={createWelcomeDrawing}
@@ -1644,12 +1796,23 @@ export function AppShell({
                   role="tabpanel"
                 >
                   <ExcalidrawEditor
+                    appearance={themeSnapshot.preference.modePreference}
                     documentId={session.id}
                     initialScene={session.scene}
                     protectedInput={protectedInputFor(session.id)}
                     onSceneChange={(scene) =>
                       documentManager.updateScene(session.id, scene)
                     }
+                    onAppearanceChange={(mode) =>
+                      void runAction(() =>
+                        themeController.setModePreference(mode),
+                      )
+                    }
+                    onControlsReady={handleEditorControlsReady}
+                    onLanguageChange={(preference) =>
+                      localeController.setPreference(preference)
+                    }
+                    onPreferencesChange={handleEditorPreferencesChange}
                     onReady={handleEditorReady}
                     readOnly={
                       session.saveState === "conflicted" ||
@@ -1661,7 +1824,7 @@ export function AppShell({
               ))
             ) : (
               <div className="canvas-empty-state">
-                <p>Select a drawing to begin.</p>
+                <p>{translateNow("shell.emptyState")}</p>
               </div>
             )}
           </div>
@@ -1687,7 +1850,10 @@ export function AppShell({
             fileName={activeSession.title}
             width={historyPanelWidth}
             onWidthChange={setHistoryPanelWidth}
-            items={historyItems}
+            items={historyItems.map((item) => ({
+              ...item,
+              summary: historySourceSummary(item.source, item.protectedAction),
+            }))}
             selectedVersionId={historySelectedVersionId}
             onSelect={(item) => setHistorySelectedVersionId(item.versionId)}
             onClose={closeVersionHistory}
@@ -1707,7 +1873,7 @@ export function AppShell({
             onRestore={restoreHistoryVersion}
             previewContent={historyPreviewContent}
             previewPortalContainer={historyPreviewHost}
-            previewErrorMessage={historyPanelMessage}
+            previewErrorMessage={historyPanelText}
             restoreEnabled={
               historyPreviewRenderedVersionId === historyPreviewVersionId
             }
@@ -1715,7 +1881,7 @@ export function AppShell({
             previewVersionId={historyPreviewVersionId}
             processing={historyBusyDocumentIds.has(activeSession.id)}
             status={historyPanelStatus}
-            statusMessage={historyPanelMessage}
+            statusMessage={historyPanelText}
             onRetry={() => void loadHistoryPanel()}
           />
         ) : null}
@@ -1735,7 +1901,8 @@ export function AppShell({
         <OrphanCloseDialog
           key={orphanCloseId}
           documentTitle={
-            sessionsById[orphanCloseId]?.title ?? "Untitled drawing"
+            sessionsById[orphanCloseId]?.title ??
+            translateNow("shell.untitledDrawing")
           }
           onSaveAs={() => {
             const documentId = orphanCloseId;
@@ -1808,14 +1975,26 @@ function historyDocumentLocator(session: {
     : ({ kind: "handle", documentId: session.historyDocumentId } as const);
 }
 
+const PROTECTED_ACTION_KEYS: Readonly<
+  Record<NonNullable<HistoryVersionView["protectedAction"]>, MessageKey>
+> = {
+  restore: "shell.history.beforeRestore",
+  clear: "shell.history.beforeClear",
+  import: "shell.history.beforeImport",
+};
+
 function historySourceSummary(
   source: HistoryVersionView["source"],
   protectedAction: HistoryVersionView["protectedAction"],
 ): string {
   if (source === "protected" && protectedAction !== undefined) {
-    return `Before ${protectedAction}`;
+    return translateNow(PROTECTED_ACTION_KEYS[protectedAction]);
   }
-  return source === "automatic" ? "Automatic checkpoint" : "Manual mark";
+  return translateNow(
+    source === "automatic"
+      ? "shell.history.automaticCheckpoint"
+      : "shell.history.manualMark",
+  );
 }
 
 function createHistoryRequestId(): string {
@@ -1825,40 +2004,24 @@ function createHistoryRequestId(): string {
 function getSaveStatus(saveState: DocumentSaveState | undefined): string {
   switch (saveState) {
     case "dirty":
-      return "Unsaved changes";
+      return translateNow("shell.saveStatus.dirty");
     case "savingDraft":
-      return "Saving recovery draft…";
+      return translateNow("shell.saveStatus.savingDraft");
     case "draftSaved":
-      return "Recovery draft saved; file has unsaved changes";
+      return translateNow("shell.saveStatus.draftSaved");
     case "checkpointing":
-      return "Saving drawing…";
+      return translateNow("shell.saveStatus.checkpointing");
     case "conflicted":
-      return "Save paused because the file changed elsewhere";
+      return translateNow("shell.saveStatus.conflicted");
     case "orphaned":
-      return "The file is unavailable. Save the drawing to a new location.";
+      return translateNow("shell.saveStatus.orphaned");
     case "error":
-      return "The drawing could not be saved";
+      return translateNow("shell.saveStatus.error");
     case "clean":
-      return "All changes saved";
+      return translateNow("shell.saveStatus.clean");
     default:
-      return "No drawing open";
+      return translateNow("shell.saveStatus.none");
   }
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === "object" && error !== null) {
-    const code = "code" in error ? error.code : undefined;
-    if (code === "DISK_FULL") {
-      return "The disk is full. Your recovery draft is still available.";
-    }
-    if ("message" in error && typeof error.message === "string") {
-      return error.message;
-    }
-  }
-  return "The requested file operation could not be completed.";
 }
 
 async function chooseSavePath(defaultTitle: string): Promise<string | null> {
@@ -1867,11 +2030,11 @@ async function chooseSavePath(defaultTitle: string): Promise<string | null> {
     defaultPath: defaultTitle,
     filters: [
       {
-        name: "Excalidraw drawing",
+        name: translateNow("shell.dialog.drawingFilter"),
         extensions: ["excalidraw", "excalidraw.json"],
       },
     ],
-    title: "Save drawing as",
+    title: translateNow("shell.dialog.saveDrawingAs"),
   });
 }
 
@@ -1911,7 +2074,7 @@ async function selectNativeWorkspaceDirectory(): Promise<string | null> {
   const selected = await open({
     directory: true,
     multiple: false,
-    title: "Open workspace",
+    title: translateNow("shell.dialog.openWorkspace"),
   });
   return typeof selected === "string" ? selected : null;
 }

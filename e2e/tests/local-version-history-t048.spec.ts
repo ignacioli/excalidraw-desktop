@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { en } from "../../src/i18n/messages/en.ts";
 import historyDesign from "../../docs/design/local-version-history/high-fi/tokens.json" with { type: "json" };
 import shellDesign from "../../docs/design/desktop-shell/hf-2/tokens.json" with { type: "json" };
 import {
@@ -252,6 +253,22 @@ test("keeps the 360 px default drawer inside a narrow viewport", async ({
   }
   await expect(menu).toBeVisible();
   await expect(menu).toContainText("v-049");
+  // The row menu uses the SDK dropdown metrics; Delete is unfocused.
+  const deleteStyle = await menu
+    .getByRole("menuitem", { name: "Delete version" })
+    .evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        background: style.backgroundColor,
+        height: style.height,
+        fontSize: style.fontSize,
+      };
+    });
+  expect(deleteStyle).toEqual({
+    background: "rgba(0, 0, 0, 0)",
+    height: "32px",
+    fontSize: "14px",
+  });
   expect(menuBox.x).toBeGreaterThanOrEqual(panelBox.x);
   expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(
     panelBox.x + panelBox.width,
@@ -706,7 +723,7 @@ test("unavailable selection explains the failure and prevents preview and restor
   const detail = panel.getByRole("region", {
     name: "Selected version actions",
   });
-  await expect(detail).toContainText("Image bytes are missing.");
+  await expect(detail).toContainText(en["error.HISTORY_RESOURCE_MISSING"]);
   await expect(detail.locator(".history-selection-eyebrow")).toContainText(
     /unavailable/i,
   );

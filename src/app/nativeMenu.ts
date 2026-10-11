@@ -16,6 +16,12 @@ export interface NativeMenuCommandActions {
   onExportImage: () => void;
   onVersionHistory: () => void;
   onAppearance: (mode: "system" | "light" | "dark") => void;
+  onLanguage: (preference: "system" | "en" | "zh-CN") => void;
+  /** Help and the canvas preference toggles act on the active editor. */
+  onHelp?: () => void;
+  onTogglePreference?: (
+    preference: "toolLock" | "grid" | "snap" | "zen" | "viewMode",
+  ) => void;
 }
 
 const nativeMenuCommands: readonly NativeMenuCommand[] = [
@@ -25,6 +31,15 @@ const nativeMenuCommands: readonly NativeMenuCommand[] = [
   "appearanceSystem",
   "appearanceLight",
   "appearanceDark",
+  "languageSystem",
+  "languageEn",
+  "languageZhCn",
+  "help",
+  "toggleToolLock",
+  "toggleGrid",
+  "toggleSnap",
+  "toggleZen",
+  "toggleViewMode",
 ];
 
 function isNativeMenuCommand(value: unknown): value is NativeMenuCommand {
@@ -51,6 +66,9 @@ export function createNativeMenuCommandHandler({
   onExportImage,
   onVersionHistory,
   onAppearance,
+  onLanguage,
+  onHelp,
+  onTogglePreference,
 }: NativeMenuCommandActions): NativeMenuCommandHandler {
   return (command) => {
     switch (command) {
@@ -71,6 +89,33 @@ export function createNativeMenuCommandHandler({
         break;
       case "appearanceDark":
         onAppearance("dark");
+        break;
+      case "languageSystem":
+        onLanguage("system");
+        break;
+      case "languageEn":
+        onLanguage("en");
+        break;
+      case "languageZhCn":
+        onLanguage("zh-CN");
+        break;
+      case "help":
+        onHelp?.();
+        break;
+      case "toggleToolLock":
+        onTogglePreference?.("toolLock");
+        break;
+      case "toggleGrid":
+        onTogglePreference?.("grid");
+        break;
+      case "toggleSnap":
+        onTogglePreference?.("snap");
+        break;
+      case "toggleZen":
+        onTogglePreference?.("zen");
+        break;
+      case "toggleViewMode":
+        onTogglePreference?.("viewMode");
         break;
     }
   };

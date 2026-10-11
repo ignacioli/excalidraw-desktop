@@ -34,8 +34,17 @@ Inside a workspace, **Current Workspace** is the single tree shown in the sideba
 - Keep local Version History for automatic checkpoints, manual marks, and protected restore/clear/import operations
 - Export drawings as PNG or SVG, with the bundled font embedded in SVG output
 - Deduplicate repeated in-drawing images so repeated pastes do not multiply the stored asset data
+- Use the interface in English or Simplified Chinese, and adjust common canvas preferences from the canvas main menu or the native menu bar
 
-The desktop shell UI is English in this release. The Chinese README is a documentation translation; it does not indicate a localized application interface.
+## Language, preferences, and menus
+
+**Interface language.** The app is available in English and Simplified Chinese (简体中文). On first launch it follows the macOS preferred-language list and falls back to English when none of those languages is supported. Change it at any time from the **Language** submenu in the app menu or the **Language** item in the canvas main menu (Follow system, English, 简体中文). The choice applies immediately to the app, the canvas editor, and the native menus, and is remembered across restarts. A change to the macOS preferred languages takes effect at the next launch. System-owned dialogs, such as open and save panels, follow macOS.
+
+**Canvas preferences.** The canvas main menu has a **Preferences** group with Tool lock, Toggle grid, Snap to objects, Zen mode, and View mode, plus the Language item and the Theme control. The native **View** menu offers the same toggles together with an **Appearance** submenu (System, Light, Dark). Both write the same app preference. When a drawing is forced read-only, Tool lock, Snap to objects, and View mode are unavailable.
+
+**Theme shortcut.** Press `Shift+Option+D` to switch the theme from the keyboard.
+
+**Native menu bar.** The macOS menu bar provides the App, File, Edit, View, Window, and Help menus, and its labels follow the interface language. File contains Save, Export Image, and Version History; Save is `Cmd+S` and Export Image is `Cmd+Option+E`.
 
 ## Platforms
 

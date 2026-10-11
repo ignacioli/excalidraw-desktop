@@ -4,9 +4,9 @@
 
 **最后更新**：2026-09-24
 
-本文档描述 Excalidraw Desktop 的**当前**实现架构：分层视图、可靠性数据流、工作区条目变更、模块职责、依赖方向与信任边界、原生窗口边界与存储层。决策记录见 `docs/adr/`；视觉与交互契约见根目录 `DESIGN.md`（英文正文；中文见 `DESIGN.zh.md`）。公开 IPC 契约见 `docs/contracts/ipc-contracts.md`（v3）。
+本文档描述 Excalidraw Desktop 的**当前**实现架构：分层视图、可靠性数据流、工作区条目变更、模块职责、依赖方向与信任边界、原生窗口边界与存储层。决策记录见 `docs/adr/`；视觉与交互契约见根目录 `DESIGN.md`（英文正文；中文见 `DESIGN.zh.md`）。公开 IPC 契约见 `docs/contracts/ipc-contracts.md`（v4）。
 
-当前壳层是画布优先的 overlay/pinned 侧边栏、IPC v3 Workspace Entry 与版本历史命令，以及统一的应用菜单/对话框。崩溃安全持久化（草稿、原子写、恢复快照、外部变更冲突）仍然有效。下文描述的是现行路径，不是已退休的 FileTree + `thumbnails/` 生产实现。
+当前壳层是画布优先的 overlay/pinned 侧边栏、IPC v4 Workspace Entry、版本历史与原生菜单命令、由前端决定的 UI 语言，以及统一的应用菜单/对话框。崩溃安全持久化（草稿、原子写、恢复快照、外部变更冲突）仍然有效。下文描述的是现行路径，不是已退休的 FileTree + `thumbnails/` 生产实现。
 
 Workspace 持久化将 mounted authority 与 Recent history 分开。已挂载记录进入路径策略、Workspace Entry 命令、索引与监听；只有唯一的 Current Workspace 进入 Sidebar 树。取消挂载会保留记录；重新挂载只在激活时校验保存的 root，而从 Recents 移除未挂载记录只改变应用历史。
 
@@ -26,10 +26,10 @@ flowchart TB
         Editor["editor/ 官方 Excalidraw 公共集成"]
         Theme["app/theme/ 主题注册 · 偏好解析"]
         Prefs["版本化本地视图偏好：pinned 与展开集"]
-        IpcClient["ipc/ 强类型 v3 客户端 + 事件订阅"]
+        IpcClient["ipc/ 强类型 v4 客户端 + 事件订阅"]
     end
     subgraph boundary [IPC 信任边界]
-        Contracts["contracts v3：WorkspaceEntry + History 命令 · 结构化错误 · operationId"]
+        Contracts["contracts v4：WorkspaceEntry + History + 原生菜单命令 · 结构化错误 · operationId"]
     end
     subgraph backend [Rust 后端 Tauri 2.x]
         Commands["commands/ IPC 入口（薄层）"]
@@ -118,15 +118,15 @@ flowchart LR
 
 仅测试用的 `e2e-harness` 提供七个进程屏障。父进程等待精确 ready marker，验证 marker 中的目标路径仍在隔离根内，发送 `SIGKILL`，然后以同一隔离根启动全新的 probe。超时或 PID 仍存活均为失败。独立 fixture 只验证 marker 协议；事务证据则通过真实受保护替换服务覆盖对象发布、保护、意图、rename／目录同步、metadata／ack 以及 retention 淘汰边界。对象层使用 typed `ENOSPC`／`EACCES`，SQLite 在 commit 前使用 deterministic typed fault；缺失／损坏对象、并发、外部写入、响应丢失与旧排队 autosave 分别由 fresh-process 或精确 frontend driver readback 负责，不能相互替代。
 
-| 屏障                                    | 产品边界                        | 重启必须回答的问题                     |
-| --------------------------------------- | ------------------------------- | -------------------------------------- |
-| `object_publish`                        | 历史不可变对象发布              | 不接受部分目标字节或未登记对象         |
-| `protection_commit`                     | 持久保护记录                    | 保护失败时替换未应用                   |
-| `intent_commit`                         | 替换意图 SQLite 提交            | 按持久事实协调旧/新/待处理             |
-| `after_rename_before_parent_sync`       | 目标 rename 后、父目录同步前    | 同步未知时不把已发布身份报告为旧状态   |
-| `metadata_complete_before_frontend_ack` | 后端完成、前端确认前            | 响应丢失按 request-id 查询，不重放替换 |
+| 屏障                                    | 产品边界                        | 重启必须回答的问题                               |
+| --------------------------------------- | ------------------------------- | ------------------------------------------------ |
+| `object_publish`                        | 历史不可变对象发布              | 不接受部分目标字节或未登记对象                   |
+| `protection_commit`                     | 持久保护记录                    | 保护失败时替换未应用                             |
+| `intent_commit`                         | 替换意图 SQLite 提交            | 按持久事实协调旧/新/待处理                       |
+| `after_rename_before_parent_sync`       | 目标 rename 后、父目录同步前    | 同步未知时不把已发布身份报告为旧状态             |
+| `metadata_complete_before_frontend_ack` | 后端完成、前端确认前            | 响应丢失按 request-id 查询，不重放替换           |
 | `eviction_delete_gc`                    | retention 提交后、可达性 GC 前  | intent 前强退保留旧文件；GC 只删除真正不可达对象 |
-| `rename_delete_repair`                  | 重启时 rename/delete 元数据修复 | lifecycle 修复遵守持久身份与实际字节   |
+| `rename_delete_repair`                  | 重启时 rename/delete 元数据修复 | lifecycle 修复遵守持久身份与实际字节             |
 
 故障 harness 仅在 `--features e2e-harness` 且 `APP_E2E=1` 时编译和注册；生产构建必须没有这些命令及 harness 字符串。所有 native 运行使用新的 `excalidraw-desktop-e2e-*` 根，并记录平台、文件系统、二进制 digest、seed、屏障 marker、进程信号和重启后 hash。
 
@@ -224,16 +224,18 @@ sequenceDiagram
 
 ### 前端（src/）
 
-| 模块                           | 职责                                                                                                              |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `app/AppShell.tsx`             | 画布优先壳层；overlay 覆盖画布且不改变画布盒；pinned 进入布局；无空右侧栏                                         |
-| `app/sidebarController.ts`     | 侧边栏 `hidden` / `overlay` / `pinned`；overlay 指针离开 500ms 延迟关闭；focus/menu/dialog/drag hold 暂停自动关闭 |
-| `app/interaction/`             | 全局唯一菜单与对话框、焦点返回；命名/删除/阻断对话框；不使用 `window.prompt` / `window.confirm`                   |
-| `app/theme/`                   | 主题类型、registry、偏好解析、语义 token 与启动前应用（DESIGN.md）；与系统标题栏颜色解耦                          |
-| `editor/`                      | ExcalidrawAdapter + 画布组件、场景序列化、导出、离线字体、IME 桥接；只走锁定包的公开 API                          |
-| `documents/`                   | DocumentManager：会话身份、标签顺序、dirty/orphan/conflict、关闭/激活队列、路径迁移、恢复 UI                      |
-| `workspaces/WorkspaceTree.tsx` | Current Workspace 及其后代的一棵连续虚拟化树；其他 workspace record 通过 Welcome/Recent 进入；无缩略图行          |
-| `ipc/`                         | 强类型 v3 命令绑定与事件订阅（`IPC_CONTRACT_VERSION = 3`）                                                        |
+| 模块                           | 职责                                                                                                                                                     |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/AppShell.tsx`             | 画布优先壳层；overlay 覆盖画布且不改变画布盒；pinned 进入布局；无空右侧栏                                                                                |
+| `app/sidebarController.ts`     | 侧边栏 `hidden` / `overlay` / `pinned`；overlay 指针离开 500ms 延迟关闭；focus/menu/dialog/drag hold 暂停自动关闭                                        |
+| `app/interaction/`             | 全局唯一菜单与对话框、焦点返回；命名/删除/阻断对话框；不使用 `window.prompt` / `window.confirm`                                                          |
+| `app/theme/`                   | 主题类型、registry、偏好解析、语义 token 与启动前应用（DESIGN.md）；与系统标题栏颜色解耦                                                                 |
+| `editor/`                      | ExcalidrawAdapter + 画布组件、场景序列化、导出、离线字体、IME 桥接；只走锁定包的公开 API                                                                 |
+| `documents/`                   | DocumentManager：会话身份、标签顺序、dirty/orphan/conflict、关闭/激活队列、路径迁移、恢复 UI                                                             |
+| `workspaces/WorkspaceTree.tsx` | Current Workspace 及其后代的一棵连续虚拟化树；其他 workspace record 通过 Welcome/Recent 进入；无缩略图行                                                 |
+| `i18n/`                        | UI 语言：`resolveLanguage`（偏好 + 系统语言到 `en` / `zh-CN` 的唯一规则）、`LocaleController`（偏好持久化）、文案目录、`readSystemLanguages`（握手读取） |
+| `app/nativeMenuSync.ts`        | 生成本地化原生菜单标签集，并发送去重后的 `native_menu_sync` 快照                                                                                         |
+| `ipc/`                         | 强类型 v4 命令绑定与事件订阅（`IPC_CONTRACT_VERSION = 4`）                                                                                               |
 
 ### 后端（src-tauri/）
 
@@ -252,13 +254,25 @@ sequenceDiagram
 
 ## 8. IPC 信任边界
 
-- 契约：命令/事件 Schema + 错误分类 + 输入校验，唯一定义于 `docs/contracts/ipc-contracts.md`；TypeScript 源为 `src/ipc/contracts.ts`，Rust DTO 为 `src-tauri/src/commands/dto.rs`。前端不得绕过。当前 `IPC_CONTRACT_VERSION = 3`。
+- 契约：命令/事件 Schema + 错误分类 + 输入校验，唯一定义于 `docs/contracts/ipc-contracts.md`；TypeScript 源为 `src/ipc/contracts.ts`，Rust DTO 为 `src-tauri/src/commands/dto.rs`。前端不得绕过。当前 `IPC_CONTRACT_VERSION = 4`。
 - 版本历史命令为 `history_list`、`history_preview`、`history_mark`、`history_replace`、`history_operation_status` 和 `history_delete`。请求携带文档授权与 request identity，不携带 history-store 路径；`history_replace` 幂等，rename 后不确定结果保持 `pendingReconciliation`。
 - `history_delete` 在持有文档 history-operation lease 时删除一条语义版本。重复使用同一 `requestId` 是幂等的；仍被活动替换引用的版本会受到保护并返回结构化 busy 错误。metadata 事务之后的对象 GC 是 best effort，仍被其他文档共享或被操作 pin 的对象会保留。
 - 条目变更授权使用 `workspaceId + relativePath`（及创建/重命名的 `baseName`）。响应中的 `canonicalPath` 供打开与会话迁移使用，**不是**前端可提交的授权证据。
 - 所有路径在后端经 `security/` canonicalize + 工作区白名单校验；越界返回 `PATH_ACCESS_DENIED`。文档 JSON 视为不可信输入（结构校验 + 尺寸上限）。
 - 最小权限：Tauri Capabilities 为 `core:default` + `core:window:allow-destroy` + `dialog:allow-open` + `dialog:allow-save`（`src-tauri/capabilities/default.json`）。该窗口权限仅用于让原生关闭处理器在 app-exit checkpoint 完成后销毁主窗口。路径 ACL 在 Rust，不靠额外 fs capability 放开 WebView 任意文件系统。严格 CSP；asset protocol 仅限 `.excalidraw_assets` 图片。
 - 生产命令集不含 `dir_list`、`file_create` / `file_rename` / `file_delete`、`thumb_lookup` / `thumb_store`。
+
+### 8.1 语言与原生菜单数据流
+
+UI 语言只在前端决定。Rust 只报告事实并渲染原生菜单，不选择也不翻译文案。
+
+1. **启动。** Rust 启动时读取一次系统 UI 语言（`src-tauri/src/locale.rs`），经 `app_handshake` 的 `preferredLanguages` 返回；前端在首次渲染前读取该列表（`i18n/systemLanguages.ts`）。
+2. **解析。** `resolveLanguage(preference, preferredLanguages)` 返回 `en` 或 `zh-CN`。用户偏好（`system` / `en` / `zh-CN`）保存在 WebView `localStorage` 键 `excalidraw-desktop.language`，不经过 IPC。
+3. **菜单同步。** `AppShell` 发送 `native_menu_sync`，携带完整本地化标签集与菜单状态（语言、外观、是否有文档、强制只读及五项画布偏好）。与上次成功请求完全相同的请求会被前端跳过，因此普通画布编辑不会触达菜单。
+4. **Rust 侧。** 命令在信任边界校验标签与状态，标签变化则重建菜单，仅状态变化则原地更新 `checked` / `enabled`。非法输入被拒绝，菜单保持上一次有效状态。首次同步前安装的是内置英文菜单。
+5. **菜单命令。** 激活菜单项时向 `main` 窗口发出 `native-menu-command`。前端路由该命令（语言、外观、画布偏好切换、帮助、保存、导出、版本历史），并在下一次 `native_menu_sync` 中回写新状态。
+
+按键归属：原生菜单只为 Save（`CmdOrCtrl+S`）与 Export Image（`CmdOrCtrl+Alt+E`）注册 accelerator；Excalidraw SDK 处理的按键不在原生侧注册，`Alt+R`（View mode）由编辑器宿主处理。完整表格见 `docs/contracts/ipc-contracts.md` §1.7.1。
 
 ## 9. 原生窗口边界（选择 A）
 
@@ -281,7 +295,7 @@ sequenceDiagram
 | 冷层   | 文件系统 `*.excalidraw`（原子替换）；支持识别 `.excalidraw.json` | 最终事实来源；新建图纸默认写入 `.excalidraw`                          |
 | 恢复   | `recovery/*.json` 轮换快照 + `session.lock`                      | 崩溃恢复                                                              |
 | 废纸篓 | 操作系统 Trash                                                   | 空 Directory 与干净 Drawing 的删除提交点；无递归/永久删除命令         |
-| 历史   | app-data `version-history/history.sqlite3` + 不可变场景/素材对象    | 持久文档身份、版本 metadata、受保护操作状态与可达性控制的 GC           |
+| 历史   | app-data `version-history/history.sqlite3` + 不可变场景/素材对象 | 持久文档身份、版本 metadata、受保护操作状态与可达性控制的 GC          |
 
 存储层设计细节见 ADR-002（双层持久化）与 ADR-003（SQLite-first 与 redb 触发条件）。热层保持 WAL 草稿，不改回就地覆盖冷文件，也不拆除恢复快照。
 
@@ -340,5 +354,5 @@ Collector 只拥有自己启动的 child process 与声明的 profile。缺少 i
 
 - ADR：ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 声明参考环境性能测量、ADR-005 主题边界（壳层布局/缩略图句见 ADR-009）、ADR-006/007/008 参考性能预算与测量序列、ADR-009 桌面 UI 交互
 - `DESIGN.md` / `DESIGN.zh.md`（视觉与交互契约）
-- `docs/quickstart.md` / `docs/quickstart.zh.md`（上手与验证）、`docs/contracts/ipc-contracts.md`（IPC 契约 v3）
+- `docs/quickstart.md` / `docs/quickstart.zh.md`（上手与验证）、`docs/contracts/ipc-contracts.md`（IPC 契约 v4）
 - `docs/evidence/`（原生验证矩阵、无障碍审计与验证汇总，VM 或物理机）

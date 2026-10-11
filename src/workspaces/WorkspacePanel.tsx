@@ -29,13 +29,19 @@ import {
 } from "../ipc/client";
 import type {
   FileEntry,
-  IpcError,
   Workspace,
   WorkspaceEntriesChangedEvent,
   WorkspaceEntry,
   EntryDeleteResult,
 } from "../ipc/contracts";
 import { defaultEventListener } from "../ipc/events";
+import { t, useI18n, type MessageKey } from "../i18n";
+import {
+  describeError,
+  DescribedError,
+  errorCodeOf,
+  LocalizedError,
+} from "../i18n/describeError";
 import { WorkspaceTree } from "./WorkspaceTree";
 import {
   makeEntryRowKey,
@@ -72,7 +78,30 @@ interface DeletingState {
   entry: WorkspaceEntry;
   phase: "confirmation" | "nonEmpty";
   busy: boolean;
-  error: string | null;
+  error: Failure | null;
+}
+
+/** A failure kept as data so it re-translates when the language changes. */
+interface Failure {
+  source: unknown;
+  fallback: MessageKey;
+  /** Show the workspace-boundary wording for PATH_ACCESS_DENIED. */
+  scoped: boolean;
+}
+
+function failure(
+  source: unknown,
+  fallback: MessageKey,
+  scoped = false,
+): Failure {
+  return { source, fallback, scoped };
+}
+
+function describeFailure(value: Failure): string {
+  if (value.scoped && errorCodeOf(value.source) === "PATH_ACCESS_DENIED") {
+    return t("workspace.error.outsideWorkspace");
+  }
+  return describeError(value.source, value.fallback);
 }
 
 interface TreeMenuState {
@@ -98,6 +127,7 @@ export function WorkspacePanel({
   preferences: providedPreferences,
   captureFocus = true,
 }: WorkspacePanelProps) {
+  const { t } = useI18n();
   const fallbackInvoker = useMemo(() => createTauriCommandInvoker(), []);
   const invoker = providedInvoker ?? fallbackInvoker;
   const selectDirectory = providedSelectDirectory ?? selectNativeDirectory;
@@ -145,7 +175,7 @@ export function WorkspacePanel({
     Set<string>
   >(() => new Set());
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Failure | null>(null);
   const [loadingKeys, setLoadingKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -242,7 +272,7 @@ export function WorkspacePanel({
           return entries;
         } catch (nextError) {
           if (loadGenerationRef.current.get(loadKey) !== generation) return;
-          setError(operationError(nextError, "Unable to load this folder."));
+          setError(failure(nextError, "workspace.error.loadFolder", true));
           return undefined;
         } finally {
           if (loadGenerationRef.current.get(loadKey) === generation) {
@@ -350,11 +380,7 @@ export function WorkspacePanel({
       })
       .catch((nextError: unknown) => {
         if (!disposed)
-          setError(
-            nextError instanceof Error
-              ? nextError.message
-              : "Unable to load workspaces.",
-          );
+          setError(failure(nextError, "workspace.error.loadWorkspaces"));
       });
     return () => {
       disposed = true;
@@ -386,11 +412,7 @@ export function WorkspacePanel({
       })
       .catch((nextError: unknown) => {
         if (!disposed) {
-          setError(
-            nextError instanceof Error
-              ? nextError.message
-              : "Unable to load workspaces.",
-          );
+          setError(failure(nextError, "workspace.error.loadWorkspaces"));
         }
       });
     return () => {
@@ -495,7 +517,10 @@ export function WorkspacePanel({
   const mountWorkspace = async () => {
     if (!selectDirectory) {
       setError(
-        "Choose a directory from the native file dialog to mount a workspace.",
+        failure(
+          new LocalizedError("workspace.error.mountNoDialog"),
+          "workspace.error.mount",
+        ),
       );
       return;
     }
@@ -519,11 +544,7 @@ export function WorkspacePanel({
         onWorkspacePresenceChange?.(true);
       }
     } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to mount this workspace.",
-      );
+      setError(failure(nextError, "workspace.error.mount"));
     } finally {
       setBusy(false);
     }
@@ -538,17 +559,13 @@ export function WorkspacePanel({
       );
       if (closeOutcome.status === "orphaned") {
         await documentManager.activate(closeOutcome.documentId);
-        throw new Error(
-          "Resolve the unavailable open drawing before removing this Workspace.",
-        );
+        throw new LocalizedError("workspace.error.removeOrphaned");
       }
       if (closeOutcome.status === "failed") {
-        throw new Error(closeOutcome.message);
+        throw new DescribedError(closeOutcome.message);
       }
       if (closeOutcome.status !== "closed") {
-        throw new Error(
-          "Open drawings are still closing. Try removing the Workspace again.",
-        );
+        throw new LocalizedError("workspace.error.removeStillClosing");
       }
       await invoker.invoke("workspace_remove", { workspaceId: workspace.id });
       workspaceListGenerationRef.current += 1;
@@ -587,11 +604,7 @@ export function WorkspacePanel({
         queueMicrotask(() => mountButtonRef.current?.focus());
       }
     } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to remove this workspace.",
-      );
+      setError(failure(nextError, "workspace.error.remove"));
     } finally {
       setBusy(false);
     }
@@ -706,7 +719,12 @@ export function WorkspacePanel({
       );
       if (blockedDocumentId !== null) {
         await documentManager.activate(blockedDocumentId);
-        setError("Save the open drawing before deleting it.");
+        setError(
+          failure(
+            new LocalizedError("workspace.error.saveBeforeDelete"),
+            "workspace.error.fileOperation",
+          ),
+        );
         return;
       }
       const preflight = await invoker.invoke(
@@ -728,7 +746,7 @@ export function WorkspacePanel({
         error: null,
       });
     } catch (nextError) {
-      setError(operationError(nextError, "The file operation failed."));
+      setError(failure(nextError, "workspace.error.fileOperation", true));
     }
   };
 
@@ -762,7 +780,7 @@ export function WorkspacePanel({
       );
       setDeleting(null);
       if (deleteResult.historyMaintenance !== undefined) {
-        setError(historyMaintenanceMessage(deleteResult.historyMaintenance));
+        setError(historyMaintenanceFailure(deleteResult.historyMaintenance));
       }
     } catch (nextError) {
       setDeleting((current) =>
@@ -771,10 +789,7 @@ export function WorkspacePanel({
           : {
               ...current,
               busy: false,
-              error: operationError(
-                nextError,
-                "The entry could not be deleted.",
-              ),
+              error: failure(nextError, "workspace.error.deleteEntry", true),
             },
       );
     }
@@ -799,10 +814,7 @@ export function WorkspacePanel({
           : {
               ...current,
               busy: false,
-              error: operationError(
-                nextError,
-                "Finder could not open this folder.",
-              ),
+              error: failure(nextError, "workspace.error.revealFolder", true),
             },
       );
     }
@@ -813,17 +825,17 @@ export function WorkspacePanel({
       return [
         {
           id: "new-drawing",
-          label: "New Drawing",
+          label: t("workspace.newDrawing"),
           onSelect: () => beginNaming("newDrawing", row.workspaceId, ""),
         },
         {
           id: "new-folder",
-          label: "New Folder",
+          label: t("workspace.newFolder"),
           onSelect: () => beginNaming("newDirectory", row.workspaceId, ""),
         },
         {
           id: "remove-workspace",
-          label: "Remove Workspace",
+          label: t("workspace.menu.removeWorkspace"),
           onSelect: () => {
             openDialogMenu();
             setError(null);
@@ -836,13 +848,13 @@ export function WorkspacePanel({
       return [
         {
           id: "new-drawing",
-          label: "New Drawing",
+          label: t("workspace.newDrawing"),
           onSelect: () =>
             beginNaming("newDrawing", row.workspaceId, row.entry.relativePath),
         },
         {
           id: "new-folder",
-          label: "New Folder",
+          label: t("workspace.newFolder"),
           onSelect: () =>
             beginNaming(
               "newDirectory",
@@ -852,7 +864,7 @@ export function WorkspacePanel({
         },
         {
           id: "rename",
-          label: "Rename",
+          label: t("workspace.menu.rename"),
           onSelect: () =>
             beginNaming(
               "renameDirectory",
@@ -863,7 +875,8 @@ export function WorkspacePanel({
         },
         {
           id: "delete",
-          label: "Delete",
+          label: t("workspace.menu.delete"),
+          destructive: true,
           onSelect: () => {
             void requestDelete(row.workspaceId, row.entry);
           },
@@ -873,7 +886,7 @@ export function WorkspacePanel({
     return [
       {
         id: "rename",
-        label: "Rename",
+        label: t("workspace.menu.rename"),
         onSelect: () =>
           beginNaming(
             "renameDrawing",
@@ -884,7 +897,8 @@ export function WorkspacePanel({
       },
       {
         id: "delete",
-        label: "Delete",
+        label: t("workspace.menu.delete"),
+        destructive: true,
         onSelect: () => {
           void requestDelete(row.workspaceId, row.entry);
         },
@@ -976,22 +990,22 @@ export function WorkspacePanel({
   return (
     <section
       aria-busy={loadingKeys.size > 0 || undefined}
-      aria-label="Workspaces"
+      aria-label={t("workspace.panelLabel")}
       className="workspace-panel"
     >
       <div className="workspace-panel-header">
-        <p className="workspace-panel-eyebrow">Workspace</p>
+        <p className="workspace-panel-eyebrow">{t("workspace.eyebrow")}</p>
         <div className="workspace-panel-title-row">
-          <h2 title={currentWorkspace?.name ?? "Workspace"}>
-            {currentWorkspace?.name ?? "Workspace"}
+          <h2 title={currentWorkspace?.name ?? t("workspace.defaultTitle")}>
+            {currentWorkspace?.name ?? t("workspace.defaultTitle")}
           </h2>
           <div
-            aria-label="Workspace actions"
+            aria-label={t("workspace.actionsLabel")}
             className="workspace-panel-actions"
             role="toolbar"
           >
             <button
-              aria-label="New Drawing"
+              aria-label={t("workspace.newDrawing")}
               className="icon-button"
               disabled={busy || currentWorkspaceId === null}
               onClick={() =>
@@ -1002,13 +1016,13 @@ export function WorkspacePanel({
                   targetRelativePath,
                 )
               }
-              title="New Drawing"
+              title={t("workspace.newDrawing")}
               type="button"
             >
               <img alt="" aria-hidden="true" src={newDrawingIcon} />
             </button>
             <button
-              aria-label="New Folder"
+              aria-label={t("workspace.newFolder")}
               className="icon-button"
               disabled={busy || currentWorkspaceId === null}
               onClick={() =>
@@ -1019,20 +1033,24 @@ export function WorkspacePanel({
                   targetRelativePath,
                 )
               }
-              title="New Folder"
+              title={t("workspace.newFolder")}
               type="button"
             >
               <img alt="" aria-hidden="true" src={newFolderIcon} />
             </button>
             <button
               aria-label={
-                allCurrentDirectoriesExpanded ? "Collapse all" : "Expand all"
+                allCurrentDirectoriesExpanded
+                  ? t("workspace.collapseAll")
+                  : t("workspace.expandAll")
               }
               className="icon-button"
               disabled={busy || currentWorkspaceId === null}
               onClick={toggleAllCurrentWorkspace}
               title={
-                allCurrentDirectoriesExpanded ? "Collapse all" : "Expand all"
+                allCurrentDirectoriesExpanded
+                  ? t("workspace.collapseAll")
+                  : t("workspace.expandAll")
               }
               type="button"
             >
@@ -1052,11 +1070,11 @@ export function WorkspacePanel({
               />
             </button>
             <button
-              aria-label="Refresh"
+              aria-label={t("workspace.refresh")}
               className="icon-button"
               disabled={busy || currentWorkspaceId === null}
               onClick={refreshCurrentWorkspace}
-              title="Refresh"
+              title={t("workspace.refresh")}
               type="button"
             >
               <img alt="" aria-hidden="true" src={refreshIcon} />
@@ -1066,22 +1084,22 @@ export function WorkspacePanel({
       </div>
       {loadingKeys.size > 0 ? (
         <p aria-live="polite" role="status">
-          Loading folder…
+          {t("workspace.loadingFolder")}
         </p>
       ) : null}
       {error && pendingRemoval === null && deleting === null ? (
-        <p role="alert">{error}</p>
+        <p role="alert">{describeFailure(error)}</p>
       ) : null}
       {workspaces.length === 0 ? (
         <div className="sidebar-placeholder">
-          <p>No workspace mounted.</p>
+          <p>{t("workspace.empty")}</p>
           <button
             ref={mountButtonRef}
             type="button"
             disabled={busy}
             onClick={() => void mountWorkspace()}
           >
-            Mount folder…
+            {t("workspace.mountFolder")}
           </button>
         </div>
       ) : (
@@ -1150,11 +1168,13 @@ export function WorkspacePanel({
           anchor={treeMenu.anchor}
           description={
             treeMenu.row.kind === "workspace"
-              ? "Files on disk will not be deleted"
+              ? t("workspace.menu.filesNotDeleted")
               : undefined
           }
           items={menuItems(treeMenu.row)}
-          label={`Actions for ${treeMenu.row.displayName}`}
+          label={t("workspace.menu.actionsFor", {
+            name: treeMenu.row.displayName,
+          })}
           onDismiss={dismissMenu}
           triggerRef={menuTriggerRef}
         />
@@ -1172,7 +1192,9 @@ export function WorkspacePanel({
         <EntryDeleteConfirmationDialog
           busy={deleting.busy}
           displayName={deleting.entry.name}
-          errorMessage={deleting.error}
+          errorMessage={
+            deleting.error === null ? null : describeFailure(deleting.error)
+          }
           returnFocusRef={returnFocusRef}
           onCancel={() => {
             if (!deleting.busy) setDeleting(null);
@@ -1183,7 +1205,9 @@ export function WorkspacePanel({
       {deleting?.phase === "nonEmpty" ? (
         <DirectoryNotEmptyDialog
           busy={deleting.busy}
-          errorMessage={deleting.error}
+          errorMessage={
+            deleting.error === null ? null : describeFailure(deleting.error)
+          }
           returnFocusRef={returnFocusRef}
           onCancel={() => {
             if (!deleting.busy) setDeleting(null);
@@ -1194,19 +1218,16 @@ export function WorkspacePanel({
       {pendingRemoval ? (
         <ApplicationDialog
           busy={busy}
-          errorMessage={error}
+          errorMessage={error === null ? null : describeFailure(error)}
           onDismiss={() => {
             if (busy) return;
             setPendingRemoval(null);
             setError(null);
           }}
           returnFocusRef={returnFocusRef}
-          title={`Remove ${pendingRemoval.name}?`}
+          title={t("workspace.remove.title", { name: pendingRemoval.name })}
         >
-          <p>
-            Open drawings from this Workspace will be saved and closed. Files on
-            disk will not be deleted.
-          </p>
+          <p>{t("workspace.remove.description")}</p>
           <div className="application-dialog-actions conflict-dialog-actions">
             <button
               disabled={busy}
@@ -1217,14 +1238,14 @@ export function WorkspacePanel({
               }}
               type="button"
             >
-              Cancel
+              {t("workspace.remove.cancel")}
             </button>
             <button
               disabled={busy}
               onClick={() => void removeWorkspace(pendingRemoval)}
               type="button"
             >
-              Remove Workspace
+              {t("workspace.remove.confirm")}
             </button>
           </div>
         </ApplicationDialog>
@@ -1252,31 +1273,17 @@ function asFileEntry(entry: WorkspaceEntry): FileEntry {
   };
 }
 
-function operationError(reason: unknown, fallback: string): string {
-  if (reason !== null && typeof reason === "object" && "code" in reason) {
-    const code = (reason as Partial<IpcError>).code;
-    if (code === "PATH_ACCESS_DENIED") {
-      return "This location is outside the Workspace.";
-    }
-  }
-  if (reason instanceof Error && reason.message.length > 0) {
-    return reason.message;
-  }
-  if (reason !== null && typeof reason === "object") {
-    const ipc = reason as Partial<IpcError>;
-    if (typeof ipc.message === "string" && ipc.message.length > 0) {
-      return ipc.message;
-    }
-  }
-  return fallback;
-}
-
-function historyMaintenanceMessage(
+function historyMaintenanceFailure(
   status: "pendingReplay" | "cleanupPending",
-): string {
-  return status === "pendingReplay"
-    ? "绘图已删除。版本历史清理仍待完成，稍后会重试。"
-    : "绘图已删除。部分版本历史资源暂未清理完成。";
+): Failure {
+  return failure(
+    new LocalizedError(
+      status === "pendingReplay"
+        ? "workspace.notice.historyCleanupPending"
+        : "workspace.notice.historyResourcesPending",
+    ),
+    "workspace.error.fileOperation",
+  );
 }
 
 function parentRelativePathOf(relativePath: string): string {
@@ -1345,7 +1352,7 @@ async function selectNativeDirectory(): Promise<string | null> {
   const selected = await open({
     directory: true,
     multiple: false,
-    title: "Mount workspace folder",
+    title: t("workspace.mountDialogTitle"),
   });
   return typeof selected === "string" ? selected : null;
 }

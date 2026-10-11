@@ -36,4 +36,28 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Every user-visible string comes from src/i18n/messages.
+    files: ["src/**/*.tsx"],
+    ignores: ["**/*.test.*", "src/e2e/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "JSXText[value=/[A-Za-z\\u4e00-\\u9fff]/]",
+          message: "Use t() from src/i18n for visible text.",
+        },
+        {
+          selector:
+            "JSXAttribute[name.name=/^(aria-label|title|placeholder|alt)$/] > Literal[value=/[A-Za-z\\u4e00-\\u9fff]/]",
+          message: "Use t() from src/i18n for accessible names and hints.",
+        },
+        {
+          selector:
+            "JSXAttribute[name.name=/^(aria-label|title|placeholder|alt)$/] > JSXExpressionContainer > Literal[value=/[A-Za-z\\u4e00-\\u9fff]/]",
+          message: "Use t() from src/i18n for accessible names and hints.",
+        },
+      ],
+    },
+  },
 );

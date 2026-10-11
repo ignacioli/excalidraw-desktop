@@ -17,7 +17,11 @@ export interface SceneSnapshot {
 export type DocumentAppState = Partial<
   Pick<
     AppState,
-    "gridModeEnabled" | "gridSize" | "gridStep" | "viewBackgroundColor"
+    | "gridModeEnabled"
+    | "gridSize"
+    | "gridStep"
+    | "viewBackgroundColor"
+    | "objectsSnapModeEnabled"
   >
 >;
 
@@ -44,16 +48,21 @@ export function documentAppState(
     ...(appState.viewBackgroundColor === undefined
       ? {}
       : { viewBackgroundColor: appState.viewBackgroundColor }),
+    ...(appState.objectsSnapModeEnabled === undefined
+      ? {}
+      : { objectsSnapModeEnabled: appState.objectsSnapModeEnabled }),
   };
 }
 
 export function serializeScene(scene: SceneSnapshot): string {
-  return serializeAsJSON(
-    scene.elements,
-    documentAppState(scene.appState),
-    scene.files,
-    "local",
-  );
+  const appState = documentAppState(scene.appState);
+  const json = serializeAsJSON(scene.elements, appState, scene.files, "local");
+  // The SDK's file export drops Snap to objects. Add it back only when it is
+  // on, so files without Snap keep exactly the bytes the SDK writes.
+  if (appState.objectsSnapModeEnabled !== true) return json;
+  const data = JSON.parse(json) as { appState?: Record<string, unknown> };
+  data.appState = { ...data.appState, objectsSnapModeEnabled: true };
+  return JSON.stringify(data, null, 2);
 }
 
 export function deserializeScene(sceneJson: string): SceneSnapshot {
@@ -76,7 +85,12 @@ export function deserializeScene(sceneJson: string): SceneSnapshot {
     const restored = restore(parsed, null, null);
     return {
       elements: restored.elements,
-      appState: documentAppState(restored.appState),
+      appState: {
+        ...documentAppState(restored.appState),
+        // A file without the key has Snap off.
+        objectsSnapModeEnabled:
+          restored.appState.objectsSnapModeEnabled === true,
+      },
       files: restored.files,
     };
   } catch (error) {

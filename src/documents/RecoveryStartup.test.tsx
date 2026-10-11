@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { en } from "../i18n/messages/en.ts";
 import type { RecoveryManager } from "./recoveryManager";
 import { RecoveryNotice, RecoveryStartup } from "./RecoveryStartup";
 
@@ -47,6 +48,7 @@ describe("RecoveryStartup", () => {
           appVersion: "0.1.0",
           abnormalExit: false,
           pendingOpenPaths: [],
+          preferredLanguages: [],
         },
         candidates: [],
         dialogRequired: false,
@@ -84,6 +86,7 @@ describe("RecoveryStartup", () => {
           appVersion: "0.1.0",
           abnormalExit: true,
           pendingOpenPaths: [],
+          preferredLanguages: [],
         },
         candidates: [candidate],
         dialogRequired: true,
@@ -128,6 +131,7 @@ describe("RecoveryStartup", () => {
           appVersion: "0.1.0",
           abnormalExit: true,
           pendingOpenPaths: [],
+          preferredLanguages: [],
         },
         candidates,
         dialogRequired: true,
@@ -319,6 +323,7 @@ describe("RecoveryStartup", () => {
           appVersion: "0.1.0",
           abnormalExit: true,
           pendingOpenPaths: [],
+          preferredLanguages: [],
         },
         candidates: [candidate],
         dialogRequired: true,
@@ -347,7 +352,11 @@ describe("RecoveryStartup", () => {
     const states: string[] = [];
     const manager = {
       start: vi.fn(async () => {
-        throw new Error("Recovery service unavailable");
+        throw {
+          code: "DB_ERROR",
+          message: "Recovery service unavailable",
+          retriable: false,
+        };
       }),
     } as unknown as RecoveryManager;
 
@@ -360,9 +369,7 @@ describe("RecoveryStartup", () => {
     );
 
     await waitFor(() => expect(states.at(-1)).toBe("error"));
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Recovery service unavailable",
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent(en["error.DB_ERROR"]);
   });
 
   it("does not dismiss unresolved recovery candidates on Escape", async () => {
