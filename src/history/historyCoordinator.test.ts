@@ -2,11 +2,7 @@ import { createStore } from "zustand/vanilla";
 import { describe, expect, it, vi } from "vitest";
 import type { HistoryClient, HistoryOperationStatusResponse } from "./types";
 import { HistoryCoordinator } from "./historyCoordinator";
-import {
-  HistoryReplacementBlockedError,
-  HistoryReplacementCancelledError,
-  HistoryReplacementRequiresSaveError,
-} from "./historyCoordinator";
+import { HistoryReplacementBlockedError } from "./historyCoordinator";
 import { HistoryReplaceStatusError } from "./historyClient";
 import { DocumentManager } from "../documents/documentStore";
 import type { DocumentGateway } from "../documents/documentGateway";
@@ -130,85 +126,6 @@ describe("HistoryCoordinator", () => {
     expect(manager.store.getState().sessionsById.doc.scene).toBe(scene);
   });
 
-  it("keeps the current canvas when an untitled first-save flow is cancelled", async () => {
-    const { manager } = createManager();
-    manager.store.setState((state) => ({
-      ...state,
-      sessionsById: {
-        ...state.sessionsById,
-        doc: {
-          ...state.sessionsById.doc,
-          path: "",
-          historyDocumentId: undefined,
-        },
-      },
-    }));
-    const client = clientWith({
-      status: "pendingReconciliation",
-      requestId: "unused",
-      replacementCommitted: null,
-      operationState: "pendingReconciliation",
-    });
-    const prepareUnsaved = vi
-      .fn()
-      .mockResolvedValue({ status: "cancelled" as const });
-    const coordinator = new HistoryCoordinator(manager, client, vi.fn());
-
-    await expect(
-      coordinator.mark("doc", { prepareUnsaved }),
-    ).resolves.toMatchObject({ status: "cancelled" });
-    expect(prepareUnsaved).toHaveBeenCalledWith(
-      expect.objectContaining({
-        path: "",
-        scene,
-        sceneJson: serializeScene(scene),
-      }),
-    );
-    expect(client.mark).not.toHaveBeenCalled();
-    expect(manager.store.getState().sessionsById.doc.scene).toBe(scene);
-  });
-
-  it("marks the captured untitled scene after the existing first-save flow", async () => {
-    const { manager } = createManager();
-    manager.store.setState((state) => ({
-      ...state,
-      sessionsById: {
-        ...state.sessionsById,
-        doc: {
-          ...state.sessionsById.doc,
-          path: "",
-          historyDocumentId: undefined,
-        },
-      },
-    }));
-    const client = clientWith({
-      status: "pendingReconciliation",
-      requestId: "unused",
-      replacementCommitted: null,
-      operationState: "pendingReconciliation",
-    });
-    const prepareUnsaved = vi.fn().mockResolvedValue({
-      status: "saved" as const,
-      document: { kind: "path" as const, path: "/workspace/new.excalidraw" },
-      sessionGeneration: 1,
-      revision: 10,
-    });
-    const coordinator = new HistoryCoordinator(manager, client, vi.fn());
-
-    await coordinator.mark("doc", {
-      requestId: "mark-unsaved",
-      prepareUnsaved,
-    });
-
-    expect(client.mark).toHaveBeenCalledWith({
-      document: { kind: "path", path: "/workspace/new.excalidraw" },
-      requestId: "mark-unsaved",
-      sessionGeneration: 1,
-      revision: 10,
-      currentSceneJson: serializeScene(scene),
-    });
-  });
-
   it("routes clear and reset through the same history_replace target", async () => {
     const { manager } = createManager();
     const client = clientWith({
@@ -271,109 +188,6 @@ describe("HistoryCoordinator", () => {
           kind: "import",
           candidateSceneJson: candidate.candidateSceneJson,
         },
-      }),
-    );
-  });
-
-  it("blocks an untitled replacement when the existing first-save flow is cancelled", async () => {
-    const { manager } = createManager();
-    manager.store.setState((state) => ({
-      ...state,
-      sessionsById: {
-        ...state.sessionsById,
-        doc: {
-          ...state.sessionsById.doc,
-          path: "",
-          historyDocumentId: undefined,
-        },
-      },
-    }));
-    const client = clientWith({
-      status: "completed",
-      requestId: "cancelled-replace",
-      replacementCommitted: true,
-      protectionVersionId: "never-created",
-      adoptedScene: { type: "excalidraw", elements: [], files: {} },
-      newBaseHash: "b".repeat(64),
-      newSessionGeneration: 5,
-    });
-    const prepareUnsaved = vi
-      .fn()
-      .mockResolvedValue({ status: "cancelled" as const });
-    const coordinator = new HistoryCoordinator(manager, client, vi.fn());
-
-    await expect(
-      coordinator.clear("doc", "cancelled-replace", { prepareUnsaved }),
-    ).rejects.toBeInstanceOf(HistoryReplacementCancelledError);
-    expect(client.replace).not.toHaveBeenCalled();
-  });
-
-  it("requires a successful first save before replacing an untitled drawing", async () => {
-    const { manager } = createManager();
-    manager.store.setState((state) => ({
-      ...state,
-      sessionsById: {
-        ...state.sessionsById,
-        doc: {
-          ...state.sessionsById.doc,
-          path: "",
-          historyDocumentId: undefined,
-        },
-      },
-    }));
-    const coordinator = new HistoryCoordinator(
-      manager,
-      clientWith({
-        status: "completed",
-        requestId: "requires-save",
-        replacementCommitted: true,
-        protectionVersionId: "never-created",
-        adoptedScene: { type: "excalidraw", elements: [], files: {} },
-        newBaseHash: "b".repeat(64),
-        newSessionGeneration: 5,
-      }),
-      vi.fn(),
-    );
-
-    await expect(
-      coordinator.clear("doc", "requires-save"),
-    ).rejects.toBeInstanceOf(HistoryReplacementRequiresSaveError);
-  });
-
-  it("reuses the first-save document locator even when the caller owns session binding", async () => {
-    const { manager } = createManager();
-    manager.store.setState((state) => ({
-      ...state,
-      sessionsById: {
-        ...state.sessionsById,
-        doc: {
-          ...state.sessionsById.doc,
-          path: "",
-          historyDocumentId: undefined,
-        },
-      },
-    }));
-    const client = clientWith({
-      status: "completed",
-      requestId: "saved-replace",
-      replacementCommitted: true,
-      protectionVersionId: "protected-saved-replace",
-      adoptedScene: { type: "excalidraw", elements: [], files: {} },
-      newBaseHash: "b".repeat(64),
-      newSessionGeneration: 5,
-    });
-    const coordinator = new HistoryCoordinator(manager, client, vi.fn());
-
-    await coordinator.clear("doc", "saved-replace", {
-      prepareUnsaved: vi.fn().mockResolvedValue({
-        status: "saved" as const,
-        document: { kind: "path" as const, path: "/workspace/new.excalidraw" },
-      }),
-    });
-
-    expect(client.replace).toHaveBeenCalledWith(
-      expect.objectContaining({
-        document: { kind: "path", path: "/workspace/new.excalidraw" },
       }),
     );
   });

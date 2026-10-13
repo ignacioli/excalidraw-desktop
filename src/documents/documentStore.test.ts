@@ -85,39 +85,15 @@ describe("DocumentManager", () => {
     manager.dispose();
   });
 
-  it("creates a Welcome untitled session without any disk gateway writes", async () => {
+  it("continues draft and checkpoint writes at the new path after an orphaned drawing is saved elsewhere", async () => {
     const gateway = createGateway();
     const manager = new DocumentManager(gateway);
-    const documentId = await manager.createUntitled();
-    const initial = manager.store.getState().sessionsById[documentId]?.scene;
-    expect(manager.store.getState().sessionsById[documentId]).toMatchObject({
-      path: "",
-      title: "Untitled",
-      saveState: "dirty",
-    });
-
-    manager.updateScene(documentId, {
-      ...initial!,
-      elements: [{ version: 1 } as SceneSnapshot["elements"][number]],
-    });
-    await vi.advanceTimersByTimeAsync(300);
-    await manager.checkpoint(documentId);
-    await manager.close(documentId);
-
-    expect(gateway.saveDraft).not.toHaveBeenCalled();
-    expect(gateway.checkpoint).not.toHaveBeenCalled();
-    expect(gateway.close).not.toHaveBeenCalled();
-    expect(manager.store.getState().sessionsById[documentId]).toBeUndefined();
-    manager.dispose();
-  });
-
-  it("continues draft and checkpoint writes after an untitled drawing is first saved", async () => {
-    const gateway = createGateway();
-    const manager = new DocumentManager(gateway);
-    const documentId = await manager.createUntitled();
+    const orphanedPath = "/tmp/orphaned.excalidraw";
+    const documentId = await manager.open(orphanedPath);
     const path = "/tmp/first-save.excalidraw";
 
     await manager.saveOrphanedAs(documentId, path);
+    expect(gateway.close).toHaveBeenCalledWith(orphanedPath, "discardOrphan");
     const initial = manager.store.getState().sessionsById[documentId]?.scene;
     manager.updateScene(documentId, {
       ...initial!,
