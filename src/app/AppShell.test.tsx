@@ -375,10 +375,6 @@ describe("AppShell", () => {
       path: `${workspace.rootPath}/Untitled.excalidraw`,
       mode: "checkpointed",
     });
-
-    expect(
-      JSON.parse(values.get(SHELL_PREFERENCES_STORAGE_KEY) ?? "{}"),
-    ).toMatchObject({ newDrawingWorkspaceId: workspace.id });
   });
 
   it("creates nothing when the first New Drawing folder choice is cancelled", async () => {

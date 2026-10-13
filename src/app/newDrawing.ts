@@ -8,7 +8,6 @@ export const NEW_DRAWING_NAME_ATTEMPTS = 1000;
 export interface NewDrawingRequest {
   invoker: Pick<CommandInvoker, "invoke">;
   mountedWorkspaces: readonly Workspace[];
-  preferredWorkspaceId: string | null;
   selectDirectory: () => Promise<string | null>;
   untitledBaseName: string;
 }
@@ -24,30 +23,25 @@ export type NewDrawingResult =
     };
 
 /**
- * Creates a Welcome New Drawing as an ordinary file in the remembered
- * new-drawing workspace, asking for that folder on first use. The file is
- * written by `workspace_entry_create` (atomic, never overwrites), so the
- * drawing is persisted like any other workspace file from the start.
+ * Creates a Welcome New Drawing as an ordinary file: asks for a folder,
+ * mounts it as a workspace (reusing it when already mounted), and creates the
+ * next free `Untitled` there. The file is written by `workspace_entry_create`
+ * (atomic, never overwrites), so the drawing is persisted like any other
+ * workspace file from the start.
  */
 export async function createNewDrawingFile({
   invoker,
   mountedWorkspaces,
-  preferredWorkspaceId,
   selectDirectory,
   untitledBaseName,
 }: NewDrawingRequest): Promise<NewDrawingResult> {
-  let workspace = mountedWorkspaces.find(
-    (item) => item.id === preferredWorkspaceId,
-  );
+  const rootPath = await selectDirectory();
+  if (rootPath === null) return { status: "cancelled" };
+  let workspace = mountedWorkspaces.find((item) => item.rootPath === rootPath);
   let mounted = false;
   if (workspace === undefined) {
-    const rootPath = await selectDirectory();
-    if (rootPath === null) return { status: "cancelled" };
-    workspace = mountedWorkspaces.find((item) => item.rootPath === rootPath);
-    if (workspace === undefined) {
-      workspace = await invoker.invoke("workspace_add", { rootPath });
-      mounted = true;
-    }
+    workspace = await invoker.invoke("workspace_add", { rootPath });
+    mounted = true;
   }
 
   for (let attempt = 1; ; attempt += 1) {

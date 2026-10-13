@@ -37,7 +37,7 @@
 
 ### 启动与浏览状态
 
-- **Welcome** 是空启动时的非标签文档状态，提供 **New Drawing**、**Open Workspace** 和 Recent Workspaces。Recent Workspaces 只从保留记录投影 `name` 与 `rootPath`，并按既有 `createdAt` 降序。Welcome 的 **New Drawing** 会立即保存为真实文件：首次使用时询问一个文件夹，将其挂载为 Workspace 并记住；之后每次 New Drawing 都直接在该文件夹中创建下一个空闲的 `Untitled`、`Untitled 2`…… `.excalidraw`，不再询问，因此它和其他文件一样有草稿、检查点与恢复。取消该文件夹选择时不创建任何内容。**Remove Workspace** 会安全关闭或保存打开的图纸、取消挂载 root，并把同一记录保留在此处；激活可访问的未挂载行会重新挂载同一记录，不可访问行只在激活时显示错误且仍保留。**Remove from Recents** 只在未挂载行可用，只删除应用历史而不触碰磁盘；通过 **Open Workspace** 选择同一保留 root 也会重新挂载原记录，不创建重复项。默认区域最多显示五行，超出后内部纵向滚动；不增加 last-opened time 或 drawing count，取消目录选择后状态不变。
+- **Welcome** 是空启动时的非标签文档状态，提供 **New Drawing**、**Open Workspace** 和 Recent Workspaces。Recent Workspaces 只从保留记录投影 `name` 与 `rootPath`，并按既有 `createdAt` 降序。每次在 Welcome 点击 **New Drawing** 都会询问一个文件夹，将其挂载为 Workspace，并在其中创建下一个可用的 `Untitled`、`Untitled 2`…… `.excalidraw`，因此它和其他文件一样有草稿、检查点与恢复。取消文件夹选择时不创建任何内容。**Remove Workspace** 会安全关闭或保存打开的图纸、取消挂载 root，并把同一记录保留在此处；激活可访问的未挂载行会重新挂载同一记录，不可访问行只在激活时显示错误且仍保留。**Remove from Recents** 只在未挂载行可用，只删除应用历史而不触碰磁盘；通过 **Open Workspace** 选择同一保留 root 也会重新挂载原记录，不创建重复项。默认区域最多显示五行，超出后内部纵向滚动；不增加 last-opened time 或 drawing count，取消目录选择后状态不变。
 - **Restored** 是存在有效 Current Workspace 或可重新打开文档时的正常启动壳层。干净重启不会显示恢复对话框。
 - 异常退出且存在恢复候选时，必须先显示恢复对话框。候选全部处理完成后才显示 Restored；在用户应用恢复决定前不得覆盖磁盘文件。
 - **Current Workspace** 是侧边栏树和标题行操作唯一使用的工作区。保存的 id 缺失或无效时回退到可用工作区，不创建新的工作区记录。

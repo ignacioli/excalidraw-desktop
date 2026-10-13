@@ -45,14 +45,13 @@ function createInvoker(existingNames: Iterable<string> = []) {
 }
 
 describe("createNewDrawingFile", () => {
-  it("asks for a folder on first use and mounts it before creating Untitled", async () => {
+  it("asks for a folder and mounts it before creating Untitled", async () => {
     const invoker = createInvoker();
     const selectDirectory = vi.fn(async () => workspace.rootPath);
 
     const result = await createNewDrawingFile({
       invoker,
       mountedWorkspaces: [],
-      preferredWorkspaceId: null,
       selectDirectory,
       untitledBaseName: "Untitled",
     });
@@ -69,29 +68,22 @@ describe("createNewDrawingFile", () => {
     });
   });
 
-  it("reuses the remembered mounted workspace without prompting and never overwrites", async () => {
+  it("steps past existing names to the next free Untitled N and never overwrites", async () => {
     const invoker = createInvoker([
       "Untitled.excalidraw",
       "Untitled 2.excalidraw",
     ]);
-    const selectDirectory = vi.fn(async () => null);
 
     const result = await createNewDrawingFile({
       invoker,
-      mountedWorkspaces: [workspace],
-      preferredWorkspaceId: workspace.id,
-      selectDirectory,
+      mountedWorkspaces: [],
+      selectDirectory: async () => workspace.rootPath,
       untitledBaseName: "Untitled",
     });
 
-    expect(selectDirectory).not.toHaveBeenCalled();
-    expect(invoker.mock).not.toHaveBeenCalledWith(
-      "workspace_add",
-      expect.anything(),
-    );
     expect(result).toMatchObject({
       status: "created",
-      mounted: false,
+      mounted: true,
       entry: { canonicalPath: `${workspace.rootPath}/Untitled 3.excalidraw` },
     });
   });
@@ -102,7 +94,6 @@ describe("createNewDrawingFile", () => {
     const result = await createNewDrawingFile({
       invoker,
       mountedWorkspaces: [workspace],
-      preferredWorkspaceId: "workspace-removed",
       selectDirectory: async () => workspace.rootPath,
       untitledBaseName: "Untitled",
     });
@@ -121,7 +112,6 @@ describe("createNewDrawingFile", () => {
       createNewDrawingFile({
         invoker,
         mountedWorkspaces: [],
-        preferredWorkspaceId: null,
         selectDirectory: async () => null,
         untitledBaseName: "Untitled",
       }),
@@ -139,8 +129,7 @@ describe("createNewDrawingFile", () => {
       createNewDrawingFile({
         invoker: { invoke },
         mountedWorkspaces: [workspace],
-        preferredWorkspaceId: workspace.id,
-        selectDirectory: async () => null,
+        selectDirectory: async () => workspace.rootPath,
         untitledBaseName: "Untitled",
       }),
     ).rejects.toBe(failure);
@@ -156,8 +145,7 @@ describe("createNewDrawingFile", () => {
       createNewDrawingFile({
         invoker: { invoke },
         mountedWorkspaces: [workspace],
-        preferredWorkspaceId: workspace.id,
-        selectDirectory: async () => null,
+        selectDirectory: async () => workspace.rootPath,
         untitledBaseName: "Untitled",
       }),
     ).rejects.toMatchObject({ code: "NAME_CONFLICT" });

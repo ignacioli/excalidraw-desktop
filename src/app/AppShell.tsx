@@ -631,14 +631,12 @@ export function AppShell({
       const result = await createNewDrawingFile({
         invoker: workspaceInvoker,
         mountedWorkspaces,
-        preferredWorkspaceId: preferences.getSnapshot().newDrawingWorkspaceId,
         selectDirectory: selectWorkspaceDirectory,
         // Same default as the sidebar New Drawing naming dialog.
         untitledBaseName: "Untitled",
       });
       if (result.status === "cancelled") return;
       const { workspace } = result;
-      preferences.setNewDrawingWorkspaceId(workspace.id);
       if (result.mounted) {
         workspaceRevisionRef.current += 1;
         setMountedWorkspaces((current) => [
