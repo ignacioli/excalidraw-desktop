@@ -23,29 +23,36 @@
 
 ## 桌面信息架构
 
-窗口是操作系统的普通装饰窗口，标题为 **Excalidraw Whiteboard**。标题栏颜色与标题位置由操作系统控制（标题栏选择 A）。不得在 Web 内容区重新绘制浏览器控制、PWA 顶栏或 macOS 红黄绿交通灯。不得强制全应用原生 Dark、透明/覆盖/混合/无边框标题栏，或生产环境始终置顶。
+应用可同时显示多个窗口。每个窗口都是操作系统的普通装饰窗口，标题表明窗口内容（见下文 **窗口**）。标题栏颜色与标题位置由操作系统控制（标题栏选择 A）。不得在 Web 内容区重新绘制浏览器控制、PWA 顶栏或 macOS 红黄绿交通灯。不得强制全应用原生 Dark、透明/覆盖/混合/无边框标题栏，或生产环境始终置顶。
 
 | 区域 | 用途 | 必须满足的行为 |
 | --- | --- | --- |
-| 原生标题栏 | 窗口身份与系统窗口装饰 | 普通装饰窗口；系统着色标题栏；标题 **Excalidraw Whiteboard** |
+| 原生标题栏 | 窗口身份与系统窗口装饰 | 普通装饰窗口；系统着色标题栏；按窗口设置标题（见 **窗口**） |
 | 左侧壳层 | 工作区导航与文件管理 | 紧凑的 Sidebar 与 Back 图标控件并列于最顶层左端。Pinned 时包含 Current Workspace 标题行与树；Overlay 覆盖 Center 但不改变画布盒；Hidden 时释放全部 Sidebar 空间。 |
 | 中央视壳层 | 文档导航与官方编辑器画布 | Tabs 位于中央顶层；官方 Excalidraw canvas 直接在其下。Hidden 时 Tabs 与画布立即回流至释放的水平空间。 |
 | 右侧 SDK 边界 | 官方 Library 与 Presentation surface | 保持 SDK-owned boundary 或占位关系。不得出现空的 app-owned right sidebar；003 不重绘、不替换，也不依赖编辑器、Library 或 Presentation 的私有 DOM。 |
-| 对话框层 | 恢复、冲突、确认、命名、偏好与应用/菜单动作 | 单一应用对话框层与单一上下文菜单；不得使用 `window.prompt` / `window.confirm`。 |
+| 对话框层 | 恢复、冲突、确认、命名、偏好与应用/菜单动作 | 每个窗口单一应用对话框层与单一上下文菜单；不得使用 `window.prompt` / `window.confirm`。 |
 
 **Canvas-first 三分区壳层。** 每个可达状态都使用上述 Left / Center / Right 层级。首次启动为 Hidden。一个紧凑 Sidebar 按钮负责所有可见模式切换：Hidden 打开 Overlay，Overlay 固定为 Pinned，Pinned 隐藏并取消固定；进入左侧边缘 reveal zone 也可打开 Overlay，且不改变 canvas box，不显示独立 Pin/Unpin 控件。Pinned Sidebar 默认宽 360px，可在 280–480px 内调整，并按需进一步限制以确保 canvas 至少保留 post-Sidebar content width 的 70%（批准的 1280×760 参考值为 76.1%）；所选宽度持久化。指针离开后 500 ms 自动关闭 Overlay，除非焦点、上下文菜单、对话框或拖放仍将其保持。Escape 关闭 Overlay，除非对话框或菜单已经消费 Escape。
+
+**窗口。** 一个窗口至多承载一个工作区，一个工作区或绘图只属于一个窗口。打开已被其他窗口拥有的工作区或绘图时，激活该窗口（最小化时先恢复），不再打开第二份。工作区不能嵌套：打开某个已打开工作区内的文件夹时，激活拥有者窗口、展开并选中该文件夹，并显示一条不打断操作的简短提示；打开包含已打开工作区的上级文件夹时，显示对话框，提供 **切换到该窗口**、**关闭该窗口后在此打开** 与 **取消**。File > New Window 打开一个 Welcome 窗口。macOS 上关闭最后一个窗口后应用留在 Dock；Cmd+Q 先让全部窗口完成检查点再退出。主题与界面语言同时作用于全部窗口；侧边栏模式、宽度与树展开状态按工作区保存。
+
+- **标题。** 无标签的 Welcome：`Excalidraw`；Welcome 中打开工作区外的绘图：`<绘图名> — Excalidraw`；工作区无活动绘图：`<工作区名>`；工作区有活动绘图：`<绘图名> — <工作区名>`。两个已打开工作区同名时，工作区部分加上级目录名：`<工作区名> (<上级目录名>)`。
+- **尺寸与位置。** 没有记住位置的窗口取所在显示器可用区域的 90%，上限 1680×1050，下限为最小尺寸 960×640，居中放置；在前台窗口旁新建的窗口错开 28 px。每个工作区记住其窗口的位置、尺寸与最大化/全屏状态；记住的位置大部分落在屏幕外时移回主显示器。
+- **重启。** 正常退出后，下次启动恢复窗口、各自的工作区、标签顺序与活动标签。异常退出后，恢复对话框只在一个窗口出现一次，完成后再恢复其他窗口。
 
 ### 启动与浏览状态
 
 - **Welcome** 是空启动时的非标签文档状态，提供 **New Drawing**、**Open Workspace** 和 Recent Workspaces。Recent Workspaces 只从保留记录投影 `name` 与 `rootPath`，并按既有 `createdAt` 降序。**Remove Workspace** 会安全关闭或保存打开的图纸、取消挂载 root，并把同一记录保留在此处；激活可访问的未挂载行会重新挂载同一记录，不可访问行只在激活时显示错误且仍保留。**Remove from Recents** 只在未挂载行可用，只删除应用历史而不触碰磁盘；通过 **Open Workspace** 选择同一保留 root 也会重新挂载原记录，不创建重复项。默认区域最多显示五行，超出后内部纵向滚动；不增加 last-opened time 或 drawing count，取消目录选择后状态不变。
 - **Restored** 是存在有效 Current Workspace 或可重新打开文档时的正常启动壳层。干净重启不会显示恢复对话框。
 - 异常退出且存在恢复候选时，必须先显示恢复对话框。候选全部处理完成后才显示 Restored；在用户应用恢复决定前不得覆盖磁盘文件。
-- **Current Workspace** 是侧边栏树和标题行操作唯一使用的工作区。保存的 id 缺失或无效时回退到可用工作区，不创建新的工作区记录。
+- **Current Workspace** 是本窗口的工作区，供侧边栏树和标题行操作使用。保存的 id 缺失或无效时回到 Welcome 并说明不可用，不创建新的工作区记录。
+- **空工作区** 是承载工作区但没有打开绘图标签的窗口。画布区域显示画布底色与网格、手写风格提示，以及 **新建绘图** 和 **显示侧边栏** 两个动作，并有指向 Sidebar 按钮的箭头；侧边栏固定显示时只保留 **新建绘图** 并隐藏箭头。不挂载 Excalidraw 编辑器。Anatomy 见 [`docs/design/multi-window/implementation-map.md`](docs/design/multi-window/implementation-map.md)。
 - **Back** 返回 Current Workspace 内上一个有效浏览位置。浏览栈为空时禁用 Back，且 Back 不关闭已打开文档。
 
-**工作区树。** Current Workspace root 及其可见后代组成一棵连续虚拟化的 Workspace Entries 树；多个 mounted Workspace root 不得堆叠在同一 Sidebar。其他 workspace record 通过 Welcome/Recent 或明确的 workspace-open flow 提供。图纸行使用文件图标。悬停行时以原生 tooltip 显示其完整路径，home 目录缩写为 `~`。没有 FileTree，没有生产环境 `dir_list` 列举，也没有画布内容缩略图 worker 或 `thumb_*` IPC。
+**工作区树。** Current Workspace root 及其可见后代组成一棵连续虚拟化的 Workspace Entries 树；多个 mounted Workspace root 不得堆叠在同一 Sidebar。其他 workspace record 通过 Welcome/Recent 或明确的 workspace-open flow 提供。图纸行使用文件图标。悬停行时以原生 tooltip 显示其完整路径，home 目录缩写为 `~`。绘图行与文件夹行的菜单提供 **Copy Path** 与 **Copy Relative Path**；工作区根行只提供 **Copy Path**。复制后显示简短确认；条目已不存在时显示失败提示。没有 FileTree，没有生产环境 `dir_list` 列举，也没有画布内容缩略图 worker 或 `thumb_*` IPC。
 
-**标签。** 每个标签预留关闭控件位置。标签上下文菜单提供 **Close**、**Close Others**、**Close Tabs to the Right** 和 **Close All**；批量关闭在首个失败或孤儿文档提示被取消时停止。中键关闭所指标签。应用壳层内，macOS 的 Cmd+W 与受支持 Linux 的 Ctrl+W 关闭活动图纸标签。标签栏上以垂直方向为主的滚轮手势切换标签，并合并到最新意图；溢出标签使用最近可见的紧凑策略，不显示可见 tab-strip scrollbar，且 reduced motion 时不使用平滑滚动。关闭孤立文档时提供 **Save As**、**Close Without Saving** 与 **Cancel**。
+**标签。** 每个标签预留关闭控件位置。标签上下文菜单提供 **Close**、**Close Others**、**Close Tabs to the Right** 和 **Close All**，其后是 **Copy Path** 与 **Copy Relative Path**（工作区外的绘图只有 **Copy Path**；未保存的新绘图两者都没有）；批量关闭在首个失败或孤儿文档提示被取消时停止。中键关闭所指标签。应用壳层内，macOS 的 Cmd+W 与受支持 Linux 的 Ctrl+W 关闭活动图纸标签。标签栏上以垂直方向为主的滚轮手势切换标签，并合并到最新意图；溢出标签使用最近可见的紧凑策略，不显示可见 tab-strip scrollbar，且 reduced motion 时不使用平滑滚动。关闭孤立文档时提供 **Save As**、**Close Without Saving** 与 **Cancel**。
 
 ### 动作归属与 legacy 移除
 

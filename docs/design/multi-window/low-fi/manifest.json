@@ -106,7 +106,8 @@
   "ownerDecision": {
     "lowFidelity": "APPROVED",
     "approvedAt": "2026-10-13",
-    "highFidelity": "PENDING_REVIEW"
+    "highFidelity": "APPROVED",
+    "highFidelityApprovedAt": "2026-10-13"
   },
   "notes": [
     "Grayscale wireframe for structure and hierarchy only; tokens and geometry come from the approved design system at high fidelity.",
@@ -125,6 +126,7 @@
     "file": "excalidraw-desktop-uxui-redesign",
     "page": "07 · Multi-window · 006 hi-fi (pending approval)",
     "snapshotBefore": "before-006 multi-window hi-fi 2026-10-13",
-    "snapshotAfter": "after-006 multi-window hi-fi draft 2026-10-13 (dialogs, menus/toasts, empty states, compositions; pending owner review)"
+    "snapshotAfter": "after-006 multi-window hi-fi draft 2026-10-13 (dialogs, menus/toasts, empty states, compositions; pending owner review)",
+    "manifest": "../high-fi/manifest.json"
   }
 }
