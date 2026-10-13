@@ -32,6 +32,7 @@ describe("ShellPreferences", () => {
       sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
       expandedWorkspaceIds: [],
       currentWorkspaceId: null,
+      newDrawingWorkspaceId: null,
     });
   });
 
@@ -41,6 +42,7 @@ describe("ShellPreferences", () => {
     preferences.setSidebarPinned(true);
     preferences.setSidebarWidth(412);
     preferences.setCurrentWorkspaceId("workspace-b");
+    preferences.setNewDrawingWorkspaceId("workspace-a");
     preferences.setWorkspaceExpanded("workspace-a", true);
     preferences.setWorkspaceExpanded("workspace-b", true);
     preferences.setWorkspaceExpanded("workspace-a", false);
@@ -51,6 +53,7 @@ describe("ShellPreferences", () => {
       sidebarWidth: 412,
       expandedWorkspaceIds: ["workspace-b"],
       currentWorkspaceId: "workspace-b",
+      newDrawingWorkspaceId: "workspace-a",
     });
     expect(new ShellPreferences(storage).getSnapshot()).toEqual(
       preferences.getSnapshot(),
@@ -87,6 +90,7 @@ describe("ShellPreferences", () => {
       sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
       expandedWorkspaceIds: [],
       currentWorkspaceId: null,
+      newDrawingWorkspaceId: null,
     });
     expect(storage.getItem(SHELL_PREFERENCES_STORAGE_KEY)).toBe(
       JSON.stringify(preferences.getSnapshot()),
@@ -157,6 +161,25 @@ describe("ShellPreferences", () => {
       sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
       expandedWorkspaceIds: ["workspace-a"],
       currentWorkspaceId: null,
+      newDrawingWorkspaceId: null,
+    });
+  });
+
+  it("discards a persisted snapshot with an invalid new-drawing Workspace id", () => {
+    const storage = new MemoryStorage();
+    storage.values.set(
+      SHELL_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({
+        version: SHELL_PREFERENCES_VERSION,
+        sidebarPinned: true,
+        expandedWorkspaceIds: [],
+        newDrawingWorkspaceId: "",
+      }),
+    );
+
+    expect(new ShellPreferences(storage).getSnapshot()).toMatchObject({
+      sidebarPinned: false,
+      newDrawingWorkspaceId: null,
     });
   });
 });

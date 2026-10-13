@@ -10,6 +10,8 @@ export interface ShellPreferenceSnapshot {
   sidebarWidth: number;
   expandedWorkspaceIds: string[];
   currentWorkspaceId: string | null;
+  /** Workspace that Welcome New Drawing saves into; chosen on first use. */
+  newDrawingWorkspaceId: string | null;
 }
 
 type ShellPreferenceStorage = Pick<Storage, "getItem" | "setItem">;
@@ -20,6 +22,7 @@ const defaultSnapshot = (): ShellPreferenceSnapshot => ({
   sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
   expandedWorkspaceIds: [],
   currentWorkspaceId: null,
+  newDrawingWorkspaceId: null,
 });
 
 export class ShellPreferences {
@@ -69,6 +72,13 @@ export class ShellPreferences {
   setCurrentWorkspaceId(currentWorkspaceId: string | null): void {
     if (this.snapshot.currentWorkspaceId === currentWorkspaceId) return;
     this.snapshot = { ...this.snapshot, currentWorkspaceId };
+    this.persist();
+    this.notify();
+  }
+
+  setNewDrawingWorkspaceId(newDrawingWorkspaceId: string | null): void {
+    if (this.snapshot.newDrawingWorkspaceId === newDrawingWorkspaceId) return;
+    this.snapshot = { ...this.snapshot, newDrawingWorkspaceId };
     this.persist();
     this.notify();
   }
@@ -141,6 +151,7 @@ function readSnapshot(stored: string | null): ShellPreferenceSnapshot {
         value.currentWorkspaceId !== null &&
         (typeof value.currentWorkspaceId !== "string" ||
           value.currentWorkspaceId.length === 0)) ||
+      !isOptionalWorkspaceId(value.newDrawingWorkspaceId) ||
       value.expandedWorkspaceIds.some(
         (id) => typeof id !== "string" || id.length === 0,
       )
@@ -159,6 +170,7 @@ function readSnapshot(stored: string | null): ShellPreferenceSnapshot {
         value.currentWorkspaceId === undefined
           ? null
           : value.currentWorkspaceId,
+      newDrawingWorkspaceId: value.newDrawingWorkspaceId ?? null,
     };
   } catch {
     return defaultSnapshot();
@@ -169,6 +181,16 @@ export function clampSidebarWidth(sidebarWidth: number): number {
   return Math.min(
     SIDEBAR_WIDTH_MAX,
     Math.max(SIDEBAR_WIDTH_MIN, Math.round(sidebarWidth)),
+  );
+}
+
+function isOptionalWorkspaceId(
+  value: unknown,
+): value is string | null | undefined {
+  return (
+    value === undefined ||
+    value === null ||
+    (typeof value === "string" && value.length > 0)
   );
 }
 
