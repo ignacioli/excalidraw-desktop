@@ -69,6 +69,7 @@ import {
 import { registerOpenFileHandler } from "./openFileHandler";
 import { TabBar } from "./TabBar";
 import { OrphanCloseDialog } from "./OrphanCloseDialog";
+import { createNewDrawingFile } from "./newDrawing";
 import { WelcomeScreen } from "./WelcomeScreen";
 import backIcon from "../../docs/design/desktop-shell/hf-2/icons/back.svg";
 import sidebarIcon from "../../docs/design/desktop-shell/hf-2/icons/sidebar.svg";
@@ -623,9 +624,32 @@ export function AppShell({
     setWelcomeBusy(true);
     clearWelcomeError();
     try {
-      await (onCreateDocument === undefined
-        ? documentManager.createUntitled()
-        : onCreateDocument());
+      if (onCreateDocument !== undefined) {
+        await onCreateDocument();
+        return;
+      }
+      const result = await createNewDrawingFile({
+        invoker: workspaceInvoker,
+        mountedWorkspaces,
+        selectDirectory: selectWorkspaceDirectory,
+        // Same default as the sidebar New Drawing naming dialog.
+        untitledBaseName: "Untitled",
+      });
+      if (result.status === "cancelled") return;
+      const { workspace } = result;
+      if (result.mounted) {
+        workspaceRevisionRef.current += 1;
+        setMountedWorkspaces((current) => [
+          ...current.filter((item) => item.id !== workspace.id),
+          workspace,
+        ]);
+        setWelcomeWorkspaces((current) => [
+          ...current.filter((item) => item.id !== workspace.id),
+          workspace,
+        ]);
+        if (currentWorkspaceId === null) selectCurrentWorkspace(workspace);
+      }
+      await documentManager.open(result.entry.canonicalPath);
     } catch (error) {
       reportWelcomeError(error);
     } finally {

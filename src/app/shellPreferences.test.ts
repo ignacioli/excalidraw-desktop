@@ -159,4 +159,31 @@ describe("ShellPreferences", () => {
       currentWorkspaceId: null,
     });
   });
+
+  it.each([["workspace-a"], [""], [null]])(
+    "ignores a legacy newDrawingWorkspaceId key (%j) instead of discarding the snapshot",
+    (legacyValue) => {
+      const storage = new MemoryStorage();
+      storage.values.set(
+        SHELL_PREFERENCES_STORAGE_KEY,
+        JSON.stringify({
+          version: SHELL_PREFERENCES_VERSION,
+          sidebarPinned: true,
+          expandedWorkspaceIds: ["workspace-a"],
+          currentWorkspaceId: "workspace-a",
+          newDrawingWorkspaceId: legacyValue,
+        }),
+      );
+
+      const snapshot = new ShellPreferences(storage).getSnapshot();
+      expect(snapshot).toEqual({
+        version: SHELL_PREFERENCES_VERSION,
+        sidebarPinned: true,
+        sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
+        expandedWorkspaceIds: ["workspace-a"],
+        currentWorkspaceId: "workspace-a",
+      });
+      expect(snapshot).not.toHaveProperty("newDrawingWorkspaceId");
+    },
+  );
 });

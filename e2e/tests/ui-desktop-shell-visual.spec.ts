@@ -642,7 +642,9 @@ test.describe("003 shell visual harness", () => {
   test("proves the visual harness has no private SDK selector dependency", async ({
     page,
   }) => {
-    await prepare(page, getShellFixture("empty"), "light");
+    await prepare(page, getShellFixture("empty"), "light", {
+      dialogPaths: ["/ui-interactions/new-drawings"],
+    });
     await page.getByRole("button", { name: "New Drawing" }).click();
     await expect(page.locator(SDK_BOUNDARY_SELECTOR)).toHaveCount(1);
     expect(assertNoPrivateSdkSelectors(SHELL_VISUAL_SELECTORS)).toMatchObject({
@@ -658,6 +660,7 @@ async function prepare(
   page: Page,
   fixture: ShellFixture,
   colorScheme: "light" | "dark",
+  options: { dialogPaths?: readonly (string | null)[] } = {},
 ): Promise<void> {
   assertShellFixtureConsistency(fixture);
   await page.setViewportSize(VISUAL_VIEWPORT);
@@ -687,6 +690,7 @@ async function prepare(
   await installUiInteractionHarness(page, {
     workspaces: fixture.workspaces,
     entries: fixture.entries,
+    dialogPaths: options.dialogPaths,
     responses:
       fixture.id === "restored-recovery"
         ? {
