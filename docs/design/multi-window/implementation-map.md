@@ -76,7 +76,6 @@
 | 侧栏工作区根行 | New Drawing · New Folder · ─ · Copy Path · ─ · Remove Workspace（说明行 `Files on disk will not be deleted`） |
 | Tab（工作区内绘图） | Close · Close Others · Close Tabs to the Right · Close All · ─ · Copy Path · Copy Relative Path |
 | Tab（工作区外绘图） | 四个关闭项 · ─ · Copy Path |
-| Tab（未保存的新绘图） | 只有四个关闭项，不显示复制分组 |
 
 文案：Copy Path / Copy Relative Path；复制路径 / 复制相对路径。首版不分配快捷键。
 
@@ -120,7 +119,6 @@
 | Welcome，有工作区外绘图 | `{drawing} — Excalidraw` |
 | 工作区，无活动绘图 | `{workspace}` |
 | 工作区，活动绘图 | `{drawing} — {workspace}` |
-| 未命名绘图 | `Untitled — {workspace}`（本地化） |
 | 两个打开的工作区同名 | `{workspace} ({parent folder})` |
 
 标题栏外观不变（系统绘制）。

@@ -52,7 +52,7 @@
 
 **工作区树。** Current Workspace root 及其可见后代组成一棵连续虚拟化的 Workspace Entries 树；多个 mounted Workspace root 不得堆叠在同一 Sidebar。其他 workspace record 通过 Welcome/Recent 或明确的 workspace-open flow 提供。图纸行使用文件图标。悬停行时以原生 tooltip 显示其完整路径，home 目录缩写为 `~`。绘图行与文件夹行的菜单提供 **Copy Path** 与 **Copy Relative Path**；工作区根行只提供 **Copy Path**。复制后显示简短确认；条目已不存在时显示失败提示。没有 FileTree，没有生产环境 `dir_list` 列举，也没有画布内容缩略图 worker 或 `thumb_*` IPC。
 
-**标签。** 每个标签预留关闭控件位置。标签上下文菜单提供 **Close**、**Close Others**、**Close Tabs to the Right** 和 **Close All**，其后是 **Copy Path** 与 **Copy Relative Path**（工作区外的绘图只有 **Copy Path**；未保存的新绘图两者都没有）；批量关闭在首个失败或孤儿文档提示被取消时停止。中键关闭所指标签。应用壳层内，macOS 的 Cmd+W 与受支持 Linux 的 Ctrl+W 关闭活动图纸标签。标签栏上以垂直方向为主的滚轮手势切换标签，并合并到最新意图；溢出标签使用最近可见的紧凑策略，不显示可见 tab-strip scrollbar，且 reduced motion 时不使用平滑滚动。关闭孤立文档时提供 **Save As**、**Close Without Saving** 与 **Cancel**。
+**标签。** 每个标签预留关闭控件位置。标签上下文菜单提供 **Close**、**Close Others**、**Close Tabs to the Right** 和 **Close All**，其后是 **Copy Path** 与 **Copy Relative Path**（工作区外的绘图只有 **Copy Path**）；批量关闭在首个失败或孤儿文档提示被取消时停止。中键关闭所指标签。应用壳层内，macOS 的 Cmd+W 与受支持 Linux 的 Ctrl+W 关闭活动图纸标签。标签栏上以垂直方向为主的滚轮手势切换标签，并合并到最新意图；溢出标签使用最近可见的紧凑策略，不显示可见 tab-strip scrollbar，且 reduced motion 时不使用平滑滚动。关闭孤立文档时提供 **Save As**、**Close Without Saving** 与 **Cancel**。
 
 ### 动作归属与 legacy 移除
 
