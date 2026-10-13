@@ -44,25 +44,6 @@ export interface HistoryReplacementResult {
   adopted: boolean;
 }
 
-export interface HistoryReplacementOptions {
-  /** Reuse the existing Save As/first-save flow for an untitled session. */
-  prepareUnsaved?: HistoryMarkSaveHandler;
-}
-
-export class HistoryReplacementRequiresSaveError extends Error {
-  constructor() {
-    super("An untitled drawing must be saved before it can be replaced.");
-    this.name = "HistoryReplacementRequiresSaveError";
-  }
-}
-
-export class HistoryReplacementCancelledError extends Error {
-  constructor() {
-    super("The first save was cancelled; the drawing was not replaced.");
-    this.name = "HistoryReplacementCancelledError";
-  }
-}
-
 export type HistoryReplacementBlockedReason = "conflict";
 
 export class HistoryReplacementBlockedError extends Error {
@@ -88,52 +69,20 @@ export class HistoryReplacementBlockedError extends Error {
 export interface HistoryMarkCapture {
   documentId: string;
   document: HistoryDocumentLocator;
-  path: string;
   scene: SceneSnapshot;
   sceneJson: string;
   sessionGeneration: number;
   revision: number;
 }
 
-export interface HistoryMarkSaveOutcome {
-  status: "saved" | "cancelled";
-  document?: HistoryDocumentLocator;
-  sessionGeneration?: number;
-  revision?: number;
-}
-
-export type HistoryMarkSaveHandler = (
-  capture: HistoryMarkCapture,
-) => Promise<HistoryMarkSaveOutcome | void> | HistoryMarkSaveOutcome | void;
-
 export interface HistoryMarkOptions {
   requestId?: string;
-  /**
-   * Existing Save As/first-save flow supplied by the shell for untitled
-   * documents. The coordinator never opens a named history dialog and never
-   * mutates the canvas while preparing the document.
-   */
-  prepareUnsaved?: HistoryMarkSaveHandler;
 }
 
 export interface HistoryMarkResult {
   status: "marked";
   response: HistoryMarkResponse;
   captured: HistoryMarkCapture;
-}
-
-export interface HistoryMarkCancelledResult {
-  status: "cancelled";
-  captured: HistoryMarkCapture;
-}
-
-export type HistoryMarkOutcome = HistoryMarkResult | HistoryMarkCancelledResult;
-
-export class HistoryMarkRequiresSaveError extends Error {
-  constructor() {
-    super("An untitled drawing must be saved before it can be marked.");
-    this.name = "HistoryMarkRequiresSaveError";
-  }
 }
 
 /**
@@ -170,47 +119,17 @@ export class HistoryCoordinator {
   async mark(
     documentId: string,
     options: HistoryMarkOptions = {},
-  ): Promise<HistoryMarkOutcome> {
+  ): Promise<HistoryMarkResult> {
     const capture = this.captureMark(documentId);
-    let document = capture.document;
-    let sessionGeneration = capture.sessionGeneration;
-    let revision = capture.revision;
-
-    if (capture.path.length === 0) {
-      if (options.prepareUnsaved === undefined) {
-        throw new HistoryMarkRequiresSaveError();
-      }
-      const prepared = await options.prepareUnsaved(capture);
-      if (prepared !== undefined && prepared.status === "cancelled") {
-        return { status: "cancelled", captured: capture };
-      }
-      const current = this.manager.store.getState().sessionsById[documentId];
-      if (current === undefined) {
-        throw new HistoryMarkRequiresSaveError();
-      }
-      if (prepared?.document !== undefined) {
-        document = prepared.document;
-      } else if (current.path.length > 0) {
-        document =
-          current.historyDocumentId === undefined
-            ? { kind: "path", path: current.path }
-            : { kind: "handle", documentId: current.historyDocumentId };
-      } else {
-        throw new HistoryMarkRequiresSaveError();
-      }
-      sessionGeneration =
-        prepared?.sessionGeneration ?? current.sessionGeneration ?? 0;
-      revision = prepared?.revision ?? current.revision;
-    }
 
     const response = await this.manager.runDocumentOperation(
       documentId,
       async () =>
         this.client.mark({
-          document,
+          document: capture.document,
           requestId: options.requestId ?? createRequestId(),
-          sessionGeneration,
-          revision,
+          sessionGeneration: capture.sessionGeneration,
+          revision: capture.revision,
           currentSceneJson: capture.sceneJson,
         }),
     );
@@ -221,9 +140,7 @@ export class HistoryCoordinator {
     documentId: string,
     target: HistoryReplaceTarget,
     requestId = createRequestId(),
-    options: HistoryReplacementOptions = {},
   ): Promise<HistoryReplacementResult> {
-    const preparedDocument = await this.prepareReplacement(documentId, options);
     const current = this.manager.store.getState().sessionsById[documentId];
     if (
       current !== undefined &&
@@ -241,13 +158,12 @@ export class HistoryCoordinator {
         }
         const request = {
           document:
-            preparedDocument ??
-            (session.historyDocumentId === undefined
+            session.historyDocumentId === undefined
               ? { kind: "path" as const, path: session.path }
               : {
                   kind: "handle" as const,
                   documentId: session.historyDocumentId,
-                }),
+                },
           requestId,
           sessionGeneration: context.sessionGeneration,
           revision: context.revision,
@@ -282,18 +198,16 @@ export class HistoryCoordinator {
   async clear(
     documentId: string,
     requestId = createRequestId(),
-    options: HistoryReplacementOptions = {},
   ): Promise<HistoryReplacementResult> {
-    return this.replace(documentId, { kind: "clear" }, requestId, options);
+    return this.replace(documentId, { kind: "clear" }, requestId);
   }
 
   /** Alias used by reset commands; it must not create a second transaction. */
   async reset(
     documentId: string,
     requestId = createRequestId(),
-    options: HistoryReplacementOptions = {},
   ): Promise<HistoryReplacementResult> {
-    return this.clear(documentId, requestId, options);
+    return this.clear(documentId, requestId);
   }
 
   /**
@@ -305,14 +219,8 @@ export class HistoryCoordinator {
     documentId: string,
     candidate: ImportedSceneCandidate,
     requestId = createRequestId(),
-    options: HistoryReplacementOptions = {},
   ): Promise<HistoryReplacementResult> {
-    return this.replace(
-      documentId,
-      importTarget(candidate),
-      requestId,
-      options,
-    );
+    return this.replace(documentId, importTarget(candidate), requestId);
   }
 
   /** Resolve a pending/uncertain operation without issuing another replace. */
@@ -471,47 +379,11 @@ export class HistoryCoordinator {
         session.historyDocumentId === undefined
           ? { kind: "path", path: session.path }
           : { kind: "handle", documentId: session.historyDocumentId },
-      path: session.path,
       scene: session.scene,
       sceneJson: serializeScene(session.scene),
       sessionGeneration: session.sessionGeneration ?? 0,
       revision: session.revision,
     };
-  }
-
-  private async prepareReplacement(
-    documentId: string,
-    options: HistoryReplacementOptions,
-  ): Promise<HistoryDocumentLocator | undefined> {
-    const current = this.manager.store.getState().sessionsById[documentId];
-    if (current === undefined) {
-      throw new Error(`Document ${documentId} is not open.`);
-    }
-    if (current.path.length > 0) {
-      return current.historyDocumentId === undefined
-        ? { kind: "path", path: current.path }
-        : { kind: "handle", documentId: current.historyDocumentId };
-    }
-    if (options.prepareUnsaved === undefined) {
-      throw new HistoryReplacementRequiresSaveError();
-    }
-    const capture = this.captureMark(documentId);
-    const prepared = await options.prepareUnsaved(capture);
-    if (prepared?.status === "cancelled") {
-      throw new HistoryReplacementCancelledError();
-    }
-    const updated = this.manager.store.getState().sessionsById[documentId];
-    if (prepared?.document !== undefined) {
-      return prepared.document;
-    }
-    if (updated?.path.length === 0) {
-      throw new HistoryReplacementRequiresSaveError();
-    }
-    return updated === undefined
-      ? undefined
-      : updated.historyDocumentId === undefined
-        ? { kind: "path", path: updated.path }
-        : { kind: "handle", documentId: updated.historyDocumentId };
   }
 
   private async finishAdoption(
