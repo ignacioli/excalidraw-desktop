@@ -26,9 +26,6 @@ interface TabMenuState {
 
 export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
   const { t } = useI18n();
-  // Untitled drawings have no file name yet, so name them in the UI language.
-  const sessionTitle = (session: { path: string; title: string }): string =>
-    session.path === "" ? t("tabs.untitled") : session.title;
   const sessionsById = useDocumentStore((state) => state.sessionsById);
   const tabOrder = useDocumentStore((state) => state.tabOrder);
   const activeDocumentId = useDocumentStore((state) => state.activeDocumentId);
@@ -328,7 +325,7 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
                     ? "tab-filename-tooltip"
                     : undefined
                 }
-                aria-label={`${sessionTitle(session)}${isDirty ? t("tabs.unsavedSuffix") : ""}${isOrphaned ? t("tabs.unavailableSuffix") : ""}`}
+                aria-label={`${session.title}${isDirty ? t("tabs.unsavedSuffix") : ""}${isOrphaned ? t("tabs.unavailableSuffix") : ""}`}
                 aria-selected={isActive}
                 className={isActive ? "tab is-selected" : "tab"}
                 id={`tab-${session.id}`}
@@ -336,7 +333,7 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
                 role="tab"
                 tabIndex={isActive ? 0 : -1}
               >
-                <span className="tab-title">{sessionTitle(session)}</span>
+                <span className="tab-title">{session.title}</span>
                 {isDirty ? (
                   <span
                     className="dirty-indicator"
@@ -367,7 +364,7 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
                 {closeVisible ? (
                   <button
                     aria-label={t("tabs.closeNamed", {
-                      title: sessionTitle(session),
+                      title: session.title,
                     })}
                     className="tab-close"
                     onClick={(event) => {
@@ -396,7 +393,7 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
                 maxWidth: Math.min(480, window.innerWidth - tooltip.x - 8),
               }}
             >
-              {sessionTitle(tooltipSession)}
+              {tooltipSession.title}
             </div>,
             document.body,
           )

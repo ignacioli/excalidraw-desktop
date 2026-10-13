@@ -163,15 +163,6 @@ export class DocumentManager {
     });
   }
 
-  async createUntitled(): Promise<string> {
-    return this.registerSession({
-      path: "",
-      scene: createEmptyScene(),
-      baseHash: "",
-      saveState: "dirty",
-    });
-  }
-
   async restore(path: string, sceneData: SceneData): Promise<string> {
     const scene = deserializeSceneData(sceneData);
     const existing = this.findByPath(path);
@@ -480,11 +471,7 @@ export class DocumentManager {
   ): HistoryAutosaveProbe | undefined {
     const session = this.store.getState().sessionsById[documentId];
     const scheduler = this.schedulers.get(documentId);
-    if (
-      session === undefined ||
-      scheduler === undefined ||
-      session.path.length === 0
-    ) {
+    if (session === undefined || scheduler === undefined) {
       return undefined;
     }
 
@@ -647,20 +634,17 @@ export class DocumentManager {
     }
 
     try {
-      if (session.path.length > 0) {
-        if (!discardDraft) {
-          await this.checkpoint(documentId, "tabClose");
-        }
-        await this.runDocumentOperation(documentId, async () => {
-          const currentPath =
-            this.store.getState().sessionsById[documentId]?.path ??
-            session.path;
-          await this.gateway.close(
-            currentPath,
-            discardDraft ? "discardOrphan" : "checkpointed",
-          );
-        });
+      if (!discardDraft) {
+        await this.checkpoint(documentId, "tabClose");
       }
+      await this.runDocumentOperation(documentId, async () => {
+        const currentPath =
+          this.store.getState().sessionsById[documentId]?.path ?? session.path;
+        await this.gateway.close(
+          currentPath,
+          discardDraft ? "discardOrphan" : "checkpointed",
+        );
+      });
     } catch (error) {
       return {
         status: "failed",
@@ -964,9 +948,7 @@ export class DocumentManager {
         serializeScene(current.scene),
         "saveAsNew",
       );
-      if (current.path.length > 0) {
-        await this.gateway.close(current.path, "discardOrphan");
-      }
+      await this.gateway.close(current.path, "discardOrphan");
       this.schedulers.get(documentId)?.setConflicted(false);
       const title = getFileName(newPath);
       this.patchSession(documentId, {
@@ -1025,11 +1007,6 @@ export class DocumentManager {
       persistDraft: (nextDraft) => this.persistDraft(id, path, nextDraft),
       checkpoint: async (nextDraft, reason) => {
         if (
-          (this.store.getState().sessionsById[id]?.path ?? path).length === 0
-        ) {
-          return;
-        }
-        if (
           historyAutosaveProbeRejection(
             this.store.getState().sessionsById[id],
             {
@@ -1080,9 +1057,6 @@ export class DocumentManager {
     nextDraft: ScheduledScene,
   ): Promise<"saved" | "rejected"> {
     const current = this.store.getState().sessionsById[documentId];
-    if ((current?.path ?? fallbackPath).length === 0) {
-      return "rejected";
-    }
     if (
       historyAutosaveProbeRejection(
         current,
