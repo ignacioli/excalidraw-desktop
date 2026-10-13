@@ -106,7 +106,7 @@
   "ownerDecision": {
     "lowFidelity": "APPROVED",
     "approvedAt": "2026-10-13",
-    "highFidelity": "NOT_STARTED"
+    "highFidelity": "PENDING_REVIEW"
   },
   "notes": [
     "Grayscale wireframe for structure and hierarchy only; tokens and geometry come from the approved design system at high fidelity.",
@@ -119,5 +119,12 @@
     "Subfolder reveal: no dialog; activate the owning window, select the folder, and show a non-blocking toast that auto-dismisses after about 3 s.",
     "Window title format: '<drawing> — <workspace>', with a parent-folder suffix for duplicate workspace names.",
     "Dialog anatomy: suffix inside the field box, Cancel-then-primary right-aligned order, non-destructive styling for Remove workspace."
-  ]
+  ],
+  "highFidelitySource": {
+    "tool": "Penpot",
+    "file": "excalidraw-desktop-uxui-redesign",
+    "page": "07 · Multi-window · 006 hi-fi (pending approval)",
+    "snapshotBefore": "before-006 multi-window hi-fi 2026-10-13",
+    "snapshotAfter": "after-006 multi-window hi-fi draft 2026-10-13 (dialogs, menus/toasts, empty states, compositions; pending owner review)"
+  }
 }
