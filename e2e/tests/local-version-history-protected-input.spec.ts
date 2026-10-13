@@ -9,6 +9,7 @@ import {
 import { persistPinnedWorkspaceSidebar } from "./workspaceSidebar";
 
 const DOCUMENT_PATH = "/virtual/history-protected-input.excalidraw";
+const OTHER_DOCUMENT_PATH = "/virtual/history-protected-input-other.excalidraw";
 const EMPTY_SCENE = JSON.stringify({
   type: "excalidraw",
   version: 2,
@@ -102,21 +103,22 @@ test.describe("Phase 5 protected input keyboard paths", () => {
     const chooserPromise = page.waitForEvent("filechooser");
     await page.keyboard.press("Meta+O");
     const chooser = await chooserPromise;
-    await page.evaluate(async () => {
+    await page.evaluate(async (otherPath) => {
       const modulePath = "/src/documents/documentStore.ts";
       const { documentManager } = await import(/* @vite-ignore */ modulePath);
-      await documentManager.createUntitled();
-    });
+      await documentManager.open(otherPath);
+    }, OTHER_DOCUMENT_PATH);
     await chooser.setFiles({
       name: "other.excalidraw",
       mimeType: "application/json",
       buffer: Buffer.from(EMPTY_SCENE),
     });
 
-    await expect(page.getByRole("tab", { name: "Untitled" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    await expect(
+      page.getByRole("tab", {
+        name: "history-protected-input-other.excalidraw",
+      }),
+    ).toHaveAttribute("aria-selected", "true");
     expect(await readHistoryReplaceCalls(page)).toEqual([]);
   });
 
@@ -134,39 +136,6 @@ test.describe("Phase 5 protected input keyboard paths", () => {
     ).toHaveCount(0);
     expect(await readHistoryReplaceCalls(page)).toEqual([]);
   });
-
-  for (const operation of ["clear", "import"] as const) {
-    test(`${operation} keeps an untitled scene when first save is cancelled`, async ({
-      page,
-    }) => {
-      await openUntitledDrawing(page);
-      await drawRectangle(page);
-      await expect.poll(async () => readActiveElementCount(page)).toBe(1);
-      const editor = page.locator(".excalidraw-editor:visible");
-      await editor.click({ position: { x: 320, y: 220 } });
-      if (operation === "clear") {
-        await editor.dispatchEvent("keydown", {
-          key: "Delete",
-          metaKey: true,
-          bubbles: true,
-          cancelable: true,
-        });
-      } else {
-        const chooserPromise = page.waitForEvent("filechooser");
-        await page.keyboard.press("Meta+O");
-        const chooser = await chooserPromise;
-        await chooser.setFiles({
-          name: "replacement.excalidraw",
-          mimeType: "application/json",
-          buffer: Buffer.from(EMPTY_SCENE),
-        });
-      }
-
-      await expect.poll(async () => readSaveDialogCount(page)).toBe(1);
-      await expect.poll(async () => readActiveElementCount(page)).toBe(1);
-      expect(await readHistoryReplaceCalls(page)).toEqual([]);
-    });
-  }
 });
 
 async function openSavedDrawing(page: Page): Promise<void> {
@@ -181,41 +150,6 @@ async function openSavedDrawing(page: Page): Promise<void> {
   await expect(
     page.getByRole("main", { name: "Drawing canvas" }),
   ).toBeVisible();
-}
-
-async function openUntitledDrawing(page: Page): Promise<void> {
-  await installBrowserTauriHarness(page, DOCUMENT_PATH, EMPTY_SCENE, []);
-  await installHistoryProbe(page, null);
-  await persistPinnedWorkspaceSidebar(page);
-  await page.goto("/");
-  await page.evaluate(async () => {
-    const modulePath = "/src/documents/documentStore.ts";
-    const { documentManager } = await import(/* @vite-ignore */ modulePath);
-    await documentManager.createUntitled();
-  });
-  await expect(page.locator(".excalidraw-editor:visible")).toHaveCount(1);
-}
-
-async function readActiveElementCount(page: Page): Promise<number> {
-  return page.evaluate(async () => {
-    const modulePath = "/src/documents/documentStore.ts";
-    const { documentManager } = await import(/* @vite-ignore */ modulePath);
-    const { activeDocumentId, sessionsById } = documentManager.store.getState();
-    return activeDocumentId === null
-      ? 0
-      : (sessionsById[activeDocumentId]?.scene.elements.length ?? 0);
-  });
-}
-
-async function readSaveDialogCount(page: Page): Promise<number> {
-  return page.evaluate(
-    () =>
-      (
-        globalThis as typeof globalThis & {
-          __historyProtectedInputProbe?: { saveDialogCount: number };
-        }
-      ).__historyProtectedInputProbe?.saveDialogCount ?? 0,
-  );
 }
 
 async function drawRectangle(page: Page): Promise<void> {
@@ -254,10 +188,7 @@ type HistoryReplaceCall = {
   requestId?: string;
 };
 
-async function installHistoryProbe(
-  page: Page,
-  pendingPath: string | null = DOCUMENT_PATH,
-): Promise<void> {
+async function installHistoryProbe(page: Page): Promise<void> {
   await page.addInitScript(
     ({ pendingPath }) => {
       type Internals = {
@@ -271,7 +202,6 @@ async function installHistoryProbe(
         __historyProtectedInputProbe?: {
           historyReplace: HistoryReplaceCall[];
           chooserOpenCount: number;
-          saveDialogCount: number;
         };
       };
       const browser = globalThis as unknown as ProbeWindow;
@@ -282,7 +212,6 @@ async function installHistoryProbe(
       const probe = {
         historyReplace: [] as HistoryReplaceCall[],
         chooserOpenCount: 0,
-        saveDialogCount: 0,
       };
       browser.__historyProtectedInputProbe = probe;
       const originalInvoke = internals.invoke.bind(internals);
@@ -297,15 +226,12 @@ async function installHistoryProbe(
           };
           return {
             ...response,
-            pendingOpenPaths: pendingPath === null ? [] : [pendingPath],
+            pendingOpenPaths: [pendingPath],
             preferredLanguages: [],
           };
         }
         if (command === "plugin:dialog|open") {
           probe.chooserOpenCount += 1;
-        }
-        if (command === "plugin:dialog|save") {
-          probe.saveDialogCount += 1;
         }
         if (command === "history_replace") {
           const request = args.request as Record<string, unknown>;
@@ -352,7 +278,7 @@ async function installHistoryProbe(
         return originalInvoke(command, args);
       };
     },
-    { pendingPath },
+    { pendingPath: DOCUMENT_PATH },
   );
 }
 

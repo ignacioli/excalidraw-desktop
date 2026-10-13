@@ -964,7 +964,7 @@ export function AppShell({
         activeDocumentId === null
           ? undefined
           : documentManager.store.getState().sessionsById[activeDocumentId];
-      if (session === undefined || session.path.length === 0) {
+      if (session === undefined) {
         setHistoryItems([]);
         setHistoryPanelStatus("empty");
         setHistoryPanelMessage(undefined);
@@ -1026,7 +1026,7 @@ export function AppShell({
       activeDocumentId === null
         ? undefined
         : documentManager.store.getState().sessionsById[activeDocumentId];
-    if (session === undefined || session.path.length === 0) {
+    if (session === undefined) {
       setInteractionError({ key: "shell.historySavedOnly" });
       return;
     }
@@ -1062,7 +1062,7 @@ export function AppShell({
         activeDocumentId === null
           ? undefined
           : documentManager.store.getState().sessionsById[activeDocumentId];
-      if (session === undefined || session.path.length === 0) return;
+      if (session === undefined) return;
       const request = ++historyPanelRequestRef.current;
       setHistoryPreviewVersionId(item.versionId);
       setHistoryPreviewState("loading");
@@ -1149,7 +1149,7 @@ export function AppShell({
         activeDocumentId === null
           ? undefined
           : documentManager.store.getState().sessionsById[activeDocumentId];
-      if (session === undefined || session.path.length === 0) return;
+      if (session === undefined) return;
       await historyClient.delete({
         document: historyDocumentLocator(session),
         requestId: createHistoryRequestId(),
@@ -1175,7 +1175,7 @@ export function AppShell({
         activeDocumentId === null
           ? undefined
           : documentManager.store.getState().sessionsById[activeDocumentId];
-      if (session === undefined || session.path.length === 0) return;
+      if (session === undefined) return;
       const response = await historyClient.setMarked({
         document: historyDocumentLocator(session),
         requestId: createHistoryRequestId(),
@@ -1271,9 +1271,7 @@ export function AppShell({
   ]);
 
   const historyMenuEnabled =
-    hasNativeWindowRuntime() &&
-    activeSession !== undefined &&
-    activeSession.path.length > 0;
+    hasNativeWindowRuntime() && activeSession !== undefined;
   useEffect(() => {
     if (!hasNativeWindowRuntime()) return;
     void setNativeMenuCommandEnabled(
