@@ -100,6 +100,7 @@ export async function installBrowserTauriHarness(
           JSON.stringify(workspaceEntries),
         );
       };
+      let workspaceMounted = seedEntries !== undefined;
       let nextDialogPath = 0;
       let checkpointCount = 0;
       let checkpointFailureArmed = false;
@@ -186,7 +187,19 @@ export async function installBrowserTauriHarness(
             command === "workspace_list" ||
             command === "workspace_recent_list"
           ) {
-            return seedEntries === undefined ? [] : [workspace];
+            return workspaceMounted ? [workspace] : [];
+          }
+          // Welcome New Drawing mounts its chosen folder on first use; only
+          // the harness root is a mountable folder.
+          if (command === "workspace_add") {
+            if (args.rootPath !== workspaceRoot) {
+              throw {
+                code: "PATH_ACCESS_DENIED",
+                message: "The requested folder is outside the harness.",
+              };
+            }
+            workspaceMounted = true;
+            return workspace;
           }
           if (command === "workspace_entry_list") {
             const workspaceId = String(args.workspaceId ?? "");
@@ -234,6 +247,13 @@ export async function installBrowserTauriHarness(
             workspaceEntries = [...workspaceEntries, entry];
             persistWorkspaceEntries();
             return { entry };
+          }
+          if (
+            command === "plugin:dialog|open" &&
+            (args.options as { directory?: boolean } | undefined)?.directory ===
+              true
+          ) {
+            return workspaceRoot;
           }
           if (
             command === "plugin:dialog|open" ||

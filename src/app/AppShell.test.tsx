@@ -262,9 +262,124 @@ describe("AppShell", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps New Drawing memory-only and avoids workspace persistence", async () => {
+  it("saves New Drawing as an ordinary file that closing checkpoints instead of dropping", async () => {
     const user = userEvent.setup();
-    const invoke = vi.fn(async (command: string) => {
+    const values = new Map<string, string>();
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key),
+        clear: () => values.clear(),
+      },
+    });
+    const workspace = {
+      id: "workspace-drawings",
+      name: "Drawings",
+      rootPath: "/Users/me/Drawings",
+      createdAt: 1,
+    };
+    const existing = new Set<string>();
+    let added = false;
+    const workspaceInvoke = vi.fn(
+      async (command: string, args?: Record<string, unknown>) => {
+        if (command === "workspace_list") return added ? [workspace] : [];
+        if (command === "workspace_recent_list") {
+          return added ? [workspace] : [];
+        }
+        if (command === "workspace_add") {
+          added = true;
+          return workspace;
+        }
+        if (command === "workspace_entry_list") return [];
+        if (command === "workspace_entry_create") {
+          const name = `${String(args?.baseName)}.excalidraw`;
+          if (existing.has(name)) {
+            throw { code: "NAME_CONFLICT", message: "exists" };
+          }
+          existing.add(name);
+          return {
+            operationId: name,
+            entry: {
+              workspaceId: workspace.id,
+              kind: "drawing",
+              canonicalPath: `${workspace.rootPath}/${name}`,
+              relativePath: name,
+              parentRelativePath: "",
+              name,
+              displayName: String(args?.baseName),
+              mtime: 1,
+              fileSize: 0,
+            },
+          };
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+    vi.mocked(invoke).mockImplementation(async (command: string) => {
+      if (command === "doc_open") {
+        return {
+          scene: {
+            type: "excalidraw",
+            version: 2,
+            elements: [],
+            appState: {},
+            files: {},
+          },
+          baseHash: "base",
+          hasNewerDraft: false,
+        };
+      }
+      if (command === "doc_checkpoint") {
+        return { newBaseHash: "next", savedAt: 2 };
+      }
+      return {};
+    });
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+    const selectWorkspaceDirectory = vi.fn(async () => workspace.rootPath);
+
+    render(
+      <AppShell
+        workspaceInvoker={{ invoke: workspaceInvoke }}
+        selectWorkspaceDirectory={selectWorkspaceDirectory}
+      />,
+    );
+    await waitFor(() =>
+      expect(workspaceInvoke).toHaveBeenCalledWith("workspace_list", {}),
+    );
+    await user.click(screen.getByRole("button", { name: "New Drawing" }));
+
+    await waitFor(() =>
+      expect(documentManager.store.getState().activeDocumentId).not.toBeNull(),
+    );
+    const firstId = documentManager.store.getState().activeDocumentId ?? "";
+    expect(workspaceInvoke).toHaveBeenCalledWith("workspace_add", {
+      rootPath: workspace.rootPath,
+    });
+    expect(
+      documentManager.store.getState().sessionsById[firstId],
+    ).toMatchObject({
+      path: `${workspace.rootPath}/Untitled.excalidraw`,
+      title: "Untitled.excalidraw",
+    });
+
+    await act(async () => {
+      expect(await documentManager.close(firstId)).toEqual({
+        status: "closed",
+      });
+    });
+    expect(invoke).toHaveBeenCalledWith("doc_close", {
+      path: `${workspace.rootPath}/Untitled.excalidraw`,
+      mode: "checkpointed",
+    });
+  });
+
+  it("creates nothing when the first New Drawing folder choice is cancelled", async () => {
+    const user = userEvent.setup();
+    const workspaceInvoke = vi.fn(async (command: string) => {
       if (command === "workspace_list") return [];
       if (command === "workspace_recent_list") return [];
       throw new Error(`Unexpected command ${command}`);
@@ -273,18 +388,28 @@ describe("AppShell", () => {
       invoke: vi.fn(async () => []),
     });
 
-    render(<AppShell workspaceInvoker={{ invoke }} />);
+    render(
+      <AppShell
+        workspaceInvoker={{ invoke: workspaceInvoke }}
+        selectWorkspaceDirectory={async () => null}
+      />,
+    );
     await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("workspace_list", {}),
+      expect(workspaceInvoke).toHaveBeenCalledWith("workspace_list", {}),
     );
     await user.click(screen.getByRole("button", { name: "New Drawing" }));
 
-    const activeDocumentId = documentManager.store.getState().activeDocumentId;
-    expect(activeDocumentId).not.toBeNull();
+    expect(documentManager.store.getState().tabOrder).toEqual([]);
+    expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
     expect(
-      documentManager.store.getState().sessionsById[activeDocumentId ?? ""],
-    ).toMatchObject({ path: "", title: "Untitled", saveState: "dirty" });
-    expect(invoke).not.toHaveBeenCalledWith("workspace_add", expect.anything());
+      vi
+        .mocked(workspaceInvoke)
+        .mock.calls.map(([command]) => command)
+        .filter(
+          (command) =>
+            command !== "workspace_list" && command !== "workspace_recent_list",
+        ),
+    ).toEqual([]);
   });
 
   it("keeps Welcome and workspace records unchanged when Open Workspace is cancelled", async () => {

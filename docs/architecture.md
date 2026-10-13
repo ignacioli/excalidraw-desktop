@@ -236,7 +236,7 @@ flowchart LR
     Apply --> Refresh["invalidate tree; restore scroll anchor and focus"]
 ```
 
-Authoritative layers: `src-tauri/src/workspace_entries/` and `src/documents/documentStore.ts`. New drawings default to the visible name `Untitled`; Rust appends `.excalidraw`. New directories default to `Untitled Folder` (`src/app/interaction/EntryNamingDialog.tsx`). Protected targets include the workspace root, dot directories, and `.excalidraw_assets`.
+Authoritative layers: `src-tauri/src/workspace_entries/` and `src/documents/documentStore.ts`. New drawings default to the visible name `Untitled`; Rust appends `.excalidraw`. New directories default to `Untitled Folder` (`src/app/interaction/EntryNamingDialog.tsx`). Welcome New Drawing (`src/app/newDrawing.ts`) asks for a folder each time, mounts it as a workspace (reusing an already mounted root), uses the same `workspace_entry_create` path there, and steps past `NAME_CONFLICT` to `Untitled N`; it never creates a pathless document session. Protected targets include the workspace root, dot directories, and `.excalidraw_assets`.
 
 ## 6. Sequence: serialized close and latest-intent activation
 

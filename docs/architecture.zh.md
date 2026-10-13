@@ -188,7 +188,7 @@ flowchart LR
     Apply --> Refresh["树失效并恢复滚动锚点与焦点"]
 ```
 
-权威层划分见 `src-tauri/src/workspace_entries/` 与 `src/documents/documentStore.ts`。新建图纸默认可见名 `Untitled`，Rust 追加 `.excalidraw`；新建目录默认 `Untitled Folder`（`src/app/interaction/EntryNamingDialog.tsx`）。受保护目标包括工作区根、点号目录与 `.excalidraw_assets`。
+权威层划分见 `src-tauri/src/workspace_entries/` 与 `src/documents/documentStore.ts`。新建图纸默认可见名 `Untitled`，Rust 追加 `.excalidraw`；新建目录默认 `Untitled Folder`（`src/app/interaction/EntryNamingDialog.tsx`）。Welcome 的 New Drawing（`src/app/newDrawing.ts`）每次询问文件夹并将其挂载为 Workspace（已挂载的根目录直接复用），然后在其中走同一条 `workspace_entry_create` 路径，遇到 `NAME_CONFLICT` 时递增为 `Untitled N`；它不再创建无路径的文档会话。受保护目标包括工作区根、点号目录与 `.excalidraw_assets`。
 
 ## 6. 序列：串行关闭与最新意图激活
 
