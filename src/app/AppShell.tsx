@@ -32,7 +32,6 @@ import {
 import type { ExcalidrawAdapter } from "../editor/ExcalidrawAdapter";
 import {
   HistoryCoordinator,
-  HistoryReplacementCancelledError,
   type HistoryReplacementResult,
 } from "../history/historyCoordinator";
 import { deserializeSceneData } from "../editor/sceneSerializer";
@@ -742,24 +741,6 @@ export function AppShell({
 
   const saveDocument = () =>
     runAction(() => documentManager.checkpointActive("manualSave"));
-  const prepareUnsavedHistoryDocument = async (capture: {
-    documentId: string;
-  }) => {
-    const session =
-      documentManager.store.getState().sessionsById[capture.documentId];
-    if (session === undefined) {
-      throw new LocalizedError("history.error.drawingClosed");
-    }
-    const path = await chooseSavePath(session.title);
-    if (path === null) return { status: "cancelled" as const };
-    if (
-      documentManager.store.getState().activeDocumentId !== capture.documentId
-    ) {
-      return { status: "cancelled" as const };
-    }
-    await documentManager.saveOrphanedAs(capture.documentId, path);
-    return { status: "saved" as const };
-  };
   const runProtectedReplacement = async (
     documentId: string,
     replace: () => Promise<HistoryReplacementResult>,
@@ -802,7 +783,7 @@ export function AppShell({
           { cause: error },
         );
       }
-      if (!(error instanceof HistoryReplacementCancelledError)) throw error;
+      throw error;
     } finally {
       const current = documentManager.store.getState().sessionsById[documentId];
       if (!documentManager.isHistoryFrozen(documentId)) {
@@ -881,10 +862,7 @@ export function AppShell({
       runAction(() =>
         runProtectedReplacement(
           documentId,
-          () =>
-            requireHistoryCoordinator().clear(documentId, undefined, {
-              prepareUnsaved: prepareUnsavedHistoryDocument,
-            }),
+          () => requireHistoryCoordinator().clear(documentId),
           "shell.history.clearSaved",
         ),
       ),
@@ -935,8 +913,6 @@ export function AppShell({
         requireHistoryCoordinator().replaceImportedScene(
           documentId,
           prepared.candidate,
-          undefined,
-          { prepareUnsaved: prepareUnsavedHistoryDocument },
         ),
       "shell.history.importSaved",
     );
@@ -1129,10 +1105,7 @@ export function AppShell({
   const markCurrentHistoryVersion = useCallback(async () => {
     const documentId = documentManager.store.getState().activeDocumentId;
     if (documentId === null) return null;
-    const outcome = await requireHistoryCoordinator().mark(documentId, {
-      prepareUnsaved: prepareUnsavedHistoryDocument,
-    });
-    if (outcome.status === "cancelled") return null;
+    const outcome = await requireHistoryCoordinator().mark(documentId);
     if (documentManager.store.getState().activeDocumentId !== documentId)
       return null;
     setHistorySelectedVersionId(outcome.response.versionId);
