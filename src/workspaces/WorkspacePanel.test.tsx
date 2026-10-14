@@ -9,11 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CommandInvoker } from "../ipc/client";
 import { createInteractionState, interactionStore } from "../app/interaction";
-import {
-  SHELL_PREFERENCES_STORAGE_KEY,
-  SHELL_PREFERENCES_VERSION,
-  ShellPreferences,
-} from "../app/shellPreferences";
+import { ShellPreferences } from "../app/shellPreferences";
 import type { Workspace, WorkspaceEntry } from "../ipc/contracts";
 import { documentManager } from "../documents/documentStore";
 import { en } from "../i18n/messages/en.ts";
@@ -110,7 +106,22 @@ function createInvoker(
             entry.parentRelativePath === parentRelativePath,
         );
       }
-      if (command === "workspace_add") return addedWorkspace;
+      if (command === "window_probe_workspace") {
+        return {
+          kind: "claimed",
+          workspace: null,
+          replaced: null,
+          shell: null,
+        };
+      }
+      if (command === "window_claim_workspace") {
+        return {
+          kind: "claimed",
+          workspace: addedWorkspace,
+          replaced: null,
+          shell: null,
+        };
+      }
       if (command === "workspace_entry_create") {
         const workspace = workspaces.find(
           (item) => item.id === String(args.workspaceId ?? ""),
@@ -137,7 +148,7 @@ function createInvoker(
           },
         };
       }
-      if (command === "workspace_remove") return {};
+      if (command === "window_release_workspace") return {};
       throw new Error(`Unexpected command ${command}`);
     },
   ) as CommandInvoker["invoke"];
@@ -375,10 +386,49 @@ describe("WorkspacePanel", () => {
     expect(
       await screen.findByRole("treeitem", { name: "Sketches" }),
     ).toHaveAttribute("aria-expanded", "true");
-    expect(invoke).toHaveBeenCalledWith("workspace_add", {
+    expect(invoke).toHaveBeenCalledWith("window_probe_workspace", {
+      rootPath: "/workspace",
+    });
+    expect(invoke).toHaveBeenCalledWith("window_claim_workspace", {
       rootPath: "/workspace",
     });
     expect(onWorkspacesChange).toHaveBeenLastCalledWith([workspace]);
+  });
+
+  it("stays empty when another window owns the chosen folder", async () => {
+    const user = userEvent.setup();
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_entry_list") return [];
+      if (
+        command === "window_probe_workspace" ||
+        command === "window_claim_workspace"
+      ) {
+        return { kind: "ownedBy", label: "window-2", workspaceId: "other" };
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    const closeMany = vi.spyOn(documentManager, "closeMany");
+
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        selectDirectory={async () => "/workspace/other"}
+      />,
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "Mount folder…" }),
+    );
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("window_claim_workspace", {
+        rootPath: "/workspace/other",
+      }),
+    );
+    expect(closeMany).not.toHaveBeenCalled();
+    expect(screen.queryByRole("tree")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mount folder…" })).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("announces folder loading then permission-denied list errors", async () => {
@@ -447,13 +497,11 @@ describe("WorkspacePanel", () => {
   });
 
   it("follows the shared Current Workspace when Recent selection changes it", async () => {
-    const preferences = new ShellPreferences();
-    preferences.setCurrentWorkspaceId("workspace-1");
     const invoker = createInvoker();
-    render(
+    const view = render(
       <WorkspacePanel
+        currentWorkspaceId="workspace-1"
         invoker={invoker}
-        preferences={preferences}
         selectDirectory={async () => null}
       />,
     );
@@ -462,7 +510,13 @@ describe("WorkspacePanel", () => {
       await screen.findByRole("heading", { name: "Sketches" }),
     ).toBeInTheDocument();
 
-    preferences.setCurrentWorkspaceId("workspace-2");
+    view.rerender(
+      <WorkspacePanel
+        currentWorkspaceId="workspace-2"
+        invoker={invoker}
+        selectDirectory={async () => null}
+      />,
+    );
 
     await waitFor(() => {
       expect(
@@ -471,58 +525,58 @@ describe("WorkspacePanel", () => {
     });
   });
 
-  it("restores and persists each Workspace expansion preference", async () => {
+  it("restores and saves the Workspace's own expansion", async () => {
     const user = userEvent.setup();
-    window.localStorage.setItem(
-      SHELL_PREFERENCES_STORAGE_KEY,
-      JSON.stringify({
-        version: SHELL_PREFERENCES_VERSION,
-        sidebarPinned: false,
-        expandedWorkspaceIds: ["workspace-1"],
-        currentWorkspaceId: "workspace-1",
-      }),
-    );
-    const invoker = createInvoker();
+    const save = vi.fn();
+    const preferences = new ShellPreferences(save);
+    preferences.loadWorkspace({
+      sidebarPinned: false,
+      sidebarWidth: 360,
+      expanded: [""],
+    });
+    const invoker = createInvoker([WORKSPACES[0]]);
 
     const firstRender = render(
-      <WorkspacePanel invoker={invoker} selectDirectory={async () => null} />,
+      <WorkspacePanel
+        invoker={invoker}
+        preferences={preferences}
+        selectDirectory={async () => null}
+      />,
     );
     const sketches = await screen.findByRole("treeitem", { name: "Sketches" });
     expect(sketches).toHaveAttribute("aria-expanded", "true");
-    expect(
-      screen.queryByRole("treeitem", { name: "Blueprints" }),
-    ).not.toBeInTheDocument();
 
     await user.click(sketches);
     expect(sketches).toHaveAttribute("aria-expanded", "false");
-    expect(
-      JSON.parse(
-        window.localStorage.getItem(SHELL_PREFERENCES_STORAGE_KEY) ?? "{}",
-      ),
-    ).toMatchObject({ expandedWorkspaceIds: [] });
+    expect(save).toHaveBeenLastCalledWith({
+      sidebarPinned: false,
+      sidebarWidth: 360,
+      expanded: [],
+    });
 
     firstRender.unmount();
+    const reopened = new ShellPreferences();
+    reopened.loadWorkspace(save.mock.lastCall?.[0] ?? null);
     render(
-      <WorkspacePanel invoker={invoker} selectDirectory={async () => null} />,
+      <WorkspacePanel
+        invoker={invoker}
+        preferences={reopened}
+        selectDirectory={async () => null}
+      />,
     );
     expect(
       await screen.findByRole("treeitem", { name: "Sketches" }),
     ).toHaveAttribute("aria-expanded", "false");
-    expect(
-      screen.queryByRole("treeitem", { name: "Blueprints" }),
-    ).not.toBeInTheDocument();
   });
 
   it("expands a newly mounted Workspace even when an existing preference is collapsed", async () => {
     const user = userEvent.setup();
-    window.localStorage.setItem(
-      SHELL_PREFERENCES_STORAGE_KEY,
-      JSON.stringify({
-        version: SHELL_PREFERENCES_VERSION,
-        sidebarPinned: false,
-        expandedWorkspaceIds: [],
-      }),
-    );
+    const preferences = new ShellPreferences();
+    preferences.showWithoutWorkspace({
+      sidebarPinned: false,
+      sidebarWidth: 360,
+      expanded: [],
+    });
     const workspace = {
       id: "workspace-new",
       name: "New sketches",
@@ -536,6 +590,7 @@ describe("WorkspacePanel", () => {
     render(
       <WorkspacePanel
         invoker={invoker}
+        preferences={preferences}
         onCurrentWorkspaceChange={onCurrentWorkspaceChange}
         onWorkspacesChange={onWorkspacesChange}
         selectDirectory={async () => workspace.rootPath}
@@ -596,9 +651,10 @@ describe("WorkspacePanel", () => {
       within(dialog).getByRole("button", { name: "Remove Workspace" }),
     );
     await waitFor(() =>
-      expect(invoker.invoke).toHaveBeenCalledWith("workspace_remove", {
-        workspaceId: "workspace-1",
-      }),
+      expect(invoker.invoke).toHaveBeenCalledWith(
+        "window_release_workspace",
+        {},
+      ),
     );
     expect(closeWorkspaceDocuments).toHaveBeenCalledWith("/workspace/one");
     expect(closeWorkspaceDocuments.mock.invocationCallOrder[0]).toBeLessThan(
@@ -607,7 +663,7 @@ describe("WorkspacePanel", () => {
         .mock.invocationCallOrder.find(
           (_, index) =>
             vi.mocked(invoker.invoke).mock.calls[index]?.[0] ===
-            "workspace_remove",
+            "window_release_workspace",
         ) ?? Number.POSITIVE_INFINITY,
     );
     await waitFor(() =>
@@ -646,7 +702,7 @@ describe("WorkspacePanel", () => {
       "The drawing could not be saved.",
     );
     expect(invoker.invoke).not.toHaveBeenCalledWith(
-      "workspace_remove",
+      "window_release_workspace",
       expect.anything(),
     );
   });
@@ -706,7 +762,7 @@ describe("WorkspacePanel", () => {
               entry.parentRelativePath === parentRelativePath,
           );
         }
-        if (command === "workspace_remove") {
+        if (command === "window_release_workspace") {
           throw {
             code: "IO_ERROR",
             message: "Workspace is still in use.",

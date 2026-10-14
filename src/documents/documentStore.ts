@@ -1251,10 +1251,7 @@ type FileChangeListener = (
 
 export async function registerDocumentFileChangeEvents(
   manager: Pick<DocumentManager, "handleFileRemoved" | "handleFileRenamed">,
-  listenForEvent: FileChangeListener = async (eventName, handler) => {
-    const { listen } = await import("@tauri-apps/api/event");
-    return listen<IpcEvents["file-changed"]>(eventName, handler);
-  },
+  listenForEvent: FileChangeListener = defaultEventListener,
 ): Promise<() => void> {
   return listenForEvent("file-changed", ({ payload }) => {
     if (payload.change === "renamed" && payload.newPath !== undefined) {

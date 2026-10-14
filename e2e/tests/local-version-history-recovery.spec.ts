@@ -131,9 +131,7 @@ function assertFrontendCanvas(
     evidence.staleAutosaveCapturedSessionGeneration,
   );
   expect(evidence.staleAutosaveDraftSaveState).toBe("clean");
-  expect(evidence.targetSha256).not.toBe(
-    evidence.staleAutosaveAttemptedHash,
-  );
+  expect(evidence.targetSha256).not.toBe(evidence.staleAutosaveAttemptedHash);
   expect(evidence.draftSceneSha256).not.toBe(
     evidence.staleAutosaveAttemptedHash,
   );

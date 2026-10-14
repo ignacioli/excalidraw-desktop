@@ -111,6 +111,11 @@ test("creates, checkpoints, and reopens a drawing with every asset local", async
   expect(Object.keys(savedScene?.files ?? {})).toHaveLength(1);
 
   await page.reload();
+  // Until launch restores the window session, the Workspace is reopened
+  // from Recent after a restart.
+  await page
+    .getByRole("button", { name: "Open workspace Virtual Workspace" })
+    .click();
   await openWorkspaceSidebar(page);
   await page.getByRole("treeitem", { name: "us1-drawing" }).click();
   await expect(

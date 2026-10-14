@@ -42,6 +42,10 @@ export async function installBrowserTauriHarness(
         __browserTauriEmit?: (event: string, payload: unknown) => void;
         __browserTauriArmCheckpointFailure?: () => void;
         __browserTauriNativeMenuSync?: Record<string, unknown>;
+        /** Forced `window_probe_workspace`/`window_claim_workspace` result. */
+        __browserTauriClaimOutcome?: Record<string, unknown>;
+        /** Commands invoked so far, in order. */
+        __browserTauriCommands?: string[];
         addEventListener(
           type: "keydown",
           listener: (event: {
@@ -100,7 +104,52 @@ export async function installBrowserTauriHarness(
           JSON.stringify(workspaceEntries),
         );
       };
-      let workspaceMounted = seedEntries !== undefined;
+      // Seeded entries make the Workspace a Recent one. As at a normal
+      // launch, no window holds it until this window claims it.
+      const workspaceRecent = seedEntries !== undefined;
+      let workspaceMounted = false;
+      // A Workspace another test-chosen claim outcome put in this window.
+      let claimedOverride: unknown;
+      // Sidebar state as the backend keeps it: per Workspace, plus the
+      // one-time import of the earlier localStorage preferences. Stored in
+      // localStorage so it survives a reload, like the app database.
+      type ShellState = {
+        sidebarPinned: boolean;
+        sidebarWidth: number;
+        expanded: string[];
+      };
+      type ShellStore = {
+        migrated: boolean;
+        legacy: { sidebarPinned: boolean; sidebarWidth: number } | null;
+        byWorkspace: Record<string, ShellState>;
+        latest: string | null;
+      };
+      const shellStoreKey = "excalidraw-e2e:shell-store";
+      const readShellStore = (): ShellStore => {
+        const stored = browser.localStorage.getItem(shellStoreKey);
+        return stored === null
+          ? { migrated: false, legacy: null, byWorkspace: {}, latest: null }
+          : (JSON.parse(stored) as ShellStore);
+      };
+      const writeShellStore = (store: ShellStore) =>
+        browser.localStorage.setItem(shellStoreKey, JSON.stringify(store));
+      // Own state, else the most recent pin and width, else the imported
+      // ones; a first-opened Workspace shows its root expanded.
+      const shellFor = (workspaceId: string): ShellState | null => {
+        const store = readShellStore();
+        const own = store.byWorkspace[workspaceId];
+        if (own !== undefined) return own;
+        const recent =
+          store.latest === null ? undefined : store.byWorkspace[store.latest];
+        const fallback = recent ?? store.legacy;
+        return fallback === null || fallback === undefined
+          ? null
+          : {
+              sidebarPinned: fallback.sidebarPinned,
+              sidebarWidth: fallback.sidebarWidth,
+              expanded: [""],
+            };
+      };
       let nextDialogPath = 0;
       let checkpointCount = 0;
       let checkpointFailureArmed = false;
@@ -137,6 +186,9 @@ export async function installBrowserTauriHarness(
         },
         metadata: { currentWindow: { label: "main" } },
         async invoke(command, args = {}) {
+          if (!command.startsWith("plugin:")) {
+            (browser.__browserTauriCommands ??= []).push(command);
+          }
           if (command === "plugin:event|listen") {
             const event = String(args.event ?? "");
             const callbackId = Number(args.handler);
@@ -177,6 +229,15 @@ export async function installBrowserTauriHarness(
               appVersion: "0.2.0-e2e",
               abnormalExit: false,
               pendingOpenPaths: [],
+              // The launch window, as the per-window bootstrap reports it.
+              window: {
+                label: "window-1",
+                workspace: null,
+                unavailableWorkspace: null,
+                restore: null,
+                shell: null,
+                openWorkspaceNames: [],
+              },
               preferredLanguages: systemLanguages,
             };
           }
@@ -187,7 +248,11 @@ export async function installBrowserTauriHarness(
             command === "workspace_list" ||
             command === "workspace_recent_list"
           ) {
-            return workspaceMounted ? [workspace] : [];
+            if (claimedOverride !== undefined) return [claimedOverride];
+            const listed =
+              workspaceMounted ||
+              (command === "workspace_recent_list" && workspaceRecent);
+            return listed ? [workspace] : [];
           }
           // Welcome New Drawing mounts its chosen folder on first use; only
           // the harness root is a mountable folder.
@@ -200,6 +265,83 @@ export async function installBrowserTauriHarness(
             }
             workspaceMounted = true;
             return workspace;
+          }
+          if (
+            command === "window_probe_workspace" ||
+            command === "window_claim_workspace"
+          ) {
+            const forced = browser.__browserTauriClaimOutcome;
+            if (forced !== undefined) {
+              if (
+                command === "window_claim_workspace" &&
+                forced.kind === "claimed"
+              ) {
+                claimedOverride = forced.workspace;
+              }
+              return forced;
+            }
+            if (
+              args.rootPath !== workspaceRoot &&
+              args.workspaceId !== workspace.id
+            ) {
+              throw {
+                code: "PATH_ACCESS_DENIED",
+                message: "The requested folder is outside the harness.",
+              };
+            }
+            if (command === "window_probe_workspace") {
+              return {
+                kind: "claimed",
+                workspace: null,
+                replaced: null,
+                shell: null,
+              };
+            }
+            workspaceMounted = true;
+            return {
+              kind: "claimed",
+              workspace,
+              replaced: null,
+              shell: shellFor(workspace.id),
+            };
+          }
+          if (command === "shell_preferences_migrate") {
+            const store = readShellStore();
+            if (store.migrated) return { migrated: false };
+            writeShellStore({
+              ...store,
+              migrated: true,
+              legacy: {
+                sidebarPinned: args.sidebarPinned === true,
+                sidebarWidth: Number(args.sidebarWidth),
+              },
+            });
+            return { migrated: true };
+          }
+          if (command === "workspace_shell_state_save") {
+            if (!workspaceMounted) {
+              throw {
+                code: "WORKSPACE_NOT_OWNED",
+                message: "This window has no Workspace.",
+                retriable: false,
+              };
+            }
+            const store = readShellStore();
+            writeShellStore({
+              ...store,
+              byWorkspace: {
+                ...store.byWorkspace,
+                [workspace.id]: {
+                  sidebarPinned: args.sidebarPinned === true,
+                  sidebarWidth: Number(args.sidebarWidth),
+                  expanded: Array.isArray(args.expanded)
+                    ? args.expanded.map(String)
+                    : [],
+                },
+              },
+              latest: workspace.id,
+            });
+            return {};
           }
           if (command === "workspace_entry_list") {
             const workspaceId = String(args.workspaceId ?? "");
@@ -305,6 +447,12 @@ export async function installBrowserTauriHarness(
             };
           }
           if (command === "doc_close") {
+            return {};
+          }
+          if (
+            command === "app_preferences_broadcast" ||
+            command === "plugin:window|set_title"
+          ) {
             return {};
           }
           // Only "Keep local changes" is modelled; it rebases without writing.
@@ -419,5 +567,34 @@ export async function readHarnessDraft(
   return page.evaluate(
     (path) => globalThis.localStorage.getItem(`excalidraw-e2e:draft:${path}`),
     documentPath,
+  );
+}
+
+/**
+ * Make every later Workspace probe and claim return `outcome`, as when
+ * another window holds the folder. Call after `goto`.
+ */
+export async function setBrowserTauriClaimOutcome(
+  page: Page,
+  outcome: Record<string, unknown>,
+): Promise<void> {
+  await page.evaluate((forced) => {
+    (
+      globalThis as typeof globalThis & {
+        __browserTauriClaimOutcome?: Record<string, unknown>;
+      }
+    ).__browserTauriClaimOutcome = forced;
+  }, outcome);
+}
+
+/** The non-plugin commands invoked so far, in order. */
+export async function readBrowserTauriCommands(page: Page): Promise<string[]> {
+  return page.evaluate(
+    () =>
+      (
+        globalThis as typeof globalThis & {
+          __browserTauriCommands?: string[];
+        }
+      ).__browserTauriCommands ?? [],
   );
 }

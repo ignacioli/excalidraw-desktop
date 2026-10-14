@@ -46,10 +46,14 @@ use commands::{
     recovery::{
         recovery_apply, recovery_list, RecoveryService, RecoveryState, TauriRecoveryPathGrant,
     },
-    session::{app_handshake, SessionState},
+    session::{
+        app_handshake, app_preferences_broadcast, shell_preferences_migrate,
+        workspace_shell_state_save, SessionState,
+    },
     workspace::{
-        workspace_add, workspace_list, workspace_recent_list, workspace_recent_remove,
-        workspace_remount, workspace_remove, WorkspaceState,
+        window_claim_workspace, window_probe_workspace, window_release_workspace, workspace_add,
+        workspace_list, workspace_recent_list, workspace_recent_remove, workspace_remount,
+        workspace_remove, WorkspaceState,
     },
 };
 use database::repository::SqliteRepository;
@@ -261,8 +265,12 @@ pub fn run() {
     #[cfg(feature = "e2e-harness")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_handshake,
+        app_preferences_broadcast,
+        shell_preferences_migrate,
+        workspace_shell_state_save,
         crate::native_menu::set_native_menu_enabled,
         crate::native_menu::sync_native_menu,
+        crate::window::window_new,
         history_list,
         history_preview,
         history_mark,
@@ -283,6 +291,9 @@ pub fn run() {
         workspace_recent_list,
         workspace_remount,
         workspace_recent_remove,
+        window_probe_workspace,
+        window_claim_workspace,
+        window_release_workspace,
         workspace_entry_list,
         workspace_entry_create,
         workspace_entry_rename,
@@ -306,8 +317,12 @@ pub fn run() {
     #[cfg(not(feature = "e2e-harness"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_handshake,
+        app_preferences_broadcast,
+        shell_preferences_migrate,
+        workspace_shell_state_save,
         crate::native_menu::set_native_menu_enabled,
         crate::native_menu::sync_native_menu,
+        crate::window::window_new,
         history_list,
         history_preview,
         history_mark,
@@ -328,6 +343,9 @@ pub fn run() {
         workspace_recent_list,
         workspace_remount,
         workspace_recent_remove,
+        window_probe_workspace,
+        window_claim_workspace,
+        window_release_workspace,
         workspace_entry_list,
         workspace_entry_create,
         workspace_entry_rename,
@@ -337,6 +355,8 @@ pub fn run() {
         doc_export,
     ]);
 
+    let builder = builder.on_window_event(handle_window_event);
+
     let app = match builder.build(tauri::generate_context!()) {
         Ok(app) => app,
         Err(error) => {
@@ -344,15 +364,49 @@ pub fn run() {
             return;
         }
     };
-    app.run(|app_handle, event| {
-        if matches!(event, tauri::RunEvent::Exit) {
+    app.run(|app_handle, event| match event {
+        tauri::RunEvent::Exit => {
             if let Some(session) = app_handle.try_state::<SessionState>() {
                 if let Err(error) = session.release() {
                     eprintln!("failed to release the session lock: {error}");
                 }
             }
         }
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Reopen {
+            has_visible_windows: false,
+            ..
+        } => crate::window::reopen(app_handle),
+        _ => {}
     });
+}
+
+/// Keep the registry and the native menu in step with window focus and
+/// window destruction.
+fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
+    let label = window.label();
+    if !label.starts_with(window::registry::WINDOW_LABEL_PREFIX) {
+        return;
+    }
+    let app = window.app_handle().clone();
+    match event {
+        tauri::WindowEvent::Focused(true) => {
+            app.state::<WindowRegistry>().focus(label);
+            crate::native_menu::show_window_state(&app, label);
+        }
+        tauri::WindowEvent::Destroyed => {
+            let label = label.to_owned();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = commands::workspace::release_for_window(&app, &label).await {
+                    eprintln!("failed to release the Workspace of {label}: {error}");
+                }
+                app.state::<WindowRegistry>().unregister(&label);
+                crate::native_menu::forget_window_state(&app, &label);
+                crate::window::broadcast_open_workspaces(&app).await;
+            });
+        }
+        _ => {}
+    }
 }
 
 struct TauriFileGrant(tauri::fs::Scope);

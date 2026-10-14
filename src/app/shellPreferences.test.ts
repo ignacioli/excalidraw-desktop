@@ -1,189 +1,223 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   SHELL_PREFERENCES_STORAGE_KEY,
-  SHELL_PREFERENCES_VERSION,
   SIDEBAR_WIDTH_DEFAULT,
   SIDEBAR_WIDTH_MAX,
   SIDEBAR_WIDTH_MIN,
   ShellPreferences,
+  importLegacyShellPreferences,
+  legacyShellStateFor,
+  readLegacyShellPreferences,
 } from "./shellPreferences";
 
-class MemoryStorage implements Pick<Storage, "getItem" | "setItem"> {
-  readonly values = new Map<string, string>();
-
-  getItem(key: string): string | null {
-    return this.values.get(key) ?? null;
-  }
-
-  setItem(key: string, value: string): void {
-    this.values.set(key, value);
-  }
+function storageWith(value: string | null) {
+  return {
+    getItem: (key: string) =>
+      key === SHELL_PREFERENCES_STORAGE_KEY ? value : null,
+  };
 }
 
 describe("ShellPreferences", () => {
-  it("does not write defaults until a preference actually changes", () => {
-    const storage = new MemoryStorage();
-    const preferences = new ShellPreferences(storage);
+  it("stores nothing until the window has a Workspace", () => {
+    const save = vi.fn();
+    const preferences = new ShellPreferences(save);
 
-    expect(storage.getItem(SHELL_PREFERENCES_STORAGE_KEY)).toBeNull();
-    expect(preferences.getSnapshot()).toEqual({
-      version: SHELL_PREFERENCES_VERSION,
-      sidebarPinned: false,
-      sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
-      expandedWorkspaceIds: [],
-      currentWorkspaceId: null,
-    });
-  });
-
-  it("persists pinned state, sidebar width, and independently expanded Workspaces", () => {
-    const storage = new MemoryStorage();
-    const preferences = new ShellPreferences(storage);
     preferences.setSidebarPinned(true);
-    preferences.setSidebarWidth(412);
-    preferences.setCurrentWorkspaceId("workspace-b");
-    preferences.setWorkspaceExpanded("workspace-a", true);
-    preferences.setWorkspaceExpanded("workspace-b", true);
-    preferences.setWorkspaceExpanded("workspace-a", false);
+    expect(save).not.toHaveBeenCalled();
+
+    preferences.loadWorkspace(null);
+    preferences.setSidebarWidth(400);
+    expect(save).toHaveBeenLastCalledWith({
+      sidebarPinned: false,
+      sidebarWidth: 400,
+      expanded: [""],
+    });
+
+    preferences.closeWorkspace();
+    preferences.setSidebarPinned(true);
+    expect(save).toHaveBeenCalledOnce();
+  });
+
+  it("shows a Workspace's own state without storing it again", () => {
+    const save = vi.fn();
+    const preferences = new ShellPreferences(save);
+    const listener = vi.fn();
+    preferences.subscribe(listener);
+
+    preferences.loadWorkspace({
+      sidebarPinned: true,
+      sidebarWidth: 320,
+      expanded: ["drafts", "drafts"],
+    });
 
     expect(preferences.getSnapshot()).toEqual({
-      version: SHELL_PREFERENCES_VERSION,
       sidebarPinned: true,
-      sidebarWidth: 412,
-      expandedWorkspaceIds: ["workspace-b"],
-      currentWorkspaceId: "workspace-b",
+      sidebarWidth: 320,
+      expanded: ["drafts"],
     });
-    expect(new ShellPreferences(storage).getSnapshot()).toEqual(
-      preferences.getSnapshot(),
+    expect(preferences.isWorkspaceExpanded()).toBe(false);
+    expect(listener).toHaveBeenCalledOnce();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("opens a Workspace with nothing saved expanded with the default width", () => {
+    const preferences = new ShellPreferences();
+    preferences.loadWorkspace(null);
+
+    expect(preferences.getSnapshot()).toEqual({
+      sidebarPinned: false,
+      sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
+      expanded: [""],
+    });
+    expect(preferences.isWorkspaceExpanded()).toBe(true);
+  });
+
+  it("keeps folder expansion when the Workspace row collapses and expands", () => {
+    const save = vi.fn();
+    const preferences = new ShellPreferences(save);
+    preferences.loadWorkspace({
+      sidebarPinned: false,
+      sidebarWidth: 360,
+      expanded: ["", "drafts"],
+    });
+
+    preferences.setWorkspaceExpanded(false);
+    expect(save).toHaveBeenLastCalledWith(
+      expect.objectContaining({ expanded: ["drafts"] }),
+    );
+    preferences.setWorkspaceExpanded(true);
+    expect(save).toHaveBeenLastCalledWith(
+      expect.objectContaining({ expanded: ["", "drafts"] }),
     );
   });
 
-  it.each([
-    "not-json",
-    JSON.stringify({
-      version: SHELL_PREFERENCES_VERSION + 1,
-      sidebarPinned: true,
-      expandedWorkspaceIds: ["workspace-a"],
-    }),
-    JSON.stringify({
-      version: SHELL_PREFERENCES_VERSION,
-      sidebarPinned: "yes",
-      expandedWorkspaceIds: [],
-    }),
-    JSON.stringify({
-      version: SHELL_PREFERENCES_VERSION,
-      sidebarPinned: false,
-      sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
-      expandedWorkspaceIds: ["workspace-a", 7],
-    }),
-  ])("falls back and repairs corrupted or future values: %s", (stored) => {
-    const storage = new MemoryStorage();
-    storage.values.set(SHELL_PREFERENCES_STORAGE_KEY, stored);
-
-    const preferences = new ShellPreferences(storage);
-
-    expect(preferences.getSnapshot()).toEqual({
-      version: SHELL_PREFERENCES_VERSION,
-      sidebarPinned: false,
-      sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
-      expandedWorkspaceIds: [],
-      currentWorkspaceId: null,
-    });
-    expect(storage.getItem(SHELL_PREFERENCES_STORAGE_KEY)).toBe(
-      JSON.stringify(preferences.getSnapshot()),
-    );
-  });
-
-  it("clamps persisted sidebar width to the approved bounds", () => {
-    const storage = new MemoryStorage();
-    const preferences = new ShellPreferences(storage);
-
-    preferences.setSidebarWidth(SIDEBAR_WIDTH_MIN - 40);
-    expect(preferences.getSnapshot().sidebarWidth).toBe(SIDEBAR_WIDTH_MIN);
-
-    preferences.setSidebarWidth(SIDEBAR_WIDTH_MAX + 40);
+  it("clamps the sidebar width to the approved bounds", () => {
+    const preferences = new ShellPreferences();
+    preferences.setSidebarWidth(SIDEBAR_WIDTH_MAX + 200);
     expect(preferences.getSnapshot().sidebarWidth).toBe(SIDEBAR_WIDTH_MAX);
+    preferences.loadWorkspace({
+      sidebarPinned: false,
+      sidebarWidth: 10,
+      expanded: [],
+    });
+    expect(preferences.getSnapshot().sidebarWidth).toBe(SIDEBAR_WIDTH_MIN);
   });
 
-  it("keeps a valid current Workspace and falls back to none when it is missing", () => {
-    const storage = new MemoryStorage();
-    const preferences = new ShellPreferences(storage);
-    preferences.setCurrentWorkspaceId("workspace-a");
+  it("shows state in a window without a Workspace and stores nothing", () => {
+    const save = vi.fn();
+    const preferences = new ShellPreferences(save);
+    preferences.loadWorkspace(null);
 
-    expect(
-      preferences.resolveCurrentWorkspaceId(new Set(["workspace-a"])),
-    ).toBe("workspace-a");
-    expect(
-      preferences.resolveCurrentWorkspaceId(new Set(["workspace-b"])),
-    ).toBeNull();
-    expect(
-      preferences.resolveCurrentWorkspaceId(
-        new Set(["workspace-b"]),
-        "workspace-b",
-      ),
-    ).toBe("workspace-b");
-  });
-
-  it("accepts a null current Workspace in a persisted snapshot", () => {
-    const storage = new MemoryStorage();
-    storage.values.set(
-      SHELL_PREFERENCES_STORAGE_KEY,
-      JSON.stringify({
-        version: SHELL_PREFERENCES_VERSION,
-        sidebarPinned: false,
-        expandedWorkspaceIds: [],
-        currentWorkspaceId: null,
-      }),
-    );
-
-    expect(new ShellPreferences(storage).getSnapshot().currentWorkspaceId).toBe(
-      null,
-    );
-  });
-
-  it("migrates an older snapshot without a current Workspace id", () => {
-    const storage = new MemoryStorage();
-    storage.values.set(
-      SHELL_PREFERENCES_STORAGE_KEY,
-      JSON.stringify({
-        version: SHELL_PREFERENCES_VERSION,
-        sidebarPinned: true,
-        expandedWorkspaceIds: ["workspace-a"],
-      }),
-    );
-
-    expect(new ShellPreferences(storage).getSnapshot()).toEqual({
-      version: SHELL_PREFERENCES_VERSION,
+    preferences.showWithoutWorkspace({
       sidebarPinned: true,
+      sidebarWidth: 300,
+      expanded: [],
+    });
+    preferences.setSidebarWidth(310);
+
+    expect(preferences.getSnapshot().sidebarPinned).toBe(true);
+    expect(save).not.toHaveBeenCalled();
+  });
+});
+
+describe("legacy shell preferences", () => {
+  const legacy = JSON.stringify({
+    version: 1,
+    sidebarPinned: true,
+    sidebarWidth: 1000,
+    expandedWorkspaceIds: ["a", "a"],
+    currentWorkspaceId: "a",
+  });
+
+  it("reads the pre-multi-window snapshot", () => {
+    expect(readLegacyShellPreferences(storageWith(legacy))).toEqual({
+      sidebarPinned: true,
+      sidebarWidth: SIDEBAR_WIDTH_MAX,
+      expandedWorkspaceIds: ["a"],
+      currentWorkspaceId: "a",
+    });
+  });
+
+  it("reads an older snapshot without a width or Current Workspace", () => {
+    expect(
+      readLegacyShellPreferences(
+        storageWith(
+          JSON.stringify({
+            version: 1,
+            sidebarPinned: false,
+            expandedWorkspaceIds: [],
+          }),
+        ),
+      ),
+    ).toEqual({
+      sidebarPinned: false,
       sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
-      expandedWorkspaceIds: ["workspace-a"],
+      expandedWorkspaceIds: [],
       currentWorkspaceId: null,
     });
   });
 
-  it.each([["workspace-a"], [""], [null]])(
-    "ignores a legacy newDrawingWorkspaceId key (%j) instead of discarding the snapshot",
-    (legacyValue) => {
-      const storage = new MemoryStorage();
-      storage.values.set(
-        SHELL_PREFERENCES_STORAGE_KEY,
-        JSON.stringify({
-          version: SHELL_PREFERENCES_VERSION,
-          sidebarPinned: true,
-          expandedWorkspaceIds: ["workspace-a"],
-          currentWorkspaceId: "workspace-a",
-          newDrawingWorkspaceId: legacyValue,
-        }),
-      );
-
-      const snapshot = new ShellPreferences(storage).getSnapshot();
-      expect(snapshot).toEqual({
-        version: SHELL_PREFERENCES_VERSION,
-        sidebarPinned: true,
-        sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
-        expandedWorkspaceIds: ["workspace-a"],
-        currentWorkspaceId: "workspace-a",
-      });
-      expect(snapshot).not.toHaveProperty("newDrawingWorkspaceId");
+  it.each([null, "not json", JSON.stringify({ version: 2 })])(
+    "ignores a missing or malformed snapshot (%s)",
+    (stored) => {
+      expect(readLegacyShellPreferences(storageWith(stored))).toBeNull();
     },
   );
+
+  it("ignores storage that cannot be read", () => {
+    expect(
+      readLegacyShellPreferences({
+        getItem: () => {
+          throw new Error("blocked");
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps the snapshot in effect until its import is recorded", async () => {
+    const answer = (result: Promise<unknown>) =>
+      ({
+        invoke: vi.fn(() => result),
+      }) as unknown as Parameters<typeof importLegacyShellPreferences>[0];
+    const storage = storageWith(legacy);
+
+    const first = answer(Promise.resolve({ migrated: true }));
+    expect(await importLegacyShellPreferences(first, storage)).toMatchObject({
+      currentWorkspaceId: "a",
+    });
+    expect(first.invoke).toHaveBeenCalledWith("shell_preferences_migrate", {
+      sidebarPinned: true,
+      sidebarWidth: SIDEBAR_WIDTH_MAX,
+    });
+    expect(
+      await importLegacyShellPreferences(
+        answer(Promise.reject(new Error("offline"))),
+        storage,
+      ),
+    ).not.toBeNull();
+    expect(
+      await importLegacyShellPreferences(
+        answer(Promise.resolve({ migrated: false })),
+        storage,
+      ),
+    ).toBeNull();
+
+    const none = answer(Promise.resolve({ migrated: true }));
+    expect(
+      await importLegacyShellPreferences(none, storageWith(null)),
+    ).toBeNull();
+    expect(none.invoke).not.toHaveBeenCalled();
+  });
+
+  it("turns the snapshot into one Workspace's state", () => {
+    const parsed = readLegacyShellPreferences(storageWith(legacy));
+    if (parsed === null) throw new Error("expected legacy preferences");
+    expect(legacyShellStateFor(parsed, "a")).toEqual({
+      sidebarPinned: true,
+      sidebarWidth: SIDEBAR_WIDTH_MAX,
+      expanded: [""],
+    });
+    expect(legacyShellStateFor(parsed, "b").expanded).toEqual([]);
+    expect(legacyShellStateFor(parsed, null).expanded).toEqual([]);
+  });
 });

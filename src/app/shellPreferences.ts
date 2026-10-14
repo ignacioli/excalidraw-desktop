@@ -1,49 +1,45 @@
-export const SHELL_PREFERENCES_VERSION = 1 as const;
+import type { CommandInvoker } from "../ipc/client";
+import type { WorkspaceShellState } from "../ipc/contracts";
+
+/** Pre-multi-window localStorage key, read once for migration only. */
 export const SHELL_PREFERENCES_STORAGE_KEY = "excalidraw-desktop.shell";
+export const SHELL_PREFERENCES_VERSION = 1 as const;
 export const SIDEBAR_WIDTH_DEFAULT = 360;
 export const SIDEBAR_WIDTH_MIN = 280;
 export const SIDEBAR_WIDTH_MAX = 480;
+/** The relative path of the Workspace row itself in `expanded`. */
+export const WORKSPACE_ROOT_PATH = "";
 
 export interface ShellPreferenceSnapshot {
-  version: typeof SHELL_PREFERENCES_VERSION;
   sidebarPinned: boolean;
   sidebarWidth: number;
-  expandedWorkspaceIds: string[];
-  currentWorkspaceId: string | null;
+  /** Expanded folders of the window's Workspace, by relative path. */
+  expanded: string[];
 }
 
-type ShellPreferenceStorage = Pick<Storage, "getItem" | "setItem">;
+/** Stores the window Workspace's sidebar state. */
+export type ShellStateSave = (state: WorkspaceShellState) => void;
 
 const defaultSnapshot = (): ShellPreferenceSnapshot => ({
-  version: SHELL_PREFERENCES_VERSION,
   sidebarPinned: false,
   sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
-  expandedWorkspaceIds: [],
-  currentWorkspaceId: null,
+  expanded: [WORKSPACE_ROOT_PATH],
 });
 
+/**
+ * The sidebar state of this window's Workspace. Each Workspace keeps its own
+ * pin, width, and expanded folders; a Welcome window keeps whatever it shows
+ * and stores nothing.
+ */
 export class ShellPreferences {
-  private snapshot: ShellPreferenceSnapshot;
+  private snapshot = defaultSnapshot();
+  private hasWorkspaceState = false;
   private readonly listeners = new Set<() => void>();
 
-  constructor(
-    private readonly storage: ShellPreferenceStorage = createDefaultShellStorage(),
-  ) {
-    const stored = storage.getItem(SHELL_PREFERENCES_STORAGE_KEY);
-    this.snapshot = readSnapshot(stored);
-    // Writing defaults on first construct poisons first-launch expansion:
-    // AppShell mounts before WorkspacePanel, so an empty persist would look
-    // like "the user collapsed every Workspace".
-    if (stored !== null) {
-      this.persist();
-    }
-  }
+  constructor(private readonly save: ShellStateSave = () => undefined) {}
 
   getSnapshot(): ShellPreferenceSnapshot {
-    return {
-      ...this.snapshot,
-      expandedWorkspaceIds: [...this.snapshot.expandedWorkspaceIds],
-    };
+    return { ...this.snapshot, expanded: [...this.snapshot.expanded] };
   }
 
   subscribe(listener: () => void): () => void {
@@ -51,73 +47,79 @@ export class ShellPreferences {
     return () => this.listeners.delete(listener);
   }
 
+  /**
+   * Show the state of the Workspace this window just opened; `null` is a
+   * Workspace with nothing saved yet. Loading stores nothing.
+   */
+  loadWorkspace(shell: WorkspaceShellState | null): void {
+    this.hasWorkspaceState = true;
+    this.apply(shell);
+  }
+
+  /** Show `shell` in a window without a Workspace; nothing is stored. */
+  showWithoutWorkspace(shell: WorkspaceShellState): void {
+    this.hasWorkspaceState = false;
+    this.apply(shell);
+  }
+
+  /** Whether the state shown is a Workspace's own and is stored. */
+  hasWorkspace(): boolean {
+    return this.hasWorkspaceState;
+  }
+
+  /** The window no longer has a Workspace; later changes are not stored. */
+  closeWorkspace(): void {
+    this.hasWorkspaceState = false;
+  }
+
   setSidebarPinned(sidebarPinned: boolean): void {
     if (this.snapshot.sidebarPinned === sidebarPinned) return;
-    this.snapshot = { ...this.snapshot, sidebarPinned };
-    this.persist();
-    this.notify();
+    this.update({ ...this.snapshot, sidebarPinned });
   }
 
   setSidebarWidth(sidebarWidth: number): void {
     const nextWidth = clampSidebarWidth(sidebarWidth);
     if (this.snapshot.sidebarWidth === nextWidth) return;
-    this.snapshot = { ...this.snapshot, sidebarWidth: nextWidth };
-    this.persist();
+    this.update({ ...this.snapshot, sidebarWidth: nextWidth });
+  }
+
+  isWorkspaceExpanded(): boolean {
+    return this.snapshot.expanded.includes(WORKSPACE_ROOT_PATH);
+  }
+
+  setWorkspaceExpanded(expanded: boolean): void {
+    if (this.isWorkspaceExpanded() === expanded) return;
+    const others = this.snapshot.expanded.filter(
+      (path) => path !== WORKSPACE_ROOT_PATH,
+    );
+    this.update({
+      ...this.snapshot,
+      expanded: expanded ? [WORKSPACE_ROOT_PATH, ...others] : others,
+    });
+  }
+
+  private apply(shell: WorkspaceShellState | null): void {
+    this.snapshot =
+      shell === null
+        ? defaultSnapshot()
+        : {
+            sidebarPinned: shell.sidebarPinned,
+            sidebarWidth: clampSidebarWidth(shell.sidebarWidth),
+            expanded: [...new Set(shell.expanded)],
+          };
     this.notify();
   }
 
-  setCurrentWorkspaceId(currentWorkspaceId: string | null): void {
-    if (this.snapshot.currentWorkspaceId === currentWorkspaceId) return;
-    this.snapshot = { ...this.snapshot, currentWorkspaceId };
-    this.persist();
-    this.notify();
-  }
-
-  resolveCurrentWorkspaceId(
-    validWorkspaceIds: ReadonlySet<string>,
-    fallbackWorkspaceId: string | null = null,
-  ): string | null {
-    const currentWorkspaceId = this.snapshot.currentWorkspaceId;
-    if (
-      currentWorkspaceId !== null &&
-      validWorkspaceIds.has(currentWorkspaceId)
-    ) {
-      return currentWorkspaceId;
+  private update(snapshot: ShellPreferenceSnapshot): void {
+    this.snapshot = snapshot;
+    if (this.hasWorkspaceState) {
+      this.save({
+        sidebarPinned: snapshot.sidebarPinned,
+        sidebarWidth: snapshot.sidebarWidth,
+        expanded: [...snapshot.expanded],
+      });
     }
-    return fallbackWorkspaceId !== null &&
-      validWorkspaceIds.has(fallbackWorkspaceId)
-      ? fallbackWorkspaceId
-      : null;
-  }
-
-  setWorkspaceExpanded(workspaceId: string, expanded: boolean): void {
-    if (workspaceId.length === 0) return;
-    const ids = new Set(this.snapshot.expandedWorkspaceIds);
-    if (expanded) ids.add(workspaceId);
-    else ids.delete(workspaceId);
-    this.snapshot = { ...this.snapshot, expandedWorkspaceIds: [...ids] };
-    this.persist();
     this.notify();
-  }
-
-  pruneWorkspaceIds(validWorkspaceIds: ReadonlySet<string>): void {
-    const expandedWorkspaceIds = this.snapshot.expandedWorkspaceIds.filter(
-      (id) => validWorkspaceIds.has(id),
-    );
-    if (
-      expandedWorkspaceIds.length === this.snapshot.expandedWorkspaceIds.length
-    )
-      return;
-    this.snapshot = { ...this.snapshot, expandedWorkspaceIds };
-    this.persist();
-    this.notify();
-  }
-
-  private persist(): void {
-    this.storage.setItem(
-      SHELL_PREFERENCES_STORAGE_KEY,
-      JSON.stringify(this.snapshot),
-    );
   }
 
   private notify(): void {
@@ -125,11 +127,31 @@ export class ShellPreferences {
   }
 }
 
-function readSnapshot(stored: string | null): ShellPreferenceSnapshot {
-  if (stored === null) return defaultSnapshot();
+/** Shell preferences stored by versions before per-Workspace state. */
+export interface LegacyShellPreferences {
+  sidebarPinned: boolean;
+  sidebarWidth: number;
+  expandedWorkspaceIds: string[];
+  currentWorkspaceId: string | null;
+}
+
+/**
+ * Read the pre-multi-window shell preferences, or `null` when there are
+ * none or they are malformed. The key is never written again.
+ */
+export function readLegacyShellPreferences(
+  storage: Pick<Storage, "getItem"> | undefined = globalThis.localStorage,
+): LegacyShellPreferences | null {
+  let stored: string | null;
+  try {
+    stored = storage?.getItem(SHELL_PREFERENCES_STORAGE_KEY) ?? null;
+  } catch {
+    return null;
+  }
+  if (stored === null) return null;
   try {
     const value: unknown = JSON.parse(stored);
-    if (!isRecord(value)) return defaultSnapshot();
+    if (!isRecord(value)) return null;
     if (
       value.version !== SHELL_PREFERENCES_VERSION ||
       typeof value.sidebarPinned !== "boolean" ||
@@ -145,24 +167,64 @@ function readSnapshot(stored: string | null): ShellPreferenceSnapshot {
         (id) => typeof id !== "string" || id.length === 0,
       )
     ) {
-      return defaultSnapshot();
+      return null;
     }
     return {
-      version: SHELL_PREFERENCES_VERSION,
       sidebarPinned: value.sidebarPinned,
       sidebarWidth:
         value.sidebarWidth === undefined
           ? SIDEBAR_WIDTH_DEFAULT
           : clampSidebarWidth(value.sidebarWidth),
-      expandedWorkspaceIds: [...new Set(value.expandedWorkspaceIds)],
+      expandedWorkspaceIds: [
+        ...new Set(value.expandedWorkspaceIds as string[]),
+      ],
       currentWorkspaceId:
         value.currentWorkspaceId === undefined
           ? null
           : value.currentWorkspaceId,
     };
   } catch {
-    return defaultSnapshot();
+    return null;
   }
+}
+
+/**
+ * The shell preferences from before per-Workspace state while they are still
+ * in effect: they are imported once, and until the import is recorded (or
+ * when it cannot be) they keep applying. `null` once imported or when there
+ * are none.
+ */
+export async function importLegacyShellPreferences(
+  invoker: CommandInvoker,
+  storage?: Pick<Storage, "getItem">,
+): Promise<LegacyShellPreferences | null> {
+  const legacy = readLegacyShellPreferences(storage);
+  if (legacy === null) return null;
+  const inEffect = await invoker
+    .invoke("shell_preferences_migrate", {
+      sidebarPinned: legacy.sidebarPinned,
+      sidebarWidth: legacy.sidebarWidth,
+    })
+    .then(
+      ({ migrated }) => migrated,
+      () => true,
+    );
+  return inEffect ? legacy : null;
+}
+
+/** The legacy preferences as one Workspace's shell state. */
+export function legacyShellStateFor(
+  legacy: LegacyShellPreferences,
+  workspaceId: string | null,
+): WorkspaceShellState {
+  return {
+    sidebarPinned: legacy.sidebarPinned,
+    sidebarWidth: legacy.sidebarWidth,
+    expanded:
+      workspaceId !== null && legacy.expandedWorkspaceIds.includes(workspaceId)
+        ? [WORKSPACE_ROOT_PATH]
+        : [],
+  };
 }
 
 export function clampSidebarWidth(sidebarWidth: number): number {
@@ -174,21 +236,4 @@ export function clampSidebarWidth(sidebarWidth: number): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function createDefaultShellStorage(): ShellPreferenceStorage {
-  const localStorage = globalThis.localStorage;
-  if (
-    localStorage !== undefined &&
-    typeof localStorage.getItem === "function"
-  ) {
-    return localStorage;
-  }
-  const values = new Map<string, string>();
-  return {
-    getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => {
-      values.set(key, value);
-    },
-  };
 }

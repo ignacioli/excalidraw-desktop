@@ -4,11 +4,11 @@
 
 **Last updated**: 2026-09-24
 
-This document describes the **current** implementation architecture of Excalidraw Desktop: layered view, reliability data flows, workspace-entry mutations, module responsibilities, dependency direction and trust boundaries, native-window boundary, and storage. Decision records live in `docs/adr/`. The visual and interaction contract is the root `DESIGN.md` (English; Chinese: `DESIGN.zh.md`). The public IPC contract is `docs/contracts/ipc-contracts.md` (v4).
+This document describes the **current** implementation architecture of Excalidraw Desktop: layered view, reliability data flows, workspace-entry mutations, module responsibilities, dependency direction and trust boundaries, native-window boundary, and storage. Decision records live in `docs/adr/`. The visual and interaction contract is the root `DESIGN.md` (English; Chinese: `DESIGN.zh.md`). The public IPC contract is `docs/contracts/ipc-contracts.md` (v5).
 
 The current shell is a canvas-first overlay/pinned sidebar, IPC v4 Workspace Entry, version-history, and native-menu commands, a frontend-owned UI language, and unified in-app menus/dialogs. Crash-safe persistence (drafts, atomic writes, recovery snapshots, external-change conflicts) still applies. What follows is the current path, not the retired FileTree + `thumbnails/` production implementation.
 
-Workspace persistence separates mounted authority from Recent history. Mounted records feed path policy, Workspace Entry commands, indexing, and watching; only the single Current Workspace feeds the Sidebar tree. Unmounting retains the record; remount validates the stored root on activation, while removing an unmounted record from Recents changes application history only.
+Workspace persistence separates mounted authority from Recent history. Mounted records feed path policy, Workspace Entry commands, indexing, and watching; only the single Current Workspace feeds the Sidebar tree. Mounted means "open in a window": the Rust `WindowRegistry` (`src-tauri/src/window/registry.rs`) is the only authority on which window holds which Workspace, at most one window per Workspace; `workspace_list` returns the calling window's Workspace only, and Workspace and document events are sent to the owning window (`src-tauri/src/window/events.rs`). Sidebar pin, width, and expansion are stored per Workspace in SQLite; appearance and language stay in WebView storage and are broadcast to the other windows after a change. Unmounting retains the record; remount validates the stored root on activation, while removing an unmounted record from Recents changes application history only.
 
 ## 1. Overall structure
 
@@ -236,7 +236,7 @@ flowchart LR
     Apply --> Refresh["invalidate tree; restore scroll anchor and focus"]
 ```
 
-Authoritative layers: `src-tauri/src/workspace_entries/` and `src/documents/documentStore.ts`. New drawings default to the visible name `Untitled`; Rust appends `.excalidraw`. New directories default to `Untitled Folder` (`src/app/interaction/EntryNamingDialog.tsx`). Welcome New Drawing (`src/app/newDrawing.ts`) asks for a folder each time, mounts it as a workspace (reusing an already mounted root), uses the same `workspace_entry_create` path there, and steps past `NAME_CONFLICT` to `Untitled N`; it never creates a pathless document session. Protected targets include the workspace root, dot directories, and `.excalidraw_assets`.
+Authoritative layers: `src-tauri/src/workspace_entries/` and `src/documents/documentStore.ts`. New drawings default to the visible name `Untitled`; Rust appends `.excalidraw`. New directories default to `Untitled Folder` (`src/app/interaction/EntryNamingDialog.tsx`). Welcome New Drawing (`src/app/newDrawing.ts`) asks for a folder each time, claims it for the window (`window_claim_workspace`; a folder held by another window brings that window to the front and creates nothing), uses the same `workspace_entry_create` path there, and steps past `NAME_CONFLICT` to `Untitled N`; it never creates a pathless document session. Protected targets include the workspace root, dot directories, and `.excalidraw_assets`.
 
 ## 6. Sequence: serialized close and latest-intent activation
 
@@ -307,7 +307,7 @@ Historical `thumbnails/` and frontend `FileTree` / `useThumbnails` are **not** t
 - `history_delete` removes one semantic version while holding the document history-operation lease. Repeating the same `requestId` is idempotent; a version referenced by an active replacement remains protected and returns a structured busy error. Object garbage collection is best effort after the metadata transaction and preserves objects still shared or pinned by another operation.
 - Entry-mutation authorization uses `workspaceId + relativePath` (plus `baseName` for create/rename). `canonicalPath` in the response is for opening and session migration. It is **not** authorization evidence the frontend may submit.
 - Every path is canonicalized in the backend by `security/` and checked against the workspace allowlist. Escape returns `PATH_ACCESS_DENIED`. Document JSON is untrusted input (structure validation + size cap).
-- Least privilege: Tauri capabilities are `core:default` + `core:window:allow-destroy` + `dialog:allow-open` + `dialog:allow-save` (`src-tauri/capabilities/default.json`). The window permission lets the native close handler destroy the main window only after its app-exit checkpoint completes. Path ACL lives in Rust; extra fs capabilities are not used to give the WebView arbitrary filesystem access. Strict CSP; the asset protocol is limited to `.excalidraw_assets` images.
+- Least privilege: Tauri capabilities are `core:default` + `core:window:allow-destroy` + `core:window:allow-set-title` + `dialog:allow-open` + `dialog:allow-save` for windows labelled `window-*` (`src-tauri/capabilities/default.json`). The destroy permission lets the native close handler destroy a window only after its app-exit checkpoint completes; set-title lets a window show its drawing and Workspace in its title. Path ACL lives in Rust; extra fs capabilities are not used to give the WebView arbitrary filesystem access. Strict CSP; the asset protocol is limited to `.excalidraw_assets` images.
 - The production command set does not include `dir_list`, `file_create` / `file_rename` / `file_delete`, or `thumb_lookup` / `thumb_store`.
 
 ### 8.1 Language and native-menu data flow
@@ -318,7 +318,7 @@ The UI language is decided only in the frontend. Rust reports facts and renders 
 2. **Resolution.** `resolveLanguage(preference, preferredLanguages)` returns `en` or `zh-CN`. The user preference (`system` / `en` / `zh-CN`) is stored in WebView `localStorage` under `excalidraw-desktop.language`; it never crosses IPC.
 3. **Menu sync.** `AppShell` sends `native_menu_sync` with the full localized label set plus the menu state (language, appearance, document presence, forced read-only, and the five canvas preferences). The frontend skips a request identical to the last successful one, so ordinary canvas edits never reach the menu.
 4. **Rust side.** The command validates labels and state at the trust boundary, then either rebuilds the menu (labels changed) or updates `checked` / `enabled` in place (state-only change). Invalid input is rejected and the last valid menu stays installed. Until the first sync, a built-in English menu is installed.
-5. **Menu command.** Activating a menu item emits `native-menu-command` to the `main` window. The frontend routes it (language, appearance, canvas preference toggles, help, save, export, version history) and writes the new state back through the next `native_menu_sync`.
+5. **Menu command.** Activating a menu item emits `native-menu-command` to the front window, or to the most recently focused window when none is in front. Menu state is kept per window and applied when a window gains focus. The frontend routes it (language, appearance, canvas preference toggles, help, save, export, version history) and writes the new state back through the next `native_menu_sync`.
 
 Key ownership: the native menu registers accelerators only for Save (`CmdOrCtrl+S`) and Export Image (`CmdOrCtrl+Alt+E`). Keys the Excalidraw SDK handles are not registered natively, and `Alt+R` (View mode) is handled by the editor host. The full table is in `docs/contracts/ipc-contracts.md` §1.7.1.
 
@@ -402,5 +402,5 @@ The collector owns only its child process and declared profile. Missing isolatio
 
 - ADRs: ADR-001 framework choice, ADR-002 two-tier persistence, ADR-003 SQLite-first and redb trigger, ADR-004 declared reference-environment performance measurement, ADR-005 theme boundary (shell-layout / thumbnail sentences: see ADR-009), ADR-006/007/008 reference performance budgets and measurement series, ADR-009 desktop UI interactions
 - `DESIGN.md` / `DESIGN.zh.md` (visual and interaction contract)
-- `docs/quickstart.md` / `docs/quickstart.zh.md` (getting started and verification), `docs/contracts/ipc-contracts.md` (IPC contract v4)
+- `docs/quickstart.md` / `docs/quickstart.zh.md` (getting started and verification), `docs/contracts/ipc-contracts.md` (IPC contract v5)
 - `docs/evidence/` (native verification matrix, accessibility audit, and validation summary; VM or physical machine)

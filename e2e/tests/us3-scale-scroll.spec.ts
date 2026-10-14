@@ -613,12 +613,29 @@ async function installScaleHarness(
           invocations.push({ command, args: { ...args } });
           if (command === "plugin:dialog|open") return "/workspace";
           if (command === "workspace_list") return mounted ? [workspace] : [];
-          if (command === "workspace_recent_list") return mounted ? [workspace] : [];
+          if (command === "workspace_recent_list")
+            return mounted ? [workspace] : [];
           if (command === "workspace_add") {
             mounted = true;
             return workspace;
           }
           if (command === "workspace_remove") {
+            mounted = false;
+            return {};
+          }
+          if (command === "window_probe_workspace") {
+            return {
+              kind: "claimed",
+              workspace: null,
+              replaced: null,
+              shell: null,
+            };
+          }
+          if (command === "window_claim_workspace") {
+            mounted = true;
+            return { kind: "claimed", workspace, replaced: null, shell: null };
+          }
+          if (command === "window_release_workspace") {
             mounted = false;
             return {};
           }

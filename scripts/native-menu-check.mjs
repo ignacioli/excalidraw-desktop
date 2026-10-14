@@ -262,6 +262,8 @@ function expectedMenu(lang, language, appearance, hasDocument) {
     [
       L("file"),
       [
+        { name: L("file.newWindow") },
+        { name: L("file.openWorkspace") },
         { name: L("file.save"), enabled: hasDocument },
         { name: L("file.exportImage") },
         { name: L("file.versionHistory") },

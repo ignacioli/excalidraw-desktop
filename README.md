@@ -22,7 +22,7 @@ The local persistence workflow is designed around the moments that matter:
 
 The Welcome screen gives you **New Drawing**, **Open Workspace**, and **Recent Workspaces**. Recent entries can be reopened when their folder is available, or removed from the app's history without deleting anything from disk.
 
-Inside a workspace, **Current Workspace** is the single tree shown in the sidebar. Other workspace records stay available through Welcome and Recent rather than stacking multiple roots into one sidebar. Open drawings appear as tabs above the official canvas, and the sidebar starts hidden so the canvas has the room. Open it as an overlay when you need it, or pin it into the layout for longer browsing; **Back** returns to the previous browsing location without closing open drawings.
+Each window holds one workspace, and its **Current Workspace** is the single tree shown in that window's sidebar. **File > New Window** (⇧⌘N) opens another window, so different workspaces can be open side by side; opening a workspace that is already open in another window brings that window to the front instead of opening it twice. Other workspace records stay available through Welcome and Recent rather than stacking multiple roots into one sidebar. Each workspace remembers its own sidebar pin, width, and expansion; appearance and language apply to every window. Open drawings appear as tabs above the official canvas, and the sidebar starts hidden so the canvas has the room. Open it as an overlay when you need it, or pin it into the layout for longer browsing; **Back** returns to the previous browsing location without closing open drawings.
 
 ## What it can do
 

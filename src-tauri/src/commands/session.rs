@@ -1,19 +1,21 @@
 use std::{path::Path, sync::Mutex};
 
-use tauri::{State, WebviewWindow};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
 use crate::{
     database::repository::{SqliteRepository, WorkspaceRepository},
     documents::session_lock::{SessionLock, SessionLockError},
     window::{
         registry::{WindowRecord, WindowRegistry, WindowRole},
-        session::WindowSessionRepository,
+        session::{WindowSessionRepository, WorkspaceShellState},
     },
 };
 
 use super::{
     dto::{
-        AppHandshakeResponse, OpenWorkspaceName, WindowBootstrap, WindowRestoreBootstrap,
+        AppHandshakeResponse, AppPreferencesChangedEvent, EmptyResponse, OpenWorkspaceName,
+        ShellPreferencesMigrateResponse, WindowBootstrap, WindowRestoreBootstrap,
         IPC_CONTRACT_VERSION,
     },
     error::{AppError, IpcError},
@@ -52,26 +54,10 @@ impl SessionState {
             None => None,
         };
         let shell = match workspace.as_ref() {
-            Some(workspace) => match repository
-                .workspace_window_state_get(workspace.id.clone())
-                .await?
-                .and_then(|state| state.shell)
-            {
-                Some(shell) => Some(shell),
-                None => repository.workspace_shell_state_latest().await?,
-            },
+            Some(workspace) => workspace_shell_state_for(repository, &workspace.id).await?,
             None => None,
         };
-        let mut open_workspace_names = Vec::new();
-        for id in open_workspace_ids {
-            if let Some(open) = repository.workspace_get(id).await? {
-                open_workspace_names.push(OpenWorkspaceName {
-                    workspace_id: open.id,
-                    name: open.name,
-                    root_path: open.root_path,
-                });
-            }
-        }
+        let open_workspace_names = open_workspace_names(repository, open_workspace_ids).await?;
         Ok(AppHandshakeResponse {
             contract_version: IPC_CONTRACT_VERSION,
             app_version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -104,6 +90,143 @@ impl SessionState {
         }
         Ok(())
     }
+}
+
+/// `app_meta` key holding the sidebar pin and width imported from the
+/// legacy localStorage shell preferences, the most recent values until a
+/// Workspace saves its own.
+pub const LEGACY_SHELL_STATE_KEY: &str = "legacy_shell_state";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacyShellState {
+    sidebar_pinned: bool,
+    sidebar_width: i64,
+}
+
+/// The sidebar state to show for a Workspace: its own record; else, for a
+/// Workspace opened for the first time, the most recent pin and width with
+/// the Workspace row expanded. `None` when nothing was ever saved.
+pub async fn workspace_shell_state_for(
+    repository: &SqliteRepository,
+    workspace_id: &str,
+) -> Result<Option<WorkspaceShellState>, AppError> {
+    if let Some(shell) = repository
+        .workspace_window_state_get(workspace_id.to_owned())
+        .await?
+        .and_then(|state| state.shell)
+    {
+        return Ok(Some(shell));
+    }
+    let latest = match repository.workspace_shell_state_latest().await? {
+        Some(latest) => Some((latest.sidebar_pinned, latest.sidebar_width)),
+        None => repository
+            .app_meta_get(LEGACY_SHELL_STATE_KEY.to_owned())
+            .await?
+            .and_then(|stored| serde_json::from_str::<LegacyShellState>(&stored).ok())
+            .map(|legacy| (legacy.sidebar_pinned, legacy.sidebar_width)),
+    };
+    Ok(
+        latest.map(|(sidebar_pinned, sidebar_width)| WorkspaceShellState {
+            sidebar_pinned,
+            sidebar_width,
+            // A Workspace's own row is its root folder, relative path "".
+            expanded: vec![String::new()],
+        }),
+    )
+}
+
+/// Save the calling window's sidebar state for its Workspace.
+#[tauri::command]
+pub async fn workspace_shell_state_save(
+    sidebar_pinned: bool,
+    sidebar_width: i64,
+    expanded: Vec<String>,
+    window: WebviewWindow,
+    registry: State<'_, WindowRegistry>,
+    repository: State<'_, SqliteRepository>,
+) -> Result<EmptyResponse, IpcError> {
+    let workspace_id = registry
+        .window(window.label())
+        .and_then(|record| record.workspace)
+        .map(|owned| owned.id)
+        .ok_or_else(|| AppError::WorkspaceNotOwned(window.label().to_owned()))?;
+    repository
+        .workspace_shell_state_save(
+            workspace_id,
+            WorkspaceShellState {
+                sidebar_pinned,
+                sidebar_width,
+                expanded,
+            },
+            unix_millis(),
+        )
+        .await
+        .map_err(AppError::from)?;
+    Ok(EmptyResponse {})
+}
+
+/// Import the legacy localStorage sidebar pin and width once. Returns
+/// `migrated: true` only to the first call, which may then use the legacy
+/// Current Workspace for the first window.
+#[tauri::command]
+pub async fn shell_preferences_migrate(
+    sidebar_pinned: bool,
+    sidebar_width: i64,
+    repository: State<'_, SqliteRepository>,
+) -> Result<ShellPreferencesMigrateResponse, IpcError> {
+    Ok(ShellPreferencesMigrateResponse {
+        migrated: migrate_shell_preferences(
+            &repository,
+            LegacyShellState {
+                sidebar_pinned,
+                sidebar_width,
+            },
+        )
+        .await?,
+    })
+}
+
+async fn migrate_shell_preferences(
+    repository: &SqliteRepository,
+    legacy: LegacyShellState,
+) -> Result<bool, AppError> {
+    let key = crate::window::session::SHELL_PREFERENCES_MIGRATED_KEY.to_owned();
+    if repository.app_meta_get(key.clone()).await?.is_some() {
+        return Ok(false);
+    }
+    let stored = serde_json::to_string(&legacy)
+        .map_err(|error| AppError::Internal(format!("legacy shell state: {error}")))?;
+    repository
+        .app_meta_set(LEGACY_SHELL_STATE_KEY.to_owned(), stored)
+        .await?;
+    repository.app_meta_set(key, "1".to_owned()).await?;
+    Ok(true)
+}
+
+fn unix_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX))
+        .unwrap_or(0)
+}
+
+/// The names of the Workspaces open in any window, for window titles.
+pub async fn open_workspace_names(
+    repository: &SqliteRepository,
+    open_workspace_ids: impl IntoIterator<Item = String>,
+) -> Result<Vec<OpenWorkspaceName>, AppError> {
+    let mut names = Vec::new();
+    for id in open_workspace_ids {
+        if let Some(open) = repository.workspace_get(id).await? {
+            names.push(OpenWorkspaceName {
+                workspace_id: open.id,
+                name: open.name,
+                root_path: open.root_path,
+            });
+        }
+    }
+    Ok(names)
 }
 
 /// Answer the calling window's startup handshake. Launch files and restore
@@ -142,8 +265,62 @@ fn session_lock_error(error: SessionLockError) -> AppError {
     }
 }
 
+/// The windows an app-wide preference change goes to: every registered
+/// window except the one that made the change.
+pub fn preference_broadcast_targets(labels: Vec<String>, caller: &str) -> Vec<String> {
+    labels.into_iter().filter(|label| label != caller).collect()
+}
+
+/// Tell the other windows that the appearance or language changed here.
+/// They apply it without storing or broadcasting it again.
+#[tauri::command]
+pub async fn app_preferences_broadcast(
+    appearance: Option<crate::native_menu_spec::AppearancePreference>,
+    language: Option<crate::native_menu_spec::LanguagePreference>,
+    app: AppHandle,
+    window: WebviewWindow,
+    registry: State<'_, WindowRegistry>,
+) -> Result<EmptyResponse, IpcError> {
+    let event = AppPreferencesChangedEvent {
+        appearance,
+        language,
+    };
+    for label in preference_broadcast_targets(registry.labels(), window.label()) {
+        app.emit_to(label.as_str(), "app-preferences-changed", event)
+            .map_err(|error| AppError::Internal(error.to_string()))?;
+    }
+    Ok(EmptyResponse {})
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn preference_changes_go_to_every_other_window() {
+        let labels = vec![
+            "window-1".to_owned(),
+            "window-2".to_owned(),
+            "window-3".to_owned(),
+        ];
+
+        assert_eq!(
+            super::preference_broadcast_targets(labels, "window-2"),
+            vec!["window-1".to_owned(), "window-3".to_owned()]
+        );
+    }
+
+    #[test]
+    fn preference_event_omits_unchanged_fields() {
+        let event = super::AppPreferencesChangedEvent {
+            appearance: Some(crate::native_menu_spec::AppearancePreference::Dark),
+            language: None,
+        };
+
+        assert_eq!(
+            serde_json::to_value(event).unwrap(),
+            serde_json::json!({ "appearance": "dark" })
+        );
+    }
+
     use super::*;
     use crate::database::repository::WorkspaceRecord;
     use crate::window::{
@@ -314,6 +491,103 @@ mod tests {
             .await
             .unwrap_or_else(|error| panic!("handshake with shell: {error}"));
         assert_eq!(response.window.shell, Some(shell));
+        remove_database(path);
+    }
+
+    async fn upsert(repository: &SqliteRepository, id: &str) {
+        repository
+            .workspace_upsert(WorkspaceRecord {
+                id: id.to_owned(),
+                name: id.to_owned(),
+                root_path: format!("/w/{id}"),
+                created_at: 1,
+                mounted: false,
+            })
+            .await
+            .unwrap_or_else(|error| panic!("upsert: {error}"));
+    }
+
+    #[tokio::test]
+    async fn legacy_shell_preferences_are_imported_once() {
+        let (repository, path) = repository().await;
+        let legacy = LegacyShellState {
+            sidebar_pinned: true,
+            sidebar_width: 300,
+        };
+
+        assert!(migrate_shell_preferences(&repository, legacy)
+            .await
+            .unwrap_or_else(|error| panic!("migrate: {error}")));
+        assert!(!migrate_shell_preferences(
+            &repository,
+            LegacyShellState {
+                sidebar_pinned: false,
+                sidebar_width: 400,
+            },
+        )
+        .await
+        .unwrap_or_else(|error| panic!("migrate again: {error}")));
+
+        upsert(&repository, "a").await;
+        assert_eq!(
+            workspace_shell_state_for(&repository, "a")
+                .await
+                .unwrap_or_else(|error| panic!("shell: {error}")),
+            Some(WorkspaceShellState {
+                sidebar_pinned: true,
+                sidebar_width: 300,
+                expanded: vec![String::new()],
+            })
+        );
+        remove_database(path);
+    }
+
+    #[tokio::test]
+    async fn a_first_opened_workspace_takes_the_most_recent_pin_and_width() {
+        let (repository, path) = repository().await;
+        assert_eq!(
+            workspace_shell_state_for(&repository, "a")
+                .await
+                .unwrap_or_else(|error| panic!("shell: {error}")),
+            None
+        );
+        migrate_shell_preferences(
+            &repository,
+            LegacyShellState {
+                sidebar_pinned: false,
+                sidebar_width: 300,
+            },
+        )
+        .await
+        .unwrap_or_else(|error| panic!("migrate: {error}"));
+        upsert(&repository, "a").await;
+        upsert(&repository, "b").await;
+        let own = WorkspaceShellState {
+            sidebar_pinned: true,
+            sidebar_width: 420,
+            expanded: vec![String::new(), "drafts".to_owned()],
+        };
+        repository
+            .workspace_shell_state_save("a".to_owned(), own.clone(), 5)
+            .await
+            .unwrap_or_else(|error| panic!("save: {error}"));
+
+        assert_eq!(
+            workspace_shell_state_for(&repository, "a")
+                .await
+                .unwrap_or_else(|error| panic!("own shell: {error}")),
+            Some(own)
+        );
+        assert_eq!(
+            workspace_shell_state_for(&repository, "b")
+                .await
+                .unwrap_or_else(|error| panic!("first-open shell: {error}")),
+            Some(WorkspaceShellState {
+                sidebar_pinned: true,
+                sidebar_width: 420,
+                expanded: vec![String::new()],
+            })
+        );
         remove_database(path);
     }
 }

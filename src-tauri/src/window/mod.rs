@@ -7,16 +7,22 @@
 //! [`create_window`], so all windows share one construction path, one chrome
 //! contract, and one placement rule.
 
+pub mod events;
 pub mod geometry;
 pub mod registry;
 pub mod session;
 
-use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+};
 
 use geometry::{
     initial_rect, logical_work_area, staggered_rect, LogicalRect, MIN_HEIGHT, MIN_WIDTH,
 };
 use registry::{WindowRegistry, WindowRole};
+use session::WindowSessionRepository;
+
+use crate::database::repository::SqliteRepository;
 
 /// Title of a Welcome window before the frontend sets its own title.
 pub const WELCOME_TITLE: &str = "Excalidraw";
@@ -73,6 +79,71 @@ pub fn create_window<R: Runtime>(
         Err(error) => {
             registry.unregister(&label);
             Err(error)
+        }
+    }
+}
+
+/// Open a Welcome window, staggered from the front window, and bring it to
+/// the front. New Window in the native menu and `window_new` share this path.
+pub fn open_new_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow<R>> {
+    let window = create_window(app, WindowRole::Normal, None)?;
+    activate_window(&window);
+    Ok(window)
+}
+
+/// Open a Welcome window. The window is created in Rust; the frontend gets
+/// no window-creation permission.
+#[tauri::command]
+pub async fn window_new(
+    app: AppHandle,
+) -> Result<crate::commands::dto::WindowNewResponse, crate::commands::error::IpcError> {
+    let window = open_new_window(&app).map_err(|error| {
+        crate::commands::error::AppError::Internal(format!("failed to open a new window: {error}"))
+    })?;
+    Ok(crate::commands::dto::WindowNewResponse {
+        label: window.label().to_owned(),
+    })
+}
+
+/// Store the Window Session snapshot. A failure is logged: the session is a
+/// convenience for the next launch and never blocks the window action.
+pub async fn persist_session<R: Runtime>(app: &AppHandle<R>) {
+    let snapshot = app.state::<WindowRegistry>().session_snapshot();
+    let repository = app.state::<SqliteRepository>().inner().clone();
+    if let Err(error) = repository.window_session_replace(snapshot).await {
+        eprintln!("failed to store the window session: {error}");
+    }
+}
+
+/// Tell every window which Workspaces are open, so each can tell apart
+/// Workspaces with the same name in its title. A failure is logged.
+pub async fn broadcast_open_workspaces<R: Runtime>(app: &AppHandle<R>) {
+    let ids = app.state::<WindowRegistry>().owned_workspace_ids();
+    let repository = app.state::<SqliteRepository>().inner().clone();
+    let workspaces = match crate::commands::session::open_workspace_names(&repository, ids).await {
+        Ok(workspaces) => workspaces,
+        Err(error) => {
+            eprintln!("failed to read the open Workspaces: {error}");
+            return;
+        }
+    };
+    if let Err(error) = app.emit(
+        "open-workspaces-changed",
+        crate::commands::dto::OpenWorkspacesChangedEvent { workspaces },
+    ) {
+        eprintln!("failed to announce the open Workspaces: {error}");
+    }
+}
+
+/// When the Dock icon is clicked: bring back the most recently focused
+/// window, or open a Welcome window when none is left.
+pub fn reopen<R: Runtime>(app: &AppHandle<R>) {
+    match app.state::<WindowRegistry>().most_recently_focused() {
+        Some(label) => activate_label(app, &label),
+        None => {
+            if let Err(error) = open_new_window(app) {
+                eprintln!("failed to open a window on reopen: {error}");
+            }
         }
     }
 }

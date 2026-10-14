@@ -12,14 +12,14 @@ use tauri::{
         CheckMenuItem, IsMenuItem, Menu, MenuEvent, MenuItem, MenuItemKind, PredefinedMenuItem,
         Submenu,
     },
-    AppHandle, Emitter, Listener, Manager, Runtime, State,
+    AppHandle, Emitter, Listener, Manager, Runtime, State, WebviewWindow,
 };
 
 use crate::commands::error::{AppError, IpcError};
 pub use crate::native_menu_spec::*;
 
-/// Event delivered to the main webview when an application menu command is
-/// activated. The frontend owns the corresponding document/export/theme
+/// Event delivered to the front window's webview when an application menu
+/// command is activated. The frontend owns the corresponding document/export/theme
 /// operation; this module only exposes the native discoverability boundary.
 pub const NATIVE_MENU_EVENT: &str = "native-menu-command";
 const NATIVE_MENU_VALIDATION_ACK_EVENT: &str = "native-menu-validation-ack";
@@ -47,10 +47,11 @@ pub enum NativeMenuCommand {
     ToggleSnap,
     ToggleZen,
     ToggleViewMode,
+    OpenWorkspace,
 }
 
 impl NativeMenuCommand {
-    const ALL: [Self; 15] = [
+    const ALL: [Self; 16] = [
         Self::Save,
         Self::ExportImage,
         Self::VersionHistory,
@@ -66,6 +67,7 @@ impl NativeMenuCommand {
         Self::ToggleSnap,
         Self::ToggleZen,
         Self::ToggleViewMode,
+        Self::OpenWorkspace,
     ];
 
     pub fn from_menu_id(id: &str) -> Option<Self> {
@@ -91,6 +93,7 @@ impl NativeMenuCommand {
             Self::ToggleSnap => SNAP_MENU_ID,
             Self::ToggleZen => ZEN_MENU_ID,
             Self::ToggleViewMode => VIEW_MODE_MENU_ID,
+            Self::OpenWorkspace => OPEN_WORKSPACE_MENU_ID,
         }
     }
 }
@@ -118,12 +121,51 @@ struct NativeMenuValidationObservation {
     command: NativeMenuCommand,
 }
 
-/// Last valid labels and state, kept so a label change can rebuild the menu
-/// and a state-only change can update items in place.
-struct NativeMenuModel {
-    labels: NativeMenuLabels,
+/// The menu state one window last reported.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct WindowMenuState {
     state: NativeMenuSyncState,
     version_history_enabled: bool,
+}
+
+/// Last valid labels and every window's last state, kept so a label change
+/// can rebuild the menu and a state-only change can update items in place.
+/// The installed menu shows the state of `active`, the front window (or the
+/// most recently focused one); with no window it shows the no-document
+/// state.
+struct NativeMenuModel {
+    labels: NativeMenuLabels,
+    windows: BTreeMap<String, WindowMenuState>,
+    active: Option<String>,
+}
+
+impl NativeMenuModel {
+    fn new(labels: NativeMenuLabels) -> Self {
+        Self {
+            labels,
+            windows: BTreeMap::new(),
+            active: None,
+        }
+    }
+
+    /// The state the installed menu should show. History stays disabled
+    /// until a window with an active saved document reports otherwise.
+    fn applied(&self) -> (WindowMenuState, bool) {
+        match self.active.as_ref() {
+            Some(label) => (self.windows.get(label).copied().unwrap_or_default(), true),
+            None => (WindowMenuState::default(), false),
+        }
+    }
+
+    fn item_state(&self, id: &str) -> Option<ItemState> {
+        let (window, has_window) = self.applied();
+        item_state(
+            id,
+            &window.state,
+            window.version_history_enabled,
+            has_window,
+        )
+    }
 }
 
 pub struct NativeMenuStore(Mutex<NativeMenuModel>);
@@ -142,14 +184,9 @@ impl NativeMenuStore {
 /// setup failure aborts application setup instead of leaving a partially
 /// configured shell running.
 pub fn install_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    let model = NativeMenuModel {
-        labels: NativeMenuLabels::english(&app.package_info().name),
-        state: NativeMenuSyncState::default(),
-        // History is available only after the frontend has an active saved
-        // document. Start disabled so the native menu cannot advertise an
-        // operation before the document authority has been established.
-        version_history_enabled: false,
-    };
+    // History is available only after a window's frontend has an active
+    // saved document, so the bootstrap state keeps it disabled.
+    let model = NativeMenuModel::new(NativeMenuLabels::english(&app.package_info().name));
     let menu = build_menu(app, &model)?;
     app.manage(NativeMenuStore(Mutex::new(model)));
     app.set_menu(menu)?;
@@ -201,7 +238,7 @@ fn build_entries<R: Runtime>(
                 accelerator,
             } => {
                 let text = model.labels.get(label);
-                let state = item_state(id, &model.state, model.version_history_enabled);
+                let state = model.item_state(id);
                 let enabled = state.is_none_or(|state| state.enabled);
                 if *check {
                     let checked = state.and_then(|state| state.checked).unwrap_or(false);
@@ -263,11 +300,7 @@ fn apply_menu_state<R: Runtime>(
     model: &NativeMenuModel,
 ) -> tauri::Result<()> {
     for item in items {
-        let state = item_state(
-            item.id().as_ref(),
-            &model.state,
-            model.version_history_enabled,
-        );
+        let state = model.item_state(item.id().as_ref());
         match (item, state) {
             (MenuItemKind::MenuItem(menu_item), Some(state)) => {
                 menu_item.set_enabled(state.enabled)?;
@@ -291,34 +324,50 @@ fn reapply_installed_state<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> 
     apply_menu_state(&menu.items()?, &model)
 }
 
-/// Apply the frontend's localized labels and state. A label change rebuilds
-/// the menu; a state-only change updates the existing items. Invalid labels
-/// are rejected and the last valid menu stays installed.
+/// Apply the frontend's localized labels and the calling window's state. A
+/// label change rebuilds the menu; a state change updates the existing items
+/// only when the caller is the window the menu currently shows. Invalid
+/// labels are rejected and the last valid menu stays installed.
 #[tauri::command(rename = "native_menu_sync")]
 pub fn sync_native_menu<R: Runtime>(
     app: AppHandle<R>,
+    window: WebviewWindow<R>,
     store: State<'_, NativeMenuStore>,
     labels: BTreeMap<String, String>,
     state: NativeMenuSyncState,
 ) -> Result<(), IpcError> {
     let labels = NativeMenuLabels::validate(labels).map_err(AppError::Internal)?;
+    let target = crate::window::target_window(&app);
     let mut model = store.lock();
+    let label = window.label().to_owned();
+    let previous_labels = model.labels.clone();
+    let previous_window = model.windows.get(&label).copied();
+    let previous_active = model.active.clone();
     let rebuild = labels != model.labels;
-    let previous = (model.labels.clone(), model.state);
     model.labels = labels;
-    model.state = state;
+    model.windows.entry(label.clone()).or_default().state = state;
+    let shows_caller = target.as_deref() == Some(label.as_str());
+    if shows_caller {
+        model.active = Some(label.clone());
+    }
     let result = if rebuild {
         build_menu(&app, &model).and_then(|menu| app.set_menu(menu).map(|_| ()))
+    } else if shows_caller {
+        apply_installed(&app, &model)
     } else {
-        match app.menu() {
-            Some(menu) => menu
-                .items()
-                .and_then(|items| apply_menu_state(&items, &model)),
-            None => Ok(()),
-        }
+        Ok(())
     };
     if let Err(error) = result {
-        (model.labels, model.state) = previous;
+        model.labels = previous_labels;
+        match previous_window {
+            Some(previous) => {
+                model.windows.insert(label, previous);
+            }
+            None => {
+                model.windows.remove(&label);
+            }
+        }
+        model.active = previous_active;
         return Err(
             AppError::Internal(format!("failed to update the native menu: {error}")).into(),
         );
@@ -326,12 +375,20 @@ pub fn sync_native_menu<R: Runtime>(
     Ok(())
 }
 
+fn apply_installed<R: Runtime>(app: &AppHandle<R>, model: &NativeMenuModel) -> tauri::Result<()> {
+    match app.menu() {
+        Some(menu) => apply_menu_state(&menu.items()?, model),
+        None => Ok(()),
+    }
+}
+
 /// Synchronize the discoverability state of the history entry with the
-/// frontend's active document authority. This is UX state only; the event
-/// route still rechecks the active document before opening the panel.
+/// calling window's active document authority. This is UX state only; the
+/// event route still rechecks the active document before opening the panel.
 #[tauri::command(rename = "native_menu_set_enabled")]
 pub fn set_native_menu_enabled<R: Runtime>(
     app: AppHandle<R>,
+    window: WebviewWindow<R>,
     command: NativeMenuCommand,
     enabled: bool,
 ) -> tauri::Result<()> {
@@ -345,8 +402,20 @@ pub fn set_native_menu_enabled<R: Runtime>(
     let menu = app.menu().ok_or_else(|| {
         std::io::Error::new(std::io::ErrorKind::NotFound, "native menu is not installed")
     })?;
+    let target = crate::window::target_window(&app);
+    let label = window.label();
     if let Some(store) = app.try_state::<NativeMenuStore>() {
-        store.lock().version_history_enabled = enabled;
+        let mut model = store.lock();
+        model
+            .windows
+            .entry(label.to_owned())
+            .or_default()
+            .version_history_enabled = enabled;
+        if target.as_deref() == Some(label) {
+            model.active = Some(label.to_owned());
+        } else {
+            return Ok(());
+        }
     }
     if !set_menu_item_enabled(&menu.items()?, command.menu_id(), enabled)? {
         return Err(std::io::Error::new(
@@ -356,6 +425,40 @@ pub fn set_native_menu_enabled<R: Runtime>(
         .into());
     }
     Ok(())
+}
+
+/// Show `label`'s last reported state; called when the window gains focus.
+pub fn show_window_state<R: Runtime>(app: &AppHandle<R>, label: &str) {
+    let Some(store) = app.try_state::<NativeMenuStore>() else {
+        return;
+    };
+    let mut model = store.lock();
+    if model.active.as_deref() == Some(label) {
+        return;
+    }
+    model.active = Some(label.to_owned());
+    if let Err(error) = apply_installed(app, &model) {
+        eprintln!("failed to apply the native menu state of {label}: {error}");
+    }
+}
+
+/// Drop a destroyed window's state and show the next window's, or the
+/// no-document state when no window is left. The registry must already have
+/// unregistered `label`.
+pub fn forget_window_state<R: Runtime>(app: &AppHandle<R>, label: &str) {
+    let Some(store) = app.try_state::<NativeMenuStore>() else {
+        return;
+    };
+    let next = crate::window::target_window(app);
+    let mut model = store.lock();
+    model.windows.remove(label);
+    if model.active.as_deref() != Some(label) && model.active.is_some() {
+        return;
+    }
+    model.active = next;
+    if let Err(error) = apply_installed(app, &model) {
+        eprintln!("failed to apply the native menu state after closing {label}: {error}");
+    }
 }
 
 fn set_menu_item_enabled<R: Runtime>(
@@ -380,8 +483,16 @@ fn set_menu_item_enabled<R: Runtime>(
     Ok(false)
 }
 
-/// Forward a recognized native menu command to the main webview.
+/// Handle New Window in Rust and forward every other recognized native menu
+/// command to the front window, falling back to the most recently focused
+/// one.
 pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
+    if event.id().as_ref() == NEW_WINDOW_MENU_ID {
+        if let Err(error) = crate::window::open_new_window(app) {
+            eprintln!("failed to open a new window: {error}");
+        }
+        return;
+    }
     let Some(command) = NativeMenuCommand::from_menu_id(event.id().as_ref()) else {
         return;
     };
@@ -556,12 +667,18 @@ mod tests {
             (SNAP_MENU_ID, NativeMenuCommand::ToggleSnap),
             (ZEN_MENU_ID, NativeMenuCommand::ToggleZen),
             (VIEW_MODE_MENU_ID, NativeMenuCommand::ToggleViewMode),
+            (OPEN_WORKSPACE_MENU_ID, NativeMenuCommand::OpenWorkspace),
         ];
 
         for (id, command) in cases {
             assert_eq!(NativeMenuCommand::from_menu_id(id), Some(command));
         }
         assert_eq!(NativeMenuCommand::from_menu_id("close-window"), None);
+        assert_eq!(
+            NativeMenuCommand::from_menu_id(NEW_WINDOW_MENU_ID),
+            None,
+            "New Window is handled in Rust, never forwarded to a webview"
+        );
         assert_eq!(
             NativeMenuCommand::from_menu_id("native-menu.help-menu"),
             None
@@ -624,6 +741,92 @@ mod tests {
             Ok(())
         );
         assert!(consume_pending_validation(&mut pending, 12, NativeMenuCommand::Save).is_err());
+    }
+
+    fn english_model() -> NativeMenuModel {
+        NativeMenuModel::new(NativeMenuLabels::english("Excalidraw"))
+    }
+
+    #[test]
+    fn shows_the_no_document_state_without_a_window() {
+        let mut model = english_model();
+        model.windows.insert(
+            "window-1".to_owned(),
+            WindowMenuState {
+                state: NativeMenuSyncState {
+                    has_document: true,
+                    ..NativeMenuSyncState::default()
+                },
+                version_history_enabled: true,
+            },
+        );
+        let enabled = |model: &NativeMenuModel, id| model.item_state(id).map(|item| item.enabled);
+        assert_eq!(enabled(&model, SAVE_MENU_ID), Some(false));
+        assert_eq!(enabled(&model, VERSION_HISTORY_MENU_ID), Some(false));
+        assert_eq!(enabled(&model, OPEN_WORKSPACE_MENU_ID), Some(false));
+        assert_eq!(enabled(&model, NEW_WINDOW_MENU_ID), Some(true));
+    }
+
+    #[test]
+    fn shows_only_the_active_window_state() {
+        let mut model = english_model();
+        let with_document = WindowMenuState {
+            state: NativeMenuSyncState {
+                has_document: true,
+                grid: true,
+                ..NativeMenuSyncState::default()
+            },
+            version_history_enabled: true,
+        };
+        model.windows.insert("window-1".to_owned(), with_document);
+        model
+            .windows
+            .insert("window-2".to_owned(), WindowMenuState::default());
+
+        model.active = Some("window-1".to_owned());
+        assert_eq!(
+            model.item_state(SAVE_MENU_ID).map(|item| item.enabled),
+            Some(true)
+        );
+        assert_eq!(
+            model.item_state(GRID_MENU_ID).and_then(|item| item.checked),
+            Some(true)
+        );
+        assert_eq!(
+            model
+                .item_state(VERSION_HISTORY_MENU_ID)
+                .map(|item| item.enabled),
+            Some(true)
+        );
+
+        model.active = Some("window-2".to_owned());
+        assert_eq!(
+            model.item_state(SAVE_MENU_ID).map(|item| item.enabled),
+            Some(false)
+        );
+        assert_eq!(
+            model.item_state(GRID_MENU_ID).and_then(|item| item.checked),
+            Some(false)
+        );
+        assert_eq!(
+            model
+                .item_state(OPEN_WORKSPACE_MENU_ID)
+                .map(|item| item.enabled),
+            Some(true)
+        );
+
+        // A window that has not reported yet shows the no-document state.
+        model.active = Some("window-3".to_owned());
+        assert_eq!(
+            model.item_state(SAVE_MENU_ID).map(|item| item.enabled),
+            Some(false)
+        );
+        assert_eq!(
+            model
+                .item_state(OPEN_WORKSPACE_MENU_ID)
+                .map(|item| item.enabled),
+            Some(true)
+        );
     }
 
     #[test]

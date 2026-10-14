@@ -2,7 +2,7 @@
 
 use std::{path::PathBuf, sync::Arc};
 
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 use crate::{
     commands::{
@@ -135,7 +135,9 @@ fn workspace_is_mounted(
 
 fn emit_progress(app: Option<&AppHandle>, workspace_id: &str, scanned: u64, done: bool) {
     if let Some(app) = app {
-        let _ = app.emit(
+        let _ = crate::window::events::emit_to_workspace_owner(
+            app,
+            workspace_id,
             "index-progress",
             IndexProgressEvent {
                 workspace_id: workspace_id.to_owned(),

@@ -188,6 +188,28 @@ async function installWorkspaceHarness(
         if (command === "workspace_recent_list") {
           return [];
         }
+        if (command === "window_probe_workspace") {
+          return {
+            kind: "claimed",
+            workspace: null,
+            replaced: null,
+            shell: null,
+          };
+        }
+        if (command === "window_claim_workspace") {
+          mounted = true;
+          return {
+            kind: "claimed",
+            workspace: {
+              id: "workspace-1",
+              name: "Workspace",
+              rootPath: "/workspace",
+              createdAt: 1,
+            },
+            replaced: null,
+            shell: null,
+          };
+        }
         if (command === "workspace_add") {
           mounted = true;
           return {
@@ -243,6 +265,15 @@ async function installRecoveryHarness(page: Page): Promise<void> {
             appVersion: "0.1.0",
             abnormalExit: true,
             pendingOpenPaths: [],
+            // The launch window, as the per-window bootstrap reports it.
+            window: {
+              label: "window-1",
+              workspace: null,
+              unavailableWorkspace: null,
+              restore: null,
+              shell: null,
+              openWorkspaceNames: [],
+            },
             preferredLanguages: [],
           };
         }

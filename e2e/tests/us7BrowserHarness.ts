@@ -78,17 +78,28 @@ export async function installUs7Harness(
         },
         async invoke(command, args = {}) {
           if (command === "plugin:dialog|open") return "/workspace";
-          if (command === "plugin:dialog|save") return "/workspace/saved.excalidraw";
+          if (command === "plugin:dialog|save")
+            return "/workspace/saved.excalidraw";
           if (command === "app_handshake")
             return {
               contractVersion: 2,
               appVersion: "0.1.0",
               abnormalExit: false,
               pendingOpenPaths: [],
+              // The launch window, as the per-window bootstrap reports it.
+              window: {
+                label: "window-1",
+                workspace: null,
+                unavailableWorkspace: null,
+                restore: null,
+                shell: null,
+                openWorkspaceNames: [],
+              },
               preferredLanguages: [],
             };
           if (command === "workspace_list") return state.mountedWorkspaces;
-          if (command === "workspace_recent_list") return state.mountedWorkspaces;
+          if (command === "workspace_recent_list")
+            return state.mountedWorkspaces;
           if (command === "workspace_add") {
             const workspace = {
               id: "workspace-2",
@@ -98,6 +109,29 @@ export async function installUs7Harness(
             };
             state.mountedWorkspaces = [...state.mountedWorkspaces, workspace];
             return workspace;
+          }
+          if (command === "window_probe_workspace") {
+            return {
+              kind: "claimed",
+              workspace: null,
+              replaced: null,
+              shell: null,
+            };
+          }
+          if (command === "window_claim_workspace") {
+            const workspace = {
+              id: "workspace-2",
+              name: "Second Workspace",
+              rootPath: "/second-workspace",
+              createdAt: 2,
+            };
+            const replaced = state.mountedWorkspaces[0]?.id ?? null;
+            state.mountedWorkspaces = [workspace];
+            return { kind: "claimed", workspace, replaced, shell: null };
+          }
+          if (command === "window_release_workspace") {
+            state.mountedWorkspaces = [];
+            return {};
           }
           if (command === "workspace_remove") {
             const workspaceId = String(args.workspaceId ?? "");

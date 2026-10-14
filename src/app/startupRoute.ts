@@ -3,12 +3,10 @@ import type {
   AppHandshakeResponse,
   RecoveryCandidate,
   Workspace,
+  WorkspaceShellState,
 } from "../ipc/contracts";
 
-const handshakes = new WeakMap<
-  CommandInvoker,
-  Promise<AppHandshakeResponse>
->();
+const handshakes = new WeakMap<CommandInvoker, Promise<AppHandshakeResponse>>();
 let defaultHandshake: Promise<AppHandshakeResponse> | null = null;
 
 /**
@@ -39,6 +37,40 @@ export function loadStartupHandshake(
     if (handshakes.get(invoker) === pending) handshakes.delete(invoker);
   });
   return pending;
+}
+
+/**
+ * The backend labels windows `window-1`, `window-2`, … in creation order, so
+ * the window created at launch is always `window-1`.
+ */
+export const FIRST_WINDOW_LABEL = "window-1";
+
+/** Whether this window is the one created at launch. */
+export async function isLaunchWindow(
+  invoker?: CommandInvoker,
+): Promise<boolean> {
+  try {
+    const handshake = await loadStartupHandshake(invoker);
+    return handshake.window.label === FIRST_WINDOW_LABEL;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The sidebar state the backend handed this window for the Workspace it
+ * starts with, or `null`.
+ */
+export async function bootstrapShellState(
+  invoker?: CommandInvoker,
+): Promise<WorkspaceShellState | null> {
+  try {
+    const handshake = await loadStartupHandshake(invoker);
+    // Handshake test doubles from before the per-window bootstrap omit it.
+    return handshake.window?.shell ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export type StartupRouteKind = "welcome" | "recovery" | "restored";

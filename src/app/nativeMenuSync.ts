@@ -21,6 +21,8 @@ const LABEL_KEYS: Readonly<Record<NativeMenuLabelId, MessageKey>> = {
   "app.hideOthers": "menu.native.app.hideOthers",
   "app.quit": "menu.native.app.quit",
   file: "menu.native.file",
+  "file.newWindow": "menu.native.file.newWindow",
+  "file.openWorkspace": "menu.native.file.openWorkspace",
   "file.save": "menu.native.file.save",
   "file.exportImage": "menu.native.file.exportImage",
   "file.versionHistory": "menu.native.file.versionHistory",

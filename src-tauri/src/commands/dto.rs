@@ -73,6 +73,24 @@ pub struct OpenWorkspaceName {
     pub root_path: String,
 }
 
+/// `app-preferences-changed`: an app-wide preference changed in another
+/// window. Absent fields did not change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppPreferencesChangedEvent {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<crate::native_menu_spec::AppearancePreference>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<crate::native_menu_spec::LanguagePreference>,
+}
+
+/// `open-workspaces-changed`: the Workspaces open in any window.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenWorkspacesChangedEvent {
+    pub workspaces: Vec<OpenWorkspaceName>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecoveryCandidate {
@@ -576,6 +594,54 @@ pub struct HistoryDeleteResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmptyResponse {}
+
+/// Result of asking to open a Workspace in the calling window. `W` is
+/// `Workspace` for `window_claim_workspace`; for the read-only
+/// `window_probe_workspace` it is `Option<Workspace>`, `None` when the
+/// claimable folder has never been opened.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ClaimWorkspaceOutcome<W> {
+    Claimed {
+        workspace: W,
+        replaced: Option<String>,
+        /// The sidebar state to show for the Workspace: its own record,
+        /// else the most recent one. Always `None` from a probe.
+        shell: Option<crate::window::session::WorkspaceShellState>,
+    },
+    OwnedBy {
+        label: String,
+        workspace_id: String,
+    },
+    InsideOpen {
+        label: String,
+        workspace_id: String,
+        relative_path: String,
+    },
+    ContainsOpen {
+        label: String,
+        workspace_id: String,
+    },
+}
+
+/// `shell_preferences_migrate`: whether this call imported the legacy
+/// preferences (only the first call does).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShellPreferencesMigrateResponse {
+    pub migrated: bool,
+}
+
+/// `window_new`: the label of the Welcome window just opened.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowNewResponse {
+    pub label: String,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

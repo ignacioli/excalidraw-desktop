@@ -9,7 +9,7 @@ use std::{
 
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::{
     database::repository::{
@@ -1343,6 +1343,7 @@ pub async fn doc_save_draft(
     path: String,
     scene_json: String,
     app: AppHandle,
+    window: WebviewWindow,
     state: State<'_, DocumentState>,
 ) -> Result<SaveDraftResponse, IpcError> {
     let response = state
@@ -1352,10 +1353,13 @@ pub async fn doc_save_draft(
             scene_json,
         })
         .await?;
-    app.emit(
+    crate::window::events::emit_to_document_owner(
+        &app,
+        Path::new(&path),
+        Some(window.label()),
         "draft-saved",
         DraftSavedEvent {
-            path,
+            path: path.clone(),
             saved_at: response.saved_at,
         },
     )
@@ -1369,6 +1373,7 @@ pub async fn doc_checkpoint(
     scene_json: String,
     reason: CheckpointReason,
     app: AppHandle,
+    window: WebviewWindow,
     state: State<'_, DocumentState>,
 ) -> Result<CheckpointResponse, IpcError> {
     let event_path = fs::canonicalize(&path).unwrap_or_else(|_| PathBuf::from(&path));
@@ -1385,7 +1390,13 @@ pub async fn doc_checkpoint(
         .history_issue_event_for_path(&event_path)
         .await
     {
-        let _ = app.emit("history-issue", event);
+        let _ = crate::window::events::emit_to_document_owner(
+            &app,
+            &event_path,
+            Some(window.label()),
+            "history-issue",
+            event,
+        );
     }
     Ok(response)
 }

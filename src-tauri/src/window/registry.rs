@@ -18,6 +18,8 @@ use std::{
 
 use crate::database::repository::WorkspaceRecord;
 
+use super::session::WindowSessionEntry;
+
 /// Label prefix of every application window; the capability file grants
 /// `window-*`.
 pub const WINDOW_LABEL_PREFIX: &str = "window-";
@@ -54,6 +56,10 @@ pub struct WindowRecord {
     pub pending_open_paths: Vec<String>,
     pub restore: Option<WindowRestore>,
     pub unavailable_workspace: Option<WorkspaceRecord>,
+    /// The open tabs and active tab the window last reported, saved in the
+    /// Window Session.
+    pub session_tabs: Vec<String>,
+    pub session_active_path: Option<String>,
 }
 
 impl WindowRecord {
@@ -67,6 +73,8 @@ impl WindowRecord {
             pending_open_paths: Vec::new(),
             restore: None,
             unavailable_workspace: None,
+            session_tabs: Vec::new(),
+            session_active_path: None,
         }
     }
 }
@@ -403,6 +411,33 @@ impl WindowRegistry {
         }
     }
 
+    /// Record the tabs a window reports for the Window Session.
+    pub fn set_session_tabs(&self, label: &str, tabs: Vec<String>, active_path: Option<String>) {
+        if let Some(record) = self.lock().windows.get_mut(label) {
+            record.session_tabs = tabs;
+            record.session_active_path = active_path;
+        }
+    }
+
+    /// The Window Session snapshot: every window in creation order with its
+    /// Workspace and reported tabs. Storing it drops empty Welcome windows.
+    pub fn session_snapshot(&self) -> Vec<WindowSessionEntry> {
+        let state = self.lock();
+        let mut records: Vec<_> = state.windows.values().collect();
+        records.sort_by_key(|record| label_number(&record.label));
+        records
+            .into_iter()
+            .map(|record| WindowSessionEntry {
+                workspace_id: record
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.id.clone()),
+                tabs: record.session_tabs.clone(),
+                active_path: record.session_active_path.clone(),
+            })
+            .collect()
+    }
+
     /// Hand a window its one-time bootstrap data. Later calls return empty
     /// pending paths and no restore data.
     pub fn take_bootstrap(&self, label: &str) -> Option<WindowRecord> {
@@ -592,6 +627,43 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
+
+    #[test]
+    fn session_snapshot_follows_creation_order() {
+        let registry = WindowRegistry::new();
+        let labels: Vec<_> = (0..11).map(|_| registry.allocate_label()).collect();
+        for label in &labels {
+            registry
+                .register(label, WindowRole::Normal)
+                .unwrap_or_else(|error| panic!("register: {error}"));
+        }
+        let root = std::env::temp_dir().join(format!("snapshot-{}", uuid::Uuid::new_v4()));
+        let candidate = WorkspaceCandidate {
+            id: Some("w-10".to_owned()),
+            root,
+        };
+        let (decision, _) = registry
+            .claim(&labels[10], &candidate)
+            .unwrap_or_else(|error| panic!("claim: {error}"));
+        assert!(matches!(
+            decision,
+            ClaimDecision::Claimable { replaced: None }
+        ));
+        registry.set_session_tabs(
+            &labels[10],
+            vec!["/a.excalidraw".to_owned()],
+            Some("/a.excalidraw".to_owned()),
+        );
+
+        let snapshot = registry.session_snapshot();
+        assert_eq!(snapshot.len(), 11);
+        // window-10 sorts after window-9, not after window-1.
+        assert_eq!(snapshot[10].workspace_id.as_deref(), Some("w-10"));
+        assert_eq!(snapshot[10].tabs, ["/a.excalidraw"]);
+        assert!(snapshot[..10]
+            .iter()
+            .all(|entry| entry.workspace_id.is_none()));
+    }
 
     fn candidate(id: &str, root: &str) -> WorkspaceCandidate {
         WorkspaceCandidate {

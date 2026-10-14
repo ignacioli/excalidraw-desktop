@@ -84,7 +84,108 @@ Gaps and open items:
 
 ## Windows and Workspace ownership
 
-Not run yet.
+New Window, opening a Workspace in its own window, fronting the window that
+already owns a Workspace, replacing and removing a window's Workspace, window
+titles, per-window events and menus, per-Workspace sidebar state, and
+appearance and language changes shared across windows.
+
+- Candidate: the commit that adds this section (parent `03857f4`), on macOS
+  (Darwin 25.6.0), 2026-10-14.
+- Result: PASS for the automated and native checks below; the items under
+  "Verified later" are not claimed here.
+
+| Command                                                                                                  | Result                                          |
+| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check`                                                 | PASS                                            |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`                         | PASS                                            |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --features e2e-harness -- -D warnings`  | PASS                                            |
+| `cargo test --manifest-path src-tauri/Cargo.toml`                                                        | PASS, 303 tests                                 |
+| `cargo test ... --lib` filtered to `window::`, `commands::workspace`, `native_menu`, `commands::session` | PASS, 35 / 5 / 22 / 7 tests                     |
+| `pnpm typecheck`                                                                                         | PASS                                            |
+| `pnpm lint`                                                                                              | PASS                                            |
+| `pnpm build`                                                                                             | PASS (chunk-size warnings only)                 |
+| `pnpm test` (whole Vitest suite)                                                                         | PASS, 80 files / 638 tests                      |
+| `APP_E2E=1 pnpm e2e e2e/tests/multi-window-ownership.spec.ts`                                            | PASS, 10 tests                                  |
+| `APP_E2E=1 pnpm e2e`, first run                                                                          | FAIL, 1 failure in the PNG export fidelity test |
+| `APP_E2E=1 pnpm e2e e2e/tests/us5-export-fidelity.spec.ts`                                               | PASS, 2 passed                                  |
+| `APP_E2E=1 pnpm e2e`, second run                                                                         | PASS, 167 passed / 84 skipped                   |
+| `APP_E2E=1 pnpm e2e e2e/tests/ui-sidebar-modes.spec.ts`, after the sidebar assertion change              | PASS, 9 passed / 2 skipped                      |
+| `pnpm native:window:test`                                                                                | PASS, 7 tests                                   |
+| `pnpm tauri build --debug --no-bundle`, then `pnpm native:window:check`                                  | PASS, 4 checks                                  |
+| `pnpm native:menu:check -- --languages "(en-US, zh-Hans)"` on the same debug binary                      | PASS, 99 checks                                 |
+
+What the checks cover:
+
+- Native, through Accessibility and System Events on the debug binary: File >
+  New Window adds exactly one window, which shows Welcome and is in front;
+  with Workspaces A and B in two windows, opening A from B's window 20 times
+  keeps two windows and fronts A every time; opening A while it is minimized
+  restores and fronts it. The File menu command runs in the front window in
+  every one of these attempts. Window names read through Accessibility are
+  the Workspace folder names.
+- Native menu: labels, enabled and checked state, and routing of each menu
+  item and Command-S in English and Simplified Chinese, including New Window
+  and Open Workspace.
+- Rust: claim, probe, and release outcomes; one owner per Workspace; a
+  repeated open of an owned Workspace changes no window; Workspace events go
+  only to the owning window; menu state is kept per window and applied when a
+  window gains focus, and menu commands go to the front window or the most
+  recently focused one; an appearance or language change is sent to every
+  other window (three windows, two targets); per-Workspace sidebar state
+  falls back to the most recent pin and width, then to the imported legacy
+  values; the legacy import happens once.
+- Frontend unit tests: replacing a Workspace closes every tab first and keeps
+  the old Workspace when a close is cancelled or fails, or when the target is
+  not claimable; Welcome New Drawing handles all four claim outcomes; window
+  titles name the Workspace and the active drawing, tell same-name
+  Workspaces apart, and follow the language; an external appearance or
+  language change is applied without being written back or sent again; the
+  sidebar shows only the window's Workspace; pin and width are saved per
+  Workspace.
+- Browser: the replacement flow, Welcome New Drawing, title de-duplication,
+  and an appearance and language change from another window reaching the DOM
+  in under one second.
+
+Verified later (not covered by this checkpoint):
+
+- Drawing events (external change, conflict, draft saved, history issue) are
+  not yet limited to the drawing's owner window. Until drawings are claimed
+  per window, an event for a drawing with no owner goes to the calling
+  window, then to the window whose Workspace contains the path, then to every
+  window; the frontend filters by path. This is checked with drawing
+  ownership in "Nested folders and file routing".
+- Clicking the Dock icon with no windows, and whether the Window menu lists
+  each window, are checked in "Closing, quitting and restoring". The Dock
+  menu and restoring a window from another desktop space are left to the
+  owner walkthrough.
+- After a restart, the last Workspace is not reopened automatically until
+  window restore lands. Four browser tests that depend on it are marked
+  `test.fixme`, and the offline edit-and-save test reopens its Workspace
+  from Recent after a reload. These are re-enabled in "Closing, quitting and
+  restoring".
+
+Gaps and owner decisions:
+
+- Owner decisions on 2026-10-14: the sidebar shows only the window's own
+  Workspace (listing several Workspaces in one sidebar is removed); only the
+  Workspace root row's expansion is saved, not nested folders.
+- Choosing a folder that contains another window's Workspace shows an error
+  instead of the three-choice dialog, which lands with nested folder routing.
+- When a window is destroyed, its claims are released, but the full close
+  and quit coordination is not in place yet.
+- The window session does not record tabs yet.
+- The legacy sidebar preference key is read on every launch and ignored after
+  the first import; it is never deleted.
+- The native checks ran against a debug binary, not a `.app` bundle, so no
+  LaunchServices path (Finder open, Dock reopen) is claimed.
+- The browser harnesses were rewritten for window-scoped Workspace lists, a
+  separate recent list, and per-Workspace sidebar state. The sidebar tests
+  now assert the sidebar state the app sends, not the harness's own fallback
+  rule; the fallback rule is owned by the Rust tests.
+- The PNG export fidelity test failed once again with the export dialog not
+  appearing within 15 seconds; the isolated rerun and the next full run
+  passed. The cause is still not determined.
+- No new app-owned UI; window titles are native.
 
 ## Nested folders and file routing
 

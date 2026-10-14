@@ -33,6 +33,27 @@ describe("LocaleController", () => {
     ).toEqual({ version: 1, preference: "zh-CN" });
   });
 
+  it("applies another window's language without storing it", () => {
+    const stored = JSON.stringify({ version: 1, preference: "en" });
+    const storage = memoryStorage(stored);
+    const controller = new LocaleController({
+      storage,
+      preferredLanguages: [],
+    });
+    const listener = vi.fn();
+    controller.subscribe(listener);
+
+    controller.applyExternalPreference("zh-CN");
+    controller.applyExternalPreference("fr");
+
+    expect(controller.getSnapshot()).toEqual({
+      preference: "zh-CN",
+      resolvedLanguage: "zh-CN",
+    });
+    expect(storage.values.get(LANGUAGE_PREFERENCE_STORAGE_KEY)).toBe(stored);
+    expect(listener).toHaveBeenCalledOnce();
+  });
+
   it("restores a valid stored preference", () => {
     const controller = new LocaleController({
       storage: memoryStorage(JSON.stringify({ version: 1, preference: "en" })),

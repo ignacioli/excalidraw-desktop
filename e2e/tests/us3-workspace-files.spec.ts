@@ -332,9 +332,9 @@ test("keeps Welcome actions visually stable while an inaccessible remount is pen
 
 async function installWorkspaceHarness(
   page: Page,
-  initiallyMounted = false,
+  initiallyRetained = false,
 ): Promise<void> {
-  await page.addInitScript((initiallyMounted) => {
+  await page.addInitScript((initiallyRetained) => {
     const browser = globalThis as typeof globalThis & {
       __TAURI_INTERNALS__?: {
         invoke(
@@ -343,13 +343,13 @@ async function installWorkspaceHarness(
         ): Promise<unknown>;
       };
     };
-    const mountedKey = "e2e-workspace-mounted";
     const retainedKey = "e2e-workspace-retained";
-    if (localStorage.getItem(mountedKey) === null) {
-      localStorage.setItem(mountedKey, String(initiallyMounted));
-      localStorage.setItem(retainedKey, String(initiallyMounted));
+    if (localStorage.getItem(retainedKey) === null) {
+      localStorage.setItem(retainedKey, String(initiallyRetained));
     }
-    let mounted = localStorage.getItem(mountedKey) === "true";
+    // A normal launch leaves every Workspace unmounted until a window
+    // claims it; a retained one stays in Recent.
+    let mounted = false;
     let retained = localStorage.getItem(retainedKey) === "true";
     let files = ["drawing.excalidraw", "second.excalidraw"];
     browser.__TAURI_INTERNALS__ = {
@@ -380,7 +380,6 @@ async function installWorkspaceHarness(
         if (command === "workspace_add") {
           mounted = true;
           retained = true;
-          localStorage.setItem(mountedKey, "true");
           localStorage.setItem(retainedKey, "true");
           return {
             id: "workspace-1",
@@ -391,12 +390,38 @@ async function installWorkspaceHarness(
         }
         if (command === "workspace_remove") {
           mounted = false;
-          localStorage.setItem(mountedKey, "false");
+          return {};
+        }
+        if (command === "window_probe_workspace") {
+          return {
+            kind: "claimed",
+            workspace: null,
+            replaced: null,
+            shell: null,
+          };
+        }
+        if (command === "window_claim_workspace") {
+          mounted = true;
+          retained = true;
+          localStorage.setItem(retainedKey, "true");
+          return {
+            kind: "claimed",
+            workspace: {
+              id: "workspace-1",
+              name: "Workspace",
+              rootPath: "/workspace",
+              createdAt: 1,
+            },
+            replaced: null,
+            shell: null,
+          };
+        }
+        if (command === "window_release_workspace") {
+          mounted = false;
           return {};
         }
         if (command === "workspace_remount") {
           mounted = true;
-          localStorage.setItem(mountedKey, "true");
           return {
             id: "workspace-1",
             name: "Workspace",
@@ -509,7 +534,7 @@ async function installWorkspaceHarness(
         throw new Error(`Unexpected workspace command ${command}`);
       },
     };
-  }, initiallyMounted);
+  }, initiallyRetained);
 }
 
 async function assertWelcomeViewportGeometry(
@@ -605,7 +630,18 @@ async function installMissingRecentHarness(
         if (command === "workspace_list") return [];
         if (command === "workspace_recent_list")
           return retained ? [workspace] : [];
-        if (command === "workspace_remount") {
+        if (command === "window_probe_workspace") {
+          return {
+            kind: "claimed",
+            workspace: null,
+            replaced: null,
+            shell: null,
+          };
+        }
+        if (
+          command === "workspace_remount" ||
+          command === "window_claim_workspace"
+        ) {
           (
             globalThis as typeof globalThis & {
               __recentRemountStarted?: boolean;

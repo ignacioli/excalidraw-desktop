@@ -24,6 +24,7 @@ pub enum ErrorCode {
     WorkspaceNotFound,
     WorkspaceMounted,
     WorkspaceOverlap,
+    WorkspaceNotOwned,
     InvalidName,
     NameConflict,
     EntryProtected,
@@ -65,6 +66,8 @@ pub enum AppError {
     WorkspaceMounted(String),
     #[error("workspace overlaps an existing mount: {0}")]
     WorkspaceOverlap(String),
+    #[error("window has no Workspace: {0}")]
+    WorkspaceNotOwned(String),
     #[error("invalid Workspace Entry name: {0}")]
     InvalidName(String),
     #[error("Workspace Entry name conflicts with {0}")]
@@ -139,6 +142,12 @@ impl AppError {
             Self::WorkspaceOverlap(_) => (
                 ErrorCode::WorkspaceOverlap,
                 "Workspace overlaps an existing mount.".to_owned(),
+                false,
+                None,
+            ),
+            Self::WorkspaceNotOwned(_) => (
+                ErrorCode::WorkspaceNotOwned,
+                "This window has no Workspace.".to_owned(),
                 false,
                 None,
             ),

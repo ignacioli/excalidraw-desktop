@@ -5,7 +5,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 use uuid::Uuid;
 
 use crate::{
@@ -17,7 +17,10 @@ use crate::{
 };
 
 use super::{
-    dto::{EmptyResponse, Workspace, WorkspaceAddRequest, WorkspaceRemoveRequest},
+    dto::{
+        ClaimWorkspaceOutcome, EmptyResponse, Workspace, WorkspaceAddRequest,
+        WorkspaceRemoveRequest,
+    },
     error::{AppError, IpcError},
 };
 
@@ -235,10 +238,6 @@ impl WorkspaceState {
 }
 
 /// Result of asking for a Workspace in a window.
-#[allow(
-    dead_code,
-    reason = "the window claim commands report the replaced Workspace and the declined decision"
-)]
 pub(crate) enum WindowClaim {
     Claimed {
         workspace: WorkspaceRecord,
@@ -356,6 +355,162 @@ pub(crate) async fn release_for_window(
     Ok(Some(released))
 }
 
+/// Resolve a claim or probe target given as either a folder or a retained
+/// Workspace id to its canonical root and record.
+pub(crate) async fn resolve_target(
+    service: &WorkspaceService,
+    root_path: Option<String>,
+    workspace_id: Option<String>,
+) -> Result<(PathBuf, Option<WorkspaceRecord>), AppError> {
+    match (root_path, workspace_id) {
+        (Some(root_path), None) => service.resolve_root(&root_path).await,
+        (None, Some(workspace_id)) => {
+            let record = service
+                .repository
+                .workspace_get(workspace_id.clone())
+                .await?
+                .ok_or(AppError::WorkspaceNotFound(workspace_id))?;
+            let root = canonical_directory(Path::new(&record.root_path))?;
+            Ok((root, Some(record)))
+        }
+        _ => Err(AppError::Internal(
+            "exactly one of rootPath or workspaceId is required".to_owned(),
+        )),
+    }
+}
+
+/// The outcome for a Workspace another window holds, or one nested with it.
+/// `None` for a claimable decision.
+pub(crate) fn declined_outcome<W>(decision: ClaimDecision) -> Option<ClaimWorkspaceOutcome<W>> {
+    match decision {
+        ClaimDecision::Claimable { .. } => None,
+        ClaimDecision::OwnedBy {
+            label,
+            workspace_id,
+        } => Some(ClaimWorkspaceOutcome::OwnedBy {
+            label,
+            workspace_id,
+        }),
+        ClaimDecision::InsideOpen {
+            label,
+            workspace_id,
+            relative_path,
+        } => Some(ClaimWorkspaceOutcome::InsideOpen {
+            label,
+            workspace_id,
+            relative_path,
+        }),
+        ClaimDecision::ContainsOpen {
+            label,
+            workspace_id,
+        } => Some(ClaimWorkspaceOutcome::ContainsOpen {
+            label,
+            workspace_id,
+        }),
+    }
+}
+
+/// Decide, without changing anything, what opening the target in `label`
+/// would do.
+pub(crate) fn probe_outcome(
+    registry: &WindowRegistry,
+    label: &str,
+    root: PathBuf,
+    record: Option<WorkspaceRecord>,
+) -> Result<ClaimWorkspaceOutcome<Option<Workspace>>, AppError> {
+    let candidate = WorkspaceCandidate {
+        id: record.as_ref().map(|record| record.id.clone()),
+        root: root.clone(),
+    };
+    let decision = registry.probe(label, &candidate).map_err(registry_error)?;
+    Ok(match decision {
+        ClaimDecision::Claimable { replaced } => ClaimWorkspaceOutcome::Claimed {
+            workspace: record.map(|record| with_root(record, &root).into()),
+            replaced,
+            shell: None,
+        },
+        declined => declined_outcome(declined)
+            .ok_or_else(|| AppError::Internal("unreachable claim decision".to_owned()))?,
+    })
+}
+
+/// Report the canonical root, which is what ownership and nesting compare.
+fn with_root(record: WorkspaceRecord, root: &Path) -> WorkspaceRecord {
+    WorkspaceRecord {
+        root_path: root.display().to_string(),
+        ..record
+    }
+}
+
+/// Read-only: what `window_claim_workspace` would decide for the calling
+/// window. Used before closing tabs to replace a Workspace.
+#[tauri::command]
+pub async fn window_probe_workspace(
+    root_path: Option<String>,
+    workspace_id: Option<String>,
+    window: WebviewWindow,
+    state: State<'_, WorkspaceState>,
+    registry: State<'_, WindowRegistry>,
+) -> Result<ClaimWorkspaceOutcome<Option<Workspace>>, IpcError> {
+    let (root, record) = resolve_target(&state.service, root_path, workspace_id).await?;
+    Ok(probe_outcome(&registry, window.label(), root, record)?)
+}
+
+/// Open a Workspace in the calling window, replacing its current one. When
+/// another window holds it or a Workspace that contains it, that window is
+/// brought to the front instead and the calling window is unchanged.
+#[tauri::command]
+pub async fn window_claim_workspace(
+    root_path: Option<String>,
+    workspace_id: Option<String>,
+    app: AppHandle,
+    window: WebviewWindow,
+    state: State<'_, WorkspaceState>,
+) -> Result<ClaimWorkspaceOutcome<Workspace>, IpcError> {
+    let (root, record) = resolve_target(&state.service, root_path, workspace_id).await?;
+    match claim_for_window(&app, window.label(), root.clone(), record, None).await? {
+        WindowClaim::Claimed {
+            workspace,
+            replaced,
+        } => {
+            crate::window::persist_session(&app).await;
+            crate::window::broadcast_open_workspaces(&app).await;
+            let shell = crate::commands::session::workspace_shell_state_for(
+                &state.service.repository,
+                &workspace.id,
+            )
+            .await?;
+            Ok(ClaimWorkspaceOutcome::Claimed {
+                workspace: with_root(workspace, &root).into(),
+                replaced,
+                shell,
+            })
+        }
+        WindowClaim::Declined(decision) => {
+            let outcome = declined_outcome(decision)
+                .ok_or_else(|| AppError::Internal("unreachable claim decision".to_owned()))?;
+            if let ClaimWorkspaceOutcome::OwnedBy { label, .. }
+            | ClaimWorkspaceOutcome::InsideOpen { label, .. } = &outcome
+            {
+                crate::window::activate_label(&app, label);
+            }
+            Ok(outcome)
+        }
+    }
+}
+
+/// Close the calling window's Workspace. The frontend closes its tabs first.
+#[tauri::command]
+pub async fn window_release_workspace(
+    app: AppHandle,
+    window: WebviewWindow,
+) -> Result<EmptyResponse, IpcError> {
+    release_for_window(&app, window.label()).await?;
+    crate::window::persist_session(&app).await;
+    crate::window::broadcast_open_workspaces(&app).await;
+    Ok(EmptyResponse {})
+}
+
 fn registry_error(error: RegistryError) -> AppError {
     AppError::Internal(error.to_string())
 }
@@ -410,9 +565,31 @@ pub async fn workspace_remove(
     }
 }
 
+/// The calling window's Workspace, as a list of at most one. Other windows'
+/// Workspaces never appear in this window's sidebar.
 #[tauri::command]
-pub async fn workspace_list(state: State<'_, WorkspaceState>) -> Result<Vec<Workspace>, IpcError> {
-    state.service.list().await
+pub async fn workspace_list(
+    window: WebviewWindow,
+    state: State<'_, WorkspaceState>,
+    registry: State<'_, WindowRegistry>,
+) -> Result<Vec<Workspace>, IpcError> {
+    Ok(window_workspaces(&state.service, &registry, window.label()).await?)
+}
+
+pub(crate) async fn window_workspaces(
+    service: &WorkspaceService,
+    registry: &WindowRegistry,
+    label: &str,
+) -> Result<Vec<Workspace>, AppError> {
+    let Some(owned) = registry.window(label).and_then(|window| window.workspace) else {
+        return Ok(Vec::new());
+    };
+    let record = service
+        .repository
+        .workspace_get(owned.id.clone())
+        .await?
+        .ok_or(AppError::WorkspaceNotFound(owned.id))?;
+    Ok(vec![with_root(record, &owned.root).into()])
 }
 
 #[tauri::command]
@@ -579,7 +756,9 @@ fn emit_index_progress(
     scanned: u64,
     done: bool,
 ) -> Result<(), AppError> {
-    app.emit(
+    crate::window::events::emit_to_workspace_owner(
+        app,
+        workspace_id,
         "index-progress",
         crate::commands::dto::IndexProgressEvent {
             workspace_id: workspace_id.to_owned(),
@@ -589,4 +768,263 @@ fn emit_index_progress(
         },
     )
     .map_err(|error| AppError::Internal(error.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::window::registry::WindowRole;
+
+    struct Fixture {
+        service: WorkspaceService,
+        database: PathBuf,
+        folders: PathBuf,
+    }
+
+    impl Fixture {
+        async fn new() -> Self {
+            let id = Uuid::new_v4();
+            let database =
+                std::env::temp_dir().join(format!("excalidraw-window-claim-{id}.sqlite3"));
+            let folders = std::env::temp_dir().join(format!("excalidraw-window-claim-{id}"));
+            fs::create_dir_all(folders.join("notes/sub"))
+                .unwrap_or_else(|error| panic!("create folders: {error}"));
+            fs::create_dir_all(folders.join("other"))
+                .unwrap_or_else(|error| panic!("create folders: {error}"));
+            let repository = SqliteRepository::open(&database)
+                .await
+                .unwrap_or_else(|error| panic!("open repository: {error}"));
+            Self {
+                service: WorkspaceService::new(Arc::new(repository)),
+                database,
+                folders,
+            }
+        }
+
+        fn folder(&self, relative: &str) -> String {
+            self.folders.join(relative).display().to_string()
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.folders);
+            for suffix in ["sqlite3-wal", "sqlite3-shm", "sqlite3"] {
+                let _ = fs::remove_file(self.database.with_extension(suffix));
+            }
+        }
+    }
+
+    fn registry_with(labels: &[&str]) -> WindowRegistry {
+        let registry = WindowRegistry::new();
+        for label in labels {
+            registry
+                .register(label, WindowRole::Normal)
+                .unwrap_or_else(|error| panic!("register {label}: {error}"));
+        }
+        registry
+    }
+
+    async fn claim(fixture: &Fixture, registry: &WindowRegistry, label: &str, folder: &str) {
+        let (root, _) = fixture
+            .service
+            .resolve_root(&fixture.folder(folder))
+            .await
+            .unwrap_or_else(|error| panic!("resolve: {error}"));
+        let record = fixture
+            .service
+            .ensure_record(&root, None)
+            .await
+            .unwrap_or_else(|error| panic!("record: {error}"));
+        let (decision, _) = registry
+            .claim(
+                label,
+                &WorkspaceCandidate {
+                    id: Some(record.id),
+                    root,
+                },
+            )
+            .unwrap_or_else(|error| panic!("claim: {error}"));
+        assert!(matches!(decision, ClaimDecision::Claimable { .. }));
+    }
+
+    async fn probe(
+        fixture: &Fixture,
+        registry: &WindowRegistry,
+        label: &str,
+        folder: &str,
+    ) -> ClaimWorkspaceOutcome<Option<Workspace>> {
+        let (root, record) = resolve_target(&fixture.service, Some(fixture.folder(folder)), None)
+            .await
+            .unwrap_or_else(|error| panic!("resolve: {error}"));
+        probe_outcome(registry, label, root, record)
+            .unwrap_or_else(|error| panic!("probe: {error}"))
+    }
+
+    #[tokio::test]
+    async fn probing_a_new_folder_is_claimable_and_creates_nothing() {
+        let fixture = Fixture::new().await;
+        let registry = registry_with(&["window-1"]);
+        let outcome = probe(&fixture, &registry, "window-1", "notes").await;
+        assert_eq!(
+            outcome,
+            ClaimWorkspaceOutcome::Claimed {
+                workspace: None,
+                replaced: None,
+                shell: None
+            }
+        );
+        let recent = fixture
+            .service
+            .recent_list()
+            .await
+            .unwrap_or_else(|error| panic!("recent: {error:?}"));
+        assert!(recent.is_empty(), "a probe must not create a record");
+        assert!(registry.owned_workspace_ids().is_empty());
+    }
+
+    #[tokio::test]
+    async fn probing_reports_each_declined_decision() {
+        let fixture = Fixture::new().await;
+        let registry = registry_with(&["window-1", "window-2"]);
+        claim(&fixture, &registry, "window-1", "notes").await;
+        let notes = registry
+            .window("window-1")
+            .and_then(|window| window.workspace)
+            .map(|workspace| workspace.id)
+            .unwrap_or_else(|| panic!("window-1 owns notes"));
+
+        assert_eq!(
+            probe(&fixture, &registry, "window-2", "notes").await,
+            ClaimWorkspaceOutcome::OwnedBy {
+                label: "window-1".to_owned(),
+                workspace_id: notes.clone(),
+            }
+        );
+        assert_eq!(
+            probe(&fixture, &registry, "window-2", "notes/sub").await,
+            ClaimWorkspaceOutcome::InsideOpen {
+                label: "window-1".to_owned(),
+                workspace_id: notes.clone(),
+                relative_path: "sub".to_owned(),
+            }
+        );
+        assert_eq!(
+            probe(&fixture, &registry, "window-2", "").await,
+            ClaimWorkspaceOutcome::ContainsOpen {
+                label: "window-1".to_owned(),
+                workspace_id: notes.clone(),
+            }
+        );
+        // The owner itself may reopen or replace its own Workspace.
+        match probe(&fixture, &registry, "window-1", "other").await {
+            ClaimWorkspaceOutcome::Claimed { replaced, .. } => {
+                assert_eq!(replaced, Some(notes));
+            }
+            other => panic!("expected claimable, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn resolves_a_retained_workspace_by_id_and_rejects_ambiguous_targets() {
+        let fixture = Fixture::new().await;
+        let (root, _) = fixture
+            .service
+            .resolve_root(&fixture.folder("notes"))
+            .await
+            .unwrap_or_else(|error| panic!("resolve: {error}"));
+        let record = fixture
+            .service
+            .ensure_record(&root, Some("Notes".to_owned()))
+            .await
+            .unwrap_or_else(|error| panic!("record: {error}"));
+
+        let (resolved, found) = resolve_target(&fixture.service, None, Some(record.id.clone()))
+            .await
+            .unwrap_or_else(|error| panic!("resolve by id: {error}"));
+        assert_eq!(resolved, root);
+        assert_eq!(found.map(|found| found.id), Some(record.id.clone()));
+
+        let registry = registry_with(&["window-1"]);
+        match probe(&fixture, &registry, "window-1", "notes").await {
+            ClaimWorkspaceOutcome::Claimed {
+                workspace: Some(workspace),
+                ..
+            } => {
+                assert_eq!(workspace.id, record.id);
+                assert_eq!(workspace.root_path, root.display().to_string());
+            }
+            other => panic!("expected the retained Workspace, got {other:?}"),
+        }
+
+        for (root_path, workspace_id) in [
+            (None, None),
+            (Some(fixture.folder("notes")), Some(record.id.clone())),
+        ] {
+            assert!(matches!(
+                resolve_target(&fixture.service, root_path, workspace_id).await,
+                Err(AppError::Internal(_))
+            ));
+        }
+        assert!(matches!(
+            resolve_target(&fixture.service, None, Some("missing".to_owned())).await,
+            Err(AppError::WorkspaceNotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn lists_only_the_calling_windows_workspace() {
+        let fixture = Fixture::new().await;
+        let registry = registry_with(&["window-1", "window-2", "window-3"]);
+        claim(&fixture, &registry, "window-1", "notes").await;
+        claim(&fixture, &registry, "window-2", "other").await;
+
+        let list = |label: &'static str| {
+            let service = fixture.service.clone();
+            let registry = &registry;
+            async move {
+                window_workspaces(&service, registry, label)
+                    .await
+                    .unwrap_or_else(|error| panic!("list {label}: {error}"))
+                    .into_iter()
+                    .map(|workspace| workspace.name)
+                    .collect::<Vec<_>>()
+            }
+        };
+        assert_eq!(list("window-1").await, ["notes"]);
+        assert_eq!(list("window-2").await, ["other"]);
+        assert!(list("window-3").await.is_empty());
+    }
+
+    #[test]
+    fn serializes_the_claim_outcome_contract() {
+        let owned: ClaimWorkspaceOutcome<Workspace> = ClaimWorkspaceOutcome::InsideOpen {
+            label: "window-2".to_owned(),
+            workspace_id: "w".to_owned(),
+            relative_path: "docs/2026".to_owned(),
+        };
+        assert_eq!(
+            serde_json::to_value(owned).unwrap_or_else(|error| panic!("serialize: {error}")),
+            serde_json::json!({
+                "kind": "insideOpen",
+                "label": "window-2",
+                "workspaceId": "w",
+                "relativePath": "docs/2026"
+            })
+        );
+        let probe: ClaimWorkspaceOutcome<Option<Workspace>> = ClaimWorkspaceOutcome::Claimed {
+            workspace: None,
+            replaced: Some("old".to_owned()),
+            shell: None,
+        };
+        assert_eq!(
+            serde_json::to_value(probe).unwrap_or_else(|error| panic!("serialize: {error}")),
+            serde_json::json!({
+                "kind": "claimed",
+                "workspace": null,
+                "replaced": "old",
+                "shell": null
+            })
+        );
+    }
 }

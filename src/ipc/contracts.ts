@@ -15,6 +15,7 @@ export type ErrorCode =
   | "WORKSPACE_NOT_FOUND"
   | "WORKSPACE_MOUNTED"
   | "WORKSPACE_OVERLAP"
+  | "WORKSPACE_NOT_OWNED"
   | "INVALID_NAME"
   | "NAME_CONFLICT"
   | "ENTRY_PROTECTED"
@@ -87,7 +88,46 @@ export interface WindowRestoreBootstrap {
 export interface WorkspaceShellState {
   sidebarPinned: boolean;
   sidebarWidth: number;
+  /** Expanded folders by relative path; `""` is the Workspace row itself. */
   expanded: string[];
+}
+
+/** A Workspace to open, by folder or by retained Workspace id. */
+export type ClaimWorkspaceTarget =
+  | { rootPath: string; workspaceId?: never }
+  | { workspaceId: string; rootPath?: never };
+
+/**
+ * Result of opening a Workspace in the calling window. `W` is `Workspace`
+ * for a claim; a probe reports `null` for a claimable folder that has never
+ * been opened.
+ */
+export type ClaimWorkspaceOutcome<W = Workspace> =
+  | {
+      kind: "claimed";
+      workspace: W;
+      replaced: string | null;
+      /**
+       * The sidebar state to show: the Workspace's own, else the most recent
+       * one. Always `null` from a probe.
+       */
+      shell: WorkspaceShellState | null;
+    }
+  /** The same Workspace is open in that window, now in front. */
+  | { kind: "ownedBy"; label: string; workspaceId: string }
+  /** The folder is inside a Workspace open in that window, now in front. */
+  | {
+      kind: "insideOpen";
+      label: string;
+      workspaceId: string;
+      relativePath: string;
+    }
+  /** The folder contains a Workspace open in that window. */
+  | { kind: "containsOpen"; label: string; workspaceId: string };
+
+export interface AppPreferencesChangedEvent {
+  appearance?: "system" | "light" | "dark";
+  language?: "system" | "en" | "zh-CN";
 }
 
 export interface OpenWorkspaceName {
@@ -371,6 +411,11 @@ export interface IpcCommands {
     request: NativeMenuSyncRequest;
     response: Record<string, never>;
   };
+  /** Open a Welcome window; the window is created in Rust. */
+  window_new: {
+    request: Record<string, never>;
+    response: { label: string };
+  };
   app_handshake: {
     request: Record<string, never>;
     response: AppHandshakeResponse;
@@ -387,6 +432,7 @@ export interface IpcCommands {
     };
     response: { scene?: SceneData; newPath?: string };
   };
+  /** Deprecated: use `window_claim_workspace`. */
   workspace_add: {
     request: { rootPath: string; name?: string };
     response: Workspace;
@@ -403,9 +449,43 @@ export interface IpcCommands {
     request: Record<string, never>;
     response: Workspace[];
   };
+  /** Deprecated: use `window_claim_workspace`. */
   workspace_remount: {
     request: { workspaceId: string };
     response: Workspace;
+  };
+  /** Read-only: what claiming the target in this window would decide. */
+  window_probe_workspace: {
+    request: ClaimWorkspaceTarget;
+    response: ClaimWorkspaceOutcome<Workspace | null>;
+  };
+  /** Open a Workspace in this window, replacing its current one. */
+  window_claim_workspace: {
+    request: ClaimWorkspaceTarget;
+    response: ClaimWorkspaceOutcome;
+  };
+  /** Close this window's Workspace; the window's tabs are closed first. */
+  window_release_workspace: {
+    request: Record<string, never>;
+    response: Record<string, never>;
+  };
+  /** Save the calling window's sidebar state for its Workspace. */
+  workspace_shell_state_save: {
+    request: WorkspaceShellState;
+    response: Record<string, never>;
+  };
+  /**
+   * Import the legacy localStorage sidebar pin and width. Only the first
+   * call reports `migrated: true`.
+   */
+  shell_preferences_migrate: {
+    request: { sidebarPinned: boolean; sidebarWidth: number };
+    response: { migrated: boolean };
+  };
+  /** Tell the other windows that an app-wide preference changed here. */
+  app_preferences_broadcast: {
+    request: AppPreferencesChangedEvent;
+    response: Record<string, never>;
   };
   workspace_recent_remove: {
     request: { workspaceId: string };
@@ -546,6 +626,21 @@ export interface IpcEvents {
   "open-file-request": { paths: string[] };
   "history-changed": HistoryChangedEvent;
   "history-issue": HistoryIssueEvent;
+  /** Switch to this window's tab for a drawing it already has open. */
+  "window-activate-document": { path: string };
+  /** Reveal a folder inside this window's Workspace. */
+  "workspace-reveal-entry": { relativePath: string; name: string };
+  /** Another window asks this one to close through its normal close path. */
+  "window-close-requested-by-peer": { requestId: string };
+  "window-claim-result": {
+    requestId: string;
+    outcome: ClaimWorkspaceOutcome | { kind: "cancelled" };
+  };
+  "app-quit-requested": { requestId: string };
+  "app-quit-cancelled": { requestId: string; failedLabel: string };
+  /** An app-wide preference changed in another window. */
+  "app-preferences-changed": AppPreferencesChangedEvent;
+  "open-workspaces-changed": { workspaces: OpenWorkspaceName[] };
 }
 
 export interface WorkspaceEntriesChangedEvent {
@@ -571,7 +666,8 @@ export type NativeMenuCommand =
   | "toggleGrid"
   | "toggleSnap"
   | "toggleZen"
-  | "toggleViewMode";
+  | "toggleViewMode"
+  | "openWorkspace";
 
 /** Every localized native menu label, including predefined item text. */
 export type NativeMenuLabelId =
@@ -585,6 +681,8 @@ export type NativeMenuLabelId =
   | "app.hideOthers"
   | "app.quit"
   | "file"
+  | "file.newWindow"
+  | "file.openWorkspace"
   | "file.save"
   | "file.exportImage"
   | "file.versionHistory"

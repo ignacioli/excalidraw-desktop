@@ -117,6 +117,16 @@ export class ThemeController {
     this.update(preference);
   }
 
+  /**
+   * Apply a mode chosen in another window. That window stored it, so this
+   * one neither stores nor broadcasts it again. Invalid values are ignored.
+   */
+  applyExternalModePreference(modePreference: unknown): void {
+    if (!isModePreference(modePreference)) return;
+    if (modePreference === this.snapshot.preference.modePreference) return;
+    this.update({ ...this.snapshot.preference, modePreference });
+  }
+
   /** Flips the displayed scheme and pins it as a fixed Light or Dark mode. */
   toggleFixed(): void {
     this.setModePreference(

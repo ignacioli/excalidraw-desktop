@@ -16,11 +16,13 @@ import {
   type EntryNamingMode,
   type MenuDismissalReason,
 } from "../app/interaction";
-import {
-  SHELL_PREFERENCES_STORAGE_KEY,
-  ShellPreferences,
-} from "../app/shellPreferences";
+import { ShellPreferences } from "../app/shellPreferences";
 import { documentManager, useDocumentStore } from "../documents/documentStore";
+import {
+  closeAllTabsForWorkspaceSwitch,
+  containsOpenError,
+  openWorkspaceInWindow,
+} from "../app/workspaceClaim";
 import type { BrowsingLocation } from "../app/browsingHistory";
 import type { CommandInvoker } from "../ipc/client";
 import {
@@ -110,9 +112,6 @@ interface TreeMenuState {
   anchor: { x: number; y: number };
 }
 
-const firstLaunchByStorage = new WeakMap<object, boolean>();
-const firstListAppliedByStorage = new WeakMap<object, boolean>();
-
 export function WorkspacePanel({
   invoker: providedInvoker,
   currentWorkspaceId: controlledCurrentWorkspaceId,
@@ -131,7 +130,6 @@ export function WorkspacePanel({
   const fallbackInvoker = useMemo(() => createTauriCommandInvoker(), []);
   const invoker = providedInvoker ?? fallbackInvoker;
   const selectDirectory = providedSelectDirectory ?? selectNativeDirectory;
-  const firstLaunch = storageIsFirstLaunch(globalThis.localStorage);
   const [ownedPreferences] = useState(
     () => providedPreferences ?? new ShellPreferences(),
   );
@@ -154,22 +152,13 @@ export function WorkspacePanel({
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(
-    () =>
-      controlledCurrentWorkspaceId === undefined
-        ? preferences.getSnapshot().currentWorkspaceId
-        : controlledCurrentWorkspaceId,
+    () => controlledCurrentWorkspaceId ?? null,
   );
   const [entriesByWorkspace, setEntriesByWorkspace] = useState<
     Record<string, Record<string, WorkspaceEntry[]>>
   >({});
   const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<Set<string>>(
-    () => {
-      const initial = firstLaunch
-        ? new Set<string>()
-        : new Set(preferences.getSnapshot().expandedWorkspaceIds);
-      expandedWorkspaceIdsRef.current = initial;
-      return initial;
-    },
+    () => new Set(),
   );
   const [expandedDirectoryKeys, setExpandedDirectoryKeys] = useState<
     Set<string>
@@ -193,12 +182,8 @@ export function WorkspacePanel({
   useEffect(() => {
     if (controlledCurrentWorkspaceId !== undefined) {
       setCurrentWorkspaceId(controlledCurrentWorkspaceId);
-      return;
     }
-    return preferences.subscribe(() => {
-      setCurrentWorkspaceId(preferences.getSnapshot().currentWorkspaceId);
-    });
-  }, [controlledCurrentWorkspaceId, preferences]);
+  }, [controlledCurrentWorkspaceId]);
 
   const dismissMenu = useCallback((reason: MenuDismissalReason): void => {
     if (interactionStore.getState().menu !== null) {
@@ -295,50 +280,22 @@ export function WorkspacePanel({
   const applyWorkspaceList = useCallback(
     (items: Workspace[]) => {
       const liveIds = new Set(items.map((workspace) => workspace.id));
-      preferences.pruneWorkspaceIds(liveIds);
+      // The list holds this window's Workspace, if it has one; it wins over
+      // a Current Workspace the shell has not learned about yet.
       const nextCurrentWorkspaceId =
-        controlledCurrentWorkspaceId === undefined
-          ? preferences.resolveCurrentWorkspaceId(liveIds, items[0]?.id ?? null)
-          : controlledCurrentWorkspaceId !== null &&
-              liveIds.has(controlledCurrentWorkspaceId)
-            ? controlledCurrentWorkspaceId
-            : null;
-      if (controlledCurrentWorkspaceId === undefined) {
-        preferences.setCurrentWorkspaceId(nextCurrentWorkspaceId);
-      }
+        controlledCurrentWorkspaceId !== undefined &&
+        controlledCurrentWorkspaceId !== null &&
+        liveIds.has(controlledCurrentWorkspaceId)
+          ? controlledCurrentWorkspaceId
+          : (items[0]?.id ?? null);
       setCurrentWorkspaceId(nextCurrentWorkspaceId);
       onCurrentWorkspaceChange?.(
         items.find((workspace) => workspace.id === nextCurrentWorkspaceId) ??
           null,
       );
-      const known = knownWorkspaceIdsRef.current;
-      const next = new Set(expandedWorkspaceIdsRef.current);
-      if (known === null) {
-        const alreadyAppliedFirstLaunch =
-          firstListAppliedByStorage.get(globalThis.localStorage) === true;
-        if (firstLaunch && !alreadyAppliedFirstLaunch) {
-          for (const workspace of items) {
-            next.add(workspace.id);
-            preferences.setWorkspaceExpanded(workspace.id, true);
-          }
-          firstListAppliedByStorage.set(globalThis.localStorage, true);
-        } else {
-          next.clear();
-          for (const id of preferences.getSnapshot().expandedWorkspaceIds) {
-            if (liveIds.has(id)) next.add(id);
-          }
-        }
-      } else {
-        for (const workspace of items) {
-          if (!known.has(workspace.id)) {
-            next.add(workspace.id);
-            preferences.setWorkspaceExpanded(workspace.id, true);
-          }
-        }
-        for (const id of [...next]) {
-          if (!liveIds.has(id)) next.delete(id);
-        }
-      }
+      const next = preferences.isWorkspaceExpanded()
+        ? new Set(liveIds)
+        : new Set<string>();
       knownWorkspaceIdsRef.current = liveIds;
       expandedWorkspaceIdsRef.current = next;
       setExpandedWorkspaceIds(next);
@@ -359,11 +316,31 @@ export function WorkspacePanel({
     },
     [
       controlledCurrentWorkspaceId,
-      firstLaunch,
       loadEntries,
       onCurrentWorkspaceChange,
       preferences,
     ],
+  );
+
+  // Opening a Workspace loads its saved expansion.
+  useEffect(
+    () =>
+      preferences.subscribe(() => {
+        const next = preferences.isWorkspaceExpanded()
+          ? new Set(knownWorkspaceIdsRef.current ?? [])
+          : new Set<string>();
+        const current = expandedWorkspaceIdsRef.current;
+        if (
+          next.size === current.size &&
+          [...next].every((id) => current.has(id))
+        ) {
+          return;
+        }
+        expandedWorkspaceIdsRef.current = next;
+        setExpandedWorkspaceIds(next);
+        for (const id of next) void loadEntries(id, "");
+      }),
+    [loadEntries, preferences],
   );
 
   useEffect(() => {
@@ -499,21 +476,6 @@ export function WorkspacePanel({
     }
   }, [dismissMenu, entriesByWorkspace, treeMenu, workspaces]);
 
-  const expandWorkspace = (workspaceId: string): void => {
-    preferences.setWorkspaceExpanded(workspaceId, true);
-    setExpandedWorkspaceIds((current) => {
-      const next = new Set(current);
-      next.add(workspaceId);
-      expandedWorkspaceIdsRef.current = next;
-      return next;
-    });
-    knownWorkspaceIdsRef.current = new Set([
-      ...(knownWorkspaceIdsRef.current ?? []),
-      workspaceId,
-    ]);
-    void loadEntries(workspaceId, "");
-  };
-
   const mountWorkspace = async () => {
     if (!selectDirectory) {
       setError(
@@ -530,17 +492,32 @@ export function WorkspacePanel({
       const rootPath = await selectDirectory();
       if (rootPath) {
         workspaceListGenerationRef.current += 1;
-        const workspace = await invoker.invoke("workspace_add", { rootPath });
-        const next = [
-          ...workspaces.filter((item) => item.id !== workspace.id),
-          workspace,
-        ];
+        // A window shows one Workspace: opening another replaces it after
+        // every tab is closed, or brings the window that owns it forward.
+        const result = await openWorkspaceInWindow({
+          invoker,
+          target: { rootPath },
+          closeTabs: () => closeAllTabsForWorkspaceSwitch(documentManager),
+        });
+        if (result.status === "declined") {
+          if (result.outcome.kind === "containsOpen") {
+            throw containsOpenError();
+          }
+          return;
+        }
+        const { workspace } = result;
+        const next = [workspace];
+        knownWorkspaceIdsRef.current = new Set([workspace.id]);
         setWorkspaces(next);
+        setEntriesByWorkspace((current) => {
+          const existing = current[workspace.id];
+          return existing === undefined ? {} : { [workspace.id]: existing };
+        });
         onWorkspacesChange?.(next);
-        preferences.setCurrentWorkspaceId(workspace.id);
         setCurrentWorkspaceId(workspace.id);
         onCurrentWorkspaceChange?.(workspace);
-        expandWorkspace(workspace.id);
+        // Shows the Workspace's saved pin, width and expansion.
+        preferences.loadWorkspace(result.shell);
         onWorkspacePresenceChange?.(true);
       }
     } catch (nextError) {
@@ -567,14 +544,14 @@ export function WorkspacePanel({
       if (closeOutcome.status !== "closed") {
         throw new LocalizedError("workspace.error.removeStillClosing");
       }
-      await invoker.invoke("workspace_remove", { workspaceId: workspace.id });
+      await invoker.invoke("window_release_workspace", {});
       workspaceListGenerationRef.current += 1;
       const next = workspaces.filter((item) => item.id !== workspace.id);
       const nextCurrentWorkspaceId =
         workspace.id === currentWorkspaceId
           ? (next[0]?.id ?? null)
           : currentWorkspaceId;
-      preferences.setCurrentWorkspaceId(nextCurrentWorkspaceId);
+      if (nextCurrentWorkspaceId === null) preferences.closeWorkspace();
       setCurrentWorkspaceId(nextCurrentWorkspaceId);
       onCurrentWorkspaceChange?.(
         next.find((item) => item.id === nextCurrentWorkspaceId) ?? null,
@@ -587,7 +564,6 @@ export function WorkspacePanel({
         expandedWorkspaceIdsRef.current = withoutRemoved;
         return withoutRemoved;
       });
-      preferences.pruneWorkspaceIds(new Set(next.map((item) => item.id)));
       knownWorkspaceIdsRef.current?.delete(workspace.id);
       setEntriesByWorkspace((current) => {
         const remaining = { ...current };
@@ -956,7 +932,7 @@ export function WorkspacePanel({
   const toggleAllCurrentWorkspace = (): void => {
     if (currentWorkspaceId === null) return;
     const shouldExpand = !allCurrentDirectoriesExpanded;
-    preferences.setWorkspaceExpanded(currentWorkspaceId, shouldExpand);
+    preferences.setWorkspaceExpanded(shouldExpand);
     setExpandedWorkspaceIds((current) => {
       const next = new Set(current);
       if (shouldExpand) next.add(currentWorkspaceId);
@@ -1112,7 +1088,7 @@ export function WorkspacePanel({
           activeDocumentPath={activeDocumentPath}
           captureFocus={captureFocus}
           onToggleWorkspace={(workspaceId, expanded) => {
-            preferences.setWorkspaceExpanded(workspaceId, expanded);
+            preferences.setWorkspaceExpanded(expanded);
             setExpandedWorkspaceIds((current) => {
               const next = new Set(current);
               if (expanded) next.add(workspaceId);
@@ -1252,14 +1228,6 @@ export function WorkspacePanel({
       ) : null}
     </section>
   );
-}
-
-function storageIsFirstLaunch(storage: Pick<Storage, "getItem">): boolean {
-  const cached = firstLaunchByStorage.get(storage);
-  if (cached !== undefined) return cached;
-  const first = storage.getItem(SHELL_PREFERENCES_STORAGE_KEY) === null;
-  firstLaunchByStorage.set(storage, first);
-  return first;
 }
 
 function asFileEntry(entry: WorkspaceEntry): FileEntry {

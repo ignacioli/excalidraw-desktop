@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State};
 
 use crate::{
     database::repository::SqliteRepository,
@@ -202,6 +202,12 @@ fn emit_entries_changed(
     app: &AppHandle,
     event: WorkspaceEntriesChangedEvent,
 ) -> Result<(), IpcError> {
-    app.emit("workspace-entries-changed", event)
-        .map_err(|error| IpcError::from(AppError::Internal(error.to_string())))
+    let workspace_id = event.workspace_id.clone();
+    crate::window::events::emit_to_workspace_owner(
+        app,
+        &workspace_id,
+        "workspace-entries-changed",
+        event,
+    )
+    .map_err(|error| IpcError::from(AppError::Internal(error.to_string())))
 }
