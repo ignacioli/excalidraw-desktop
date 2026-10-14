@@ -69,9 +69,7 @@ test("drawing rows stay icon-only and opening one performs exactly one document 
   ).toEqual([]);
   await expect(page.locator("img.file-tree-thumbnail")).toHaveCount(0);
 });
-// Pending: a restart reopens the last Workspace again once launch restores
-// the window session; until then the launch window starts on Welcome.
-test.fixme("mounting, expanding, and revisiting a Workspace never starts thumbnail work", async ({
+test("mounting, expanding, and revisiting a Workspace never starts thumbnail work", async ({
   page,
 }) => {
   const entries = [

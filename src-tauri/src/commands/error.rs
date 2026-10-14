@@ -27,6 +27,7 @@ pub enum ErrorCode {
     WorkspaceNotOwned,
     DocumentNotOwned,
     WindowOwnershipChanged,
+    QuitCheckpointFailed,
     InvalidName,
     NameConflict,
     EntryProtected,
@@ -74,6 +75,8 @@ pub enum AppError {
     DocumentNotOwned(PathBuf),
     #[error("Workspace ownership changed: {0}")]
     WindowOwnershipChanged(String),
+    #[error("a window could not checkpoint before quitting: {0}")]
+    QuitCheckpointFailed(String),
     #[error("invalid Workspace Entry name: {0}")]
     InvalidName(String),
     #[error("Workspace Entry name conflicts with {0}")]
@@ -166,6 +169,12 @@ impl AppError {
             Self::WindowOwnershipChanged(_) => (
                 ErrorCode::WindowOwnershipChanged,
                 "The workspace was opened or closed in another window. Try again.".to_owned(),
+                true,
+                None,
+            ),
+            Self::QuitCheckpointFailed(_) => (
+                ErrorCode::QuitCheckpointFailed,
+                "A drawing could not be saved, so the app did not quit.".to_owned(),
                 true,
                 None,
             ),

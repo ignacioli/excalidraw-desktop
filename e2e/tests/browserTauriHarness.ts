@@ -119,7 +119,28 @@ export async function installBrowserTauriHarness(
       // Seeded entries make the Workspace a Recent one. As at a normal
       // launch, no window holds it until this window claims it.
       const workspaceRecent = seedEntries !== undefined;
-      let workspaceMounted = false;
+      // The Window Session as the backend stores it: the claimed Workspace
+      // and the reported tabs. A reload is a restart, which claims the
+      // Workspace again before the window loads and hands back the tabs.
+      type WindowSession = {
+        mounted: boolean;
+        tabs: string[];
+        activePath: string | null;
+      };
+      const windowSessionKey = "excalidraw-e2e:window-session";
+      const readWindowSession = (): WindowSession => {
+        const stored = browser.localStorage.getItem(windowSessionKey);
+        return stored === null
+          ? { mounted: false, tabs: [], activePath: null }
+          : (JSON.parse(stored) as WindowSession);
+      };
+      const writeWindowSession = (next: Partial<WindowSession>) =>
+        browser.localStorage.setItem(
+          windowSessionKey,
+          JSON.stringify({ ...readWindowSession(), ...next }),
+        );
+      const restoredSession = readWindowSession();
+      let workspaceMounted = restoredSession.mounted;
       // A Workspace another test-chosen claim outcome put in this window.
       let claimedOverride: unknown;
       // Sidebar state as the backend keeps it: per Workspace, plus the
@@ -244,10 +265,17 @@ export async function installBrowserTauriHarness(
               // The launch window, as the per-window bootstrap reports it.
               window: {
                 label: "window-1",
-                workspace: null,
+                workspace: restoredSession.mounted ? workspace : null,
                 unavailableWorkspace: null,
-                restore: null,
-                shell: null,
+                restore:
+                  restoredSession.tabs.length > 0
+                    ? {
+                        tabs: restoredSession.tabs,
+                        activePath: restoredSession.activePath,
+                        skipped: 0,
+                      }
+                    : null,
+                shell: restoredSession.mounted ? shellFor(workspace.id) : null,
                 openWorkspaceNames: [],
               },
               preferredLanguages: systemLanguages,
@@ -282,6 +310,7 @@ export async function installBrowserTauriHarness(
               };
             }
             workspaceMounted = true;
+            writeWindowSession({ mounted: true });
             return workspace;
           }
           if (
@@ -328,6 +357,7 @@ export async function installBrowserTauriHarness(
               };
             }
             workspaceMounted = true;
+            writeWindowSession({ mounted: true });
             return {
               kind: "claimed",
               workspace,
@@ -446,7 +476,24 @@ export async function installBrowserTauriHarness(
             browser.__browserTauriPeerClose = args;
             return { status: "closing", requestId: "peer-request-1" };
           }
-          if (command === "window_peer_close_failed") {
+          if (command === "window_session_update") {
+            writeWindowSession({
+              tabs: Array.isArray(args.tabs) ? args.tabs.map(String) : [],
+              activePath:
+                typeof args.activePath === "string" ? args.activePath : null,
+            });
+            return {};
+          }
+          if (command === "window_release_workspace") {
+            workspaceMounted = false;
+            writeWindowSession({ mounted: false });
+            return {};
+          }
+          if (
+            command === "window_peer_close_failed" ||
+            command === "app_quit_ready" ||
+            command === "startup_recovery_done"
+          ) {
             return {};
           }
           if (command === "doc_open") {

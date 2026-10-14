@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CloseRequestedEvent } from "@tauri-apps/api/window";
 import {
   registerExitCheckpoint,
+  registerQuitCheckpoint,
   type PeerCloseOptions,
 } from "./exitCheckpoint";
 
@@ -183,5 +184,109 @@ describe("registerExitCheckpoint", () => {
       expect(peer.unlistenClose).toHaveBeenCalledOnce();
       expect(peer.unlistenPeer).toHaveBeenCalledOnce();
     });
+  });
+});
+
+describe("registerQuitCheckpoint", () => {
+  type Handler<Payload> = (event: { payload: Payload }) => void;
+
+  function setup(checkpointAll: () => Promise<void>) {
+    let requested: Handler<{ requestId: string }> | undefined;
+    let cancelled:
+      Handler<{ requestId: string; failedLabel: string }> | undefined;
+    const onError = vi.fn();
+    const reportReady = vi.fn(async () => undefined);
+    const unlistenRequest = vi.fn();
+    const unlistenCancel = vi.fn();
+    const registration = registerQuitCheckpoint(
+      { checkpointAll: vi.fn(checkpointAll) },
+      onError,
+      {
+        resolveLabel: async () => "window-2",
+        requestListener: async (_name, handler) => {
+          requested = handler;
+          return unlistenRequest;
+        },
+        cancelListener: async (_name, handler) => {
+          cancelled = handler;
+          return unlistenCancel;
+        },
+        reportReady,
+      },
+    );
+    return {
+      registration,
+      onError,
+      reportReady,
+      unlistenRequest,
+      unlistenCancel,
+      request: (requestId: string) => requested?.({ payload: { requestId } }),
+      cancel: (requestId: string, failedLabel: string) =>
+        cancelled?.({ payload: { requestId, failedLabel } }),
+    };
+  }
+
+  it("checkpoints every drawing, then reports ready", async () => {
+    const checkpoint = vi.fn(async () => undefined);
+    const h = setup(checkpoint);
+    await h.registration;
+
+    h.request("quit-1");
+
+    await vi.waitFor(() =>
+      expect(h.reportReady).toHaveBeenCalledWith({
+        requestId: "quit-1",
+        ok: true,
+      }),
+    );
+    expect(checkpoint).toHaveBeenCalledOnce();
+    expect(h.onError).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed checkpoint and shows that the app did not quit", async () => {
+    const h = setup(async () => Promise.reject(new Error("disk full")));
+    await h.registration;
+
+    h.request("quit-1");
+
+    await vi.waitFor(() =>
+      expect(h.reportReady).toHaveBeenCalledWith({
+        requestId: "quit-1",
+        ok: false,
+        message: "disk full",
+      }),
+    );
+    expect(h.onError).toHaveBeenCalledOnce();
+    expect(h.onError.mock.calls[0]?.[0]).toMatchObject({
+      key: "shell.quit.cancelled",
+    });
+    // The cancel that follows does not repeat the explanation.
+    h.cancel("quit-1", "window-2");
+    expect(h.onError).toHaveBeenCalledOnce();
+  });
+
+  it("explains a cancel caused by this window answering too late", async () => {
+    const h = setup(() => new Promise<void>(() => undefined));
+    await h.registration;
+    h.request("quit-1");
+
+    h.cancel("quit-1", "window-1");
+    expect(h.onError).not.toHaveBeenCalled();
+    h.cancel("quit-1", "window-2");
+
+    expect(h.onError).toHaveBeenCalledOnce();
+    expect(h.onError.mock.calls[0]?.[0]).toMatchObject({
+      key: "error.QUIT_CHECKPOINT_FAILED",
+    });
+  });
+
+  it("stops listening when unregistered", async () => {
+    const h = setup(async () => undefined);
+    const unlisten = await h.registration;
+
+    unlisten();
+
+    expect(h.unlistenRequest).toHaveBeenCalledOnce();
+    expect(h.unlistenCancel).toHaveBeenCalledOnce();
   });
 });

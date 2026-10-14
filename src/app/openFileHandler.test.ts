@@ -202,3 +202,122 @@ describe("registerOpenFileHandler", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 });
+
+describe("restoring the previous session's tabs", () => {
+  function handshakeWith(restore: AppHandshakeResponse["window"]["restore"]) {
+    return {
+      invoke: vi.fn(async () => ({
+        contractVersion: 5,
+        appVersion: "0.1.0",
+        abnormalExit: false,
+        pendingOpenPaths: ["/launch.excalidraw"],
+        preferredLanguages: [],
+        window: { ...welcomeWindow, restore },
+      })),
+    };
+  }
+
+  it("reopens the tabs in order, activates the last active one, then opens launch files", async () => {
+    const handlers = installHandlers();
+    const onRestoreSkipped = vi.fn();
+
+    await registerOpenFileHandler(handlers.manager, {
+      invoker: handshakeWith({
+        tabs: ["/a/one.excalidraw", "/a/two.excalidraw"],
+        activePath: "/a/one.excalidraw",
+        skipped: 0,
+      }),
+      listener: handlers.listener,
+      activateListener: handlers.activateListener,
+      onRestoreSkipped,
+    });
+
+    await vi.waitFor(() =>
+      expect(handlers.opened).toEqual([
+        "/a/one.excalidraw",
+        "/a/two.excalidraw",
+        "/a/one.excalidraw",
+        "/launch.excalidraw",
+      ]),
+    );
+    expect(onRestoreSkipped).not.toHaveBeenCalled();
+  });
+
+  it("opens the restored tabs and launch files once when registered twice", async () => {
+    const handlers = installHandlers();
+    const invoker = handshakeWith({
+      tabs: ["/a/one.excalidraw"],
+      activePath: null,
+      skipped: 0,
+    });
+    const options = {
+      invoker,
+      listener: handlers.listener,
+      activateListener: handlers.activateListener,
+    };
+
+    // React Strict Mode mounts the registering effect twice.
+    await Promise.all([
+      registerOpenFileHandler(handlers.manager, options),
+      registerOpenFileHandler(handlers.manager, options),
+    ]);
+
+    await vi.waitFor(() =>
+      expect(handlers.opened).toEqual([
+        "/a/one.excalidraw",
+        "/launch.excalidraw",
+      ]),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(handlers.opened).toHaveLength(2);
+  });
+
+  it("counts the tabs dropped by the backend and those that fail to open", async () => {
+    const handlers = installHandlers();
+    handlers.manager.openRouted.mockImplementation(async (path: string) => {
+      if (path === "/a/broken.excalidraw") throw new Error("corrupt");
+      if (path === "/a/elsewhere.excalidraw") return null;
+      handlers.opened.push(path);
+      return path;
+    });
+    const onRestoreSkipped = vi.fn();
+    const onError = vi.fn();
+
+    await registerOpenFileHandler(handlers.manager, {
+      invoker: handshakeWith({
+        tabs: [
+          "/a/broken.excalidraw",
+          "/a/elsewhere.excalidraw",
+          "/a/kept.excalidraw",
+        ],
+        activePath: "/a/broken.excalidraw",
+        skipped: 2,
+      }),
+      listener: handlers.listener,
+      activateListener: handlers.activateListener,
+      onError,
+      onRestoreSkipped,
+    });
+
+    await vi.waitFor(() => expect(onRestoreSkipped).toHaveBeenCalledWith(4));
+    expect(handlers.opened).toEqual([
+      "/a/kept.excalidraw",
+      "/launch.excalidraw",
+    ]);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("reports tabs the backend dropped even when none remain", async () => {
+    const handlers = installHandlers();
+    const onRestoreSkipped = vi.fn();
+
+    await registerOpenFileHandler(handlers.manager, {
+      invoker: handshakeWith({ tabs: [], activePath: null, skipped: 1 }),
+      listener: handlers.listener,
+      activateListener: handlers.activateListener,
+      onRestoreSkipped,
+    });
+
+    await vi.waitFor(() => expect(onRestoreSkipped).toHaveBeenCalledWith(1));
+  });
+});

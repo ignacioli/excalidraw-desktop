@@ -64,8 +64,10 @@ import { ExportDialog } from "./ExportDialog";
 import {
   hasNativeWindowRuntime,
   registerExitCheckpoint,
+  registerQuitCheckpoint,
 } from "./exitCheckpoint";
 import { registerOpenFileHandler } from "./openFileHandler";
+import { reportWindowSession } from "./windowSession";
 import { FeedbackToast } from "./FeedbackToast";
 import {
   FEEDBACK_TOAST_DURATION_MS,
@@ -107,6 +109,7 @@ import {
   bootstrapShellState,
   deriveStartupRoute,
   isLaunchWindow,
+  loadStartupHandshake,
 } from "./startupRoute";
 import { useAppStore } from "./store";
 import {
@@ -205,6 +208,19 @@ export function AppShell({
       }
     | undefined
   >(undefined);
+  const multiWindowDriverRef = useRef<
+    | {
+        attachEditor(documentId: string, adapter: ExcalidrawAdapter): void;
+        attachShell(shell: {
+          openWorkspace(rootPath: string): Promise<void>;
+        }): void;
+        start(): void;
+      }
+    | undefined
+  >(undefined);
+  const driverOpenWorkspaceRef = useRef<(rootPath: string) => Promise<void>>(
+    async () => undefined,
+  );
   const editorAdaptersRef = useRef(new Map<string, ExcalidrawAdapter>());
   const editorControlsRef = useRef(new Map<string, EditorControls>());
   const [canvasPreferencesById, setCanvasPreferencesById] = useState<
@@ -767,6 +783,17 @@ export function AppShell({
       setWelcomeBusy(false);
     }
   };
+
+  // The test-only multi-window driver opens a folder as the dialog would.
+  driverOpenWorkspaceRef.current = async (rootPath) =>
+    applyOpenWorkspaceResult(
+      rootPath,
+      await openWorkspaceInWindow({
+        invoker: workspaceInvoker,
+        target: { rootPath },
+        closeTabs: closeOpenDocumentsForWorkspaceSwitch,
+      }),
+    );
 
   const openRecentWorkspace = async (workspace: Workspace): Promise<void> => {
     setWelcomeBusy(true);
@@ -1586,6 +1613,7 @@ export function AppShell({
         container,
       );
       historyFrontendDriverRef.current?.attachEditor(documentId, adapter);
+      multiWindowDriverRef.current?.attachEditor(documentId, adapter);
       editorAdaptersRef.current.set(documentId, adapter);
       setReadyEditor({ documentId, adapter });
     },
@@ -1632,6 +1660,31 @@ export function AppShell({
             readyEditor.adapter,
           );
         }
+      })
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (import.meta.env.VITE_E2E_HARNESS !== "1") {
+      return;
+    }
+    let disposed = false;
+    void import("../e2e/multiWindowDriver")
+      .then(({ multiWindowDriver }) => {
+        if (disposed) return;
+        multiWindowDriverRef.current = multiWindowDriver;
+        multiWindowDriver.attachShell({
+          openWorkspace: (rootPath) => driverOpenWorkspaceRef.current(rootPath),
+        });
+        for (const [documentId, adapter] of editorAdaptersRef.current) {
+          multiWindowDriver.attachEditor(documentId, adapter);
+        }
+        multiWindowDriver.start();
       })
       .catch((error: unknown) =>
         setInteractionError(fileOperationError(error)),
@@ -1724,9 +1777,9 @@ export function AppShell({
     }
     let disposed = false;
     let unlisten: (() => void) | undefined;
-    void registerOpenFileHandler(documentManager, {
-      onError: (error) => setInteractionError(fileOperationError(error)),
-    })
+    void registerQuitCheckpoint(documentManager, (error) =>
+      setInteractionError(fileOperationError(error)),
+    )
       .then((nextUnlisten) => {
         if (disposed) {
           nextUnlisten();
@@ -1742,6 +1795,73 @@ export function AppShell({
       unlisten?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!hasTauriCommandRuntime()) return;
+    return reportWindowSession(
+      documentManager.store,
+      (report) => workspaceInvoker.invoke("window_session_update", report),
+      (error) => console.error("Failed to report the window's tabs.", error),
+    );
+  }, [workspaceInvoker]);
+
+  // A Workspace of the previous session that could not be reopened: this
+  // window stays on Welcome and says why.
+  useEffect(() => {
+    if (!hasTauriCommandRuntime()) return;
+    let disposed = false;
+    void loadStartupHandshake(providedWorkspaceInvoker)
+      .then((handshake) => {
+        // Handshake test doubles from before the per-window bootstrap omit it.
+        const unavailable = handshake.window?.unavailableWorkspace ?? null;
+        if (disposed || unavailable === null) return;
+        setUnavailableWorkspaceId(unavailable.id);
+        reportWelcomeError(
+          new LocalizedError("welcome.restoreUnavailable", {
+            name: unavailable.name,
+          }),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      disposed = true;
+    };
+  }, [providedWorkspaceInvoker, reportWelcomeError]);
+
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) {
+      return;
+    }
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void registerOpenFileHandler(documentManager, {
+      onError: (error) => setInteractionError(fileOperationError(error)),
+      onRestoreSkipped: (count) =>
+        showToast({
+          tone: "failure",
+          message: translateNow(
+            count === 1
+              ? "shell.restore.skipped.one"
+              : "shell.restore.skipped.other",
+            { count },
+          ),
+        }),
+    })
+      .then((nextUnlisten) => {
+        if (disposed) {
+          nextUnlisten();
+        } else {
+          unlisten = nextUnlisten;
+        }
+      })
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [showToast]);
 
   useEffect(() => {
     if (!hasNativeWindowRuntime()) {

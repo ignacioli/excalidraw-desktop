@@ -1,15 +1,23 @@
 #!/usr/bin/env node
 // Native window check for a built app (macOS): window count, titles, front
 // window, bounds, and minimized state through Accessibility / System Events;
-// nested folders and where opened drawings go. Drawings are handed over with
-// `open -a` when --app is given, else by a second launch of the binary.
+// nested folders and where opened drawings go; closing every window, Reopen,
+// and Cmd+Q with an unsaved keyboard edit. Drawings are handed over with `open -a`
+// when --app is given, else by a second launch of the binary. Whether the
+// Window menu lists the windows is printed as an observation.
 // Usage: pnpm native:window:check -- [--app PATH.app | --binary PATH].
 // Exit 0 = PASS, 1 = FAIL, 2 = BLOCKED. Brings the app to the foreground; do
 // not touch the keyboard or mouse while it runs. Checks that need the app to
 // be known to LaunchServices (Finder open, Dock reopen) report BLOCKED
 // without --app.
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -103,6 +111,70 @@ export function checkAvailability(check, { hasApp }) {
   return check.requiresLaunchServices && !hasApp ? "BLOCKED" : "RUN";
 }
 
+/**
+ * The coordinated quit, as the app logs it: the request to every window,
+ * then the exit, with no cancellation between them.
+ */
+export function quitWasCoordinated(log) {
+  const requested = log.indexOf("app-quit-requested");
+  const exited = log.indexOf("app-quit-exit");
+  return (
+    requested >= 0 && exited > requested && !log.includes("app-quit-cancelled")
+  );
+}
+
+/** The window titles that the Window menu lists. */
+export function listedWindows(menuItems, titles) {
+  return titles.filter((title) => menuItems.includes(title));
+}
+
+/** One rectangle at x = 100; the Cmd+Q check moves it one step right. */
+export const QUIT_DRAWING_SCENE = JSON.stringify({
+  type: "excalidraw",
+  version: 2,
+  source: "native-window-check",
+  elements: [
+    {
+      id: "native-window-check-rect",
+      type: "rectangle",
+      x: 100,
+      y: 100,
+      width: 120,
+      height: 80,
+      angle: 0,
+      strokeColor: "#1e1e1e",
+      backgroundColor: "transparent",
+      fillStyle: "solid",
+      strokeWidth: 2,
+      strokeStyle: "solid",
+      roughness: 1,
+      opacity: 100,
+      groupIds: [],
+      frameId: null,
+      index: "a0",
+      roundness: null,
+      boundElements: null,
+      updated: 1,
+      seed: 7,
+      version: 1,
+      versionNonce: 11,
+      isDeleted: false,
+      locked: false,
+      link: null,
+    },
+  ],
+  appState: {},
+  files: {},
+});
+
+/** Whether the rectangle on disk moved right of where it started. */
+export function rectangleMoved(scene) {
+  const rectangle = (scene.elements ?? []).find(
+    (element) => element.id === "native-window-check-rect",
+  );
+  return rectangle !== undefined && rectangle.x > 100;
+}
+
 /** FAIL beats BLOCKED beats PASS. */
 export function exitCodeFor(statuses) {
   if (statuses.includes("FAIL")) return 1;
@@ -152,6 +224,20 @@ const BUTTON_DUMP = `on run argv
     repeat with e in found
       try
         if (role of e as text) is "AXButton" then set end of out to (title of e as text) & tab & (description of e as text)
+      end try
+    end repeat
+  end tell
+  set AppleScript's text item delimiters to linefeed
+  return out as text
+end run`;
+
+const STATIC_TEXT_DUMP = `on run argv
+  set out to {}
+  tell application "System Events" to tell (first process whose unix id is ((item 1 of argv) as integer))
+    set found to entire contents of window 1
+    repeat with e in found
+      try
+        if (role of e as text) is "AXStaticText" then set end of out to (value of e as text)
       end try
     end repeat
   end tell
@@ -224,11 +310,18 @@ async function main() {
   for (const drawing of Object.values(drawings)) {
     writeFileSync(drawing, scene);
   }
+  drawings.quit = path.join(folders.loose, "quit.excalidraw");
+  writeFileSync(drawings.quit, QUIT_DRAWING_SCENE);
 
   const env = { ...process.env, HOME: path.join(root, "home") };
   const child = spawn(options.binary, ["-AppleLanguages", "(en-US)"], {
     env,
-    stdio: "ignore",
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  let appLog = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => {
+    appLog = (appLog + chunk).slice(-65_536);
   });
   children.add(child);
   child.on("exit", () => children.delete(child));
@@ -549,6 +642,122 @@ end tell`);
     drawings.inA,
     "A",
     drawingTitle(inA, names.a),
+  );
+
+  // Observation: whether the Window menu lists every window by title.
+  try {
+    const items = osa(`tell application "System Events" to tell (${proc})
+  set AppleScript's text item delimiters to linefeed
+  return (name of every menu item of menu 1 of menu bar item "${menuItem("menu.native.window")}" of menu bar 1) as text
+end tell`).split("\n");
+    const titles = windows().map((window) => window.name);
+    const listed = listedWindows(items, titles);
+    console.log(
+      `INFO the Window menu lists ${listed.length} of ${titles.length} windows — listed: ${listed.join(", ") || "none"}; items: ${items.join(", ")}`,
+    );
+  } catch (error) {
+    console.log(`INFO the Window menu could not be read: ${error.message}`);
+  }
+
+  // Closing every window leaves the app running.
+  for (let open = windows().length; open > 0; open = windows().length) {
+    osa(`tell application "System Events" to tell (${proc})
+  click (first button of window 1 whose subrole is "AXCloseButton")
+end tell`);
+    await waitFor("a window to close", (list) => list.length < open);
+  }
+  await sleep(2_000);
+  check(
+    "closing every window leaves the app running",
+    windows().length === 0 && child.exitCode === null,
+    `windows: ${windows().length}, exit code: ${child.exitCode}`,
+  );
+
+  // Reopen (the Dock icon, or `open -a` without a file) shows Welcome.
+  if (
+    checkAvailability(
+      { requiresLaunchServices: true },
+      { hasApp: options.app !== null },
+    ) === "BLOCKED"
+  ) {
+    report(
+      "BLOCKED",
+      "Reopen without windows shows a Welcome window",
+      "needs --app",
+    );
+  } else {
+    execFileSync("open", ["-a", options.app]);
+    const reopened = await waitFor(
+      "a Welcome window after Reopen",
+      (list) => list.length === 1 && list[0].name === WELCOME_TITLE,
+    );
+    check(
+      "Reopen without windows shows a Welcome window",
+      !timedOut(reopened),
+      `windows: ${describe(reopened)}`,
+    );
+  }
+
+  // Cmd+Q with an unsaved edit asks every window, then quits.
+  await deliver(drawings.quit);
+  const editing = await waitFor("the drawing to open", (list) =>
+    list.some((window) => window.name.startsWith(path.basename(drawings.quit))),
+  );
+  if (timedOut(editing)) {
+    block(`the drawing did not open for Cmd+Q (saw: ${describe(editing)})`);
+  }
+  // Select everything and move it one step right with the keyboard.
+  osa(`tell application "System Events" to tell (${proc})
+  set frontmost to true
+  keystroke "a" using {command down}
+  key code 124
+end tell`);
+  // The save status reads “draft saved” once the edit is stored.
+  const draftSaved = en["shell.saveStatus.draftSaved"];
+  let texts = [];
+  for (
+    const deadline = Date.now() + 10_000;
+    Date.now() < deadline && !texts.includes(draftSaved);
+    await sleep(250)
+  ) {
+    try {
+      texts = osa(STATIC_TEXT_DUMP, pid).split("\n");
+    } catch {
+      texts = [];
+    }
+  }
+  check(
+    "the edit reaches the drawing before Cmd+Q",
+    texts.includes(draftSaved),
+    `status texts: ${texts
+      .filter((text) => text.trim() !== "")
+      .slice(0, 12)
+      .join(" | ")}`,
+  );
+  const exited = new Promise((done) => {
+    if (child.exitCode !== null) done(child.exitCode);
+    child.on("exit", (code) => done(code));
+  });
+  osa(`tell application "System Events" to tell (${proc})
+  set frontmost to true
+  keystroke "q" using {command down}
+end tell`);
+  const code = await Promise.race([exited, sleep(20_000).then(() => null)]);
+  const saved = JSON.parse(readFileSync(drawings.quit, "utf8"));
+  check(
+    "Cmd+Q asks every window, then quits",
+    code === 0 && quitWasCoordinated(appLog),
+    `exit code: ${code}; log: ${appLog
+      .split("\n")
+      .filter((line) => line.includes("app-quit"))
+      .join(" | ")}`,
+  );
+  check(
+    "Cmd+Q saves the unsaved edit before quitting",
+    rectangleMoved(saved),
+    `rectangle on disk: ${JSON.stringify(
+      (saved.elements ?? []).map(({ id, x, y }) => ({ id, x, y })),
+    )}`,
   );
 
   finish(exitCodeFor(statuses));

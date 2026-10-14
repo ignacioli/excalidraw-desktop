@@ -10,7 +10,15 @@
 //! `window_session` table in one transaction, so a reader never observes a
 //! partially written set of windows.
 
-use std::{collections::HashSet, path::Path};
+use std::{
+    collections::HashSet,
+    path::Path,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+    time::Duration,
+};
 
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -20,6 +28,67 @@ use crate::database::repository::{RepositoryFuture, SqliteRepository, WorkspaceR
 /// `app_meta` key recording that the legacy localStorage shell preferences
 /// were imported once.
 pub const SHELL_PREFERENCES_MIGRATED_KEY: &str = "shell_preferences_migrated";
+
+/// Window Session writes requested within this window are stored once.
+pub const SESSION_WRITE_DELAY: Duration = Duration::from_millis(500);
+
+/// When the Window Session may be written.
+///
+/// It is held while startup has not yet recreated the stored windows (after
+/// an abnormal exit, until Recovery finishes), so the windows that exist so
+/// far never replace it. It is frozen once a coordinated quit stored it, so
+/// the windows the exit destroys never empty it.
+#[derive(Debug, Default)]
+pub struct SessionWriter {
+    held: AtomicBool,
+    frozen: AtomicBool,
+    scheduled: AtomicBool,
+    /// The stored session read at startup, recreated when Recovery
+    /// finishes.
+    pending_restore: Mutex<Option<Vec<WindowSessionEntry>>>,
+}
+
+impl SessionWriter {
+    pub fn hold(&self) {
+        self.held.store(true, Ordering::SeqCst);
+    }
+
+    pub fn release(&self) {
+        self.held.store(false, Ordering::SeqCst);
+    }
+
+    pub fn freeze(&self) {
+        self.frozen.store(true, Ordering::SeqCst);
+    }
+
+    pub fn can_write(&self) -> bool {
+        !self.held.load(Ordering::SeqCst) && !self.frozen.load(Ordering::SeqCst)
+    }
+
+    /// Claim the pending delayed write; `false` when one is already queued.
+    pub fn try_schedule(&self) -> bool {
+        !self.scheduled.swap(true, Ordering::SeqCst)
+    }
+
+    pub fn clear_scheduled(&self) {
+        self.scheduled.store(false, Ordering::SeqCst);
+    }
+
+    pub fn set_pending_restore(&self, entries: Vec<WindowSessionEntry>) {
+        *self
+            .pending_restore
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(entries);
+    }
+
+    /// The stored session to recreate, once.
+    pub fn take_pending_restore(&self) -> Option<Vec<WindowSessionEntry>> {
+        self.pending_restore
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
+    }
+}
 
 /// One window of the Window Session, in restore order.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -697,6 +766,36 @@ mod tests {
             Some("1".to_owned())
         );
         remove_database(path);
+    }
+
+    #[test]
+    fn the_session_is_not_written_while_held_or_after_the_quit_stored_it() {
+        let writer = SessionWriter::default();
+        assert!(writer.can_write());
+        writer.hold();
+        assert!(!writer.can_write());
+        writer.release();
+        assert!(writer.can_write());
+        writer.freeze();
+        writer.release();
+        assert!(!writer.can_write(), "a frozen session stays frozen");
+    }
+
+    #[test]
+    fn delayed_writes_are_coalesced_until_the_queued_one_runs() {
+        let writer = SessionWriter::default();
+        assert!(writer.try_schedule());
+        assert!(!writer.try_schedule());
+        writer.clear_scheduled();
+        assert!(writer.try_schedule());
+    }
+
+    #[test]
+    fn the_startup_session_is_restored_once() {
+        let writer = SessionWriter::default();
+        writer.set_pending_restore(vec![entry(Some("a"), &[], None)]);
+        assert_eq!(writer.take_pending_restore().map(|e| e.len()), Some(1));
+        assert_eq!(writer.take_pending_restore(), None);
     }
 
     #[test]

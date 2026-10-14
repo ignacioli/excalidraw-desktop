@@ -24,6 +24,8 @@ pub const SNAP_MENU_ID: &str = "native-menu.pref.snap";
 pub const ZEN_MENU_ID: &str = "native-menu.pref.zen";
 pub const VIEW_MODE_MENU_ID: &str = "native-menu.pref.view-mode";
 pub const HELP_MENU_ID: &str = "native-menu.help";
+/// The app's own Quit, so every window checkpoints before the app exits.
+pub const QUIT_MENU_ID: &str = "native-menu.quit";
 
 pub const SAVE_MENU_ACCELERATOR: &str = "CmdOrCtrl+S";
 /// The SDK has no `N` shortcut and tool shortcuts never use Cmd/Ctrl.
@@ -32,6 +34,7 @@ pub const NEW_WINDOW_MENU_ACCELERATOR: &str = "CmdOrCtrl+Shift+N";
 /// free in both the shell and the SDK.
 pub const OPEN_WORKSPACE_MENU_ACCELERATOR: &str = "CmdOrCtrl+Shift+O";
 pub const EXPORT_IMAGE_MENU_ACCELERATOR: &str = "CmdOrCtrl+Alt+E";
+pub const QUIT_MENU_ACCELERATOR: &str = "CmdOrCtrl+Q";
 
 #[cfg(target_os = "macos")]
 const APPLICATION_SUBMENU_ID: &str = "native-menu.application";
@@ -235,7 +238,7 @@ pub fn item_state(
         checked: Some(checked),
     };
     Some(match id {
-        NEW_WINDOW_MENU_ID => plain(true),
+        NEW_WINDOW_MENU_ID | QUIT_MENU_ID => plain(true),
         OPEN_WORKSPACE_MENU_ID => plain(has_window),
         SAVE_MENU_ID => plain(document),
         EXPORT_IMAGE_MENU_ID => plain(true),
@@ -262,7 +265,6 @@ pub enum SystemItem {
     Services,
     Hide,
     HideOthers,
-    Quit,
     CloseWindow,
     Undo,
     Redo,
@@ -325,6 +327,15 @@ fn system(kind: SystemItem, label: &'static str) -> MenuEntry {
     MenuEntry::System { kind, label }
 }
 
+fn quit_item() -> MenuEntry {
+    MenuEntry::Item {
+        id: QUIT_MENU_ID,
+        label: "app.quit",
+        check: false,
+        accelerator: Some(QUIT_MENU_ACCELERATOR),
+    }
+}
+
 fn submenu(id: &'static str, label: &'static str, children: Vec<MenuEntry>) -> MenuEntry {
     MenuEntry::Submenu {
         id,
@@ -345,8 +356,8 @@ fn language_submenu() -> MenuEntry {
     )
 }
 
-/// The whole menu tree. Only New Window, Open Workspace, Save, and Export
-/// Image register accelerators; keys the SDK already handles (Q, Cmd+',
+/// The whole menu tree. Only New Window, Open Workspace, Save, Export Image,
+/// and Quit register accelerators; keys the SDK already handles (Q, Cmd+',
 /// Alt+S, Alt+Z, Alt+R, ?) are not registered so each key keeps a single
 /// owner.
 pub fn menu_spec() -> Vec<MenuEntry> {
@@ -382,7 +393,7 @@ pub fn menu_spec() -> Vec<MenuEntry> {
         file.extend([
             MenuEntry::Separator,
             system(SystemItem::CloseWindow, "file.closeWindow"),
-            system(SystemItem::Quit, "app.quit"),
+            quit_item(),
         ]);
     }
 
@@ -452,7 +463,7 @@ pub fn menu_spec() -> Vec<MenuEntry> {
             system(SystemItem::Hide, "app.hide"),
             system(SystemItem::HideOthers, "app.hideOthers"),
             MenuEntry::Separator,
-            system(SystemItem::Quit, "app.quit"),
+            quit_item(),
         ],
     });
     menu.extend([
@@ -512,6 +523,7 @@ mod tests {
             ZEN_MENU_ID,
             VIEW_MODE_MENU_ID,
             HELP_MENU_ID,
+            QUIT_MENU_ID,
         ]
         .into_iter()
         .collect();
@@ -540,7 +552,7 @@ mod tests {
     }
 
     #[test]
-    fn registers_only_the_owned_file_accelerators() {
+    fn registers_only_the_owned_accelerators() {
         let spec = menu_spec();
         let mut accelerators = BTreeSet::new();
         walk(&spec, &mut |entry| {
@@ -559,6 +571,7 @@ mod tests {
                 "CmdOrCtrl+Alt+E",
                 "CmdOrCtrl+Shift+N",
                 "CmdOrCtrl+Shift+O",
+                "CmdOrCtrl+Q",
             ])
         );
         assert!(

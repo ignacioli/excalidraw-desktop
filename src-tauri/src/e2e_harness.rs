@@ -82,6 +82,8 @@ use crate::{
     },
 };
 
+pub(crate) mod multi_window;
+
 pub(crate) const RELIABILITY_SCENARIO_FLAG: &str = "--e2e-reliability-scenario";
 const E2E_ROOT_PREFIX: &str = "excalidraw-desktop-e2e-";
 const HISTORY_FRONTEND_DRIVER_FLAG: &str = "EXCALIDRAW_E2E_HISTORY_FRONTEND";
@@ -117,6 +119,11 @@ pub(crate) fn e2e_history_frontend_bootstrap(
         target_version_id,
         request_id,
     }))
+}
+
+/// The history frontend driver ends its process by closing its only window.
+pub(crate) fn exits_with_last_window() -> bool {
+    env::var(HISTORY_FRONTEND_DRIVER_FLAG).as_deref() == Ok("1")
 }
 
 #[tauri::command]

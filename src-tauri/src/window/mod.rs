@@ -10,6 +10,7 @@
 pub mod events;
 pub mod geometry;
 pub mod peer_close;
+pub mod quit;
 pub mod registry;
 pub mod router;
 pub mod session;
@@ -21,10 +22,14 @@ use tauri::{
 use geometry::{
     initial_rect, logical_work_area, staggered_rect, LogicalRect, MIN_HEIGHT, MIN_WIDTH,
 };
-use registry::{WindowRegistry, WindowRole};
-use session::WindowSessionRepository;
+use std::path::Path;
 
-use crate::database::repository::SqliteRepository;
+use tauri_plugin_fs::FsExt;
+
+use registry::{WindowRegistry, WindowRestore, WindowRole};
+use session::{SessionWriter, WindowSessionEntry, WindowSessionRepository};
+
+use crate::database::repository::{SqliteRepository, WorkspaceRecord, WorkspaceRepository};
 
 /// Title of a Welcome window before the frontend sets its own title.
 pub const WELCOME_TITLE: &str = "Excalidraw";
@@ -61,14 +66,35 @@ pub fn create_window<R: Runtime>(
     role: WindowRole,
     placement: Option<LogicalRect>,
 ) -> tauri::Result<WebviewWindow<R>> {
+    let (label, rect) = register_window(app, role, placement)?;
+    build_window(app, &label, rect)
+}
+
+/// Reserve and register a window without showing it, so its Workspace and
+/// startup data can be prepared before its frontend asks for them.
+fn register_window<R: Runtime>(
+    app: &AppHandle<R>,
+    role: WindowRole,
+    placement: Option<LogicalRect>,
+) -> tauri::Result<(String, LogicalRect)> {
     let registry = app.state::<WindowRegistry>();
     let label = registry.allocate_label();
     let rect = placement.unwrap_or_else(|| default_placement(app, &registry));
     if let Err(error) = registry.register(&label, role) {
         return Err(tauri::Error::Anyhow(error.into()));
     }
+    Ok((label, rect))
+}
+
+/// Show a registered window. A failure unregisters it.
+fn build_window<R: Runtime>(
+    app: &AppHandle<R>,
+    label: &str,
+    rect: LogicalRect,
+) -> tauri::Result<WebviewWindow<R>> {
+    let registry = app.state::<WindowRegistry>();
     let url = WebviewUrl::App(format!("index.html?window={label}").into());
-    let builder = WebviewWindowBuilder::new(app, &label, url)
+    let builder = WebviewWindowBuilder::new(app, label, url)
         .title(WINDOW_CHROME.title)
         .decorations(WINDOW_CHROME.decorations)
         .always_on_top(WINDOW_CHROME.always_on_top)
@@ -79,7 +105,7 @@ pub fn create_window<R: Runtime>(
     match builder.build() {
         Ok(window) => Ok(window),
         Err(error) => {
-            registry.unregister(&label);
+            registry.unregister(label);
             Err(error)
         }
     }
@@ -110,11 +136,182 @@ pub async fn window_new(
 /// Store the Window Session snapshot. A failure is logged: the session is a
 /// convenience for the next launch and never blocks the window action.
 pub async fn persist_session<R: Runtime>(app: &AppHandle<R>) {
+    if !app.state::<SessionWriter>().can_write() {
+        return;
+    }
     let snapshot = app.state::<WindowRegistry>().session_snapshot();
     let repository = app.state::<SqliteRepository>().inner().clone();
     if let Err(error) = repository.window_session_replace(snapshot).await {
         eprintln!("failed to store the window session: {error}");
     }
+}
+
+/// Store the Window Session after [`session::SESSION_WRITE_DELAY`], once for
+/// every change requested in the meantime.
+pub fn schedule_session_write<R: Runtime>(app: &AppHandle<R>) {
+    if !app.state::<SessionWriter>().try_schedule() {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(session::SESSION_WRITE_DELAY).await;
+        app.state::<SessionWriter>().clear_scheduled();
+        persist_session(&app).await;
+    });
+}
+
+/// Recreate the windows of a stored Window Session. Each Workspace is claimed
+/// before its window is shown, so the window's startup data already names
+/// it; a Workspace that cannot be opened leaves its window on Welcome with an
+/// explanation. Workspaces and drawings already open in a window (opened
+/// during Recovery) are left where they are. Returns the number of windows
+/// created.
+pub async fn restore_session(app: &AppHandle, entries: Vec<WindowSessionEntry>) -> usize {
+    let registry = app.state::<WindowRegistry>();
+    let repository = app.state::<SqliteRepository>().inner().clone();
+    let workspaces = match repository.workspace_recent_list().await {
+        Ok(workspaces) => workspaces,
+        Err(error) => {
+            eprintln!("failed to read the Workspaces to restore: {error}");
+            Vec::new()
+        }
+    };
+    let owned = registry.owned_workspace_ids();
+    let entries: Vec<_> = entries
+        .into_iter()
+        .map(|mut entry| {
+            if entry
+                .workspace_id
+                .as_ref()
+                .is_some_and(|id| owned.contains(id))
+            {
+                entry.workspace_id = None;
+            }
+            entry.tabs.retain(|tab| {
+                let canonical = crate::commands::documents::canonical_document_path(Path::new(tab));
+                registry.document_owner(&canonical).is_none()
+            });
+            entry
+        })
+        .collect();
+    let plan = session::plan_restore(
+        &entries,
+        &workspaces,
+        |root| root.is_dir(),
+        |file| file.is_file(),
+    );
+    let mut created = 0;
+    for window in plan {
+        if window.workspace.is_none()
+            && window.tabs.is_empty()
+            && window.unavailable_workspace.is_none()
+        {
+            continue;
+        }
+        let (label, rect) = match register_window(app, WindowRole::Normal, None) {
+            Ok(registered) => registered,
+            Err(error) => {
+                eprintln!("failed to register a restored window: {error}");
+                continue;
+            }
+        };
+        let mut unavailable = window.unavailable_workspace;
+        if let Some(workspace) = window.workspace {
+            if !claim_restored_workspace(app, &label, workspace.clone()).await {
+                unavailable = Some(workspace);
+            }
+        }
+        for tab in &window.tabs {
+            // The stored tabs were opened in an earlier run; grant the exact
+            // files again so drawings outside the Workspace can reopen.
+            if let Err(error) = app.fs_scope().allow_file(Path::new(tab)) {
+                eprintln!("failed to grant a restored drawing: {error}");
+            }
+        }
+        let restore = (!window.tabs.is_empty() || window.skipped > 0).then_some(WindowRestore {
+            tabs: window.tabs,
+            active_path: window.active_path,
+            skipped: window.skipped,
+        });
+        registry.set_restore(&label, restore, unavailable);
+        match build_window(app, &label, rect) {
+            Ok(_) => created += 1,
+            Err(error) => {
+                eprintln!("failed to show a restored window: {error}");
+                if let Err(error) =
+                    crate::commands::workspace::release_for_window(app, &label).await
+                {
+                    eprintln!("failed to release the Workspace of {label}: {error}");
+                }
+            }
+        }
+    }
+    created
+}
+
+async fn claim_restored_workspace(
+    app: &AppHandle,
+    label: &str,
+    workspace: WorkspaceRecord,
+) -> bool {
+    let Ok(root) = std::fs::canonicalize(&workspace.root_path) else {
+        return false;
+    };
+    match crate::commands::workspace::claim_for_window(app, label, root, Some(workspace), None)
+        .await
+    {
+        Ok(crate::commands::workspace::WindowClaim::Claimed { .. }) => true,
+        Ok(crate::commands::workspace::WindowClaim::Declined(_)) => false,
+        Err(error) => {
+            eprintln!("failed to reopen a Workspace in {label}: {error}");
+            false
+        }
+    }
+}
+
+/// Recovery finished in the Recovery window: clear the `mounted` rows kept
+/// for Recovery, recreate the stored windows, and close the Recovery window
+/// when it was left empty and other windows took over. Later calls do
+/// nothing.
+pub async fn finish_recovery(
+    app: &AppHandle,
+    label: &str,
+) -> Result<(), crate::commands::error::AppError> {
+    let registry = app.state::<WindowRegistry>();
+    let Some(record) = registry.window(label) else {
+        return Ok(());
+    };
+    if record.role != WindowRole::Recovery {
+        return Ok(());
+    }
+    registry.set_role(label, WindowRole::Normal);
+    let repository = app.state::<SqliteRepository>().inner().clone();
+    let owned = registry.owned_workspace_ids();
+    for workspace in repository.workspace_list().await? {
+        if workspace.mounted && !owned.contains(&workspace.id) {
+            repository
+                .workspace_set_mounted(workspace.id, false)
+                .await?;
+        }
+    }
+    let writer = app.state::<SessionWriter>();
+    let entries = writer.take_pending_restore().unwrap_or_default();
+    let created = restore_session(app, entries).await;
+    writer.release();
+    persist_session(app).await;
+    broadcast_open_workspaces(app).await;
+    let left_empty = registry
+        .window(label)
+        .is_some_and(|record| record.workspace.is_none() && record.documents.is_empty());
+    if created > 0 && left_empty {
+        if let Some(window) = app.get_webview_window(label) {
+            // The normal close request, so the window checkpoints first.
+            if let Err(error) = window.close() {
+                eprintln!("failed to close the empty Recovery window: {error}");
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Tell every window which Workspaces are open, so each can tell apart

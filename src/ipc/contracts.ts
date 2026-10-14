@@ -18,6 +18,7 @@ export type ErrorCode =
   | "WORKSPACE_NOT_OWNED"
   | "DOCUMENT_NOT_OWNED"
   | "WINDOW_OWNERSHIP_CHANGED"
+  | "QUIT_CHECKPOINT_FAILED"
   | "INVALID_NAME"
   | "NAME_CONFLICT"
   | "ENTRY_PROTECTED"
@@ -495,6 +496,24 @@ export interface IpcCommands {
   /** Close this window's Workspace; the window's tabs are closed first. */
   window_release_workspace: {
     request: Record<string, never>;
+    response: Record<string, never>;
+  };
+  /**
+   * Report this window's tabs for the Window Session. Paths the window does
+   * not own and that are outside its Workspace are ignored.
+   */
+  window_session_update: {
+    request: { tabs: string[]; activePath: string | null };
+    response: Record<string, never>;
+  };
+  /** Recovery is finished in the Recovery window; the other windows open. */
+  startup_recovery_done: {
+    request: Record<string, never>;
+    response: Record<string, never>;
+  };
+  /** This window's answer to `app-quit-requested`. */
+  app_quit_ready: {
+    request: { requestId: string; ok: boolean; message?: string };
     response: Record<string, never>;
   };
   /** Save the calling window's sidebar state for its Workspace. */

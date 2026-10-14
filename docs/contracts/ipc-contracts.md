@@ -60,6 +60,7 @@ type ErrorCode =
   | "WORKSPACE_NOT_OWNED"   // 调用窗口没有 Workspace（如 Welcome 窗口保存侧栏状态）
   | "DOCUMENT_NOT_OWNED"    // 绘图由另一个窗口打开；context.path 为该绘图
   | "WINDOW_OWNERSHIP_CHANGED" // 判定之后归属已变（retriable）
+  | "QUIT_CHECKPOINT_FAILED" // 退出前有窗口未能 checkpoint，应用未退出（retriable）
   | "INTERNAL";
 ```
 
@@ -74,6 +75,9 @@ Rust 侧以 `thiserror` 枚举实现并映射到该形状；`unwrap`/`expect` �
 | `app_handshake` | `{}` | `AppHandshakeResponse` | `contractVersion` 为 5；按调用窗口返回；`abnormalExit=true` 时进入恢复；`pendingOpenPaths` 为本次启动文件关联/单实例转交路径；`preferredLanguages` 为系统 UI 语言列表 |
 | `recovery_list` | `{}` | `RecoveryCandidate[]` | 列出可恢复草稿 |
 | `recovery_apply` | `{ documentId; action; saveAsPath? }` | `{ scene?; newPath? }` | `action`: `restore` \| `keepDisk` \| `saveAsNew` \| `discard` |
+| `startup_recovery_done` | `{}` | `{}` | Recovery 窗口在每个候选的结果都已被采用（打开或恢复到 Tab）之后调用；后端随后按 Window Session 重建其他窗口。没有候选的 Recovery 窗口直接关闭 |
+| `window_session_update` | `{ tabs: string[]; activePath: string \| null }` | `{}` | 上报本窗口的 Tab 顺序与活动 Tab；只保留本窗口持有或位于其 Workspace 内的绘图（规范化路径），其余忽略；后端短暂合并后写入 Window Session |
+| `app_quit_ready` | `{ requestId; ok; message? }` | `{}` | 本窗口对 `app-quit-requested` 的应答：`ok=false` 表示 checkpoint 失败 |
 
 ```typescript
 interface AppHandshakeResponse {
@@ -369,13 +373,14 @@ interface NativeMenuSyncState {
 
 #### 1.7.1 按键归属
 
-每个按键只有一个 owner。原生菜单只为 New Window、Open Workspace、Save 和 Export Image 注册 accelerator（`native_menu_spec.rs` 的 `registers_only_the_owned_file_accelerators` 测试断言集合恰为这四项，并断言不含 Cmd/Ctrl+O）。
+每个按键只有一个 owner。原生菜单只为 New Window、Open Workspace、Save、Export Image 和 Quit 注册 accelerator（`native_menu_spec.rs` 的 `registers_only_the_owned_accelerators` 测试断言集合恰为这五项，并断言不含 Cmd/Ctrl+O）。
 
 | 按键 | Owner | 说明 |
 |------|-------|------|
 | Cmd/Ctrl+S | 原生菜单 Save | 桌面壳内前端不再监听该 keydown，避免一次按键保存两次；无原生窗口运行时（浏览器测试环境）由 window keydown 处理 |
 | Cmd/Ctrl+Alt+E | 原生菜单 Export Image | 不与 SDK 的 Cmd/Ctrl+Shift+E 重合 |
 | Cmd/Ctrl+Shift+N | 原生菜单 New Window | Rust 直接创建 Welcome 窗口，不经前端；SDK 没有 N 快捷键，工具快捷键不带 Cmd/Ctrl |
+| Cmd/Ctrl+Q | 原生菜单 Quit | 应用自有菜单项（不是系统 predefined Quit）；Rust 发起协调退出，见 §2 `app-quit-requested` |
 | Cmd/Ctrl+Shift+O | 原生菜单 Open Workspace… | 发往前台窗口；不用 Cmd/Ctrl+O，因为它属于 Version History 受保护输入的导入快捷键 |
 | Q、Cmd+'、Alt+S、Alt+Z、? | Excalidraw SDK | 原生菜单对应的 Tool Lock、Grid、Snap、Zen、Help 项不注册 accelerator |
 | Shift+Alt+D | Excalidraw SDK | 切换主题；编辑器宿主把 SDK 发起的主题变化写回应用外观偏好，原生 Appearance 子菜单不注册 accelerator |
@@ -431,6 +436,9 @@ interface WorkspaceShellState {
 | `native-menu-command` | `{ command: NativeMenuCommand; validationId? }` | 用户激活原生菜单项（仅 Rust 拥有的项）；发给前台窗口，没有前台窗口时发给最近聚焦的窗口 |
 | `app-preferences-changed` | `{ appearance?; language? }` | 某窗口改变外观或语言后，发给除该窗口外的所有窗口；接收端只应用，不写回存储、不再广播 |
 | `open-workspaces-changed` | `{ workspaces: { workspaceId; name; rootPath }[] }` | 任一窗口认领或释放 Workspace、窗口销毁后发给所有窗口；用于窗口标题同名区分 |
+
+| `app-quit-requested` | `{ requestId }` | 用户选择 Quit（菜单或 Cmd+Q，由 Rust 处理）：发给每个窗口；窗口 checkpoint 全部绘图后调用 `app_quit_ready`。全部成功（或窗口已销毁）时后端写入 Window Session 并退出 |
+| `app-quit-cancelled` | `{ requestId; failedLabel }` | 某窗口应答失败或在超时（10 秒）内未应答：退出取消，`failedLabel` 窗口被置前并显示 `QUIT_CHECKPOINT_FAILED`；发给所有窗口 |
 
 v5 起 `workspace-entries-changed`、`index-progress` 只发给持有该 Workspace 的窗口（无持有者则不发）；`file-changed`、`conflict-detected`、`draft-saved`、`history-issue` 只发给持有该文档的窗口（由 `doc_open` 或首次写入登记；无持有者则不发）；前端仍按 path 过滤。前端监听必须以当前窗口为目标（`{ target: { kind: "WebviewWindow", label } }`），否则目标为 `Any` 的监听会收到发给其他窗口的事件。
 

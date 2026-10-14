@@ -152,16 +152,17 @@ export function RecoveryStartup({
       };
     }
 
-    const response = await manager.apply(appliedDecision);
-    if (
-      response.scene !== undefined &&
-      response.scene !== null &&
-      candidate.originalPath !== null
-    ) {
-      await documents.restore(candidate.originalPath, response.scene);
-    } else if (response.newPath !== undefined && response.newPath !== null) {
-      await documents.open(response.newPath);
-    }
+    const response = await manager.apply(appliedDecision, async (applied) => {
+      if (
+        applied.scene !== undefined &&
+        applied.scene !== null &&
+        candidate.originalPath !== null
+      ) {
+        await documents.restore(candidate.originalPath, applied.scene);
+      } else if (applied.newPath !== undefined && applied.newPath !== null) {
+        await documents.open(applied.newPath);
+      }
+    });
     const recovered =
       (response.scene !== undefined &&
         response.scene !== null &&

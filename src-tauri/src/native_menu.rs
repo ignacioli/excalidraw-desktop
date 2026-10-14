@@ -280,7 +280,6 @@ fn system_item<R: Runtime>(
         SystemItem::Services => PredefinedMenuItem::services(app, text),
         SystemItem::Hide => PredefinedMenuItem::hide(app, text),
         SystemItem::HideOthers => PredefinedMenuItem::hide_others(app, text),
-        SystemItem::Quit => PredefinedMenuItem::quit(app, text),
         SystemItem::CloseWindow => PredefinedMenuItem::close_window(app, text),
         SystemItem::Undo => PredefinedMenuItem::undo(app, text),
         SystemItem::Redo => PredefinedMenuItem::redo(app, text),
@@ -483,14 +482,18 @@ fn set_menu_item_enabled<R: Runtime>(
     Ok(false)
 }
 
-/// Handle New Window in Rust and forward every other recognized native menu
-/// command to the front window, falling back to the most recently focused
-/// one.
+/// Handle New Window and Quit in Rust and forward every other recognized
+/// native menu command to the front window, falling back to the most
+/// recently focused one.
 pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
     if event.id().as_ref() == NEW_WINDOW_MENU_ID {
         if let Err(error) = crate::window::open_new_window(app) {
             eprintln!("failed to open a new window: {error}");
         }
+        return;
+    }
+    if event.id().as_ref() == QUIT_MENU_ID {
+        crate::window::quit::request_quit(app);
         return;
     }
     let Some(command) = NativeMenuCommand::from_menu_id(event.id().as_ref()) else {

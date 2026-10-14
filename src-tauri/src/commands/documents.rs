@@ -1510,6 +1510,10 @@ pub async fn doc_checkpoint(
     window: WebviewWindow,
     state: State<'_, DocumentState>,
 ) -> Result<CheckpointResponse, IpcError> {
+    #[cfg(feature = "e2e-harness")]
+    if crate::e2e_harness::multi_window::checkpoint_fault(window.label()) {
+        return Err(AppError::DiskFull.into());
+    }
     let event_path = fs::canonicalize(&path).unwrap_or_else(|_| PathBuf::from(&path));
     let registry = app.state::<WindowRegistry>();
     let response = write_for_window(

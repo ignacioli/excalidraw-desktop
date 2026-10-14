@@ -20,6 +20,7 @@ import type { NativeMenuCommand } from "../ipc/contracts";
 import { LocaleController } from "../i18n";
 import { en } from "../i18n/messages/en.ts";
 import { AppShell } from "./AppShell";
+import { registerOpenFileHandler } from "./openFileHandler";
 import {
   SHELL_PREFERENCES_STORAGE_KEY,
   SHELL_PREFERENCES_VERSION,
@@ -113,6 +114,7 @@ vi.mock("./exitCheckpoint", async () => {
     ...actual,
     hasNativeWindowRuntime: () => nativeRuntimeHarness.enabled,
     registerExitCheckpoint: vi.fn(async () => () => undefined),
+    registerQuitCheckpoint: vi.fn(async () => () => undefined),
   };
 });
 
@@ -410,7 +412,10 @@ describe("AppShell", () => {
         .mock.calls.map(([command]) => command)
         .filter(
           (command) =>
-            command !== "workspace_list" && command !== "workspace_recent_list",
+            // Startup reads only.
+            command !== "workspace_list" &&
+            command !== "workspace_recent_list" &&
+            command !== "app_handshake",
         ),
     ).toEqual([]);
   });
@@ -875,6 +880,111 @@ describe("AppShell", () => {
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(documentManager.store.getState().sessionsById).toEqual({});
+  });
+
+  it("explains on Welcome that a Workspace of the previous session is unavailable", async () => {
+    const workspace = {
+      id: "workspace-moved",
+      name: "Moved workspace",
+      rootPath: "/workspace/moved",
+      createdAt: 1,
+    };
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [workspace];
+      if (command === "app_handshake") {
+        return {
+          contractVersion: 5,
+          appVersion: "0.1.0",
+          abnormalExit: false,
+          pendingOpenPaths: [],
+          preferredLanguages: [],
+          window: {
+            label: "window-2",
+            workspace: null,
+            unavailableWorkspace: workspace,
+            restore: null,
+            shell: null,
+            openWorkspaceNames: [],
+          },
+        };
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "“Moved workspace” couldn’t be reopened.",
+    );
+    expect(await screen.findByText("Folder unavailable")).toBeInTheDocument();
+    expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith(
+      "window_claim_workspace",
+      expect.anything(),
+    );
+  });
+
+  it("says briefly how many tabs of the previous session were skipped", async () => {
+    nativeRuntimeHarness.enabled = true;
+    render(<AppShell />);
+    await waitFor(() => expect(registerOpenFileHandler).toHaveBeenCalled());
+    const options = vi.mocked(registerOpenFileHandler).mock.calls.at(-1)?.[1];
+
+    act(() => options?.onRestoreSkipped?.(2));
+
+    expect(
+      await screen.findByText(
+        "2 drawings from last time couldn’t be reopened. They were moved, deleted, or can’t be read.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("reports the window's tabs for the next launch", async () => {
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list" || command === "workspace_recent_list")
+        return [];
+      if (command === "window_session_update") return {};
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("workspace_list", {}),
+    );
+
+    act(() => {
+      documentManager.store.setState({
+        sessionsById: {
+          d1: {
+            id: "d1",
+            path: "/a/one.excalidraw",
+            title: "one",
+          } as DocumentSession,
+        },
+        tabOrder: ["d1"],
+        activeDocumentId: "d1",
+      });
+    });
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("window_session_update", {
+        tabs: ["/a/one.excalidraw"],
+        activePath: "/a/one.excalidraw",
+      }),
+    );
+    act(() => {
+      documentManager.store.setState({
+        sessionsById: {},
+        tabOrder: [],
+        activeDocumentId: null,
+      });
+    });
   });
 
   it("clears the unavailable row state after a successful remount retry", async () => {

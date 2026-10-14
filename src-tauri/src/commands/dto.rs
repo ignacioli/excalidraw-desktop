@@ -679,6 +679,23 @@ pub struct WorkspaceRevealEntryEvent {
     pub name: String,
 }
 
+/// `app-quit-requested`: checkpoint every drawing, then answer with
+/// `app_quit_ready`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppQuitRequestedEvent {
+    pub request_id: String,
+}
+
+/// `app-quit-cancelled`: the quit stopped because `failed_label` could not
+/// checkpoint or did not answer in time.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppQuitCancelledEvent {
+    pub request_id: String,
+    pub failed_label: String,
+}
+
 /// `shell_preferences_migrate`: whether this call imported the legacy
 /// preferences (only the first call does).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

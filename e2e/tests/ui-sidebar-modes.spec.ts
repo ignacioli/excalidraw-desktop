@@ -66,9 +66,7 @@ test("a selected Workspace starts hidden; the Toggle control opens overlay", asy
   ).toBeLessThanOrEqual(LAYOUT_PX);
 });
 
-// Pending: a restart reopens the last Workspace again once launch restores
-// the window session; until then the launch window starts on Welcome.
-test.fixme("one toggle cycles hidden, overlay, pinned, and hidden while persisting pin state", async ({
+test("one toggle cycles hidden, overlay, pinned, and hidden while persisting pin state", async ({
   page,
 }) => {
   await prepareShell(page);
@@ -289,9 +287,7 @@ test("prefers-reduced-motion still opens and closes overlay without relying on a
   expect(await workspaceSidebar(page).isVisible()).toBe(false);
 });
 
-// Pending: a restart reopens the last Workspace again once launch restores
-// the window session; until then the launch window starts on Welcome.
-test.fixme("persisted Light, Dark, and System preferences remain independent of sidebar modes", async ({
+test("persisted Light, Dark, and System preferences remain independent of sidebar modes", async ({
   page,
 }) => {
   await page.emulateMedia({ colorScheme: "light" });

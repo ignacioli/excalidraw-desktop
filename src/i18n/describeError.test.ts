@@ -14,6 +14,7 @@ const ERROR_CODES: readonly ErrorCode[] = [
   "WORKSPACE_NOT_OWNED",
   "DOCUMENT_NOT_OWNED",
   "WINDOW_OWNERSHIP_CHANGED",
+  "QUIT_CHECKPOINT_FAILED",
   "INVALID_NAME",
   "NAME_CONFLICT",
   "ENTRY_PROTECTED",
@@ -43,8 +44,8 @@ function ipcError(code: string) {
 }
 
 describe("describeError", () => {
-  it("has distinct English and Simplified Chinese copy for all 26 error codes", () => {
-    expect(ERROR_CODES).toHaveLength(26);
+  it("has distinct English and Simplified Chinese copy for all 27 error codes", () => {
+    expect(ERROR_CODES).toHaveLength(27);
     for (const code of ERROR_CODES) {
       const key = `error.${code}` as const;
       expect(en[key], key).toBeTruthy();

@@ -67,6 +67,8 @@ export const zhCN: Record<MessageKey, string> = {
   "error.DOCUMENT_NOT_OWNED": "这个绘图已在另一个窗口打开。",
   "error.WINDOW_OWNERSHIP_CHANGED":
     "该工作区已在另一个窗口中打开或关闭，请重试。",
+  "error.QUIT_CHECKPOINT_FAILED":
+    "此窗口中有绘图未能保存，Excalidraw 没有退出。",
   "error.INVALID_NAME": "名称无效。",
   "error.NAME_CONFLICT": "已存在同名项目。",
   "error.ENTRY_PROTECTED": "该项目受保护，无法更改。",

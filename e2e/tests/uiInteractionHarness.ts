@@ -185,6 +185,34 @@ export async function installUiInteractionHarness(
       };
       const browser = globalThis as HarnessWindow;
 
+      // The Window Session as the backend stores it: the claimed Workspace
+      // and the reported tabs. A reload is a restart, which claims the
+      // Workspace again before the window loads and hands back the tabs.
+      type WindowSession = {
+        workspaceId: string | null;
+        tabs: string[];
+        activePath: string | null;
+      };
+      const windowSessionKey = "excalidraw-e2e:ui-window-session";
+      const readWindowSession = (): WindowSession => {
+        const stored = browser.localStorage.getItem(windowSessionKey);
+        return stored === null
+          ? { workspaceId: null, tabs: [], activePath: null }
+          : (JSON.parse(stored) as WindowSession);
+      };
+      const writeWindowSession = (next: Partial<WindowSession>) =>
+        browser.localStorage.setItem(
+          windowSessionKey,
+          JSON.stringify({ ...readWindowSession(), ...next }),
+        );
+      const restoredSession = readWindowSession();
+      const restoredWorkspace = state.recent.find(
+        (workspace) => workspace.id === restoredSession.workspaceId,
+      );
+      if (restoredWorkspace !== undefined) {
+        state.workspaces = [restoredWorkspace];
+      }
+
       // Sidebar state as the backend keeps it: per Workspace, plus the
       // one-time import of the earlier localStorage preferences. Stored in
       // localStorage so it survives a reload, like the app database.
@@ -280,9 +308,19 @@ export async function installUiInteractionHarness(
               // The launch window, as the per-window bootstrap reports it.
               window: {
                 label: "window-1",
-                workspace: null,
+                workspace:
+                  restoredWorkspace === undefined
+                    ? null
+                    : { ...restoredWorkspace },
                 unavailableWorkspace: null,
-                restore: null,
+                restore:
+                  restoredSession.tabs.length > 0
+                    ? {
+                        tabs: restoredSession.tabs,
+                        activePath: restoredSession.activePath,
+                        skipped: 0,
+                      }
+                    : null,
                 shell: shellFor(state.workspaces[0]?.id),
                 openWorkspaceNames: [],
               },
@@ -312,6 +350,7 @@ export async function installUiInteractionHarness(
             };
             state.recent.push(workspace);
             state.workspaces = [workspace];
+            writeWindowSession({ workspaceId: workspace.id });
             return { ...workspace };
           }
           if (command === "window_probe_workspace") {
@@ -341,6 +380,7 @@ export async function installUiInteractionHarness(
             if (existing === undefined) state.recent.push(workspace);
             const replaced = state.workspaces[0]?.id ?? null;
             state.workspaces = [workspace];
+            writeWindowSession({ workspaceId: workspace.id });
             return {
               kind: "claimed",
               workspace: { ...workspace },
@@ -403,6 +443,7 @@ export async function installUiInteractionHarness(
           }
           if (command === "window_release_workspace") {
             state.workspaces = [];
+            writeWindowSession({ workspaceId: null });
             return {};
           }
           if (command === "workspace_remove") {
@@ -410,6 +451,23 @@ export async function installUiInteractionHarness(
             state.workspaces = state.workspaces.filter(
               (workspace) => workspace.id !== workspaceId,
             );
+            writeWindowSession({
+              workspaceId: state.workspaces[0]?.id ?? null,
+            });
+            return {};
+          }
+          if (command === "window_session_update") {
+            writeWindowSession({
+              tabs: Array.isArray(args.tabs) ? args.tabs.map(String) : [],
+              activePath:
+                typeof args.activePath === "string" ? args.activePath : null,
+            });
+            return {};
+          }
+          if (
+            command === "app_quit_ready" ||
+            command === "startup_recovery_done"
+          ) {
             return {};
           }
           if (command === "workspace_entry_list") {

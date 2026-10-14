@@ -249,6 +249,100 @@ pub async fn app_handshake(
         .map_err(Into::into)
 }
 
+/// A window finished (or failed) its checkpoint for a coordinated quit.
+#[tauri::command]
+pub async fn app_quit_ready(
+    request_id: String,
+    ok: bool,
+    message: Option<String>,
+    app: AppHandle,
+    window: WebviewWindow,
+) -> Result<EmptyResponse, IpcError> {
+    if !ok {
+        eprintln!(
+            "{} could not checkpoint before quitting: {}",
+            window.label(),
+            message.as_deref().unwrap_or("no reason given")
+        );
+    }
+    crate::window::quit::report_ready(&app, &request_id, window.label(), ok);
+    Ok(EmptyResponse {})
+}
+
+/// The Recovery window finished Recovery: recreate the other windows.
+#[tauri::command]
+pub async fn startup_recovery_done(
+    app: AppHandle,
+    window: WebviewWindow,
+) -> Result<EmptyResponse, IpcError> {
+    crate::window::finish_recovery(&app, window.label()).await?;
+    Ok(EmptyResponse {})
+}
+
+/// The tabs of `label` that the Window Session may store: drawings the
+/// window owns or that lie in its Workspace, as canonical paths. The active
+/// tab is kept only when it is one of them. Returns the number ignored.
+pub fn accepted_session_tabs(
+    registry: &WindowRegistry,
+    label: &str,
+    tabs: Vec<String>,
+    active_path: Option<String>,
+) -> (Vec<String>, Option<String>, usize) {
+    let record = registry.window(label);
+    let root = record
+        .as_ref()
+        .and_then(|record| record.workspace.as_ref())
+        .map(|workspace| workspace.root.clone());
+    let mut ignored = 0;
+    let mut accepted = Vec::new();
+    let mut active = None;
+    for tab in tabs {
+        let canonical = crate::commands::documents::canonical_document_path(Path::new(&tab));
+        let owner = registry.document_owner(&canonical);
+        let inside = root
+            .as_ref()
+            .is_some_and(|root| canonical.starts_with(root));
+        let allowed = match owner.as_deref() {
+            Some(owner) => owner == label,
+            // Not opened yet (a new drawing before its first write).
+            None => inside,
+        };
+        let canonical = canonical.to_string_lossy().into_owned();
+        if !allowed || accepted.contains(&canonical) {
+            ignored += 1;
+            continue;
+        }
+        if active_path.as_deref() == Some(tab.as_str()) {
+            active = Some(canonical.clone());
+        }
+        accepted.push(canonical);
+    }
+    (accepted, active, ignored)
+}
+
+/// Record the calling window's tabs for the Window Session; the store is
+/// written after a short delay so bursts of tab changes write once.
+#[tauri::command]
+pub async fn window_session_update(
+    tabs: Vec<String>,
+    active_path: Option<String>,
+    app: AppHandle,
+    window: WebviewWindow,
+    registry: State<'_, WindowRegistry>,
+) -> Result<EmptyResponse, IpcError> {
+    let (tabs, active_path, ignored) =
+        accepted_session_tabs(&registry, window.label(), tabs, active_path);
+    if ignored > 0 {
+        eprintln!(
+            "ignored {ignored} Window Session tabs {} does not own",
+            window.label()
+        );
+    }
+    registry.set_session_tabs(window.label(), tabs, active_path);
+    crate::window::schedule_session_write(&app);
+    Ok(EmptyResponse {})
+}
+
 fn session_lock_error(error: SessionLockError) -> AppError {
     match error {
         SessionLockError::CreateDirectory { path, source }
@@ -327,6 +421,77 @@ mod tests {
         registry::{WindowRestore, WorkspaceCandidate},
         session::WorkspaceShellState,
     };
+
+    #[test]
+    fn the_session_keeps_only_tabs_the_window_owns_or_holds_in_its_workspace() {
+        let base = std::env::temp_dir().join(format!("session-tabs-{}", uuid::Uuid::new_v4()));
+        let mine = base.join("mine");
+        let theirs = base.join("theirs");
+        std::fs::create_dir_all(&mine).unwrap_or_else(|error| panic!("create mine: {error}"));
+        std::fs::create_dir_all(&theirs).unwrap_or_else(|error| panic!("create theirs: {error}"));
+        let mine = std::fs::canonicalize(&mine).unwrap_or_else(|error| panic!("{error}"));
+        let theirs = std::fs::canonicalize(&theirs).unwrap_or_else(|error| panic!("{error}"));
+        let outside = base.join("outside.excalidraw");
+        for file in [
+            mine.join("a.excalidraw"),
+            theirs.join("b.excalidraw"),
+            outside.clone(),
+        ] {
+            std::fs::write(&file, b"{}").unwrap_or_else(|error| panic!("write: {error}"));
+        }
+        let outside = std::fs::canonicalize(&outside).unwrap_or_else(|error| panic!("{error}"));
+        let registry = WindowRegistry::new();
+        for (label, id, root) in [("window-1", "mine", &mine), ("window-2", "theirs", &theirs)] {
+            registry
+                .register(label, WindowRole::Normal)
+                .unwrap_or_else(|error| panic!("register: {error}"));
+            registry
+                .claim(
+                    label,
+                    &WorkspaceCandidate {
+                        id: Some(id.to_owned()),
+                        root: root.clone(),
+                    },
+                )
+                .unwrap_or_else(|error| panic!("claim: {error}"));
+        }
+        registry
+            .claim_document("window-1", &outside)
+            .unwrap_or_else(|error| panic!("claim drawing: {error}"));
+        let path = |path: &std::path::Path| path.to_string_lossy().into_owned();
+
+        let (tabs, active, ignored) = accepted_session_tabs(
+            &registry,
+            "window-1",
+            vec![
+                path(&mine.join("a.excalidraw")),
+                path(&theirs.join("b.excalidraw")),
+                path(&outside),
+                path(&mine.join("new.excalidraw")),
+                path(&mine.join("a.excalidraw")),
+            ],
+            Some(path(&theirs.join("b.excalidraw"))),
+        );
+
+        assert_eq!(
+            tabs,
+            vec![
+                path(&mine.join("a.excalidraw")),
+                path(&outside),
+                path(&mine.join("new.excalidraw")),
+            ]
+        );
+        assert_eq!(active, None, "an ignored tab cannot be the active one");
+        assert_eq!(ignored, 2);
+        let (_, active, _) = accepted_session_tabs(
+            &registry,
+            "window-1",
+            vec![path(&outside)],
+            Some(path(&outside)),
+        );
+        assert_eq!(active, Some(path(&outside)));
+        let _ = std::fs::remove_dir_all(base);
+    }
 
     fn session(abnormal_exit: bool) -> SessionState {
         SessionState {

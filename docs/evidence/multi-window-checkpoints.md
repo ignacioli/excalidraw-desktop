@@ -288,7 +288,109 @@ Gaps and owner decisions:
 
 ## Closing, quitting and restoring
 
-Not run yet.
+Quit (the app's own menu item and Cmd+Q) checkpoints every window before the
+app exits; closing one window; the last window closing while the app keeps
+running; and what the next launch restores: one Recovery window after a
+crash, then the windows, tabs and active tab of the last session.
+
+- Candidate: the commit that adds this section (parent `bcd512f`), on macOS
+  26.6.2 (Darwin 25.6.0, arm64), 2026-10-14.
+- Result: PASS for the automated and native checks below, with one open
+  defect: a pasted element is not written to the file on Cmd+Q (see "Gaps
+  and owner decisions"). It is being investigated and fixed separately.
+
+| Command                                                                                                 | Result                        |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check`                                                | PASS                          |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`                        | PASS                          |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --features e2e-harness -- -D warnings` | PASS                          |
+| `cargo test --manifest-path src-tauri/Cargo.toml`                                                       | PASS, 336 tests               |
+| `pnpm typecheck`                                                                                        | PASS                          |
+| `pnpm lint`                                                                                             | PASS                          |
+| `pnpm format`                                                                                           | PASS                          |
+| `pnpm test` (whole Vitest suite)                                                                        | PASS, 84 files / 692 tests    |
+| `APP_E2E=1 pnpm e2e`                                                                                    | PASS, 180 passed / 85 skipped |
+| `pnpm native:window:test`                                                                               | PASS, 13 tests                |
+| `APP_E2E=1 EXCALIDRAW_E2E_BINARY=<harness build> pnpm e2e e2e/tests/multi-window-reliability.spec.ts`   | PASS, 4 scenarios × 10 runs   |
+| `pnpm tauri build --debug --bundles app`, then `pnpm native:window:check -- --app <debug .app>`         | PASS                          |
+
+The process-level runs used the test-only build
+`VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness --no-bundle`,
+sha256 `73af0e016dd568664b524298897da0bb578ef0c054e514ad3edcaab50d912fd1`,
+built from the working tree on top of `bcd512f`. Later changes in this
+checkpoint touch only the native check script, documents and formatting, not
+the built app. Each run wrote one JSON record of its checks; the 40 records
+were read back and contain no failed check. They are kept outside the
+repository.
+
+What the checks cover:
+
+- Process level, two windows with unsaved edits, each scenario 10 times:
+  - Crash (the process group killed): the next launch shows exactly one
+    Recovery window, covering both drawings; no other window opens and the
+    files are unchanged before Recovery; the restored content is the edited
+    content; after Recovery the windows of the last session open.
+  - Quit while one window cannot checkpoint: the app keeps running, the
+    failing window comes to the front with the error, the edits and drafts
+    are kept, and a second Quit exits with code 0 and saves both drawings.
+  - Quit and restart: the window count, tab order and active tab come back;
+    a deleted drawing is skipped with a notice; a Workspace whose folder was
+    moved opens Welcome with a notice.
+  - Closing one window saves its drawings and leaves the other window as it
+    was; a close that cannot checkpoint keeps the window open with the error,
+    the edit and the draft.
+- Native, through Accessibility and System Events on the debug `.app`:
+  closing every window leaves the app running; reopening it with `open -a`
+  shows Welcome; Cmd+Q goes through the coordinated quit (the app log shows
+  the request to every window and then the exit), exits with code 0, and a
+  keyboard edit made before it is on disk.
+- Rust: every transition of the quit coordinator (all ready, one failure,
+  timeout, a destroyed window, Quit again while collecting, Quit after a
+  cancel, answers from unknown windows); Quit is the app's own menu item with
+  Cmd+Q, and the menu registers only its own accelerators; the Window Session
+  keeps only tabs the window owns or holds in its Workspace; the startup
+  order (Recovery first, then the session); the test-only multi-window
+  commands are not in the production command list.
+- Frontend unit tests: a window answers the quit request after checkpointing
+  and shows the error when it cannot; Recovery reports itself finished only
+  after every result is open in a tab, and a result that cannot be opened
+  stays undecided; restored tabs and launch files open once, also when the
+  handler is registered twice; the skipped-tab and unavailable-Workspace
+  notices.
+- Browser: the four restart tests that waited for this checkpoint run again
+  and pass (sidebar modes, appearance after restart, the workspace tree
+  scroll anchor, and revisiting folders); after a reload the last tab comes
+  back without reopening the Workspace through Recent.
+
+Defects found and fixed by these checks:
+
+- Recovery reported itself finished after the first decision. The session
+  restore then claimed the second drawing first, and restoring it failed
+  with "This drawing is open in another window".
+- Under React StrictMode the restored tabs were opened twice.
+
+Gaps and owner decisions:
+
+- Open defect: after pasting an element into an empty drawing, Cmd+Q exits
+  with code 0 through the coordinated quit, but the file on disk still has
+  no elements. Reproduced twice on the native build. Moving an existing
+  element, by keyboard or by the test driver, is saved. Whether the pasted
+  element is kept in the recovery draft, and whether the defect predates
+  the coordinated quit, is not yet known. The process-level scenarios edit
+  existing elements only, so they do not cover this case.
+- The Window menu lists none of the open windows; it has Minimize, Zoom,
+  Close Window and Close All. Recorded as an observation, not fixed.
+- A failed checkpoint leaves the drawing's save status at "checkpointing"
+  rather than an error state; the error is shown by the shell. Not fixed.
+- The test driver turns structured IPC errors into "[object Object]" in its
+  answers. This affects only test diagnostics.
+- When Recovery leaves its window empty and the session opens other
+  windows, the Recovery window closes.
+- In the test-only build started by the history driver, closing the last
+  window ends the process; every other build keeps running.
+- The `native:menu:check` was not re-run; the Quit item is checked by the
+  Rust menu tests and by the native window check.
+- No new app-owned UI beyond the existing notices and error text.
 
 ## Window size and placement
 

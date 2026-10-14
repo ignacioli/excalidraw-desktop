@@ -23,7 +23,11 @@ use tauri::Manager;
 
 use database::repository::WorkspaceRepository;
 use tauri_plugin_fs::FsExt;
-use window::registry::{WindowRegistry, WindowRole};
+use window::{
+    quit::QuitCoordinator,
+    registry::{WindowRegistry, WindowRole},
+    session::{SessionWriter, WindowSessionRepository},
+};
 
 use commands::{
     documents::{
@@ -43,8 +47,8 @@ use commands::{
         recovery_apply, recovery_list, RecoveryService, RecoveryState, TauriRecoveryPathGrant,
     },
     session::{
-        app_handshake, app_preferences_broadcast, shell_preferences_migrate,
-        workspace_shell_state_save, SessionState,
+        app_handshake, app_preferences_broadcast, app_quit_ready, shell_preferences_migrate,
+        startup_recovery_done, window_session_update, workspace_shell_state_save, SessionState,
     },
     workspace::{
         window_claim_workspace, window_close_other_and_claim, window_peer_close_failed,
@@ -195,9 +199,19 @@ pub fn run() {
         if !session.abnormal_exit() {
             tauri::async_runtime::block_on(repository.workspace_unmount_all())?;
         }
+        let stored_session = match tauri::async_runtime::block_on(repository.window_session_list())
+        {
+            Ok(entries) => entries,
+            Err(error) => {
+                eprintln!("failed to read the window session: {error}");
+                Vec::new()
+            }
+        };
         let window_registry = WindowRegistry::new();
         let owned_workspace_ids = window_registry.owned_workspace_ids();
         app.manage(window_registry);
+        app.manage(QuitCoordinator::new(window::quit::configured_timeout()));
+        app.manage(SessionWriter::default());
         app.manage(crate::window::peer_close::PeerCloseRequests::default());
         app.manage(repository);
         app.manage(history_state);
@@ -235,26 +249,35 @@ pub fn run() {
         app.on_menu_event(crate::native_menu::handle_menu_event);
         crate::native_menu::register_validation_listener(app.handle());
         crate::native_menu::install_menu(app.handle())?;
-        let role = if app.state::<SessionState>().abnormal_exit() {
-            WindowRole::Recovery
+        // The stored windows are recreated first; after an abnormal exit
+        // only the Recovery window opens, and the others follow once
+        // Recovery is done. Until then the stored session is not replaced.
+        let writer = app.state::<SessionWriter>();
+        writer.hold();
+        if app.state::<SessionState>().abnormal_exit() {
+            writer.set_pending_restore(stored_session);
+            crate::window::create_window(app.handle(), WindowRole::Recovery, None)?;
         } else {
-            WindowRole::Normal
-        };
-        #[cfg_attr(
-            not(feature = "e2e-harness"),
-            allow(
-                unused_variables,
-                reason = "only the test-only build pins the first window"
-            )
-        )]
-        let first_window = crate::window::create_window(app.handle(), role, None)?;
+            let created = tauri::async_runtime::block_on(crate::window::restore_session(
+                app.handle(),
+                stored_session,
+            ));
+            writer.release();
+            if created == 0 {
+                crate::window::create_window(app.handle(), WindowRole::Normal, None)?;
+            }
+        }
         crate::window::router::route_open_paths(app.handle(), &pending_open_paths);
+        #[cfg(feature = "e2e-harness")]
+        e2e_harness::multi_window::start_app_driver(app.handle()).map_err(std::io::Error::other)?;
         // rAF-driven performance workloads stall when the window is
         // occluded (WebKit throttles occluded views); keep the test-only
         // measurement window unoccluded on busy diagnostic hosts.
         #[cfg(feature = "e2e-harness")]
         if std::env::var_os("EXCALIDRAW_PERF_CONTROL_DIR").is_some() {
-            let _ = first_window.set_always_on_top(true);
+            for window in app.webview_windows().values() {
+                let _ = window.set_always_on_top(true);
+            }
         }
         Ok(())
     });
@@ -263,7 +286,10 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_handshake,
         app_preferences_broadcast,
+        app_quit_ready,
         shell_preferences_migrate,
+        startup_recovery_done,
+        window_session_update,
         workspace_shell_state_save,
         crate::native_menu::set_native_menu_enabled,
         crate::native_menu::sync_native_menu,
@@ -306,6 +332,9 @@ pub fn run() {
         e2e_harness::e2e_history_frontend_bootstrap,
         e2e_harness::e2e_history_frontend_publish,
         e2e_harness::e2e_history_frontend_close,
+        e2e_harness::multi_window::e2e_multi_window_bootstrap,
+        e2e_harness::multi_window::e2e_multi_window_next,
+        e2e_harness::multi_window::e2e_multi_window_publish,
         e2e_perf_bootstrap,
         e2e_perf_publish_ready,
         e2e_perf_next_command,
@@ -317,7 +346,10 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_handshake,
         app_preferences_broadcast,
+        app_quit_ready,
         shell_preferences_migrate,
+        startup_recovery_done,
+        window_session_update,
         workspace_shell_state_save,
         crate::native_menu::set_native_menu_enabled,
         crate::native_menu::sync_native_menu,
@@ -366,7 +398,19 @@ pub fn run() {
         }
     };
     app.run(|app_handle, event| match event {
+        // Closing the last window keeps the app in the Dock on macOS. An
+        // exit with a code (the coordinated quit) is never held.
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::ExitRequested {
+            code: None, api, ..
+        } if keeps_running_without_windows() => api.prevent_exit(),
         tauri::RunEvent::Exit => {
+            // Terminations that skip the coordinated quit (the Dock menu,
+            // logging out) still store the windows when possible.
+            if app_handle.try_state::<SessionWriter>().is_some() {
+                tauri::async_runtime::block_on(crate::window::persist_session(app_handle));
+                app_handle.state::<SessionWriter>().freeze();
+            }
             if let Some(session) = app_handle.try_state::<SessionState>() {
                 if let Err(error) = session.release() {
                     eprintln!("failed to release the session lock: {error}");
@@ -410,6 +454,8 @@ fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
         }
         tauri::WindowEvent::Destroyed => {
             let label = label.to_owned();
+            // Its own close checkpointed it, so a quit stops waiting for it.
+            crate::window::quit::forget_window(&app, &label);
             tauri::async_runtime::spawn(async move {
                 if let Err(error) = commands::workspace::release_for_window(&app, &label).await {
                     eprintln!("failed to release the Workspace of {label}: {error}");
@@ -417,11 +463,23 @@ fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
                 app.state::<WindowRegistry>().unregister(&label);
                 crate::native_menu::forget_window_state(&app, &label);
                 commands::workspace::finish_peer_closes(&app, &label).await;
+                crate::window::schedule_session_write(&app);
                 crate::window::broadcast_open_workspaces(&app).await;
             });
         }
         _ => {}
     }
+}
+
+/// Whether closing the last window leaves the app running. The test-only
+/// history driver ends its process by closing its only window.
+#[cfg(target_os = "macos")]
+fn keeps_running_without_windows() -> bool {
+    #[cfg(feature = "e2e-harness")]
+    if e2e_harness::exits_with_last_window() {
+        return false;
+    }
+    true
 }
 
 /// Grant drawing paths handed to the running app and route them to windows.
@@ -673,5 +731,27 @@ mod tests {
 
     fn remove_directory(directory: PathBuf) {
         std::fs::remove_dir_all(directory).expect("remove temp fixture directory");
+    }
+
+    /// The production build registers its own command list, which names no
+    /// test-only driver command.
+    #[test]
+    fn the_production_command_list_has_no_test_only_commands() {
+        let source = include_str!("lib.rs");
+        let marker = concat!(
+            "#[cfg(not(feature = \"e2e-harness\"))]\n",
+            "    let builder = builder.invoke_handler("
+        );
+        let start = source.find(marker).expect("production command list");
+        let list = &source[start..];
+        let list = &list[..list.find("]);").expect("end of the command list")];
+
+        assert!(list.contains("app_quit_ready"));
+        for token in ["e2e_", "multi_window", "history_frontend", "perf_"] {
+            assert!(
+                !list.contains(token),
+                "production command list names {token}"
+            );
+        }
     }
 }

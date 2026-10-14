@@ -68,6 +68,8 @@ export const en = {
   "error.DOCUMENT_NOT_OWNED": "This drawing is open in another window.",
   "error.WINDOW_OWNERSHIP_CHANGED":
     "The workspace was opened or closed in another window. Try again.",
+  "error.QUIT_CHECKPOINT_FAILED":
+    "A drawing in this window couldn’t be saved, so Excalidraw didn’t quit.",
   "error.INVALID_NAME": "This name isn’t valid.",
   "error.NAME_CONFLICT": "An item with this name already exists.",
   "error.ENTRY_PROTECTED": "This item is protected and can’t be changed.",

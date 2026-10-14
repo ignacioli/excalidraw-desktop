@@ -3,14 +3,18 @@ import { describe, it } from "node:test";
 import {
   DEFAULT_BINARY,
   NESTED_DIALOG_BUTTONS,
+  QUIT_DRAWING_SCENE,
   checkAvailability,
   drawingTitle,
   exitCodeFor,
   frontWindow,
   hasButtons,
+  listedWindows,
   parseArgs,
   parseButtonNames,
   parseWindowList,
+  quitWasCoordinated,
+  rectangleMoved,
 } from "./native-window-check.mjs";
 
 describe("parseArgs", () => {
@@ -99,5 +103,49 @@ describe("nested-Workspace dialog", () => {
 describe("drawing titles", () => {
   it("names the active drawing and the Workspace", () => {
     assert.equal(drawingTitle("in-a", "alpha"), "in-a — alpha");
+  });
+});
+
+describe("quitWasCoordinated", () => {
+  it("needs the request to every window before the exit", () => {
+    assert.equal(
+      quitWasCoordinated(
+        "app-quit-requested q1 to window-1,window-2\napp-quit-exit\n",
+      ),
+      true,
+    );
+    assert.equal(quitWasCoordinated("app-quit-exit\n"), false);
+    assert.equal(
+      quitWasCoordinated("app-quit-requested q1 to window-1\n"),
+      false,
+    );
+  });
+
+  it("rejects a quit that was cancelled on the way", () => {
+    assert.equal(
+      quitWasCoordinated(
+        "app-quit-requested q1 to window-1\napp-quit-cancelled q1 by window-1\napp-quit-requested q2 to window-1\napp-quit-exit\n",
+      ),
+      false,
+    );
+  });
+});
+
+describe("listedWindows", () => {
+  it("keeps the titles that the Window menu lists", () => {
+    assert.deepEqual(
+      listedWindows(["Minimize", "Zoom", "alpha", "beta"], ["alpha", "gamma"]),
+      ["alpha"],
+    );
+  });
+});
+
+describe("rectangleMoved", () => {
+  it("starts unmoved and moves once x grows", () => {
+    const scene = JSON.parse(QUIT_DRAWING_SCENE);
+    assert.equal(rectangleMoved(scene), false);
+    scene.elements[0].x = 101;
+    assert.equal(rectangleMoved(scene), true);
+    assert.equal(rectangleMoved({ elements: [] }), false);
   });
 });
