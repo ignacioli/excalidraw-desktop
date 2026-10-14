@@ -6448,41 +6448,17 @@ async fn run_tab_close_wheel_notch(root: &Path) -> Result<TabCloseWheelNotchEvid
 }
 
 fn run_window_contract(_root: &Path) -> Result<WindowContractEvidence, String> {
-    let parsed: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
-        .map_err(|error| format!("failed to parse bundled tauri.conf.json: {error}"))?;
-    let window = parsed
-        .pointer("/app/windows/0")
-        .ok_or_else(|| "tauri.conf.json is missing app.windows[0]".to_owned())?;
-    let title = window
-        .get("title")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
-    let decorations = window
-        .get("decorations")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(true);
-    let transparent = window
-        .get("transparent")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    let title_bar_style = window
-        .get("titleBarStyle")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("Visible");
-    let always_on_top = window
-        .get("alwaysOnTop")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false)
-        || env::var_os("EXCALIDRAW_PERF_CONTROL_DIR").is_some();
-    let overlay = title_bar_style.eq_ignore_ascii_case("Overlay");
-    let theme = window.get("theme").and_then(serde_json::Value::as_str);
+    // Every window is built at runtime from this one chrome contract.
+    let chrome = crate::window::WINDOW_CHROME;
+    let always_on_top =
+        chrome.always_on_top || env::var_os("EXCALIDRAW_PERF_CONTROL_DIR").is_some();
+    let overlay = chrome.title_bar_style.eq_ignore_ascii_case("Overlay");
     Ok(WindowContractEvidence {
         scenario: "window-contract",
-        title,
-        decorations,
-        transparent,
-        title_bar_style: if title_bar_style.eq_ignore_ascii_case("Transparent") {
+        title: chrome.title.to_owned(),
+        decorations: chrome.decorations,
+        transparent: chrome.transparent,
+        title_bar_style: if chrome.title_bar_style.eq_ignore_ascii_case("Transparent") {
             "Transparent"
         } else if overlay {
             "Overlay"
@@ -6492,8 +6468,10 @@ fn run_window_contract(_root: &Path) -> Result<WindowContractEvidence, String> {
         always_on_top,
         fullscreen: false,
         overlay_title_bar: overlay,
-        system_controlled_chrome: theme.is_none(),
-        app_wide_dark: theme.is_some_and(|value| value.eq_ignore_ascii_case("dark")),
+        system_controlled_chrome: chrome.theme.is_none(),
+        app_wide_dark: chrome
+            .theme
+            .is_some_and(|value| value.eq_ignore_ascii_case("dark")),
     })
 }
 

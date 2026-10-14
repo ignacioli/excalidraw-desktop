@@ -1,3 +1,4 @@
+import { loadStartupHandshake } from "../app/startupRoute";
 import { createTauriCommandInvoker, type CommandInvoker } from "../ipc/client";
 import type {
   AppHandshakeResponse,
@@ -49,10 +50,11 @@ export interface RecoveryManagerOptions {
 }
 
 export function createRecoveryGateway(
-  invoker: CommandInvoker = createTauriCommandInvoker(),
+  providedInvoker?: CommandInvoker,
 ): RecoveryGateway {
+  const invoker = providedInvoker ?? createTauriCommandInvoker();
   return {
-    handshake: () => invoker.invoke("app_handshake", {}),
+    handshake: () => loadStartupHandshake(providedInvoker),
     list: () => invoker.invoke("recovery_list", {}),
     apply: (decision) => invoker.invoke("recovery_apply", decision),
   };

@@ -1,6 +1,7 @@
-import { createTauriCommandInvoker, type CommandInvoker } from "../ipc/client";
+import type { CommandInvoker } from "../ipc/client";
 import type { AppHandshakeResponse } from "../ipc/contracts";
 import { defaultEventListener } from "../ipc/events";
+import { loadStartupHandshake } from "./startupRoute";
 
 export interface OpenFileManager {
   open(path: string): Promise<string>;
@@ -29,26 +30,24 @@ export function registerOpenFileHandler(
     onError,
   }: OpenFileHandlerOptions = {},
 ): Promise<() => void> {
-  const invoker = providedInvoker ?? createTauriCommandInvoker();
-
   return listener("open-file-request", (event) => {
     const paths = event.payload.paths;
     if (paths.length > 0) {
       openPaths(manager, paths, onError);
     }
   }).then((unlisten) => {
-    void drainPendingStartupPaths(manager, invoker, onError);
+    void drainPendingStartupPaths(manager, providedInvoker, onError);
     return unlisten;
   });
 }
 
 async function drainPendingStartupPaths(
   manager: OpenFileManager,
-  invoker: CommandInvoker,
+  invoker: CommandInvoker | undefined,
   onError: ((error: unknown) => void) | undefined,
 ): Promise<void> {
   try {
-    const response = await invoker.invoke("app_handshake", {});
+    const response = await loadStartupHandshake(invoker);
     const paths = response.pendingOpenPaths;
     if (paths.length > 0) {
       await openPaths(manager, paths, onError);

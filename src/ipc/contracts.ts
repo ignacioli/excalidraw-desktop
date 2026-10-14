@@ -1,4 +1,4 @@
-export const IPC_CONTRACT_VERSION = 4 as const;
+export const IPC_CONTRACT_VERSION = 5 as const;
 /** The activated history boundary; retained as an explicit version marker. */
 export const RESERVED_HISTORY_CONTRACT_VERSION = 3 as const;
 
@@ -56,10 +56,44 @@ export type CheckpointReason =
 export interface AppHandshakeResponse {
   contractVersion: number;
   appVersion: string;
+  /** True only for the window that presents Recovery after an abnormal exit. */
   abnormalExit: boolean;
+  /** Launch files routed to this window; handed out once per window. */
   pendingOpenPaths: string[];
   /** System UI languages (raw BCP-47 tags, at most 16), read once at startup. */
   preferredLanguages: string[];
+  /** What the calling window shows; ownership is decided by the backend. */
+  window: WindowBootstrap;
+}
+
+export interface WindowBootstrap {
+  label: string;
+  /** The Workspace this window owns; `null` is Welcome. */
+  workspace: Workspace | null;
+  /** A session Workspace that could not be opened again. */
+  unavailableWorkspace: Workspace | null;
+  restore: WindowRestoreBootstrap | null;
+  shell: WorkspaceShellState | null;
+  /** Workspaces open in any window, for window-title disambiguation. */
+  openWorkspaceNames: OpenWorkspaceName[];
+}
+
+export interface WindowRestoreBootstrap {
+  tabs: string[];
+  activePath: string | null;
+  skipped: number;
+}
+
+export interface WorkspaceShellState {
+  sidebarPinned: boolean;
+  sidebarWidth: number;
+  expanded: string[];
+}
+
+export interface OpenWorkspaceName {
+  workspaceId: string;
+  name: string;
+  rootPath: string;
 }
 
 export interface RecoveryCandidate {

@@ -3,9 +3,10 @@ use std::{path::Path, time::Duration};
 use rusqlite::Connection;
 use thiserror::Error;
 
-const CURRENT_SCHEMA_VERSION: i64 = 2;
+const CURRENT_SCHEMA_VERSION: i64 = 3;
 const MIGRATION_0001: &str = include_str!("../../migrations/0001_init.sql");
 const MIGRATION_0002: &str = include_str!("../../migrations/0002_workspace_mount_state.sql");
+const MIGRATION_0003: &str = include_str!("../../migrations/0003_window_session.sql");
 
 #[derive(Debug, Error)]
 pub enum MigrationError {
@@ -45,6 +46,9 @@ pub fn run_migrations(connection: &mut Connection) -> Result<(), MigrationError>
     }
     if version < 2 {
         apply_migration(connection, 2, MIGRATION_0002)?;
+    }
+    if version < 3 {
+        apply_migration(connection, 3, MIGRATION_0003)?;
     }
     Ok(())
 }
@@ -92,7 +96,15 @@ mod tests {
             .unwrap_or_else(|error| panic!("read user_version: {error}"));
         assert_eq!(version, CURRENT_SCHEMA_VERSION);
 
-        for table in ["workspaces", "file_index", "drafts", "file_meta"] {
+        for table in [
+            "workspaces",
+            "file_index",
+            "drafts",
+            "file_meta",
+            "window_session",
+            "workspace_window_state",
+            "app_meta",
+        ] {
             let exists: bool = connection
                 .query_row(
                     "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
@@ -156,6 +168,6 @@ mod tests {
         let version: i64 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap_or_else(|error| panic!("read version: {error}"));
-        assert_eq!(version, 2);
+        assert_eq!(version, CURRENT_SCHEMA_VERSION);
     }
 }

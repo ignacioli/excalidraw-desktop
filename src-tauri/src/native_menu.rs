@@ -401,7 +401,13 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
         command,
         validation_id,
     };
-    if let Err(error) = app.emit_to("main", NATIVE_MENU_EVENT, payload) {
+    let Some(target) = crate::window::target_window(app) else {
+        if let Some(validation_id) = validation_id {
+            discard_pending_validation(validation_id);
+        }
+        return;
+    };
+    if let Err(error) = app.emit_to(target.as_str(), NATIVE_MENU_EVENT, payload) {
         if let Some(validation_id) = validation_id {
             discard_pending_validation(validation_id);
         }

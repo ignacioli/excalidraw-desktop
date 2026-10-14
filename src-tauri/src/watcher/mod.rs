@@ -7,7 +7,7 @@
 //! (plan data flow 2, FR-018/019/020, R7).
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -248,9 +248,19 @@ impl WatcherService {
         Ok(())
     }
 
-    pub async fn start_existing(&self, app: AppHandle) -> Result<(), AppError> {
+    /// Start watchers for the Workspaces a window has claimed. Mounted rows
+    /// that no window owns (left by an abnormal exit until Recovery
+    /// finishes) are not watched.
+    pub async fn start_existing(
+        &self,
+        owned_workspace_ids: &BTreeSet<String>,
+        app: AppHandle,
+    ) -> Result<(), AppError> {
         let workspaces = self.repository.workspace_list().await?;
-        for workspace in workspaces {
+        for workspace in workspaces
+            .into_iter()
+            .filter(|workspace| owned_workspace_ids.contains(&workspace.id))
+        {
             self.spawn_for_workspace(workspace, app.clone()).await?;
         }
         Ok(())

@@ -14,6 +14,7 @@ mod native_menu;
 mod native_menu_spec;
 pub mod security;
 mod watcher;
+mod window;
 pub mod workspace_entries;
 
 use std::{path::Path, path::PathBuf, sync::Arc};
@@ -21,7 +22,10 @@ use std::{path::Path, path::PathBuf, sync::Arc};
 #[cfg(not(feature = "e2e-harness"))]
 use tauri::Emitter;
 use tauri::Manager;
+
+use database::repository::WorkspaceRepository;
 use tauri_plugin_fs::FsExt;
+use window::registry::{WindowRegistry, WindowRole};
 
 #[cfg(not(feature = "e2e-harness"))]
 use commands::dto::OpenFileRequestEvent;
@@ -92,8 +96,8 @@ pub fn run() {
                 }
             }
         }
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.set_focus();
+        if let Some(label) = crate::window::target_window(app) {
+            crate::window::activate_label(app, &label);
         }
     }));
     let builder = builder.setup(|app| {
@@ -106,7 +110,7 @@ pub fn run() {
         let repository = tauri::async_runtime::block_on(SqliteRepository::open(
             &app_data_directory.join("excalidraw-desktop.sqlite3"),
         ))?;
-        let session = SessionState::initialize(&app_data_directory, pending_open_paths)?;
+        let session = SessionState::initialize(&app_data_directory)?;
         let shared_repository = Arc::new(repository.clone());
         let history_store = match HistoryStore::open(&app_data_directory) {
             Ok(store) => Some(Arc::new(store)),
@@ -190,6 +194,16 @@ pub fn run() {
             Arc::new(TauriRecoveryPathGrant(app.fs_scope())),
         );
         recovery_service.attach_watcher(Arc::new(watcher_service.clone()));
+        // `mounted` means "open in a window", so no Workspace is mounted until
+        // a window claims it. After an abnormal exit the previous mounted rows
+        // stay as Recovery's authorization roots until Recovery finishes. The
+        // startup reconciliation above still sees the previous mounted set.
+        if !session.abnormal_exit() {
+            tauri::async_runtime::block_on(repository.workspace_unmount_all())?;
+        }
+        let window_registry = WindowRegistry::new();
+        let owned_workspace_ids = window_registry.owned_workspace_ids();
+        app.manage(window_registry);
         app.manage(repository);
         app.manage(history_state);
         app.manage(history_replacement_state);
@@ -220,18 +234,26 @@ pub fn run() {
         )));
         app.manage(session);
         app.manage(WatcherState::new(watcher_service.clone()));
-        tauri::async_runtime::block_on(watcher_service.start_existing(app.handle().clone()))?;
+        tauri::async_runtime::block_on(
+            watcher_service.start_existing(&owned_workspace_ids, app.handle().clone()),
+        )?;
         app.on_menu_event(crate::native_menu::handle_menu_event);
         crate::native_menu::register_validation_listener(app.handle());
         crate::native_menu::install_menu(app.handle())?;
+        let role = if app.state::<SessionState>().abnormal_exit() {
+            WindowRole::Recovery
+        } else {
+            WindowRole::Normal
+        };
+        let first_window = crate::window::create_window(app.handle(), role, None)?;
+        app.state::<WindowRegistry>()
+            .push_pending_open_paths(first_window.label(), pending_open_paths);
         // rAF-driven performance workloads stall when the window is
         // occluded (WebKit throttles occluded views); keep the test-only
         // measurement window unoccluded on busy diagnostic hosts.
         #[cfg(feature = "e2e-harness")]
         if std::env::var_os("EXCALIDRAW_PERF_CONTROL_DIR").is_some() {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_always_on_top(true);
-            }
+            let _ = first_window.set_always_on_top(true);
         }
         Ok(())
     });

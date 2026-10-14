@@ -18,6 +18,7 @@ import {
   type HistoryVersionItem,
   type IpcCommands,
   type IpcEvents,
+  type WindowBootstrap,
   type NativeMenuCommandEvent,
   type PathMigration,
   type WorkspaceEntriesChangedEvent,
@@ -76,7 +77,11 @@ describe("IPC v3 history contract", () => {
   });
 
   it("types Workspace Entry commands and proves migrated legacy callers are gone", () => {
-    expect(IPC_CONTRACT_VERSION).toBe(4);
+    // The per-window handshake activates v5; the entry DTOs are unchanged.
+    expect(IPC_CONTRACT_VERSION).toBe(5);
+    expectTypeOf<
+      CommandResponse<"app_handshake">["window"]
+    >().toEqualTypeOf<WindowBootstrap>();
     expectTypeOf<CommandRequest<"workspace_entry_list">>().toEqualTypeOf<{
       workspaceId: string;
       parentRelativePath: string;

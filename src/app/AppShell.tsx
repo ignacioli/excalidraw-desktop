@@ -706,11 +706,37 @@ export function AppShell({
       workspaceInvoker.invoke("workspace_list", {}),
       workspaceInvoker.invoke("workspace_recent_list", {}),
     ])
-      .then(([items, recentItems]) => {
+      .then(async ([items, recentItems]) => {
         if (disposed || workspaceRevisionRef.current !== requestedRevision)
           return;
-        setMountedWorkspaces(items);
         setWelcomeWorkspaces(recentItems);
+        // `mounted` means "open in a window", and the backend unmounts every
+        // Workspace at a normal launch. Claim the last Workspace for this
+        // window again so a restart still reopens it.
+        const preferredId = preferences.getSnapshot().currentWorkspaceId;
+        const retained = recentItems.find(
+          (workspace) => workspace.id === preferredId,
+        );
+        if (
+          retained !== undefined &&
+          !items.some((workspace) => workspace.id === retained.id)
+        ) {
+          try {
+            const remounted = await workspaceInvoker.invoke(
+              "workspace_remount",
+              { workspaceId: retained.id },
+            );
+            if (disposed || workspaceRevisionRef.current !== requestedRevision)
+              return;
+            items = [...items, remounted];
+          } catch (error) {
+            if (disposed || workspaceRevisionRef.current !== requestedRevision)
+              return;
+            reportWelcomeError(error, true);
+            setUnavailableWorkspaceId(retained.id);
+          }
+        }
+        setMountedWorkspaces(items);
         const validIds = new Set(items.map((workspace) => workspace.id));
         const nextCurrentWorkspaceId = preferences.resolveCurrentWorkspaceId(
           validIds,

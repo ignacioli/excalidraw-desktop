@@ -1490,3 +1490,283 @@ body {
     grid-column: 2;
   }
 }
+
+/* DSC-DIALOG-001 sidebar variant: naming, confirmation, and nested
+   Workspace conflict dialogs. The default ApplicationDialog layout above is
+   unchanged. */
+.application-dialog--sidebar {
+  width: min(30rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 3rem);
+  overflow: auto;
+  border: var(--border-default) solid var(--border-strong);
+  border-radius: calc(var(--radius-control) * 2);
+  padding: var(--space-6);
+  color: var(--text-primary);
+  background: var(--panel-background);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 28%);
+}
+
+.application-dialog--sidebar .application-dialog-title {
+  margin: 0;
+  font-size: var(--font-size-section, 20px);
+  font-weight: var(--font-weight-semibold, 600);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.application-dialog--sidebar .application-dialog-description {
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-body, 14px);
+  line-height: 1.5;
+}
+
+.application-dialog--sidebar .application-dialog-object-path {
+  height: 2.25rem;
+  margin: var(--space-4) 0 0;
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  padding: 0 var(--space-3);
+  color: var(--text-secondary);
+  background: var(--surface-background);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--font-size-label, 12px);
+  line-height: 2.25rem;
+  white-space: nowrap;
+}
+
+.application-dialog-field {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: 1.25rem;
+}
+
+.application-dialog-field-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-label, 12px);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.application-dialog-field-box {
+  display: flex;
+  height: 2.25rem;
+  overflow: hidden;
+  border: var(--border-default) solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--panel-background);
+}
+
+.application-dialog-field-box:focus-within {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring);
+}
+
+.application-dialog-field-box[data-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
+.application-dialog-field-box input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  padding: 0 var(--space-3);
+  color: var(--text-primary);
+  background: transparent;
+  font: inherit;
+  font-size: var(--font-size-body, 14px);
+  outline: none;
+}
+
+.application-dialog-field-box input::selection {
+  background: var(--surface-active);
+}
+
+.application-dialog-field-box input:disabled {
+  color: var(--text-disabled);
+}
+
+.application-dialog-field-suffix {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  border-left: var(--border-default) solid var(--border-strong);
+  padding: 0 var(--space-3);
+  color: var(--text-secondary);
+  background: var(--surface-background);
+  font-size: var(--font-size-body, 14px);
+}
+
+.application-dialog-field-error,
+.application-dialog--sidebar .application-dialog-error {
+  margin: var(--space-2) 0 0;
+  color: var(--danger);
+  font-size: var(--font-size-label, 12px);
+  line-height: 1.4;
+}
+
+.application-dialog--sidebar .application-dialog-error {
+  margin-top: var(--space-4);
+}
+
+.application-dialog-actions--sidebar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}
+
+.application-dialog-actions-leading {
+  margin-right: auto;
+}
+
+.application-dialog-actions-trailing {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.application-dialog-button {
+  min-height: 2rem;
+  border: var(--border-default) solid transparent;
+  border-radius: var(--radius-control);
+  padding: 0 var(--space-3);
+  font: inherit;
+  font-size: var(--font-size-body, 14px);
+  font-weight: var(--font-weight-semibold, 600);
+  cursor: pointer;
+}
+
+.application-dialog-button[data-kind="secondary"] {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  background: var(--surface-background);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.application-dialog-button[data-kind="secondary"]:hover {
+  background: var(--surface-hover);
+}
+
+.application-dialog-button[data-kind="primary"] {
+  color: var(--accent-contrast);
+  background: var(--accent);
+}
+
+.application-dialog-button[data-kind="primary"]:hover {
+  background: var(--accent-hover);
+}
+
+.application-dialog-button[data-kind="danger"] {
+  color: var(--accent-contrast);
+  background: var(--danger);
+}
+
+.application-dialog-button[data-kind="link"] {
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.application-dialog-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.application-dialog-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+/* MW-COPY-FEEDBACK: one toast at a time, bottom-centered in the window. The
+   app-wide reduced-motion rule removes the fade. */
+.feedback-toast {
+  position: fixed;
+  z-index: 90;
+  bottom: var(--space-6);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: calc(100vw - 2rem);
+  min-height: 2.5rem;
+  border: var(--border-default) solid transparent;
+  border-radius: var(--radius-control);
+  padding: 0 var(--space-4);
+  /* Light theme: inverted surface. */
+  color: var(--panel-background);
+  background: var(--text-primary);
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 18%);
+  transform: translateX(-50%);
+  animation: feedback-toast-in 120ms ease-out;
+}
+
+:root[data-theme="excalidraw"][data-color-scheme="dark"] .feedback-toast {
+  color: var(--text-primary);
+  background: var(--surface-background);
+}
+
+.feedback-toast-symbol {
+  flex: 0 0 auto;
+  /* Approved board value: the dark-theme success color reads on the
+     inverted light-theme surface. */
+  color: #69db7c;
+  font-weight: var(--font-weight-semibold, 600);
+}
+
+:root[data-theme="excalidraw"][data-color-scheme="dark"]
+  .feedback-toast-symbol {
+  color: var(--success);
+}
+
+.feedback-toast-message {
+  font-size: var(--font-size-body, 14px);
+  font-weight: var(--font-weight-medium, 500);
+  white-space: nowrap;
+}
+
+.feedback-toast-path {
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0.8;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--font-size-label, 12px);
+  white-space: nowrap;
+}
+
+.feedback-toast[data-tone="failure"] {
+  border-color: var(--danger);
+  color: var(--text-primary);
+  background: var(--panel-background);
+}
+
+.feedback-toast[data-tone="failure"] .feedback-toast-symbol {
+  color: var(--danger);
+}
+
+.feedback-toast-dismiss {
+  flex: 0 0 auto;
+  margin-right: calc(var(--space-2) * -1);
+  border: 0;
+  border-radius: var(--radius-control);
+  padding: 0 var(--space-2);
+  color: var(--text-secondary);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.feedback-toast-dismiss:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@keyframes feedback-toast-in {
+  from {
+    opacity: 0;
+  }
+}

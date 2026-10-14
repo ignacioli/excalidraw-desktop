@@ -1,6 +1,6 @@
 # 多窗口界面 component anatomy 与实现映射
 
-状态：低保真 2026-10-13 负责人批准（[low-fi/manifest.json](low-fi/manifest.json)）；高保真 2026-10-13 负责人批准（[high-fi/manifest.json](high-fi/manifest.json)，13 张画板）。尚未实现。本文件是多窗口相关 app-owned 界面的唯一 anatomy 入口；共享部分在 [组件目录](../components.md) 中登记并链接到这里。
+状态：低保真 2026-10-13 负责人批准（[low-fi/manifest.json](low-fi/manifest.json)）；高保真 2026-10-13 负责人批准（[high-fi/manifest.json](high-fi/manifest.json)，13 张画板）。共享组件 `DSC-DIALOG-001` 侧栏变体与 `MW-COPY-FEEDBACK` 已实现（2026-10-14）；页面消费者尚未接入。本文件是多窗口相关 app-owned 界面的唯一 anatomy 入口；共享部分在 [组件目录](../components.md) 中登记并链接到这里。
 
 ## 权威与实施入口
 
@@ -15,7 +15,7 @@
 | --- | --- | --- | --- |
 | `DSC-DIALOG-001` 侧栏对话框 anatomy | 扩展：为命名、确认、嵌套冲突三类对话框定义统一 anatomy | [ApplicationDialog.tsx](../../../src/app/interaction/ApplicationDialog.tsx)（外壳）；[EntryNamingDialog.tsx](../../../src/app/interaction/EntryNamingDialog.tsx)、[EntryDeleteDialogs.tsx](../../../src/app/interaction/EntryDeleteDialogs.tsx)、[WorkspacePanel.tsx](../../../src/workspaces/WorkspacePanel.tsx)（移除工作区）、新增嵌套冲突对话框 | 01–03、12、13 |
 | `DSC-MENU-001` 复制路径菜单项 | 复用：新增菜单项，度量与分组不变 | [ContextMenu.tsx](../../../src/app/interaction/ContextMenu.tsx)；菜单模型在 [WorkspacePanel.tsx](../../../src/workspaces/WorkspacePanel.tsx) 与 [TabBar.tsx](../../../src/app/TabBar.tsx) | 04–06 |
-| `MW-COPY-FEEDBACK` 反馈 toast | 新增 feature-owned：复制路径反馈与子目录定位提示共用 | 新组件，位于 `src/app/` 壳层 | 04–06 |
+| `MW-COPY-FEEDBACK` 反馈 toast | 新增 feature-owned：复制路径反馈与子目录定位提示共用 | [FeedbackToast.tsx](../../../src/app/FeedbackToast.tsx)、[feedbackToastState.ts](../../../src/app/feedbackToastState.ts) | 04–06 |
 | `MW-EMPTY-STATE` 画布空状态 | 新增 feature-owned：替换 [AppShell.tsx](../../../src/app/AppShell.tsx) 中的 `.canvas-empty-state` | 新组件，位于 `src/app/` 壳层 | 07–11 |
 | 窗口标题 | 文字决定，无视觉组件 | 原生窗口标题，由后端按窗口设置 | — |
 
@@ -142,5 +142,5 @@
 影响范围：DSC-DIALOG-001 扩展（消费者 EntryNamingDialog、EntryDeleteDialogs、WorkspacePanel 移除工作区、新增嵌套冲突对话框；其他对话框默认渲染不变）；DSC-MENU-001 新增两项（WorkspacePanel、TabBar）；新增 MW-COPY-FEEDBACK、MW-EMPTY-STATE；同步 components.md 索引与 DESIGN.md / DESIGN.zh.md。
 设计决定：沿用 ApplicationDialog 外壳度量与 SDK 菜单度量；新增并已批准：对话框宽 480、危险按钮实心填充（Dark 文字 #121212）、toast 样式、空状态网格颜色、侧栏固定时空状态只保留新建绘图、工作区外 Tab 菜单只有复制路径。
 实施与验证：见上表不变量；页面组合抽检对话框叠在空状态上（Light）与嵌套冲突（Dark）。
-结果：设计批准完成；尚未实现。
+结果：设计批准完成。2026-10-14 组件层：DSC-DIALOG-001 侧栏变体（ApplicationDialog variant="sidebar"、ApplicationDialogField、ApplicationDialogActions、ApplicationDialogButton）与默认渲染不变由 ApplicationDialog.test.tsx 覆盖，PASS；MW-COPY-FEEDBACK（FeedbackToast、feedbackToastState）成功/失败/定位提示/替换由 FeedbackToast.test.tsx（假时钟）覆盖，PASS。尚无页面消费者；页面组合、四种主题 × 语言溢出检查与负责人对照画板留待各消费者落地与最终集中体验。
 ```

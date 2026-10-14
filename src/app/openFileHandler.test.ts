@@ -1,5 +1,15 @@
+import type { AppHandshakeResponse } from "../ipc/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { registerOpenFileHandler } from "./openFileHandler";
+
+const welcomeWindow: AppHandshakeResponse["window"] = {
+  label: "window-1",
+  workspace: null,
+  unavailableWorkspace: null,
+  restore: null,
+  shell: null,
+  openWorkspaceNames: [],
+};
 
 interface CapturedListener {
   eventName: string;
@@ -59,6 +69,7 @@ describe("registerOpenFileHandler", () => {
             abnormalExit: false,
             pendingOpenPaths: ["/startup.excalidraw"],
             preferredLanguages: [],
+            window: welcomeWindow,
           };
         }
         throw new Error(`Unexpected command ${command}`);
@@ -93,6 +104,7 @@ describe("registerOpenFileHandler", () => {
         abnormalExit: false,
         pendingOpenPaths: [],
         preferredLanguages: [],
+        window: welcomeWindow,
       })),
     };
 

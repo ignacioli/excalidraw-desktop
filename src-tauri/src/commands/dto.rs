@@ -19,7 +19,7 @@ use crate::history::types::{
     HistoryValidationError,
 };
 
-pub const IPC_CONTRACT_VERSION: u32 = 4;
+pub const IPC_CONTRACT_VERSION: u32 = 5;
 /// Reserved history contract version marker retained for compatibility with
 /// code that needs to distinguish the activated v3 boundary.
 pub const RESERVED_HISTORY_CONTRACT_VERSION: u32 = 3;
@@ -29,14 +29,48 @@ pub const RESERVED_HISTORY_CONTRACT_VERSION: u32 = 3;
 pub struct AppHandshakeResponse {
     pub contract_version: u32,
     pub app_version: String,
+    /// True only for the window that presents Recovery after an abnormal
+    /// exit.
     pub abnormal_exit: bool,
-    /// Drawing files handed to this launch by the OS (file association) or
-    /// forwarded by a single-instance handoff. Populated before the first
-    /// render so the frontend can open them without racing an event.
+    /// Drawing files routed to this window at launch (file association or a
+    /// single-instance handoff). Handed out once: a later handshake from the
+    /// same window returns an empty list.
     pub pending_open_paths: Vec<String>,
     /// System UI languages as raw BCP-47 tags in the user's order (at most
     /// 16), read once at startup. The frontend resolves the UI language.
     pub preferred_languages: Vec<String>,
+    /// What the calling window shows; ownership is already decided.
+    pub window: WindowBootstrap,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowBootstrap {
+    pub label: String,
+    /// The Workspace this window already owns; `None` is Welcome.
+    pub workspace: Option<Workspace>,
+    /// A session Workspace that could not be opened again.
+    pub unavailable_workspace: Option<Workspace>,
+    pub restore: Option<WindowRestoreBootstrap>,
+    pub shell: Option<crate::window::session::WorkspaceShellState>,
+    /// Names of the Workspaces open in any window, for title disambiguation.
+    pub open_workspace_names: Vec<OpenWorkspaceName>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowRestoreBootstrap {
+    pub tabs: Vec<String>,
+    pub active_path: Option<String>,
+    pub skipped: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenWorkspaceName {
+    pub workspace_id: String,
+    pub name: String,
+    pub root_path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -604,10 +638,32 @@ mod tests {
             abnormal_exit: false,
             pending_open_paths: vec!["/tmp/drawing.excalidraw".to_owned()],
             preferred_languages: vec!["zh-Hans-CN".to_owned(), "en-US".to_owned()],
+            window: WindowBootstrap {
+                label: "window-1".to_owned(),
+                workspace: None,
+                unavailable_workspace: None,
+                restore: Some(WindowRestoreBootstrap {
+                    tabs: vec!["/tmp/drawing.excalidraw".to_owned()],
+                    active_path: None,
+                    skipped: 1,
+                }),
+                shell: None,
+                open_workspace_names: Vec::new(),
+            },
         };
         let value = serde_json::to_value(response)
             .unwrap_or_else(|error| panic!("serialize handshake: {error}"));
-        assert_eq!(value["contractVersion"], 4);
+        assert_eq!(value["contractVersion"], 5);
+        assert_eq!(value["window"]["label"], "window-1");
+        assert_eq!(
+            value["window"]["unavailableWorkspace"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            value["window"]["restore"]["activePath"],
+            serde_json::Value::Null
+        );
+        assert_eq!(value["window"]["openWorkspaceNames"], serde_json::json!([]));
         assert_eq!(
             value["preferredLanguages"],
             serde_json::json!(["zh-Hans-CN", "en-US"])

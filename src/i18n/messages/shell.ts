@@ -10,6 +10,7 @@ export const shellEn = {
   "shell.canvas": "Drawing canvas",
   "shell.emptyState": "Select a drawing to begin.",
   "shell.reloaded": "Reloaded from disk",
+  "shell.feedback.dismiss": "Dismiss notification",
   "shell.untitledDrawing": "Untitled drawing",
   "shell.exportUnavailable":
     "Export is unavailable until the active drawing is ready.",
@@ -142,6 +143,7 @@ export const shellZhCN: Record<keyof typeof shellEn, string> = {
   "shell.canvas": "绘图画布",
   "shell.emptyState": "选择一个绘图以开始。",
   "shell.reloaded": "已从磁盘重新载入",
+  "shell.feedback.dismiss": "关闭通知",
   "shell.untitledDrawing": "未命名绘图",
   "shell.exportUnavailable": "当前绘图准备就绪后才能导出。",
   "shell.historySavedOnly": "仅已保存的绘图支持版本历史。",

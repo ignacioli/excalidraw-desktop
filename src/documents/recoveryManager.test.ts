@@ -1,9 +1,19 @@
+import type { AppHandshakeResponse } from "../ipc/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
   RecoveryManager,
   type RecoveryDecision,
   type RecoveryGateway,
 } from "./recoveryManager";
+
+const welcomeWindow: AppHandshakeResponse["window"] = {
+  label: "window-1",
+  workspace: null,
+  unavailableWorkspace: null,
+  restore: null,
+  shell: null,
+  openWorkspaceNames: [],
+};
 
 function candidate() {
   return {
@@ -26,6 +36,7 @@ function createGateway(
       abnormalExit: false,
       pendingOpenPaths: [],
       preferredLanguages: [],
+      window: welcomeWindow,
     })),
     list: vi.fn(async () => []),
     apply: vi.fn(async () => ({ scene: undefined, newPath: undefined })),
@@ -53,6 +64,7 @@ describe("RecoveryManager", () => {
         abnormalExit: true,
         pendingOpenPaths: [],
         preferredLanguages: [],
+        window: welcomeWindow,
       })),
       list: vi.fn(async () => [candidate()]),
       apply: vi.fn(async () => ({ scene, newPath: undefined })),
@@ -83,6 +95,7 @@ describe("RecoveryManager", () => {
         abnormalExit: true,
         pendingOpenPaths: [],
         preferredLanguages: [],
+        window: welcomeWindow,
       })),
       list: vi.fn(async () => [candidate()]),
     });
@@ -124,6 +137,7 @@ describe("RecoveryManager", () => {
           abnormalExit: false,
           pendingOpenPaths: [],
           preferredLanguages: [],
+          window: welcomeWindow,
         };
       }),
       apply,
