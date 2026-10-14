@@ -64,6 +64,9 @@ export const zhCN: Record<MessageKey, string> = {
   "error.WORKSPACE_MOUNTED": "这个文件夹已作为工作区挂载。",
   "error.WORKSPACE_OVERLAP": "这个文件夹与已挂载的工作区重叠。",
   "error.WORKSPACE_NOT_OWNED": "这个窗口没有打开工作区。",
+  "error.DOCUMENT_NOT_OWNED": "这个绘图已在另一个窗口打开。",
+  "error.WINDOW_OWNERSHIP_CHANGED":
+    "该工作区已在另一个窗口中打开或关闭，请重试。",
   "error.INVALID_NAME": "名称无效。",
   "error.NAME_CONFLICT": "已存在同名项目。",
   "error.ENTRY_PROTECTED": "该项目受保护，无法更改。",

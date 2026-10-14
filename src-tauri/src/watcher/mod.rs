@@ -406,7 +406,6 @@ impl WatcherService {
                 let _ = crate::window::events::emit_to_document_owner(
                     app,
                     path,
-                    None,
                     "file-changed",
                     FileChangedEvent {
                         path: path.display().to_string(),
@@ -432,7 +431,6 @@ impl WatcherService {
                 let _ = crate::window::events::emit_to_document_owner(
                     app,
                     path,
-                    None,
                     "file-changed",
                     FileChangedEvent {
                         path: path.display().to_string(),
@@ -469,7 +467,6 @@ impl WatcherService {
                     let _ = crate::window::events::emit_to_document_owner(
                         app,
                         path,
-                        None,
                         "file-changed",
                         FileChangedEvent {
                             path: path.display().to_string(),
@@ -500,7 +497,6 @@ impl WatcherService {
         let _ = crate::window::events::emit_to_document_owner(
             app,
             path,
-            None,
             "file-changed",
             FileChangedEvent {
                 path: path_string.clone(),
@@ -520,7 +516,6 @@ impl WatcherService {
                     let _ = crate::window::events::emit_to_document_owner(
                         app,
                         path,
-                        None,
                         "conflict-detected",
                         ConflictDetectedEvent {
                             path: path_string,

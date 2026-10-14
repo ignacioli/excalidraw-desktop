@@ -32,6 +32,7 @@ vi.mock("@excalidraw/excalidraw", () => ({
 function createHarness(paths: { open?: string | null; save?: string | null }) {
   const gateway: DocumentGateway = {
     open: vi.fn(async () => ({
+      kind: "opened" as const,
       scene: {
         type: "excalidraw",
         version: 2,

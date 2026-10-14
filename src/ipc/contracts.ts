@@ -16,6 +16,8 @@ export type ErrorCode =
   | "WORKSPACE_MOUNTED"
   | "WORKSPACE_OVERLAP"
   | "WORKSPACE_NOT_OWNED"
+  | "DOCUMENT_NOT_OWNED"
+  | "WINDOW_OWNERSHIP_CHANGED"
   | "INVALID_NAME"
   | "NAME_CONFLICT"
   | "ENTRY_PROTECTED"
@@ -96,6 +98,17 @@ export interface WorkspaceShellState {
 export type ClaimWorkspaceTarget =
   | { rootPath: string; workspaceId?: never }
   | { workspaceId: string; rootPath?: never };
+
+export interface SceneOpenPayload {
+  scene: SceneData;
+  baseHash: string;
+  hasNewerDraft: boolean;
+}
+
+export type DocOpenResponse =
+  | ({ kind: "opened" } & SceneOpenPayload)
+  /** The drawing is open in that window, which is now in front. */
+  | { kind: "ownedElsewhere"; label: string };
 
 /**
  * Result of opening a Workspace in the calling window. `W` is `Workspace`
@@ -464,6 +477,21 @@ export interface IpcCommands {
     request: ClaimWorkspaceTarget;
     response: ClaimWorkspaceOutcome;
   };
+  /**
+   * "Close it and open here": ask `targetLabel`, whose Workspace lies inside
+   * `rootPath`, to close. The result arrives as `window-claim-result`. This
+   * window's tabs are closed first.
+   */
+  window_close_other_and_claim: {
+    request: { targetLabel: string; rootPath: string };
+    /** `requestId` names the `window-claim-result` that answers this call. */
+    response: { status: "closing"; requestId: string };
+  };
+  /** This window was asked to close by another one and the close failed. */
+  window_peer_close_failed: {
+    request: { requestId: string };
+    response: Record<string, never>;
+  };
   /** Close this window's Workspace; the window's tabs are closed first. */
   window_release_workspace: {
     request: Record<string, never>;
@@ -529,9 +557,14 @@ export interface IpcCommands {
     request: { workspaceId: string; relativePath: string };
     response: Record<string, never>;
   };
+  /**
+   * Open a drawing in this window. A drawing open in another window, or
+   * inside another window's Workspace, is not read: that window is brought
+   * to the front and shows it.
+   */
   doc_open: {
     request: { path: string };
-    response: { scene: SceneData; baseHash: string; hasNewerDraft: boolean };
+    response: DocOpenResponse;
   };
   doc_save_draft: {
     request: { path: string; sceneJson: string };

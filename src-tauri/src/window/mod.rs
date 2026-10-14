@@ -9,7 +9,9 @@
 
 pub mod events;
 pub mod geometry;
+pub mod peer_close;
 pub mod registry;
+pub mod router;
 pub mod session;
 
 use tauri::{

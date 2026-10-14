@@ -189,7 +189,102 @@ Gaps and owner decisions:
 
 ## Nested folders and file routing
 
-Not run yet.
+Opening a folder that is inside, or contains, another window's Workspace;
+where drawings opened from Finder, `open -a`, a second launch, or the launch
+arguments go; and one window per drawing.
+
+- Candidate: the commit that adds this section (parent `4ae652d`), on macOS
+  (Darwin 25.6.0), 2026-10-14.
+- Result: PASS for the automated and native checks below; the items under
+  "Verified later" are not claimed here.
+
+| Command                                                                                                        | Result                          |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check`                                                       | PASS                            |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`                               | PASS                            |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --features e2e-harness -- -D warnings`        | PASS                            |
+| `cargo test --manifest-path src-tauri/Cargo.toml`                                                              | PASS, 325 tests                 |
+| `cargo test --manifest-path src-tauri/Cargo.toml --lib -- window::router window::registry commands::documents` | PASS, 33 tests                  |
+| `pnpm typecheck`                                                                                               | PASS                            |
+| `pnpm lint`                                                                                                    | PASS                            |
+| `pnpm format`                                                                                                  | PASS                            |
+| `pnpm build`                                                                                                   | PASS (chunk-size warnings only) |
+| `pnpm test` (whole Vitest suite)                                                                               | PASS, 82 files / 663 tests      |
+| `APP_E2E=1 pnpm e2e e2e/tests/multi-window-nesting.spec.ts`                                                    | PASS, 9 tests                   |
+| `APP_E2E=1 pnpm e2e`                                                                                           | PASS, 176 passed / 84 skipped   |
+| `pnpm native:window:test`                                                                                      | PASS, 9 tests                   |
+| `pnpm tauri build --debug --bundles app`, then `pnpm native:window:check -- --app <debug .app>`                | PASS, 11 checks                 |
+| `pnpm native:window:check -- --binary src-tauri/target/debug/excalidraw-desktop` (same build)                  | PASS, 11 checks                 |
+
+What the checks cover:
+
+- Native, through Accessibility and System Events: with Workspace A in one
+  window and B in another, opening a folder inside A from B's window fronts
+  A's window and opens no window; opening A's parent folder from B keeps two
+  windows, keeps B in front, and shows the nested-Workspace dialog, whose
+  three buttons (Close it and open here, Cancel, Switch to that window) are
+  read by name; Escape closes it. Drawings handed over with `open -a` (with
+  the `.app`) and with a second launch of the binary (without it) go to the
+  right place each time: a drawing inside A opens in A's window, a second one
+  opens as another tab there, a drawing outside every Workspace opens in the
+  most recently used window, and a drawing already open fronts its window and
+  switches to its tab. Window titles name the active tab.
+- Rust: the routing order (the window that has the drawing, the window whose
+  Workspace contains it, the most recently used window, a new window) and
+  batching per window; a window that has not read its startup data gets the
+  paths through it; a drawing open in, or inside the Workspace of, another
+  window is answered without reading the file; a symlink, a `..` path, and a
+  different letter case on a case-insensitive volume are the same drawing;
+  a failed open or write gives back the claim it made; a close by another
+  window keeps the draft and recovery data; writes to another window's
+  drawing are refused; drawing events go only to the drawing's window; a
+  "Close it and open here" request is answered only by the window it asked,
+  and a request from a destroyed window is dropped; the request and result
+  name their request.
+- Frontend unit tests: the sidebar reveals a nested folder by expanding down
+  to it and selecting it; the nested-Workspace dialog's names, path, focus,
+  button order, busy and failure states, and language; "Close it and open
+  here" closes this window's tabs first, then waits for its own result, and
+  keeps a result that arrives before the request id; Open Workspace, Recent,
+  the sidebar's mount button, and Welcome New Drawing all open the dialog,
+  and New Drawing continues once the folder opened; a window asked by another
+  closes the normal way and reports a failed close back.
+- Browser: reveal with the sidebar opened, the folder selected and the
+  toast; the dialog's three actions; a cancelled close opens nothing; this
+  window's tabs close before the other window is asked; a drawing another
+  window asks for switches to its tab without reading it again; a drawing
+  open in another window does not open here.
+
+Verified later (not covered by this checkpoint):
+
+- What happens when the window asked to close has unsaved edits that cannot
+  be saved is checked with the close coordination in "Closing, quitting and
+  restoring".
+- The toast and dialog in four themes and both languages, against the
+  approved boards, are left to the owner walkthrough.
+
+Gaps and owner decisions:
+
+- Before this checkpoint, Finder and `open -a` with the app running opened
+  nothing: the macOS "open file" event was not handled. It is now routed.
+- The routing check does not tell which path a drawing arrived by (the macOS
+  open event or the second-instance hand-off); both end in the same router.
+- `history_replace` checks ownership only for a drawing named by path; a
+  history handle is not checked.
+- After "save as new" from a conflict, the new path is claimed and the old one
+  released. Saving a drawing whose file is gone under a new path claims the
+  new path, but the missing old path stays claimed by that window until the
+  window closes.
+- Within one window, a drawing opened again under a different spelling of its
+  path can open a second tab; across windows the spellings are treated as one
+  drawing.
+- The nested-Workspace dialog names the Workspace inside from the Recent
+  list; when it is not there the overlap error is shown instead.
+- If the asked window never answers, the dialog stays busy; there is no
+  timeout.
+- The `native:menu:check` was not re-run; this checkpoint changes no menu.
+- App-owned UI: the nested-Workspace dialog and the folder-located toast,
+  both from the approved designs.
 
 ## Closing, quitting and restoring
 

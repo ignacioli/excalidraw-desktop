@@ -142,5 +142,5 @@
 影响范围：DSC-DIALOG-001 扩展（消费者 EntryNamingDialog、EntryDeleteDialogs、WorkspacePanel 移除工作区、新增嵌套冲突对话框；其他对话框默认渲染不变）；DSC-MENU-001 新增两项（WorkspacePanel、TabBar）；新增 MW-COPY-FEEDBACK、MW-EMPTY-STATE；同步 components.md 索引与 DESIGN.md / DESIGN.zh.md。
 设计决定：沿用 ApplicationDialog 外壳度量与 SDK 菜单度量；新增并已批准：对话框宽 480、危险按钮实心填充（Dark 文字 #121212）、toast 样式、空状态网格颜色、侧栏固定时空状态只保留新建绘图、工作区外 Tab 菜单只有复制路径。
 实施与验证：见上表不变量；页面组合抽检对话框叠在空状态上（Light）与嵌套冲突（Dark）。
-结果：设计批准完成。2026-10-14 组件层：DSC-DIALOG-001 侧栏变体（ApplicationDialog variant="sidebar"、ApplicationDialogField、ApplicationDialogActions、ApplicationDialogButton）与默认渲染不变由 ApplicationDialog.test.tsx 覆盖，PASS；MW-COPY-FEEDBACK（FeedbackToast、feedbackToastState）成功/失败/定位提示/替换由 FeedbackToast.test.tsx（假时钟）覆盖，PASS。尚无页面消费者；页面组合、四种主题 × 语言溢出检查与负责人对照画板留待各消费者落地与最终集中体验。
+结果：设计批准完成。2026-10-14 组件层：DSC-DIALOG-001 侧栏变体（ApplicationDialog variant="sidebar"、ApplicationDialogField、ApplicationDialogActions、ApplicationDialogButton）与默认渲染不变由 ApplicationDialog.test.tsx 覆盖，PASS；MW-COPY-FEEDBACK（FeedbackToast、feedbackToastState）成功/失败/定位提示/替换由 FeedbackToast.test.tsx（假时钟）覆盖，PASS。尚无页面消费者。2026-10-14 首批消费者：嵌套冲突对话框（NestedWorkspaceDialog，侧栏变体：默认、进行中、未关闭与其他失败，初始焦点与按钮顺序）由 NestedWorkspaceDialog.test.tsx 与浏览器 multi-window-nesting.spec.ts 覆盖，原生经 Accessibility 读到三个按钮名称，PASS；子目录定位提示（MW-COPY-FEEDBACK 定位样式，无路径，3 秒）由 multi-window-nesting.spec.ts 覆盖，PASS。四种主题 × 语言溢出检查与负责人对照画板留待最终集中体验。
 ```

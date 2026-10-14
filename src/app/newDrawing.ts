@@ -22,7 +22,12 @@ export type NewDrawingResult =
    * Another window holds the folder or one nested with it. Nothing is
    * created; for `ownedBy` and `insideOpen` that window is now in front.
    */
-  | { status: "declined"; outcome: DeclinedWorkspaceOutcome }
+  | {
+      status: "declined";
+      /** The folder that was chosen. */
+      rootPath: string;
+      outcome: DeclinedWorkspaceOutcome;
+    }
   | {
       status: "created";
       workspace: Workspace;
@@ -47,26 +52,38 @@ export async function createNewDrawingFile({
   const rootPath = await selectDirectory();
   if (rootPath === null) return { status: "cancelled" };
   const outcome = await invoker.invoke("window_claim_workspace", { rootPath });
-  if (outcome.kind !== "claimed") return { status: "declined", outcome };
+  if (outcome.kind !== "claimed") {
+    return { status: "declined", rootPath, outcome };
+  }
   const { workspace, replaced, shell } = outcome;
+  const entry = await createUntitledDrawing(
+    invoker,
+    workspace.id,
+    untitledBaseName,
+  );
+  return { status: "created", workspace, replaced, shell, entry };
+}
 
+/**
+ * Create the next free `Untitled` at the root of `workspaceId`. The file is
+ * written by `workspace_entry_create` (atomic, never overwrites).
+ */
+export async function createUntitledDrawing(
+  invoker: Pick<CommandInvoker, "invoke">,
+  workspaceId: string,
+  untitledBaseName: string,
+): Promise<WorkspaceEntry> {
   for (let attempt = 1; ; attempt += 1) {
     const baseName =
       attempt === 1 ? untitledBaseName : `${untitledBaseName} ${attempt}`;
     try {
       const created = await invoker.invoke("workspace_entry_create", {
-        workspaceId: workspace.id,
+        workspaceId,
         parentRelativePath: "",
         kind: "drawing",
         baseName,
       });
-      return {
-        status: "created",
-        workspace,
-        replaced,
-        shell,
-        entry: created.entry,
-      };
+      return created.entry;
     } catch (error) {
       if (
         errorCodeOf(error) !== "NAME_CONFLICT" ||

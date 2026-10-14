@@ -66,9 +66,24 @@ import {
   registerExitCheckpoint,
 } from "./exitCheckpoint";
 import { registerOpenFileHandler } from "./openFileHandler";
+import { FeedbackToast } from "./FeedbackToast";
+import {
+  FEEDBACK_TOAST_DURATION_MS,
+  useFeedbackToast,
+} from "./feedbackToastState";
+import { defaultEventListener } from "../ipc/events";
 import { TabBar } from "./TabBar";
 import { OrphanCloseDialog } from "./OrphanCloseDialog";
-import { createNewDrawingFile } from "./newDrawing";
+import { createNewDrawingFile, createUntitledDrawing } from "./newDrawing";
+import {
+  closeOtherAndClaim,
+  describeNestedConflict,
+  type NestedWorkspaceConflict,
+} from "./nestedWorkspace";
+import {
+  NestedWorkspaceDialog,
+  type NestedWorkspaceDialogStatus,
+} from "../workspaces/NestedWorkspaceDialog";
 import { useWindowTitle } from "./useWindowTitle";
 import {
   broadcastAppPreferences,
@@ -108,7 +123,6 @@ import { createNativeMenuSync } from "./nativeMenuSync";
 import { describeError, LocalizedError } from "../i18n/describeError";
 import {
   closeAllTabsForWorkspaceSwitch,
-  containsOpenError,
   openWorkspaceInWindow,
   type OpenWorkspaceResult,
 } from "./workspaceClaim";
@@ -139,6 +153,17 @@ function renderShellMessage(message: ShellMessage): string {
   if ("key" in message) return translateNow(message.key);
   if ("text" in message) return message.text;
   return describeError(message.error, message.fallback);
+}
+
+/** The nested-Workspace dialog: the conflict and what opening it continues. */
+interface NestedDialogState extends NestedWorkspaceConflict {
+  status: NestedWorkspaceDialogStatus;
+  errorMessage: string | null;
+  /** Runs once the folder opened in this window. */
+  onClaimed(
+    workspace: Workspace,
+    shell: WorkspaceShellState | null,
+  ): Promise<void>;
 }
 
 interface AppShellProps {
@@ -352,6 +377,13 @@ export function AppShell({
   const [browsingHistory] = useState(() => new BrowsingHistory());
   const currentBrowsingLocationRef = useRef<BrowsingLocation | null>(null);
   const [backLocation, setBackLocation] = useState<BrowsingLocation | null>(
+    null,
+  );
+  const [revealLocation, setRevealLocation] = useState<BrowsingLocation | null>(
+    null,
+  );
+  const { toast, showToast, dismissToast } = useFeedbackToast();
+  const [nestedDialog, setNestedDialog] = useState<NestedDialogState | null>(
     null,
   );
   const [, setHistoryVersion] = useState(0);
@@ -617,16 +649,92 @@ export function AppShell({
     setMountedWorkspaces([workspace]);
   };
 
+  const showClaimedWorkspaceAsync = async (
+    workspace: Workspace,
+    shell: WorkspaceShellState | null,
+  ): Promise<void> => showClaimedWorkspace(workspace, shell);
+
+  /** `targetPath` contains a Workspace open in another window: ask. */
+  const showNestedConflict = async (
+    targetPath: string,
+    outcome: { label: string; workspaceId: string },
+    onClaimed: NestedDialogState["onClaimed"],
+  ): Promise<void> => {
+    const conflict = await describeNestedConflict(
+      workspaceInvoker,
+      targetPath,
+      outcome,
+    );
+    setNestedDialog({
+      ...conflict,
+      status: "idle",
+      errorMessage: null,
+      onClaimed,
+    });
+  };
+
   /**
    * Apply an open request's result. A Workspace held by another window has
-   * brought that window to the front; one that contains another window's
-   * Workspace is reported until the nested-Workspace dialog handles it.
+   * brought that window to the front; a folder that contains another
+   * window's Workspace opens the nested-Workspace dialog.
    */
-  const applyOpenWorkspaceResult = (result: OpenWorkspaceResult): void => {
+  const applyOpenWorkspaceResult = async (
+    targetPath: string,
+    result: OpenWorkspaceResult,
+  ): Promise<void> => {
     if (result.status === "claimed") {
       showClaimedWorkspace(result.workspace, result.shell);
     } else if (result.outcome.kind === "containsOpen") {
-      throw containsOpenError();
+      await showNestedConflict(
+        targetPath,
+        result.outcome,
+        showClaimedWorkspaceAsync,
+      );
+    }
+  };
+
+  /** Bring the window with the Workspace inside to the front. */
+  const switchToNestedWindow = async (): Promise<void> => {
+    const dialog = nestedDialog;
+    if (dialog === null) return;
+    try {
+      await workspaceInvoker.invoke("window_claim_workspace", {
+        workspaceId: dialog.workspaceId,
+      });
+      setNestedDialog(null);
+    } catch (error) {
+      setNestedDialog({ ...dialog, errorMessage: describeError(error) });
+    }
+  };
+
+  /** Close the window with the Workspace inside, then open the folder here. */
+  const closeNestedWindowAndOpen = async (): Promise<void> => {
+    const dialog = nestedDialog;
+    if (dialog === null) return;
+    setNestedDialog({ ...dialog, status: "closing", errorMessage: null });
+    try {
+      const outcome = await closeOtherAndClaim({
+        invoker: workspaceInvoker,
+        conflict: dialog,
+        closeTabs: closeOpenDocumentsForWorkspaceSwitch,
+      });
+      if (outcome.kind === "cancelled") {
+        setNestedDialog({ ...dialog, status: "notClosed" });
+        return;
+      }
+      setNestedDialog(null);
+      if (outcome.kind === "claimed") {
+        await dialog.onClaimed(outcome.workspace, outcome.shell);
+      } else if (outcome.kind === "containsOpen") {
+        // Another Workspace inside the folder opened meanwhile.
+        await showNestedConflict(dialog.targetPath, outcome, dialog.onClaimed);
+      }
+    } catch (error) {
+      setNestedDialog({
+        ...dialog,
+        status: "idle",
+        errorMessage: describeError(error),
+      });
     }
   };
 
@@ -643,7 +751,8 @@ export function AppShell({
     try {
       const rootPath = await selectWorkspaceDirectory();
       if (rootPath === null) return;
-      applyOpenWorkspaceResult(
+      await applyOpenWorkspaceResult(
+        rootPath,
         await openWorkspaceInWindow({
           invoker: workspaceInvoker,
           target: { rootPath },
@@ -664,7 +773,8 @@ export function AppShell({
     clearWelcomeError();
     let closingTabs = false;
     try {
-      applyOpenWorkspaceResult(
+      await applyOpenWorkspaceResult(
+        workspace.rootPath,
         await openWorkspaceInWindow({
           invoker: workspaceInvoker,
           target: { workspaceId: workspace.id },
@@ -724,11 +834,25 @@ export function AppShell({
       });
       if (result.status === "cancelled") return;
       if (result.status === "declined") {
-        if (result.outcome.kind === "containsOpen") throw containsOpenError();
+        if (result.outcome.kind === "containsOpen") {
+          await showNestedConflict(
+            result.rootPath,
+            result.outcome,
+            async (workspace, shell) => {
+              showClaimedWorkspace(workspace, shell);
+              const entry = await createUntitledDrawing(
+                workspaceInvoker,
+                workspace.id,
+                "Untitled",
+              );
+              await documentManager.openRouted(entry.canonicalPath);
+            },
+          );
+        }
         return;
       }
       showClaimedWorkspace(result.workspace, result.shell);
-      await documentManager.open(result.entry.canonicalPath);
+      await documentManager.openRouted(result.entry.canonicalPath);
     } catch (error) {
       reportWelcomeError(error);
     } finally {
@@ -1666,6 +1790,47 @@ export function AppShell({
     };
   }, []);
 
+  const currentWorkspaceRef = useRef<Workspace | null>(null);
+  currentWorkspaceRef.current =
+    mountedWorkspaces.find(
+      (workspace) => workspace.id === currentWorkspaceId,
+    ) ?? null;
+
+  // Another window opened a folder inside this window's Workspace: show it.
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void defaultEventListener("workspace-reveal-entry", (event) => {
+      const workspace = currentWorkspaceRef.current;
+      if (workspace === null) return;
+      sidebarController.openOverlay();
+      setRevealLocation({
+        workspaceId: workspace.id,
+        directoryRelativePath: event.payload.relativePath,
+      });
+      showToast({
+        tone: "success",
+        message: translateNow("shell.feedback.revealed", {
+          folder: event.payload.name,
+          workspace: workspace.name,
+        }),
+        durationMs: FEEDBACK_TOAST_DURATION_MS.locate,
+      });
+    })
+      .then((nextUnlisten) => {
+        if (disposed) nextUnlisten();
+        else unlisten = nextUnlisten;
+      })
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [showToast, sidebarController]);
+
   useEffect(() => {
     // The native File > Save accelerator owns Command-S in the desktop shell;
     // handling the keydown as well would save twice per press.
@@ -1900,7 +2065,9 @@ export function AppShell({
               preferences={preferences}
               captureFocus={sidebarSnapshot.mode === "overlay"}
               onOpenFile={(entry) => {
-                void runAction(() => documentManager.open(entry.canonicalPath));
+                void runAction(() =>
+                  documentManager.openRouted(entry.canonicalPath),
+                );
               }}
               onWorkspacePresenceChange={setHasMountedWorkspace}
               onWorkspacesChange={handleMountedWorkspacesChange}
@@ -1908,6 +2075,11 @@ export function AppShell({
               onBrowse={handleBrowse}
               backLocation={backLocation}
               onBackLocationApplied={() => setBackLocation(null)}
+              revealLocation={revealLocation}
+              onNestedConflict={(rootPath, outcome) =>
+                showNestedConflict(rootPath, outcome, showClaimedWorkspaceAsync)
+              }
+              onRevealLocationApplied={() => setRevealLocation(null)}
             />
           ) : null}
           {sidebarSnapshot.mode === "pinned" ? (
@@ -2018,6 +2190,7 @@ export function AppShell({
           ) : null}
           <div className="history-preview-root" ref={setHistoryPreviewHost} />
         </main>
+        <FeedbackToast toast={toast} onDismiss={dismissToast} />
         {historyOpen && activeSession !== undefined ? (
           <HistoryPanel
             documentId={activeSession.id}
@@ -2070,6 +2243,19 @@ export function AppShell({
           documentPath={activeSession.path}
           documentTitle={activeSession.title}
           onClose={closeExportDialog}
+        />
+      ) : null}
+      {nestedDialog !== null ? (
+        <NestedWorkspaceDialog
+          errorMessage={nestedDialog.errorMessage}
+          onCancel={() => setNestedDialog(null)}
+          onCloseAndOpen={() => void closeNestedWindowAndOpen()}
+          onSwitch={() => void switchToNestedWindow()}
+          openWorkspaceName={nestedDialog.openWorkspaceName}
+          openWorkspacePath={nestedDialog.openWorkspacePath}
+          status={nestedDialog.status}
+          targetName={nestedDialog.targetName}
+          targetPath={nestedDialog.targetPath}
         />
       ) : null}
       {orphanCloseId !== null ? (

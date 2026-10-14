@@ -15,7 +15,7 @@ v1 的 `dir_list` / `file_create` / `file_rename` / `file_delete` / `thumb_looku
 - v1 → v2 不兼容变更：删除缩略图命令；用统一 Workspace Entry 命令替换 `dir_list` 与 `file_*`；`doc_close` 改为显式 `mode`（可丢弃失联文档而不再授权已缺失路径）。
 - v3 当前公开 history command 为 `history_list`、`history_preview`、`history_mark`、`history_set_marked`、`history_replace`、`history_operation_status` 和 `history_delete`。v2 客户端不兼容此握手版本。
 - v4 新增：`app_handshake` 响应字段 `preferredLanguages`（系统 UI 语言原始 BCP-47 标签）；命令 `native_menu_sync`（前端向 Rust 同步本地化菜单标签与菜单状态）；`native-menu-command` 事件新增语言、外观、画布偏好与帮助命令值。既有命令 `native_menu_set_enabled` 保留。详见 §1.1、§1.7 与 §2。
-- v5 多窗口：`app_handshake` 按调用窗口返回 `window`（`WindowBootstrap`）；`workspace_list` 改为只返回调用窗口持有的 Workspace（0 或 1 项）；新增窗口归属、侧栏状态与偏好广播命令（§1.8）及窗口定向事件（§2）；新增错误码 `WORKSPACE_NOT_OWNED`。`workspace_add`、`workspace_remount` 保留为 deprecated，前端改用 `window_claim_workspace`。
+- v5 多窗口：`app_handshake` 按调用窗口返回 `window`（`WindowBootstrap`）；`workspace_list` 改为只返回调用窗口持有的 Workspace（0 或 1 项）；新增窗口归属、侧栏状态与偏好广播命令（§1.8）及窗口定向事件（§2）；新增错误码 `WORKSPACE_NOT_OWNED`。`workspace_add`、`workspace_remount` 保留为 deprecated，前端改用 `window_claim_workspace`。同一绘图至多由一个窗口打开：`doc_open` 响应改为带 `kind` 的联合（§1.4），写命令与 `doc_close` 检查调用窗口的归属；新增错误码 `DOCUMENT_NOT_OWNED`、`WINDOW_OWNERSHIP_CHANGED` 与嵌套 Workspace 的“关闭该窗口后在此打开”（§1.8）。
 
 ### 信任边界规则（所有命令统一执行）
 
@@ -58,6 +58,8 @@ type ErrorCode =
   | "HISTORY_OPERATION_PENDING"
   | "HISTORY_BUSY"
   | "WORKSPACE_NOT_OWNED"   // 调用窗口没有 Workspace（如 Welcome 窗口保存侧栏状态）
+  | "DOCUMENT_NOT_OWNED"    // 绘图由另一个窗口打开；context.path 为该绘图
+  | "WINDOW_OWNERSHIP_CHANGED" // 判定之后归属已变（retriable）
   | "INTERNAL";
 ```
 
@@ -187,12 +189,20 @@ interface EntryRenameResult {
 
 | 命令 | 请求 | 响应 | 说明 |
 |------|------|------|------|
-| `doc_open` | `{ path: string }` | `{ scene; baseHash; hasNewerDraft }` | `hasNewerDraft=true` 时提示载入草稿或磁盘版 |
+| `doc_open` | `{ path: string }` | `DocOpenResponse` | 由调用窗口打开并登记归属；`hasNewerDraft=true` 时提示载入草稿或磁盘版。绘图已由别的窗口打开、或位于别的窗口的 Workspace 内时返回 `ownedElsewhere`，不读取文件，并激活那个窗口、向其发 `window-activate-document` |
 | `doc_save_draft` | `{ path: string; sceneJson: string }` | `{ contentHash; savedAt }` | L2 热层写入；`CONFLICT_PENDING` 时拒绝 |
 | `doc_checkpoint` | `{ path; sceneJson; reason }` | `{ newBaseHash; mtime }` | L3 原子写冷层 |
 | `doc_close` | `{ path; mode }` | `{}` | `mode`: `checkpointed` \| `discardOrphan` |
 | `doc_resolve_conflict` | `{ path; resolution; saveAsPath? }` | `{ scene?; newBaseHash }` | `takeExternal` \| `keepLocal` \| `saveAsNew` |
 | `doc_export` | `{ path; sceneJson; format; targetPath; options; bytes }` | `{ writtenPath }` | 前端渲染 PNG/SVG 字节，后端走原子写落盘；失败不留残件 |
+
+```typescript
+type DocOpenResponse =
+  | { kind: "opened"; scene: SceneData; baseHash: string; hasNewerDraft: boolean }
+  | { kind: "ownedElsewhere"; label: string };
+```
+
+归属按规范化路径（符号链接、`..`、大小写不敏感卷上的大小写写法都视为同一绘图）登记。`doc_save_draft`、`doc_checkpoint`、`doc_resolve_conflict` 与 `history_replace`（`path` 定位）写别的窗口打开的绘图时返回 `DOCUMENT_NOT_OWNED`；没有窗口打开的绘图（新建）由本次写入登记，写入失败则撤销登记。`doc_close` 由非持有窗口调用时返回 `DOCUMENT_NOT_OWNED`，不删除草稿与恢复记录。`recovery_apply` 由恢复窗口调用时不检查归属，否则检查原路径与另存路径。`doc_resolve_conflict` 的 `saveAsNew` 改为登记新路径并释放原路径。
 
 ```typescript
 type CheckpointReason =
@@ -382,6 +392,8 @@ interface NativeMenuSyncState {
 | `window_probe_workspace` | `{ rootPath } \| { workspaceId }` | `ClaimWorkspaceOutcome` | 只读判定；`claimed` 表示可在本窗口打开，此时 `workspace`、`shell` 为 `null`。替换前先判定，再关闭 Tab |
 | `window_claim_workspace` | `{ rootPath } \| { workspaceId }` | `ClaimWorkspaceOutcome` | 在本窗口打开（替换原 Workspace）；同一 Workspace 或其子目录已在别的窗口时激活那个窗口，本窗口不变 |
 | `window_release_workspace` | `{}` | `{}` | 释放本窗口的 Workspace；前端须先关闭全部 Tab |
+| `window_close_other_and_claim` | `{ targetLabel; rootPath }` | `{ status: "closing"; requestId }` | 嵌套冲突的“关闭该窗口后在此打开”：前端先关闭本窗口全部 Tab；后端确认 `targetLabel` 仍是 `rootPath` 内 Workspace 的持有者（否则 `WINDOW_OWNERSHIP_CHANGED`），向它发 `window-close-requested-by-peer`；它销毁后在本窗口认领 `rootPath`，结果经 `window-claim-result` 返回 |
+| `window_peer_close_failed` | `{ requestId }` | `{}` | 被要求关闭的窗口关闭失败或取消；后端向发起窗口发 `window-claim-result` 的 `cancelled`。只有被要求的窗口能应答该请求 |
 | `workspace_shell_state_save` | `{ sidebarPinned; sidebarWidth; expanded }` | `{}` | 保存本窗口 Workspace 的侧栏状态；窗口没有 Workspace 时返回 `WORKSPACE_NOT_OWNED` |
 | `shell_preferences_migrate` | `{ sidebarPinned; sidebarWidth }` | `{ migrated }` | 一次性导入旧 localStorage 键 `excalidraw-desktop.shell` 的固定与宽度；只有第一次调用返回 `true`。旧键只读不删 |
 | `app_preferences_broadcast` | `{ appearance?; language? }` | `{}` | 通知其他窗口应用级偏好已改变（见 §2 `app-preferences-changed`） |
@@ -411,12 +423,16 @@ interface WorkspaceShellState {
 | `index-progress` | `{ workspaceId; scanned; total; done }` | 后台索引进度 |
 | `draft-saved` | `{ path; savedAt }` | 热层写入成功 |
 | `conflict-detected` | `{ path; externalMtime; localDraftUpdatedAt }` | 变更命中 isDirty 文档 |
-| `open-file-request` | `{ paths: string[] }` | 单实例二次启动/系统文件关联转发 |
+| `open-file-request` | `{ paths: string[] }` | 单实例二次启动、启动参数与 Finder 打开（macOS `RunEvent::Opened`）的绘图，按路由发给一个窗口：已打开该绘图的窗口（改发 `window-activate-document`）→ Workspace 包含它的窗口 → 最近聚焦的窗口 → 新窗口。尚未读取启动数据的窗口改由握手 `pendingOpenPaths` 接收 |
+| `window-activate-document` | `{ path }` | 绘图已在本窗口打开，另一处请求打开它：切换到该 Tab（本窗口没有该 Tab 时打开它） |
+| `workspace-reveal-entry` | `{ relativePath; name }` | 别的窗口打开了本窗口 Workspace 内的文件夹：打开侧栏，展开到该文件夹并选中，显示定位提示 |
+| `window-close-requested-by-peer` | `{ requestId }` | 别的窗口要在此打开包含本窗口 Workspace 的文件夹：走正常关闭（先 checkpoint）；失败时调用 `window_peer_close_failed` |
+| `window-claim-result` | `{ requestId; outcome: ClaimWorkspaceOutcome \| { kind: "cancelled" } }` | `window_close_other_and_claim` 的结果，只发给发起窗口 |
 | `native-menu-command` | `{ command: NativeMenuCommand; validationId? }` | 用户激活原生菜单项（仅 Rust 拥有的项）；发给前台窗口，没有前台窗口时发给最近聚焦的窗口 |
 | `app-preferences-changed` | `{ appearance?; language? }` | 某窗口改变外观或语言后，发给除该窗口外的所有窗口；接收端只应用，不写回存储、不再广播 |
 | `open-workspaces-changed` | `{ workspaces: { workspaceId; name; rootPath }[] }` | 任一窗口认领或释放 Workspace、窗口销毁后发给所有窗口；用于窗口标题同名区分 |
 
-v5 起 `workspace-entries-changed`、`index-progress` 只发给持有该 Workspace 的窗口（无持有者则不发）；`file-changed`、`conflict-detected`、`draft-saved`、`history-issue` 发给持有该文档的窗口。文档持有关系由 `doc_open` 登记之前，无持有者的文档事件依次发给触发它的窗口、持有包含该路径的 Workspace 的窗口、所有窗口；前端按 path 过滤。前端监听必须以当前窗口为目标（`{ target: { kind: "WebviewWindow", label } }`），否则目标为 `Any` 的监听会收到发给其他窗口的事件。
+v5 起 `workspace-entries-changed`、`index-progress` 只发给持有该 Workspace 的窗口（无持有者则不发）；`file-changed`、`conflict-detected`、`draft-saved`、`history-issue` 只发给持有该文档的窗口（由 `doc_open` 或首次写入登记；无持有者则不发）；前端仍按 path 过滤。前端监听必须以当前窗口为目标（`{ target: { kind: "WebviewWindow", label } }`），否则目标为 `Any` 的监听会收到发给其他窗口的事件。
 
 ```typescript
 interface WorkspaceEntriesChangedEvent {

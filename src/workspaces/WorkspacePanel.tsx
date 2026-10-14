@@ -61,6 +61,20 @@ export interface WorkspacePanelProps {
   onBrowse?: (location: BrowsingLocation) => void;
   backLocation?: BrowsingLocation | null;
   onBackLocationApplied?: () => void;
+  /**
+   * A folder of this window's Workspace to show: the root row and every
+   * folder down to it are expanded, and the folder is selected.
+   */
+  revealLocation?: BrowsingLocation | null;
+  onRevealLocationApplied?: () => void;
+  /**
+   * The chosen folder contains a Workspace open in another window. Without
+   * it the overlap is shown as an error.
+   */
+  onNestedConflict?: (
+    rootPath: string,
+    outcome: { label: string; workspaceId: string },
+  ) => Promise<void>;
   onWorkspacePresenceChange?: (hasAny: boolean) => void;
   onWorkspacesChange?: (workspaces: Workspace[]) => void;
   preferences?: ShellPreferences;
@@ -121,6 +135,9 @@ export function WorkspacePanel({
   onBrowse,
   backLocation = null,
   onBackLocationApplied,
+  revealLocation = null,
+  onRevealLocationApplied,
+  onNestedConflict,
   onWorkspacePresenceChange,
   onWorkspacesChange,
   preferences: providedPreferences,
@@ -464,6 +481,50 @@ export function WorkspacePanel({
   }, [backLocation, currentWorkspaceId, loadEntries, onBackLocationApplied]);
 
   useEffect(() => {
+    if (
+      revealLocation === null ||
+      revealLocation.workspaceId !== currentWorkspaceId
+    ) {
+      return;
+    }
+    const { workspaceId, directoryRelativePath } = revealLocation;
+    const segments = directoryRelativePath.split("/").filter(Boolean);
+    const folders = segments.map((_, index) =>
+      segments.slice(0, index + 1).join("/"),
+    );
+    preferences.setWorkspaceExpanded(true);
+    setExpandedWorkspaceIds((current) => {
+      const next = new Set(current).add(workspaceId);
+      expandedWorkspaceIdsRef.current = next;
+      return next;
+    });
+    setExpandedDirectoryKeys((current) => {
+      const next = new Set(current);
+      for (const folder of folders) {
+        next.add(makeEntryRowKey(workspaceId, folder));
+      }
+      return next;
+    });
+    for (const parent of ["", ...folders]) {
+      void loadEntries(workspaceId, parent);
+    }
+    const target = folders.at(-1) ?? null;
+    setSelectedDirectoryRelativePath(target);
+    setFocusRequestKey(
+      target === null
+        ? makeWorkspaceRowKey(workspaceId)
+        : makeEntryRowKey(workspaceId, target),
+    );
+    onRevealLocationApplied?.();
+  }, [
+    currentWorkspaceId,
+    loadEntries,
+    onRevealLocationApplied,
+    preferences,
+    revealLocation,
+  ]);
+
+  useEffect(() => {
     if (treeMenu === null) return;
     if (
       !workspaces.some((workspace) => workspace.id === treeMenu.row.workspaceId)
@@ -501,7 +562,8 @@ export function WorkspacePanel({
         });
         if (result.status === "declined") {
           if (result.outcome.kind === "containsOpen") {
-            throw containsOpenError();
+            if (onNestedConflict === undefined) throw containsOpenError();
+            await onNestedConflict(rootPath, result.outcome);
           }
           return;
         }

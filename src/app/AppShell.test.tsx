@@ -503,43 +503,233 @@ describe("AppShell", () => {
     },
   );
 
-  it("reports a folder that contains another window's Workspace without closing tabs", async () => {
-    const user = userEvent.setup();
-    const invoke = vi.fn(async (command: string) => {
-      if (command === "workspace_list") return [];
-      if (command === "workspace_recent_list") return [];
-      if (command === "window_probe_workspace") {
-        return {
-          kind: "containsOpen",
-          label: "window-2",
-          workspaceId: "workspace-a",
-        };
-      }
-      throw new Error(`Unexpected command ${command}`);
-    }) as CommandInvoker["invoke"];
-    const closeMany = vi.spyOn(documentManager, "closeMany");
-    vi.stubGlobal("__TAURI_INTERNALS__", {
-      invoke: vi.fn(async () => []),
+  describe("a folder that contains another window's Workspace", () => {
+    const INNER = {
+      id: "workspace-a",
+      name: "Inner",
+      rootPath: "/workspace/inner",
+      createdAt: 1,
+    };
+    const OUTER = {
+      id: "workspace-outer",
+      name: "workspace",
+      rootPath: "/workspace",
+      createdAt: 2,
+    };
+
+    async function openConflict({
+      claimResult,
+      newDrawing = false,
+    }: {
+      claimResult?: unknown;
+      newDrawing?: boolean;
+    } = {}) {
+      const user = userEvent.setup();
+      let claimHandler:
+        | ((event: {
+            payload: { requestId: string; outcome: unknown };
+          }) => void)
+        | undefined;
+      const { defaultEventListener } = await import("../ipc/events");
+      vi.mocked(defaultEventListener).mockImplementation(
+        async (eventName, handler) => {
+          if (eventName === "window-claim-result") {
+            claimHandler = handler as typeof claimHandler;
+          }
+          return () => undefined;
+        },
+      );
+      let openedHere = false;
+      const invoke = vi.fn(
+        async (command: string, args?: Record<string, unknown>) => {
+          if (command === "workspace_list") return openedHere ? [OUTER] : [];
+          if (command === "workspace_entry_list") return [];
+          if (command === "workspace_recent_list") return [INNER];
+          if (command === "window_probe_workspace") {
+            return {
+              kind: "containsOpen",
+              label: "window-2",
+              workspaceId: INNER.id,
+            };
+          }
+          if (command === "window_claim_workspace") {
+            if (args?.workspaceId === INNER.id) {
+              return {
+                kind: "ownedBy",
+                label: "window-2",
+                workspaceId: INNER.id,
+              };
+            }
+            return {
+              kind: "containsOpen",
+              label: "window-2",
+              workspaceId: INNER.id,
+            };
+          }
+          if (command === "window_close_other_and_claim") {
+            if (claimResult !== undefined) {
+              openedHere = (claimResult as { kind: string }).kind === "claimed";
+              queueMicrotask(() =>
+                claimHandler?.({
+                  payload: { requestId: "request-1", outcome: claimResult },
+                }),
+              );
+            }
+            return { status: "closing", requestId: "request-1" };
+          }
+          if (command === "workspace_entry_create") {
+            return {
+              operationId: "operation-1",
+              entry: {
+                workspaceId: OUTER.id,
+                kind: "drawing",
+                canonicalPath: "/workspace/Untitled.excalidraw",
+                relativePath: "Untitled.excalidraw",
+                parentRelativePath: "",
+                name: "Untitled.excalidraw",
+                displayName: "Untitled",
+                mtime: 1,
+                fileSize: 10,
+              },
+            };
+          }
+          throw new Error(`Unexpected command ${command}`);
+        },
+      ) as CommandInvoker["invoke"];
+      const closeMany = vi.spyOn(documentManager, "closeMany");
+      const openRouted = vi
+        .spyOn(documentManager, "openRouted")
+        .mockResolvedValue("document-1");
+      vi.stubGlobal("__TAURI_INTERNALS__", {
+        invoke: vi.fn(async () => []),
+      });
+
+      render(
+        <AppShell
+          selectWorkspaceDirectory={async () => "/workspace"}
+          workspaceInvoker={{ invoke }}
+        />,
+      );
+      await user.click(
+        await screen.findByRole("button", {
+          name: newDrawing ? "New Drawing" : "Open Workspace",
+        }),
+      );
+      const dialog = await screen.findByRole("dialog", {
+        name: "“workspace” contains an open Workspace",
+      });
+      return { user, invoke, closeMany, openRouted, dialog };
+    }
+
+    it("asks without closing tabs or opening anything", async () => {
+      const { user, invoke, closeMany, dialog } = await openConflict();
+
+      expect(dialog).toHaveTextContent("/workspace ⊃ /workspace/inner");
+      expect(closeMany).not.toHaveBeenCalled();
+      expect(invoke).not.toHaveBeenCalledWith(
+        "window_claim_workspace",
+        expect.anything(),
+      );
+
+      await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
     });
 
-    render(
-      <AppShell
-        selectWorkspaceDirectory={async () => "/workspace"}
-        workspaceInvoker={{ invoke }}
-      />,
-    );
-    await user.click(
-      await screen.findByRole("button", { name: "Open Workspace" }),
-    );
+    it("switches to the window that has the Workspace inside", async () => {
+      const { user, invoke, dialog } = await openConflict();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      en["error.WORKSPACE_OVERLAP"],
-    );
-    expect(closeMany).not.toHaveBeenCalled();
-    expect(invoke).not.toHaveBeenCalledWith(
-      "window_claim_workspace",
-      expect.anything(),
-    );
+      await user.click(
+        within(dialog).getByRole("button", { name: "Switch to that window" }),
+      );
+
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+      );
+      expect(invoke).toHaveBeenCalledWith("window_claim_workspace", {
+        workspaceId: INNER.id,
+      });
+      expect(invoke).not.toHaveBeenCalledWith(
+        "window_close_other_and_claim",
+        expect.anything(),
+      );
+    });
+
+    it("opens the folder here once the other window closed", async () => {
+      const { user, invoke, dialog } = await openConflict({
+        claimResult: {
+          kind: "claimed",
+          workspace: OUTER,
+          replaced: null,
+          shell: null,
+        },
+      });
+
+      await user.click(
+        within(dialog).getByRole("button", { name: "Close it and open here" }),
+      );
+
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+      );
+      expect(invoke).toHaveBeenCalledWith("window_close_other_and_claim", {
+        targetLabel: "window-2",
+        rootPath: "/workspace",
+      });
+      await user.click(
+        screen.getByRole("button", { name: /workspace sidebar/i }),
+      );
+      expect(
+        await screen.findByRole("treeitem", { name: OUTER.name }),
+      ).toBeInTheDocument();
+    });
+
+    it("opens nothing when the other window stayed open", async () => {
+      const { user, dialog } = await openConflict({
+        claimResult: { kind: "cancelled" },
+      });
+
+      await user.click(
+        within(dialog).getByRole("button", { name: "Close it and open here" }),
+      );
+
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+        "“Inner” was not closed, so “workspace” was not opened.",
+      );
+      expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
+    });
+
+    it("continues a New Drawing once the folder opened here", async () => {
+      const { user, invoke, openRouted, dialog } = await openConflict({
+        newDrawing: true,
+        claimResult: {
+          kind: "claimed",
+          workspace: OUTER,
+          replaced: null,
+          shell: null,
+        },
+      });
+
+      expect(invoke).not.toHaveBeenCalledWith(
+        "workspace_entry_create",
+        expect.anything(),
+      );
+      await user.click(
+        within(dialog).getByRole("button", { name: "Close it and open here" }),
+      );
+
+      await waitFor(() =>
+        expect(openRouted).toHaveBeenCalledWith(
+          "/workspace/Untitled.excalidraw",
+        ),
+      );
+      expect(invoke).toHaveBeenCalledWith("workspace_entry_create", {
+        workspaceId: OUTER.id,
+        parentRelativePath: "",
+        kind: "drawing",
+        baseName: "Untitled",
+      });
+    });
   });
 
   it("keeps the current Workspace when closing its tabs is cancelled", async () => {

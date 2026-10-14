@@ -25,6 +25,8 @@ pub enum ErrorCode {
     WorkspaceMounted,
     WorkspaceOverlap,
     WorkspaceNotOwned,
+    DocumentNotOwned,
+    WindowOwnershipChanged,
     InvalidName,
     NameConflict,
     EntryProtected,
@@ -68,6 +70,10 @@ pub enum AppError {
     WorkspaceOverlap(String),
     #[error("window has no Workspace: {0}")]
     WorkspaceNotOwned(String),
+    #[error("drawing is open in another window: {0}")]
+    DocumentNotOwned(PathBuf),
+    #[error("Workspace ownership changed: {0}")]
+    WindowOwnershipChanged(String),
     #[error("invalid Workspace Entry name: {0}")]
     InvalidName(String),
     #[error("Workspace Entry name conflicts with {0}")]
@@ -149,6 +155,18 @@ impl AppError {
                 ErrorCode::WorkspaceNotOwned,
                 "This window has no Workspace.".to_owned(),
                 false,
+                None,
+            ),
+            Self::DocumentNotOwned(path) => (
+                ErrorCode::DocumentNotOwned,
+                "The drawing is open in another window.".to_owned(),
+                false,
+                Some(path),
+            ),
+            Self::WindowOwnershipChanged(_) => (
+                ErrorCode::WindowOwnershipChanged,
+                "The workspace was opened or closed in another window. Try again.".to_owned(),
+                true,
                 None,
             ),
             Self::InvalidName(_) => (

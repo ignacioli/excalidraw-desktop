@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   DEFAULT_BINARY,
+  NESTED_DIALOG_BUTTONS,
   checkAvailability,
+  drawingTitle,
   exitCodeFor,
   frontWindow,
+  hasButtons,
   parseArgs,
+  parseButtonNames,
   parseWindowList,
 } from "./native-window-check.mjs";
 
@@ -73,5 +77,27 @@ describe("results", () => {
     assert.equal(exitCodeFor(["PASS", "BLOCKED", "FAIL"]), 1);
     assert.equal(exitCodeFor(["PASS", "BLOCKED"]), 2);
     assert.equal(exitCodeFor(["PASS", "PASS"]), 0);
+  });
+});
+
+describe("nested-Workspace dialog", () => {
+  it("reads web button names from either the title or the description", () => {
+    const names = parseButtonNames(
+      "Close it and open here\tmissing value\n\tCancel\nSwitch to that window\t\n",
+    );
+    assert.deepEqual(names, [
+      "Close it and open here",
+      "Cancel",
+      "Switch to that window",
+    ]);
+    assert.equal(hasButtons(names, NESTED_DIALOG_BUTTONS), true);
+    assert.equal(hasButtons(names.slice(1), NESTED_DIALOG_BUTTONS), false);
+    assert.deepEqual(parseButtonNames(""), []);
+  });
+});
+
+describe("drawing titles", () => {
+  it("names the active drawing and the Workspace", () => {
+    assert.equal(drawingTitle("in-a", "alpha"), "in-a — alpha");
   });
 });

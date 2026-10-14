@@ -159,12 +159,16 @@ describe("loadStartupHandshake", () => {
       createRecoveryGateway(invoker).handshake(),
       registerOpenFileHandler(
         {
-          open: async (path) => {
+          openRouted: async (path) => {
             opened.push(path);
             return path;
           },
         },
-        { invoker, listener: async () => () => undefined },
+        {
+          invoker,
+          listener: async () => () => undefined,
+          activateListener: async () => () => undefined,
+        },
       ),
     ]);
 

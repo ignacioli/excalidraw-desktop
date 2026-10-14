@@ -19,16 +19,12 @@ pub mod workspace_entries;
 
 use std::{path::Path, path::PathBuf, sync::Arc};
 
-#[cfg(not(feature = "e2e-harness"))]
-use tauri::Emitter;
 use tauri::Manager;
 
 use database::repository::WorkspaceRepository;
 use tauri_plugin_fs::FsExt;
 use window::registry::{WindowRegistry, WindowRole};
 
-#[cfg(not(feature = "e2e-harness"))]
-use commands::dto::OpenFileRequestEvent;
 use commands::{
     documents::{
         doc_checkpoint, doc_close, doc_open, doc_resolve_conflict, doc_save_draft,
@@ -51,9 +47,10 @@ use commands::{
         workspace_shell_state_save, SessionState,
     },
     workspace::{
-        window_claim_workspace, window_probe_workspace, window_release_workspace, workspace_add,
-        workspace_list, workspace_recent_list, workspace_recent_remove, workspace_remount,
-        workspace_remove, WorkspaceState,
+        window_claim_workspace, window_close_other_and_claim, window_peer_close_failed,
+        window_probe_workspace, window_release_workspace, workspace_add, workspace_list,
+        workspace_recent_list, workspace_recent_remove, workspace_remount, workspace_remove,
+        WorkspaceState,
     },
 };
 use database::repository::SqliteRepository;
@@ -89,20 +86,13 @@ pub fn run() {
     #[cfg(not(feature = "e2e-harness"))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
         let paths = drawing_paths_from_args(&argv);
-        if !paths.is_empty() {
-            let scope = app.fs_scope();
-            match grant_drawing_paths(&scope, &paths) {
-                Ok(()) => {
-                    let _ = app.emit("open-file-request", OpenFileRequestEvent { paths });
-                }
-                Err(error) => {
-                    eprintln!("failed to grant single-instance open-file paths: {error}");
-                }
+        if paths.is_empty() {
+            if let Some(label) = crate::window::target_window(app) {
+                crate::window::activate_label(app, &label);
             }
+            return;
         }
-        if let Some(label) = crate::window::target_window(app) {
-            crate::window::activate_label(app, &label);
-        }
+        open_drawing_paths(app, &paths);
     }));
     let builder = builder.setup(|app| {
         let app_data_directory = resolve_app_data_directory(app)?;
@@ -208,6 +198,7 @@ pub fn run() {
         let window_registry = WindowRegistry::new();
         let owned_workspace_ids = window_registry.owned_workspace_ids();
         app.manage(window_registry);
+        app.manage(crate::window::peer_close::PeerCloseRequests::default());
         app.manage(repository);
         app.manage(history_state);
         app.manage(history_replacement_state);
@@ -249,9 +240,15 @@ pub fn run() {
         } else {
             WindowRole::Normal
         };
+        #[cfg_attr(
+            not(feature = "e2e-harness"),
+            allow(
+                unused_variables,
+                reason = "only the test-only build pins the first window"
+            )
+        )]
         let first_window = crate::window::create_window(app.handle(), role, None)?;
-        app.state::<WindowRegistry>()
-            .push_pending_open_paths(first_window.label(), pending_open_paths);
+        crate::window::router::route_open_paths(app.handle(), &pending_open_paths);
         // rAF-driven performance workloads stall when the window is
         // occluded (WebKit throttles occluded views); keep the test-only
         // measurement window unoccluded on busy diagnostic hosts.
@@ -293,6 +290,8 @@ pub fn run() {
         workspace_recent_remove,
         window_probe_workspace,
         window_claim_workspace,
+        window_close_other_and_claim,
+        window_peer_close_failed,
         window_release_workspace,
         workspace_entry_list,
         workspace_entry_create,
@@ -345,6 +344,8 @@ pub fn run() {
         workspace_recent_remove,
         window_probe_workspace,
         window_claim_workspace,
+        window_close_other_and_claim,
+        window_peer_close_failed,
         window_release_workspace,
         workspace_entry_list,
         workspace_entry_create,
@@ -370,6 +371,19 @@ pub fn run() {
                 if let Err(error) = session.release() {
                     eprintln!("failed to release the session lock: {error}");
                 }
+            }
+        }
+        // Finder and `open` hand drawings to a running app as Apple Events.
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Opened { urls } => {
+            let arguments: Vec<String> = urls
+                .iter()
+                .filter_map(|url| url.to_file_path().ok())
+                .map(|path| path_string(&path))
+                .collect();
+            let paths = drawing_paths_from_args(&arguments);
+            if !paths.is_empty() {
+                open_drawing_paths(app_handle, &paths);
             }
         }
         #[cfg(target_os = "macos")]
@@ -402,10 +416,19 @@ fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
                 }
                 app.state::<WindowRegistry>().unregister(&label);
                 crate::native_menu::forget_window_state(&app, &label);
+                commands::workspace::finish_peer_closes(&app, &label).await;
                 crate::window::broadcast_open_workspaces(&app).await;
             });
         }
         _ => {}
+    }
+}
+
+/// Grant drawing paths handed to the running app and route them to windows.
+fn open_drawing_paths<R: tauri::Runtime>(app: &tauri::AppHandle<R>, paths: &[String]) {
+    match grant_drawing_paths(&app.fs_scope(), paths) {
+        Ok(()) => crate::window::router::route_open_paths(app, paths),
+        Err(error) => eprintln!("failed to grant opened drawing paths: {error}"),
     }
 }
 

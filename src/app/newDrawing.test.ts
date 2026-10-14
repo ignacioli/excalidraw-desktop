@@ -118,7 +118,11 @@ describe("createNewDrawingFile", () => {
           selectDirectory: async () => workspace.rootPath,
           untitledBaseName: "Untitled",
         }),
-      ).resolves.toEqual({ status: "declined", outcome });
+      ).resolves.toEqual({
+        status: "declined",
+        rootPath: workspace.rootPath,
+        outcome,
+      });
       expect(invoker.mock).not.toHaveBeenCalledWith(
         "workspace_entry_create",
         expect.anything(),

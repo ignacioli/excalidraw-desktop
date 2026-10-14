@@ -60,6 +60,15 @@ export const documentsEn = {
     "Open drawings from this Workspace will be saved and closed. Files on disk will not be deleted.",
   "workspace.remove.cancel": "Cancel",
   "workspace.remove.confirm": "Remove Workspace",
+  "workspace.nested.title": "“{target}” contains an open Workspace",
+  "workspace.nested.description":
+    "“{workspace}” is already open in another window. A Workspace can't be opened inside another one.",
+  "workspace.nested.switch": "Switch to that window",
+  "workspace.nested.closeAndOpen": "Close it and open here",
+  "workspace.nested.closing": "Closing that window…",
+  "workspace.nested.cancel": "Cancel",
+  "workspace.nested.notClosed":
+    "“{workspace}” was not closed, so “{target}” was not opened.",
   "workspace.tree.label": "Workspace files",
   "workspace.tree.activeDrawing": "Active drawing",
   "workspace.error.loadFolder": "Unable to load this folder.",
@@ -141,6 +150,15 @@ export const documentsZhCN: Record<keyof typeof documentsEn, string> = {
     "此工作区中已打开的绘图将被保存并关闭。不会删除磁盘上的文件。",
   "workspace.remove.cancel": "取消",
   "workspace.remove.confirm": "移除工作区",
+  "workspace.nested.title": "「{target}」包含一个已打开的工作区",
+  "workspace.nested.description":
+    "「{workspace}」已在另一个窗口中打开。工作区不能嵌套打开。",
+  "workspace.nested.switch": "切换到该窗口",
+  "workspace.nested.closeAndOpen": "关闭该窗口后在此打开",
+  "workspace.nested.closing": "正在关闭该窗口…",
+  "workspace.nested.cancel": "取消",
+  "workspace.nested.notClosed":
+    "「{workspace}」未关闭，因此「{target}」未打开。",
   "workspace.tree.label": "工作区文件",
   "workspace.tree.activeDrawing": "当前绘图",
   "workspace.error.loadFolder": "无法加载此文件夹。",

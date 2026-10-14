@@ -13,6 +13,8 @@ export const shellEn = {
   "shell.windowTitle.drawing": "{drawing} — {context}",
   "shell.windowTitle.sameName": "{workspace} ({parent})",
   "shell.feedback.dismiss": "Dismiss notification",
+  "shell.feedback.revealed":
+    "“{folder}” is inside {workspace}, already open in this window",
   "shell.untitledDrawing": "Untitled drawing",
   "shell.exportUnavailable":
     "Export is unavailable until the active drawing is ready.",
@@ -148,6 +150,7 @@ export const shellZhCN: Record<keyof typeof shellEn, string> = {
   "shell.windowTitle.drawing": "{drawing} — {context}",
   "shell.windowTitle.sameName": "{workspace}（{parent}）",
   "shell.feedback.dismiss": "关闭通知",
+  "shell.feedback.revealed": "“{folder}”位于已在此窗口打开的 {workspace} 中",
   "shell.untitledDrawing": "未命名绘图",
   "shell.exportUnavailable": "当前绘图准备就绪后才能导出。",
   "shell.historySavedOnly": "仅已保存的绘图支持版本历史。",

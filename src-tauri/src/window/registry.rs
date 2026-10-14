@@ -60,6 +60,9 @@ pub struct WindowRecord {
     /// Window Session.
     pub session_tabs: Vec<String>,
     pub session_active_path: Option<String>,
+    /// Whether the window has read its startup data; later launch paths go
+    /// to it as events.
+    pub bootstrapped: bool,
 }
 
 impl WindowRecord {
@@ -75,6 +78,7 @@ impl WindowRecord {
             unavailable_workspace: None,
             session_tabs: Vec::new(),
             session_active_path: None,
+            bootstrapped: false,
         }
     }
 }
@@ -399,6 +403,20 @@ impl WindowRegistry {
         }
     }
 
+    /// Hand drawing paths to a window: queued for its startup data when it
+    /// has not read them yet (returns `None`), otherwise returned for the
+    /// caller to send as an event.
+    pub fn queue_open_paths(&self, label: &str, paths: Vec<String>) -> Option<Vec<String>> {
+        let mut state = self.lock();
+        match state.windows.get_mut(label) {
+            Some(record) if !record.bootstrapped => {
+                record.pending_open_paths.extend(paths);
+                None
+            }
+            _ => Some(paths),
+        }
+    }
+
     pub fn set_restore(
         &self,
         label: &str,
@@ -444,6 +462,7 @@ impl WindowRegistry {
         let mut state = self.lock();
         let record = state.windows.get_mut(label)?;
         let snapshot = record.clone();
+        record.bootstrapped = true;
         record.pending_open_paths.clear();
         record.restore = None;
         record.unavailable_workspace = None;

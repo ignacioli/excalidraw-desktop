@@ -46,6 +46,18 @@ export async function installBrowserTauriHarness(
         __browserTauriClaimOutcome?: Record<string, unknown>;
         /** Commands invoked so far, in order. */
         __browserTauriCommands?: string[];
+        /** Workspaces another window has open, listed in Recent too. */
+        __browserTauriRecentExtra?: Record<string, unknown>[];
+        /** Entries listed besides the seeded drawings, by parent folder. */
+        __browserTauriExtraEntries?: {
+          parentRelativePath: string;
+          [field: string]: unknown;
+        }[];
+        /** Drawings another window has open: path → that window's label. */
+        __browserTauriOwnedElsewhere?: Record<string, string>;
+        /** The last `window_close_other_and_claim` arguments. */
+        __browserTauriPeerClose?: Record<string, unknown>;
+        __browserTauriMountWorkspace?: () => void;
         addEventListener(
           type: "keydown",
           listener: (event: {
@@ -248,11 +260,17 @@ export async function installBrowserTauriHarness(
             command === "workspace_list" ||
             command === "workspace_recent_list"
           ) {
-            if (claimedOverride !== undefined) return [claimedOverride];
+            const extra =
+              command === "workspace_recent_list"
+                ? (browser.__browserTauriRecentExtra ?? [])
+                : [];
+            if (claimedOverride !== undefined) {
+              return [claimedOverride, ...extra];
+            }
             const listed =
               workspaceMounted ||
               (command === "workspace_recent_list" && workspaceRecent);
-            return listed ? [workspace] : [];
+            return [...(listed ? [workspace] : []), ...extra];
           }
           // Welcome New Drawing mounts its chosen folder on first use; only
           // the harness root is a mountable folder.
@@ -271,6 +289,18 @@ export async function installBrowserTauriHarness(
             command === "window_claim_workspace"
           ) {
             const forced = browser.__browserTauriClaimOutcome;
+            // "Switch to that window" claims the Workspace inside, which
+            // only brings its window to the front.
+            if (
+              forced?.kind === "containsOpen" &&
+              args.workspaceId === forced.workspaceId
+            ) {
+              return {
+                kind: "ownedBy",
+                label: forced.label,
+                workspaceId: forced.workspaceId,
+              };
+            }
             if (forced !== undefined) {
               if (
                 command === "window_claim_workspace" &&
@@ -346,10 +376,13 @@ export async function installBrowserTauriHarness(
           if (command === "workspace_entry_list") {
             const workspaceId = String(args.workspaceId ?? "");
             const parentRelativePath = String(args.parentRelativePath ?? "");
-            if (workspaceId !== workspace.id || parentRelativePath !== "") {
-              return [];
-            }
-            return workspaceEntries;
+            if (workspaceId !== workspace.id) return [];
+            const extra = (browser.__browserTauriExtraEntries ?? []).filter(
+              (entry) => entry.parentRelativePath === parentRelativePath,
+            );
+            return parentRelativePath === ""
+              ? [...workspaceEntries, ...extra]
+              : extra;
           }
           if (command === "workspace_entry_create") {
             const workspaceId = String(args.workspaceId ?? "");
@@ -409,10 +442,22 @@ export async function installBrowserTauriHarness(
             typeof args.path === "string" ? args.path : path;
           const requestedFileKey = `excalidraw-e2e:file:${requestedPath}`;
           const requestedDraftKey = `excalidraw-e2e:draft:${requestedPath}`;
+          if (command === "window_close_other_and_claim") {
+            browser.__browserTauriPeerClose = args;
+            return { status: "closing", requestId: "peer-request-1" };
+          }
+          if (command === "window_peer_close_failed") {
+            return {};
+          }
           if (command === "doc_open") {
+            const owner = browser.__browserTauriOwnedElsewhere?.[requestedPath];
+            if (owner !== undefined) {
+              return { kind: "ownedElsewhere", label: owner };
+            }
             const sceneJson =
               browser.localStorage.getItem(requestedFileKey) ?? emptyScene;
             return {
+              kind: "opened",
               scene: JSON.parse(sceneJson),
               baseHash: await hashScene(sceneJson),
               hasNewerDraft: false,
@@ -475,6 +520,9 @@ export async function installBrowserTauriHarness(
         for (const callbackId of listeners.get(event) ?? []) {
           callbacks.get(callbackId)?.({ event, id: callbackId, payload });
         }
+      };
+      browser.__browserTauriMountWorkspace = () => {
+        workspaceMounted = true;
       };
       browser.__browserTauriArmCheckpointFailure = () => {
         checkpointFailureArmed = true;
@@ -597,4 +645,79 @@ export async function readBrowserTauriCommands(page: Page): Promise<string[]> {
         }
       ).__browserTauriCommands ?? [],
   );
+}
+
+/** Set a harness global; call after `goto`. */
+async function setHarnessGlobal(
+  page: Page,
+  name: string,
+  value: unknown,
+): Promise<void> {
+  await page.evaluate(
+    ({ key, next }) => {
+      (globalThis as unknown as Record<string, unknown>)[key] = next;
+    },
+    { key: name, next: value },
+  );
+}
+
+/** Workspaces another window has open, listed in Recent too. */
+export async function setBrowserTauriRecentExtra(
+  page: Page,
+  workspaces: readonly Record<string, unknown>[],
+): Promise<void> {
+  await setHarnessGlobal(page, "__browserTauriRecentExtra", workspaces);
+}
+
+/** Entries of the harness Workspace besides the seeded drawings. */
+export async function setBrowserTauriExtraEntries(
+  page: Page,
+  entries: readonly { parentRelativePath: string; [field: string]: unknown }[],
+): Promise<void> {
+  await setHarnessGlobal(page, "__browserTauriExtraEntries", entries);
+}
+
+/** Drawings another window has open: path → that window's label. */
+export async function setBrowserTauriOwnedElsewhere(
+  page: Page,
+  owners: Record<string, string>,
+): Promise<void> {
+  await setHarnessGlobal(page, "__browserTauriOwnedElsewhere", owners);
+}
+
+/** The last `window_close_other_and_claim` arguments, if any. */
+export async function readBrowserTauriPeerClose(
+  page: Page,
+): Promise<Record<string, unknown> | null> {
+  return page.evaluate(
+    () =>
+      (
+        globalThis as typeof globalThis & {
+          __browserTauriPeerClose?: Record<string, unknown>;
+        }
+      ).__browserTauriPeerClose ?? null,
+  );
+}
+
+/**
+ * Answer the pending "Close it and open here" request. A `claimed` outcome
+ * also makes the harness Workspace this window's own.
+ */
+export async function answerBrowserTauriPeerClose(
+  page: Page,
+  outcome: Record<string, unknown>,
+): Promise<void> {
+  if (outcome.kind === "claimed") {
+    await page.evaluate(() =>
+      (
+        globalThis as typeof globalThis & {
+          __browserTauriMountWorkspace?: () => void;
+        }
+      ).__browserTauriMountWorkspace?.(),
+    );
+  }
+  await emitBrowserTauriEvent(page, "window-claim-result", {
+    requestId: "peer-request-1",
+    outcome,
+  });
 }

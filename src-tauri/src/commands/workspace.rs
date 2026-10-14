@@ -5,7 +5,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use tauri::{AppHandle, Manager, State, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 use uuid::Uuid;
 
 use crate::{
@@ -13,13 +13,17 @@ use crate::{
     indexing::Indexer,
     security::WorkspacePathPolicy,
     watcher::WatcherState,
-    window::registry::{ClaimDecision, RegistryError, WindowRegistry, WorkspaceCandidate},
+    window::{
+        peer_close::{PeerCloseRequest, PeerCloseRequests},
+        registry::{ClaimDecision, RegistryError, WindowRegistry, WorkspaceCandidate},
+    },
 };
 
 use super::{
     dto::{
-        ClaimWorkspaceOutcome, EmptyResponse, Workspace, WorkspaceAddRequest,
-        WorkspaceRemoveRequest,
+        ClaimWorkspaceOutcome, EmptyResponse, PeerClaimOutcome, PeerCloseCancelled,
+        WindowClaimResultEvent, WindowCloseOtherResponse, WindowCloseRequestedByPeerEvent,
+        Workspace, WorkspaceAddRequest, WorkspaceRemoveRequest, WorkspaceRevealEntryEvent,
     },
     error::{AppError, IpcError},
 };
@@ -456,27 +460,26 @@ pub async fn window_probe_workspace(
     Ok(probe_outcome(&registry, window.label(), root, record)?)
 }
 
-/// Open a Workspace in the calling window, replacing its current one. When
-/// another window holds it or a Workspace that contains it, that window is
-/// brought to the front instead and the calling window is unchanged.
-#[tauri::command]
-pub async fn window_claim_workspace(
-    root_path: Option<String>,
-    workspace_id: Option<String>,
-    app: AppHandle,
-    window: WebviewWindow,
-    state: State<'_, WorkspaceState>,
-) -> Result<ClaimWorkspaceOutcome<Workspace>, IpcError> {
-    let (root, record) = resolve_target(&state.service, root_path, workspace_id).await?;
-    match claim_for_window(&app, window.label(), root.clone(), record, None).await? {
+/// Open `root` in window `label` and report the outcome. When another window
+/// holds it or a Workspace that contains it, that window is brought to the
+/// front instead and `label` is unchanged; a folder inside another window's
+/// Workspace is also shown in that window's sidebar.
+pub(crate) async fn claim_outcome_for_window(
+    app: &AppHandle,
+    service: &WorkspaceService,
+    label: &str,
+    root: PathBuf,
+    record: Option<WorkspaceRecord>,
+) -> Result<ClaimWorkspaceOutcome<Workspace>, AppError> {
+    match claim_for_window(app, label, root.clone(), record, None).await? {
         WindowClaim::Claimed {
             workspace,
             replaced,
         } => {
-            crate::window::persist_session(&app).await;
-            crate::window::broadcast_open_workspaces(&app).await;
+            crate::window::persist_session(app).await;
+            crate::window::broadcast_open_workspaces(app).await;
             let shell = crate::commands::session::workspace_shell_state_for(
-                &state.service.repository,
+                &service.repository,
                 &workspace.id,
             )
             .await?;
@@ -489,13 +492,172 @@ pub async fn window_claim_workspace(
         WindowClaim::Declined(decision) => {
             let outcome = declined_outcome(decision)
                 .ok_or_else(|| AppError::Internal("unreachable claim decision".to_owned()))?;
-            if let ClaimWorkspaceOutcome::OwnedBy { label, .. }
-            | ClaimWorkspaceOutcome::InsideOpen { label, .. } = &outcome
-            {
-                crate::window::activate_label(&app, label);
+            match &outcome {
+                ClaimWorkspaceOutcome::OwnedBy { label, .. } => {
+                    crate::window::activate_label(app, label);
+                }
+                ClaimWorkspaceOutcome::InsideOpen {
+                    label,
+                    relative_path,
+                    ..
+                } => {
+                    crate::window::activate_label(app, label);
+                    let name = root
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    if let Err(error) = app.emit_to(
+                        label.as_str(),
+                        "workspace-reveal-entry",
+                        WorkspaceRevealEntryEvent {
+                            relative_path: relative_path.clone(),
+                            name,
+                        },
+                    ) {
+                        eprintln!("failed to show the folder in {label}: {error}");
+                    }
+                }
+                _ => {}
             }
             Ok(outcome)
         }
+    }
+}
+
+/// Open a Workspace in the calling window, replacing its current one (see
+/// [`claim_outcome_for_window`]).
+#[tauri::command]
+pub async fn window_claim_workspace(
+    root_path: Option<String>,
+    workspace_id: Option<String>,
+    app: AppHandle,
+    window: WebviewWindow,
+    state: State<'_, WorkspaceState>,
+) -> Result<ClaimWorkspaceOutcome<Workspace>, IpcError> {
+    let (root, record) = resolve_target(&state.service, root_path, workspace_id).await?;
+    Ok(claim_outcome_for_window(&app, &state.service, window.label(), root, record).await?)
+}
+
+/// "Close it and open here" is still valid only while `root` contains the
+/// Workspace of `target_label`; otherwise ownership changed after the dialog
+/// opened.
+pub(crate) fn ensure_still_contained(
+    registry: &WindowRegistry,
+    label: &str,
+    root: PathBuf,
+    record: Option<WorkspaceRecord>,
+    target_label: &str,
+) -> Result<(), AppError> {
+    match probe_outcome(registry, label, root.clone(), record)? {
+        ClaimWorkspaceOutcome::ContainsOpen { label, .. } if label == target_label => Ok(()),
+        _ => Err(AppError::WindowOwnershipChanged(root.display().to_string())),
+    }
+}
+
+/// "Close it and open here": ask `target_label`, whose Workspace lies inside
+/// `root_path`, to close the normal way. The folder opens in the calling
+/// window once that window is gone; the result arrives as
+/// `window-claim-result`. The calling window closes its own tabs first.
+#[tauri::command]
+pub async fn window_close_other_and_claim(
+    target_label: String,
+    root_path: String,
+    app: AppHandle,
+    window: WebviewWindow,
+    state: State<'_, WorkspaceState>,
+) -> Result<WindowCloseOtherResponse, IpcError> {
+    let (root, record) = resolve_target(&state.service, Some(root_path), None).await?;
+    ensure_still_contained(
+        &app.state::<WindowRegistry>(),
+        window.label(),
+        root.clone(),
+        record,
+        &target_label,
+    )?;
+    let request_id = Uuid::new_v4().to_string();
+    let requests = app.state::<PeerCloseRequests>();
+    requests.begin(PeerCloseRequest {
+        request_id: request_id.clone(),
+        initiator: window.label().to_owned(),
+        target: target_label.clone(),
+        root_path: root.display().to_string(),
+    });
+    if let Err(error) = app.emit_to(
+        target_label.as_str(),
+        "window-close-requested-by-peer",
+        WindowCloseRequestedByPeerEvent {
+            request_id: request_id.clone(),
+        },
+    ) {
+        requests.take(&request_id, &target_label);
+        return Err(
+            AppError::Internal(format!("failed to ask {target_label} to close: {error}")).into(),
+        );
+    }
+    Ok(WindowCloseOtherResponse::Closing { request_id })
+}
+
+/// The calling window was asked to close by a peer and its close was
+/// cancelled or failed: tell the window that asked; nothing is opened.
+#[tauri::command]
+pub async fn window_peer_close_failed(
+    request_id: String,
+    app: AppHandle,
+    window: WebviewWindow,
+) -> Result<EmptyResponse, IpcError> {
+    if let Some(request) = app
+        .state::<PeerCloseRequests>()
+        .take(&request_id, window.label())
+    {
+        send_claim_result(
+            &app,
+            &request,
+            PeerClaimOutcome::Cancelled(PeerCloseCancelled::Cancelled),
+        );
+    }
+    Ok(EmptyResponse {})
+}
+
+/// After window `label` is destroyed: open the folders that waited for it to
+/// close, and forget the requests it made.
+pub(crate) async fn finish_peer_closes(app: &AppHandle, label: &str) {
+    let requests = app.state::<PeerCloseRequests>();
+    requests.drop_initiator(label);
+    let service = app.state::<WorkspaceState>().service.clone();
+    for request in requests.take_for_target(label) {
+        let outcome = match resolve_target(&service, Some(request.root_path.clone()), None).await {
+            Ok((root, record)) => {
+                claim_outcome_for_window(app, &service, &request.initiator, root, record).await
+            }
+            Err(error) => Err(error),
+        };
+        let outcome = match outcome {
+            Ok(outcome) => PeerClaimOutcome::Claim(outcome),
+            Err(error) => {
+                eprintln!(
+                    "failed to open {} after its window closed: {error}",
+                    request.root_path
+                );
+                PeerClaimOutcome::Cancelled(PeerCloseCancelled::Cancelled)
+            }
+        };
+        send_claim_result(app, &request, outcome);
+    }
+}
+
+fn send_claim_result(app: &AppHandle, request: &PeerCloseRequest, outcome: PeerClaimOutcome) {
+    if let Err(error) = app.emit_to(
+        request.initiator.as_str(),
+        "window-claim-result",
+        WindowClaimResultEvent {
+            request_id: request.request_id.clone(),
+            outcome,
+        },
+    ) {
+        eprintln!(
+            "failed to report the open to {}: {error}",
+            request.initiator
+        );
     }
 }
 
@@ -859,6 +1021,45 @@ mod tests {
             .unwrap_or_else(|error| panic!("resolve: {error}"));
         probe_outcome(registry, label, root, record)
             .unwrap_or_else(|error| panic!("probe: {error}"))
+    }
+
+    #[tokio::test]
+    async fn close_and_open_requires_the_contained_workspace_to_be_unchanged() {
+        let fixture = Fixture::new().await;
+        let registry = registry_with(&["window-1", "window-2", "window-3"]);
+        claim(&fixture, &registry, "window-2", "notes/sub").await;
+        let (root, record) = resolve_target(&fixture.service, Some(fixture.folder("notes")), None)
+            .await
+            .unwrap_or_else(|error| panic!("resolve: {error}"));
+
+        assert!(ensure_still_contained(
+            &registry,
+            "window-1",
+            root.clone(),
+            record.clone(),
+            "window-2"
+        )
+        .is_ok());
+        let wrong_target = ensure_still_contained(
+            &registry,
+            "window-1",
+            root.clone(),
+            record.clone(),
+            "window-3",
+        )
+        .expect_err("another window does not hold the contained Workspace");
+        assert!(matches!(wrong_target, AppError::WindowOwnershipChanged(_)));
+
+        registry
+            .release_workspace("window-2")
+            .unwrap_or_else(|error| panic!("release: {error}"));
+        let released = ensure_still_contained(&registry, "window-1", root, record, "window-2")
+            .expect_err("the contained Workspace was closed meanwhile");
+        assert!(matches!(released, AppError::WindowOwnershipChanged(_)));
+        assert_eq!(
+            IpcError::from(released).code,
+            crate::commands::error::ErrorCode::WindowOwnershipChanged
+        );
     }
 
     #[tokio::test]

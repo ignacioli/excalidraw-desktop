@@ -628,12 +628,81 @@ pub enum ClaimWorkspaceOutcome<W> {
     },
 }
 
+/// `window_close_other_and_claim`: the other window was asked to close; the
+/// result arrives as `window-claim-result`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum WindowCloseOtherResponse {
+    /// `request_id` names the `window-claim-result` that answers this call.
+    Closing {
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+}
+
+/// `window-close-requested-by-peer`: close this window the normal way;
+/// report a failed close with `window_peer_close_failed`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowCloseRequestedByPeerEvent {
+    pub request_id: String,
+}
+
+/// The other window's close was cancelled or failed; nothing was opened.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PeerCloseCancelled {
+    Cancelled,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(untagged)]
+pub enum PeerClaimOutcome {
+    Claim(ClaimWorkspaceOutcome<Workspace>),
+    Cancelled(PeerCloseCancelled),
+}
+
+/// `window-claim-result`: what "Close it and open here" ended with.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowClaimResultEvent {
+    pub request_id: String,
+    pub outcome: PeerClaimOutcome,
+}
+
+/// `workspace-reveal-entry`: show the folder at `relative_path` in this
+/// window's sidebar.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceRevealEntryEvent {
+    pub relative_path: String,
+    pub name: String,
+}
+
 /// `shell_preferences_migrate`: whether this call imported the legacy
 /// preferences (only the first call does).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShellPreferencesMigrateResponse {
     pub migrated: bool,
+}
+
+/// `doc_open`: the opened drawing, or the window that already has it. An
+/// `ownedElsewhere` response reads nothing; that window was brought to the
+/// front and asked to show the drawing.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum DocOpenResponse {
+    Opened(SceneOpenResponse),
+    OwnedElsewhere { label: String },
+}
+
+/// `window-activate-document`: show `path` in this window, opening it when
+/// it is not open yet.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowActivateDocumentEvent {
+    pub path: String,
 }
 
 /// `window_new`: the label of the Welcome window just opened.
@@ -743,5 +812,26 @@ mod tests {
         let save_as_reason = serde_json::to_string(&CheckpointReason::SaveAsNew)
             .unwrap_or_else(|error| panic!("serialize save-as checkpoint reason: {error}"));
         assert_eq!(save_as_reason, "\"saveAsNew\"");
+    }
+
+    #[test]
+    fn peer_close_messages_name_their_request() {
+        let closing = serde_json::to_value(WindowCloseOtherResponse::Closing {
+            request_id: "request-1".to_owned(),
+        })
+        .unwrap_or_else(|error| panic!("serialize close response: {error}"));
+        assert_eq!(
+            closing,
+            serde_json::json!({ "status": "closing", "requestId": "request-1" })
+        );
+        let cancelled = serde_json::to_value(WindowClaimResultEvent {
+            request_id: "request-1".to_owned(),
+            outcome: PeerClaimOutcome::Cancelled(PeerCloseCancelled::Cancelled),
+        })
+        .unwrap_or_else(|error| panic!("serialize claim result: {error}"));
+        assert_eq!(
+            cancelled,
+            serde_json::json!({ "requestId": "request-1", "outcome": { "kind": "cancelled" } })
+        );
     }
 }

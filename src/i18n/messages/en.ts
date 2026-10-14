@@ -65,6 +65,9 @@ export const en = {
   "error.WORKSPACE_OVERLAP":
     "This folder overlaps a workspace that is already mounted.",
   "error.WORKSPACE_NOT_OWNED": "This window has no workspace open.",
+  "error.DOCUMENT_NOT_OWNED": "This drawing is open in another window.",
+  "error.WINDOW_OWNERSHIP_CHANGED":
+    "The workspace was opened or closed in another window. Try again.",
   "error.INVALID_NAME": "This name isn’t valid.",
   "error.NAME_CONFLICT": "An item with this name already exists.",
   "error.ENTRY_PROTECTED": "This item is protected and can’t be changed.",

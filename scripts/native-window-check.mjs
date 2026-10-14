@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 // Native window check for a built app (macOS): window count, titles, front
-// window, bounds, and minimized state through Accessibility / System Events.
+// window, bounds, and minimized state through Accessibility / System Events;
+// nested folders and where opened drawings go. Drawings are handed over with
+// `open -a` when --app is given, else by a second launch of the binary.
 // Usage: pnpm native:window:check -- [--app PATH.app | --binary PATH].
 // Exit 0 = PASS, 1 = FAIL, 2 = BLOCKED. Brings the app to the foreground; do
 // not touch the keyboard or mouse while it runs. Checks that need the app to
 // be known to LaunchServices (Finder open, Dock reopen) report BLOCKED
 // without --app.
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,6 +65,39 @@ export function frontWindow(windows) {
   return windows.find((window) => !window.minimized) ?? null;
 }
 
+/** The nested-Workspace dialog's buttons, as Accessibility names them. */
+export const NESTED_DIALOG_BUTTONS = [
+  en["workspace.nested.closeAndOpen"],
+  en["workspace.nested.cancel"],
+  en["workspace.nested.switch"],
+];
+
+/**
+ * Parse the button rows printed by BUTTON_DUMP: title and description. A
+ * web button's name is in either one.
+ */
+export function parseButtonNames(raw) {
+  if (raw.trim() === "") return [];
+  return raw
+    .trim()
+    .split("\n")
+    .flatMap((line) => line.split("\t"))
+    .map((name) => name.trim())
+    .filter((name) => name !== "" && name !== "missing value");
+}
+
+/** Every expected button name is present. */
+export function hasButtons(names, expected) {
+  return expected.every((name) => names.includes(name));
+}
+
+/** `{drawing} — {workspace}`, as the window title shows an active drawing. */
+export function drawingTitle(drawing, workspace) {
+  return en["shell.windowTitle.drawing"]
+    .replace("{drawing}", drawing)
+    .replace("{context}", workspace);
+}
+
 /** A check that needs LaunchServices cannot run against a bare binary. */
 export function checkAvailability(check, { hasApp }) {
   return check.requiresLaunchServices && !hasApp ? "BLOCKED" : "RUN";
@@ -87,6 +122,37 @@ const WINDOW_DUMP = `on run argv
       set p to position of w
       set s to size of w
       set end of out to (name of w) & tab & m & tab & (item 1 of p) & tab & (item 2 of p) & tab & (item 1 of s) & tab & (item 2 of s)
+    end repeat
+  end tell
+  set AppleScript's text item delimiters to linefeed
+  return out as text
+end run`;
+
+const ROLE_DUMP = `on run argv
+  set windowName to item 2 of argv
+  set out to {}
+  tell application "System Events" to tell (first process whose unix id is ((item 1 of argv) as integer))
+    set found to entire contents of (first window whose name is windowName)
+    set end of out to "count=" & (count of found)
+    repeat with e in found
+      try
+        set end of out to (role of e as text) & ":" & (title of e as text) & ":" & (description of e as text)
+      end try
+    end repeat
+  end tell
+  set AppleScript's text item delimiters to linefeed
+  return out as text
+end run`;
+
+const BUTTON_DUMP = `on run argv
+  set windowName to item 2 of argv
+  set out to {}
+  tell application "System Events" to tell (first process whose unix id is ((item 1 of argv) as integer))
+    set found to entire contents of (first window whose name is windowName)
+    repeat with e in found
+      try
+        if (role of e as text) is "AXButton" then set end of out to (title of e as text) & tab & (description of e as text)
+      end try
     end repeat
   end tell
   set AppleScript's text item delimiters to linefeed
@@ -130,11 +196,38 @@ async function main() {
 
   const root = mkdtempSync(path.join(tmpdir(), "native-window-check-"));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
-  const folders = { a: path.join(root, "alpha"), b: path.join(root, "beta") };
-  for (const folder of Object.values(folders)) mkdirSync(folder);
+  // A sits in its own parent folder, so opening that parent conflicts
+  // with A only.
+  const folders = {
+    outer: path.join(root, "outer"),
+    a: path.join(root, "outer", "alpha"),
+    sub: path.join(root, "outer", "alpha", "sub"),
+    b: path.join(root, "beta"),
+    loose: path.join(root, "loose"),
+  };
+  for (const folder of Object.values(folders)) {
+    mkdirSync(folder, { recursive: true });
+  }
+  const scene = JSON.stringify({
+    type: "excalidraw",
+    version: 2,
+    source: "native-window-check",
+    elements: [],
+    appState: {},
+    files: {},
+  });
+  const drawings = {
+    inA: path.join(folders.a, "in-a.excalidraw"),
+    alsoInA: path.join(folders.a, "also-in-a.excalidraw"),
+    outside: path.join(folders.loose, "outside.excalidraw"),
+  };
+  for (const drawing of Object.values(drawings)) {
+    writeFileSync(drawing, scene);
+  }
 
+  const env = { ...process.env, HOME: path.join(root, "home") };
   const child = spawn(options.binary, ["-AppleLanguages", "(en-US)"], {
-    env: { ...process.env, HOME: path.join(root, "home") },
+    env,
     stdio: "ignore",
   });
   children.add(child);
@@ -327,6 +420,135 @@ end tell`);
     "opening a minimized Workspace window restores and fronts it",
     !timedOut(restored),
     `windows: ${describe(restored)}`,
+  );
+
+  // A folder inside A, opened from B: A's window comes forward.
+  raise(names.b);
+  await waitFor("B in front", (list) => frontWindow(list)?.name === names.b);
+  await openWorkspace(folders.sub);
+  const revealed = await waitFor(
+    "A in front for its sub-folder",
+    (list) => list.length === 2 && frontWindow(list)?.name === names.a,
+  );
+  check(
+    "opening a folder inside A fronts A's window and opens no window",
+    !timedOut(revealed),
+    `windows: ${describe(revealed)}`,
+  );
+
+  // A's parent folder, opened from B: B asks in the nested-Workspace dialog.
+  raise(names.b);
+  await waitFor("B in front", (list) => frontWindow(list)?.name === names.b);
+  await openWorkspace(folders.outer);
+  let buttonError = "";
+  const buttons = () => {
+    try {
+      return parseButtonNames(osa(BUTTON_DUMP, pid, names.b));
+    } catch (error) {
+      buttonError = error.message.split("\n").at(-2) ?? error.message;
+      return [];
+    }
+  };
+  let seen = [];
+  for (
+    const deadline = Date.now() + 10_000;
+    Date.now() < deadline && !hasButtons(seen, NESTED_DIALOG_BUTTONS);
+    await sleep(250)
+  ) {
+    seen = buttons();
+  }
+  check(
+    "opening A's parent folder asks with Close it and open here, Cancel, Switch to that window",
+    hasButtons(seen, NESTED_DIALOG_BUTTONS),
+    `buttons: ${seen.join(", ")}${buttonError ? `; last error: ${buttonError}` : ""}`,
+  );
+  if (!hasButtons(seen, NESTED_DIALOG_BUTTONS)) {
+    try {
+      console.log(
+        osa(ROLE_DUMP, pid, names.b).split("\n").slice(0, 80).join("\n"),
+      );
+    } catch (error) {
+      console.log(`role dump failed: ${error.message}`);
+    }
+  }
+  const afterParent = windows();
+  check(
+    "the parent folder opens no window and leaves B in front",
+    afterParent.length === 2 && frontWindow(afterParent)?.name === names.b,
+    `windows: ${describe(afterParent)}`,
+  );
+  // Escape cancels the dialog.
+  osa(`tell application "System Events" to tell (${proc}) to key code 53`);
+  await waitUntil(
+    "the dialog to close",
+    () => !hasButtons(buttons(), NESTED_DIALOG_BUTTONS),
+  );
+
+  // Drawings handed to the app: inside A, outside every Workspace, and one
+  // already open.
+  const deliver = async (file) => {
+    if (options.app !== null) {
+      execFileSync("open", ["-a", options.app, file]);
+      return;
+    }
+    // A second launch hands its drawings to the running app and exits.
+    const second = spawn(options.binary, [file], { env, stdio: "ignore" });
+    children.add(second);
+    await new Promise((done) => {
+      second.on("exit", done);
+      second.on("error", done);
+      setTimeout(done, 10_000);
+    });
+    children.delete(second);
+  };
+  const via = options.app !== null ? "open -a" : "a second launch";
+  const deliveredTo = async (what, file, windowName, title) => {
+    await deliver(file);
+    const result = await waitFor(
+      what,
+      (list) =>
+        list.length === 2 &&
+        frontWindow(list)?.name === title &&
+        list.some((window) => window.name === title),
+    );
+    check(
+      `${what} (${via})`,
+      !timedOut(result),
+      `expected ${windowName} in front titled “${title}”; windows: ${describe(result)}`,
+    );
+  };
+  // A tab is titled with the file name.
+  const inA = path.basename(drawings.inA);
+  const alsoInA = path.basename(drawings.alsoInA);
+  const outside = path.basename(drawings.outside);
+
+  raise(names.b);
+  await waitFor("B in front", (list) => frontWindow(list)?.name === names.b);
+  await deliveredTo(
+    "a drawing inside A opens in A's window",
+    drawings.inA,
+    "A",
+    drawingTitle(inA, names.a),
+  );
+  await deliveredTo(
+    "a second drawing inside A opens as another tab of A's window",
+    drawings.alsoInA,
+    "A",
+    drawingTitle(alsoInA, names.a),
+  );
+  raise(names.b);
+  await waitFor("B in front", (list) => frontWindow(list)?.name === names.b);
+  await deliveredTo(
+    "a drawing outside every Workspace opens in the most recently used window",
+    drawings.outside,
+    "B",
+    drawingTitle(outside, names.b),
+  );
+  await deliveredTo(
+    "a drawing already open fronts its window and switches to its tab",
+    drawings.inA,
+    "A",
+    drawingTitle(inA, names.a),
   );
 
   finish(exitCodeFor(statuses));

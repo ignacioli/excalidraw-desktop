@@ -30,12 +30,30 @@ function installHandlers() {
   );
   const opened: string[] = [];
   const manager = {
-    open: vi.fn(async (path: string) => {
+    openRouted: vi.fn(async (path: string): Promise<string | null> => {
       opened.push(path);
       return path;
     }),
   };
-  return { captured, listener, manager, opened, unlisten };
+  const activated: Array<(event: { payload: { path: string } }) => void> = [];
+  const activateListener = vi.fn(
+    (
+      _eventName: "window-activate-document",
+      handler: (event: { payload: { path: string } }) => void,
+    ) => {
+      activated.push(handler);
+      return Promise.resolve(unlisten);
+    },
+  );
+  return {
+    activated,
+    activateListener,
+    captured,
+    listener,
+    manager,
+    opened,
+    unlisten,
+  };
 }
 
 describe("registerOpenFileHandler", () => {
@@ -46,6 +64,7 @@ describe("registerOpenFileHandler", () => {
     await registerOpenFileHandler(handlers.manager, {
       invoker,
       listener: handlers.listener,
+      activateListener: handlers.activateListener,
     });
 
     expect(handlers.listener).toHaveBeenCalledWith(
@@ -79,6 +98,7 @@ describe("registerOpenFileHandler", () => {
     await registerOpenFileHandler(handlers.manager, {
       invoker,
       listener: handlers.listener,
+      activateListener: handlers.activateListener,
     });
 
     await vi.waitFor(() => {
@@ -88,7 +108,7 @@ describe("registerOpenFileHandler", () => {
 
   it("continues opening remaining paths when one fails and reports the error", async () => {
     const handlers = installHandlers();
-    handlers.manager.open
+    handlers.manager.openRouted
       .mockImplementationOnce(async () => {
         throw new Error("corrupt scene");
       })
@@ -111,6 +131,7 @@ describe("registerOpenFileHandler", () => {
     await registerOpenFileHandler(handlers.manager, {
       invoker,
       listener: handlers.listener,
+      activateListener: handlers.activateListener,
       onError,
     });
     await handlers.captured[0].handler({
@@ -119,5 +140,65 @@ describe("registerOpenFileHandler", () => {
 
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(handlers.opened).toEqual(["/two.excalidraw"]);
+  });
+
+  it("switches to or opens the drawing another window asked this one to show", async () => {
+    const handlers = installHandlers();
+    const invoker = {
+      invoke: vi.fn(async () => ({
+        contractVersion: 5,
+        appVersion: "0.1.0",
+        abnormalExit: false,
+        pendingOpenPaths: [],
+        preferredLanguages: [],
+        window: welcomeWindow,
+      })),
+    };
+
+    await registerOpenFileHandler(handlers.manager, {
+      invoker,
+      listener: handlers.listener,
+      activateListener: handlers.activateListener,
+    });
+    expect(handlers.activateListener).toHaveBeenCalledWith(
+      "window-activate-document",
+      expect.any(Function),
+    );
+    handlers.activated[0]({ payload: { path: "/a/note.excalidraw" } });
+
+    await vi.waitFor(() => {
+      expect(handlers.opened).toEqual(["/a/note.excalidraw"]);
+    });
+  });
+
+  it("opens nothing here for a drawing another window has", async () => {
+    const handlers = installHandlers();
+    handlers.manager.openRouted.mockResolvedValue(null);
+    const onError = vi.fn();
+    const invoker = {
+      invoke: vi.fn(async () => ({
+        contractVersion: 5,
+        appVersion: "0.1.0",
+        abnormalExit: false,
+        pendingOpenPaths: [],
+        preferredLanguages: [],
+        window: welcomeWindow,
+      })),
+    };
+
+    await registerOpenFileHandler(handlers.manager, {
+      invoker,
+      listener: handlers.listener,
+      activateListener: handlers.activateListener,
+      onError,
+    });
+    await handlers.captured[0].handler({
+      payload: { paths: ["/b/owned.excalidraw"] },
+    });
+
+    expect(handlers.manager.openRouted).toHaveBeenCalledWith(
+      "/b/owned.excalidraw",
+    );
+    expect(onError).not.toHaveBeenCalled();
   });
 });

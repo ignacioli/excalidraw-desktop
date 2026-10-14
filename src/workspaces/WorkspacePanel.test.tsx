@@ -431,6 +431,48 @@ describe("WorkspacePanel", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("hands a folder that contains another window's Workspace to the shell", async () => {
+    const user = userEvent.setup();
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "window_probe_workspace") {
+        return {
+          kind: "containsOpen",
+          label: "window-2",
+          workspaceId: "inner",
+        };
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    const closeMany = vi.spyOn(documentManager, "closeMany");
+    const onNestedConflict = vi.fn(async () => undefined);
+
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        onNestedConflict={onNestedConflict}
+        selectDirectory={async () => "/workspace"}
+      />,
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "Mount folder…" }),
+    );
+
+    await waitFor(() =>
+      expect(onNestedConflict).toHaveBeenCalledWith("/workspace", {
+        kind: "containsOpen",
+        label: "window-2",
+        workspaceId: "inner",
+      }),
+    );
+    expect(closeMany).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalledWith(
+      "window_claim_workspace",
+      expect.anything(),
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("announces folder loading then permission-denied list errors", async () => {
     let rejectList: (reason: unknown) => void = () => undefined;
     const pending = new Promise<never>((_resolve, reject) => {
@@ -467,6 +509,77 @@ describe("WorkspacePanel", () => {
       "This location is outside the Workspace.",
     );
     expect(screen.queryByText("Loading folder…")).not.toBeInTheDocument();
+  });
+
+  it("reveals a nested folder by expanding down to it and selecting it", async () => {
+    const directory = (relativePath: string): WorkspaceEntry => {
+      const slash = relativePath.lastIndexOf("/");
+      const name = relativePath.slice(slash + 1);
+      return {
+        workspaceId: "workspace-1",
+        kind: "directory",
+        canonicalPath: `/workspace/one/${relativePath}`,
+        relativePath,
+        parentRelativePath: slash < 0 ? "" : relativePath.slice(0, slash),
+        name,
+        displayName: name,
+        mtime: 1,
+        fileSize: 0,
+      };
+    };
+    const listings: Record<string, WorkspaceEntry[]> = {
+      "": [directory("notes")],
+      notes: [directory("notes/deep")],
+      "notes/deep": [],
+    };
+    const invoke = vi.fn(
+      async (command: string, args: Record<string, unknown>) => {
+        if (command === "workspace_list") return [WORKSPACES[0]];
+        if (command === "workspace_entry_list") {
+          return listings[String(args.parentRelativePath ?? "")] ?? [];
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+    const save = vi.fn();
+    const preferences = new ShellPreferences(save);
+    preferences.loadWorkspace({
+      sidebarPinned: false,
+      sidebarWidth: 360,
+      expanded: [],
+    });
+    const onRevealLocationApplied = vi.fn();
+
+    render(
+      <WorkspacePanel
+        currentWorkspaceId="workspace-1"
+        invoker={{ invoke }}
+        onRevealLocationApplied={onRevealLocationApplied}
+        preferences={preferences}
+        revealLocation={{
+          workspaceId: "workspace-1",
+          directoryRelativePath: "notes/deep",
+        }}
+        selectDirectory={async () => null}
+      />,
+    );
+
+    const deep = await screen.findByRole("treeitem", { name: "deep" });
+    await waitFor(() => expect(deep).toHaveFocus());
+    expect(screen.getByRole("treeitem", { name: "Sketches" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByRole("treeitem", { name: "notes" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(onRevealLocationApplied).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenLastCalledWith({
+      sidebarPinned: false,
+      sidebarWidth: 360,
+      expanded: [""],
+    });
   });
 
   it("renders only the current Workspace and collapses it", async () => {

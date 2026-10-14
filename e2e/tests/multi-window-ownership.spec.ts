@@ -79,7 +79,9 @@ test.describe("Welcome New Drawing", () => {
     });
   }
 
-  test("reports a folder that contains another window's Workspace", async ({
+  // The nested-Workspace dialog needs the Workspace inside from Recent;
+  // without it the overlap is reported instead.
+  test("reports a folder that contains a Workspace not in Recent", async ({
     page,
   }) => {
     await setBrowserTauriClaimOutcome(page, CONTAINS_OPEN);
@@ -133,7 +135,7 @@ test.describe("Open Workspace in a window with tabs", () => {
     });
   }
 
-  test("keeps the tabs and reports a folder that contains another window's Workspace", async ({
+  test("keeps the tabs and reports a folder that contains a Workspace not in Recent", async ({
     page,
   }) => {
     await setBrowserTauriClaimOutcome(page, CONTAINS_OPEN);

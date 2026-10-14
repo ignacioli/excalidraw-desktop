@@ -33,6 +33,7 @@ vi.mock("@excalidraw/excalidraw", () => ({
 function createGateway(): DocumentGateway {
   return {
     open: vi.fn(async () => ({
+      kind: "opened" as const,
       scene: {
         type: "excalidraw",
         version: 2,
@@ -55,6 +56,34 @@ describe("DocumentManager", () => {
     vi.useFakeTimers();
     serializeAsJSON.mockClear();
     useAppStore.setState({ hasMountedWorkspace: false });
+  });
+
+  it("leaves a drawing another window has in that window", async () => {
+    const gateway = createGateway();
+    vi.mocked(gateway.open).mockResolvedValue({
+      kind: "ownedElsewhere",
+      label: "window-2",
+    });
+    const manager = new DocumentManager(gateway);
+
+    await expect(manager.openRouted("/b/note.excalidraw")).resolves.toBeNull();
+    expect(manager.store.getState().tabOrder).toEqual([]);
+    expect(manager.store.getState().activeDocumentId).toBeNull();
+    await expect(manager.open("/b/note.excalidraw")).rejects.toMatchObject({
+      key: "error.DOCUMENT_NOT_OWNED",
+    });
+    expect(manager.store.getState().tabOrder).toEqual([]);
+  });
+
+  it("switches to the existing tab without asking the backend again", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const first = await manager.openRouted("/a/note.excalidraw");
+    await manager.openRouted("/a/other.excalidraw");
+
+    await expect(manager.openRouted("/a/note.excalidraw")).resolves.toBe(first);
+    expect(gateway.open).toHaveBeenCalledTimes(2);
+    expect(manager.store.getState().activeDocumentId).toBe(first);
   });
 
   it("does not serialize high-frequency scene or viewport changes", async () => {
@@ -630,6 +659,7 @@ describe("DocumentManager", () => {
     const manager = new DocumentManager(gateway);
     const documentId = await manager.open("/tmp/drawing.excalidraw");
     vi.mocked(gateway.open).mockResolvedValueOnce({
+      kind: "opened" as const,
       scene: {
         type: "excalidraw",
         version: 2,
