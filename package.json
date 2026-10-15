@@ -17,6 +17,7 @@
     "e2e": "playwright test --config e2e/playwright.config.ts",
     "hf2:verify": "node scripts/verify-hf2-handoff.mjs",
     "native:menu:check": "node scripts/native-menu-check.mjs",
+    "native:menu:test": "node --test scripts/native-menu-check.test.mjs",
     "native:window:check": "node scripts/native-window-check.mjs",
     "native:window:test": "node --test scripts/native-window-check.test.mjs",
     "native:macos:seal": "node scripts/native-macos-validation.mjs seal",
