@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import path from "node:path";
 import {
   DEFAULT_BINARY,
   NESTED_DIALOG_BUTTONS,
@@ -10,6 +11,7 @@ import {
   frontWindow,
   hasButtons,
   listedWindows,
+  listsEveryWindow,
   parseArgs,
   parseButtonNames,
   parseWindowList,
@@ -23,6 +25,19 @@ describe("parseArgs", () => {
       app: "/tmp/Excalidraw.app",
       binary: "/tmp/Excalidraw.app/Contents/MacOS/excalidraw-desktop",
     });
+  });
+
+  it("makes a relative --app path absolute for open -a", () => {
+    const app = path.resolve(
+      "src-tauri/target/debug/bundle/macos/Excalidraw.app",
+    );
+    assert.deepEqual(
+      parseArgs([
+        "--app",
+        "src-tauri/target/debug/bundle/macos/Excalidraw.app",
+      ]),
+      { app, binary: path.join(app, "Contents/MacOS/excalidraw-desktop") },
+    );
   });
 
   it("rejects an --app path that is not a bundle", () => {
@@ -137,6 +152,26 @@ describe("listedWindows", () => {
       listedWindows(["Minimize", "Zoom", "alpha", "beta"], ["alpha", "gamma"]),
       ["alpha"],
     );
+  });
+});
+
+describe("listsEveryWindow", () => {
+  const items = ["Minimize", "Zoom", "Close Window", "alpha", "beta"];
+
+  it("passes when every window title is a Window menu item", () => {
+    assert.equal(listsEveryWindow(items, ["alpha", "beta"]), true);
+  });
+
+  it("fails when a window is missing from the Window menu", () => {
+    assert.equal(listsEveryWindow(items, ["alpha", "gamma"]), false);
+    assert.equal(
+      listsEveryWindow(["Minimize", "Zoom", "Close Window"], ["alpha"]),
+      false,
+    );
+  });
+
+  it("fails when there is no window to list", () => {
+    assert.equal(listsEveryWindow(items, []), false);
   });
 });
 
