@@ -26,7 +26,13 @@ test("entry dialogs cancel without mutation and keep naming conflicts inline", a
   await page.goto("/");
   await openWorkspaceSidebar(page);
 
-  await page.getByRole("button", { name: "New Drawing" }).click();
+  await page
+
+    .getByRole("toolbar", { name: "Workspace actions" })
+
+    .getByRole("button", { name: "New Drawing" })
+
+    .click();
   const input = page.getByRole("textbox", { name: "Name" });
   await expect(input).toHaveValue("Untitled");
   await expect(page.getByLabel("Fixed extension .excalidraw")).toBeVisible();
@@ -37,7 +43,13 @@ test("entry dialogs cancel without mutation and keep naming conflicts inline", a
     ),
   ).toHaveLength(0);
 
-  await page.getByRole("button", { name: "New Drawing" }).click();
+  await page
+
+    .getByRole("toolbar", { name: "Workspace actions" })
+
+    .getByRole("button", { name: "New Drawing" })
+
+    .click();
   await input.fill("drawing");
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page.getByRole("alert")).toContainText("already exists");

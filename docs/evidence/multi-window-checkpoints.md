@@ -511,7 +511,67 @@ Gaps:
 
 ## Empty Workspace state
 
-Not run yet.
+What a Workspace window shows when no drawing is open: the canvas
+background and grid, a handwritten hint, New Drawing and Show Sidebar, and
+a pointer to the sidebar toggle; with the sidebar pinned, only New Drawing.
+
+- Candidate: the commit that adds this section, on macOS 26.6.2 (Darwin
+  25.6.0, arm64), 2026-10-14.
+- Result: PASS for the automated checks below. The look of the screen is
+  not judged from screenshots; it is in the owner walkthrough list.
+- Components: `MW-EMPTY-STATE` in Light and Dark, English and Simplified
+  Chinese, sidebar hidden and pinned.
+
+| Command                                                         | Result                                      |
+| --------------------------------------------------------------- | ------------------------------------------- |
+| `pnpm test src/app/CanvasEmptyState.test.tsx`                   | PASS, 7 tests                               |
+| `pnpm test` (whole Vitest suite)                                | PASS, 85 files / 700 tests                  |
+| `pnpm typecheck`                                                | PASS                                        |
+| `pnpm lint`                                                     | PASS                                        |
+| `pnpm format`                                                   | PASS                                        |
+| `APP_E2E=1 pnpm e2e e2e/tests/multi-window-empty-state.spec.ts` | PASS, 7 tests                               |
+| `APP_E2E=1 pnpm e2e` (whole browser suite)                      | 188 passed, 86 skipped, 1 timed out (below) |
+
+What the checks cover:
+
+- Component: the area is named "Empty canvas area"; the hint and actions
+  are plain text and buttons, New Drawing before Show Sidebar; no editor or
+  canvas element is mounted; the pointer and its note are hidden from
+  assistive technology; with the sidebar pinned there is one action and no
+  pointer; New Drawing is disabled while one is being created; a language
+  change updates every text.
+- Browser, in Light and Dark with English and Simplified Chinese: the area
+  has the canvas background color, shows the texts of the chosen language
+  only, and does not overflow horizontally; Tab reaches New Drawing, then
+  Show Sidebar; Show Sidebar opens the sidebar as an overlay; New Drawing
+  opens a new drawing in a tab; dragging and pressing a tool key on the
+  empty area changes nothing and calls no document command; the pinned
+  variant has one action and no pointer.
+
+Behavior worth knowing:
+
+- New Drawing creates the next free "Untitled" at the root of the window's
+  Workspace and opens it, as Welcome New Drawing does once it has a folder.
+- The handwriting uses the editor's Latin font subset; Chinese text uses the
+  bundled CJK handwriting font loaded at startup.
+- The approved design shows keyboard shortcut hints next to the actions.
+  The app has no such shortcuts yet, so the hints are not shown (owner
+  decision, 2026-10-14).
+
+Test changes:
+
+- Three browser tests clicked "New Drawing" anywhere on the page; the empty
+  area now has its own New Drawing, so they click the sidebar toolbar's
+  button, which is what they meant. One test that checked the old empty
+  text now checks the named area.
+
+Gaps:
+
+- In one whole-suite run the Simplified Chinese export-dialog accessibility
+  test timed out; run alone twice it passed (3 of 3 each time), and it
+  passed in the earlier whole-suite run. It does not touch the empty area.
+- The arrow, handwriting and spacing are not compared with the approved
+  boards; they are in the owner walkthrough list.
 
 ## Sidebar dialogs
 

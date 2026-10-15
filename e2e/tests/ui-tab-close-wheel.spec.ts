@@ -289,7 +289,9 @@ test("closing the last drawing tab keeps the window shell and Files sidebar", as
   await expect(
     page.getByRole("complementary", { name: "Files" }),
   ).toBeAttached();
-  await expect(page.getByText("Select a drawing to begin.")).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Empty canvas area" }),
+  ).toBeVisible();
 });
 
 test("vertical wheel on the tab bar cycles one tab per notch and ignores horizontal input", async ({

@@ -39,7 +39,10 @@ test("creates, checkpoints, and reopens a drawing with every asset local", async
   await page.goto("/");
 
   await openWorkspaceSidebar(page);
-  await page.getByRole("button", { name: "New Drawing", exact: true }).click();
+  await page
+    .getByRole("toolbar", { name: "Workspace actions" })
+    .getByRole("button", { name: "New Drawing" })
+    .click();
   const namingDialog = page.getByRole("dialog", { name: "New drawing" });
   await namingDialog.getByRole("textbox", { name: "Name" }).fill("us1-drawing");
   await namingDialog.getByRole("button", { name: "Create" }).click();

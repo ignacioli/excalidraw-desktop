@@ -956,7 +956,10 @@ test("create dialog announces permission-denied as an alert", async ({
   );
   await page.goto("/");
   await ensureFilesSidebar(page);
-  await page.getByRole("button", { name: "New Drawing" }).click();
+  await page
+    .getByRole("toolbar", { name: "Workspace actions" })
+    .getByRole("button", { name: "New Drawing" })
+    .click();
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page.getByRole("alert")).toHaveText(
     "This location is outside the Workspace.",

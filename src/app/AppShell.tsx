@@ -76,6 +76,7 @@ import {
 import { defaultEventListener } from "../ipc/events";
 import { TabBar } from "./TabBar";
 import { OrphanCloseDialog } from "./OrphanCloseDialog";
+import { CanvasEmptyState } from "./CanvasEmptyState";
 import { createNewDrawingFile, createUntitledDrawing } from "./newDrawing";
 import {
   closeOtherAndClaim,
@@ -884,6 +885,28 @@ export function AppShell({
       reportWelcomeError(error);
     } finally {
       setWelcomeBusy(false);
+    }
+  };
+
+  // The empty canvas's New Drawing: the next free Untitled at the root of
+  // this window's Workspace, as Welcome New Drawing creates once it has a
+  // folder.
+  const [emptyStateBusy, setEmptyStateBusy] = useState(false);
+  const createEmptyStateDrawing = async (): Promise<void> => {
+    const workspace = currentWorkspaceRef.current;
+    if (workspace === null) return;
+    setEmptyStateBusy(true);
+    try {
+      await runAction(async () => {
+        const entry = await createUntitledDrawing(
+          workspaceInvoker,
+          workspace.id,
+          "Untitled",
+        );
+        await documentManager.openRouted(entry.canonicalPath);
+      });
+    } finally {
+      setEmptyStateBusy(false);
     }
   };
 
@@ -2290,9 +2313,12 @@ export function AppShell({
                 </section>
               ))
             ) : (
-              <div className="canvas-empty-state">
-                <p>{translateNow("shell.emptyState")}</p>
-              </div>
+              <CanvasEmptyState
+                busy={emptyStateBusy}
+                onNewDrawing={() => void createEmptyStateDrawing()}
+                onShowSidebar={() => sidebarController.openOverlay()}
+                sidebarPinned={sidebarSnapshot.mode === "pinned"}
+              />
             )}
           </div>
           {historyOpen &&
