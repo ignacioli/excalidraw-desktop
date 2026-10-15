@@ -371,9 +371,10 @@ Defects found and fixed by these checks:
 
 Gaps and owner decisions:
 
-- The Window menu lists none of the open windows; it has Minimize, Zoom,
+- The Window menu listed none of the open windows; it had Minimize, Zoom,
   Close Window and Close All. Owner decision: a defect, fixed separately as
-  a small fix ahead of the remaining work.
+  a small fix ahead of the remaining work; fixed (see "Follow-up: the Window
+  menu").
 - A failed checkpoint leaves the drawing's save status at "checkpointing"
   rather than an error state; the error is shown by the shell. Owner
   decision: fixed with the final polish.
@@ -404,6 +405,27 @@ Follow-up: paste, then quit (2026-10-14):
   the source file was unchanged.
 - Owner review: no defect in this case; the Window menu is fixed separately;
   the save status and driver error items are scheduled as noted above.
+
+Follow-up: the Window menu (2026-10-14):
+
+- Fix: every time the app menu is installed (at startup and on each rebuild,
+  such as a language change) the Window submenu is registered again as the
+  macOS window menu (commits `549d5f4`, merged in `1118068`).
+- `pnpm native:window:check -- --app <debug .app>` on a debug build of the
+  fix: exit 0, 17 checks PASS. The Window menu check is now PASS/FAIL instead
+  of an observation: it listed 2 of 2 windows by title. The script now also
+  accepts a relative `--app` path.
+- `pnpm native:menu:check -- --languages "(en-US, zh-Hans)"`: exit 0, 100
+  checks PASS. The first run crashed reading a log line split across two
+  output chunks; the script now reads whole lines (`a0ab44a`) and the rerun
+  passed.
+- After the merge: `cargo fmt --check`, both clippy runs, `cargo test` (337
+  tests), `pnpm lint`, `pnpm typecheck`, `pnpm format`, `pnpm test` (693
+  tests), `pnpm native:window:test` (17) and `pnpm native:menu:test` (1)
+  PASS. The native checks ran on the fix's own build, not re-run on the
+  merged build; the merge adds only test-driver code and documents.
+- Gap: no native check reads the Window menu after a language switch; the
+  rebuild uses the same install path, but this is not natively proven.
 
 ## Window size and placement
 

@@ -43,7 +43,9 @@ const FILE_SUBMENU_ID: &str = "native-menu.file";
 const EDIT_SUBMENU_ID: &str = "native-menu.edit";
 const VIEW_SUBMENU_ID: &str = "native-menu.view";
 const APPEARANCE_SUBMENU_ID: &str = "native-menu.appearance";
-const WINDOW_SUBMENU_ID: &str = "native-menu.window";
+/// The submenu registered as AppKit's `NSApp.windowsMenu`, so macOS lists every
+/// open window by title in it.
+pub const WINDOW_SUBMENU_ID: &str = "native-menu.window";
 const HELP_SUBMENU_ID: &str = "native-menu.help-menu";
 
 /// Every label the frontend must supply, including predefined item text.
@@ -500,6 +502,21 @@ mod tests {
             }
         });
         items
+    }
+
+    #[test]
+    fn exposes_exactly_one_top_level_window_submenu() {
+        let spec = menu_spec();
+        let mut matches = 0;
+        walk(&spec, &mut |entry| {
+            if matches!(entry, MenuEntry::Submenu { id, .. } if *id == WINDOW_SUBMENU_ID) {
+                matches += 1;
+            }
+        });
+        assert_eq!(matches, 1);
+        assert!(spec.iter().any(
+            |entry| matches!(entry, MenuEntry::Submenu { id, .. } if *id == WINDOW_SUBMENU_ID)
+        ));
     }
 
     #[test]
