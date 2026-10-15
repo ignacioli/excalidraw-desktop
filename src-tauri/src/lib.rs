@@ -24,6 +24,7 @@ use tauri::Manager;
 use database::repository::WorkspaceRepository;
 use tauri_plugin_fs::FsExt;
 use window::{
+    placement::PlacementTracker,
     quit::QuitCoordinator,
     registry::{WindowRegistry, WindowRole},
     session::{SessionWriter, WindowSessionRepository},
@@ -212,6 +213,7 @@ pub fn run() {
         app.manage(window_registry);
         app.manage(QuitCoordinator::new(window::quit::configured_timeout()));
         app.manage(SessionWriter::default());
+        app.manage(PlacementTracker::default());
         app.manage(crate::window::peer_close::PeerCloseRequests::default());
         app.manage(repository);
         app.manage(history_state);
@@ -407,6 +409,9 @@ pub fn run() {
         tauri::RunEvent::Exit => {
             // Terminations that skip the coordinated quit (the Dock menu,
             // logging out) still store the windows when possible.
+            if app_handle.try_state::<PlacementTracker>().is_some() {
+                tauri::async_runtime::block_on(crate::window::placement::flush(app_handle));
+            }
             if app_handle.try_state::<SessionWriter>().is_some() {
                 tauri::async_runtime::block_on(crate::window::persist_session(app_handle));
                 app_handle.state::<SessionWriter>().freeze();
@@ -440,7 +445,7 @@ pub fn run() {
 }
 
 /// Keep the registry and the native menu in step with window focus and
-/// window destruction.
+/// window destruction, and remember where Workspace windows are.
 fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
     let label = window.label();
     if !label.starts_with(window::registry::WINDOW_LABEL_PREFIX) {
@@ -452,7 +457,14 @@ fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
             app.state::<WindowRegistry>().focus(label);
             crate::native_menu::show_window_state(&app, label);
         }
+        // Maximizing and entering full screen also resize the window.
+        tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+            if let Some(observed) = crate::window::placement::observe_window(window) {
+                crate::window::placement::record(&app, label, observed);
+            }
+        }
         tauri::WindowEvent::Destroyed => {
+            app.state::<PlacementTracker>().forget(label);
             let label = label.to_owned();
             // Its own close checkpointed it, so a quit stops waiting for it.
             crate::window::quit::forget_window(&app, &label);

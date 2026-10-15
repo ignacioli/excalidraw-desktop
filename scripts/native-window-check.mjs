@@ -2,7 +2,9 @@
 // Native window check for a built app (macOS): window count, titles, front
 // window, bounds, and minimized state through Accessibility / System Events;
 // nested folders and where opened drawings go; closing every window, Reopen,
-// and Cmd+Q with an unsaved keyboard edit. Drawings are handed over with `open -a`
+// and Cmd+Q with an unsaved keyboard edit; the first window's size, a
+// Workspace window's bounds after closing and reopening it, and after a
+// normal quit and relaunch. Drawings are handed over with `open -a`
 // when --app is given, else by a second launch of the binary. Whether the
 // Window menu lists the windows is printed as an observation.
 // Usage: pnpm native:window:check -- [--app PATH.app | --binary PATH].
@@ -175,6 +177,74 @@ export function rectangleMoved(scene) {
   return rectangle !== undefined && rectangle.x > 100;
 }
 
+/** Smallest window content size, in points. */
+export const MIN_SIZE = { width: 960, height: 640 };
+/** Bounds read back through Accessibility may differ by a rounding step. */
+export const BOUNDS_TOLERANCE = 1;
+/** Height of the system title bar that the outer frame adds, at most. */
+export const MAX_TITLE_BAR = 60;
+
+/**
+ * Content size of a window without remembered placement on `workArea`: 90%
+ * of the work area, at most 1680×1050 and at least the minimum size.
+ */
+export function expectedInitialSize(workArea) {
+  const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+  return {
+    width: clamp(Math.floor(workArea.width * 0.9), MIN_SIZE.width, 1680),
+    height: clamp(Math.floor(workArea.height * 0.9), MIN_SIZE.height, 1050),
+  };
+}
+
+/**
+ * Whether the first window's outer frame (title bar included) follows the
+ * initial size rule, lies inside the work area, and, on a work area of at
+ * least 1440×900, has content of at least 1280×760.
+ */
+export function firstWindowFits(bounds, workArea) {
+  const expected = expectedInitialSize(workArea);
+  const titleBar = bounds.height - expected.height;
+  const inside =
+    bounds.x >= workArea.x - BOUNDS_TOLERANCE &&
+    bounds.y >= workArea.y - BOUNDS_TOLERANCE &&
+    bounds.x + bounds.width <= workArea.x + workArea.width + BOUNDS_TOLERANCE &&
+    bounds.y + bounds.height <= workArea.y + workArea.height + BOUNDS_TOLERANCE;
+  const sized =
+    Math.abs(bounds.width - expected.width) <= BOUNDS_TOLERANCE &&
+    titleBar >= 0 &&
+    titleBar <= MAX_TITLE_BAR;
+  const large = workArea.width >= 1440 && workArea.height >= 900;
+  const target = !large || (expected.width >= 1280 && expected.height >= 760);
+  return { ok: inside && sized && target, expected, inside, sized, target };
+}
+
+/** Two window frames match within the rounding tolerance. */
+export function sameBounds(left, right) {
+  return ["x", "y", "width", "height"].every(
+    (key) => Math.abs(left[key] - right[key]) <= BOUNDS_TOLERANCE,
+  );
+}
+
+/**
+ * Bounds to move a window to inside `workArea`: offset from its top-left
+ * corner and smaller than the initial size, so they differ from both the
+ * centered and the staggered default.
+ */
+export function adjustedBounds(workArea) {
+  return {
+    x: Math.round(workArea.x + 40),
+    y: Math.round(workArea.y + 30),
+    width: Math.max(MIN_SIZE.width + 80, Math.round(workArea.width * 0.7)),
+    height: Math.max(MIN_SIZE.height + 60, Math.round(workArea.height * 0.75)),
+  };
+}
+
+/** `x\ty\twidth\theight` as printed by PRIMARY_WORK_AREA. */
+export function parseWorkArea(raw) {
+  const [x, y, width, height] = raw.trim().split("\t").map(Number);
+  return { x, y, width, height };
+}
+
 /** FAIL beats BLOCKED beats PASS. */
 export function exitCodeFor(statuses) {
   if (statuses.includes("FAIL")) return 1;
@@ -199,6 +269,15 @@ const WINDOW_DUMP = `on run argv
   set AppleScript's text item delimiters to linefeed
   return out as text
 end run`;
+
+// The primary display's work area in top-left screen coordinates, the ones
+// System Events reports window positions in.
+const PRIMARY_WORK_AREA = `ObjC.import("AppKit");
+const screen = $.NSScreen.screens.objectAtIndex(0);
+const full = screen.frame;
+const visible = screen.visibleFrame;
+const top = full.size.height - (visible.origin.y + visible.size.height);
+[visible.origin.x, top, visible.size.width, visible.size.height].join("\\t");`;
 
 const ROLE_DUMP = `on run argv
   set windowName to item 2 of argv
@@ -368,6 +447,20 @@ end tell`);
     osa(`tell application "System Events" to tell (${proc})
   set value of attribute "AXMinimized" of (first window whose name is "${name}") to true
 end tell`);
+  const setBounds = (name, bounds) =>
+    osa(`tell application "System Events" to tell (${proc})
+  set w to (first window whose name is "${name}")
+  set position of w to {${bounds.x}, ${bounds.y}}
+  set size of w to {${bounds.width}, ${bounds.height}}
+end tell`);
+  const boundsOf = (name) =>
+    windows().find((window) => window.name === name)?.bounds ?? null;
+  const closeWindow = (name) =>
+    osa(`tell application "System Events" to tell (${proc})
+  click (first button of (first window whose name is "${name}") whose subrole is "AXCloseButton")
+end tell`);
+  // Placement is stored 500 ms after the last move; wait past that.
+  const PLACEMENT_SETTLE_MS = 1_500;
   const sheetCount = (of) => {
     try {
       return Number(
@@ -431,6 +524,29 @@ end tell`);
   );
   if (timedOut(launched)) {
     block(`no Welcome window after launch (saw: ${describe(launched)})`);
+  }
+
+  // The first window fits the primary display's work area.
+  let workArea;
+  try {
+    workArea = parseWorkArea(
+      execFileSync("osascript", ["-l", "JavaScript", "-e", PRIMARY_WORK_AREA], {
+        encoding: "utf8",
+      }),
+    );
+  } catch (error) {
+    block(
+      `the primary display's work area could not be read: ${error.message}`,
+    );
+  }
+  {
+    const first = launched[0].bounds;
+    const fit = firstWindowFits(first, workArea);
+    check(
+      "the first window takes 90% of the work area, inside it, at least the minimum size",
+      fit.ok,
+      `window ${JSON.stringify(first)}; work area ${JSON.stringify(workArea)}; expected content ${fit.expected.width}×${fit.expected.height}; inside ${fit.inside}, sized ${fit.sized}, 1280×760 target ${fit.target}`,
+    );
   }
 
   // File > New Window adds one Welcome window in front.
@@ -577,6 +693,48 @@ end tell`);
     () => !hasButtons(buttons(), NESTED_DIALOG_BUTTONS),
   );
 
+  // A's window, moved and resized, then closed: opening A again shows it
+  // where it was.
+  raise(names.a);
+  await waitFor("A in front", (list) => frontWindow(list)?.name === names.a);
+  setBounds(names.a, adjustedBounds(workArea));
+  await sleep(PLACEMENT_SETTLE_MS);
+  const placedA = boundsOf(names.a);
+  closeWindow(names.a);
+  const withoutA = await waitFor("A to close", (list) => list.length === 1);
+  if (timedOut(withoutA)) {
+    block(`A's window did not close (saw: ${describe(withoutA)})`);
+  }
+  clickFileItem("menu.native.file.newWindow");
+  await waitFor(
+    "a Welcome window for A",
+    (list) => list.length === 2 && frontWindow(list)?.name === WELCOME_TITLE,
+  );
+  await openWorkspace(folders.a);
+  const reopenedA = await waitFor("A to reopen", (list) =>
+    list.some((window) => window.name === names.a),
+  );
+  if (timedOut(reopenedA)) {
+    block(`A did not reopen (saw: ${describe(reopenedA)})`);
+  }
+  // The remembered placement is applied right after the Workspace opens.
+  let reopenedBounds = boundsOf(names.a);
+  for (
+    const deadline = Date.now() + 5_000;
+    Date.now() < deadline &&
+    !(placedA && reopenedBounds && sameBounds(placedA, reopenedBounds));
+    await sleep(250)
+  ) {
+    reopenedBounds = boundsOf(names.a);
+  }
+  check(
+    "a Workspace window reopens with the bounds it was closed with",
+    placedA !== null &&
+      reopenedBounds !== null &&
+      sameBounds(placedA, reopenedBounds),
+    `closed at ${JSON.stringify(placedA)}; reopened at ${JSON.stringify(reopenedBounds)}`,
+  );
+
   // Drawings handed to the app: inside A, outside every Workspace, and one
   // already open.
   const deliver = async (file) => {
@@ -706,6 +864,31 @@ end tell`);
   if (timedOut(editing)) {
     block(`the drawing did not open for Cmd+Q (saw: ${describe(editing)})`);
   }
+  const quitWindow = frontWindow(editing)?.name ?? "";
+  // A Workspace window that a normal quit and relaunch must put back.
+  clickFileItem("menu.native.file.newWindow");
+  await waitFor(
+    "a Welcome window for the relaunch check",
+    (list) => frontWindow(list)?.name === WELCOME_TITLE,
+  );
+  await openWorkspace(folders.a);
+  const beforeQuit = await waitFor("A for the relaunch check", (list) =>
+    list.some((window) => window.name === names.a),
+  );
+  if (timedOut(beforeQuit)) {
+    block(`A did not open before Cmd+Q (saw: ${describe(beforeQuit)})`);
+  }
+  setBounds(names.a, {
+    ...adjustedBounds(workArea),
+    x: adjustedBounds(workArea).x + 60,
+  });
+  await sleep(PLACEMENT_SETTLE_MS);
+  const quitBounds = boundsOf(names.a);
+  raise(quitWindow);
+  await waitFor(
+    "the drawing in front",
+    (list) => frontWindow(list)?.name === quitWindow,
+  );
   // Select everything and move it one step right with the keyboard.
   osa(`tell application "System Events" to tell (${proc})
   set frontmost to true
@@ -759,6 +942,47 @@ end tell`);
       (saved.elements ?? []).map(({ id, x, y }) => ({ id, x, y })),
     )}`,
   );
+
+  // A normal quit, then a relaunch, puts A's window back where it was.
+  if (code === 0) {
+    const relaunched = spawn(options.binary, ["-AppleLanguages", "(en-US)"], {
+      env,
+      stdio: "ignore",
+    });
+    children.add(relaunched);
+    relaunched.on("exit", () => children.delete(relaunched));
+    const relaunchedPid = relaunched.pid;
+    const relaunchedWindows = () =>
+      parseWindowList(osa(WINDOW_DUMP, relaunchedPid));
+    let restoredA = null;
+    for (
+      const deadline = Date.now() + 30_000;
+      Date.now() < deadline &&
+      !(restoredA && quitBounds && sameBounds(quitBounds, restoredA));
+      await sleep(250)
+    ) {
+      try {
+        restoredA =
+          relaunchedWindows().find((window) => window.name === names.a)
+            ?.bounds ?? null;
+      } catch {
+        // The relaunched process or its windows are not available yet.
+      }
+    }
+    check(
+      "a normal quit and relaunch restores a Workspace window's bounds",
+      quitBounds !== null &&
+        restoredA !== null &&
+        sameBounds(quitBounds, restoredA),
+      `quit at ${JSON.stringify(quitBounds)}; relaunched at ${JSON.stringify(restoredA)}`,
+    );
+  } else {
+    report(
+      "BLOCKED",
+      "a normal quit and relaunch restores a Workspace window's bounds",
+      "the app did not quit normally",
+    );
+  }
 
   finish(exitCodeFor(statuses));
 }

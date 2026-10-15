@@ -318,6 +318,7 @@ pub(crate) async fn claim_for_window(
         .service
         .spawn_for_workspace(workspace.clone(), app.clone())
         .await?;
+    crate::window::placement::place_for_workspace(app, label, &workspace.id).await;
     Ok(WindowClaim::Claimed {
         workspace,
         replaced,

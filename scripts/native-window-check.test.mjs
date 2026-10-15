@@ -3,18 +3,24 @@ import { describe, it } from "node:test";
 import {
   DEFAULT_BINARY,
   NESTED_DIALOG_BUTTONS,
+  MIN_SIZE,
   QUIT_DRAWING_SCENE,
+  adjustedBounds,
   checkAvailability,
   drawingTitle,
   exitCodeFor,
+  expectedInitialSize,
+  firstWindowFits,
   frontWindow,
   hasButtons,
   listedWindows,
   parseArgs,
   parseButtonNames,
   parseWindowList,
+  parseWorkArea,
   quitWasCoordinated,
   rectangleMoved,
+  sameBounds,
 } from "./native-window-check.mjs";
 
 describe("parseArgs", () => {
@@ -147,5 +153,75 @@ describe("rectangleMoved", () => {
     scene.elements[0].x = 101;
     assert.equal(rectangleMoved(scene), true);
     assert.equal(rectangleMoved({ elements: [] }), false);
+  });
+});
+
+describe("window geometry", () => {
+  // A 1440×900 display below a 25-point menu bar.
+  const laptop = { x: 0, y: 25, width: 1440, height: 875 };
+
+  it("reads the work area printed by the display query", () => {
+    assert.deepEqual(parseWorkArea("0\t25\t1440\t875\n"), laptop);
+  });
+
+  it("sizes the first window at 90% of the work area within the limits", () => {
+    assert.deepEqual(expectedInitialSize(laptop), {
+      width: 1296,
+      height: 787,
+    });
+    assert.deepEqual(
+      expectedInitialSize({ x: 0, y: 0, width: 2560, height: 1415 }),
+      { width: 1680, height: 1050 },
+    );
+    assert.deepEqual(
+      expectedInitialSize({ x: 0, y: 0, width: 1000, height: 700 }),
+      MIN_SIZE,
+    );
+  });
+
+  it("accepts a centered first window whose frame adds the title bar", () => {
+    // Content 1296×787 at (72, 69) plus a 28-point title bar.
+    const fit = firstWindowFits(
+      { x: 72, y: 69, width: 1296, height: 815 },
+      laptop,
+    );
+    assert.equal(fit.ok, true);
+  });
+
+  it("rejects a first window that is too small or leaves the work area", () => {
+    assert.equal(
+      firstWindowFits({ x: 0, y: 25, width: 800, height: 628 }, laptop).ok,
+      false,
+    );
+    assert.equal(
+      firstWindowFits({ x: 200, y: 69, width: 1296, height: 815 }, laptop).ok,
+      false,
+    );
+  });
+
+  it("holds a 1440×900 work area to the 1280×760 content target", () => {
+    const fit = firstWindowFits(
+      { x: 72, y: 45, width: 1296, height: 838 },
+      { x: 0, y: 0, width: 1440, height: 900 },
+    );
+    assert.equal(fit.ok, true);
+    assert.equal(fit.target, true);
+  });
+
+  it("compares bounds within one point", () => {
+    const bounds = { x: 40, y: 55, width: 1008, height: 656 };
+    assert.equal(sameBounds(bounds, { ...bounds, x: 41 }), true);
+    assert.equal(sameBounds(bounds, { ...bounds, width: 1010 }), false);
+  });
+
+  it("moves a window inside the work area, away from the defaults", () => {
+    const bounds = adjustedBounds(laptop);
+    assert.ok(bounds.x >= laptop.x && bounds.y >= laptop.y);
+    assert.ok(bounds.x + bounds.width <= laptop.x + laptop.width);
+    assert.ok(bounds.y + bounds.height <= laptop.y + laptop.height);
+    assert.ok(
+      bounds.width >= MIN_SIZE.width && bounds.height >= MIN_SIZE.height,
+    );
+    assert.notEqual(bounds.width, expectedInitialSize(laptop).width);
   });
 });

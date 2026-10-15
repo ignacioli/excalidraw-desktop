@@ -1415,6 +1415,8 @@ body {
   position: absolute;
   width: 1px;
   height: 1px;
+  /* Keeps a hidden element at the right edge from widening the page. */
+  margin: -1px;
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;

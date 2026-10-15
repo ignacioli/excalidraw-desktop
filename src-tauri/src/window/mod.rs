@@ -10,6 +10,7 @@
 pub mod events;
 pub mod geometry;
 pub mod peer_close;
+pub mod placement;
 pub mod quit;
 pub mod registry;
 pub mod router;
@@ -67,7 +68,16 @@ pub fn create_window<R: Runtime>(
     placement: Option<LogicalRect>,
 ) -> tauri::Result<WebviewWindow<R>> {
     let (label, rect) = register_window(app, role, placement)?;
-    build_window(app, &label, rect)
+    build_window(app, &label, normal_plan(rect))
+}
+
+/// A window shown in its normal state at `rect`.
+fn normal_plan(rect: LogicalRect) -> placement::PlacementPlan {
+    placement::PlacementPlan {
+        rect,
+        maximized: false,
+        fullscreen: false,
+    }
 }
 
 /// Reserve and register a window without showing it, so its Workspace and
@@ -90,9 +100,12 @@ fn register_window<R: Runtime>(
 fn build_window<R: Runtime>(
     app: &AppHandle<R>,
     label: &str,
-    rect: LogicalRect,
+    plan: placement::PlacementPlan,
 ) -> tauri::Result<WebviewWindow<R>> {
     let registry = app.state::<WindowRegistry>();
+    let rect = plan.rect;
+    app.state::<placement::PlacementTracker>()
+        .set_normal(label, rect);
     let url = WebviewUrl::App(format!("index.html?window={label}").into());
     let builder = WebviewWindowBuilder::new(app, label, url)
         .title(WINDOW_CHROME.title)
@@ -101,11 +114,14 @@ fn build_window<R: Runtime>(
         .visible(true)
         .min_inner_size(MIN_WIDTH, MIN_HEIGHT)
         .inner_size(rect.width, rect.height)
-        .position(rect.x, rect.y);
+        .position(rect.x, rect.y)
+        .maximized(plan.maximized && !plan.fullscreen)
+        .fullscreen(plan.fullscreen);
     match builder.build() {
         Ok(window) => Ok(window),
         Err(error) => {
             registry.unregister(label);
+            app.state::<placement::PlacementTracker>().forget(label);
             Err(error)
         }
     }
@@ -216,8 +232,13 @@ pub async fn restore_session(app: &AppHandle, entries: Vec<WindowSessionEntry>) 
             }
         };
         let mut unavailable = window.unavailable_workspace;
+        let mut plan = normal_plan(rect);
         if let Some(workspace) = window.workspace {
-            if !claim_restored_workspace(app, &label, workspace.clone()).await {
+            if claim_restored_workspace(app, &label, workspace.clone()).await {
+                if let Some(remembered) = placement::remembered_plan(app, &workspace.id).await {
+                    plan = remembered;
+                }
+            } else {
                 unavailable = Some(workspace);
             }
         }
@@ -234,7 +255,7 @@ pub async fn restore_session(app: &AppHandle, entries: Vec<WindowSessionEntry>) 
             skipped: window.skipped,
         });
         registry.set_restore(&label, restore, unavailable);
-        match build_window(app, &label, rect) {
+        match build_window(app, &label, plan) {
             Ok(_) => created += 1,
             Err(error) => {
                 eprintln!("failed to show a restored window: {error}");
