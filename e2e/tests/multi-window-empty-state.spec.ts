@@ -5,6 +5,7 @@ import {
   emitBrowserTauriEvent,
   installBrowserTauriHarness,
   readBrowserTauriCommands,
+  setBrowserTauriExtraEntries,
 } from "./browserTauriHarness";
 
 type Catalog = typeof en | typeof zhCN;
@@ -179,4 +180,45 @@ test("with the sidebar pinned only New Drawing remains, without the pointer", as
   ).toBeVisible();
   await expect(page.getByText("Your drawings live here")).toHaveCount(0);
   await expectNoHorizontalOverflow(page, region);
+});
+
+test("New Drawing creates in the folder selected in the sidebar", async ({
+  page,
+}) => {
+  await setBrowserTauriExtraEntries(page, [
+    {
+      workspaceId: "workspace-1",
+      kind: "directory",
+      canonicalPath: "/virtual/sketches",
+      relativePath: "sketches",
+      parentRelativePath: "",
+      name: "sketches",
+      displayName: "sketches",
+      mtime: 1,
+      fileSize: 0,
+    },
+  ]);
+  const toggle = page.getByRole("button", {
+    name: "Toggle workspace sidebar",
+    exact: true,
+  });
+  await toggle.click();
+  await toggle.click();
+  const sidebar = page.getByRole("complementary", { name: "Files" });
+  await sidebar.getByRole("button", { name: "Refresh" }).click();
+  await sidebar.getByRole("treeitem", { name: "sketches" }).click();
+
+  await emptyState(page, en)
+    .getByRole("button", { name: "New Drawing" })
+    .click();
+
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  const created = await page.evaluate(() => {
+    const stored = localStorage.getItem(
+      "excalidraw-e2e:workspace-entries:workspace-1",
+    );
+    const entries = JSON.parse(stored ?? "[]") as { relativePath: string }[];
+    return entries.map((entry) => entry.relativePath);
+  });
+  expect(created).toContain("sketches/Untitled.excalidraw");
 });

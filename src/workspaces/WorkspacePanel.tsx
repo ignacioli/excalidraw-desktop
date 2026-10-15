@@ -90,6 +90,13 @@ export interface WorkspacePanelProps {
   onWorkspacesChange?: (workspaces: Workspace[]) => void;
   /** Copy Path and Copy Relative Path from a row's menu. */
   onCopyPath?: (request: CopyPathRequest) => void;
+  /**
+   * The folder the toolbar's New Drawing and New Folder create in: the
+   * selected folder, or `""` for the Workspace root.
+   */
+  onTargetFolderChange?: (
+    target: { workspaceId: string; relativePath: string } | null,
+  ) => void;
   preferences?: ShellPreferences;
   captureFocus?: boolean;
 }
@@ -154,6 +161,7 @@ export function WorkspacePanel({
   onWorkspacePresenceChange,
   onWorkspacesChange,
   onCopyPath,
+  onTargetFolderChange,
   preferences: providedPreferences,
   captureFocus = true,
 }: WorkspacePanelProps) {
@@ -755,6 +763,12 @@ export function WorkspacePanel({
           }),
       );
       forgetEntrySubtree(naming.workspaceId, entry.relativePath);
+      // A renamed selected folder, or one inside it, stays selected.
+      setSelectedDirectoryRelativePath((selected) =>
+        selected !== null && isWithinRelativePath(selected, entry.relativePath)
+          ? renamed.newRelativePath + selected.slice(entry.relativePath.length)
+          : selected,
+      );
       await loadEntries(naming.workspaceId, entry.parentRelativePath, true);
       returnFocusRef.current = null;
       setFocusRequestKey(
@@ -828,6 +842,15 @@ export function WorkspacePanel({
             }),
         );
       forgetEntrySubtree(workspaceId, entry.relativePath);
+      // A deleted selected folder, or one inside it, hands the selection
+      // to the deleted entry's parent.
+      setSelectedDirectoryRelativePath((selected) =>
+        selected !== null && isWithinRelativePath(selected, entry.relativePath)
+          ? entry.parentRelativePath.length > 0
+            ? entry.parentRelativePath
+            : null
+          : selected,
+      );
       await loadEntries(workspaceId, entry.parentRelativePath, true);
       returnFocusRef.current = null;
       setFocusRequestKey(
@@ -1098,6 +1121,13 @@ export function WorkspacePanel({
   };
 
   const targetRelativePath = selectedDirectoryRelativePath ?? "";
+  useEffect(() => {
+    onTargetFolderChange?.(
+      currentWorkspaceId === null
+        ? null
+        : { workspaceId: currentWorkspaceId, relativePath: targetRelativePath },
+    );
+  }, [currentWorkspaceId, onTargetFolderChange, targetRelativePath]);
 
   const treeEntries: WorkspaceTreeEntriesByWorkspace = entriesByWorkspace;
 
@@ -1503,4 +1533,9 @@ async function selectNativeDirectory(): Promise<string | null> {
     title: t("workspace.mountDialogTitle"),
   });
   return typeof selected === "string" ? selected : null;
+}
+
+/** `path` is `ancestor` or lies below it (Workspace-relative, `/`-separated). */
+function isWithinRelativePath(path: string, ancestor: string): boolean {
+  return path === ancestor || path.startsWith(`${ancestor}/`);
 }

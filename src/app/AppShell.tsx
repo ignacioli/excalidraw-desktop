@@ -922,13 +922,26 @@ export function AppShell({
     }
   };
 
-  // The empty canvas's New Drawing: the next free Untitled at the root of
-  // this window's Workspace, as Welcome New Drawing creates once it has a
-  // folder.
+  // The empty canvas's New Drawing: the next free Untitled in the folder
+  // selected in the sidebar, or at the root of this window's Workspace when
+  // none is selected.
+  const sidebarTargetFolderRef = useRef<{
+    workspaceId: string;
+    relativePath: string;
+  } | null>(null);
+  const handleTargetFolderChange = useCallback(
+    (target: { workspaceId: string; relativePath: string } | null) => {
+      sidebarTargetFolderRef.current = target;
+    },
+    [],
+  );
   const [emptyStateBusy, setEmptyStateBusy] = useState(false);
   const createEmptyStateDrawing = async (): Promise<void> => {
     const workspace = currentWorkspaceRef.current;
     if (workspace === null) return;
+    const target = sidebarTargetFolderRef.current;
+    const parentRelativePath =
+      target?.workspaceId === workspace.id ? target.relativePath : "";
     setEmptyStateBusy(true);
     try {
       await runAction(async () => {
@@ -936,6 +949,7 @@ export function AppShell({
           workspaceInvoker,
           workspace.id,
           "Untitled",
+          parentRelativePath,
         );
         await documentManager.openRouted(entry.canonicalPath);
       });
@@ -2251,6 +2265,7 @@ export function AppShell({
               onWorkspacePresenceChange={setHasMountedWorkspace}
               onWorkspacesChange={handleMountedWorkspacesChange}
               onCopyPath={(request) => void copyPathWithFeedback(request)}
+              onTargetFolderChange={handleTargetFolderChange}
               onCurrentWorkspaceChange={handleCurrentWorkspaceChange}
               onBrowse={handleBrowse}
               backLocation={backLocation}

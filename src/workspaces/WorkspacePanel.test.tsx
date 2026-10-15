@@ -1077,6 +1077,72 @@ describe("WorkspacePanel", () => {
     expect(notesListCount).toBeGreaterThanOrEqual(2);
   });
 
+  it("reports the selected folder as the creation target until it is deleted", async () => {
+    const user = userEvent.setup();
+    const onTargetFolderChange = vi.fn();
+    const entries = ROOT_ENTRIES.filter(
+      (entry) => entry.workspaceId === "workspace-1",
+    );
+    const invoke = vi.fn(
+      async (command: string, args: Record<string, unknown>) => {
+        if (command === "workspace_list") return [WORKSPACES[0]];
+        if (command === "workspace_entry_list") {
+          const parentRelativePath = String(args.parentRelativePath ?? "");
+          return entries.filter(
+            (entry) => entry.parentRelativePath === parentRelativePath,
+          );
+        }
+        if (command === "workspace_entry_delete_preflight") {
+          const entry = entries.find(
+            (item) => item.relativePath === String(args.relativePath ?? ""),
+          );
+          if (entry === undefined) throw new Error("missing entry");
+          return { status: "confirmable", entry };
+        }
+        if (command === "workspace_entry_delete") {
+          const relativePath = String(args.relativePath ?? "");
+          const index = entries.findIndex(
+            (entry) => entry.relativePath === relativePath,
+          );
+          if (index >= 0) entries.splice(index, 1);
+          return {
+            operationId: "delete-notes",
+            kind: "directory",
+            oldRelativePath: relativePath,
+          };
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        onTargetFolderChange={onTargetFolderChange}
+        selectDirectory={async () => null}
+      />,
+    );
+
+    await user.click(await screen.findByRole("treeitem", { name: "notes" }));
+    expect(onTargetFolderChange).toHaveBeenLastCalledWith({
+      workspaceId: "workspace-1",
+      relativePath: "notes",
+    });
+
+    await user.click(screen.getByRole("button", { name: "Actions for notes" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Delete notes?",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(onTargetFolderChange).toHaveBeenLastCalledWith({
+        workspaceId: "workspace-1",
+        relativePath: "",
+      }),
+    );
+  });
+
   it("focuses the parent workspace row after a drawing is deleted", async () => {
     const user = userEvent.setup();
     const entries = ROOT_ENTRIES.filter(

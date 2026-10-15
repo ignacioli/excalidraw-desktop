@@ -883,11 +883,13 @@ follow-up:
   The defect predates the multi-window work. Fixed: saving back to the
   drawing's own path no longer discards it; a unit test and a backend
   contract test cover it. To be repeated.
-- The empty state's New Drawing creates `Untitled` at the Workspace root
-  without a naming dialog, by design; the sidebar's New Drawing shows the
-  dialog. The owner asked for New Drawing to create in the selected folder
-  (being assessed) and for moving drawings by dragging (recorded as a
-  separate feature).
+- The empty state's New Drawing creates `Untitled` without a naming
+  dialog, by design; the sidebar's New Drawing shows the dialog. On the
+  owner's request it now creates in the folder selected in the sidebar,
+  or at the Workspace root when none is selected; when the selected folder
+  is deleted the selection moves to its parent, and a renamed one stays
+  selected. Unit tests and a browser test cover it. Moving drawings by
+  dragging was recorded as a separate feature.
 - Remaining gap: if a trashed drawing's file comes back by other means
   (for example "Put Back"), the tab stays marked as unavailable and "Close
   Without Saving" is refused, as before; closing the window clears it.

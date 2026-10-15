@@ -65,13 +65,15 @@ export async function createNewDrawingFile({
 }
 
 /**
- * Create the next free `Untitled` at the root of `workspaceId`. The file is
- * written by `workspace_entry_create` (atomic, never overwrites).
+ * Create the next free `Untitled` in a folder of `workspaceId` (`""` is the
+ * root). The file is written by `workspace_entry_create` (atomic, never
+ * overwrites).
  */
 export async function createUntitledDrawing(
   invoker: Pick<CommandInvoker, "invoke">,
   workspaceId: string,
   untitledBaseName: string,
+  parentRelativePath = "",
 ): Promise<WorkspaceEntry> {
   for (let attempt = 1; ; attempt += 1) {
     const baseName =
@@ -79,7 +81,7 @@ export async function createUntitledDrawing(
     try {
       const created = await invoker.invoke("workspace_entry_create", {
         workspaceId,
-        parentRelativePath: "",
+        parentRelativePath,
         kind: "drawing",
         baseName,
       });

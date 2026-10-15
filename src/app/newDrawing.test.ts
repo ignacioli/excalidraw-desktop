@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CommandInvoker } from "../ipc/client";
 import type { ClaimWorkspaceOutcome } from "../ipc/contracts";
-import { createNewDrawingFile, NEW_DRAWING_NAME_ATTEMPTS } from "./newDrawing";
+import {
+  createNewDrawingFile,
+  createUntitledDrawing,
+  NEW_DRAWING_NAME_ATTEMPTS,
+} from "./newDrawing";
 
 const workspace = {
   id: "workspace-drawings",
@@ -193,5 +197,28 @@ describe("createNewDrawingFile", () => {
     ).rejects.toMatchObject({ code: "NAME_CONFLICT" });
     // One claim, then one create per name attempt.
     expect(invoke).toHaveBeenCalledTimes(NEW_DRAWING_NAME_ATTEMPTS + 1);
+  });
+});
+
+describe("createUntitledDrawing", () => {
+  it("creates in the given folder, at the root by default", async () => {
+    const inFolder = createInvoker();
+    const atRoot = createInvoker();
+
+    await createUntitledDrawing(inFolder, workspace.id, "Untitled", "notes");
+    await createUntitledDrawing(atRoot, workspace.id, "Untitled");
+
+    expect(inFolder.mock).toHaveBeenCalledWith("workspace_entry_create", {
+      workspaceId: workspace.id,
+      parentRelativePath: "notes",
+      kind: "drawing",
+      baseName: "Untitled",
+    });
+    expect(atRoot.mock).toHaveBeenCalledWith("workspace_entry_create", {
+      workspaceId: workspace.id,
+      parentRelativePath: "",
+      kind: "drawing",
+      baseName: "Untitled",
+    });
   });
 });
