@@ -221,4 +221,18 @@ test("New Drawing creates in the folder selected in the sidebar", async ({
     return entries.map((entry) => entry.relativePath);
   });
   expect(created).toContain("sketches/Untitled.excalidraw");
+
+  // The new drawing shows in its folder without a Refresh.
+  if (!(await sidebar.isVisible())) await toggle.click();
+  const tree = sidebar.getByRole("tree");
+  await expect(
+    tree.getByRole("treeitem", { name: "sketches", exact: true }),
+  ).toHaveAttribute("aria-expanded", "true");
+  const createdRow = tree.getByRole("treeitem", {
+    name: "Untitled",
+    description: "/virtual/sketches/Untitled.excalidraw",
+  });
+  await expect(createdRow).toBeVisible();
+  // Inside `sketches`: the workspace root is level 1, the folder level 2.
+  await expect(createdRow).toHaveAttribute("aria-level", "3");
 });

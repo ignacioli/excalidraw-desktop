@@ -79,6 +79,13 @@ export interface WorkspacePanelProps {
   revealLocation?: BrowsingLocation | null;
   onRevealLocationApplied?: () => void;
   /**
+   * An entry created outside the panel, such as by the empty state's New
+   * Drawing: its folder is listed again and expanded so the entry shows
+   * without a Refresh. Focus stays where it is.
+   */
+  createdEntry?: { workspaceId: string; relativePath: string } | null;
+  onCreatedEntryApplied?: () => void;
+  /**
    * The chosen folder contains a Workspace open in another window. Without
    * it the overlap is shown as an error.
    */
@@ -157,6 +164,8 @@ export function WorkspacePanel({
   onBackLocationApplied,
   revealLocation = null,
   onRevealLocationApplied,
+  createdEntry = null,
+  onCreatedEntryApplied,
   onNestedConflict,
   onWorkspacePresenceChange,
   onWorkspacesChange,
@@ -547,6 +556,33 @@ export function WorkspacePanel({
     preferences,
     revealLocation,
   ]);
+
+  useEffect(() => {
+    if (createdEntry === null) return;
+    const { workspaceId, relativePath } = createdEntry;
+    const parentRelativePath = parentRelativePathOf(relativePath);
+    const segments = parentRelativePath.split("/").filter(Boolean);
+    const folders = segments.map((_, index) =>
+      segments.slice(0, index + 1).join("/"),
+    );
+    preferences.setWorkspaceExpanded(true);
+    setExpandedWorkspaceIds((current) => {
+      const next = new Set(current).add(workspaceId);
+      expandedWorkspaceIdsRef.current = next;
+      return next;
+    });
+    setExpandedDirectoryKeys((current) => {
+      const next = new Set(current);
+      for (const folder of folders) {
+        next.add(makeEntryRowKey(workspaceId, folder));
+      }
+      return next;
+    });
+    for (const parent of ["", ...folders]) {
+      void loadEntries(workspaceId, parent, parent === parentRelativePath);
+    }
+    onCreatedEntryApplied?.();
+  }, [createdEntry, loadEntries, onCreatedEntryApplied, preferences]);
 
   useEffect(() => {
     if (treeMenu === null) return;

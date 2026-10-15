@@ -404,6 +404,10 @@ export function AppShell({
   const [backLocation, setBackLocation] = useState<BrowsingLocation | null>(
     null,
   );
+  const [createdEntry, setCreatedEntry] = useState<{
+    workspaceId: string;
+    relativePath: string;
+  } | null>(null);
   const [revealLocation, setRevealLocation] = useState<BrowsingLocation | null>(
     null,
   );
@@ -936,6 +940,11 @@ export function AppShell({
     [],
   );
   const [emptyStateBusy, setEmptyStateBusy] = useState(false);
+  const handleCreatedEntryApplied = useCallback(
+    () => setCreatedEntry(null),
+    [],
+  );
+
   const createEmptyStateDrawing = async (): Promise<void> => {
     const workspace = currentWorkspaceRef.current;
     if (workspace === null) return;
@@ -951,6 +960,10 @@ export function AppShell({
           "Untitled",
           parentRelativePath,
         );
+        setCreatedEntry({
+          workspaceId: entry.workspaceId,
+          relativePath: entry.relativePath,
+        });
         await documentManager.openRouted(entry.canonicalPath);
       });
     } finally {
@@ -2275,6 +2288,8 @@ export function AppShell({
                 showNestedConflict(rootPath, outcome, showClaimedWorkspaceAsync)
               }
               onRevealLocationApplied={() => setRevealLocation(null)}
+              createdEntry={createdEntry}
+              onCreatedEntryApplied={handleCreatedEntryApplied}
             />
           ) : null}
           {sidebarSnapshot.mode === "pinned" ? (

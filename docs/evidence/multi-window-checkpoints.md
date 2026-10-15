@@ -894,6 +894,23 @@ follow-up:
   (for example "Put Back"), the tab stays marked as unavailable and "Close
   Without Saving" is refused, as before; closing the window clears it.
 
+Second pass by the owner, 2026-10-15, on the debug `.app` of `e9b3083` with
+the candidate set as the default app for `.excalidraw`:
+
+- Finder: both repeated items passed. `loose.excalidraw` opens in the most
+  recent window, and a drawing already open brings its window forward on
+  its tab.
+- The trashed drawing saved back to its own path closes normally. Passed.
+- The empty state's New Drawing created in the selected folder, but the new
+  drawing showed in the sidebar only after Refresh. The panel keeps each
+  folder's listing; the sidebar's own New Drawing lists the folder again
+  itself, while the empty state relied on the backend's entries-changed
+  event, which did not update the sidebar in the owner's run (why was not
+  established). Fixed: after creating, the window asks the panel to list that folder
+  again and expand down to it, without moving focus; the browser harness
+  now lists created drawings under their own folder. A unit test and the
+  browser test fail without the fix. To be repeated.
+
 Owner conclusion (recorded by the owner, separately from the results
 above):
 

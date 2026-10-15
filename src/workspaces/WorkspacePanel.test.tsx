@@ -1143,6 +1143,69 @@ describe("WorkspacePanel", () => {
     );
   });
 
+  it("lists a folder again and expands it when an entry is created outside the panel", async () => {
+    const user = userEvent.setup();
+    const entries: WorkspaceEntry[] = ROOT_ENTRIES.filter(
+      (entry) => entry.workspaceId === "workspace-1",
+    );
+    const invoke = vi.fn(
+      async (command: string, args: Record<string, unknown>) => {
+        if (command === "workspace_list") return [WORKSPACES[0]];
+        if (command === "workspace_entry_list") {
+          const parentRelativePath = String(args.parentRelativePath ?? "");
+          return entries.filter(
+            (entry) => entry.parentRelativePath === parentRelativePath,
+          );
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+    const onCreatedEntryApplied = vi.fn();
+    const { rerender } = render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        selectDirectory={async () => null}
+      />,
+    );
+    // Expanding and collapsing `notes` caches its (empty) listing.
+    const notes = await screen.findByRole("treeitem", { name: "notes" });
+    await user.click(notes);
+    await user.click(notes);
+    expect(notes).toHaveAttribute("aria-expanded", "false");
+
+    entries.push({
+      workspaceId: "workspace-1",
+      kind: "drawing",
+      canonicalPath: `${WORKSPACES[0]!.rootPath}/notes/Untitled.excalidraw`,
+      relativePath: "notes/Untitled.excalidraw",
+      parentRelativePath: "notes",
+      name: "Untitled.excalidraw",
+      displayName: "Untitled",
+      mtime: 2,
+      fileSize: 10,
+    });
+    rerender(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        selectDirectory={async () => null}
+        createdEntry={{
+          workspaceId: "workspace-1",
+          relativePath: "notes/Untitled.excalidraw",
+        }}
+        onCreatedEntryApplied={onCreatedEntryApplied}
+      />,
+    );
+
+    const created = await screen.findByRole("treeitem", { name: "Untitled" });
+    expect(created).toHaveAttribute("aria-level", "3");
+    expect(screen.getByRole("treeitem", { name: "notes" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(onCreatedEntryApplied).toHaveBeenCalledTimes(1);
+    expect(created).not.toHaveFocus();
+  });
+
   it("focuses the parent workspace row after a drawing is deleted", async () => {
     const user = userEvent.setup();
     const entries = ROOT_ENTRIES.filter(

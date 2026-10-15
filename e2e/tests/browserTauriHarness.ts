@@ -410,9 +410,13 @@ export async function installBrowserTauriHarness(
             const extra = (browser.__browserTauriExtraEntries ?? []).filter(
               (entry) => entry.parentRelativePath === parentRelativePath,
             );
-            return parentRelativePath === ""
-              ? [...workspaceEntries, ...extra]
-              : extra;
+            return [
+              ...workspaceEntries.filter(
+                (entry) =>
+                  (entry.parentRelativePath ?? "") === parentRelativePath,
+              ),
+              ...extra,
+            ];
           }
           if (command === "workspace_entry_create") {
             const workspaceId = String(args.workspaceId ?? "");
