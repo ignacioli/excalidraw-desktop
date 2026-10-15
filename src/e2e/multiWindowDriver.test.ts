@@ -156,6 +156,99 @@ describe("MultiWindowDriver", () => {
     });
   });
 
+  it("pastes over the canvas and answers once the draft of the paste is stored", async () => {
+    // jsdom has neither DataTransfer nor ClipboardEvent.
+    class TestDataTransfer {
+      private readonly data = new Map<string, string>();
+      setData(type: string, value: string) {
+        this.data.set(type, value);
+      }
+      getData(type: string) {
+        return this.data.get(type) ?? "";
+      }
+    }
+    class TestClipboardEvent extends Event {
+      readonly clipboardData: TestDataTransfer | null;
+      constructor(
+        type: string,
+        init: EventInit & { clipboardData?: TestDataTransfer },
+      ) {
+        super(type, init);
+        this.clipboardData = init.clipboardData ?? null;
+      }
+    }
+    vi.stubGlobal("DataTransfer", TestDataTransfer);
+    vi.stubGlobal("ClipboardEvent", TestClipboardEvent);
+    const { driver, store, root } = setup([
+      session("doc-a", "/w/a.excalidraw", { scene: scene(0) }),
+    ]);
+    root.innerHTML =
+      '<div class="excalidraw-editor" data-document-id="doc-a"><canvas class="excalidraw__canvas interactive"></canvas></div>';
+    document.body.append(root);
+    driver.attachEditor("doc-a", {
+      isEditable: () => true,
+      applyPerformanceEdit: () => false,
+    });
+    const pointerMoves: Event[] = [];
+    const onPointerMove = (event: Event) => pointerMoves.push(event);
+    document.addEventListener("pointermove", onPointerMove);
+    const pasted: string[] = [];
+    const onPaste = (event: Event) => {
+      pasted.push(
+        (event as TestClipboardEvent).clipboardData?.getData("text/plain") ??
+          "",
+      );
+      const current = store.getState().sessionsById["doc-a"];
+      setTimeout(() =>
+        store.setState({
+          sessionsById: {
+            "doc-a": {
+              ...current,
+              revision: 1,
+              saveState: "draftSaved",
+              scene: {
+                ...current.scene,
+                elements: [
+                  ...current.scene.elements,
+                  { id: "pasted", x: 5, y: 6, isDeleted: false },
+                ],
+              } as unknown as SceneSnapshot,
+            },
+          },
+        }),
+      );
+    };
+    document.addEventListener("paste", onPaste);
+
+    try {
+      const answer = await driver.answer(
+        request("paste", {
+          path: "/w/a.excalidraw",
+          clipboardText: '{"type":"excalidraw/clipboard"}',
+        }),
+      );
+
+      expect(answer).toEqual({
+        id: "req-paste",
+        ok: true,
+        result: {
+          documentId: "doc-a",
+          elements: [
+            { id: "rect", x: 0, y: 0 },
+            { id: "pasted", x: 5, y: 6 },
+          ],
+        },
+      });
+      expect(pointerMoves).toHaveLength(1);
+      expect(pasted).toEqual(['{"type":"excalidraw/clipboard"}']);
+    } finally {
+      document.removeEventListener("paste", onPaste);
+      document.removeEventListener("pointermove", onPointerMove);
+      root.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("reports tabs in order, the active tab, Recovery candidates, and errors", async () => {
     const { driver, root } = setup([
       session("doc-a", "/w/a.excalidraw", { saveState: "dirty" }),

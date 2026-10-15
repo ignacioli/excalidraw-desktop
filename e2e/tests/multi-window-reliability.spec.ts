@@ -527,6 +527,68 @@ test.describe("multi-window process reliability", () => {
     });
   });
 
+  test("a quit saves an element pasted into an empty drawing", async ({
+    browserName,
+  }, testInfo) => {
+    void browserName;
+    await repeat(testInfo, "quit-after-paste", async (fixture, evidence) => {
+      const empty = join(fixture.alpha.root, "empty.excalidraw");
+      await writeFile(
+        empty,
+        JSON.stringify({
+          type: "excalidraw",
+          version: 2,
+          source: "multi-window-reliability",
+          elements: [],
+          appState: { viewBackgroundColor: "#ffffff" },
+          files: {},
+        }),
+      );
+      const app = await launchMultiWindowApp(fixture.paths);
+      try {
+        const first = await app.waitForSnapshot(
+          (snapshot) =>
+            snapshot.windows.length === 1 && snapshot.openWindows.length === 1,
+        );
+        const label = first.windows[0].label;
+        evidence.labels.window = label;
+        await app.request(label, "openWorkspace", {
+          rootPath: fixture.alpha.root,
+        });
+        await app.request(label, "openDrawing", { path: empty });
+        // Opening checkpoints the drawing once; paste into the settled editor.
+        await waitForReport(
+          app,
+          label,
+          (report) => tabOf(report, empty)?.saveState === "clean",
+        );
+        // The SDK gives pasted elements new ids; compare by count.
+        const { elements } = await app.request<{ elements: Position[] }>(
+          label,
+          "paste",
+          {
+            path: empty,
+            clipboardText: JSON.stringify({
+              type: "excalidraw/clipboard",
+              elements: [rectangle("pasted-rect", 40)],
+              files: {},
+            }),
+          },
+        );
+        evidence.checks.pasteReachedDraft = elements.length === 1;
+        await app.request("app", "quit");
+        const exit = await app.waitForExit(20_000);
+        evidence.checks.quitExits = exit.code === 0;
+        const saved = await positionsOnDisk(empty);
+        evidence.checks.quitSavedPaste =
+          saved.length === 1 && saved[0].id === elements[0]?.id;
+        evidence.details = { pasted: elements, saved };
+      } finally {
+        await stop(app);
+      }
+    });
+  });
+
   test("closing one window saves it and leaves the other window as it was", async ({
     browserName,
   }, testInfo) => {

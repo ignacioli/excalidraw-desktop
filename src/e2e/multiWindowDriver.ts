@@ -149,6 +149,11 @@ export class MultiWindowDriver {
         if (path === null) throw new Error("edit needs a path.");
         return await this.edit(path, Number(args.seed ?? 1));
       }
+      case "paste": {
+        if (path === null || typeof args.clipboardText !== "string")
+          throw new Error("paste needs a path and clipboardText.");
+        return await this.paste(path, args.clipboardText);
+      }
       case "report":
         return this.report();
       case "recover":
@@ -184,6 +189,55 @@ export class MultiWindowDriver {
         ? current
         : undefined;
     }, "the draft of the edit");
+    return { documentId, elements: positions(session.scene) };
+  }
+
+  /**
+   * Paste `clipboardText` as the SDK receives a keyboard paste (a pointer
+   * move over the canvas, then a document `paste` event) and wait until the
+   * draft of the paste is stored.
+   */
+  private async paste(path: string, clipboardText: string) {
+    const { documents, root } = this.dependencies;
+    const documentId = await documents.openRouted(path);
+    if (documentId === null)
+      throw new Error("The drawing is open in another window.");
+    await this.until(
+      () =>
+        this.editors.get(documentId)?.isEditable() === true ? true : undefined,
+      "the editor of the drawing",
+    );
+    const canvas = root.querySelector<HTMLCanvasElement>(
+      `.excalidraw-editor[data-document-id="${documentId}"] .excalidraw__canvas.interactive`,
+    );
+    if (canvas === null) throw new Error("The drawing has no canvas.");
+    const before = documents.store.getState().sessionsById[documentId];
+    if (before === undefined) throw new Error("The drawing has no session.");
+    const bounds = canvas.getBoundingClientRect();
+    canvas.dispatchEvent(
+      new PointerEvent("pointermove", {
+        bubbles: true,
+        clientX: bounds.left + bounds.width / 2,
+        clientY: bounds.top + bounds.height / 2,
+      }),
+    );
+    const clipboardData = new DataTransfer();
+    clipboardData.setData("text/plain", clipboardText);
+    canvas.ownerDocument.dispatchEvent(
+      new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+        clipboardData,
+      }),
+    );
+    const session = await this.until(() => {
+      const current = documents.store.getState().sessionsById[documentId];
+      return current !== undefined &&
+        current.revision > before.revision &&
+        current.saveState === "draftSaved"
+        ? current
+        : undefined;
+    }, "the draft of the paste");
     return { documentId, elements: positions(session.scene) };
   }
 
