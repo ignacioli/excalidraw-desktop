@@ -602,3 +602,74 @@ async fn concurrent_checkpoints_leave_disk_draft_and_index_on_one_version() {
     );
     assert!(!draft.is_dirty);
 }
+
+#[tokio::test]
+async fn an_orphan_saved_back_to_its_own_path_closes_without_a_discard() {
+    let harness = DocumentHarness::new(1024 * 1024).await;
+    let original = valid_scene("original");
+    let local = valid_scene("local-edit");
+    let path = harness.write_scene("gone.excalidraw", &original);
+    let path_string = path
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("canonicalize document: {error}"))
+        .display()
+        .to_string();
+
+    harness
+        .service
+        .doc_open(PathRequest {
+            path: path_string.clone(),
+        })
+        .await
+        .unwrap_or_else(|error| panic!("open document: {error:?}"));
+    harness
+        .service
+        .doc_save_draft(SaveDraftRequest {
+            path: path_string.clone(),
+            scene_json: local.clone(),
+        })
+        .await
+        .unwrap_or_else(|error| panic!("save draft: {error:?}"));
+    fs::remove_file(&path).unwrap_or_else(|error| panic!("remove document: {error}"));
+
+    // Save As chose the drawing's own path: the file is written back.
+    harness
+        .service
+        .doc_checkpoint(CheckpointRequest {
+            path: path_string.clone(),
+            scene_json: local.clone(),
+            reason: CheckpointReason::SaveAsNew,
+        })
+        .await
+        .unwrap_or_else(|error| panic!("save as to the same path: {error:?}"));
+    assert_eq!(read_scene(&path), local);
+
+    // Discarding the orphan now would be refused: the file exists again.
+    let refused = harness
+        .service
+        .doc_close(CloseDocumentRequest {
+            path: path_string.clone(),
+            mode: CloseDocumentMode::DiscardOrphan,
+        })
+        .await
+        .err()
+        .unwrap_or_else(|| panic!("discarding an existing file must be refused"));
+    assert_eq!(refused.code, ErrorCode::EntryChanged);
+
+    // The drawing is clean at its path, so an ordinary close succeeds.
+    harness
+        .service
+        .doc_close(CloseDocumentRequest {
+            path: path_string.clone(),
+            mode: CloseDocumentMode::Checkpointed,
+        })
+        .await
+        .unwrap_or_else(|error| panic!("close the saved drawing: {error:?}"));
+    assert_eq!(read_scene(&path), local);
+    assert!(harness
+        .repository
+        .draft_get(path_string)
+        .await
+        .unwrap_or_else(|error| panic!("read draft: {error}"))
+        .is_none());
+}

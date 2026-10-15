@@ -836,6 +836,37 @@ describe("DocumentManager", () => {
     manager.dispose();
   });
 
+  it("saves an orphaned document back to its own path without discarding it", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/gone.excalidraw");
+    manager.handleFileRemoved("/tmp/gone.excalidraw");
+    vi.mocked(gateway.checkpoint).mockResolvedValueOnce({
+      newBaseHash: "restored",
+      mtime: 4,
+    });
+
+    await manager.saveOrphanedAs(documentId, "/tmp/gone.excalidraw");
+
+    expect(gateway.checkpoint).toHaveBeenCalledWith(
+      "/tmp/gone.excalidraw",
+      expect.any(String),
+      "saveAsNew",
+    );
+    expect(gateway.close).not.toHaveBeenCalled();
+    const session = manager.store.getState().sessionsById[documentId];
+    expect(session?.saveState).toBe("clean");
+    expect(session?.baseHash).toBe("restored");
+
+    const outcome = await manager.close(documentId);
+    expect(outcome).toEqual({ status: "closed" });
+    expect(gateway.close).toHaveBeenCalledWith(
+      "/tmp/gone.excalidraw",
+      "checkpointed",
+    );
+    manager.dispose();
+  });
+
   describe("US3 close and activation", () => {
     type CloseOutcome =
       | { status: "closed" }

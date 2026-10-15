@@ -864,6 +864,34 @@ from the automated results.
 | 8   | Quit and restore            | Cmd+Q with unsaved edits in two windows quits within seconds; relaunching restores the windows, tabs, placement and the edits; closing every window and clicking the Dock icon opens Welcome; the Dock menu is observed.     |
 | 9   | Another desktop space       | Opening a Workspace whose window is on another space brings that window forward and opens no new one.                                                                                                                        |
 
+First pass by the owner, 2026-10-15, on the debug `.app` of `fdb6456`.
+Passed: new window and two Workspaces, subfolder and parent folder, theme
+and language, size and placement, quit and restore, another desktop space,
+and the remaining dialog, empty-state and copy-path items. Findings and
+follow-up:
+
+- Finder: double-clicking a drawing did nothing. The Mac's default app for
+  `.excalidraw` was an old 0.3.0 copy with the same bundle identifier, so
+  Finder launched that copy, which handed its launch arguments (without the
+  file) to the running candidate and quit. Not a candidate defect; `open -a`
+  with the candidate passes in the native window check. To be repeated with
+  the candidate as the default app.
+- A drawing whose file went to the Trash, then "Save As" onto its own path,
+  could no longer be closed: the file was written back, then discarding the
+  old path was refused because the file existed again, so the tab, deleting
+  the file and removing the Workspace all failed until the window closed.
+  The defect predates the multi-window work. Fixed: saving back to the
+  drawing's own path no longer discards it; a unit test and a backend
+  contract test cover it. To be repeated.
+- The empty state's New Drawing creates `Untitled` at the Workspace root
+  without a naming dialog, by design; the sidebar's New Drawing shows the
+  dialog. The owner asked for New Drawing to create in the selected folder
+  (being assessed) and for moving drawings by dragging (recorded as a
+  separate feature).
+- Remaining gap: if a trashed drawing's file comes back by other means
+  (for example "Put Back"), the tab stays marked as unavailable and "Close
+  Without Saving" is refused, as before; closing the window clears it.
+
 Owner conclusion (recorded by the owner, separately from the results
 above):
 

@@ -967,7 +967,11 @@ export class DocumentManager {
         serializeScene(current.scene),
         "saveAsNew",
       );
-      await this.gateway.close(current.path, "discardOrphan");
+      // Saved back to its own path: the file now exists again and its
+      // draft is the clean saved content, so there is no orphan to discard.
+      if (newPath !== current.path) {
+        await this.gateway.close(current.path, "discardOrphan");
+      }
       this.schedulers.get(documentId)?.setConflicted(false);
       const title = getFileName(newPath);
       this.patchSession(documentId, {
