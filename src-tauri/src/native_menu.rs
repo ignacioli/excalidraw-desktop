@@ -189,7 +189,23 @@ pub fn install_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let model = NativeMenuModel::new(NativeMenuLabels::english(&app.package_info().name));
     let menu = build_menu(app, &model)?;
     app.manage(NativeMenuStore(Mutex::new(model)));
+    set_app_menu(app, menu)
+}
+
+/// Install `menu` as the application menu. Every install replaces the AppKit
+/// menu objects, so the Window submenu is registered as `NSApp.windowsMenu`
+/// again each time; otherwise macOS stops listing the open windows.
+fn set_app_menu<R: Runtime>(app: &AppHandle<R>, menu: Menu<R>) -> tauri::Result<()> {
+    #[cfg(target_os = "macos")]
+    let window_menu = menu
+        .get(WINDOW_SUBMENU_ID)
+        .and_then(|item| item.as_submenu().cloned());
     app.set_menu(menu)?;
+    #[cfg(target_os = "macos")]
+    match window_menu {
+        Some(submenu) => submenu.set_as_windows_menu_for_nsapp()?,
+        None => eprintln!("the native menu has no {WINDOW_SUBMENU_ID} submenu to register"),
+    }
     Ok(())
 }
 
@@ -350,7 +366,7 @@ pub fn sync_native_menu<R: Runtime>(
         model.active = Some(label.clone());
     }
     let result = if rebuild {
-        build_menu(&app, &model).and_then(|menu| app.set_menu(menu).map(|_| ()))
+        build_menu(&app, &model).and_then(|menu| set_app_menu(&app, menu))
     } else if shows_caller {
         apply_installed(&app, &model)
     } else {

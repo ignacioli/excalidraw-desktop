@@ -3,8 +3,8 @@
 // window, bounds, and minimized state through Accessibility / System Events;
 // nested folders and where opened drawings go; closing every window, Reopen,
 // and Cmd+Q with an unsaved keyboard edit. Drawings are handed over with `open -a`
-// when --app is given, else by a second launch of the binary. Whether the
-// Window menu lists the windows is printed as an observation.
+// when --app is given, else by a second launch of the binary; and that the
+// Window menu lists every open window by title.
 // Usage: pnpm native:window:check -- [--app PATH.app | --binary PATH].
 // Exit 0 = PASS, 1 = FAIL, 2 = BLOCKED. Brings the app to the foreground; do
 // not touch the keyboard or mouse while it runs. Checks that need the app to
@@ -28,7 +28,10 @@ export const APP_EXECUTABLE = "Contents/MacOS/excalidraw-desktop";
 export const WELCOME_TITLE = "Excalidraw";
 export const REPEATED_OPENS = 20;
 
-/** `--app` wins over `--binary`; an `--app` path must name a `.app`. */
+/**
+ * `--app` wins over `--binary`; an `--app` path must name a `.app` and is made
+ * absolute, because `open -a` reads a relative path as an application name.
+ */
 export function parseArgs(argv) {
   const value = (name) => {
     const index = argv.indexOf(name);
@@ -39,7 +42,8 @@ export function parseArgs(argv) {
     if (!app.endsWith(".app")) {
       return { error: `--app must name a .app bundle: ${app}` };
     }
-    return { app, binary: path.join(app, APP_EXECUTABLE) };
+    const bundle = path.resolve(app);
+    return { app: bundle, binary: path.join(bundle, APP_EXECUTABLE) };
   }
   return { app: null, binary: value("--binary") ?? DEFAULT_BINARY };
 }
@@ -126,6 +130,14 @@ export function quitWasCoordinated(log) {
 /** The window titles that the Window menu lists. */
 export function listedWindows(menuItems, titles) {
   return titles.filter((title) => menuItems.includes(title));
+}
+
+/** Whether the Window menu lists every open window (at least one) by title. */
+export function listsEveryWindow(menuItems, titles) {
+  return (
+    titles.length > 0 &&
+    listedWindows(menuItems, titles).length === titles.length
+  );
 }
 
 /** One rectangle at x = 100; the Cmd+Q check moves it one step right. */
@@ -644,19 +656,31 @@ end tell`);
     drawingTitle(inA, names.a),
   );
 
-  // Observation: whether the Window menu lists every window by title.
-  try {
-    const items = osa(`tell application "System Events" to tell (${proc})
+  // The Window menu lists every window by title.
+  {
+    const name = "the Window menu lists every open window by title";
+    let items;
+    try {
+      items = osa(`tell application "System Events" to tell (${proc})
   set AppleScript's text item delimiters to linefeed
   return (name of every menu item of menu 1 of menu bar item "${menuItem("menu.native.window")}" of menu bar 1) as text
 end tell`).split("\n");
-    const titles = windows().map((window) => window.name);
-    const listed = listedWindows(items, titles);
-    console.log(
-      `INFO the Window menu lists ${listed.length} of ${titles.length} windows — listed: ${listed.join(", ") || "none"}; items: ${items.join(", ")}`,
-    );
-  } catch (error) {
-    console.log(`INFO the Window menu could not be read: ${error.message}`);
+    } catch (error) {
+      report(
+        "BLOCKED",
+        name,
+        `the Window menu could not be read: ${error.message}`,
+      );
+    }
+    if (items !== undefined) {
+      const titles = windows().map((window) => window.name);
+      const listed = listedWindows(items, titles);
+      check(
+        name,
+        listsEveryWindow(items, titles),
+        `listed ${listed.length} of ${titles.length}: ${listed.join(", ") || "none"}; items: ${items.join(", ")}`,
+      );
+    }
   }
 
   // Closing every window leaves the app running.
