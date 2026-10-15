@@ -6,6 +6,7 @@ import {
   type DocumentManager,
 } from "../documents/documentStore";
 import type { SceneSnapshot } from "../editor/sceneSerializer";
+import { formatHistoryFrontendError } from "./historyFrontendError";
 
 /**
  * Test-only driver for the multi-window process scenarios. The backend
@@ -45,7 +46,7 @@ export interface DriverEditor {
 
 export interface MultiWindowDriverDependencies {
   control: DriverControl;
-  documents: Pick<DocumentManager, "store" | "openRouted">;
+  documents: Pick<DocumentManager, "store" | "openRouted" | "checkpoint">;
   root: ParentNode;
   wait(milliseconds: number): Promise<void>;
   timeoutMs?: number;
@@ -123,7 +124,8 @@ export class MultiWindowDriver {
       return {
         id: request.id,
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        // IPC failures are `{ code, message }` objects, not Errors.
+        error: formatHistoryFrontendError(error),
       };
     }
   }
@@ -148,6 +150,10 @@ export class MultiWindowDriver {
       case "edit": {
         if (path === null) throw new Error("edit needs a path.");
         return await this.edit(path, Number(args.seed ?? 1));
+      }
+      case "save": {
+        if (path === null) throw new Error("save needs a path.");
+        return await this.save(path);
       }
       case "paste": {
         if (path === null || typeof args.clipboardText !== "string")
@@ -190,6 +196,22 @@ export class MultiWindowDriver {
         : undefined;
     }, "the draft of the edit");
     return { documentId, elements: positions(session.scene) };
+  }
+
+  /** Save the drawing as File > Save does and answer once it is clean. */
+  private async save(path: string) {
+    const { documents } = this.dependencies;
+    const documentId = await documents.openRouted(path);
+    if (documentId === null)
+      throw new Error("The drawing is open in another window.");
+    await documents.checkpoint(documentId, "manualSave");
+    const session = documents.store.getState().sessionsById[documentId];
+    if (session === undefined) throw new Error("The drawing has no session.");
+    return {
+      documentId,
+      saveState: session.saveState,
+      elements: positions(session.scene),
+    };
   }
 
   /**

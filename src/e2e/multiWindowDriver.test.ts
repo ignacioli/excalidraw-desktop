@@ -59,6 +59,16 @@ function setup(sessions: DocumentSession[] = []) {
         (candidate) => candidate.path === path,
       )?.id ?? null,
   );
+  const checkpoint = vi.fn(async (documentId: string) => {
+    const current = store.getState().sessionsById[documentId];
+    if (current === undefined) return;
+    store.setState({
+      sessionsById: {
+        ...store.getState().sessionsById,
+        [documentId]: { ...current, saveState: "clean" },
+      },
+    });
+  });
   const root = document.createElement("div");
   const driver = new MultiWindowDriver({
     control: {
@@ -66,12 +76,12 @@ function setup(sessions: DocumentSession[] = []) {
       next: async () => null,
       publish: async () => undefined,
     },
-    documents: { store, openRouted },
+    documents: { store, openRouted, checkpoint },
     root,
     wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
     timeoutMs: 200,
   });
-  return { driver, store, openRouted, root };
+  return { driver, store, openRouted, checkpoint, root };
 }
 
 function request(action: string, args?: Record<string, unknown>) {
@@ -308,6 +318,38 @@ describe("MultiWindowDriver", () => {
     expect(clicked).toEqual(["Restore", "Restore"]);
   });
 
+  it("saves a drawing as File > Save does and answers its clean state", async () => {
+    const { driver, checkpoint } = setup([
+      session("doc-a", "/w/a.excalidraw", { saveState: "draftSaved" }),
+    ]);
+
+    expect(
+      await driver.answer(request("save", { path: "/w/a.excalidraw" })),
+    ).toEqual({
+      id: "req-save",
+      ok: true,
+      result: {
+        documentId: "doc-a",
+        saveState: "clean",
+        elements: [{ id: "rect", x: 0, y: 0 }],
+      },
+    });
+    expect(checkpoint).toHaveBeenCalledWith("doc-a", "manualSave");
+  });
+
+  it("answers an IPC failure with its code and message", async () => {
+    const { driver, checkpoint } = setup([session("doc-a", "/w/a.excalidraw")]);
+    checkpoint.mockRejectedValueOnce({
+      code: "DISK_FULL",
+      message: "disk is full",
+      retriable: false,
+    });
+
+    expect(
+      await driver.answer(request("save", { path: "/w/a.excalidraw" })),
+    ).toEqual({ id: "req-save", ok: false, error: "DISK_FULL: disk is full" });
+  });
+
   it("answers an unknown request with an error", async () => {
     const { driver } = setup();
 
@@ -328,10 +370,10 @@ describe("MultiWindowDriver", () => {
         published.push(`${answer.id}:${answer.ok}`);
       },
     };
-    const { store, openRouted, root } = setup();
+    const { store, openRouted, checkpoint, root } = setup();
     const serving = new MultiWindowDriver({
       control,
-      documents: { store, openRouted },
+      documents: { store, openRouted, checkpoint },
       root,
       wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
     });
@@ -344,7 +386,7 @@ describe("MultiWindowDriver", () => {
     const next = vi.fn(async () => null);
     new MultiWindowDriver({
       control: { ...control, bootstrap: async () => false, next },
-      documents: { store, openRouted },
+      documents: { store, openRouted, checkpoint },
       root,
       wait: async () => undefined,
     }).start();

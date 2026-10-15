@@ -50,6 +50,20 @@ _避免使用_：已删除标签页、丢失文件
 当前显示在画布上的 Open Document。
 _避免使用_：选中文件、聚焦标签页
 
+### 窗口
+
+**Window（窗口）**：
+应用的一个窗口。它至多持有一个 Workspace，以及其中图纸对应的 Open Document。Welcome 窗口两者都不持有。所有窗口都由 Rust 创建，并带有不复用的 label。
+_避免使用_：标签页、实例、会话
+
+**Workspace Ownership（工作区归属）**：
+一个 Workspace 至多在一个 Window 中打开、一幅 Drawing 至多在一个 Window 中打开的规则。位于另一个 Window 的 Workspace 内的 Drawing 属于那个 Window。与另一个 Window 的 Workspace 相同、位于其内或包含它的文件夹，不能在第二个 Window 中打开。归属由 Rust 判定，Window 只能提出请求。
+_避免使用_：锁、挂载、共享
+
+**Window Session（窗口会话）**：
+正常退出后用于重新打开 Window 的已保存快照：每个 Window 的 Workspace，以及它的标签和活动标签。窗口位置与大小不属于它，而是按 Workspace 记住。
+_避免使用_：布局、已存标签、恢复
+
 ### 壳层导航
 
 **Workspace Sidebar（工作区侧边栏）**：

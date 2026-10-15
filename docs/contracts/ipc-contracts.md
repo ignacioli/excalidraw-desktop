@@ -1,6 +1,6 @@
 # IPC Contracts: Excalidraw Desktop（v5）
 
-**Date**: 2026-10-10 | **架构**: [../architecture.md](../architecture.md)
+**Date**: 2026-10-14 | **架构**: [../architecture.md](../architecture.md)
 
 本文件定义前端 ↔ Rust 后端的**当前**公开 IPC 边界（Tauri commands + events）。契约为强类型、显式、版本可感知。TypeScript 类型置于 `src/ipc/contracts.ts`，Rust 对应类型置于 `src-tauri/src/commands/dto.rs` 与 `src-tauri/src/commands/error.rs`，两侧字段名以本文件与 `contracts.ts` 为准（serde `camelCase`）。
 
@@ -15,7 +15,7 @@ v1 的 `dir_list` / `file_create` / `file_rename` / `file_delete` / `thumb_looku
 - v1 → v2 不兼容变更：删除缩略图命令；用统一 Workspace Entry 命令替换 `dir_list` 与 `file_*`；`doc_close` 改为显式 `mode`（可丢弃失联文档而不再授权已缺失路径）。
 - v3 当前公开 history command 为 `history_list`、`history_preview`、`history_mark`、`history_set_marked`、`history_replace`、`history_operation_status` 和 `history_delete`。v2 客户端不兼容此握手版本。
 - v4 新增：`app_handshake` 响应字段 `preferredLanguages`（系统 UI 语言原始 BCP-47 标签）；命令 `native_menu_sync`（前端向 Rust 同步本地化菜单标签与菜单状态）；`native-menu-command` 事件新增语言、外观、画布偏好与帮助命令值。既有命令 `native_menu_set_enabled` 保留。详见 §1.1、§1.7 与 §2。
-- v5 多窗口：`app_handshake` 按调用窗口返回 `window`（`WindowBootstrap`）；`workspace_list` 改为只返回调用窗口持有的 Workspace（0 或 1 项）；新增窗口归属、侧栏状态与偏好广播命令（§1.8）及窗口定向事件（§2）；新增错误码 `WORKSPACE_NOT_OWNED`。`workspace_add`、`workspace_remount` 保留为 deprecated，前端改用 `window_claim_workspace`。同一绘图至多由一个窗口打开：`doc_open` 响应改为带 `kind` 的联合（§1.4），写命令与 `doc_close` 检查调用窗口的归属；新增错误码 `DOCUMENT_NOT_OWNED`、`WINDOW_OWNERSHIP_CHANGED` 与嵌套 Workspace 的“关闭该窗口后在此打开”（§1.8）。
+- v5 多窗口：`app_handshake` 按调用窗口返回 `window`（`WindowBootstrap`）；`workspace_list` 改为只返回调用窗口持有的 Workspace（0 或 1 项）；新增窗口归属、侧栏状态与偏好广播命令（§1.8）及窗口定向事件（§2）、原生菜单路由与窗口生命周期（§1.9）；新增错误码 `WORKSPACE_NOT_OWNED`。`workspace_add`、`workspace_remount` 保留为 deprecated，前端改用 `window_claim_workspace`。同一绘图至多由一个窗口打开：`doc_open` 响应改为带 `kind` 的联合（§1.4），写命令与 `doc_close` 检查调用窗口的归属；新增错误码 `DOCUMENT_NOT_OWNED`、`WINDOW_OWNERSHIP_CHANGED` 与嵌套 Workspace 的“关闭该窗口后在此打开”（§1.8）。
 
 ### 信任边界规则（所有命令统一执行）
 
@@ -342,7 +342,7 @@ interface NativeMenuSyncState {
 }
 ```
 
-`NativeMenuLabelId` 共 37 个，类型见 `src/ipc/contracts.ts`，Rust 侧权威列表为 `native_menu_spec.rs` 的 `LABEL_IDS`。每个 ID `x` 对应前端语言资源键 `menu.native.x`，仅 `app.languageEn`、`app.languageZhCn` 取自 `language.autonym.*`。
+`NativeMenuLabelId` 共 39 个，类型见 `src/ipc/contracts.ts`，Rust 侧权威列表为 `native_menu_spec.rs` 的 `LABEL_IDS`。每个 ID `x` 对应前端语言资源键 `menu.native.x`，仅 `app.languageEn`、`app.languageZhCn` 取自 `language.autonym.*`。
 
 **Rust 信任边界校验**
 
@@ -419,6 +419,54 @@ interface WorkspaceShellState {
 
 `claimed.shell` 与握手 `window.shell` 取值相同：该 Workspace 自己的记录；没有时取最近一次保存的固定与宽度；再没有时取一次性导入的旧值；后两种情况 `expanded` 为 `[""]`；都没有时为 `null`（前端用默认值：不固定、宽度 360、根行展开）。
 
+### 1.9 v5 原生菜单路由与窗口生命周期
+
+本节只描述上文命令与下文事件如何组合成路由与生命周期；窗口放置和复制路径没有 IPC 命令。决策记录见 ADR-010。
+
+**窗口创建。** 所有窗口只由 Rust 创建（`create_window`），label 为 `window-<n>`（进程内单调递增，不复用）；`tauri.conf.json` 不声明窗口。capability 的 `windows` 为 `["window-*"]`，前端没有创建窗口的权限。URL 查询参数 `?window=<label>` 仅作诊断，窗口的 Workspace、要恢复的 Tab 与 Recovery 角色只来自 `app_handshake`。
+
+**原生菜单路由。**
+
+| 菜单项 | 处理者 | 去向 |
+|--------|--------|------|
+| New Window（Cmd/Ctrl+Shift+N） | Rust | 直接 `create_window`，不发事件 |
+| Quit（Cmd/Ctrl+Q） | Rust | 发起协调退出（见下） |
+| Open Workspace…（Cmd/Ctrl+Shift+O）、Save、Export Image、Version History、语言、外观、画布偏好、Help | 前端 | `native-menu-command`，发给前台窗口；没有前台窗口时发给最近聚焦的窗口；两者都没有则丢弃 |
+
+菜单状态（`native_menu_sync` 的 `labels` 与 `state`）按窗口记录；窗口获得焦点时 Rust 应用该窗口的状态，窗口销毁后改为显示下一个目标窗口的状态，没有窗口时为无文档状态。语言与外观属于应用级：发起窗口调用 `app_preferences_broadcast`，其他窗口收到 `app-preferences-changed` 后只应用，不回写、不再广播。macOS 的 Window 菜单列出所有已打开窗口。
+
+**事件目标。** 窗口定向事件的目标由 `WindowRegistry` 决定：Workspace 事件发给持有该 Workspace 的窗口，文档事件发给持有该绘图的窗口，没有持有者则丢弃；`open-file-request` 与 `window-activate-document` 由打开文件路由决定（见 §2 `open-file-request`）。`open-workspaces-changed`、`app-quit-cancelled` 发给所有窗口。
+
+**关闭一个窗口。**
+
+1. 用户关闭窗口 → 前端 `onCloseRequested` 被拦截，对本窗口全部绘图执行 `checkpointAll("appExit")`。
+2. 全部成功 → 前端调用 `destroy()`（权限 `core:window:allow-destroy`）；任一失败 → 窗口保持打开并显示错误，不销毁。
+3. 窗口销毁后 Rust 依次：忘记该窗口的放置与退出等待、释放它的 Workspace（`mounted` 置 0、停止 watcher）、从 registry 注销、处理等待它关闭的对等请求（`window-claim-result`）、重写 Window Session、广播 `open-workspaces-changed`。
+4. macOS 上最后一个窗口关闭后应用继续运行；点击 Dock 图标（`RunEvent::Reopen`）时，前置最近聚焦的窗口，没有窗口时新建 Welcome 窗口。其他平台关闭最后一个窗口即退出。
+
+对等关闭（`window_close_other_and_claim`）复用同一条关闭路径：被要求的窗口收到 `window-close-requested-by-peer` 后执行上面的步骤 1–2；失败时调用 `window_peer_close_failed`。
+
+**协调退出（Quit）。**
+
+```
+Rust → 每个窗口: app-quit-requested { requestId }
+每个窗口: checkpointAll("appExit") → app_quit_ready { requestId, ok }
+全部 ok（窗口销毁也算已应答）→ Rust 写入 Window Session、冻结后续会话写入、exit(0)
+任一 ok=false，或 10 秒内有窗口未应答 → Rust 取消、置前该窗口、向所有窗口发 app-quit-cancelled { requestId, failedLabel }
+```
+
+- 没有窗口时直接退出。已有一次退出在收集应答时，再次 Quit 复用该请求；取消后再次 Quit 开始新请求。
+- 应用无法拦截的终止（Dock 菜单的退出、注销）不经过协调；`RunEvent::Exit` 中尽力写入放置与 Window Session。草稿与恢复快照的保证不变。
+
+**Window Session。** SQLite 中的快照：按顺序保存每个窗口的 `workspaceId`、Tab 路径列表与活动 Tab。每次写入在一个事务内替换整张表；没有 Workspace 也没有 Tab 的窗口不保存。触发：窗口销毁、Workspace 认领/释放（认领与释放立即写入；销毁与 `window_session_update` 合并 500 ms）、Recovery 完成、协调退出，以及 `RunEvent::Exit` 的尽力写入。启动时：
+
+- 正常启动先把所有 Workspace 置为未挂载，再按会话重建窗口：先在 Rust 中认领 Workspace（含放置），再显示窗口；Workspace 目录不可用时窗口留在 Welcome，握手的 `unavailableWorkspace` 给出该记录；记录已被删除且没有可恢复的 Tab 时不创建窗口；已不存在的文件被跳过，数量放入 `restore.skipped`；已被前面窗口恢复的 Workspace 或绘图不重复恢复。
+- 异常退出：只创建一个 Recovery 窗口，会话保持不被覆盖，上一次的 `mounted` 行保留用于 Recovery 授权；Recovery 窗口调用 `startup_recovery_done` 后，清理这些 `mounted` 行、重建保存的窗口并解除会话写入保护。若 Recovery 窗口此时既无 Workspace 也无绘图且已重建了其他窗口，则它按正常关闭路径关闭。
+
+**窗口放置。** 按 Workspace 保存普通状态的逻辑像素边界（x、y、宽、高）与最大化、全屏标志；最大化或全屏时保留之前的普通边界。移动与缩放事件合并 500 ms 后写入，Workspace 被认领时应用已保存的放置，没有保存值则记录当前位置。恢复时与当前显示器工作区对照：标题栏可抓取区域（至少 100×28 逻辑像素）不可见时，移到主显示器并居中；最小尺寸 960×640。无已保存放置的窗口为工作区的 90%（上限 1680×1050）并居中，新窗口相对前台窗口错开 28 像素。没有对应的 IPC 命令。
+
+**复制路径。** 没有 IPC 命令。前端在菜单项被选中时读取当前路径，经 `@tauri-apps/plugin-clipboard-manager` 的 `writeText` 写入剪贴板；capability 只授予 `clipboard-manager:allow-write-text`，不授予读取。绝对路径取条目的 `canonicalPath` 或会话路径，相对路径取 `relativePath`（Tab 为相对于本窗口 Workspace 根、以 `/` 分隔的路径）。
+
 ## 2. 事件契约（后端 → 前端）
 
 | 事件 | 载荷 | 触发 |
@@ -436,7 +484,6 @@ interface WorkspaceShellState {
 | `native-menu-command` | `{ command: NativeMenuCommand; validationId? }` | 用户激活原生菜单项（仅 Rust 拥有的项）；发给前台窗口，没有前台窗口时发给最近聚焦的窗口 |
 | `app-preferences-changed` | `{ appearance?; language? }` | 某窗口改变外观或语言后，发给除该窗口外的所有窗口；接收端只应用，不写回存储、不再广播 |
 | `open-workspaces-changed` | `{ workspaces: { workspaceId; name; rootPath }[] }` | 任一窗口认领或释放 Workspace、窗口销毁后发给所有窗口；用于窗口标题同名区分 |
-
 | `app-quit-requested` | `{ requestId }` | 用户选择 Quit（菜单或 Cmd+Q，由 Rust 处理）：发给每个窗口；窗口 checkpoint 全部绘图后调用 `app_quit_ready`。全部成功（或窗口已销毁）时后端写入 Window Session 并退出 |
 | `app-quit-cancelled` | `{ requestId; failedLabel }` | 某窗口应答失败或在超时（10 秒）内未应答：退出取消，`failedLabel` 窗口被置前并显示 `QUIT_CHECKPOINT_FAILED`；发给所有窗口 |
 
@@ -462,10 +509,11 @@ type NativeMenuCommand =
   | "appearanceSystem" | "appearanceLight" | "appearanceDark"
   | "languageSystem" | "languageEn" | "languageZhCn"
   | "help"
-  | "toggleToolLock" | "toggleGrid" | "toggleSnap" | "toggleZen" | "toggleViewMode";
+  | "toggleToolLock" | "toggleGrid" | "toggleSnap" | "toggleZen" | "toggleViewMode"
+  | "openWorkspace";
 ```
 
-v4 之前的值为 `save`、`exportImage`、`versionHistory`、`appearanceSystem`、`appearanceLight`、`appearanceDark`；v4 新增 `languageSystem`、`languageEn`、`languageZhCn`、`help` 与五个 `toggle*`。前端处理：语言/外观命令写入各自的偏好控制器；`toggle*` 命令作用于活动编辑器；`help` 打开活动编辑器的帮助。`validationId` 仅在原生 macOS 验收 harness 启动的包中出现，用于关联原生事件与前端路由，不是产品 IPC 命令；生产路径不依赖它。事件只表达“用户激活了哪个菜单项”，状态变更由前端裁决后经 `native_menu_sync` 回写。
+v4 之前的值为 `save`、`exportImage`、`versionHistory`、`appearanceSystem`、`appearanceLight`、`appearanceDark`；v4 新增 `languageSystem`、`languageEn`、`languageZhCn`、`help` 与五个 `toggle*`；多窗口新增 `openWorkspace`（File > Open Workspace…）。前端处理：语言/外观命令写入各自的偏好控制器；`toggle*` 命令作用于活动编辑器；`help` 打开活动编辑器的帮助。`validationId` 仅在原生 macOS 验收 harness 启动的包中出现，用于关联原生事件与前端路由，不是产品 IPC 命令；生产路径不依赖它。事件只表达“用户激活了哪个菜单项”，状态变更由前端裁决后经 `native_menu_sync` 回写。
 
 ### 2.1 v3 版本历史事件结构
 

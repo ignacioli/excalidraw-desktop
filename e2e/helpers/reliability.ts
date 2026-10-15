@@ -2417,6 +2417,9 @@ export interface MultiWindowAnswer {
 export interface MultiWindowApp {
   readonly child: ReturnType<typeof spawn>;
   readonly paths: IsolatedDesktopPaths;
+  /** For process-tree measurements: the spawn time and WebKit helpers. */
+  readonly startedAtNs: bigint;
+  readonly webkitTracker: WebKitProcessTracker;
   /** Send a request and return its answer, failed or not. */
   send(
     target: string,
@@ -2473,6 +2476,7 @@ export async function launchMultiWindowApp(
   await rm(control, { recursive: true, force: true });
   await mkdir(join(control, "requests"), { recursive: true });
   const tracker = await WebKitProcessTracker.create();
+  const startedAtNs = process.hrtime.bigint();
   const child = spawn(binary, [...(options.args ?? [])], {
     detached: process.platform !== "win32",
     env: isolatedDesktopEnvironment(paths, {
@@ -2542,6 +2546,8 @@ export async function launchMultiWindowApp(
   return {
     child,
     paths,
+    startedAtNs,
+    webkitTracker: tracker,
     send,
     request,
     snapshot,

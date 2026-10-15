@@ -145,11 +145,6 @@ pub fn run() {
         }
         let workspace_mutation_gate = WorkspaceMutationGate::default();
         let recovery_store = Arc::new(RecoveryStore::new(&app_data_directory));
-        #[cfg(feature = "e2e-harness")]
-        let performance_state = tauri::async_runtime::block_on(
-            PerformanceHarnessState::from_environment(Arc::clone(&shared_repository)),
-        )
-        .map_err(std::io::Error::other)?;
         let conflicts = ConflictRegistry::default();
         let watcher_service =
             WatcherService::new(Arc::clone(&shared_repository), conflicts.clone());
@@ -201,6 +196,13 @@ pub fn run() {
         if !session.abnormal_exit() {
             tauri::async_runtime::block_on(repository.workspace_unmount_all())?;
         }
+        // The performance harness registers its Workspace as mounted, so it
+        // runs after the startup unmount; no window claims that Workspace.
+        #[cfg(feature = "e2e-harness")]
+        let performance_state = tauri::async_runtime::block_on(
+            PerformanceHarnessState::from_environment(Arc::clone(&shared_repository)),
+        )
+        .map_err(std::io::Error::other)?;
         let stored_session = match tauri::async_runtime::block_on(repository.window_session_list())
         {
             Ok(entries) => entries,

@@ -170,6 +170,44 @@ describe("native performance driver contract", () => {
     expect(reportError).toHaveBeenCalled();
   });
 
+  it("publishes a structured IPC error as readable text", async () => {
+    const publishError = vi.fn<(message: string) => Promise<void>>(
+      async () => {},
+    );
+    const driver = new NativePerformanceDriver({
+      control: {
+        bootstrap: vi.fn(async () => ({
+          schemaVersion: "1.0.0" as const,
+          scenario: "startup-editable" as const,
+          seed: 1,
+          documentPath: "/tmp/performance.excalidraw",
+        })),
+        publishReady: vi.fn(async () => {}),
+        nextCommand: vi.fn(async () => null),
+        publishResult: vi.fn(async () => {}),
+        publishError,
+      },
+      documents: {
+        open: vi.fn(() =>
+          Promise.reject({
+            code: "PATH_ACCESS_DENIED",
+            message: "path access denied",
+          }),
+        ),
+      },
+      clock: createFrameClock(),
+      wait: async () => {},
+      isNativeRuntime: () => true,
+      reportError: vi.fn(),
+    });
+
+    driver.start();
+    await vi.waitFor(() => expect(publishError).toHaveBeenCalledTimes(1));
+    expect(publishError).toHaveBeenCalledWith(
+      "PATH_ACCESS_DENIED: path access denied",
+    );
+  });
+
   it("paces soak edits while retaining frame-by-frame measurements", async () => {
     const editor = createEditor();
     const result = await executePerformanceCommand(

@@ -1040,11 +1040,28 @@ export class DocumentManager {
         this.patchSession(id, { saveState: "checkpointing" });
         const currentPath =
           this.store.getState().sessionsById[id]?.path ?? path;
-        const response = await this.gateway.checkpoint(
-          currentPath,
-          serializeScene(nextDraft.scene),
-          reason,
-        );
+        let response: Awaited<ReturnType<DocumentGateway["checkpoint"]>>;
+        try {
+          response = await this.gateway.checkpoint(
+            currentPath,
+            serializeScene(nextDraft.scene),
+            reason,
+          );
+        } catch (error) {
+          // Close, quit and manual save await this directly, so the timer
+          // `onError` never sees it. Leave a state an event set meanwhile
+          // (orphaned, conflict) alone.
+          if (
+            this.store.getState().sessionsById[id]?.saveState ===
+            "checkpointing"
+          ) {
+            this.patchSession(id, {
+              saveState: "error",
+              errorMessage: describeError(error, "error.saveFailed"),
+            });
+          }
+          throw error;
+        }
         const current = this.store.getState().sessionsById[id];
         this.patchSession(id, {
           baseHash: response.newBaseHash,

@@ -711,10 +711,182 @@ Gaps:
   walkthrough list.
 - The toast's look is not compared with the approved boards.
 
+## Final regression
+
+The whole gate on the final candidate, plus the last fixes and checks of
+the multi-window work.
+
+- Candidate: the commit that adds this section, on macOS 26.6.2 (Darwin
+  25.6.0, arm64), 2026-10-14. Debug `.app` main binary SHA-256
+  `db5e054c…21ac86`; test-harness release binary SHA-256 `e2381185…413d0`.
+- Result: PASS for every command below.
+
+| Command                                                                                  | Result                                 |
+| ---------------------------------------------------------------------------------------- | -------------------------------------- |
+| `pnpm typecheck` / `pnpm lint` / `pnpm format`                                           | PASS                                   |
+| `pnpm test`                                                                              | PASS, 86 files / 725 tests             |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check`                                 | PASS                                   |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`         | PASS                                   |
+| The same with `--features e2e-harness`                                                   | PASS                                   |
+| `cargo test --manifest-path src-tauri/Cargo.toml`                                        | PASS, 346 tests                        |
+| `APP_E2E=1 EXCALIDRAW_E2E_BINARY=<harness> pnpm e2e` (browser and native process suites) | PASS, 283 passed, 11 skipped, 0 failed |
+| Three-window edit and save in `e2e/tests/multi-window-reliability.spec.ts`, 10 runs      | PASS, 10 of 10                         |
+| `APP_E2E=1 pnpm e2e a11y-audit` (multi-window surfaces)                                  | PASS, 8 tests, 32 scans, 0 violations  |
+| `pnpm native:window:test`                                                                | PASS, 24 tests                         |
+| `pnpm native:menu:check -- --languages "(en-US, zh-Hans)"`                               | PASS, 99 checks                        |
+| `pnpm native:window:check -- --app <debug .app>`                                         | PASS, 20 checks                        |
+
+What changed and what the checks cover:
+
+- A drawing whose checkpoint fails while its window closes or the app
+  quits now shows a save error with the reason instead of staying in
+  "saving"; a drawing whose file disappeared at the same time stays
+  orphaned. Unit tests cover the close and quit paths.
+- Three windows each edit and save their own drawing: each save changes
+  only its own file, every save ends clean, and each window keeps its own
+  drawing. The test driver now reports a refused request as its error code
+  and message.
+- Accessibility: the empty state, the "inside" toast, the nested-folder
+  dialog, the delete, folder-not-empty and remove-Workspace dialogs, and
+  the copy toasts, in Light and Dark and both languages; see
+  `docs/evidence/a11y-audit.md`.
+- Documents: the multi-window decision record (ADR-010), the architecture
+  overview, the IPC contract, README, CONTEXT and the contributor guide.
+- The eleven skipped end-to-end tests skip themselves by their own
+  environment conditions; they were not listed one by one.
+- The two foreground native checks ran with nobody using the mouse or
+  keyboard.
+
 ## Performance
 
-Not run yet.
+Cold start, idle memory and writes on `main` and on the candidate, and
+process-tree memory with one, two and three windows. Measured on a
+physical Mac; the declared reference VM was not available.
+
+- Machine: Mac17,9 (Apple M5 Pro), 48 GiB, macOS 26.6.2 (25G83), WebKit
+  21624.5.1.11.3, 2026-10-14. Not virtualized; nothing else was launched
+  during the runs.
+- Binaries: test-harness release builds
+  (`VITE_E2E_HARNESS=1 pnpm tauri build --features e2e-harness --no-bundle`).
+  `main` at `854cc4e`, SHA-256 `546d4632…cb368`; candidate at the commit
+  that adds this section, SHA-256 `e2381185…413d0`.
+- Result: no regression found. Both binaries fail the 2 s cold-start
+  budget the same way (below); idle memory passes; idle writes are zero.
+
+| Command                                                                                                                 | Result          |
+| ----------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `PERF_TEST=1 APP_E2E=1 EXCALIDRAW_E2E_BINARY=<main> pnpm exec playwright test … e2e/perf/startup-idle.spec.ts`          | PASS (recorded) |
+| The same with `EXCALIDRAW_E2E_BINARY=<candidate>`                                                                       | PASS (recorded) |
+| `PERF_TEST=1 APP_E2E=1 EXCALIDRAW_E2E_BINARY=<candidate> pnpm exec playwright test … e2e/perf/multi-window-rss.spec.ts` | PASS (recorded) |
+
+Cold start to an editable canvas, 10 launches each, each with a new data
+root:
+
+| Binary    | Launches (ms)                                     | Median | P95 (nearest rank) | Budget 2000 ms |
+| --------- | ------------------------------------------------- | ------ | ------------------ | -------------- |
+| main      | 2667, 623, 616, 594, 595, 621, 597, 592, 598, 590 | 597    | 2667               | fail           |
+| candidate | 2463, 622, 622, 625, 628, 624, 625, 621, 623, 623 | 623    | 2463               | fail           |
+
+- With ten launches the nearest-rank P95 is the slowest launch. On both
+  binaries that is the first launch after the build, about 2.5 s; the
+  other nine are 0.59–0.63 s. The budget fails on `main` too, so it is not
+  caused by this work.
+- The candidate's median is 26 ms (4%) slower than `main`'s. The spec
+  expects up to 20% launch-to-launch variation; this is within it.
+
+Idle, 30 s after the canvas is ready, sampled once a second for 60 s:
+
+| Binary    | Process-tree RSS P95 | Budget 500 MB | Persistent writes (events / changed paths) |
+| --------- | -------------------- | ------------- | ------------------------------------------ |
+| main      | 314.9 MiB            | pass          | 0 / 0                                      |
+| candidate | 317.5 MiB            | pass          | 0 / 0                                      |
+
+Windows, each holding one Workspace and one drawing with one rectangle;
+15 s to settle after each window opens, then 20 samples a second apart.
+There is no budget; the numbers are recorded only.
+
+| Windows | RSS P50   | RSS P95   | Processes | P95 added by this window |
+| ------- | --------- | --------- | --------- | ------------------------ |
+| 1       | 318.0 MiB | 318.9 MiB | 4         | —                        |
+| 2       | 454.2 MiB | 454.4 MiB | 5         | 135.5 MiB                |
+| 3       | 586.8 MiB | 587.7 MiB | 6         | 133.2 MiB                |
+
+- Each window adds one WebKit content process and about 135 MiB. With
+  three windows the process tree passes the 500 MB single-window idle
+  budget; that budget is for one window and is not applied here.
+
+Fix found by this run:
+
+- On the first candidate build the performance driver could not open its
+  drawing: the harness registered its Workspace as mounted before the
+  startup step that unmounts every Workspace, so the open was refused
+  (`main` has no such step). The harness now registers after that step.
+  The driver also reported the refused open as `[object Object]`; it now
+  reports the error code and message, with a unit test. The harness
+  Workspace is not claimed by a window, so no watcher runs for it on the
+  candidate, as for any Workspace not open in a window.
+
+Gaps:
+
+- The declared reference VM was not available; this is physical-Mac
+  evidence only.
+- RSS counts shared pages in each process, so the per-window figure is an
+  upper bound on new memory.
 
 ## Owner walkthrough
 
-Not run yet.
+One pass by the product owner on the final candidate `.app`, about 25
+minutes. It covers what the automated checks cannot: real macOS
+interaction, the real clipboard, the approved boards, and desktop spaces.
+The owner's conclusion is recorded below on its own and is not inferred
+from the automated results.
+
+- Build: the debug `.app` of the final candidate
+  (`pnpm tauri build --debug --bundles app`), the same build the native
+  window check runs on.
+- Seed folders, under `~/Documents/excalidraw-walkthrough-2026-10-14/`:
+  `Alpha Space/` (a space in the name) with `Plan.excalidraw`,
+  `设计 草图/流程图.excalidraw` (Chinese and a space) and a non-empty
+  `Notes/`; `工作区 B/看板.excalidraw`; and `Outside/loose.excalidraw`,
+  which is in no Workspace.
+- The walkthrough uses the owner's own app data, so both Workspaces join the
+  Recent list.
+
+| #   | Area                        | Pass when                                                                                                                                                                                                                    |
+| --- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | New window, two Workspaces  | File > New Window adds a Welcome window; each window shows only its own Workspace; opening `Alpha Space` again from the other window, several times and once while minimized, opens no window and brings the owner to front. |
+| 2   | Subfolder and parent folder | Opening `设计 草图` brings the owner to front, reveals the folder and shows the "inside" toast; opening the parent shows the nested dialog; both of its actions work.                                                        |
+| 3   | Finder                      | A drawing in a Workspace opens in its owner; `loose.excalidraw` opens in the most recent window; a drawing already open is not opened twice.                                                                                 |
+| 4   | Theme and language          | A change in one window applies to every window and to the native menus; the Window menu still lists every window.                                                                                                            |
+| 5   | Empty state and dialogs     | Against boards 01–03 and 07–13, in English and Simplified Chinese (Dark once): parts, order, placement and styles match. The shortcut hints are left out by an earlier owner decision and are not a failure.                 |
+| 6   | Copy path (real clipboard)  | Pasting gives the full path with Chinese and spaces kept, or the path below the Workspace root; the Workspace row and a drawing outside the Workspace offer only Copy Path; the toasts read as designed in both languages.   |
+| 7   | Size and placement          | A Workspace reopened after a move and resize comes back where it was; maximized, full screen and a disconnected display are observed and recorded.                                                                           |
+| 8   | Quit and restore            | Cmd+Q with unsaved edits in two windows quits within seconds; relaunching restores the windows, tabs, placement and the edits; closing every window and clicking the Dock icon opens Welcome; the Dock menu is observed.     |
+| 9   | Another desktop space       | Opening a Workspace whose window is on another space brings that window forward and opens no new one.                                                                                                                        |
+
+Owner conclusion (recorded by the owner, separately from the results
+above):
+
+- Date and build:
+- Failed items and what was seen:
+- Conclusion: accepted / accepted with conditions / not accepted
+
+## Final summary
+
+- Automated: every gate in "Final regression" passes on the final
+  candidate. Performance shows no regression against `main`; the
+  cold-start budget fails on both binaries because of the first launch
+  after a build.
+- Documented differences between the design notes and the code, where the
+  code is what the documents describe: an event for a drawing or Workspace
+  that no window holds is dropped rather than sent to another window; after
+  Recovery the stored windows are recreated and an empty Recovery window
+  closes; the preferences-changed event carries the appearance and
+  language only; the menu target is the focused window, else the window
+  focused most recently.
+- Residual risks: the reference VM was not measured; the real macOS
+  clipboard, the approved boards, maximized and full-screen restore, a
+  disconnected display, the Dock menu, the Window menu after a language
+  switch, and other desktop spaces rest on the owner walkthrough; the
+  empty state's shortcut hints wait for shortcuts to exist.
+- Owner conclusion: recorded in "Owner walkthrough", separately.

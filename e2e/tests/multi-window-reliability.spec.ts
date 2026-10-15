@@ -589,6 +589,89 @@ test.describe("multi-window process reliability", () => {
     });
   });
 
+  test("three windows edit and save their own drawings without touching the others", async ({
+    browserName,
+  }, testInfo) => {
+    void browserName;
+    await repeat(testInfo, "three-windows-save", async (fixture, evidence) => {
+      let app: MultiWindowApp | undefined;
+      try {
+        const gamma = await createWorkspace(fixture.paths, "gamma");
+        app = await launchMultiWindowApp(fixture.paths);
+        const labels = await openTwoWindows(app, fixture);
+        const { label: third } = await app.request<{ label: string }>(
+          "app",
+          "newWindow",
+        );
+        await app.request(third, "openWorkspace", { rootPath: gamma.root });
+        await app.request(third, "openDrawing", { path: gamma.file });
+        await app.waitForSnapshot(
+          (snapshot) =>
+            snapshot.openWindows.length === 3 &&
+            owns(snapshot, gamma.root, gamma.file),
+        );
+        evidence.labels = { ...labels, gamma: third };
+        const windows = [
+          { label: labels.alpha, file: fixture.alpha.file, seed: 3 },
+          { label: labels.beta, file: fixture.beta.file, seed: 5 },
+          { label: third, file: gamma.file, seed: 9 },
+        ];
+        const before = await Promise.all(
+          windows.map(({ file }) => positionsOnDisk(file)),
+        );
+
+        // Edit all three before saving any, so each save runs while the
+        // other windows hold unsaved edits.
+        const edits: Position[][] = [];
+        for (const window of windows) {
+          edits.push(await edit(app, window.label, window.file, window.seed));
+        }
+        evidence.checks.editsDiffer =
+          new Set(edits.map((elements) => JSON.stringify(elements))).size ===
+            3 &&
+          edits.every(
+            (elements, index) =>
+              JSON.stringify(elements) !== JSON.stringify(before[index]),
+          );
+
+        const saved: Array<{ saveState: string; elements: Position[] }> = [];
+        for (const [index, window] of windows.entries()) {
+          saved.push(
+            await app.request(window.label, "save", { path: window.file }),
+          );
+          const onDisk = await Promise.all(
+            windows.map(({ file }) => positionsOnDisk(file)),
+          );
+          // Saved windows match their edit; the rest are still as before.
+          evidence.checks[`save${index + 1}TouchesOnlyItsFile`] = onDisk.every(
+            (elements, other) =>
+              JSON.stringify(elements) ===
+              JSON.stringify(other <= index ? edits[other] : before[other]),
+          );
+        }
+        evidence.checks.everySaveClean = saved.every(
+          (result) => result.saveState === "clean",
+        );
+
+        const reports = await Promise.all(
+          windows.map(({ label }) => app?.report(label)),
+        );
+        evidence.checks.windowsKeepTheirOwnDrawing = reports.every(
+          (report, index) =>
+            report !== undefined &&
+            report.tabs.length === 1 &&
+            report.tabs[0].path === windows[index].file &&
+            JSON.stringify(report.tabs[0].elements) ===
+              JSON.stringify(edits[index]) &&
+            report.alerts.length === 0,
+        );
+        evidence.details = { before, edits, saved };
+      } finally {
+        await stop(app);
+      }
+    });
+  });
+
   test("closing one window saves it and leaves the other window as it was", async ({
     browserName,
   }, testInfo) => {
