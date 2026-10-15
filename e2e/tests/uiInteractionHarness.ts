@@ -864,6 +864,28 @@ export async function installUiInteractionFileEvents(
   });
 }
 
+/** Emits any app event, e.g. `native-menu-command`; needs `installUiInteractionFileEvents`. */
+export async function emitUiInteractionEvent(
+  page: Page,
+  event: string,
+  payload: unknown,
+): Promise<void> {
+  await page.evaluate(
+    ({ event: eventName, payload: eventPayload }) => {
+      const emit = (
+        globalThis as typeof globalThis & {
+          __emitUiInteractionEvent?: (eventName: string, next: unknown) => void;
+        }
+      ).__emitUiInteractionEvent;
+      if (emit === undefined) {
+        throw new Error("UI interaction events are not installed.");
+      }
+      emit(eventName, eventPayload);
+    },
+    { event, payload },
+  );
+}
+
 export async function emitUiInteractionFileChanged(
   page: Page,
   payload: {

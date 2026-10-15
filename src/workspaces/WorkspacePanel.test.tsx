@@ -760,6 +760,21 @@ describe("WorkspacePanel", () => {
     expect(dialog).toHaveTextContent(
       "Open drawings from this Workspace will be saved and closed",
     );
+    // Sidebar confirmation anatomy: root path, Cancel first with focus, and
+    // a primary (not destructive) Remove Workspace.
+    expect(dialog).toHaveAttribute("data-variant", "sidebar");
+    expect(within(dialog).getByText("/workspace/one")).toBeInTheDocument();
+    expect(
+      within(dialog)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Cancel", "Remove Workspace"]);
+    expect(
+      within(dialog).getByRole("button", { name: "Cancel" }),
+    ).toHaveFocus();
+    expect(
+      within(dialog).getByRole("button", { name: "Remove Workspace" }),
+    ).toHaveAttribute("data-kind", "primary");
     await user.click(
       within(dialog).getByRole("button", { name: "Remove Workspace" }),
     );
@@ -913,7 +928,9 @@ describe("WorkspacePanel", () => {
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
-    expect(remove).toHaveFocus();
+    // Focus returns to the row: its actions button is hidden once the row
+    // is neither hovered nor focused.
+    expect(screen.getByRole("treeitem", { name: "Sketches" })).toHaveFocus();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 

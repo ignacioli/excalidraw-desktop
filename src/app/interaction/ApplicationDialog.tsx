@@ -240,6 +240,8 @@ interface ApplicationDialogFieldProps {
   inputRef?: Ref<HTMLInputElement>;
   /** Fixed, non-editable suffix shown inside the field box. */
   suffix?: string;
+  /** How assistive technology describes the suffix, e.g. "Fixed extension .excalidraw". */
+  suffixLabel?: string;
   errorMessage?: string | null;
   disabled?: boolean;
 }
@@ -251,6 +253,7 @@ export function ApplicationDialogField({
   onChange,
   inputRef,
   suffix,
+  suffixLabel,
   errorMessage,
   disabled = false,
 }: ApplicationDialogFieldProps) {
@@ -282,9 +285,17 @@ export function ApplicationDialogField({
           value={value}
         />
         {suffix ? (
-          <span className="application-dialog-field-suffix" id={suffixId}>
-            {suffix}
-          </span>
+          <>
+            <span
+              aria-hidden="true"
+              className="application-dialog-field-suffix"
+            >
+              {suffix}
+            </span>
+            <span className="visually-hidden" id={suffixId}>
+              {suffixLabel ?? suffix}
+            </span>
+          </>
         ) : null}
       </div>
       {errorMessage ? (

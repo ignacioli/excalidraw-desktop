@@ -575,7 +575,73 @@ Gaps:
 
 ## Sidebar dialogs
 
-Not run yet.
+The dialogs opened from the Workspace sidebar share one layout: title,
+consequence text, the object's path, the name field with a fixed
+extension, the error, and the actions on the right with Cancel first.
+Seven dialogs use it: New drawing, New folder, Rename drawing, Rename
+folder, Delete, Folder isn't empty and Remove Workspace.
+
+- Candidate: the commit that adds this section, on macOS 26.6.2 (Darwin
+  25.6.0, arm64), 2026-10-14.
+- Result: PASS for the automated checks below. The look of the dialogs is
+  not judged from screenshots; it is in the owner walkthrough list.
+- Components: `DSC-DIALOG-001` sidebar variant. Naming dialogs: default,
+  error and submitting. Confirmation dialogs: Delete, Folder isn't empty
+  and Remove Workspace.
+
+| Command                                        | Result                                   |
+| ---------------------------------------------- | ---------------------------------------- |
+| `pnpm test src/app/interaction src/workspaces` | PASS, 10 files / 91 tests                |
+| `pnpm test` (whole Vitest suite)               | PASS, 85 files / 709 tests               |
+| `pnpm typecheck`                               | PASS                                     |
+| `pnpm lint`                                    | PASS                                     |
+| `pnpm format`                                  | PASS                                     |
+| `APP_E2E=1 pnpm e2e ui-entry-dialogs`          | PASS, 8 tests                            |
+| `APP_E2E=1 pnpm e2e` (whole browser suite)     | 192 passed, 86 skipped, 1 failed (below) |
+
+What the checks cover:
+
+- Naming dialogs: the field is labeled "Name", its value is selected
+  without the extension, and the extension is announced as "Fixed
+  extension .excalidraw" while its visible text is hidden from assistive
+  technology; folders have no extension; Enter submits and Escape cancels;
+  while submitting the field and both buttons are disabled; a failure
+  shows its message under the field as an alert, keeps the typed name and
+  puts focus back in the field; the actions are Cancel, then Create or
+  Rename in the primary style.
+- Confirmation dialogs: each shows the consequence and the object's path
+  with the home folder shortened to `~`; Cancel comes first and has the
+  initial focus; Delete is the only danger-styled action; Open in Finder
+  and Remove Workspace use the primary style; busy disables both actions.
+- Browser, at 1280 × 760 in Light and Dark with English and Simplified
+  Chinese, for each of the seven dialogs: it uses the sidebar layout, lies
+  inside the window, nothing in it sticks out or is clipped, the page does
+  not scroll sideways; the actions are in the planned order in the chosen
+  language; initial focus is on the field or on Cancel; Escape closes it
+  and focus goes back to what opened it; no file, folder or Workspace
+  command is sent.
+
+Fixes made while checking:
+
+- The extension's spoken label was set on a plain text element, where
+  assistive technology ignores it. The field now points to a hidden text
+  that says "Fixed extension …".
+- New Drawing and New Folder in the sidebar toolbar did not tell the dialog
+  where to send focus back, so focus was lost when it closed. They now do.
+- Dialogs opened from a row's menu sent focus back to the row's actions
+  button, which is hidden unless the row is hovered or focused, so focus
+  fell to the page. Focus now goes back to the row itself; one existing
+  test that expected the button was changed to expect the row.
+
+Gaps:
+
+- In the whole-suite run the PNG export fidelity test failed waiting for
+  the Export dialog to appear; run alone three times it passed each time
+  (6 of 6 across both browser projects). It does not open a sidebar
+  dialog. The export dialog was also the one that timed out in the
+  previous section's whole-suite run.
+- The spacing, colors and fonts are not compared with the approved
+  boards; they are in the owner walkthrough list.
 
 ## Copy path
 

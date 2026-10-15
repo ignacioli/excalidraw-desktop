@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import collapseAllIcon from "../../docs/design/desktop-shell/hf-2/icons/collapse-all.svg";
 import expandAllIcon from "../../docs/design/desktop-shell/hf-2/icons/expand-all.svg";
 import newDrawingIcon from "../../docs/design/desktop-shell/hf-2/icons/new-drawing.svg";
@@ -6,6 +13,8 @@ import newFolderIcon from "../../docs/design/desktop-shell/hf-2/icons/new-folder
 import refreshIcon from "../../docs/design/desktop-shell/hf-2/icons/refresh.svg";
 import {
   ApplicationDialog,
+  ApplicationDialogActions,
+  ApplicationDialogButton,
   ContextMenu,
   DirectoryNotEmptyDialog,
   EntryDeleteConfirmationDialog,
@@ -45,6 +54,7 @@ import {
   LocalizedError,
 } from "../i18n/describeError";
 import { WorkspaceTree } from "./WorkspaceTree";
+import { abbreviateHome, useHomeDirectory } from "./displayPath";
 import {
   makeEntryRowKey,
   makeWorkspaceRowKey,
@@ -669,7 +679,10 @@ export function WorkspacePanel({
       return;
     }
     const rect = trigger.getBoundingClientRect();
-    returnFocusRef.current = trigger;
+    // Dialogs opened from the menu return focus to the row: its actions
+    // button is hidden unless the row is hovered or focused.
+    returnFocusRef.current =
+      trigger.closest<HTMLElement>('[role="treeitem"]') ?? trigger;
     menuTriggerRef.current = trigger;
     setTreeMenu({
       row,
@@ -1046,14 +1059,15 @@ export function WorkspacePanel({
               aria-label={t("workspace.newDrawing")}
               className="icon-button"
               disabled={busy || currentWorkspaceId === null}
-              onClick={() =>
-                currentWorkspaceId !== null &&
+              onClick={(event) => {
+                if (currentWorkspaceId === null) return;
+                returnFocusRef.current = event.currentTarget;
                 beginNaming(
                   "newDrawing",
                   currentWorkspaceId,
                   targetRelativePath,
-                )
-              }
+                );
+              }}
               title={t("workspace.newDrawing")}
               type="button"
             >
@@ -1063,14 +1077,15 @@ export function WorkspacePanel({
               aria-label={t("workspace.newFolder")}
               className="icon-button"
               disabled={busy || currentWorkspaceId === null}
-              onClick={() =>
-                currentWorkspaceId !== null &&
+              onClick={(event) => {
+                if (currentWorkspaceId === null) return;
+                returnFocusRef.current = event.currentTarget;
                 beginNaming(
                   "newDirectory",
                   currentWorkspaceId,
                   targetRelativePath,
-                )
-              }
+                );
+              }}
               title={t("workspace.newFolder")}
               type="button"
             >
@@ -1230,6 +1245,7 @@ export function WorkspacePanel({
         <EntryDeleteConfirmationDialog
           busy={deleting.busy}
           displayName={deleting.entry.name}
+          path={deleting.entry.canonicalPath}
           errorMessage={
             deleting.error === null ? null : describeFailure(deleting.error)
           }
@@ -1243,6 +1259,7 @@ export function WorkspacePanel({
       {deleting?.phase === "nonEmpty" ? (
         <DirectoryNotEmptyDialog
           busy={deleting.busy}
+          path={deleting.entry.canonicalPath}
           errorMessage={
             deleting.error === null ? null : describeFailure(deleting.error)
           }
@@ -1254,41 +1271,79 @@ export function WorkspacePanel({
         />
       ) : null}
       {pendingRemoval ? (
-        <ApplicationDialog
+        <RemoveWorkspaceDialog
           busy={busy}
           errorMessage={error === null ? null : describeFailure(error)}
-          onDismiss={() => {
+          onCancel={() => {
             if (busy) return;
             setPendingRemoval(null);
             setError(null);
           }}
+          onRemove={() => void removeWorkspace(pendingRemoval)}
           returnFocusRef={returnFocusRef}
-          title={t("workspace.remove.title", { name: pendingRemoval.name })}
-        >
-          <p>{t("workspace.remove.description")}</p>
-          <div className="application-dialog-actions conflict-dialog-actions">
-            <button
-              disabled={busy}
-              onClick={() => {
-                if (busy) return;
-                setPendingRemoval(null);
-                setError(null);
-              }}
-              type="button"
-            >
-              {t("workspace.remove.cancel")}
-            </button>
-            <button
-              disabled={busy}
-              onClick={() => void removeWorkspace(pendingRemoval)}
-              type="button"
-            >
-              {t("workspace.remove.confirm")}
-            </button>
-          </div>
-        </ApplicationDialog>
+          workspace={pendingRemoval}
+        />
       ) : null}
     </section>
+  );
+}
+
+/**
+ * Removing a Workspace from the list keeps its files, so the action uses the
+ * primary style. Sidebar confirmation anatomy with the root path; Cancel has
+ * the initial focus.
+ */
+function RemoveWorkspaceDialog({
+  workspace,
+  busy,
+  errorMessage,
+  returnFocusRef,
+  onCancel,
+  onRemove,
+}: {
+  workspace: Workspace;
+  busy: boolean;
+  errorMessage: string | null;
+  returnFocusRef: RefObject<HTMLElement | null>;
+  onCancel(): void;
+  onRemove(): void;
+}) {
+  const { t } = useI18n();
+  const home = useHomeDirectory();
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  return (
+    <ApplicationDialog
+      actions={
+        <ApplicationDialogActions>
+          <ApplicationDialogButton
+            buttonRef={cancelRef}
+            disabled={busy}
+            kind="secondary"
+            onClick={onCancel}
+          >
+            {t("workspace.remove.cancel")}
+          </ApplicationDialogButton>
+          <ApplicationDialogButton
+            disabled={busy}
+            kind="primary"
+            onClick={onRemove}
+          >
+            {t("workspace.remove.confirm")}
+          </ApplicationDialogButton>
+        </ApplicationDialogActions>
+      }
+      busy={busy}
+      description={t("workspace.remove.description")}
+      errorMessage={errorMessage}
+      initialFocusRef={cancelRef}
+      objectPath={abbreviateHome(workspace.rootPath, home)}
+      onDismiss={onCancel}
+      returnFocusRef={returnFocusRef}
+      title={t("workspace.remove.title", { name: workspace.name })}
+      variant="sidebar"
+    >
+      {null}
+    </ApplicationDialog>
   );
 }
 
