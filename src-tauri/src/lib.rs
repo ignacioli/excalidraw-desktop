@@ -87,7 +87,8 @@ pub fn run() {
     configure_linux_ime_environment();
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_dialog::init());
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init());
     #[cfg(not(feature = "e2e-harness"))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
         let paths = drawing_paths_from_args(&argv);

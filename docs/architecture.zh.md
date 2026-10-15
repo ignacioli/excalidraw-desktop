@@ -259,7 +259,7 @@ sequenceDiagram
 - `history_delete` 在持有文档 history-operation lease 时删除一条语义版本。重复使用同一 `requestId` 是幂等的；仍被活动替换引用的版本会受到保护并返回结构化 busy 错误。metadata 事务之后的对象 GC 是 best effort，仍被其他文档共享或被操作 pin 的对象会保留。
 - 条目变更授权使用 `workspaceId + relativePath`（及创建/重命名的 `baseName`）。响应中的 `canonicalPath` 供打开与会话迁移使用，**不是**前端可提交的授权证据。
 - 所有路径在后端经 `security/` canonicalize + 工作区白名单校验；越界返回 `PATH_ACCESS_DENIED`。文档 JSON 视为不可信输入（结构校验 + 尺寸上限）。
-- 最小权限：Tauri Capabilities 为 `core:default` + `core:window:allow-destroy` + `core:window:allow-set-title` + `dialog:allow-open` + `dialog:allow-save`，适用于 label 为 `window-*` 的窗口（`src-tauri/capabilities/default.json`）。销毁权限仅用于让原生关闭处理器在 app-exit checkpoint 完成后销毁窗口；设置标题权限让窗口在标题中显示图纸与 Workspace。路径 ACL 在 Rust，不靠额外 fs capability 放开 WebView 任意文件系统。严格 CSP；asset protocol 仅限 `.excalidraw_assets` 图片。
+- 最小权限：Tauri Capabilities 为 `core:default` + `core:window:allow-destroy` + `core:window:allow-set-title` + `clipboard-manager:allow-write-text` + `dialog:allow-open` + `dialog:allow-save`，适用于 label 为 `window-*` 的窗口（`src-tauri/capabilities/default.json`）。销毁权限仅用于让原生关闭处理器在 app-exit checkpoint 完成后销毁窗口；设置标题权限让窗口在标题中显示图纸与 Workspace；写入文本权限让“复制路径”把路径放到剪贴板，不授予读取剪贴板。路径 ACL 在 Rust，不靠额外 fs capability 放开 WebView 任意文件系统。严格 CSP；asset protocol 仅限 `.excalidraw_assets` 图片。
 - 生产命令集不含 `dir_list`、`file_create` / `file_rename` / `file_delete`、`thumb_lookup` / `thumb_store`。
 
 ### 8.1 语言与原生菜单数据流

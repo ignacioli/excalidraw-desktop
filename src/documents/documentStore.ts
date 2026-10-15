@@ -1199,7 +1199,7 @@ function historyAutosaveProbeRejection(
   return undefined;
 }
 
-function relativeDocumentPath(
+export function relativeDocumentPath(
   workspaceRoot: string,
   canonicalPath: string,
 ): string {

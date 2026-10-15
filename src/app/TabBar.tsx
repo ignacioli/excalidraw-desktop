@@ -10,12 +10,16 @@ import { createPortal } from "react-dom";
 import { documentManager, useDocumentStore } from "../documents/documentStore";
 import { ingestWheel } from "../documents/tabActivationQueue";
 import { useI18n } from "../i18n";
-import { ContextMenu } from "./interaction/ContextMenu";
+import { ContextMenu, type ContextMenuItem } from "./interaction/ContextMenu";
+import { workspaceRelativePath, type CopyPathRequest } from "./clipboard";
 import type { CloseOutcome } from "../documents/documentStore";
 import closeIcon from "../../docs/design/desktop-shell/hf-2/icons/close.svg";
 
 interface TabBarProps {
   onCloseOutcome?: (documentId: string, outcome: CloseOutcome) => void;
+  /** This window's Workspace root; drawings below it get Copy Relative Path. */
+  workspaceRoot?: string | null;
+  onCopyPath?: (request: CopyPathRequest) => void;
 }
 
 interface TabMenuState {
@@ -24,7 +28,11 @@ interface TabMenuState {
   y: number;
 }
 
-export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
+export function TabBar({
+  onCloseOutcome,
+  workspaceRoot = null,
+  onCopyPath,
+}: TabBarProps = {}) {
   const { t } = useI18n();
   const sessionsById = useDocumentStore((state) => state.sessionsById);
   const tabOrder = useDocumentStore((state) => state.tabOrder);
@@ -210,16 +218,52 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
     setMenu({ documentId, x: event.clientX, y: event.clientY });
   };
 
-  const menuItems = (() => {
+  const menuItems = ((): ContextMenuItem[] => {
     if (menu === null) return [];
-    const index = tabOrder.indexOf(menu.documentId);
-    const others = tabOrder.filter((id) => id !== menu.documentId);
+    const documentId = menu.documentId;
+    const index = tabOrder.indexOf(documentId);
+    const others = tabOrder.filter((id) => id !== documentId);
     const toTheRight = tabOrder.slice(index + 1);
+    // Paths are read when the item is chosen, from the latest session.
+    const currentPath = () =>
+      documentManager.store.getState().sessionsById[documentId]?.path || null;
+    const menuPath = sessionsById[documentId]?.path ?? "";
+    const insideWorkspace =
+      workspaceRoot !== null &&
+      workspaceRelativePath(workspaceRoot, menuPath) !== null;
+    const copyItems: ContextMenuItem[] =
+      menuPath === ""
+        ? []
+        : [
+            {
+              id: "copy-path",
+              label: t("tabs.copyPath"),
+              separatorBefore: true,
+              onSelect: () =>
+                onCopyPath?.({ kind: "path", resolve: currentPath }),
+            },
+          ];
+    if (copyItems.length > 0 && insideWorkspace && workspaceRoot !== null) {
+      copyItems.push({
+        id: "copy-relative-path",
+        label: t("tabs.copyRelativePath"),
+        onSelect: () =>
+          onCopyPath?.({
+            kind: "relativePath",
+            resolve: () => {
+              const path = currentPath();
+              return path === null
+                ? null
+                : workspaceRelativePath(workspaceRoot, path);
+            },
+          }),
+      });
+    }
     return [
       {
         id: "close",
         label: t("tabs.close"),
-        onSelect: () => closeTab(menu.documentId),
+        onSelect: () => closeTab(documentId),
       },
       {
         id: "close-others",
@@ -236,6 +280,7 @@ export function TabBar({ onCloseOutcome }: TabBarProps = {}) {
         label: t("tabs.closeAll"),
         onSelect: () => closeMany(tabOrder),
       },
+      ...copyItems,
     ];
   })();
 

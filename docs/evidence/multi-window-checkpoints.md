@@ -645,7 +645,71 @@ Gaps:
 
 ## Copy path
 
-Not run yet.
+Copy Path and Copy Relative Path in the sidebar row menus and the tab
+context menu. The app may write text to the clipboard and has no
+permission to read it.
+
+- Candidate: the commit that adds this section, on macOS 26.6.2 (Darwin
+  25.6.0, arm64), 2026-10-14.
+- Result: PASS for the automated checks below. Copying in the packaged app
+  was not run; it is in the owner walkthrough list.
+- Components: `DSC-MENU-001` copy items (drawing, folder and Workspace
+  rows; tabs inside and outside the Workspace) and `MW-COPY-FEEDBACK`
+  success and failure.
+- Dependency: the official clipboard plugin, version 2.3.3 for both Rust
+  and npm, pinned exactly. It was published on 2026-08-31 and is the
+  newest release that works with Tauri 2.11; 2.4 and later need Tauri
+  2.12.
+
+| Command                                                                                              | Result                                   |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `cargo test --manifest-path src-tauri/Cargo.toml --test capabilities`                                | PASS, 1 test                             |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check`                                             | PASS                                     |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`                     | PASS                                     |
+| `cargo test --manifest-path src-tauri/Cargo.toml`                                                    | PASS, 346 tests in 12 targets            |
+| `pnpm test src/app/clipboard.test.ts src/app/TabBar.test.tsx src/workspaces/WorkspacePanel.test.tsx` | PASS                                     |
+| `pnpm test` (whole Vitest suite)                                                                     | PASS, 86 files / 720 tests               |
+| `pnpm typecheck` / `pnpm lint` / `pnpm format`                                                       | PASS                                     |
+| `APP_E2E=1 pnpm e2e multi-window-copy-path`                                                          | PASS, 6 tests                            |
+| `APP_E2E=1 pnpm e2e` (whole browser suite)                                                           | 198 passed, 86 skipped, 1 failed (below) |
+
+What the checks cover:
+
+- Permissions: across every capability file the only clipboard
+  permission is writing text. Building the app checks that the permission
+  name exists in the plugin.
+- Copying: the whole path is written in one call, with spaces and Chinese
+  kept; the path is read when the item is chosen, so a renamed tab copies
+  its new path; an item that no longer exists, or a failed write, copies
+  nothing and shows a failure.
+- Menus, in order: drawing row Rename, Copy Path, Copy Relative Path,
+  Delete; folder row New Drawing, New Folder, Copy Path, Copy Relative
+  Path, Rename, Delete; Workspace row New Drawing, New Folder, Copy Path,
+  Remove Workspace; tabs end with Copy Path and, for a drawing in the
+  Workspace, Copy Relative Path. Separators split the groups as designed.
+- Browser: Copy Path on a drawing or folder writes its full path (not
+  shortened to `~`) and shows "Path copied"; Copy Relative Path writes the
+  `/`-separated path below the Workspace root, with no leading `/`, and
+  shows "Relative path copied"; the Workspace row copies its root; a tab
+  copies what its row copies; a drawing opened from outside the Workspace
+  has only Copy Path; a failed write shows "Couldn't copy path" and leaves
+  the earlier clipboard text in place.
+
+Test changes:
+
+- The menu keyboard test in the continuous Workspace tree spec counted four
+  items in a folder's menu; the folder menu now has six (the two copy
+  items). That is the whole-suite failure counted above; with the count
+  updated the spec passes (3 tests) and the menu still fits a 420 × 260
+  window. The Tab menu unit test that lists the items now expects Copy
+  Path at the end.
+
+Gaps:
+
+- The browser tests answer the clipboard command themselves; the plugin
+  writing to the macOS clipboard in the packaged app is in the owner
+  walkthrough list.
+- The toast's look is not compared with the approved boards.
 
 ## Performance
 

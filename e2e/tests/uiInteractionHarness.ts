@@ -47,6 +47,8 @@ export interface UiInteractionHarnessOptions {
   latenciesMs?: Readonly<Record<string, number>>;
   responses?: Readonly<Record<string, unknown>>;
   dialogPaths?: readonly (string | null)[];
+  /** What the system clipboard holds before the test copies anything. */
+  clipboardText?: string;
   startup?: UiHarnessStartupOptions;
   tenThousandRows?: {
     workspaceId?: string;
@@ -63,6 +65,7 @@ export interface UiInteractionHarnessState {
   entryCountByParent: Record<string, number>;
   failures: Record<string, UiHarnessFailure>;
   errors: string[];
+  clipboardText: string;
 }
 
 const DEFAULT_WORKSPACE: UiHarnessWorkspace = {
@@ -137,6 +140,7 @@ export async function installUiInteractionHarness(
       latencySeeds,
       responseSeeds,
       pathSeeds,
+      clipboardSeed,
       emptyScene,
       startup,
     }) => {
@@ -152,6 +156,7 @@ export async function installUiInteractionHarness(
         dialogPaths: (string | null)[];
         nextDialogPath: number;
         errors: string[];
+        clipboardText: string;
       };
       type HarnessWindow = typeof globalThis & {
         __TAURI_INTERNALS__?: {
@@ -182,6 +187,7 @@ export async function installUiInteractionHarness(
         dialogPaths: [...pathSeeds],
         nextDialogPath: 0,
         errors: [],
+        clipboardText: clipboardSeed,
       };
       const browser = globalThis as HarnessWindow;
 
@@ -652,6 +658,11 @@ export async function installUiInteractionHarness(
             command === "native_menu_set_enabled"
           )
             return {};
+          // Copy Path: the clipboard plugin's only granted command.
+          if (command === "plugin:clipboard-manager|write_text") {
+            state.clipboardText = String(args.text ?? "");
+            return null;
+          }
           // `homeDir()` for the row path tooltips.
           if (command === "plugin:path|resolve_directory")
             return "/Users/tester";
@@ -681,6 +692,7 @@ export async function installUiInteractionHarness(
       latencySeeds: { ...(options.latenciesMs ?? {}) },
       responseSeeds: { ...(options.responses ?? {}) },
       pathSeeds: [...(options.dialogPaths ?? [])],
+      clipboardSeed: options.clipboardText ?? "",
       emptyScene: EMPTY_SCENE,
       startup: {
         abnormalExit: options.startup?.abnormalExit ?? false,
@@ -736,6 +748,7 @@ export async function getUiInteractionHarnessState(
             entries: UiHarnessWorkspaceEntry[];
             failures: Record<string, UiHarnessFailure>;
             errors: string[];
+            clipboardText: string;
           };
         };
       }
@@ -757,6 +770,7 @@ export async function getUiInteractionHarnessState(
       entryCountByParent,
       failures: { ...(state?.failures ?? {}) },
       errors: [...(state?.errors ?? [])],
+      clipboardText: state?.clipboardText ?? "",
     };
   });
 }

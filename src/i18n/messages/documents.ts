@@ -54,6 +54,8 @@ export const documentsEn = {
   "workspace.menu.filesNotDeleted": "Files on disk will not be deleted",
   "workspace.menu.rename": "Rename",
   "workspace.menu.delete": "Delete",
+  "workspace.menu.copyPath": "Copy Path",
+  "workspace.menu.copyRelativePath": "Copy Relative Path",
   "workspace.menu.removeWorkspace": "Remove Workspace",
   "workspace.remove.title": "Remove {name}?",
   "workspace.remove.description":
@@ -144,6 +146,8 @@ export const documentsZhCN: Record<keyof typeof documentsEn, string> = {
   "workspace.menu.filesNotDeleted": "不会删除磁盘上的文件",
   "workspace.menu.rename": "重命名",
   "workspace.menu.delete": "删除",
+  "workspace.menu.copyPath": "复制路径",
+  "workspace.menu.copyRelativePath": "复制相对路径",
   "workspace.menu.removeWorkspace": "移除工作区",
   "workspace.remove.title": "移除「{name}」？",
   "workspace.remove.description":

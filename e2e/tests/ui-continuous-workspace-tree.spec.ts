@@ -170,7 +170,8 @@ test("Workspace and entry menus support keyboard navigation, dismissal, and view
   const menu = page.getByRole("menu");
   await expect(menu).toBeVisible();
   const items = menu.getByRole("menuitem");
-  await expect(items).toHaveCount(4);
+  // New Drawing, New Folder, Copy Path, Copy Relative Path, Rename, Delete.
+  await expect(items).toHaveCount(6);
   // Sidebar button styles must not leak into menu items. The first item
   // has focus and shows the hover surface, so check an unfocused one.
   const itemStyle = await items.nth(1).evaluate((element) => {

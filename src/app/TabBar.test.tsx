@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -13,6 +14,7 @@ import {
   type DocumentSession,
 } from "../documents/documentStore";
 import { TabBar } from "./TabBar";
+import type { CopyPathRequest } from "./clipboard";
 
 vi.mock("@excalidraw/excalidraw", () => ({
   getSceneVersion: (elements: ReadonlyArray<{ version?: number }>) =>
@@ -225,10 +227,113 @@ describe("TabBar", () => {
       "Close Others",
       "Close Tabs to the Right",
       "Close All",
+      "Copy Path",
     ]);
 
     await user.click(within(menu).getByRole("menuitem", { name: "Close" }));
     expect(documentManager.close).toHaveBeenCalledWith("beta");
+  });
+
+  it("offers both copy items, after a separator, for a drawing in the Workspace", async () => {
+    const user = userEvent.setup();
+    const onCopyPath = vi.fn<(request: CopyPathRequest) => void>();
+    setDocumentSessions([
+      createSession(
+        "plan",
+        "计划 草图",
+        "/Users/me/My Drawings/计划/计划 草图.excalidraw",
+        "clean",
+      ),
+    ]);
+    render(
+      <TabBar onCopyPath={onCopyPath} workspaceRoot="/Users/me/My Drawings" />,
+    );
+
+    fireEvent.contextMenu(screen.getByRole("tab", { name: "计划 草图" }));
+    const menu = screen.getByRole("menu");
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "Close",
+      "Close Others",
+      "Close Tabs to the Right",
+      "Close All",
+      "Copy Path",
+      "Copy Relative Path",
+    ]);
+    expect(
+      within(menu).getAllByRole("separator", { hidden: true }),
+    ).toHaveLength(1);
+
+    await user.click(
+      within(menu).getByRole("menuitem", { name: "Copy Relative Path" }),
+    );
+    const relative = onCopyPath.mock.calls[0]?.[0];
+    expect(relative?.kind).toBe("relativePath");
+    expect(relative?.resolve()).toBe("计划/计划 草图.excalidraw");
+
+    fireEvent.contextMenu(screen.getByRole("tab", { name: "计划 草图" }));
+    await user.click(
+      within(screen.getByRole("menu")).getByRole("menuitem", {
+        name: "Copy Path",
+      }),
+    );
+    const absolute = onCopyPath.mock.calls[1]?.[0];
+    expect(absolute?.kind).toBe("path");
+    expect(absolute?.resolve()).toBe(
+      "/Users/me/My Drawings/计划/计划 草图.excalidraw",
+    );
+  });
+
+  it("offers only Copy Path for a drawing outside the Workspace", () => {
+    setDocumentSessions([
+      createSession("loose", "Loose", "/tmp/loose.excalidraw", "clean"),
+    ]);
+    render(<TabBar onCopyPath={vi.fn()} workspaceRoot="/Users/me/Drawings" />);
+
+    fireEvent.contextMenu(screen.getByRole("tab", { name: "Loose" }));
+    const menu = screen.getByRole("menu");
+    expect(
+      within(menu).getByRole("menuitem", { name: "Copy Path" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Copy Relative Path" }),
+    ).toBeNull();
+  });
+
+  it("copies the path the drawing has when the item is chosen", async () => {
+    const user = userEvent.setup();
+    const onCopyPath = vi.fn<(request: CopyPathRequest) => void>();
+    setDocumentSessions([
+      createSession(
+        "plan",
+        "Plan",
+        "/Users/me/Drawings/plan.excalidraw",
+        "clean",
+      ),
+    ]);
+    render(
+      <TabBar onCopyPath={onCopyPath} workspaceRoot="/Users/me/Drawings" />,
+    );
+    fireEvent.contextMenu(screen.getByRole("tab", { name: "Plan" }));
+    await user.click(screen.getByRole("menuitem", { name: "Copy Path" }));
+    const request = onCopyPath.mock.calls[0]?.[0];
+
+    act(() =>
+      setDocumentSessions([
+        createSession(
+          "plan",
+          "Renamed",
+          "/Users/me/Drawings/renamed.excalidraw",
+          "clean",
+        ),
+      ]),
+    );
+    expect(request?.resolve()).toBe("/Users/me/Drawings/renamed.excalidraw");
+    act(() => setDocumentSessions([]));
+    expect(request?.resolve()).toBeNull();
   });
 
   it("closes every other tab in visual order from Close Others", async () => {

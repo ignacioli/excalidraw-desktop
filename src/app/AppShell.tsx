@@ -70,6 +70,12 @@ import { registerOpenFileHandler } from "./openFileHandler";
 import { reportWindowSession } from "./windowSession";
 import { FeedbackToast } from "./FeedbackToast";
 import {
+  copyPath,
+  systemClipboard,
+  type ClipboardPort,
+  type CopyPathRequest,
+} from "./clipboard";
+import {
   FEEDBACK_TOAST_DURATION_MS,
   useFeedbackToast,
 } from "./feedbackToastState";
@@ -177,6 +183,7 @@ interface AppShellProps {
   selectWorkspaceDirectory?: () => Promise<string | null>;
   themeController?: ThemeController;
   localeController?: LocaleController;
+  clipboard?: ClipboardPort;
 }
 
 export function AppShell({
@@ -186,6 +193,7 @@ export function AppShell({
   selectWorkspaceDirectory = selectNativeWorkspaceDirectory,
   themeController = initializeBrowserThemeController(),
   localeController = initializeBrowserLocaleController([]),
+  clipboard = systemClipboard,
 }: AppShellProps) {
   useI18n();
   const [interactionError, setInteractionError] = useState<ShellMessage | null>(
@@ -400,6 +408,32 @@ export function AppShell({
     null,
   );
   const { toast, showToast, dismissToast } = useFeedbackToast();
+  const copyPathWithFeedback = useCallback(
+    async (request: CopyPathRequest) => {
+      const result = await copyPath(clipboard, request);
+      if (result.status === "copied") {
+        showToast({
+          tone: "success",
+          message: translateNow(
+            result.kind === "path"
+              ? "shell.feedback.pathCopied"
+              : "shell.feedback.relativePathCopied",
+          ),
+          path: result.text,
+        });
+        return;
+      }
+      showToast({
+        tone: "failure",
+        message: translateNow(
+          result.status === "missing"
+            ? "shell.feedback.copyMissing"
+            : "shell.feedback.copyFailed",
+        ),
+      });
+    },
+    [clipboard, showToast],
+  );
   const [nestedDialog, setNestedDialog] = useState<NestedDialogState | null>(
     null,
   );
@@ -2100,6 +2134,8 @@ export function AppShell({
             onCloseOutcome={(_, outcome) => {
               applyCloseOutcome(outcome);
             }}
+            onCopyPath={(request) => void copyPathWithFeedback(request)}
+            workspaceRoot={currentWorkspaceRef.current?.rootPath ?? null}
           />
         </div>
         <div className="app-commands" aria-live="polite">
@@ -2214,6 +2250,7 @@ export function AppShell({
               }}
               onWorkspacePresenceChange={setHasMountedWorkspace}
               onWorkspacesChange={handleMountedWorkspacesChange}
+              onCopyPath={(request) => void copyPathWithFeedback(request)}
               onCurrentWorkspaceChange={handleCurrentWorkspaceChange}
               onBrowse={handleBrowse}
               backLocation={backLocation}

@@ -55,6 +55,7 @@ import {
 } from "../i18n/describeError";
 import { WorkspaceTree } from "./WorkspaceTree";
 import { abbreviateHome, useHomeDirectory } from "./displayPath";
+import type { CopyPathRequest } from "../app/clipboard";
 import {
   makeEntryRowKey,
   makeWorkspaceRowKey,
@@ -87,6 +88,8 @@ export interface WorkspacePanelProps {
   ) => Promise<void>;
   onWorkspacePresenceChange?: (hasAny: boolean) => void;
   onWorkspacesChange?: (workspaces: Workspace[]) => void;
+  /** Copy Path and Copy Relative Path from a row's menu. */
+  onCopyPath?: (request: CopyPathRequest) => void;
   preferences?: ShellPreferences;
   captureFocus?: boolean;
 }
@@ -150,6 +153,7 @@ export function WorkspacePanel({
   onNestedConflict,
   onWorkspacePresenceChange,
   onWorkspacesChange,
+  onCopyPath,
   preferences: providedPreferences,
   captureFocus = true,
 }: WorkspacePanelProps) {
@@ -178,6 +182,8 @@ export function WorkspacePanel({
   const openMenu = useInteractionStore((state) => state.menu);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const workspacesRef = useRef(workspaces);
+  workspacesRef.current = workspaces;
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(
     () => controlledCurrentWorkspaceId ?? null,
   );
@@ -871,6 +877,58 @@ export function WorkspacePanel({
     }
   };
 
+  // Paths are read when the item is chosen, from the latest listing.
+  const currentEntry = (
+    workspaceId: string,
+    entry: WorkspaceEntry,
+  ): WorkspaceEntry | null =>
+    entriesRef.current[workspaceId]?.[entry.parentRelativePath]?.find(
+      (candidate) => candidate.relativePath === entry.relativePath,
+    ) ?? null;
+
+  const copyItems = (row: WorkspaceTreeRow): ContextMenuItem[] => {
+    if (row.kind === "workspace") {
+      return [
+        {
+          id: "copy-path",
+          label: t("workspace.menu.copyPath"),
+          separatorBefore: true,
+          onSelect: () =>
+            onCopyPath?.({
+              kind: "path",
+              resolve: () =>
+                workspacesRef.current.find(
+                  (workspace) => workspace.id === row.workspaceId,
+                )?.rootPath ?? null,
+            }),
+        },
+      ];
+    }
+    return [
+      {
+        id: "copy-path",
+        label: t("workspace.menu.copyPath"),
+        separatorBefore: true,
+        onSelect: () =>
+          onCopyPath?.({
+            kind: "path",
+            resolve: () =>
+              currentEntry(row.workspaceId, row.entry)?.canonicalPath ?? null,
+          }),
+      },
+      {
+        id: "copy-relative-path",
+        label: t("workspace.menu.copyRelativePath"),
+        onSelect: () =>
+          onCopyPath?.({
+            kind: "relativePath",
+            resolve: () =>
+              currentEntry(row.workspaceId, row.entry)?.relativePath ?? null,
+          }),
+      },
+    ];
+  };
+
   const menuItems = (row: WorkspaceTreeRow): ContextMenuItem[] => {
     if (row.kind === "workspace") {
       return [
@@ -884,9 +942,11 @@ export function WorkspacePanel({
           label: t("workspace.newFolder"),
           onSelect: () => beginNaming("newDirectory", row.workspaceId, ""),
         },
+        ...copyItems(row),
         {
           id: "remove-workspace",
           label: t("workspace.menu.removeWorkspace"),
+          separatorBefore: true,
           onSelect: () => {
             openDialogMenu();
             setError(null);
@@ -913,9 +973,11 @@ export function WorkspacePanel({
               row.entry.relativePath,
             ),
         },
+        ...copyItems(row),
         {
           id: "rename",
           label: t("workspace.menu.rename"),
+          separatorBefore: true,
           onSelect: () =>
             beginNaming(
               "renameDirectory",
@@ -946,6 +1008,7 @@ export function WorkspacePanel({
             row.entry,
           ),
       },
+      ...copyItems(row),
       {
         id: "delete",
         label: t("workspace.menu.delete"),

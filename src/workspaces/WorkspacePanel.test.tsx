@@ -14,6 +14,7 @@ import type { Workspace, WorkspaceEntry } from "../ipc/contracts";
 import { documentManager } from "../documents/documentStore";
 import { en } from "../i18n/messages/en.ts";
 import { WorkspacePanel } from "./WorkspacePanel";
+import type { CopyPathRequest } from "../app/clipboard";
 
 vi.mock("@excalidraw/excalidraw", () => ({
   getSceneVersion: () => 2,
@@ -1203,5 +1204,160 @@ describe("WorkspacePanel", () => {
     expect(
       screen.queryByRole("treeitem", { name: "drawing" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("offers the copy items per row kind and copies the entry's current paths", async () => {
+    const user = userEvent.setup();
+    const root = "/Users/me/My Drawings";
+    const workspace = {
+      id: "workspace-1",
+      name: "My Drawings",
+      rootPath: root,
+      createdAt: 1,
+    };
+    const entries: WorkspaceEntry[] = [
+      {
+        workspaceId: workspace.id,
+        kind: "directory",
+        canonicalPath: `${root}/我的 文件夹`,
+        relativePath: "我的 文件夹",
+        parentRelativePath: "",
+        name: "我的 文件夹",
+        displayName: "我的 文件夹",
+        mtime: 1,
+        fileSize: 0,
+      },
+      {
+        workspaceId: workspace.id,
+        kind: "drawing",
+        canonicalPath: `${root}/计划 草图.excalidraw`,
+        relativePath: "计划 草图.excalidraw",
+        parentRelativePath: "",
+        name: "计划 草图.excalidraw",
+        displayName: "计划 草图",
+        mtime: 1,
+        fileSize: 10,
+      },
+    ];
+    const invoke = vi.fn(
+      async (command: string, args: Record<string, unknown>) => {
+        if (command === "workspace_list") return [workspace];
+        if (command === "workspace_entry_list") {
+          return entries.filter(
+            (entry) => entry.parentRelativePath === args.parentRelativePath,
+          );
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+    const onCopyPath = vi.fn<(request: CopyPathRequest) => void>();
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        onCopyPath={onCopyPath}
+        selectDirectory={async () => null}
+      />,
+    );
+
+    const menuOf = async (name: string) => {
+      await user.click(
+        await screen.findByRole("button", { name: `Actions for ${name}` }),
+      );
+      const menu = screen.getByRole("menu");
+      return {
+        menu,
+        labels: within(menu)
+          .getAllByRole("menuitem")
+          .map((item) => item.textContent),
+        separators: within(menu).getAllByRole("separator", { hidden: true })
+          .length,
+      };
+    };
+    const copy = async (name: string, item: string) => {
+      const { menu } = await menuOf(name);
+      await user.click(within(menu).getByRole("menuitem", { name: item }));
+      return onCopyPath.mock.calls.at(-1)?.[0];
+    };
+
+    const rootMenu = await menuOf("My Drawings");
+    expect(rootMenu.labels).toEqual([
+      "New Drawing",
+      "New Folder",
+      "Copy Path",
+      "Remove Workspace",
+    ]);
+    expect(rootMenu.separators).toBe(2);
+    await user.keyboard("{Escape}");
+
+    const folderMenu = await menuOf("我的 文件夹");
+    expect(folderMenu.labels).toEqual([
+      "New Drawing",
+      "New Folder",
+      "Copy Path",
+      "Copy Relative Path",
+      "Rename",
+      "Delete",
+    ]);
+    expect(folderMenu.separators).toBe(3);
+    await user.keyboard("{Escape}");
+
+    const drawingMenu = await menuOf("计划 草图");
+    expect(drawingMenu.labels).toEqual([
+      "Rename",
+      "Copy Path",
+      "Copy Relative Path",
+      "Delete",
+    ]);
+    expect(drawingMenu.separators).toBe(2);
+    await user.keyboard("{Escape}");
+
+    const rootPath = await copy("My Drawings", "Copy Path");
+    expect(rootPath?.kind).toBe("path");
+    expect(rootPath?.resolve()).toBe(root);
+    const drawingPath = await copy("计划 草图", "Copy Path");
+    expect(drawingPath?.resolve()).toBe(`${root}/计划 草图.excalidraw`);
+    const drawingRelative = await copy("计划 草图", "Copy Relative Path");
+    expect(drawingRelative?.kind).toBe("relativePath");
+    expect(drawingRelative?.resolve()).toBe("计划 草图.excalidraw");
+    const folderRelative = await copy("我的 文件夹", "Copy Relative Path");
+    expect(folderRelative?.resolve()).toBe("我的 文件夹");
+  });
+
+  it("copies nothing for an entry that no longer exists", async () => {
+    const REFRESH_LABEL = en["workspace.refresh"];
+    const user = userEvent.setup();
+    const invoker = createInvoker();
+    const onCopyPath = vi.fn<(request: CopyPathRequest) => void>();
+    render(
+      <WorkspacePanel
+        invoker={invoker}
+        onCopyPath={onCopyPath}
+        selectDirectory={async () => null}
+      />,
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for drawing" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Copy Path" }));
+    const request = onCopyPath.mock.calls[0]?.[0];
+    expect(request?.resolve()).toBe("/workspace/one/drawing.excalidraw");
+
+    // The listing refreshes without the drawing (deleted on disk).
+    const index = ROOT_ENTRIES.findIndex(
+      (entry) =>
+        entry.workspaceId === "workspace-1" && entry.kind === "drawing",
+    );
+    const [removed] = ROOT_ENTRIES.splice(index, 1);
+    try {
+      await user.click(screen.getByRole("button", { name: REFRESH_LABEL }));
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("treeitem", { name: "drawing" }),
+        ).not.toBeInTheDocument(),
+      );
+      expect(request?.resolve()).toBeNull();
+    } finally {
+      if (removed !== undefined) ROOT_ENTRIES.splice(index, 0, removed);
+    }
   });
 });
