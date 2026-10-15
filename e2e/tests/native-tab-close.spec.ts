@@ -28,7 +28,9 @@ test.describe("US3 native tab close and wheel process barriers", () => {
       expect(evidence.inactiveTabIdsBefore.length).toBeGreaterThanOrEqual(1);
       expect(evidence.closedTabIds).toEqual([evidence.activeTabIdBefore]);
       expect(evidence.remainingTabIds).toEqual(evidence.inactiveTabIdsBefore);
-      expect(evidence.remainingTabIds).not.toContain(evidence.activeTabIdBefore);
+      expect(evidence.remainingTabIds).not.toContain(
+        evidence.activeTabIdBefore,
+      );
       expect(evidence.checkpointInvoked).toBe(true);
       expect(evidence.checkpointReason).toBe("tabClose");
       expect(evidence.closeInvokedCount).toBe(1);

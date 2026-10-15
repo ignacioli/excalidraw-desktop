@@ -22,7 +22,7 @@
 
 Welcome 页面提供 **New Drawing**、**Open Workspace** 和 **Recent Workspaces**。工作区文件夹可访问时，可以从 Recent 重新打开；也可以只从应用历史中移除记录，不删除磁盘上的任何内容。
 
-进入工作区后，**Current Workspace** 是侧边栏中唯一显示的目录树。其他工作区记录通过 Welcome 和 Recent 使用，不会把多个根目录堆在同一个侧边栏里。打开的图纸以标签显示在官方画布上方；首次启动时侧边栏隐藏，让画布拥有完整空间。需要浏览时可打开覆盖层，长时间浏览时可将其固定到布局中；**Back** 返回上一个浏览位置，不会关闭已经打开的图纸。
+每个窗口持有一个工作区，其 **Current Workspace** 是该窗口侧边栏中唯一显示的目录树。**File > New Window**（⇧⌘N）会打开另一个窗口，因此不同工作区可以并排打开。打开已在其他窗口中打开的工作区时，会把那个窗口前置，而不会打开第二份；打开其中的子文件夹时同样如此，并在那个窗口的侧边栏中定位到该文件夹。打开一个包含了其他窗口中工作区的文件夹时，会询问是否关闭那个窗口并在此打开。同一幅图纸同一时间只能在一个窗口中打开；从侧边栏或 Finder 再次打开它时，会切换到已打开它的窗口。其他工作区记录通过 Welcome 和 Recent 使用，不会把多个根目录堆在同一个侧边栏里。每个窗口会记住其工作区上次显示的位置，包括大小、位置以及最大化或全屏状态；原位置不再能被访问时，窗口会回到已连接的显示器上。正常退出后，下次启动会重新打开你之前的窗口、工作区和标签。有工作区但没有打开图纸的窗口会显示空白画布，带有提示、**New Drawing** 和 **Show Sidebar**。每个工作区各自记住侧边栏的固定、宽度与展开状态；外观与语言对所有窗口生效。在侧边栏中右键点击图纸或文件夹，或右键点击标签，可以**复制路径**或**复制相对路径**（相对于工作区根目录）；工作区根目录只提供复制路径。打开的图纸以标签显示在官方画布上方；首次启动时侧边栏隐藏，让画布拥有完整空间。需要浏览时可打开覆盖层，长时间浏览时可将其固定到布局中；**Back** 返回上一个浏览位置，不会关闭已经打开的图纸。
 
 ## 功能
 
@@ -30,6 +30,8 @@ Welcome 页面提供 **New Drawing**、**Open Workspace** 和 **Recent Workspace
 - 在异常中断后恢复未保存的编辑
 - 通过一棵连续的 Current Workspace 目录树浏览文件夹和图纸
 - 在多个标签中打开图纸；从 Finder 打开文件时复用正在运行的应用实例
+- 同时使用多个窗口，每个窗口一个工作区，并按工作区记住窗口位置
+- 从侧边栏和标签复制图纸或文件夹的路径，或相对于工作区的路径
 - 感知外部文件变更并明确解决冲突
 - 为 automatic checkpoint、manual 标记以及受保护的 restore/clear/import 操作保留本地 Version History
 - 将图纸导出为 PNG 或 SVG；SVG 输出会内嵌捆绑字体
@@ -44,7 +46,7 @@ Welcome 页面提供 **New Drawing**、**Open Workspace** 和 **Recent Workspace
 
 **主题快捷键。** 按 `Shift+Option+D` 可用键盘切换主题。
 
-**原生菜单栏。** macOS 菜单栏提供 App、File、Edit、View、Window 和 Help 菜单，菜单文案跟随界面语言。File 包含 Save、Export Image 和 Version History；Save 为 `Cmd+S`，Export Image 为 `Cmd+Option+E`。
+**原生菜单栏。** macOS 菜单栏提供 App、File、Edit、View、Window 和 Help 菜单，菜单文案跟随界面语言。File 包含 New Window、Open Workspace、Save、Export Image 和 Version History；Save 为 `Cmd+S`，Export Image 为 `Cmd+Option+E`。
 
 ## 平台
 

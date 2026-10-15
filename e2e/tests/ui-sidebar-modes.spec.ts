@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   getUiInteractionHarnessState,
   installUiInteractionHarness,
+  readUiHarnessLastShellSave,
 } from "./uiInteractionHarness";
 
 /**
@@ -429,15 +430,12 @@ async function expectPersistedSidebarPinned(
   page: Page,
   expected: boolean,
 ): Promise<void> {
-  const stored = await page.evaluate(
-    (key) => localStorage.getItem(key),
-    SHELL_PREFERENCES_STORAGE_KEY,
-  );
-  expect(stored).not.toBeNull();
-  expect(JSON.parse(stored ?? "null")).toMatchObject({
-    version: SHELL_PREFERENCES_VERSION,
-    sidebarPinned: expected,
-  });
+  await expect
+    .poll(
+      async () =>
+        (await readUiHarnessLastShellSave(page, workspace.id))?.sidebarPinned,
+    )
+    .toBe(expected);
 }
 
 async function setPersistedThemePreference(

@@ -5,15 +5,12 @@ import {
   persistCurrentWorkspace,
 } from "./workspaceSidebar";
 
-test("mounted workspaces never stack and removing the current one leaves the other mounted", async ({
+test("removing the window's Workspace leaves the sidebar empty", async ({
   page,
 }) => {
   await installUs7Harness(page, {
     files: ["drawing.excalidraw"],
-    workspaces: [
-      { id: "workspace-1", name: "Work", rootPath: "/work" },
-      { id: "workspace-2", name: "Personal", rootPath: "/personal" },
-    ],
+    workspaces: [{ id: "workspace-1", name: "Work", rootPath: "/work" }],
   });
   await persistCurrentWorkspace(page, "workspace-1");
   await page.goto("/");
@@ -21,7 +18,6 @@ test("mounted workspaces never stack and removing the current one leaves the oth
 
   const tree = page.getByRole("tree");
   await expect(tree.getByRole("treeitem", { name: "Work" })).toBeVisible();
-  await expect(tree.getByRole("treeitem", { name: "Personal" })).toHaveCount(0);
 
   await tree.getByRole("treeitem", { name: "Work" }).hover();
   await page.getByRole("button", { name: "Actions for Work" }).click();
@@ -30,11 +26,11 @@ test("mounted workspaces never stack and removing the current one leaves the oth
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("Files on disk will not be deleted");
   await dialog.getByRole("button", { name: "Remove Workspace" }).click();
-  await expect(tree.getByRole("treeitem", { name: "Work" })).toHaveCount(0);
-  await expect(tree.getByRole("treeitem", { name: "Personal" })).toBeVisible();
+  await expect(page.getByRole("tree")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Mount folder…" }),
+  ).toBeVisible();
 
   const state = await getUs7State(page);
-  expect(state.mountedWorkspaces.map((workspace) => workspace.id)).toEqual([
-    "workspace-2",
-  ]);
+  expect(state.mountedWorkspaces).toEqual([]);
 });

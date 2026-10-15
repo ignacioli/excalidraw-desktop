@@ -1,14 +1,12 @@
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type RefObject,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { describeError, errorCodeOf } from "../../i18n/describeError";
 import { t as translateNow, useI18n, type MessageKey } from "../../i18n";
-import { ApplicationDialog } from "./ApplicationDialog";
+import {
+  ApplicationDialog,
+  ApplicationDialogActions,
+  ApplicationDialogButton,
+  ApplicationDialogField,
+} from "./ApplicationDialog";
 
 export type EntryNamingMode =
   "newDrawing" | "newDirectory" | "renameDrawing" | "renameDirectory";
@@ -46,12 +44,17 @@ export function EntryNamingDialog({
   const [failure, setFailure] = useState<{ reason: unknown } | null>(null);
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const inputId = useId();
-  const extensionId = useId();
 
+  // The editable name starts selected; the fixed suffix is not part of it.
   useEffect(() => {
     inputRef.current?.select();
   }, []);
+
+  // A failed submit keeps the typed name and returns focus to the field,
+  // which was disabled while submitting.
+  useEffect(() => {
+    if (failure !== null && !busy) inputRef.current?.focus();
+  }, [failure, busy]);
 
   const submit = async () => {
     setBusy(true);
@@ -78,13 +81,13 @@ export function EntryNamingDialog({
   return (
     <ApplicationDialog
       busy={busy}
-      errorMessage={error}
       initialFocusRef={inputRef}
       onDismiss={() => {
         if (!busy) onCancel();
       }}
       returnFocusRef={returnFocusRef}
       title={title}
+      variant="sidebar"
     >
       <form
         onSubmit={(event) => {
@@ -92,37 +95,40 @@ export function EntryNamingDialog({
           if (!busy) void submit();
         }}
       >
-        <label htmlFor={inputId}>{t("entry.naming.name")}</label>
-        <span className="entry-name-input-row">
-          <input
-            ref={inputRef}
-            id={inputId}
-            aria-describedby={drawing ? extensionId : undefined}
+        <ApplicationDialogField
+          disabled={busy}
+          errorMessage={error}
+          inputRef={inputRef}
+          label={t("entry.naming.name")}
+          onChange={setValue}
+          suffix={drawing ? suffix : undefined}
+          suffixLabel={
+            drawing ? t("entry.naming.fixedExtension", { suffix }) : undefined
+          }
+          value={value}
+        />
+        <ApplicationDialogActions>
+          <ApplicationDialogButton
             disabled={busy}
-            onChange={(event) => setValue(event.currentTarget.value)}
-            value={value}
-          />
-          {drawing ? (
-            <span
-              id={extensionId}
-              aria-label={t("entry.naming.fixedExtension", { suffix })}
-            >
-              {suffix}
-            </span>
-          ) : null}
-        </span>
-        <div className="application-dialog-actions conflict-dialog-actions">
-          <button disabled={busy} onClick={onCancel} type="button">
+            kind="secondary"
+            onClick={onCancel}
+          >
             {t("dialog.cancel")}
-          </button>
-          <button disabled={busy} type="submit">
+          </ApplicationDialogButton>
+          <ApplicationDialogButton
+            disabled={busy}
+            kind="primary"
+            onClick={() => {
+              if (!busy) void submit();
+            }}
+          >
             {t(
               mode.startsWith("new")
                 ? "entry.naming.create"
                 : "entry.naming.rename",
             )}
-          </button>
-        </div>
+          </ApplicationDialogButton>
+        </ApplicationDialogActions>
       </form>
     </ApplicationDialog>
   );

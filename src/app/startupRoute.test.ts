@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
-import type { RecoveryCandidate } from "../ipc/contracts";
-import { deriveStartupRoute, type StartupRouteInput } from "./startupRoute";
+import { describe, expect, it, vi } from "vitest";
+import { registerOpenFileHandler } from "./openFileHandler";
+import { createRecoveryGateway } from "../documents/recoveryManager";
+import type { CommandInvoker } from "../ipc/client";
+import type { AppHandshakeResponse, RecoveryCandidate } from "../ipc/contracts";
+import {
+  deriveStartupRoute,
+  loadStartupHandshake,
+  type StartupRouteInput,
+} from "./startupRoute";
 
 const recoveryCandidate: RecoveryCandidate = {
   documentId: "document-1",
@@ -102,5 +109,88 @@ describe("deriveStartupRoute", () => {
         },
       }),
     ).toEqual({ kind: "restored" });
+  });
+});
+
+function handshakeResponse(
+  pendingOpenPaths: string[] = [],
+): AppHandshakeResponse {
+  return {
+    contractVersion: 5,
+    appVersion: "0.5.0",
+    abnormalExit: false,
+    pendingOpenPaths,
+    preferredLanguages: ["en-US"],
+    window: {
+      label: "window-1",
+      workspace: null,
+      unavailableWorkspace: null,
+      restore: null,
+      shell: null,
+      openWorkspaceNames: [],
+    },
+  };
+}
+
+function countingInvoker(
+  respond: () => Promise<AppHandshakeResponse>,
+): CommandInvoker & { calls: () => number } {
+  const invoke = vi.fn(async (command: string) => {
+    if (command !== "app_handshake") {
+      throw new Error(`Unexpected command ${command}`);
+    }
+    return respond();
+  });
+  return {
+    invoke: invoke as unknown as CommandInvoker["invoke"],
+    calls: () => invoke.mock.calls.length,
+  };
+}
+
+describe("loadStartupHandshake", () => {
+  it("calls app_handshake once and shares the result with every consumer", async () => {
+    const invoker = countingInvoker(async () =>
+      handshakeResponse(["/startup.excalidraw"]),
+    );
+    const opened: string[] = [];
+
+    const [direct, recovery] = await Promise.all([
+      loadStartupHandshake(invoker),
+      createRecoveryGateway(invoker).handshake(),
+      registerOpenFileHandler(
+        {
+          openRouted: async (path) => {
+            opened.push(path);
+            return path;
+          },
+        },
+        {
+          invoker,
+          listener: async () => () => undefined,
+          activateListener: async () => () => undefined,
+        },
+      ),
+    ]);
+
+    await vi.waitFor(() => {
+      expect(opened).toEqual(["/startup.excalidraw"]);
+    });
+    expect(recovery).toBe(direct);
+    expect(invoker.calls()).toBe(1);
+  });
+
+  it("does not cache a failed handshake", async () => {
+    let attempt = 0;
+    const invoker = countingInvoker(async () => {
+      attempt += 1;
+      if (attempt === 1) throw new Error("not ready");
+      return handshakeResponse();
+    });
+
+    await expect(loadStartupHandshake(invoker)).rejects.toThrow("not ready");
+    await expect(loadStartupHandshake(invoker)).resolves.toMatchObject({
+      contractVersion: 5,
+    });
+    expect(invoker.calls()).toBe(2);
   });
 });

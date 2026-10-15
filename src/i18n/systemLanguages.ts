@@ -1,5 +1,6 @@
 import { hasNativeWindowRuntime } from "../app/exitCheckpoint";
-import { createTauriCommandInvoker, type CommandInvoker } from "../ipc/client";
+import { loadStartupHandshake } from "../app/startupRoute";
+import type { CommandInvoker } from "../ipc/client";
 
 const MAX_PREFERRED_LANGUAGES = 16;
 
@@ -13,10 +14,7 @@ export async function readSystemLanguages(
 ): Promise<string[]> {
   if (invoker === undefined && !hasNativeWindowRuntime()) return [];
   try {
-    const response = await (invoker ?? createTauriCommandInvoker()).invoke(
-      "app_handshake",
-      {},
-    );
+    const response = await loadStartupHandshake(invoker);
     const languages: unknown = response.preferredLanguages;
     if (!Array.isArray(languages)) return [];
     return languages

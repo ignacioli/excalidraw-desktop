@@ -7,7 +7,7 @@ use std::{
 };
 
 use sha2::{Digest, Sha256};
-use tauri::State;
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 use crate::{
     database::repository::{
@@ -22,6 +22,7 @@ use crate::{
     },
     security::{PathSecurityError, WorkspacePathPolicy},
     watcher::WatcherService,
+    window::registry::{WindowRegistry, WindowRole},
     workspace_entries::{
         mutation_journal::{
             filesystem_commit_observed, load_journals, MutationJournalKind, MutationJournalRecord,
@@ -364,13 +365,34 @@ pub async fn recovery_list(
     state.service.list().await.map_err(Into::into)
 }
 
+/// `recovery_apply`. The Recovery window may write any candidate during
+/// startup; any other window may write only drawings no other window owns.
 #[tauri::command]
 pub async fn recovery_apply(
     document_id: String,
     action: RecoveryAction,
     save_as_path: Option<String>,
+    app: AppHandle,
+    window: WebviewWindow,
     state: State<'_, RecoveryState>,
 ) -> Result<RecoveryApplyResponse, IpcError> {
+    let registry = app.state::<WindowRegistry>();
+    let label = window.label();
+    let is_recovery_window = registry
+        .window(label)
+        .is_some_and(|record| record.role == WindowRole::Recovery);
+    if !is_recovery_window {
+        let original_path = state
+            .service
+            .list()
+            .await?
+            .into_iter()
+            .find(|candidate| candidate.document_id == document_id)
+            .and_then(|candidate| candidate.original_path);
+        for path in original_path.iter().chain(save_as_path.iter()) {
+            super::documents::ensure_not_owned_elsewhere(&registry, label, Path::new(path))?;
+        }
+    }
     state
         .service
         .apply(RecoveryApplyRequest {

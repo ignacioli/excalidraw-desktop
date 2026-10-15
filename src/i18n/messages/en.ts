@@ -29,6 +29,8 @@ export const en = {
   "menu.native.app.hideOthers": "Hide Others",
   "menu.native.app.quit": "Quit {name}",
   "menu.native.file": "File",
+  "menu.native.file.newWindow": "New Window",
+  "menu.native.file.openWorkspace": "Open Workspace…",
   "menu.native.file.save": "Save",
   "menu.native.file.exportImage": "Export Image",
   "menu.native.file.versionHistory": "Version History…",
@@ -62,6 +64,12 @@ export const en = {
   "error.WORKSPACE_MOUNTED": "This folder is already mounted as a workspace.",
   "error.WORKSPACE_OVERLAP":
     "This folder overlaps a workspace that is already mounted.",
+  "error.WORKSPACE_NOT_OWNED": "This window has no workspace open.",
+  "error.DOCUMENT_NOT_OWNED": "This drawing is open in another window.",
+  "error.WINDOW_OWNERSHIP_CHANGED":
+    "The workspace was opened or closed in another window. Try again.",
+  "error.QUIT_CHECKPOINT_FAILED":
+    "A drawing in this window couldn’t be saved, so Excalidraw didn’t quit.",
   "error.INVALID_NAME": "This name isn’t valid.",
   "error.NAME_CONFLICT": "An item with this name already exists.",
   "error.ENTRY_PROTECTED": "This item is protected and can’t be changed.",

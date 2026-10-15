@@ -17,53 +17,75 @@ const DEFAULT_CAPABILITY_PATH = fileURLToPath(
 const LIB_RS_PATH = fileURLToPath(
   new URL("../../src-tauri/src/lib.rs", import.meta.url),
 );
+const WINDOW_RS_PATH = fileURLToPath(
+  new URL("../../src-tauri/src/window/mod.rs", import.meta.url),
+);
 
 test.describe("US4 native window contract (titlebar choice A)", () => {
-  test("production window title is Excalidraw Whiteboard", async () => {
-    const windowConfig = await readPrimaryWindowConfig();
-    expect(windowConfig.title).toBe(REQUIRED_NATIVE_WINDOW_TITLE);
+  test("windows are created at runtime, not declared in tauri.conf.json", async () => {
+    const parsed: unknown = JSON.parse(await readFile(TAURI_CONF_PATH, "utf8"));
+    if (!isRecord(parsed) || !isRecord(parsed.app)) {
+      throw new Error("src-tauri/tauri.conf.json is missing app.");
+    }
+    expect(parsed.app.windows ?? []).toEqual([]);
+  });
+
+  test("the window chrome contract titles a new window Excalidraw", async () => {
+    const chrome = await readWindowChrome();
+    expect(chrome.title).toBe(REQUIRED_NATIVE_WINDOW_TITLE);
   });
 
   test("window is ordinary decorated without transparency or overlay title bar", async () => {
-    const windowConfig = await readPrimaryWindowConfig();
-    expect(windowConfig.decorations).not.toBe(false);
-    expect(windowConfig.transparent).not.toBe(true);
-    expect(windowConfig.hiddenTitle).not.toBe(true);
-    expect(windowConfig.titleBarStyle ?? "Visible").toBe("Visible");
-    expect(windowConfig.titleBarStyle).not.toBe("Overlay");
-    expect(windowConfig.titleBarStyle).not.toBe("Transparent");
+    const chrome = await readWindowChrome();
+    expect(chrome.decorations).toBe("true");
+    expect(chrome.transparent).toBe("false");
+    expect(chrome.titleBarStyle).toBe("Visible");
+
+    const source = await readFile(WINDOW_RS_PATH, "utf8");
+    expect(source).not.toMatch(/\.transparent\s*\(/u);
+    expect(source).not.toMatch(/\.hidden_title\s*\(/u);
+    expect(source).not.toMatch(/\.title_bar_style\s*\(/u);
+    expect(source).toMatch(/\.decorations\(WINDOW_CHROME\.decorations\)/u);
   });
 
-  test("production tauri.conf.json does not set alwaysOnTop", async () => {
-    const windowConfig = await readPrimaryWindowConfig();
-    expect(windowConfig.alwaysOnTop).not.toBe(true);
+  test("production windows are not always on top", async () => {
+    const chrome = await readWindowChrome();
+    expect(chrome.alwaysOnTop).toBe("false");
+    const source = await readFile(WINDOW_RS_PATH, "utf8");
+    expect(source).toMatch(/\.always_on_top\(WINDOW_CHROME\.always_on_top\)/u);
   });
 
-  test("native close checkpoint may destroy the main window", async () => {
-    const permissions = await readDefaultCapabilityPermissions();
-    expect(permissions).toContain("core:window:allow-destroy");
+  test("every application window may set its title and destroy itself after the close checkpoint", async () => {
+    const capability = await readDefaultCapability();
+    expect(capability.windows).toEqual(["window-*"]);
+    expect(capability.permissions).toContain("core:window:allow-destroy");
+    expect(capability.permissions).toContain("core:window:allow-set-title");
   });
 
-  test("lib.rs set_always_on_top stays behind e2e-harness and EXCALIDRAW_PERF_CONTROL_DIR", async () => {
-    const source = await readFile(LIB_RS_PATH, "utf8");
-    const ungated = ungatedAlwaysOnTopSites(source);
-    expect(
-      ungated,
-      "production lib.rs must not call set_always_on_top except behind feature e2e-harness and EXCALIDRAW_PERF_CONTROL_DIR",
-    ).toEqual([]);
+  test("set_always_on_top stays behind e2e-harness and EXCALIDRAW_PERF_CONTROL_DIR", async () => {
+    for (const path of [LIB_RS_PATH, WINDOW_RS_PATH]) {
+      const source = await readFile(path, "utf8");
+      const ungated = ungatedAlwaysOnTopSites(source);
+      expect(
+        ungated,
+        `${path} must not call set_always_on_top except behind feature e2e-harness and EXCALIDRAW_PERF_CONTROL_DIR`,
+      ).toEqual([]);
+    }
   });
 
   test("production native chrome is system-colored without app-wide Dark", async () => {
-    const windowConfig = await readPrimaryWindowConfig();
-    expect(windowConfig.theme).toBeUndefined();
-    expect(String(windowConfig.theme ?? "")).not.toMatch(/^dark$/iu);
+    const chrome = await readWindowChrome();
+    expect(chrome.theme).toBe("None");
 
-    const source = await readFile(LIB_RS_PATH, "utf8");
-    expect(source).not.toMatch(/\bset_theme\s*\(/u);
-    expect(source).not.toMatch(/\bTheme\s*::\s*Dark\b/u);
-    expect(source).not.toMatch(/\bNSAppearance\b/u);
-    expect(source).not.toMatch(/\bsetAppearance\s*\(/u);
-    expect(source).not.toMatch(/\bDarkAqua\b/u);
+    for (const path of [LIB_RS_PATH, WINDOW_RS_PATH]) {
+      const source = await readFile(path, "utf8");
+      expect(source).not.toMatch(/\bset_theme\s*\(/u);
+      expect(source).not.toMatch(/\.theme\s*\(/u);
+      expect(source).not.toMatch(/\bTheme\s*::\s*Dark\b/u);
+      expect(source).not.toMatch(/\bNSAppearance\b/u);
+      expect(source).not.toMatch(/\bsetAppearance\s*\(/u);
+      expect(source).not.toMatch(/\bDarkAqua\b/u);
+    }
   });
 
   test("live native process reports OS title, ordinary stacking, and non-overlay chrome", async ({
@@ -123,41 +145,68 @@ function nativeWindowBuildConfigured(): boolean {
   );
 }
 
-async function readPrimaryWindowConfig(): Promise<Record<string, unknown>> {
-  const parsed: unknown = JSON.parse(await readFile(TAURI_CONF_PATH, "utf8"));
-  if (!isRecord(parsed) || !isRecord(parsed.app)) {
-    throw new Error("src-tauri/tauri.conf.json is missing app.");
-  }
-  const windows = parsed.app.windows;
-  if (!Array.isArray(windows) || windows.length === 0) {
-    throw new Error("src-tauri/tauri.conf.json is missing app.windows[0].");
-  }
-  const windowConfig = windows[0];
-  if (!isRecord(windowConfig)) {
-    throw new Error(
-      "src-tauri/tauri.conf.json app.windows[0] is not an object.",
-    );
-  }
-  return windowConfig;
+interface WindowChromeSource {
+  title: string;
+  decorations: string;
+  transparent: string;
+  titleBarStyle: string;
+  alwaysOnTop: string;
+  theme: string;
 }
 
-async function readDefaultCapabilityPermissions(): Promise<string[]> {
+/** Read the `WINDOW_CHROME` constant every runtime window is built from. */
+async function readWindowChrome(): Promise<WindowChromeSource> {
+  const source = await readFile(WINDOW_RS_PATH, "utf8");
+  const block =
+    /pub const WINDOW_CHROME: WindowChrome = WindowChrome \{([^}]*)\};/u.exec(
+      source,
+    )?.[1];
+  const welcomeTitle = /pub const WELCOME_TITLE: &str = "([^"]*)";/u.exec(
+    source,
+  )?.[1];
+  if (block === undefined || welcomeTitle === undefined) {
+    throw new Error("src-tauri/src/window/mod.rs is missing WINDOW_CHROME.");
+  }
+  const field = (name: string): string => {
+    const value = new RegExp(`\\b${name}:\\s*([^,]+),`, "u").exec(block)?.[1];
+    if (value === undefined) {
+      throw new Error(`WINDOW_CHROME is missing ${name}.`);
+    }
+    return value.trim();
+  };
+  const title = field("title");
+  return {
+    title: title === "WELCOME_TITLE" ? welcomeTitle : title.replace(/"/gu, ""),
+    decorations: field("decorations"),
+    transparent: field("transparent"),
+    titleBarStyle: field("title_bar_style").replace(/"/gu, ""),
+    alwaysOnTop: field("always_on_top"),
+    theme: field("theme"),
+  };
+}
+
+async function readDefaultCapability(): Promise<{
+  windows: string[];
+  permissions: string[];
+}> {
   const parsed: unknown = JSON.parse(
     await readFile(DEFAULT_CAPABILITY_PATH, "utf8"),
   );
-  if (!isRecord(parsed) || !Array.isArray(parsed.permissions)) {
-    throw new Error(
-      "src-tauri/capabilities/default.json is missing permissions.",
-    );
-  }
   if (
-    !parsed.permissions.every((permission) => typeof permission === "string")
+    !isRecord(parsed) ||
+    !Array.isArray(parsed.permissions) ||
+    !Array.isArray(parsed.windows)
   ) {
     throw new Error(
-      "src-tauri/capabilities/default.json permissions must be strings.",
+      "src-tauri/capabilities/default.json is missing windows or permissions.",
     );
   }
-  return parsed.permissions;
+  const strings = (values: unknown[]): string[] =>
+    values.filter((value): value is string => typeof value === "string");
+  return {
+    windows: strings(parsed.windows),
+    permissions: strings(parsed.permissions),
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

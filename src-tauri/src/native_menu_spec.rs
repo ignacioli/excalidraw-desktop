@@ -5,8 +5,10 @@
 
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
+pub const NEW_WINDOW_MENU_ID: &str = "native-menu.new-window";
+pub const OPEN_WORKSPACE_MENU_ID: &str = "native-menu.open-workspace";
 pub const SAVE_MENU_ID: &str = "native-menu.save";
 pub const EXPORT_IMAGE_MENU_ID: &str = "native-menu.export-image";
 pub const VERSION_HISTORY_MENU_ID: &str = "native-menu.version-history";
@@ -22,9 +24,17 @@ pub const SNAP_MENU_ID: &str = "native-menu.pref.snap";
 pub const ZEN_MENU_ID: &str = "native-menu.pref.zen";
 pub const VIEW_MODE_MENU_ID: &str = "native-menu.pref.view-mode";
 pub const HELP_MENU_ID: &str = "native-menu.help";
+/// The app's own Quit, so every window checkpoints before the app exits.
+pub const QUIT_MENU_ID: &str = "native-menu.quit";
 
 pub const SAVE_MENU_ACCELERATOR: &str = "CmdOrCtrl+S";
+/// The SDK has no `N` shortcut and tool shortcuts never use Cmd/Ctrl.
+pub const NEW_WINDOW_MENU_ACCELERATOR: &str = "CmdOrCtrl+Shift+N";
+/// Plain Cmd+O belongs to the protected import shortcut; the Shift variant is
+/// free in both the shell and the SDK.
+pub const OPEN_WORKSPACE_MENU_ACCELERATOR: &str = "CmdOrCtrl+Shift+O";
 pub const EXPORT_IMAGE_MENU_ACCELERATOR: &str = "CmdOrCtrl+Alt+E";
+pub const QUIT_MENU_ACCELERATOR: &str = "CmdOrCtrl+Q";
 
 #[cfg(target_os = "macos")]
 const APPLICATION_SUBMENU_ID: &str = "native-menu.application";
@@ -33,13 +43,15 @@ const FILE_SUBMENU_ID: &str = "native-menu.file";
 const EDIT_SUBMENU_ID: &str = "native-menu.edit";
 const VIEW_SUBMENU_ID: &str = "native-menu.view";
 const APPEARANCE_SUBMENU_ID: &str = "native-menu.appearance";
-const WINDOW_SUBMENU_ID: &str = "native-menu.window";
+/// The submenu registered as AppKit's `NSApp.windowsMenu`, so macOS lists every
+/// open window by title in it.
+pub const WINDOW_SUBMENU_ID: &str = "native-menu.window";
 const HELP_SUBMENU_ID: &str = "native-menu.help-menu";
 
 /// Every label the frontend must supply, including predefined item text.
 /// Each id `x` corresponds to the message key `menu.native.x`, except the two
 /// language autonyms, which come from `language.autonym.*`.
-pub const LABEL_IDS: [&str; 37] = [
+pub const LABEL_IDS: [&str; 39] = [
     "app.about",
     "app.language",
     "app.languageSystem",
@@ -50,6 +62,8 @@ pub const LABEL_IDS: [&str; 37] = [
     "app.hideOthers",
     "app.quit",
     "file",
+    "file.newWindow",
+    "file.openWorkspace",
     "file.save",
     "file.exportImage",
     "file.versionHistory",
@@ -110,7 +124,7 @@ impl NativeMenuLabels {
 
     /// Built-in English labels used until the frontend sends its first set.
     pub fn english(app_name: &str) -> Self {
-        let pairs: [(&str, String); 37] = [
+        let pairs: [(&str, String); 39] = [
             ("app.about", format!("About {app_name}")),
             ("app.language", "Language".to_owned()),
             ("app.languageSystem", "Follow System".to_owned()),
@@ -121,6 +135,8 @@ impl NativeMenuLabels {
             ("app.hideOthers", "Hide Others".to_owned()),
             ("app.quit", format!("Quit {app_name}")),
             ("file", "File".to_owned()),
+            ("file.newWindow", "New Window".to_owned()),
+            ("file.openWorkspace", "Open Workspace…".to_owned()),
             ("file.save", "Save".to_owned()),
             ("file.exportImage", "Export Image".to_owned()),
             ("file.versionHistory", "Version History…".to_owned()),
@@ -162,7 +178,7 @@ impl NativeMenuLabels {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LanguagePreference {
     #[default]
@@ -172,7 +188,7 @@ pub enum LanguagePreference {
     ZhCn,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AppearancePreference {
     #[default]
@@ -205,11 +221,13 @@ pub struct ItemState {
 }
 
 /// Derive the state of an owned menu item; `None` for ids the frontend
-/// snapshot does not govern.
+/// snapshot does not govern. `has_window` is false when no window exists;
+/// New Window stays available so the app can always open one.
 pub fn item_state(
     id: &str,
     state: &NativeMenuSyncState,
     version_history_enabled: bool,
+    has_window: bool,
 ) -> Option<ItemState> {
     let document = state.has_document;
     let editable = document && !state.forced_read_only;
@@ -222,6 +240,8 @@ pub fn item_state(
         checked: Some(checked),
     };
     Some(match id {
+        NEW_WINDOW_MENU_ID | QUIT_MENU_ID => plain(true),
+        OPEN_WORKSPACE_MENU_ID => plain(has_window),
         SAVE_MENU_ID => plain(document),
         EXPORT_IMAGE_MENU_ID => plain(true),
         VERSION_HISTORY_MENU_ID => plain(version_history_enabled),
@@ -247,7 +267,6 @@ pub enum SystemItem {
     Services,
     Hide,
     HideOthers,
-    Quit,
     CloseWindow,
     Undo,
     Redo,
@@ -310,6 +329,15 @@ fn system(kind: SystemItem, label: &'static str) -> MenuEntry {
     MenuEntry::System { kind, label }
 }
 
+fn quit_item() -> MenuEntry {
+    MenuEntry::Item {
+        id: QUIT_MENU_ID,
+        label: "app.quit",
+        check: false,
+        accelerator: Some(QUIT_MENU_ACCELERATOR),
+    }
+}
+
 fn submenu(id: &'static str, label: &'static str, children: Vec<MenuEntry>) -> MenuEntry {
     MenuEntry::Submenu {
         id,
@@ -330,11 +358,25 @@ fn language_submenu() -> MenuEntry {
     )
 }
 
-/// The whole menu tree. Only Save and Export Image register accelerators;
-/// keys the SDK already handles (Q, Cmd+', Alt+S, Alt+Z, Alt+R, ?) are not
-/// registered so each key keeps a single owner.
+/// The whole menu tree. Only New Window, Open Workspace, Save, Export Image,
+/// and Quit register accelerators; keys the SDK already handles (Q, Cmd+',
+/// Alt+S, Alt+Z, Alt+R, ?) are not registered so each key keeps a single
+/// owner.
 pub fn menu_spec() -> Vec<MenuEntry> {
     let mut file = vec![
+        MenuEntry::Item {
+            id: NEW_WINDOW_MENU_ID,
+            label: "file.newWindow",
+            check: false,
+            accelerator: Some(NEW_WINDOW_MENU_ACCELERATOR),
+        },
+        MenuEntry::Item {
+            id: OPEN_WORKSPACE_MENU_ID,
+            label: "file.openWorkspace",
+            check: false,
+            accelerator: Some(OPEN_WORKSPACE_MENU_ACCELERATOR),
+        },
+        MenuEntry::Separator,
         MenuEntry::Item {
             id: SAVE_MENU_ID,
             label: "file.save",
@@ -353,7 +395,7 @@ pub fn menu_spec() -> Vec<MenuEntry> {
         file.extend([
             MenuEntry::Separator,
             system(SystemItem::CloseWindow, "file.closeWindow"),
-            system(SystemItem::Quit, "app.quit"),
+            quit_item(),
         ]);
     }
 
@@ -423,7 +465,7 @@ pub fn menu_spec() -> Vec<MenuEntry> {
             system(SystemItem::Hide, "app.hide"),
             system(SystemItem::HideOthers, "app.hideOthers"),
             MenuEntry::Separator,
-            system(SystemItem::Quit, "app.quit"),
+            quit_item(),
         ],
     });
     menu.extend([
@@ -463,9 +505,26 @@ mod tests {
     }
 
     #[test]
+    fn exposes_exactly_one_top_level_window_submenu() {
+        let spec = menu_spec();
+        let mut matches = 0;
+        walk(&spec, &mut |entry| {
+            if matches!(entry, MenuEntry::Submenu { id, .. } if *id == WINDOW_SUBMENU_ID) {
+                matches += 1;
+            }
+        });
+        assert_eq!(matches, 1);
+        assert!(spec.iter().any(
+            |entry| matches!(entry, MenuEntry::Submenu { id, .. } if *id == WINDOW_SUBMENU_ID)
+        ));
+    }
+
+    #[test]
     fn owns_exactly_the_contract_item_ids() {
         let ids: BTreeSet<_> = owned_items().into_iter().map(|(id, _)| id).collect();
         let expected: BTreeSet<_> = [
+            NEW_WINDOW_MENU_ID,
+            OPEN_WORKSPACE_MENU_ID,
             SAVE_MENU_ID,
             EXPORT_IMAGE_MENU_ID,
             VERSION_HISTORY_MENU_ID,
@@ -481,6 +540,7 @@ mod tests {
             ZEN_MENU_ID,
             VIEW_MODE_MENU_ID,
             HELP_MENU_ID,
+            QUIT_MENU_ID,
         ]
         .into_iter()
         .collect();
@@ -509,7 +569,7 @@ mod tests {
     }
 
     #[test]
-    fn registers_only_save_and_export_accelerators() {
+    fn registers_only_the_owned_accelerators() {
         let spec = menu_spec();
         let mut accelerators = BTreeSet::new();
         walk(&spec, &mut |entry| {
@@ -523,8 +583,60 @@ mod tests {
         });
         assert_eq!(
             accelerators,
-            BTreeSet::from(["CmdOrCtrl+S", "CmdOrCtrl+Alt+E"])
+            BTreeSet::from([
+                "CmdOrCtrl+S",
+                "CmdOrCtrl+Alt+E",
+                "CmdOrCtrl+Shift+N",
+                "CmdOrCtrl+Shift+O",
+                "CmdOrCtrl+Q",
+            ])
         );
+        assert!(
+            !accelerators.contains("CmdOrCtrl+O"),
+            "plain Cmd+O belongs to the protected import shortcut"
+        );
+    }
+
+    #[test]
+    fn file_menu_starts_with_window_commands() {
+        let spec = menu_spec();
+        let file = spec
+            .iter()
+            .find_map(|entry| match entry {
+                MenuEntry::Submenu { id, children, .. } if *id == FILE_SUBMENU_ID => Some(children),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("the File menu is missing"));
+        let ids: Vec<_> = file
+            .iter()
+            .take(4)
+            .map(|entry| match entry {
+                MenuEntry::Item { id, .. } => *id,
+                MenuEntry::Separator => "separator",
+                _ => "other",
+            })
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                NEW_WINDOW_MENU_ID,
+                OPEN_WORKSPACE_MENU_ID,
+                "separator",
+                SAVE_MENU_ID
+            ]
+        );
+    }
+
+    #[test]
+    fn new_window_stays_available_without_a_window() {
+        let state = NativeMenuSyncState::default();
+        let enabled =
+            |id, has_window| item_state(id, &state, false, has_window).map(|item| item.enabled);
+        assert_eq!(enabled(NEW_WINDOW_MENU_ID, false), Some(true));
+        assert_eq!(enabled(NEW_WINDOW_MENU_ID, true), Some(true));
+        assert_eq!(enabled(OPEN_WORKSPACE_MENU_ID, false), Some(false));
+        assert_eq!(enabled(OPEN_WORKSPACE_MENU_ID, true), Some(true));
+        assert_eq!(enabled(SAVE_MENU_ID, false), Some(false));
     }
 
     #[test]
@@ -641,7 +753,7 @@ mod tests {
                         ..NativeMenuSyncState::default()
                     };
                     let get = |id| {
-                        item_state(id, &state, false)
+                        item_state(id, &state, false, true)
                             .unwrap_or_else(|| panic!("{id} has no derived state"))
                     };
                     let context = format!("doc={has_document} forced={forced_read_only} on={on}");
@@ -678,7 +790,7 @@ mod tests {
             appearance: AppearancePreference::Light,
             ..NativeMenuSyncState::default()
         };
-        let checked = |id| item_state(id, &state, false).and_then(|item| item.checked);
+        let checked = |id| item_state(id, &state, false, true).and_then(|item| item.checked);
         assert_eq!(checked(LANGUAGE_SYSTEM_MENU_ID), Some(false));
         assert_eq!(checked(LANGUAGE_EN_MENU_ID), Some(true));
         assert_eq!(checked(LANGUAGE_ZH_CN_MENU_ID), Some(false));
@@ -686,9 +798,9 @@ mod tests {
         assert_eq!(checked(APPEARANCE_LIGHT_MENU_ID), Some(true));
         assert_eq!(checked(APPEARANCE_DARK_MENU_ID), Some(false));
         assert_eq!(
-            item_state(VERSION_HISTORY_MENU_ID, &state, true).map(|item| item.enabled),
+            item_state(VERSION_HISTORY_MENU_ID, &state, true, true).map(|item| item.enabled),
             Some(true)
         );
-        assert_eq!(item_state("native-menu.file", &state, false), None);
+        assert_eq!(item_state("native-menu.file", &state, false, true), None);
     }
 }

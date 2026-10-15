@@ -81,3 +81,14 @@ T063：
 ### T063 执行（2026-08-23）
 
 `pnpm e2e tests/a11y-audit.spec.ts --workers=1` → **21 passed**. 扫描面 serious/critical 均为 0。未覆盖真实 VoiceOver / Cmd+W / 触控板（T070）。
+
+### 多窗口界面（2026-10-14）
+
+`APP_E2E=1 pnpm e2e a11y-audit -g "multi-window surfaces"` → **8 passed**（Playwright `browser-ui`，macOS 26.6.2）。Light / Dark × English / 简体中文 四种组合，每种组合扫描 8 个界面，共 32 次扫描，每次的违规数（各级别）均为 0：
+
+- 工作区窗口的画布空状态；
+- 嵌套工作区冲突对话框（所选文件夹包含另一个窗口已打开的工作区）；
+- 侧栏的删除确认、文件夹非空、移除工作区三个确认对话框；
+- 定位提示 toast（文件夹已在本窗口的工作区内）、复制路径成功 toast、复制路径失败 toast。
+
+命名对话框（新建、重命名）沿用上面的 “entry dialogs” 用例。键盘顺序、初始焦点与焦点返回由 `e2e/tests/ui-entry-dialogs.spec.ts`、`e2e/tests/multi-window-empty-state.spec.ts` 与 `e2e/tests/multi-window-nesting.spec.ts` 覆盖。未覆盖 VoiceOver 实际朗读与打包后的原生窗口。

@@ -25,11 +25,7 @@ test("automatic/manual history survives restart and the 21st pooled record evict
     expect(verify.manualSource).toBe("manual");
     expect(seed.manualContentHash).toMatch(/^[0-9a-f]{64}$/u);
     expect(verify.manualSceneSha256).toMatch(/^[0-9a-f]{64}$/u);
-    expect(verify.manualElementIds).toEqual([
-      "text-B",
-      "rect-B",
-      "image-B",
-    ]);
+    expect(verify.manualElementIds).toEqual(["text-B", "rect-B", "image-B"]);
     expect(verify.manualSceneSha256).not.toBe(seed.postEditSceneSha256);
     expect(verify.listedVersionIds).toContain(seed.manualVersionId);
 

@@ -9,7 +9,7 @@ use std::{
 
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
 use crate::{
     database::repository::{
@@ -37,14 +37,15 @@ use crate::{
     },
     security::{PathSecurityError, WorkspacePathPolicy},
     watcher::WatcherService,
+    window::registry::{DocumentClaim, WindowRegistry},
 };
 
 use super::{
     dto::{
         CheckpointReason, CheckpointRequest, CheckpointResponse, CloseDocumentMode,
-        CloseDocumentRequest, ConflictResolution, DraftSavedEvent, EmptyResponse, PathRequest,
-        ResolveConflictRequest, ResolveConflictResponse, SaveDraftRequest, SaveDraftResponse,
-        SceneOpenResponse,
+        CloseDocumentRequest, ConflictResolution, DocOpenResponse, DraftSavedEvent, EmptyResponse,
+        PathRequest, ResolveConflictRequest, ResolveConflictResponse, SaveDraftRequest,
+        SaveDraftResponse, SceneOpenResponse, WindowActivateDocumentEvent,
     },
     error::{AppError, ErrorCode, IpcError},
 };
@@ -1313,28 +1314,158 @@ impl DocumentState {
     }
 }
 
+/// The path drawing ownership is keyed by: the real path when the file
+/// exists, else the real parent joined with the file name (a drawing being
+/// created, or one deleted while open).
+pub(crate) fn canonical_document_path(path: &Path) -> PathBuf {
+    if let Ok(canonical) = fs::canonicalize(path) {
+        return canonical;
+    }
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) => fs::canonicalize(parent)
+            .map(|parent| parent.join(name))
+            .unwrap_or_else(|_| path.to_path_buf()),
+        _ => path.to_path_buf(),
+    }
+}
+
+/// Claim `canonical` for a write by `label`. A drawing nobody owns is claimed
+/// now (a drawing being created). Returns whether this call claimed it, so a
+/// failed write can release it again.
+fn claim_for_write(
+    registry: &WindowRegistry,
+    label: &str,
+    canonical: &Path,
+) -> Result<bool, AppError> {
+    let already_owned = registry.document_owner(canonical).as_deref() == Some(label);
+    match registry.claim_document(label, canonical) {
+        Ok(DocumentClaim::Claimed) => Ok(!already_owned),
+        Ok(DocumentClaim::OwnedElsewhere { .. }) => {
+            Err(AppError::DocumentNotOwned(canonical.to_path_buf()))
+        }
+        Err(error) => Err(AppError::Internal(error.to_string())),
+    }
+}
+
+/// Fail with `DOCUMENT_NOT_OWNED` when another window owns `path`.
+pub(crate) fn ensure_not_owned_elsewhere(
+    registry: &WindowRegistry,
+    label: &str,
+    path: &Path,
+) -> Result<(), IpcError> {
+    let canonical = canonical_document_path(path);
+    match registry.document_owner(&canonical) {
+        Some(owner) if owner != label => Err(AppError::DocumentNotOwned(canonical).into()),
+        _ => Ok(()),
+    }
+}
+
+/// Run a write on `path` for window `label`: another window's drawing is
+/// refused with `DOCUMENT_NOT_OWNED`; an unowned drawing is claimed and
+/// released again when the write fails.
+pub(crate) async fn write_for_window<T, F>(
+    registry: &WindowRegistry,
+    label: &str,
+    path: &Path,
+    write: F,
+) -> Result<T, IpcError>
+where
+    F: std::future::Future<Output = Result<T, IpcError>>,
+{
+    let canonical = canonical_document_path(path);
+    let claimed_now = claim_for_write(registry, label, &canonical)?;
+    let result = write.await;
+    if result.is_err() && claimed_now {
+        registry.release_document(label, &canonical);
+    }
+    result
+}
+
+/// `doc_open` for window `label`. A drawing open in another window, or
+/// inside another window's Workspace, is not read: the response names that
+/// window. Otherwise the drawing is opened and `label` becomes its owner.
+pub(crate) async fn open_for_window(
+    service: &DocumentService,
+    registry: &WindowRegistry,
+    label: &str,
+    path: &str,
+) -> Result<DocOpenResponse, IpcError> {
+    let canonical = canonical_document_path(Path::new(path));
+    let already_owned = registry.document_owner(&canonical).as_deref() == Some(label);
+    match registry
+        .claim_document(label, &canonical)
+        .map_err(|error| AppError::Internal(error.to_string()))?
+    {
+        DocumentClaim::OwnedElsewhere { label } => Ok(DocOpenResponse::OwnedElsewhere { label }),
+        DocumentClaim::Claimed => match service
+            .doc_open(PathRequest {
+                path: path.to_owned(),
+            })
+            .await
+        {
+            Ok(response) => Ok(DocOpenResponse::Opened(response)),
+            Err(error) => {
+                if !already_owned {
+                    registry.release_document(label, &canonical);
+                }
+                Err(error)
+            }
+        },
+    }
+}
+
+/// `doc_close` for window `label`. Only the owner may close a drawing; a
+/// refused close keeps its draft and Recovery slots. A successful close
+/// releases the drawing.
+pub(crate) async fn close_for_window(
+    service: &DocumentService,
+    registry: &WindowRegistry,
+    label: &str,
+    request: CloseDocumentRequest,
+) -> Result<EmptyResponse, IpcError> {
+    let canonical = canonical_document_path(Path::new(&request.path));
+    ensure_not_owned_elsewhere(registry, label, &canonical)?;
+    let response = service.doc_close(request).await?;
+    registry.release_document(label, &canonical);
+    Ok(response)
+}
+
 #[tauri::command]
 pub async fn doc_open(
     path: String,
     app: AppHandle,
+    window: WebviewWindow,
     state: State<'_, DocumentState>,
-) -> Result<SceneOpenResponse, IpcError> {
-    let response = state
-        .service
-        .doc_open(PathRequest { path: path.clone() })
-        .await?;
-    let authorized = state
-        .service
-        .authorize_path(Path::new(&path), PathMode::Existing)
-        .await?;
-    let asset_root = asset_root_for(
-        &authorized.path,
-        authorized
-            .workspace
-            .as_ref()
-            .map(|workspace| Path::new(&workspace.root_path)),
-    );
-    super::asset_scope::grant_response_assets(&app, &asset_root, &response.scene)?;
+) -> Result<DocOpenResponse, IpcError> {
+    let registry = app.state::<WindowRegistry>();
+    let response = open_for_window(&state.service, &registry, window.label(), &path).await?;
+    match &response {
+        DocOpenResponse::OwnedElsewhere { label } => {
+            crate::window::activate_label(&app, label);
+            app.emit_to(
+                label.as_str(),
+                "window-activate-document",
+                WindowActivateDocumentEvent {
+                    path: path_string(&canonical_document_path(Path::new(&path))),
+                },
+            )
+            .map_err(|error| IpcError::from(AppError::Internal(error.to_string())))?;
+        }
+        DocOpenResponse::Opened(opened) => {
+            let authorized = state
+                .service
+                .authorize_path(Path::new(&path), PathMode::Existing)
+                .await?;
+            let asset_root = asset_root_for(
+                &authorized.path,
+                authorized
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| Path::new(&workspace.root_path)),
+            );
+            super::asset_scope::grant_response_assets(&app, &asset_root, &opened.scene)?;
+        }
+    }
     Ok(response)
 }
 
@@ -1343,19 +1474,26 @@ pub async fn doc_save_draft(
     path: String,
     scene_json: String,
     app: AppHandle,
+    window: WebviewWindow,
     state: State<'_, DocumentState>,
 ) -> Result<SaveDraftResponse, IpcError> {
-    let response = state
-        .service
-        .doc_save_draft(SaveDraftRequest {
+    let registry = app.state::<WindowRegistry>();
+    let response = write_for_window(
+        &registry,
+        window.label(),
+        Path::new(&path),
+        state.service.doc_save_draft(SaveDraftRequest {
             path: path.clone(),
             scene_json,
-        })
-        .await?;
-    app.emit(
+        }),
+    )
+    .await?;
+    crate::window::events::emit_to_document_owner(
+        &app,
+        Path::new(&path),
         "draft-saved",
         DraftSavedEvent {
-            path,
+            path: path.clone(),
             saved_at: response.saved_at,
         },
     )
@@ -1369,23 +1507,37 @@ pub async fn doc_checkpoint(
     scene_json: String,
     reason: CheckpointReason,
     app: AppHandle,
+    window: WebviewWindow,
     state: State<'_, DocumentState>,
 ) -> Result<CheckpointResponse, IpcError> {
+    #[cfg(feature = "e2e-harness")]
+    if crate::e2e_harness::multi_window::checkpoint_fault(window.label()) {
+        return Err(AppError::DiskFull.into());
+    }
     let event_path = fs::canonicalize(&path).unwrap_or_else(|_| PathBuf::from(&path));
-    let response = state
-        .service
-        .doc_checkpoint(CheckpointRequest {
-            path,
+    let registry = app.state::<WindowRegistry>();
+    let response = write_for_window(
+        &registry,
+        window.label(),
+        Path::new(&path),
+        state.service.doc_checkpoint(CheckpointRequest {
+            path: path.clone(),
             scene_json,
             reason,
-        })
-        .await?;
+        }),
+    )
+    .await?;
     if let Some(event) = state
         .service
         .history_issue_event_for_path(&event_path)
         .await
     {
-        let _ = app.emit("history-issue", event);
+        let _ = crate::window::events::emit_to_document_owner(
+            &app,
+            &event_path,
+            "history-issue",
+            event,
+        );
     }
     Ok(response)
 }
@@ -1394,29 +1546,53 @@ pub async fn doc_checkpoint(
 pub async fn doc_close(
     path: String,
     mode: CloseDocumentMode,
+    app: AppHandle,
+    window: WebviewWindow,
     state: State<'_, DocumentState>,
 ) -> Result<EmptyResponse, IpcError> {
-    state
-        .service
-        .doc_close(CloseDocumentRequest { path, mode })
-        .await
+    let registry = app.state::<WindowRegistry>();
+    close_for_window(
+        &state.service,
+        &registry,
+        window.label(),
+        CloseDocumentRequest { path, mode },
+    )
+    .await
 }
 
+/// `doc_resolve_conflict`. Saving as a new drawing moves the tab to the new
+/// path, so the window claims the new path and releases the old one.
 #[tauri::command]
 pub async fn doc_resolve_conflict(
     path: String,
     resolution: ConflictResolution,
     save_as_path: Option<String>,
+    app: AppHandle,
+    window: WebviewWindow,
     state: State<'_, DocumentState>,
 ) -> Result<ResolveConflictResponse, IpcError> {
-    state
-        .service
-        .doc_resolve_conflict(ResolveConflictRequest {
-            path,
-            resolution,
-            save_as_path,
-        })
-        .await
+    let registry = app.state::<WindowRegistry>();
+    let label = window.label();
+    ensure_not_owned_elsewhere(&registry, label, Path::new(&path))?;
+    let request = ResolveConflictRequest {
+        path: path.clone(),
+        resolution,
+        save_as_path: save_as_path.clone(),
+    };
+    match save_as_path.filter(|_| resolution == ConflictResolution::SaveAsNew) {
+        Some(new_path) => {
+            let response = write_for_window(
+                &registry,
+                label,
+                Path::new(&new_path),
+                state.service.doc_resolve_conflict(request),
+            )
+            .await?;
+            registry.release_document(label, &canonical_document_path(Path::new(&path)));
+            Ok(response)
+        }
+        None => state.service.doc_resolve_conflict(request).await,
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -1908,5 +2084,304 @@ mod tests {
 
         drop(history_store);
         fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    mod window_ownership {
+        use super::*;
+        use crate::window::registry::{ClaimDecision, WindowRole, WorkspaceCandidate};
+
+        const SCENE: &str = r#"{"type":"excalidraw","version":2,"source":"test","elements":[],"appState":{},"files":{}}"#;
+
+        struct Fixture {
+            root: PathBuf,
+            workspace: PathBuf,
+            outside: PathBuf,
+            repository: Arc<SqliteRepository>,
+            recovery: Arc<RecoveryStore>,
+            service: DocumentService,
+            registry: WindowRegistry,
+        }
+
+        impl Fixture {
+            async fn new() -> Self {
+                let root = std::env::temp_dir()
+                    .join(format!("excalidraw-document-ownership-{}", Uuid::new_v4()));
+                let workspace = root.join("workspace");
+                let outside = root.join("outside");
+                fs::create_dir_all(&workspace).expect("create workspace");
+                fs::create_dir_all(&outside).expect("create outside folder");
+                let workspace = workspace.canonicalize().expect("canonicalize workspace");
+                let outside = outside.canonicalize().expect("canonicalize outside folder");
+                let repository = Arc::new(
+                    SqliteRepository::open(&root.join("state.sqlite3"))
+                        .await
+                        .expect("open repository"),
+                );
+                repository
+                    .workspace_upsert(WorkspaceRecord {
+                        id: "workspace-1".to_owned(),
+                        name: "Workspace".to_owned(),
+                        root_path: workspace.display().to_string(),
+                        created_at: 1,
+                        mounted: true,
+                    })
+                    .await
+                    .expect("register workspace");
+                let recovery = Arc::new(RecoveryStore::with_app_version(&root, "ownership-test"));
+                let service =
+                    DocumentService::with_recovery(Arc::clone(&repository), Arc::clone(&recovery));
+                let registry = WindowRegistry::new();
+                registry.register("window-1", WindowRole::Normal).unwrap();
+                registry.register("window-2", WindowRole::Normal).unwrap();
+                Self {
+                    root,
+                    workspace,
+                    outside,
+                    repository,
+                    recovery,
+                    service,
+                    registry,
+                }
+            }
+
+            fn claim_workspace(&self, label: &str) {
+                let (decision, _) = self
+                    .registry
+                    .claim(
+                        label,
+                        &WorkspaceCandidate {
+                            id: Some("workspace-1".to_owned()),
+                            root: self.workspace.clone(),
+                        },
+                    )
+                    .unwrap();
+                assert!(matches!(decision, ClaimDecision::Claimable { .. }));
+            }
+
+            fn write(&self, path: &Path, contents: &str) -> String {
+                fs::write(path, contents).expect("write drawing");
+                path.display().to_string()
+            }
+        }
+
+        impl Drop for Fixture {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.root);
+            }
+        }
+
+        #[tokio::test]
+        async fn a_drawing_owned_by_another_window_is_not_read() {
+            let fixture = Fixture::new().await;
+            // Reading this file fails, so only a response that skipped the
+            // read can succeed.
+            let path = fixture.write(&fixture.workspace.join("broken.excalidraw"), "not json");
+            fixture
+                .registry
+                .claim_document("window-1", Path::new(&path))
+                .unwrap();
+
+            let response = open_for_window(&fixture.service, &fixture.registry, "window-2", &path)
+                .await
+                .expect("an owned drawing answers without reading it");
+            assert_eq!(
+                response,
+                DocOpenResponse::OwnedElsewhere {
+                    label: "window-1".to_owned()
+                }
+            );
+            assert!(
+                open_for_window(&fixture.service, &fixture.registry, "window-1", &path)
+                    .await
+                    .is_err(),
+                "the owner does read the file"
+            );
+            assert_eq!(
+                fixture.registry.document_owner(Path::new(&path)).as_deref(),
+                Some("window-1"),
+                "a failed read by the owner keeps the drawing it already owned"
+            );
+        }
+
+        #[tokio::test]
+        async fn every_spelling_of_an_owned_drawing_is_the_same_drawing() {
+            let fixture = Fixture::new().await;
+            let path = fixture.write(&fixture.workspace.join("note.excalidraw"), SCENE);
+            fs::create_dir_all(fixture.workspace.join("sub")).expect("create sub folder");
+            let link = fixture.workspace.join("link.excalidraw");
+            std::os::unix::fs::symlink(&path, &link).expect("create symlink");
+            assert!(matches!(
+                open_for_window(&fixture.service, &fixture.registry, "window-1", &path)
+                    .await
+                    .expect("open the drawing"),
+                DocOpenResponse::Opened(_)
+            ));
+
+            let mut spellings = vec![
+                link.display().to_string(),
+                fixture
+                    .workspace
+                    .join("sub/../note.excalidraw")
+                    .display()
+                    .to_string(),
+            ];
+            // macOS volumes are case-insensitive by default; on a
+            // case-sensitive volume the upper-case name is another file.
+            let upper = fixture.workspace.join("NOTE.excalidraw");
+            if upper.exists() {
+                spellings.push(upper.display().to_string());
+            }
+            for spelling in spellings {
+                assert_eq!(
+                    open_for_window(&fixture.service, &fixture.registry, "window-2", &spelling)
+                        .await
+                        .expect("an owned drawing answers"),
+                    DocOpenResponse::OwnedElsewhere {
+                        label: "window-1".to_owned()
+                    },
+                    "{spelling}"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn a_drawing_inside_another_windows_workspace_is_not_read() {
+            let fixture = Fixture::new().await;
+            fixture.claim_workspace("window-1");
+            let path = fixture.write(&fixture.workspace.join("broken.excalidraw"), "not json");
+
+            let response = open_for_window(&fixture.service, &fixture.registry, "window-2", &path)
+                .await
+                .expect("a drawing in another window's Workspace answers without reading it");
+            assert_eq!(
+                response,
+                DocOpenResponse::OwnedElsewhere {
+                    label: "window-1".to_owned()
+                }
+            );
+            assert_eq!(fixture.registry.document_owner(Path::new(&path)), None);
+        }
+
+        #[tokio::test]
+        async fn opening_claims_the_drawing_and_a_failed_open_releases_it() {
+            let fixture = Fixture::new().await;
+            let good = fixture.write(&fixture.workspace.join("good.excalidraw"), SCENE);
+            let broken = fixture.write(&fixture.workspace.join("broken.excalidraw"), "not json");
+
+            let opened = open_for_window(&fixture.service, &fixture.registry, "window-2", &good)
+                .await
+                .expect("open drawing");
+            assert!(matches!(opened, DocOpenResponse::Opened(_)));
+            assert_eq!(
+                fixture.registry.document_owner(Path::new(&good)).as_deref(),
+                Some("window-2")
+            );
+            assert!(
+                open_for_window(&fixture.service, &fixture.registry, "window-2", &broken)
+                    .await
+                    .is_err()
+            );
+            assert_eq!(fixture.registry.document_owner(Path::new(&broken)), None);
+            fixture.registry.check_invariants().unwrap();
+        }
+
+        #[tokio::test]
+        async fn a_close_by_another_window_keeps_the_draft_and_recovery_slots() {
+            let fixture = Fixture::new().await;
+            let path = fixture.write(&fixture.workspace.join("note.excalidraw"), SCENE);
+            open_for_window(&fixture.service, &fixture.registry, "window-1", &path)
+                .await
+                .expect("open drawing");
+            fixture
+                .service
+                .doc_save_draft(SaveDraftRequest {
+                    path: path.clone(),
+                    scene_json: SCENE.replace("\"elements\":[]", "\"elements\":[],\"x\":1"),
+                })
+                .await
+                .expect("save draft");
+            let snapshots_before = fixture.recovery.list_snapshots().unwrap().len();
+            assert!(snapshots_before > 0, "the draft wrote a Recovery slot");
+
+            let error = close_for_window(
+                &fixture.service,
+                &fixture.registry,
+                "window-2",
+                CloseDocumentRequest {
+                    path: path.clone(),
+                    mode: CloseDocumentMode::Checkpointed,
+                },
+            )
+            .await
+            .expect_err("only the owner closes a drawing");
+            assert_eq!(error.code, ErrorCode::DocumentNotOwned);
+            assert!(fixture
+                .repository
+                .draft_get(path.clone())
+                .await
+                .unwrap()
+                .is_some());
+            assert_eq!(
+                fixture.recovery.list_snapshots().unwrap().len(),
+                snapshots_before
+            );
+            assert_eq!(
+                fixture.registry.document_owner(Path::new(&path)).as_deref(),
+                Some("window-1")
+            );
+        }
+
+        #[tokio::test]
+        async fn writes_to_another_windows_drawing_are_refused() {
+            let fixture = Fixture::new().await;
+            let path = fixture.write(&fixture.workspace.join("note.excalidraw"), SCENE);
+            open_for_window(&fixture.service, &fixture.registry, "window-1", &path)
+                .await
+                .expect("open drawing");
+
+            let error = write_for_window(
+                &fixture.registry,
+                "window-2",
+                Path::new(&path),
+                fixture.service.doc_checkpoint(CheckpointRequest {
+                    path: path.clone(),
+                    scene_json: SCENE.to_owned(),
+                    reason: CheckpointReason::ManualSave,
+                }),
+            )
+            .await
+            .expect_err("another window's drawing is not written");
+            assert_eq!(error.code, ErrorCode::DocumentNotOwned);
+        }
+
+        #[tokio::test]
+        async fn creating_a_drawing_claims_it_and_a_failed_write_releases_it() {
+            let fixture = Fixture::new().await;
+            let created = fixture.outside.join("created.excalidraw");
+            write_for_window(&fixture.registry, "window-2", &created, async {
+                Ok::<_, IpcError>(())
+            })
+            .await
+            .unwrap();
+            assert_eq!(
+                fixture
+                    .registry
+                    .document_owner(&canonical_document_path(&created))
+                    .as_deref(),
+                Some("window-2")
+            );
+
+            let failed = fixture.outside.join("failed.excalidraw");
+            let _ = write_for_window(&fixture.registry, "window-2", &failed, async {
+                Err::<(), _>(IpcError::from(AppError::Internal("disk full".to_owned())))
+            })
+            .await;
+            assert_eq!(
+                fixture
+                    .registry
+                    .document_owner(&canonical_document_path(&failed)),
+                None
+            );
+        }
     }
 }

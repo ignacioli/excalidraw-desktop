@@ -2,13 +2,13 @@
 
 # Excalidraw Desktop 架构文档
 
-**最后更新**：2026-09-24
+**最后更新**：2026-10-14
 
-本文档描述 Excalidraw Desktop 的**当前**实现架构：分层视图、可靠性数据流、工作区条目变更、模块职责、依赖方向与信任边界、原生窗口边界与存储层。决策记录见 `docs/adr/`；视觉与交互契约见根目录 `DESIGN.md`（英文正文；中文见 `DESIGN.zh.md`）。公开 IPC 契约见 `docs/contracts/ipc-contracts.md`（v4）。
+本文档描述 Excalidraw Desktop 的**当前**实现架构：分层视图、可靠性数据流、工作区条目变更、模块职责、依赖方向与信任边界、原生窗口边界与存储层。决策记录见 `docs/adr/`；视觉与交互契约见根目录 `DESIGN.md`（英文正文；中文见 `DESIGN.zh.md`）。公开 IPC 契约见 `docs/contracts/ipc-contracts.md`（v5）。
 
-当前壳层是画布优先的 overlay/pinned 侧边栏、IPC v4 Workspace Entry、版本历史与原生菜单命令、由前端决定的 UI 语言，以及统一的应用菜单/对话框。崩溃安全持久化（草稿、原子写、恢复快照、外部变更冲突）仍然有效。下文描述的是现行路径，不是已退休的 FileTree + `thumbnails/` 生产实现。
+当前壳层是画布优先的 overlay/pinned 侧边栏、IPC v5 Workspace Entry、版本历史与原生菜单命令、由前端决定的 UI 语言，以及统一的应用菜单/对话框。崩溃安全持久化（草稿、原子写、恢复快照、外部变更冲突）仍然有效。下文描述的是现行路径，不是已退休的 FileTree + `thumbnails/` 生产实现。
 
-Workspace 持久化将 mounted authority 与 Recent history 分开。已挂载记录进入路径策略、Workspace Entry 命令、索引与监听；只有唯一的 Current Workspace 进入 Sidebar 树。取消挂载会保留记录；重新挂载只在激活时校验保存的 root，而从 Recents 移除未挂载记录只改变应用历史。
+Workspace 持久化将 mounted authority 与 Recent history 分开。已挂载记录进入路径策略、Workspace Entry 命令、索引与监听；只有唯一的 Current Workspace 进入 Sidebar 树。“已挂载”的含义是“正在某个窗口中打开”：Rust `WindowRegistry`（`src-tauri/src/window/registry.rs`）是窗口持有哪个 Workspace 的唯一权威，每个 Workspace 至多由一个窗口持有；`workspace_list` 只返回调用窗口的 Workspace，Workspace 与文档事件只发给持有它的窗口（`src-tauri/src/window/events.rs`）。侧栏固定、宽度与展开状态按 Workspace 存于 SQLite；外观与语言仍存于 WebView 存储，改变后广播给其他窗口。取消挂载会保留记录；重新挂载只在激活时校验保存的 root，而从 Recents 移除未挂载记录只改变应用历史。
 
 ## 1. 总体结构
 
@@ -26,10 +26,10 @@ flowchart TB
         Editor["editor/ 官方 Excalidraw 公共集成"]
         Theme["app/theme/ 主题注册 · 偏好解析"]
         Prefs["版本化本地视图偏好：pinned 与展开集"]
-        IpcClient["ipc/ 强类型 v4 客户端 + 事件订阅"]
+        IpcClient["ipc/ 强类型 v5 客户端 + 事件订阅"]
     end
     subgraph boundary [IPC 信任边界]
-        Contracts["contracts v4：WorkspaceEntry + History + 原生菜单命令 · 结构化错误 · operationId"]
+        Contracts["contracts v5：WorkspaceEntry + History + 原生菜单命令 · 结构化错误 · operationId"]
     end
     subgraph backend [Rust 后端 Tauri 2.x]
         Commands["commands/ IPC 入口（薄层）"]
@@ -188,7 +188,7 @@ flowchart LR
     Apply --> Refresh["树失效并恢复滚动锚点与焦点"]
 ```
 
-权威层划分见 `src-tauri/src/workspace_entries/` 与 `src/documents/documentStore.ts`。新建图纸默认可见名 `Untitled`，Rust 追加 `.excalidraw`；新建目录默认 `Untitled Folder`（`src/app/interaction/EntryNamingDialog.tsx`）。Welcome 的 New Drawing（`src/app/newDrawing.ts`）每次询问文件夹并将其挂载为 Workspace（已挂载的根目录直接复用），然后在其中走同一条 `workspace_entry_create` 路径，遇到 `NAME_CONFLICT` 时递增为 `Untitled N`；它不再创建无路径的文档会话。受保护目标包括工作区根、点号目录与 `.excalidraw_assets`。
+权威层划分见 `src-tauri/src/workspace_entries/` 与 `src/documents/documentStore.ts`。新建图纸默认可见名 `Untitled`，Rust 追加 `.excalidraw`；新建目录默认 `Untitled Folder`（`src/app/interaction/EntryNamingDialog.tsx`）。Welcome 的 New Drawing（`src/app/newDrawing.ts`）每次询问文件夹并为本窗口认领（`window_claim_workspace`；该文件夹已被其他窗口持有时前置那个窗口，不创建文件），然后在其中走同一条 `workspace_entry_create` 路径，遇到 `NAME_CONFLICT` 时递增为 `Untitled N`；它不再创建无路径的文档会话。受保护目标包括工作区根、点号目录与 `.excalidraw_assets`。
 
 ## 6. 序列：串行关闭与最新意图激活
 
@@ -235,7 +235,10 @@ sequenceDiagram
 | `workspaces/WorkspaceTree.tsx` | Current Workspace 及其后代的一棵连续虚拟化树；其他 workspace record 通过 Welcome/Recent 进入；无缩略图行                                                 |
 | `i18n/`                        | UI 语言：`resolveLanguage`（偏好 + 系统语言到 `en` / `zh-CN` 的唯一规则）、`LocaleController`（偏好持久化）、文案目录、`readSystemLanguages`（握手读取） |
 | `app/nativeMenuSync.ts`        | 生成本地化原生菜单标签集，并发送去重后的 `native_menu_sync` 快照                                                                                         |
-| `ipc/`                         | 强类型 v4 命令绑定与事件订阅（`IPC_CONTRACT_VERSION = 4`）                                                                                               |
+| `app/clipboard.ts`             | 复制路径 / 复制相对路径：菜单项被选中时才读取路径，经剪贴板插件（只写）写入文本                                                                          |
+| `app/exitCheckpoint.ts`        | 每个窗口的关闭 checkpoint、对等关闭请求与退出 checkpoint 处理；checkpoint 失败则窗口保持打开                                                             |
+| `app/openFileHandler.ts`       | 打开被路由到本窗口的绘图（`open-file-request`、`window-activate-document`）及本窗口要恢复的标签                                                          |
+| `ipc/`                         | 强类型 v5 命令绑定与事件订阅（`IPC_CONTRACT_VERSION = 5`）                                                                                               |
 
 ### 后端（src-tauri/）
 
@@ -249,6 +252,7 @@ sequenceDiagram
 | `indexing/`          | 工作区异步扫描与增量索引                                                                         |
 | `watcher/`           | notify 封装 + 去抖 + 回声抑制；复杂外部目录事件发 `invalidated`                                  |
 | `security/`          | 路径规范化、工作区 ACL 白名单、符号链接逃逸拒绝                                                  |
+| `window/`            | `WindowRegistry` 归属、窗口创建、打开文件路由、退出协调、Window Session、窗口位置与几何          |
 
 历史 `thumbnails/` 与前端 `FileTree` / `useThumbnails` **不是**当前生产路径。
 
@@ -259,7 +263,7 @@ sequenceDiagram
 - `history_delete` 在持有文档 history-operation lease 时删除一条语义版本。重复使用同一 `requestId` 是幂等的；仍被活动替换引用的版本会受到保护并返回结构化 busy 错误。metadata 事务之后的对象 GC 是 best effort，仍被其他文档共享或被操作 pin 的对象会保留。
 - 条目变更授权使用 `workspaceId + relativePath`（及创建/重命名的 `baseName`）。响应中的 `canonicalPath` 供打开与会话迁移使用，**不是**前端可提交的授权证据。
 - 所有路径在后端经 `security/` canonicalize + 工作区白名单校验；越界返回 `PATH_ACCESS_DENIED`。文档 JSON 视为不可信输入（结构校验 + 尺寸上限）。
-- 最小权限：Tauri Capabilities 为 `core:default` + `core:window:allow-destroy` + `dialog:allow-open` + `dialog:allow-save`（`src-tauri/capabilities/default.json`）。该窗口权限仅用于让原生关闭处理器在 app-exit checkpoint 完成后销毁主窗口。路径 ACL 在 Rust，不靠额外 fs capability 放开 WebView 任意文件系统。严格 CSP；asset protocol 仅限 `.excalidraw_assets` 图片。
+- 最小权限：Tauri Capabilities 为 `core:default` + `core:window:allow-destroy` + `core:window:allow-set-title` + `clipboard-manager:allow-write-text` + `dialog:allow-open` + `dialog:allow-save`，适用于 label 为 `window-*` 的窗口（`src-tauri/capabilities/default.json`）。销毁权限仅用于让原生关闭处理器在 app-exit checkpoint 完成后销毁窗口；设置标题权限让窗口在标题中显示图纸与 Workspace；写入文本权限让“复制路径”把路径放到剪贴板，不授予读取剪贴板。路径 ACL 在 Rust，不靠额外 fs capability 放开 WebView 任意文件系统。严格 CSP；asset protocol 仅限 `.excalidraw_assets` 图片。
 - 生产命令集不含 `dir_list`、`file_create` / `file_rename` / `file_delete`、`thumb_lookup` / `thumb_store`。
 
 ### 8.1 语言与原生菜单数据流
@@ -270,22 +274,49 @@ UI 语言只在前端决定。Rust 只报告事实并渲染原生菜单，不选
 2. **解析。** `resolveLanguage(preference, preferredLanguages)` 返回 `en` 或 `zh-CN`。用户偏好（`system` / `en` / `zh-CN`）保存在 WebView `localStorage` 键 `excalidraw-desktop.language`，不经过 IPC。
 3. **菜单同步。** `AppShell` 发送 `native_menu_sync`，携带完整本地化标签集与菜单状态（语言、外观、是否有文档、强制只读及五项画布偏好）。与上次成功请求完全相同的请求会被前端跳过，因此普通画布编辑不会触达菜单。
 4. **Rust 侧。** 命令在信任边界校验标签与状态，标签变化则重建菜单，仅状态变化则原地更新 `checked` / `enabled`。非法输入被拒绝，菜单保持上一次有效状态。首次同步前安装的是内置英文菜单。
-5. **菜单命令。** 激活菜单项时向 `main` 窗口发出 `native-menu-command`。前端路由该命令（语言、外观、画布偏好切换、帮助、保存、导出、版本历史），并在下一次 `native_menu_sync` 中回写新状态。
+5. **菜单命令。** New Window 与 Quit 由 Rust 自己处理；其余菜单项向前台窗口发出 `native-menu-command`，没有前台窗口时发给最近聚焦的窗口。菜单状态按窗口保存，窗口获得焦点时应用。前端路由该命令（语言、外观、画布偏好切换、帮助、保存、导出、版本历史），并在下一次 `native_menu_sync` 中回写新状态。
 
-按键归属：原生菜单只为 Save（`CmdOrCtrl+S`）与 Export Image（`CmdOrCtrl+Alt+E`）注册 accelerator；Excalidraw SDK 处理的按键不在原生侧注册，`Alt+R`（View mode）由编辑器宿主处理。完整表格见 `docs/contracts/ipc-contracts.md` §1.7.1。
+按键归属：原生菜单只为 New Window（`CmdOrCtrl+Shift+N`）、Open Workspace（`CmdOrCtrl+Shift+O`）、Save（`CmdOrCtrl+S`）、Export Image（`CmdOrCtrl+Alt+E`）与 Quit（`CmdOrCtrl+Q`）注册 accelerator；Excalidraw SDK 处理的按键不在原生侧注册，`Alt+R`（View mode）由编辑器宿主处理。完整表格见 `docs/contracts/ipc-contracts.md` §1.7.1。
 
 ## 9. 原生窗口边界（选择 A）
 
-配置与实现见 `src-tauri/tauri.conf.json`（窗口 `title`）与 `src-tauri/src/lib.rs`（无生产标题栏着色 / 置顶）。ADR-009 记录该选择。
+配置与实现见 `src-tauri/src/window/mod.rs` 的 `WINDOW_CHROME`（每个窗口都由它构建）与 `src-tauri/src/lib.rs`（无生产标题栏着色 / 置顶）。`tauri.conf.json` 不声明任何窗口。ADR-009 记录该选择。
 
 | 项            | 当前产品行为                                                                                      |
 | ------------- | ------------------------------------------------------------------------------------------------- |
 | 窗口模型      | 普通装饰窗口；未配置 Overlay / Transparent / frameless                                            |
-| 标题          | `Excalidraw Whiteboard`                                                                           |
+| 标题          | 前端设置前为 `Excalidraw`；之后是 `<Workspace>`，有活动绘图时为 `<绘图> — <Workspace>`            |
 | 标题栏颜色    | 由操作系统控制，不随内容 `light \| dark \| system` 强制                                           |
 | 内容主题      | 前端独立解析；`system` 跟随 `prefers-color-scheme`                                                |
 | 层级          | 正常堆叠；可被其他应用覆盖、最小化、恢复                                                          |
 | always-on-top | 生产关闭。`e2e_harness` 仅在 `EXCALIDRAW_PERF_CONTROL_DIR` 存在时可为测量窗口置顶，不得泄漏到生产 |
+
+### 9.1 多窗口归属与生命周期
+
+决策记录见 ADR-010。代码：`src-tauri/src/window/`、`src-tauri/src/commands/workspace.rs` 中的 `claim_for_window`、`src/app/exitCheckpoint.ts`、`src/app/openFileHandler.ts`。线上结构见 `docs/contracts/ipc-contracts.md` §1.8、§1.9 与 §2。
+
+**窗口。** 所有窗口都由 Rust 在运行时创建，label 为 `window-<n>`，不复用。capability 作用于 `window-*`，前端不能创建窗口。`app_handshake` 按窗口返回启动数据（Workspace、要恢复的标签、Recovery 角色），前端不从 URL 推导。File > New Window（`CmdOrCtrl+Shift+N`）与 `window_new` 打开一个 Welcome 窗口。
+
+**归属。** `WindowRegistry` 是哪个窗口持有哪个 Workspace、哪个绘图的唯一权威。所有变更在一把锁内完成，并发认领因此被串行化。认领 Workspace 返回四种判定之一；调用窗口自己当前的 Workspace 不参与判定，因为认领会替换它。
+
+| 判定           | 条件                                           | 效果                                                                 |
+| -------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
+| `claimed`      | 没有别的窗口持有该文件夹，也没有嵌套或包含关系 | 窗口取得 Workspace 并释放原来的；`mounted` 与 watcher 随之变化       |
+| `ownedBy`      | 别的窗口持有同一个 Workspace                   | 该窗口被置前；调用窗口不变                                           |
+| `insideOpen`   | 文件夹位于别的窗口的 Workspace 内              | 该窗口被置前，并在其侧栏中定位到该文件夹                             |
+| `containsOpen` | 文件夹包含别的窗口的 Workspace                 | 调用窗口不变；用户可以选择关闭那个窗口并在此打开该文件夹（对等关闭） |
+
+一个绘图至多由一个窗口持有，位于别的窗口 Workspace 内的绘图视为由该窗口持有。`doc_open` 返回 `ownedElsewhere` 而不读取文件，后端把持有者置前并向它发送 `window-activate-document`。不持有该绘图的窗口发来的写命令以 `DOCUMENT_NOT_OWNED` 失败，因此一个绘图的草稿与 checkpoint 只有一个 owner。
+
+**打开文件路由。** Finder、二次启动与启动参数的路径在授权后都进入 `window/router.rs`。绘图依次发给：已经打开它的窗口、Workspace 包含它的窗口、最近聚焦的窗口、新窗口。尚未读取启动数据的窗口经握手的 `pendingOpenPaths` 收到路径，其他窗口收到 `open-file-request`。
+
+**事件与菜单路由。** Workspace 事件发给 Workspace 的持有窗口，文档事件发给绘图的持有窗口；没有持有者的事件被丢弃。前端监听按自己的窗口过滤，因为 Tauri 也会把发给某个窗口的事件投递给没有指定窗口的监听。`native-menu-command` 发给前台窗口或最近聚焦的窗口。菜单状态按窗口保存，窗口获得焦点时应用。外观与语言是应用级的，由 `app_preferences_broadcast` 转发给其他窗口。
+
+**关闭与退出。** 关闭窗口先执行 `checkpointAll` 再销毁窗口；checkpoint 失败则窗口保持打开。窗口销毁后，Rust 释放它的 Workspace 与绘图、停止其 watcher 并重写 Window Session。在 macOS 上关闭最后一个窗口不会退出应用。Quit 是应用自有的菜单项：`QuitCoordinator` 请每个窗口做 checkpoint（`app-quit-requested`），等待每个窗口的 `app_quit_ready`，只有全部成功才退出。有窗口失败，或 10 秒内没有应答，就取消退出、把失败的窗口置前并向所有窗口发送 `app-quit-cancelled`。Rust 无法拦截的终止（如 Dock 菜单退出、注销）仍会在 `RunEvent::Exit` 中尽力保存 Window Session。
+
+**Window Session 与窗口位置。** Window Session 是 SQLite 中待恢复窗口的快照：每个窗口的 Workspace、标签路径与活动标签。一次写入在一个事务内替换整张表，并合并 500 ms；没有标签的 Welcome 窗口不保存。启动时 Rust 重建保存的窗口，并在显示窗口之前认领它的 Workspace。不可用的 Workspace 让窗口停留在 Welcome 并给出说明，缺失的文件被跳过并计数。异常退出后只打开 Recovery 窗口，待它调用 `startup_recovery_done` 后再重建保存的窗口。窗口位置（普通状态的逻辑像素边界、最大化、全屏）按 Workspace 保存，同样合并 500 ms 写入，恢复时对照当前连接的显示器检查：标题栏够不到的窗口移到主显示器。侧栏固定、宽度与展开目录同样按 Workspace 保存。
+
+**复制路径。** 侧栏行与标签页右键菜单提供“复制路径”和“复制相对路径”。Workspace 根行只提供“复制路径”。标签页在绘图有路径时提供“复制路径”，只有绘图位于本窗口 Workspace 内时才提供“复制相对路径”。路径在菜单项被选中时读取，因此被重命名、移动或删除的条目不会带着过时路径被复制；条目已不存在时窗口显示简短提示。相对路径使用 `/`，相对于 Workspace 根。写入经剪贴板插件，只授予 write-text；应用不能读取剪贴板。
 
 ## 10. 存储层
 
@@ -352,7 +383,7 @@ Collector 只拥有自己启动的 child process 与声明的 profile。缺少 i
 
 ## 13. 相关文档
 
-- ADR：ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 声明参考环境性能测量、ADR-005 主题边界（壳层布局/缩略图句见 ADR-009）、ADR-006/007/008 参考性能预算与测量序列、ADR-009 桌面 UI 交互
+- ADR：ADR-001 框架选型、ADR-002 双层持久化、ADR-003 SQLite-first 与 redb 触发条件、ADR-004 声明参考环境性能测量、ADR-005 主题边界（壳层布局/缩略图句见 ADR-009）、ADR-006/007/008 参考性能预算与测量序列、ADR-009 桌面 UI 交互、ADR-010 多窗口
 - `DESIGN.md` / `DESIGN.zh.md`（视觉与交互契约）
-- `docs/quickstart.md` / `docs/quickstart.zh.md`（上手与验证）、`docs/contracts/ipc-contracts.md`（IPC 契约 v4）
+- `docs/quickstart.md` / `docs/quickstart.zh.md`（上手与验证）、`docs/contracts/ipc-contracts.md`（IPC 契约 v5）
 - `docs/evidence/`（原生验证矩阵、无障碍审计与验证汇总，VM 或物理机）

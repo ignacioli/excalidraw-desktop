@@ -14,7 +14,7 @@ use std::{
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 use uuid::Uuid;
 
 use crate::{
@@ -54,6 +54,7 @@ use crate::{
         },
     },
     security::{PathSecurityError, WorkspacePathPolicy},
+    window::registry::WindowRegistry,
 };
 
 #[tauri::command]
@@ -503,12 +504,22 @@ impl HistoryReplacementService {
     }
 }
 
+/// `history_replace`. A drawing located by path must not be open in
+/// another window.
 #[tauri::command]
 pub async fn history_replace(
     request: HistoryReplaceRequest,
     app: AppHandle,
+    window: WebviewWindow,
     state: State<'_, HistoryReplacementState>,
 ) -> Result<HistoryReplaceResponse, IpcError> {
+    if let HistoryDocumentLocator::Path { path } = &request.document {
+        super::documents::ensure_not_owned_elsewhere(
+            &app.state::<WindowRegistry>(),
+            window.label(),
+            Path::new(path),
+        )?;
+    }
     let grant: ResponseAssetGrant =
         Arc::new(move |root, scene| super::asset_scope::grant_response_assets(&app, root, scene));
     state.service.replace(request, Some(grant)).await

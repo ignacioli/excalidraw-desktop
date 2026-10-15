@@ -6,7 +6,6 @@ import {
 } from "./uiInteractionHarness";
 import {
   openWorkspaceSidebar,
-  persistCurrentWorkspace,
   persistPinnedWorkspaceSidebar,
 } from "./workspaceSidebar";
 
@@ -171,7 +170,8 @@ test("Workspace and entry menus support keyboard navigation, dismissal, and view
   const menu = page.getByRole("menu");
   await expect(menu).toBeVisible();
   const items = menu.getByRole("menuitem");
-  await expect(items).toHaveCount(4);
+  // New Drawing, New Folder, Copy Path, Copy Relative Path, Rename, Delete.
+  await expect(items).toHaveCount(6);
   // Sidebar button styles must not leak into menu items. The first item
   // has focus and shows the hover surface, so check an unfocused one.
   const itemStyle = await items.nth(1).evaluate((element) => {
@@ -319,8 +319,13 @@ test("refresh keeps the first surviving scroll anchor and a restarted overlay fo
   );
 
   // A Pinned Sidebar never takes startup focus from the canvas; the tree
-  // captures focus when the Sidebar opens as an Overlay.
-  await persistCurrentWorkspace(page, WORKSPACES[0].id);
+  // captures focus when the Sidebar opens as an Overlay. The restart
+  // restores this Workspace's own Sidebar state, so hide the pinned Sidebar
+  // first.
+  await page
+    .getByRole("button", { name: "Toggle workspace sidebar", exact: true })
+    .click();
+  await expect(tree).toBeHidden();
   await page.reload();
   await openWorkspaceSidebar(page);
   const restartedTree = page.getByRole("tree");

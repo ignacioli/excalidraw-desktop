@@ -14,17 +14,22 @@ mod native_menu;
 mod native_menu_spec;
 pub mod security;
 mod watcher;
+mod window;
 pub mod workspace_entries;
 
 use std::{path::Path, path::PathBuf, sync::Arc};
 
-#[cfg(not(feature = "e2e-harness"))]
-use tauri::Emitter;
 use tauri::Manager;
-use tauri_plugin_fs::FsExt;
 
-#[cfg(not(feature = "e2e-harness"))]
-use commands::dto::OpenFileRequestEvent;
+use database::repository::WorkspaceRepository;
+use tauri_plugin_fs::FsExt;
+use window::{
+    placement::PlacementTracker,
+    quit::QuitCoordinator,
+    registry::{WindowRegistry, WindowRole},
+    session::{SessionWriter, WindowSessionRepository},
+};
+
 use commands::{
     documents::{
         doc_checkpoint, doc_close, doc_open, doc_resolve_conflict, doc_save_draft,
@@ -42,10 +47,15 @@ use commands::{
     recovery::{
         recovery_apply, recovery_list, RecoveryService, RecoveryState, TauriRecoveryPathGrant,
     },
-    session::{app_handshake, SessionState},
+    session::{
+        app_handshake, app_preferences_broadcast, app_quit_ready, shell_preferences_migrate,
+        startup_recovery_done, window_session_update, workspace_shell_state_save, SessionState,
+    },
     workspace::{
-        workspace_add, workspace_list, workspace_recent_list, workspace_recent_remove,
-        workspace_remount, workspace_remove, WorkspaceState,
+        window_claim_workspace, window_close_other_and_claim, window_peer_close_failed,
+        window_probe_workspace, window_release_workspace, workspace_add, workspace_list,
+        workspace_recent_list, workspace_recent_remove, workspace_remount, workspace_remove,
+        WorkspaceState,
     },
 };
 use database::repository::SqliteRepository;
@@ -77,24 +87,18 @@ pub fn run() {
     configure_linux_ime_environment();
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_dialog::init());
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init());
     #[cfg(not(feature = "e2e-harness"))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
         let paths = drawing_paths_from_args(&argv);
-        if !paths.is_empty() {
-            let scope = app.fs_scope();
-            match grant_drawing_paths(&scope, &paths) {
-                Ok(()) => {
-                    let _ = app.emit("open-file-request", OpenFileRequestEvent { paths });
-                }
-                Err(error) => {
-                    eprintln!("failed to grant single-instance open-file paths: {error}");
-                }
+        if paths.is_empty() {
+            if let Some(label) = crate::window::target_window(app) {
+                crate::window::activate_label(app, &label);
             }
+            return;
         }
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.set_focus();
-        }
+        open_drawing_paths(app, &paths);
     }));
     let builder = builder.setup(|app| {
         let app_data_directory = resolve_app_data_directory(app)?;
@@ -106,7 +110,7 @@ pub fn run() {
         let repository = tauri::async_runtime::block_on(SqliteRepository::open(
             &app_data_directory.join("excalidraw-desktop.sqlite3"),
         ))?;
-        let session = SessionState::initialize(&app_data_directory, pending_open_paths)?;
+        let session = SessionState::initialize(&app_data_directory)?;
         let shared_repository = Arc::new(repository.clone());
         let history_store = match HistoryStore::open(&app_data_directory) {
             Ok(store) => Some(Arc::new(store)),
@@ -141,11 +145,6 @@ pub fn run() {
         }
         let workspace_mutation_gate = WorkspaceMutationGate::default();
         let recovery_store = Arc::new(RecoveryStore::new(&app_data_directory));
-        #[cfg(feature = "e2e-harness")]
-        let performance_state = tauri::async_runtime::block_on(
-            PerformanceHarnessState::from_environment(Arc::clone(&shared_repository)),
-        )
-        .map_err(std::io::Error::other)?;
         let conflicts = ConflictRegistry::default();
         let watcher_service =
             WatcherService::new(Arc::clone(&shared_repository), conflicts.clone());
@@ -190,6 +189,35 @@ pub fn run() {
             Arc::new(TauriRecoveryPathGrant(app.fs_scope())),
         );
         recovery_service.attach_watcher(Arc::new(watcher_service.clone()));
+        // `mounted` means "open in a window", so no Workspace is mounted until
+        // a window claims it. After an abnormal exit the previous mounted rows
+        // stay as Recovery's authorization roots until Recovery finishes. The
+        // startup reconciliation above still sees the previous mounted set.
+        if !session.abnormal_exit() {
+            tauri::async_runtime::block_on(repository.workspace_unmount_all())?;
+        }
+        // The performance harness registers its Workspace as mounted, so it
+        // runs after the startup unmount; no window claims that Workspace.
+        #[cfg(feature = "e2e-harness")]
+        let performance_state = tauri::async_runtime::block_on(
+            PerformanceHarnessState::from_environment(Arc::clone(&shared_repository)),
+        )
+        .map_err(std::io::Error::other)?;
+        let stored_session = match tauri::async_runtime::block_on(repository.window_session_list())
+        {
+            Ok(entries) => entries,
+            Err(error) => {
+                eprintln!("failed to read the window session: {error}");
+                Vec::new()
+            }
+        };
+        let window_registry = WindowRegistry::new();
+        let owned_workspace_ids = window_registry.owned_workspace_ids();
+        app.manage(window_registry);
+        app.manage(QuitCoordinator::new(window::quit::configured_timeout()));
+        app.manage(SessionWriter::default());
+        app.manage(PlacementTracker::default());
+        app.manage(crate::window::peer_close::PeerCloseRequests::default());
         app.manage(repository);
         app.manage(history_state);
         app.manage(history_replacement_state);
@@ -220,16 +248,39 @@ pub fn run() {
         )));
         app.manage(session);
         app.manage(WatcherState::new(watcher_service.clone()));
-        tauri::async_runtime::block_on(watcher_service.start_existing(app.handle().clone()))?;
+        tauri::async_runtime::block_on(
+            watcher_service.start_existing(&owned_workspace_ids, app.handle().clone()),
+        )?;
         app.on_menu_event(crate::native_menu::handle_menu_event);
         crate::native_menu::register_validation_listener(app.handle());
         crate::native_menu::install_menu(app.handle())?;
+        // The stored windows are recreated first; after an abnormal exit
+        // only the Recovery window opens, and the others follow once
+        // Recovery is done. Until then the stored session is not replaced.
+        let writer = app.state::<SessionWriter>();
+        writer.hold();
+        if app.state::<SessionState>().abnormal_exit() {
+            writer.set_pending_restore(stored_session);
+            crate::window::create_window(app.handle(), WindowRole::Recovery, None)?;
+        } else {
+            let created = tauri::async_runtime::block_on(crate::window::restore_session(
+                app.handle(),
+                stored_session,
+            ));
+            writer.release();
+            if created == 0 {
+                crate::window::create_window(app.handle(), WindowRole::Normal, None)?;
+            }
+        }
+        crate::window::router::route_open_paths(app.handle(), &pending_open_paths);
+        #[cfg(feature = "e2e-harness")]
+        e2e_harness::multi_window::start_app_driver(app.handle()).map_err(std::io::Error::other)?;
         // rAF-driven performance workloads stall when the window is
         // occluded (WebKit throttles occluded views); keep the test-only
         // measurement window unoccluded on busy diagnostic hosts.
         #[cfg(feature = "e2e-harness")]
         if std::env::var_os("EXCALIDRAW_PERF_CONTROL_DIR").is_some() {
-            if let Some(window) = app.get_webview_window("main") {
+            for window in app.webview_windows().values() {
                 let _ = window.set_always_on_top(true);
             }
         }
@@ -239,8 +290,15 @@ pub fn run() {
     #[cfg(feature = "e2e-harness")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_handshake,
+        app_preferences_broadcast,
+        app_quit_ready,
+        shell_preferences_migrate,
+        startup_recovery_done,
+        window_session_update,
+        workspace_shell_state_save,
         crate::native_menu::set_native_menu_enabled,
         crate::native_menu::sync_native_menu,
+        crate::window::window_new,
         history_list,
         history_preview,
         history_mark,
@@ -261,6 +319,11 @@ pub fn run() {
         workspace_recent_list,
         workspace_remount,
         workspace_recent_remove,
+        window_probe_workspace,
+        window_claim_workspace,
+        window_close_other_and_claim,
+        window_peer_close_failed,
+        window_release_workspace,
         workspace_entry_list,
         workspace_entry_create,
         workspace_entry_rename,
@@ -274,6 +337,9 @@ pub fn run() {
         e2e_harness::e2e_history_frontend_bootstrap,
         e2e_harness::e2e_history_frontend_publish,
         e2e_harness::e2e_history_frontend_close,
+        e2e_harness::multi_window::e2e_multi_window_bootstrap,
+        e2e_harness::multi_window::e2e_multi_window_next,
+        e2e_harness::multi_window::e2e_multi_window_publish,
         e2e_perf_bootstrap,
         e2e_perf_publish_ready,
         e2e_perf_next_command,
@@ -284,8 +350,15 @@ pub fn run() {
     #[cfg(not(feature = "e2e-harness"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_handshake,
+        app_preferences_broadcast,
+        app_quit_ready,
+        shell_preferences_migrate,
+        startup_recovery_done,
+        window_session_update,
+        workspace_shell_state_save,
         crate::native_menu::set_native_menu_enabled,
         crate::native_menu::sync_native_menu,
+        crate::window::window_new,
         history_list,
         history_preview,
         history_mark,
@@ -306,6 +379,11 @@ pub fn run() {
         workspace_recent_list,
         workspace_remount,
         workspace_recent_remove,
+        window_probe_workspace,
+        window_claim_workspace,
+        window_close_other_and_claim,
+        window_peer_close_failed,
+        window_release_workspace,
         workspace_entry_list,
         workspace_entry_create,
         workspace_entry_rename,
@@ -315,6 +393,8 @@ pub fn run() {
         doc_export,
     ]);
 
+    let builder = builder.on_window_event(handle_window_event);
+
     let app = match builder.build(tauri::generate_context!()) {
         Ok(app) => app,
         Err(error) => {
@@ -322,15 +402,107 @@ pub fn run() {
             return;
         }
     };
-    app.run(|app_handle, event| {
-        if matches!(event, tauri::RunEvent::Exit) {
+    app.run(|app_handle, event| match event {
+        // Closing the last window keeps the app in the Dock on macOS. An
+        // exit with a code (the coordinated quit) is never held.
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::ExitRequested {
+            code: None, api, ..
+        } if keeps_running_without_windows() => api.prevent_exit(),
+        tauri::RunEvent::Exit => {
+            // Terminations that skip the coordinated quit (the Dock menu,
+            // logging out) still store the windows when possible.
+            if app_handle.try_state::<PlacementTracker>().is_some() {
+                tauri::async_runtime::block_on(crate::window::placement::flush(app_handle));
+            }
+            if app_handle.try_state::<SessionWriter>().is_some() {
+                tauri::async_runtime::block_on(crate::window::persist_session(app_handle));
+                app_handle.state::<SessionWriter>().freeze();
+            }
             if let Some(session) = app_handle.try_state::<SessionState>() {
                 if let Err(error) = session.release() {
                     eprintln!("failed to release the session lock: {error}");
                 }
             }
         }
+        // Finder and `open` hand drawings to a running app as Apple Events.
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Opened { urls } => {
+            let arguments: Vec<String> = urls
+                .iter()
+                .filter_map(|url| url.to_file_path().ok())
+                .map(|path| path_string(&path))
+                .collect();
+            let paths = drawing_paths_from_args(&arguments);
+            if !paths.is_empty() {
+                open_drawing_paths(app_handle, &paths);
+            }
+        }
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Reopen {
+            has_visible_windows: false,
+            ..
+        } => crate::window::reopen(app_handle),
+        _ => {}
     });
+}
+
+/// Keep the registry and the native menu in step with window focus and
+/// window destruction, and remember where Workspace windows are.
+fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
+    let label = window.label();
+    if !label.starts_with(window::registry::WINDOW_LABEL_PREFIX) {
+        return;
+    }
+    let app = window.app_handle().clone();
+    match event {
+        tauri::WindowEvent::Focused(true) => {
+            app.state::<WindowRegistry>().focus(label);
+            crate::native_menu::show_window_state(&app, label);
+        }
+        // Maximizing and entering full screen also resize the window.
+        tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+            if let Some(observed) = crate::window::placement::observe_window(window) {
+                crate::window::placement::record(&app, label, observed);
+            }
+        }
+        tauri::WindowEvent::Destroyed => {
+            app.state::<PlacementTracker>().forget(label);
+            let label = label.to_owned();
+            // Its own close checkpointed it, so a quit stops waiting for it.
+            crate::window::quit::forget_window(&app, &label);
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = commands::workspace::release_for_window(&app, &label).await {
+                    eprintln!("failed to release the Workspace of {label}: {error}");
+                }
+                app.state::<WindowRegistry>().unregister(&label);
+                crate::native_menu::forget_window_state(&app, &label);
+                commands::workspace::finish_peer_closes(&app, &label).await;
+                crate::window::schedule_session_write(&app);
+                crate::window::broadcast_open_workspaces(&app).await;
+            });
+        }
+        _ => {}
+    }
+}
+
+/// Whether closing the last window leaves the app running. The test-only
+/// history driver ends its process by closing its only window.
+#[cfg(target_os = "macos")]
+fn keeps_running_without_windows() -> bool {
+    #[cfg(feature = "e2e-harness")]
+    if e2e_harness::exits_with_last_window() {
+        return false;
+    }
+    true
+}
+
+/// Grant drawing paths handed to the running app and route them to windows.
+fn open_drawing_paths<R: tauri::Runtime>(app: &tauri::AppHandle<R>, paths: &[String]) {
+    match grant_drawing_paths(&app.fs_scope(), paths) {
+        Ok(()) => crate::window::router::route_open_paths(app, paths),
+        Err(error) => eprintln!("failed to grant opened drawing paths: {error}"),
+    }
 }
 
 struct TauriFileGrant(tauri::fs::Scope);
@@ -574,5 +746,27 @@ mod tests {
 
     fn remove_directory(directory: PathBuf) {
         std::fs::remove_dir_all(directory).expect("remove temp fixture directory");
+    }
+
+    /// The production build registers its own command list, which names no
+    /// test-only driver command.
+    #[test]
+    fn the_production_command_list_has_no_test_only_commands() {
+        let source = include_str!("lib.rs");
+        let marker = concat!(
+            "#[cfg(not(feature = \"e2e-harness\"))]\n",
+            "    let builder = builder.invoke_handler("
+        );
+        let start = source.find(marker).expect("production command list");
+        let list = &source[start..];
+        let list = &list[..list.find("]);").expect("end of the command list")];
+
+        assert!(list.contains("app_quit_ready"));
+        for token in ["e2e_", "multi_window", "history_frontend", "perf_"] {
+            assert!(
+                !list.contains(token),
+                "production command list names {token}"
+            );
+        }
     }
 }

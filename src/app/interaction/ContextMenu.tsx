@@ -17,6 +17,8 @@ export interface ContextMenuItem {
   disabled?: boolean;
   /** Irreversible actions, shown last after a separator. */
   destructive?: boolean;
+  /** Starts a new group: a separator is drawn before this item. */
+  separatorBefore?: boolean;
   onSelect(): void;
 }
 
@@ -135,7 +137,9 @@ export function ContextMenu({
       >
         {items.map((item, index) => (
           <Fragment key={item.id}>
-            {item.destructive && index > 0 && !items[index - 1]?.destructive ? (
+            {index > 0 &&
+            (item.separatorBefore === true ||
+              (item.destructive && !items[index - 1]?.destructive)) ? (
               <div
                 aria-hidden="true"
                 className="application-context-menu-separator"

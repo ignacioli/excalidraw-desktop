@@ -9,15 +9,12 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CommandInvoker } from "../ipc/client";
 import { createInteractionState, interactionStore } from "../app/interaction";
-import {
-  SHELL_PREFERENCES_STORAGE_KEY,
-  SHELL_PREFERENCES_VERSION,
-  ShellPreferences,
-} from "../app/shellPreferences";
+import { ShellPreferences } from "../app/shellPreferences";
 import type { Workspace, WorkspaceEntry } from "../ipc/contracts";
 import { documentManager } from "../documents/documentStore";
 import { en } from "../i18n/messages/en.ts";
 import { WorkspacePanel } from "./WorkspacePanel";
+import type { CopyPathRequest } from "../app/clipboard";
 
 vi.mock("@excalidraw/excalidraw", () => ({
   getSceneVersion: () => 2,
@@ -110,7 +107,22 @@ function createInvoker(
             entry.parentRelativePath === parentRelativePath,
         );
       }
-      if (command === "workspace_add") return addedWorkspace;
+      if (command === "window_probe_workspace") {
+        return {
+          kind: "claimed",
+          workspace: null,
+          replaced: null,
+          shell: null,
+        };
+      }
+      if (command === "window_claim_workspace") {
+        return {
+          kind: "claimed",
+          workspace: addedWorkspace,
+          replaced: null,
+          shell: null,
+        };
+      }
       if (command === "workspace_entry_create") {
         const workspace = workspaces.find(
           (item) => item.id === String(args.workspaceId ?? ""),
@@ -137,7 +149,7 @@ function createInvoker(
           },
         };
       }
-      if (command === "workspace_remove") return {};
+      if (command === "window_release_workspace") return {};
       throw new Error(`Unexpected command ${command}`);
     },
   ) as CommandInvoker["invoke"];
@@ -375,10 +387,91 @@ describe("WorkspacePanel", () => {
     expect(
       await screen.findByRole("treeitem", { name: "Sketches" }),
     ).toHaveAttribute("aria-expanded", "true");
-    expect(invoke).toHaveBeenCalledWith("workspace_add", {
+    expect(invoke).toHaveBeenCalledWith("window_probe_workspace", {
+      rootPath: "/workspace",
+    });
+    expect(invoke).toHaveBeenCalledWith("window_claim_workspace", {
       rootPath: "/workspace",
     });
     expect(onWorkspacesChange).toHaveBeenLastCalledWith([workspace]);
+  });
+
+  it("stays empty when another window owns the chosen folder", async () => {
+    const user = userEvent.setup();
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_entry_list") return [];
+      if (
+        command === "window_probe_workspace" ||
+        command === "window_claim_workspace"
+      ) {
+        return { kind: "ownedBy", label: "window-2", workspaceId: "other" };
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    const closeMany = vi.spyOn(documentManager, "closeMany");
+
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        selectDirectory={async () => "/workspace/other"}
+      />,
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "Mount folder…" }),
+    );
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("window_claim_workspace", {
+        rootPath: "/workspace/other",
+      }),
+    );
+    expect(closeMany).not.toHaveBeenCalled();
+    expect(screen.queryByRole("tree")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mount folder…" })).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("hands a folder that contains another window's Workspace to the shell", async () => {
+    const user = userEvent.setup();
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "window_probe_workspace") {
+        return {
+          kind: "containsOpen",
+          label: "window-2",
+          workspaceId: "inner",
+        };
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    const closeMany = vi.spyOn(documentManager, "closeMany");
+    const onNestedConflict = vi.fn(async () => undefined);
+
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        onNestedConflict={onNestedConflict}
+        selectDirectory={async () => "/workspace"}
+      />,
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "Mount folder…" }),
+    );
+
+    await waitFor(() =>
+      expect(onNestedConflict).toHaveBeenCalledWith("/workspace", {
+        kind: "containsOpen",
+        label: "window-2",
+        workspaceId: "inner",
+      }),
+    );
+    expect(closeMany).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalledWith(
+      "window_claim_workspace",
+      expect.anything(),
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("announces folder loading then permission-denied list errors", async () => {
@@ -419,6 +512,77 @@ describe("WorkspacePanel", () => {
     expect(screen.queryByText("Loading folder…")).not.toBeInTheDocument();
   });
 
+  it("reveals a nested folder by expanding down to it and selecting it", async () => {
+    const directory = (relativePath: string): WorkspaceEntry => {
+      const slash = relativePath.lastIndexOf("/");
+      const name = relativePath.slice(slash + 1);
+      return {
+        workspaceId: "workspace-1",
+        kind: "directory",
+        canonicalPath: `/workspace/one/${relativePath}`,
+        relativePath,
+        parentRelativePath: slash < 0 ? "" : relativePath.slice(0, slash),
+        name,
+        displayName: name,
+        mtime: 1,
+        fileSize: 0,
+      };
+    };
+    const listings: Record<string, WorkspaceEntry[]> = {
+      "": [directory("notes")],
+      notes: [directory("notes/deep")],
+      "notes/deep": [],
+    };
+    const invoke = vi.fn(
+      async (command: string, args: Record<string, unknown>) => {
+        if (command === "workspace_list") return [WORKSPACES[0]];
+        if (command === "workspace_entry_list") {
+          return listings[String(args.parentRelativePath ?? "")] ?? [];
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+    const save = vi.fn();
+    const preferences = new ShellPreferences(save);
+    preferences.loadWorkspace({
+      sidebarPinned: false,
+      sidebarWidth: 360,
+      expanded: [],
+    });
+    const onRevealLocationApplied = vi.fn();
+
+    render(
+      <WorkspacePanel
+        currentWorkspaceId="workspace-1"
+        invoker={{ invoke }}
+        onRevealLocationApplied={onRevealLocationApplied}
+        preferences={preferences}
+        revealLocation={{
+          workspaceId: "workspace-1",
+          directoryRelativePath: "notes/deep",
+        }}
+        selectDirectory={async () => null}
+      />,
+    );
+
+    const deep = await screen.findByRole("treeitem", { name: "deep" });
+    await waitFor(() => expect(deep).toHaveFocus());
+    expect(screen.getByRole("treeitem", { name: "Sketches" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByRole("treeitem", { name: "notes" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(onRevealLocationApplied).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenLastCalledWith({
+      sidebarPinned: false,
+      sidebarWidth: 360,
+      expanded: [""],
+    });
+  });
+
   it("renders only the current Workspace and collapses it", async () => {
     const user = userEvent.setup();
     const invoker = createInvoker();
@@ -447,13 +611,11 @@ describe("WorkspacePanel", () => {
   });
 
   it("follows the shared Current Workspace when Recent selection changes it", async () => {
-    const preferences = new ShellPreferences();
-    preferences.setCurrentWorkspaceId("workspace-1");
     const invoker = createInvoker();
-    render(
+    const view = render(
       <WorkspacePanel
+        currentWorkspaceId="workspace-1"
         invoker={invoker}
-        preferences={preferences}
         selectDirectory={async () => null}
       />,
     );
@@ -462,7 +624,13 @@ describe("WorkspacePanel", () => {
       await screen.findByRole("heading", { name: "Sketches" }),
     ).toBeInTheDocument();
 
-    preferences.setCurrentWorkspaceId("workspace-2");
+    view.rerender(
+      <WorkspacePanel
+        currentWorkspaceId="workspace-2"
+        invoker={invoker}
+        selectDirectory={async () => null}
+      />,
+    );
 
     await waitFor(() => {
       expect(
@@ -471,58 +639,58 @@ describe("WorkspacePanel", () => {
     });
   });
 
-  it("restores and persists each Workspace expansion preference", async () => {
+  it("restores and saves the Workspace's own expansion", async () => {
     const user = userEvent.setup();
-    window.localStorage.setItem(
-      SHELL_PREFERENCES_STORAGE_KEY,
-      JSON.stringify({
-        version: SHELL_PREFERENCES_VERSION,
-        sidebarPinned: false,
-        expandedWorkspaceIds: ["workspace-1"],
-        currentWorkspaceId: "workspace-1",
-      }),
-    );
-    const invoker = createInvoker();
+    const save = vi.fn();
+    const preferences = new ShellPreferences(save);
+    preferences.loadWorkspace({
+      sidebarPinned: false,
+      sidebarWidth: 360,
+      expanded: [""],
+    });
+    const invoker = createInvoker([WORKSPACES[0]]);
 
     const firstRender = render(
-      <WorkspacePanel invoker={invoker} selectDirectory={async () => null} />,
+      <WorkspacePanel
+        invoker={invoker}
+        preferences={preferences}
+        selectDirectory={async () => null}
+      />,
     );
     const sketches = await screen.findByRole("treeitem", { name: "Sketches" });
     expect(sketches).toHaveAttribute("aria-expanded", "true");
-    expect(
-      screen.queryByRole("treeitem", { name: "Blueprints" }),
-    ).not.toBeInTheDocument();
 
     await user.click(sketches);
     expect(sketches).toHaveAttribute("aria-expanded", "false");
-    expect(
-      JSON.parse(
-        window.localStorage.getItem(SHELL_PREFERENCES_STORAGE_KEY) ?? "{}",
-      ),
-    ).toMatchObject({ expandedWorkspaceIds: [] });
+    expect(save).toHaveBeenLastCalledWith({
+      sidebarPinned: false,
+      sidebarWidth: 360,
+      expanded: [],
+    });
 
     firstRender.unmount();
+    const reopened = new ShellPreferences();
+    reopened.loadWorkspace(save.mock.lastCall?.[0] ?? null);
     render(
-      <WorkspacePanel invoker={invoker} selectDirectory={async () => null} />,
+      <WorkspacePanel
+        invoker={invoker}
+        preferences={reopened}
+        selectDirectory={async () => null}
+      />,
     );
     expect(
       await screen.findByRole("treeitem", { name: "Sketches" }),
     ).toHaveAttribute("aria-expanded", "false");
-    expect(
-      screen.queryByRole("treeitem", { name: "Blueprints" }),
-    ).not.toBeInTheDocument();
   });
 
   it("expands a newly mounted Workspace even when an existing preference is collapsed", async () => {
     const user = userEvent.setup();
-    window.localStorage.setItem(
-      SHELL_PREFERENCES_STORAGE_KEY,
-      JSON.stringify({
-        version: SHELL_PREFERENCES_VERSION,
-        sidebarPinned: false,
-        expandedWorkspaceIds: [],
-      }),
-    );
+    const preferences = new ShellPreferences();
+    preferences.showWithoutWorkspace({
+      sidebarPinned: false,
+      sidebarWidth: 360,
+      expanded: [],
+    });
     const workspace = {
       id: "workspace-new",
       name: "New sketches",
@@ -536,6 +704,7 @@ describe("WorkspacePanel", () => {
     render(
       <WorkspacePanel
         invoker={invoker}
+        preferences={preferences}
         onCurrentWorkspaceChange={onCurrentWorkspaceChange}
         onWorkspacesChange={onWorkspacesChange}
         selectDirectory={async () => workspace.rootPath}
@@ -592,13 +761,29 @@ describe("WorkspacePanel", () => {
     expect(dialog).toHaveTextContent(
       "Open drawings from this Workspace will be saved and closed",
     );
+    // Sidebar confirmation anatomy: root path, Cancel first with focus, and
+    // a primary (not destructive) Remove Workspace.
+    expect(dialog).toHaveAttribute("data-variant", "sidebar");
+    expect(within(dialog).getByText("/workspace/one")).toBeInTheDocument();
+    expect(
+      within(dialog)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Cancel", "Remove Workspace"]);
+    expect(
+      within(dialog).getByRole("button", { name: "Cancel" }),
+    ).toHaveFocus();
+    expect(
+      within(dialog).getByRole("button", { name: "Remove Workspace" }),
+    ).toHaveAttribute("data-kind", "primary");
     await user.click(
       within(dialog).getByRole("button", { name: "Remove Workspace" }),
     );
     await waitFor(() =>
-      expect(invoker.invoke).toHaveBeenCalledWith("workspace_remove", {
-        workspaceId: "workspace-1",
-      }),
+      expect(invoker.invoke).toHaveBeenCalledWith(
+        "window_release_workspace",
+        {},
+      ),
     );
     expect(closeWorkspaceDocuments).toHaveBeenCalledWith("/workspace/one");
     expect(closeWorkspaceDocuments.mock.invocationCallOrder[0]).toBeLessThan(
@@ -607,7 +792,7 @@ describe("WorkspacePanel", () => {
         .mock.invocationCallOrder.find(
           (_, index) =>
             vi.mocked(invoker.invoke).mock.calls[index]?.[0] ===
-            "workspace_remove",
+            "window_release_workspace",
         ) ?? Number.POSITIVE_INFINITY,
     );
     await waitFor(() =>
@@ -646,7 +831,7 @@ describe("WorkspacePanel", () => {
       "The drawing could not be saved.",
     );
     expect(invoker.invoke).not.toHaveBeenCalledWith(
-      "workspace_remove",
+      "window_release_workspace",
       expect.anything(),
     );
   });
@@ -706,7 +891,7 @@ describe("WorkspacePanel", () => {
               entry.parentRelativePath === parentRelativePath,
           );
         }
-        if (command === "workspace_remove") {
+        if (command === "window_release_workspace") {
           throw {
             code: "IO_ERROR",
             message: "Workspace is still in use.",
@@ -744,7 +929,9 @@ describe("WorkspacePanel", () => {
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
-    expect(remove).toHaveFocus();
+    // Focus returns to the row: its actions button is hidden once the row
+    // is neither hovered nor focused.
+    expect(screen.getByRole("treeitem", { name: "Sketches" })).toHaveFocus();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -890,6 +1077,135 @@ describe("WorkspacePanel", () => {
     expect(notesListCount).toBeGreaterThanOrEqual(2);
   });
 
+  it("reports the selected folder as the creation target until it is deleted", async () => {
+    const user = userEvent.setup();
+    const onTargetFolderChange = vi.fn();
+    const entries = ROOT_ENTRIES.filter(
+      (entry) => entry.workspaceId === "workspace-1",
+    );
+    const invoke = vi.fn(
+      async (command: string, args: Record<string, unknown>) => {
+        if (command === "workspace_list") return [WORKSPACES[0]];
+        if (command === "workspace_entry_list") {
+          const parentRelativePath = String(args.parentRelativePath ?? "");
+          return entries.filter(
+            (entry) => entry.parentRelativePath === parentRelativePath,
+          );
+        }
+        if (command === "workspace_entry_delete_preflight") {
+          const entry = entries.find(
+            (item) => item.relativePath === String(args.relativePath ?? ""),
+          );
+          if (entry === undefined) throw new Error("missing entry");
+          return { status: "confirmable", entry };
+        }
+        if (command === "workspace_entry_delete") {
+          const relativePath = String(args.relativePath ?? "");
+          const index = entries.findIndex(
+            (entry) => entry.relativePath === relativePath,
+          );
+          if (index >= 0) entries.splice(index, 1);
+          return {
+            operationId: "delete-notes",
+            kind: "directory",
+            oldRelativePath: relativePath,
+          };
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        onTargetFolderChange={onTargetFolderChange}
+        selectDirectory={async () => null}
+      />,
+    );
+
+    await user.click(await screen.findByRole("treeitem", { name: "notes" }));
+    expect(onTargetFolderChange).toHaveBeenLastCalledWith({
+      workspaceId: "workspace-1",
+      relativePath: "notes",
+    });
+
+    await user.click(screen.getByRole("button", { name: "Actions for notes" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Delete notes?",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(onTargetFolderChange).toHaveBeenLastCalledWith({
+        workspaceId: "workspace-1",
+        relativePath: "",
+      }),
+    );
+  });
+
+  it("lists a folder again and expands it when an entry is created outside the panel", async () => {
+    const user = userEvent.setup();
+    const entries: WorkspaceEntry[] = ROOT_ENTRIES.filter(
+      (entry) => entry.workspaceId === "workspace-1",
+    );
+    const invoke = vi.fn(
+      async (command: string, args: Record<string, unknown>) => {
+        if (command === "workspace_list") return [WORKSPACES[0]];
+        if (command === "workspace_entry_list") {
+          const parentRelativePath = String(args.parentRelativePath ?? "");
+          return entries.filter(
+            (entry) => entry.parentRelativePath === parentRelativePath,
+          );
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+    const onCreatedEntryApplied = vi.fn();
+    const { rerender } = render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        selectDirectory={async () => null}
+      />,
+    );
+    // Expanding and collapsing `notes` caches its (empty) listing.
+    const notes = await screen.findByRole("treeitem", { name: "notes" });
+    await user.click(notes);
+    await user.click(notes);
+    expect(notes).toHaveAttribute("aria-expanded", "false");
+
+    entries.push({
+      workspaceId: "workspace-1",
+      kind: "drawing",
+      canonicalPath: `${WORKSPACES[0]!.rootPath}/notes/Untitled.excalidraw`,
+      relativePath: "notes/Untitled.excalidraw",
+      parentRelativePath: "notes",
+      name: "Untitled.excalidraw",
+      displayName: "Untitled",
+      mtime: 2,
+      fileSize: 10,
+    });
+    rerender(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        selectDirectory={async () => null}
+        createdEntry={{
+          workspaceId: "workspace-1",
+          relativePath: "notes/Untitled.excalidraw",
+        }}
+        onCreatedEntryApplied={onCreatedEntryApplied}
+      />,
+    );
+
+    const created = await screen.findByRole("treeitem", { name: "Untitled" });
+    expect(created).toHaveAttribute("aria-level", "3");
+    expect(screen.getByRole("treeitem", { name: "notes" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(onCreatedEntryApplied).toHaveBeenCalledTimes(1);
+    expect(created).not.toHaveFocus();
+  });
+
   it("focuses the parent workspace row after a drawing is deleted", async () => {
     const user = userEvent.setup();
     const entries = ROOT_ENTRIES.filter(
@@ -1017,5 +1333,160 @@ describe("WorkspacePanel", () => {
     expect(
       screen.queryByRole("treeitem", { name: "drawing" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("offers the copy items per row kind and copies the entry's current paths", async () => {
+    const user = userEvent.setup();
+    const root = "/Users/me/My Drawings";
+    const workspace = {
+      id: "workspace-1",
+      name: "My Drawings",
+      rootPath: root,
+      createdAt: 1,
+    };
+    const entries: WorkspaceEntry[] = [
+      {
+        workspaceId: workspace.id,
+        kind: "directory",
+        canonicalPath: `${root}/我的 文件夹`,
+        relativePath: "我的 文件夹",
+        parentRelativePath: "",
+        name: "我的 文件夹",
+        displayName: "我的 文件夹",
+        mtime: 1,
+        fileSize: 0,
+      },
+      {
+        workspaceId: workspace.id,
+        kind: "drawing",
+        canonicalPath: `${root}/计划 草图.excalidraw`,
+        relativePath: "计划 草图.excalidraw",
+        parentRelativePath: "",
+        name: "计划 草图.excalidraw",
+        displayName: "计划 草图",
+        mtime: 1,
+        fileSize: 10,
+      },
+    ];
+    const invoke = vi.fn(
+      async (command: string, args: Record<string, unknown>) => {
+        if (command === "workspace_list") return [workspace];
+        if (command === "workspace_entry_list") {
+          return entries.filter(
+            (entry) => entry.parentRelativePath === args.parentRelativePath,
+          );
+        }
+        throw new Error(`Unexpected command ${command}`);
+      },
+    ) as CommandInvoker["invoke"];
+    const onCopyPath = vi.fn<(request: CopyPathRequest) => void>();
+    render(
+      <WorkspacePanel
+        invoker={{ invoke }}
+        onCopyPath={onCopyPath}
+        selectDirectory={async () => null}
+      />,
+    );
+
+    const menuOf = async (name: string) => {
+      await user.click(
+        await screen.findByRole("button", { name: `Actions for ${name}` }),
+      );
+      const menu = screen.getByRole("menu");
+      return {
+        menu,
+        labels: within(menu)
+          .getAllByRole("menuitem")
+          .map((item) => item.textContent),
+        separators: within(menu).getAllByRole("separator", { hidden: true })
+          .length,
+      };
+    };
+    const copy = async (name: string, item: string) => {
+      const { menu } = await menuOf(name);
+      await user.click(within(menu).getByRole("menuitem", { name: item }));
+      return onCopyPath.mock.calls.at(-1)?.[0];
+    };
+
+    const rootMenu = await menuOf("My Drawings");
+    expect(rootMenu.labels).toEqual([
+      "New Drawing",
+      "New Folder",
+      "Copy Path",
+      "Remove Workspace",
+    ]);
+    expect(rootMenu.separators).toBe(2);
+    await user.keyboard("{Escape}");
+
+    const folderMenu = await menuOf("我的 文件夹");
+    expect(folderMenu.labels).toEqual([
+      "New Drawing",
+      "New Folder",
+      "Copy Path",
+      "Copy Relative Path",
+      "Rename",
+      "Delete",
+    ]);
+    expect(folderMenu.separators).toBe(3);
+    await user.keyboard("{Escape}");
+
+    const drawingMenu = await menuOf("计划 草图");
+    expect(drawingMenu.labels).toEqual([
+      "Rename",
+      "Copy Path",
+      "Copy Relative Path",
+      "Delete",
+    ]);
+    expect(drawingMenu.separators).toBe(2);
+    await user.keyboard("{Escape}");
+
+    const rootPath = await copy("My Drawings", "Copy Path");
+    expect(rootPath?.kind).toBe("path");
+    expect(rootPath?.resolve()).toBe(root);
+    const drawingPath = await copy("计划 草图", "Copy Path");
+    expect(drawingPath?.resolve()).toBe(`${root}/计划 草图.excalidraw`);
+    const drawingRelative = await copy("计划 草图", "Copy Relative Path");
+    expect(drawingRelative?.kind).toBe("relativePath");
+    expect(drawingRelative?.resolve()).toBe("计划 草图.excalidraw");
+    const folderRelative = await copy("我的 文件夹", "Copy Relative Path");
+    expect(folderRelative?.resolve()).toBe("我的 文件夹");
+  });
+
+  it("copies nothing for an entry that no longer exists", async () => {
+    const REFRESH_LABEL = en["workspace.refresh"];
+    const user = userEvent.setup();
+    const invoker = createInvoker();
+    const onCopyPath = vi.fn<(request: CopyPathRequest) => void>();
+    render(
+      <WorkspacePanel
+        invoker={invoker}
+        onCopyPath={onCopyPath}
+        selectDirectory={async () => null}
+      />,
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for drawing" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Copy Path" }));
+    const request = onCopyPath.mock.calls[0]?.[0];
+    expect(request?.resolve()).toBe("/workspace/one/drawing.excalidraw");
+
+    // The listing refreshes without the drawing (deleted on disk).
+    const index = ROOT_ENTRIES.findIndex(
+      (entry) =>
+        entry.workspaceId === "workspace-1" && entry.kind === "drawing",
+    );
+    const [removed] = ROOT_ENTRIES.splice(index, 1);
+    try {
+      await user.click(screen.getByRole("button", { name: REFRESH_LABEL }));
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("treeitem", { name: "drawing" }),
+        ).not.toBeInTheDocument(),
+      );
+      expect(request?.resolve()).toBeNull();
+    } finally {
+      if (removed !== undefined) ROOT_ENTRIES.splice(index, 0, removed);
+    }
   });
 });

@@ -9,6 +9,8 @@ import { zhCN } from "./zh-CN.ts";
 const SAME_IN_BOTH_LANGUAGES: ReadonlySet<MessageKey> = new Set([
   "language.autonym.en",
   "language.autonym.zhCN",
+  // The em dash separator is the macOS title convention in both languages.
+  "shell.windowTitle.drawing",
 ]);
 
 describe("message catalogs", () => {

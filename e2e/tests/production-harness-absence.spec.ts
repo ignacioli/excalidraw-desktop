@@ -43,3 +43,27 @@ test("production executable omits native history restart driver tokens", async (
   );
   expect(exposed).toEqual([]);
 });
+
+test("production executable omits the multi-window driver", async () => {
+  const binaryPath = process.env.TAURI_PRODUCTION_BINARY;
+  test.skip(
+    !binaryPath,
+    "Set TAURI_PRODUCTION_BINARY to a production build without the e2e-harness feature.",
+  );
+  if (!binaryPath) {
+    return;
+  }
+
+  const executable = await readFile(binaryPath);
+  const testOnlyTokens = [
+    "e2e_multi_window_bootstrap",
+    "e2e_multi_window_next",
+    "e2e_multi_window_publish",
+    "EXCALIDRAW_E2E_MULTI_WINDOW",
+    "setCheckpointFault",
+  ];
+  const exposed = testOnlyTokens.filter((token) =>
+    executable.includes(Buffer.from(token)),
+  );
+  expect(exposed).toEqual([]);
+});

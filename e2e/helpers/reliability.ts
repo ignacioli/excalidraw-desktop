@@ -1,6 +1,14 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readdir, readFile, rm, statfs, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  statfs,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { createHistoryFrontendEvidence } from "../../src/e2e/historyFrontendEvidence";
@@ -19,6 +27,7 @@ import {
   type HistoryFaultReadyMarker,
   type HistoryFaultStage,
 } from "./fault";
+import { WebKitProcessTracker } from "./webkitProcesses";
 
 const RELIABILITY_SCENARIO_FLAG = "--e2e-reliability-scenario";
 const SCENARIO_TIMEOUT_MS = 30_000;
@@ -2358,4 +2367,221 @@ async function listTemporaryFiles(targetPath: string): Promise<string[]> {
 
 function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+/** One window as the multi-window driver's ownership snapshot reports it. */
+export interface MultiWindowRecord {
+  label: string;
+  recovery: boolean;
+  workspaceId: string | null;
+  workspaceRoot: string | null;
+  documents: string[];
+  sessionTabs: string[];
+  sessionActivePath: string | null;
+}
+
+export interface MultiWindowSnapshot {
+  pid: number;
+  windows: MultiWindowRecord[];
+  /** Labels of the native windows that exist. */
+  openWindows: string[];
+  focused: string[];
+}
+
+/** One window's tabs, active tab, Welcome, Recovery dialog, and errors. */
+export interface MultiWindowReport {
+  tabs: Array<{
+    path: string;
+    saveState: string;
+    elements: Array<{ id: string; x: number; y: number }>;
+  }>;
+  activePath: string | null;
+  welcome: boolean;
+  recoveryCandidates: string[];
+  alerts: string[];
+}
+
+export interface MultiWindowAnswer {
+  id: string;
+  target: string;
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+}
+
+/**
+ * A running test-only build with the multi-window driver. Requests go to
+ * `app` (snapshot, newWindow, close, quit, setCheckpointFault) or to a
+ * window label (openWorkspace, openDrawing, edit, report, recover).
+ */
+export interface MultiWindowApp {
+  readonly child: ReturnType<typeof spawn>;
+  readonly paths: IsolatedDesktopPaths;
+  /** For process-tree measurements: the spawn time and WebKit helpers. */
+  readonly startedAtNs: bigint;
+  readonly webkitTracker: WebKitProcessTracker;
+  /** Send a request and return its answer, failed or not. */
+  send(
+    target: string,
+    action: string,
+    args?: Record<string, unknown>,
+    timeoutMs?: number,
+  ): Promise<MultiWindowAnswer>;
+  /** Send a request and return its result; a failed request throws. */
+  request<T = unknown>(
+    target: string,
+    action: string,
+    args?: Record<string, unknown>,
+    timeoutMs?: number,
+  ): Promise<T>;
+  snapshot(): Promise<MultiWindowSnapshot>;
+  report(label: string): Promise<MultiWindowReport>;
+  /** Poll the snapshot until `accept` holds. */
+  waitForSnapshot(
+    accept: (snapshot: MultiWindowSnapshot) => boolean,
+    timeoutMs?: number,
+  ): Promise<MultiWindowSnapshot>;
+  /** SIGKILL the whole process group, as a crash would. */
+  kill(): Promise<void>;
+  /** Wait for the process to end by itself. */
+  waitForExit(
+    timeoutMs: number,
+  ): Promise<{ code: number | null; signal: string | null }>;
+  /** Whether the process is still running. */
+  running(): boolean;
+  stderr(): string;
+}
+
+const MULTI_WINDOW_REQUEST_TIMEOUT_MS = 30_000;
+
+function multiWindowControl(paths: IsolatedDesktopPaths): string {
+  return join(paths.runtime, "reliability", "multi-window");
+}
+
+/**
+ * Start the test-only build with the multi-window driver on `paths`, which
+ * persist across launches so a restart sees the previous session.
+ * `EXCALIDRAW_E2E_QUIT_TIMEOUT_MS` shortens the quit deadline when given.
+ */
+export async function launchMultiWindowApp(
+  paths: IsolatedDesktopPaths,
+  options: {
+    args?: readonly string[];
+    environment?: Readonly<NodeJS.ProcessEnv>;
+  } = {},
+): Promise<MultiWindowApp> {
+  const binary = await resolveDesktopBinary();
+  const control = multiWindowControl(paths);
+  // Requests and answers of an earlier launch never reach this one.
+  await rm(control, { recursive: true, force: true });
+  await mkdir(join(control, "requests"), { recursive: true });
+  const tracker = await WebKitProcessTracker.create();
+  const startedAtNs = process.hrtime.bigint();
+  const child = spawn(binary, [...(options.args ?? [])], {
+    detached: process.platform !== "win32",
+    env: isolatedDesktopEnvironment(paths, {
+      ...options.environment,
+      EXCALIDRAW_E2E_MULTI_WINDOW: "1",
+    }),
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  let stderr = "";
+  child.stderr?.setEncoding("utf8");
+  child.stderr?.on("data", (chunk: string) => {
+    stderr = (stderr + chunk).slice(-65_536);
+  });
+  let sequence = 0;
+  const running = () => child.exitCode === null && child.signalCode === null;
+
+  const send: MultiWindowApp["send"] = async (
+    target,
+    action,
+    args = {},
+    timeoutMs = MULTI_WINDOW_REQUEST_TIMEOUT_MS,
+  ) => {
+    sequence += 1;
+    const id = `${String(sequence).padStart(6, "0")}-${action}`;
+    const queue = join(control, "requests", target);
+    await mkdir(queue, { recursive: true });
+    const staged = join(control, `.${id}.request`);
+    await writeFile(staged, JSON.stringify({ id, action, args }));
+    await rename(staged, join(queue, `${id}.json`));
+    const resultPath = join(control, "results", `${id}.json`);
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        return JSON.parse(
+          await readFile(resultPath, "utf8"),
+        ) as MultiWindowAnswer;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      if (!running()) {
+        throw new Error(
+          `The app exited before answering ${action} for ${target} (code=${child.exitCode}, signal=${child.signalCode}).${stderr ? `\napp stderr tail:\n${stderr}` : ""}`,
+        );
+      }
+      await delay(25);
+    }
+    throw new Error(
+      `${target} did not answer ${action} within ${timeoutMs} ms.${stderr ? `\napp stderr tail:\n${stderr}` : ""}`,
+    );
+  };
+
+  const request: MultiWindowApp["request"] = async <T = unknown>(
+    target: string,
+    action: string,
+    args?: Record<string, unknown>,
+    timeoutMs?: number,
+  ): Promise<T> => {
+    const answer = await send(target, action, args, timeoutMs);
+    if (!answer.ok) {
+      throw new Error(`${target} failed ${action}: ${answer.error ?? ""}`);
+    }
+    return answer.result as T;
+  };
+
+  const snapshot = () => request<MultiWindowSnapshot>("app", "snapshot");
+
+  return {
+    child,
+    paths,
+    startedAtNs,
+    webkitTracker: tracker,
+    send,
+    request,
+    snapshot,
+    report: (label) => request<MultiWindowReport>(label, "report"),
+    async waitForSnapshot(accept, timeoutMs = MULTI_WINDOW_REQUEST_TIMEOUT_MS) {
+      const deadline = Date.now() + timeoutMs;
+      let last: MultiWindowSnapshot | undefined;
+      while (Date.now() < deadline) {
+        last = await snapshot();
+        if (accept(last)) return last;
+        await delay(50);
+      }
+      throw new Error(
+        `The windows did not reach the expected state within ${timeoutMs} ms. Last snapshot: ${JSON.stringify(last)}`,
+      );
+    },
+    async kill() {
+      if (child.pid !== undefined && running()) {
+        try {
+          if (process.platform !== "win32") process.kill(-child.pid, "SIGKILL");
+          else child.kill("SIGKILL");
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+        }
+      }
+      await waitForChildExit(child, 5_000);
+      await tracker.terminateOrphanedProcesses();
+    },
+    async waitForExit(timeoutMs) {
+      await waitForChildExit(child, timeoutMs);
+      if (!running()) await tracker.terminateOrphanedProcesses();
+      return { code: child.exitCode, signal: child.signalCode };
+    },
+    running,
+    stderr: () => stderr,
+  };
 }

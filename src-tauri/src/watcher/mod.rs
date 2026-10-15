@@ -7,7 +7,7 @@
 //! (plan data flow 2, FR-018/019/020, R7).
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -16,7 +16,7 @@ use std::{
 
 use notify::{EventKind, RecursiveMode, Watcher as _};
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 use tokio::sync::Mutex;
 
 use crate::{
@@ -248,9 +248,19 @@ impl WatcherService {
         Ok(())
     }
 
-    pub async fn start_existing(&self, app: AppHandle) -> Result<(), AppError> {
+    /// Start watchers for the Workspaces a window has claimed. Mounted rows
+    /// that no window owns (left by an abnormal exit until Recovery
+    /// finishes) are not watched.
+    pub async fn start_existing(
+        &self,
+        owned_workspace_ids: &BTreeSet<String>,
+        app: AppHandle,
+    ) -> Result<(), AppError> {
         let workspaces = self.repository.workspace_list().await?;
-        for workspace in workspaces {
+        for workspace in workspaces
+            .into_iter()
+            .filter(|workspace| owned_workspace_ids.contains(&workspace.id))
+        {
             self.spawn_for_workspace(workspace, app.clone()).await?;
         }
         Ok(())
@@ -393,7 +403,9 @@ impl WatcherService {
                     }
                     _ => (None, None),
                 };
-                let _ = app.emit(
+                let _ = crate::window::events::emit_to_document_owner(
+                    app,
+                    path,
                     "file-changed",
                     FileChangedEvent {
                         path: path.display().to_string(),
@@ -416,7 +428,9 @@ impl WatcherService {
                 }
                 self.known.lock().await.remove(path);
                 self.conflicts.clear_conflicted(path).await;
-                let _ = app.emit(
+                let _ = crate::window::events::emit_to_document_owner(
+                    app,
+                    path,
                     "file-changed",
                     FileChangedEvent {
                         path: path.display().to_string(),
@@ -450,7 +464,9 @@ impl WatcherService {
                 if emit_removed_when_missing {
                     self.known.lock().await.remove(path);
                     self.conflicts.clear_conflicted(path).await;
-                    let _ = app.emit(
+                    let _ = crate::window::events::emit_to_document_owner(
+                        app,
+                        path,
                         "file-changed",
                         FileChangedEvent {
                             path: path.display().to_string(),
@@ -478,7 +494,9 @@ impl WatcherService {
             _ => FileChangeKind::Modified,
         };
         let path_string = path.display().to_string();
-        let _ = app.emit(
+        let _ = crate::window::events::emit_to_document_owner(
+            app,
+            path,
             "file-changed",
             FileChangedEvent {
                 path: path_string.clone(),
@@ -495,7 +513,9 @@ impl WatcherService {
             if let Ok(Some(draft)) = self.repository.draft_get(path_string.clone()).await {
                 if draft.is_dirty {
                     self.conflicts.mark_conflicted(path.to_path_buf()).await;
-                    let _ = app.emit(
+                    let _ = crate::window::events::emit_to_document_owner(
+                        app,
+                        path,
                         "conflict-detected",
                         ConflictDetectedEvent {
                             path: path_string,
@@ -547,7 +567,9 @@ impl WatcherService {
                     .replace(std::path::MAIN_SEPARATOR, "/")
             })
             .unwrap_or_default();
-        let _ = app.emit(
+        let _ = crate::window::events::emit_to_workspace_owner(
+            app,
+            &workspace.id,
             "workspace-entries-changed",
             serde_json::json!({
                 "workspaceId": workspace.id,

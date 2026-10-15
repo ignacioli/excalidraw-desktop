@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CommandInvoker } from "../ipc/client";
-import { createNewDrawingFile, NEW_DRAWING_NAME_ATTEMPTS } from "./newDrawing";
+import type { ClaimWorkspaceOutcome } from "../ipc/contracts";
+import {
+  createNewDrawingFile,
+  createUntitledDrawing,
+  NEW_DRAWING_NAME_ATTEMPTS,
+} from "./newDrawing";
 
 const workspace = {
   id: "workspace-drawings",
@@ -9,11 +14,21 @@ const workspace = {
   createdAt: 1,
 };
 
-function createInvoker(existingNames: Iterable<string> = []) {
+const claimed: ClaimWorkspaceOutcome = {
+  kind: "claimed",
+  workspace,
+  replaced: null,
+  shell: null,
+};
+
+function createInvoker(
+  existingNames: Iterable<string> = [],
+  claim: ClaimWorkspaceOutcome = claimed,
+) {
   const existing = new Set(existingNames);
   const invoke = vi.fn(
     async (command: string, args?: Record<string, unknown>) => {
-      if (command === "workspace_add") return workspace;
+      if (command === "window_claim_workspace") return claim;
       if (command === "workspace_entry_create") {
         const name = `${String(args?.baseName)}.excalidraw`;
         if (existing.has(name)) {
@@ -45,28 +60,79 @@ function createInvoker(existingNames: Iterable<string> = []) {
 }
 
 describe("createNewDrawingFile", () => {
-  it("asks for a folder and mounts it before creating Untitled", async () => {
+  it("asks for a folder and claims it before creating Untitled", async () => {
     const invoker = createInvoker();
     const selectDirectory = vi.fn(async () => workspace.rootPath);
 
     const result = await createNewDrawingFile({
       invoker,
-      mountedWorkspaces: [],
       selectDirectory,
       untitledBaseName: "Untitled",
     });
 
     expect(selectDirectory).toHaveBeenCalledOnce();
-    expect(invoker.mock).toHaveBeenCalledWith("workspace_add", {
+    expect(invoker.mock).toHaveBeenCalledWith("window_claim_workspace", {
       rootPath: workspace.rootPath,
     });
     expect(result).toMatchObject({
       status: "created",
       workspace,
-      mounted: true,
+      replaced: null,
       entry: { canonicalPath: `${workspace.rootPath}/Untitled.excalidraw` },
     });
   });
+
+  it("reports the Workspace this window held before", async () => {
+    const invoker = createInvoker([], {
+      kind: "claimed",
+      workspace,
+      replaced: "workspace-previous",
+      shell: null,
+    });
+
+    await expect(
+      createNewDrawingFile({
+        invoker,
+        selectDirectory: async () => workspace.rootPath,
+        untitledBaseName: "Untitled",
+      }),
+    ).resolves.toMatchObject({
+      status: "created",
+      replaced: "workspace-previous",
+    });
+  });
+
+  it.each<ClaimWorkspaceOutcome>([
+    { kind: "ownedBy", label: "window-2", workspaceId: workspace.id },
+    {
+      kind: "insideOpen",
+      label: "window-2",
+      workspaceId: "workspace-parent",
+      relativePath: "Drawings",
+    },
+    { kind: "containsOpen", label: "window-2", workspaceId: "workspace-child" },
+  ])(
+    "creates nothing when another window holds the folder ($kind)",
+    async (outcome) => {
+      const invoker = createInvoker([], outcome);
+
+      await expect(
+        createNewDrawingFile({
+          invoker,
+          selectDirectory: async () => workspace.rootPath,
+          untitledBaseName: "Untitled",
+        }),
+      ).resolves.toEqual({
+        status: "declined",
+        rootPath: workspace.rootPath,
+        outcome,
+      });
+      expect(invoker.mock).not.toHaveBeenCalledWith(
+        "workspace_entry_create",
+        expect.anything(),
+      );
+    },
+  );
 
   it("steps past existing names to the next free Untitled N and never overwrites", async () => {
     const invoker = createInvoker([
@@ -76,33 +142,14 @@ describe("createNewDrawingFile", () => {
 
     const result = await createNewDrawingFile({
       invoker,
-      mountedWorkspaces: [],
       selectDirectory: async () => workspace.rootPath,
       untitledBaseName: "Untitled",
     });
 
     expect(result).toMatchObject({
       status: "created",
-      mounted: true,
       entry: { canonicalPath: `${workspace.rootPath}/Untitled 3.excalidraw` },
     });
-  });
-
-  it("reuses an already mounted workspace when the chosen folder is its root", async () => {
-    const invoker = createInvoker();
-
-    const result = await createNewDrawingFile({
-      invoker,
-      mountedWorkspaces: [workspace],
-      selectDirectory: async () => workspace.rootPath,
-      untitledBaseName: "Untitled",
-    });
-
-    expect(invoker.mock).not.toHaveBeenCalledWith(
-      "workspace_add",
-      expect.anything(),
-    );
-    expect(result).toMatchObject({ status: "created", mounted: false });
   });
 
   it("creates nothing when the folder choice is cancelled", async () => {
@@ -111,7 +158,6 @@ describe("createNewDrawingFile", () => {
     await expect(
       createNewDrawingFile({
         invoker,
-        mountedWorkspaces: [],
         selectDirectory: async () => null,
         untitledBaseName: "Untitled",
       }),
@@ -121,34 +167,58 @@ describe("createNewDrawingFile", () => {
 
   it("propagates errors other than a name conflict", async () => {
     const failure = { code: "DISK_FULL", message: "full" };
-    const invoke = vi.fn(async () => {
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "window_claim_workspace") return claimed;
       throw failure;
     }) as unknown as CommandInvoker["invoke"];
 
     await expect(
       createNewDrawingFile({
         invoker: { invoke },
-        mountedWorkspaces: [workspace],
         selectDirectory: async () => workspace.rootPath,
         untitledBaseName: "Untitled",
       }),
     ).rejects.toBe(failure);
-    expect(invoke).toHaveBeenCalledOnce();
+    expect(invoke).toHaveBeenCalledTimes(2);
   });
 
   it("reports the conflict after the bounded number of name attempts", async () => {
-    const invoke = vi.fn(async () => {
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "window_claim_workspace") return claimed;
       throw { code: "NAME_CONFLICT", message: "exists" };
     }) as unknown as CommandInvoker["invoke"];
 
     await expect(
       createNewDrawingFile({
         invoker: { invoke },
-        mountedWorkspaces: [workspace],
         selectDirectory: async () => workspace.rootPath,
         untitledBaseName: "Untitled",
       }),
     ).rejects.toMatchObject({ code: "NAME_CONFLICT" });
-    expect(invoke).toHaveBeenCalledTimes(NEW_DRAWING_NAME_ATTEMPTS);
+    // One claim, then one create per name attempt.
+    expect(invoke).toHaveBeenCalledTimes(NEW_DRAWING_NAME_ATTEMPTS + 1);
+  });
+});
+
+describe("createUntitledDrawing", () => {
+  it("creates in the given folder, at the root by default", async () => {
+    const inFolder = createInvoker();
+    const atRoot = createInvoker();
+
+    await createUntitledDrawing(inFolder, workspace.id, "Untitled", "notes");
+    await createUntitledDrawing(atRoot, workspace.id, "Untitled");
+
+    expect(inFolder.mock).toHaveBeenCalledWith("workspace_entry_create", {
+      workspaceId: workspace.id,
+      parentRelativePath: "notes",
+      kind: "drawing",
+      baseName: "Untitled",
+    });
+    expect(atRoot.mock).toHaveBeenCalledWith("workspace_entry_create", {
+      workspaceId: workspace.id,
+      parentRelativePath: "",
+      kind: "drawing",
+      baseName: "Untitled",
+    });
   });
 });

@@ -142,6 +142,15 @@ export async function installUs4Harness(
               appVersion: "0.1.0",
               abnormalExit: false,
               pendingOpenPaths: [],
+              // The launch window, as the per-window bootstrap reports it.
+              window: {
+                label: "window-1",
+                workspace: null,
+                unavailableWorkspace: null,
+                restore: null,
+                shell: null,
+                openWorkspaceNames: [],
+              },
               preferredLanguages: [],
             };
           }
@@ -168,6 +177,28 @@ export async function installUs4Harness(
                   },
                 ]
               : [];
+          }
+          if (command === "window_probe_workspace") {
+            return {
+              kind: "claimed",
+              workspace: null,
+              replaced: null,
+              shell: null,
+            };
+          }
+          if (command === "window_claim_workspace") {
+            state.mounted = true;
+            return {
+              kind: "claimed",
+              workspace: {
+                id: "workspace-1",
+                name: "Workspace",
+                rootPath: "/workspace",
+                createdAt: 1,
+              },
+              replaced: null,
+              shell: null,
+            };
           }
           if (command === "workspace_add") {
             state.mounted = true;

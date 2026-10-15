@@ -41,7 +41,8 @@ test("keeps shell appearance synchronized and restores the preference", async ({
     "dark",
   );
   await expectPersistedAppearance(page, "dark");
-  await openWelcomeDrawing(page);
+  // The restart reopens the Workspace; an Untitled drawing is not restored.
+  await openWorkspaceDrawing(page);
 
   await page.emulateMedia({ colorScheme: "light" });
   await setNativeAppearance(page, "appearanceSystem");
@@ -65,6 +66,18 @@ async function openWelcomeDrawing(
     .getByTestId("welcome-screen")
     .getByRole("button", { name: "New Drawing", exact: true })
     .click();
+  await expect(page.locator(".excalidraw-editor")).toBeVisible();
+}
+
+async function openWorkspaceDrawing(
+  page: import("@playwright/test").Page,
+): Promise<void> {
+  await page
+    .getByRole("toolbar", { name: "Workspace actions" })
+    .getByRole("button", { name: "New Drawing" })
+    .click();
+  await page.getByRole("textbox", { name: "Name" }).fill("appearance");
+  await page.getByRole("button", { name: "Create" }).click();
   await expect(page.locator(".excalidraw-editor")).toBeVisible();
 }
 

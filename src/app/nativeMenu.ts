@@ -22,6 +22,8 @@ export interface NativeMenuCommandActions {
   onTogglePreference?: (
     preference: "toolLock" | "grid" | "snap" | "zen" | "viewMode",
   ) => void;
+  /** Open Workspace… shows the folder picker in this window. */
+  onOpenWorkspace?: () => void;
 }
 
 const nativeMenuCommands: readonly NativeMenuCommand[] = [
@@ -40,6 +42,7 @@ const nativeMenuCommands: readonly NativeMenuCommand[] = [
   "toggleSnap",
   "toggleZen",
   "toggleViewMode",
+  "openWorkspace",
 ];
 
 function isNativeMenuCommand(value: unknown): value is NativeMenuCommand {
@@ -69,6 +72,7 @@ export function createNativeMenuCommandHandler({
   onLanguage,
   onHelp,
   onTogglePreference,
+  onOpenWorkspace,
 }: NativeMenuCommandActions): NativeMenuCommandHandler {
   return (command) => {
     switch (command) {
@@ -116,6 +120,9 @@ export function createNativeMenuCommandHandler({
         break;
       case "toggleViewMode":
         onTogglePreference?.("viewMode");
+        break;
+      case "openWorkspace":
+        onOpenWorkspace?.();
         break;
     }
   };

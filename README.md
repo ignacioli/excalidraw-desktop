@@ -22,7 +22,7 @@ The local persistence workflow is designed around the moments that matter:
 
 The Welcome screen gives you **New Drawing**, **Open Workspace**, and **Recent Workspaces**. Recent entries can be reopened when their folder is available, or removed from the app's history without deleting anything from disk.
 
-Inside a workspace, **Current Workspace** is the single tree shown in the sidebar. Other workspace records stay available through Welcome and Recent rather than stacking multiple roots into one sidebar. Open drawings appear as tabs above the official canvas, and the sidebar starts hidden so the canvas has the room. Open it as an overlay when you need it, or pin it into the layout for longer browsing; **Back** returns to the previous browsing location without closing open drawings.
+Each window holds one workspace, and its **Current Workspace** is the single tree shown in that window's sidebar. **File > New Window** (⇧⌘N) opens another window, so different workspaces can be open side by side. Opening a workspace that is already open in another window brings that window to the front instead of opening it twice, and so does opening a folder inside it (the folder is revealed in that window's sidebar). Opening a folder that contains a workspace open elsewhere asks whether to close that window and open the folder here. A drawing can be open in only one window at a time; opening it again, from the sidebar or from Finder, switches to the window that has it. Other workspace records stay available through Welcome and Recent rather than stacking multiple roots into one sidebar. Each window remembers where its workspace was last shown, including size, position, and maximized or full-screen state, and moves back onto a connected display if its old position is no longer reachable. After a normal quit, the next launch reopens the windows, workspaces, and tabs you had. A window with a workspace but no open drawing shows an empty canvas with a hint, **New Drawing**, and **Show Sidebar**. Each workspace remembers its own sidebar pin, width, and expansion; appearance and language apply to every window. Right-click a drawing or folder in the sidebar, or a tab, to **Copy Path** or **Copy Relative Path** (relative to the workspace root). The workspace root offers Copy Path only. Open drawings appear as tabs above the official canvas, and the sidebar starts hidden so the canvas has the room. Open it as an overlay when you need it, or pin it into the layout for longer browsing; **Back** returns to the previous browsing location without closing open drawings.
 
 ## What it can do
 
@@ -30,6 +30,8 @@ Inside a workspace, **Current Workspace** is the single tree shown in the sideba
 - Recover unsaved work after an interrupted session
 - Browse folders and drawings from one continuous Current Workspace tree
 - Open multiple drawings in tabs and reuse the running app when opening files from Finder
+- Work in several windows at once, one workspace per window, with window positions remembered per workspace
+- Copy a drawing's or folder's path, or its path relative to the workspace, from the sidebar and tabs
 - Detect external file changes and resolve conflicts explicitly
 - Keep local Version History for automatic checkpoints, manual marks, and protected restore/clear/import operations
 - Export drawings as PNG or SVG, with the bundled font embedded in SVG output
@@ -44,7 +46,7 @@ Inside a workspace, **Current Workspace** is the single tree shown in the sideba
 
 **Theme shortcut.** Press `Shift+Option+D` to switch the theme from the keyboard.
 
-**Native menu bar.** The macOS menu bar provides the App, File, Edit, View, Window, and Help menus, and its labels follow the interface language. File contains Save, Export Image, and Version History; Save is `Cmd+S` and Export Image is `Cmd+Option+E`.
+**Native menu bar.** The macOS menu bar provides the App, File, Edit, View, Window, and Help menus, and its labels follow the interface language. File contains New Window, Open Workspace, Save, Export Image, and Version History; Save is `Cmd+S` and Export Image is `Cmd+Option+E`.
 
 ## Platforms
 

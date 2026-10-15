@@ -9,6 +9,7 @@ import type {
   IpcEvents,
   PathMigration,
   SceneData,
+  SceneOpenPayload,
 } from "../ipc/contracts";
 import {
   createEmptyScene,
@@ -21,7 +22,7 @@ import { createDocumentGateway, type DocumentGateway } from "./documentGateway";
 import { bindActivateRunner, requestActivate } from "./tabActivationQueue";
 import { defaultEventListener, type EventListener } from "../ipc/events";
 import { t } from "../i18n";
-import { describeError } from "../i18n/describeError";
+import { describeError, LocalizedError } from "../i18n/describeError";
 
 export type DocumentSaveState =
   | "clean"
@@ -130,7 +131,24 @@ export class DocumentManager {
     bindActivateRunner((documentId) => this.performActivate(documentId));
   }
 
+  /**
+   * Open `path` as a tab, or switch to its tab. Fails with
+   * `DOCUMENT_NOT_OWNED` when another window has the drawing.
+   */
   async open(path: string): Promise<string> {
+    const documentId = await this.openRouted(path);
+    if (documentId === null) {
+      throw new LocalizedError("error.DOCUMENT_NOT_OWNED");
+    }
+    return documentId;
+  }
+
+  /**
+   * Open `path` as a tab, or switch to its tab. Returns `null` when another
+   * window has the drawing: that window is brought to the front and shows
+   * it, and this window is unchanged.
+   */
+  async openRouted(path: string): Promise<string | null> {
     const existing = this.findByPath(path);
     if (existing !== undefined) {
       await this.activate(existing.id);
@@ -138,6 +156,7 @@ export class DocumentManager {
     }
 
     const response = await this.gateway.open(path);
+    if (response.kind === "ownedElsewhere") return null;
     const scene = deserializeSceneData(response.scene);
     return this.registerSession({
       path,
@@ -179,7 +198,7 @@ export class DocumentManager {
       });
       documentId = existing.id;
     } else {
-      const response = await this.gateway.open(path);
+      const response = await this.openOwned(path);
       documentId = await this.registerSession({
         path,
         scene,
@@ -847,7 +866,7 @@ export class DocumentManager {
     await this.runDocumentOperation(documentId, async () => {
       const current = this.store.getState().sessionsById[documentId];
       if (current === undefined) return;
-      const response = await this.gateway.open(current.path);
+      const response = await this.openOwned(current.path);
       const scene = deserializeSceneData(response.scene);
       this.schedulers.get(documentId)?.setConflicted(false);
       this.patchSession(documentId, {
@@ -948,7 +967,11 @@ export class DocumentManager {
         serializeScene(current.scene),
         "saveAsNew",
       );
-      await this.gateway.close(current.path, "discardOrphan");
+      // Saved back to its own path: the file now exists again and its
+      // draft is the clean saved content, so there is no orphan to discard.
+      if (newPath !== current.path) {
+        await this.gateway.close(current.path, "discardOrphan");
+      }
       this.schedulers.get(documentId)?.setConflicted(false);
       const title = getFileName(newPath);
       this.patchSession(documentId, {
@@ -1021,11 +1044,28 @@ export class DocumentManager {
         this.patchSession(id, { saveState: "checkpointing" });
         const currentPath =
           this.store.getState().sessionsById[id]?.path ?? path;
-        const response = await this.gateway.checkpoint(
-          currentPath,
-          serializeScene(nextDraft.scene),
-          reason,
-        );
+        let response: Awaited<ReturnType<DocumentGateway["checkpoint"]>>;
+        try {
+          response = await this.gateway.checkpoint(
+            currentPath,
+            serializeScene(nextDraft.scene),
+            reason,
+          );
+        } catch (error) {
+          // Close, quit and manual save await this directly, so the timer
+          // `onError` never sees it. Leave a state an event set meanwhile
+          // (orphaned, conflict) alone.
+          if (
+            this.store.getState().sessionsById[id]?.saveState ===
+            "checkpointing"
+          ) {
+            this.patchSession(id, {
+              saveState: "error",
+              errorMessage: describeError(error, "error.saveFailed"),
+            });
+          }
+          throw error;
+        }
         const current = this.store.getState().sessionsById[id];
         this.patchSession(id, {
           baseHash: response.newBaseHash,
@@ -1080,6 +1120,15 @@ export class DocumentManager {
       this.patchSession(documentId, { saveState: "draftSaved" });
     }
     return "saved";
+  }
+
+  /** Read a drawing this window must own; another window's is an error. */
+  private async openOwned(path: string): Promise<SceneOpenPayload> {
+    const response = await this.gateway.open(path);
+    if (response.kind === "ownedElsewhere") {
+      throw new LocalizedError("error.DOCUMENT_NOT_OWNED");
+    }
+    return response;
   }
 
   private findByPath(path: string): DocumentSession | undefined {
@@ -1171,7 +1220,7 @@ function historyAutosaveProbeRejection(
   return undefined;
 }
 
-function relativeDocumentPath(
+export function relativeDocumentPath(
   workspaceRoot: string,
   canonicalPath: string,
 ): string {
@@ -1251,10 +1300,7 @@ type FileChangeListener = (
 
 export async function registerDocumentFileChangeEvents(
   manager: Pick<DocumentManager, "handleFileRemoved" | "handleFileRenamed">,
-  listenForEvent: FileChangeListener = async (eventName, handler) => {
-    const { listen } = await import("@tauri-apps/api/event");
-    return listen<IpcEvents["file-changed"]>(eventName, handler);
-  },
+  listenForEvent: FileChangeListener = defaultEventListener,
 ): Promise<() => void> {
   return listenForEvent("file-changed", ({ payload }) => {
     if (payload.change === "renamed" && payload.newPath !== undefined) {

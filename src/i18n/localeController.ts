@@ -60,6 +60,18 @@ export class LocaleController {
     this.listeners.forEach((listener) => listener());
   }
 
+  /**
+   * Apply a language chosen in another window. That window stored it, so
+   * this one neither stores nor broadcasts it again. Invalid values are
+   * ignored.
+   */
+  applyExternalPreference(preference: unknown): void {
+    if (!isLanguagePreference(preference)) return;
+    if (preference === this.snapshot.preference) return;
+    this.snapshot = this.snapshotFor(preference);
+    this.listeners.forEach((listener) => listener());
+  }
+
   private snapshotFor(preference: LanguagePreference): LocaleSnapshot {
     return {
       preference,

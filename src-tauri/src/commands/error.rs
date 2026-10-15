@@ -24,6 +24,10 @@ pub enum ErrorCode {
     WorkspaceNotFound,
     WorkspaceMounted,
     WorkspaceOverlap,
+    WorkspaceNotOwned,
+    DocumentNotOwned,
+    WindowOwnershipChanged,
+    QuitCheckpointFailed,
     InvalidName,
     NameConflict,
     EntryProtected,
@@ -65,6 +69,14 @@ pub enum AppError {
     WorkspaceMounted(String),
     #[error("workspace overlaps an existing mount: {0}")]
     WorkspaceOverlap(String),
+    #[error("window has no Workspace: {0}")]
+    WorkspaceNotOwned(String),
+    #[error("drawing is open in another window: {0}")]
+    DocumentNotOwned(PathBuf),
+    #[error("Workspace ownership changed: {0}")]
+    WindowOwnershipChanged(String),
+    #[error("a window could not checkpoint before quitting: {0}")]
+    QuitCheckpointFailed(String),
     #[error("invalid Workspace Entry name: {0}")]
     InvalidName(String),
     #[error("Workspace Entry name conflicts with {0}")]
@@ -140,6 +152,30 @@ impl AppError {
                 ErrorCode::WorkspaceOverlap,
                 "Workspace overlaps an existing mount.".to_owned(),
                 false,
+                None,
+            ),
+            Self::WorkspaceNotOwned(_) => (
+                ErrorCode::WorkspaceNotOwned,
+                "This window has no Workspace.".to_owned(),
+                false,
+                None,
+            ),
+            Self::DocumentNotOwned(path) => (
+                ErrorCode::DocumentNotOwned,
+                "The drawing is open in another window.".to_owned(),
+                false,
+                Some(path),
+            ),
+            Self::WindowOwnershipChanged(_) => (
+                ErrorCode::WindowOwnershipChanged,
+                "The workspace was opened or closed in another window. Try again.".to_owned(),
+                true,
+                None,
+            ),
+            Self::QuitCheckpointFailed(_) => (
+                ErrorCode::QuitCheckpointFailed,
+                "A drawing could not be saved, so the app did not quit.".to_owned(),
+                true,
                 None,
             ),
             Self::InvalidName(_) => (

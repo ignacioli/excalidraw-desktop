@@ -18,6 +18,9 @@ import {
   type HistoryVersionItem,
   type IpcCommands,
   type IpcEvents,
+  type ClaimWorkspaceOutcome,
+  type WindowBootstrap,
+  type Workspace,
   type NativeMenuCommandEvent,
   type PathMigration,
   type WorkspaceEntriesChangedEvent,
@@ -76,7 +79,11 @@ describe("IPC v3 history contract", () => {
   });
 
   it("types Workspace Entry commands and proves migrated legacy callers are gone", () => {
-    expect(IPC_CONTRACT_VERSION).toBe(4);
+    // The per-window handshake activates v5; the entry DTOs are unchanged.
+    expect(IPC_CONTRACT_VERSION).toBe(5);
+    expectTypeOf<
+      CommandResponse<"app_handshake">["window"]
+    >().toEqualTypeOf<WindowBootstrap>();
     expectTypeOf<CommandRequest<"workspace_entry_list">>().toEqualTypeOf<{
       workspaceId: string;
       parentRelativePath: string;
@@ -167,7 +174,8 @@ describe("IPC v3 history contract", () => {
         | "toggleGrid"
         | "toggleSnap"
         | "toggleZen"
-        | "toggleViewMode";
+        | "toggleViewMode"
+        | "openWorkspace";
       validationId?: number;
     }>();
     expectTypeOf<
@@ -270,5 +278,39 @@ describe("IPC v3 history contract", () => {
     expectTypeOf<
       IpcEvents["history-issue"]
     >().toEqualTypeOf<HistoryIssueEvent>();
+  });
+
+  it("types the per-window Workspace ownership commands and events", () => {
+    expectTypeOf<CommandRequest<"window_claim_workspace">>().toEqualTypeOf<
+      | { rootPath: string; workspaceId?: never }
+      | { workspaceId: string; rootPath?: never }
+    >();
+    expectTypeOf<
+      CommandResponse<"window_claim_workspace">
+    >().toEqualTypeOf<ClaimWorkspaceOutcome>();
+    expectTypeOf<
+      Extract<
+        CommandResponse<"window_probe_workspace">,
+        { kind: "claimed" }
+      >["workspace"]
+    >().toEqualTypeOf<Workspace | null>();
+    expectTypeOf<
+      Extract<ClaimWorkspaceOutcome, { kind: "insideOpen" }>
+    >().toEqualTypeOf<{
+      kind: "insideOpen";
+      label: string;
+      workspaceId: string;
+      relativePath: string;
+    }>();
+    expectTypeOf<CommandResponse<"window_new">>().toEqualTypeOf<{
+      label: string;
+    }>();
+    expectTypeOf<IpcEvents["workspace-reveal-entry"]>().toEqualTypeOf<{
+      relativePath: string;
+      name: string;
+    }>();
+    expectTypeOf<IpcEvents["window-claim-result"]["outcome"]>().toEqualTypeOf<
+      ClaimWorkspaceOutcome | { kind: "cancelled" }
+    >();
   });
 });

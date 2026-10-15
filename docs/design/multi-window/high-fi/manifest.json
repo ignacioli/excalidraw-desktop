@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "status": "APPROVED_HIGH_FIDELITY",
+  "approvedAt": "2026-10-13",
+  "ownerDecision": "2026-10-13：负责人「高保真通过」。",
+  "scope": "Multi-window app-owned surfaces: sidebar naming/confirmation dialogs (DSC-DIALOG-001 extension), nested-workspace conflict dialog, copy-path menu items (DSC-MENU-001 reuse), copy/reveal feedback toast, canvas empty state; English/简体中文, Light/Dark. Implementation, browser and native acceptance remain separate.",
+  "penpot": {
+    "fileId": "a5ac146a-5787-80fa-8008-b3c2d0b30bae",
+    "fileName": "excalidraw-desktop-uxui-redesign",
+    "pageId": "6a71d025-5932-8012-8008-c850d719053b",
+    "pageName": "07 · Multi-window · 006 hi-fi (approved 2026-10-13)",
+    "snapshotBefore": "before-006 multi-window hi-fi 2026-10-13",
+    "snapshotApproved": "006 multi-window hi-fi approved by owner 2026-10-13"
+  },
+  "source": {
+    "note": "Screens are Penpot plugin exports of the approved boards. No .penpot archive is stored for this round; the named Penpot version snapshot is the source of record."
+  },
+  "fontProxy": "Penpot lacks Excalifont and PingFang SC. Hand-drawn text uses Kalam (en) and LXGW WenKai TC (zh) as stand-ins; the product uses its bundled hand-drawn font (Excalifont / Virgil-CJK). Chinese UI text uses Noto Sans SC as a proxy for the system CJK font.",
+  "designDecisions": [
+    "Dialog width 480; radius, padding, shadow and backdrop reuse the existing ApplicationDialog CSS.",
+    "Destructive primary (Delete) uses danger fill; dark-mode text on it is #121212. Open in Finder and Remove Workspace use the normal primary style.",
+    "Copy feedback toast: success inverse surface (Light) / surface (Dark); failure panel surface with danger stroke; path in monospace with middle ellipsis.",
+    "Empty state with the Sidebar pinned shows only New Drawing and hides the arrow.",
+    "Tab menu outside a Workspace keeps the four close items and offers Copy Path only.",
+    "Empty-state grid: 20px, thin lines only (Light #EEF0F2, Dark #2C2B33)."
+  ],
+  "viewport": {
+    "width": 1280,
+    "height": 760
+  },
+  "frames": [
+    {
+      "name": "006 · DSC-DIALOG-001 · Naming & confirmation anatomy · English · Light",
+      "shapeId": "6a71d025-5932-8012-8008-c851165d368d",
+      "path": "screens/01-dialogs-en-light.png",
+      "sha256": "a1f209d8ce8a5dd68133449923c9694602da25a722f8bebb1112ca4c78eb6c9c",
+      "width": 1620,
+      "height": 1005
+    },
+    {
+      "name": "006 · DSC-DIALOG-001 · Naming & confirmation anatomy · English · Dark",
+      "shapeId": "6a71d025-5932-8012-8008-c8517fc8907a",
+      "path": "screens/02-dialogs-en-dark.png",
+      "sha256": "b9843b9d04b5724fc87c84ada3a8c8e63c66195573a6dce3c62ec478907e968d",
+      "width": 1620,
+      "height": 1005
+    },
+    {
+      "name": "006 · DSC-DIALOG-001 · Naming & confirmation anatomy · 简体中文 · Light",
+      "shapeId": "6a71d025-5932-8012-8008-c851f12522b3",
+      "path": "screens/03-dialogs-zh-light.png",
+      "sha256": "5479135c2f83eb7cf373cac714f83eac80988345a0fec6426e6e5261ccb88ecf",
+      "width": 1620,
+      "height": 984
+    },
+    {
+      "name": "006 · DSC-MENU-001 + MW-COPY-FEEDBACK · Menus & toasts · English · Light",
+      "shapeId": "6a71d025-5932-8012-8008-c852d9a82ef7",
+      "path": "screens/04-menus-toasts-en-light.png",
+      "sha256": "a1e545d5ce445b39233c56bd4076e50a19757a8c6bae5f51988a9a95d61d4558",
+      "width": 1620,
+      "height": 680
+    },
+    {
+      "name": "006 · DSC-MENU-001 + MW-COPY-FEEDBACK · Menus & toasts · English · Dark",
+      "shapeId": "6a71d025-5932-8012-8008-c852e3e01ced",
+      "path": "screens/05-menus-toasts-en-dark.png",
+      "sha256": "f0de4138d1b44db259fae7610246ba5f678d1763426eb609fcb09ce86eccc0b6",
+      "width": 1620,
+      "height": 680
+    },
+    {
+      "name": "006 · DSC-MENU-001 + MW-COPY-FEEDBACK · Menus & toasts · 简体中文 · Light",
+      "shapeId": "6a71d025-5932-8012-8008-c852ee89f477",
+      "path": "screens/06-menus-toasts-zh-light.png",
+      "sha256": "02c5f74f611c35d81226209248055d59c4a625e437a43ca97f4d3fb35ce078fe",
+      "width": 1620,
+      "height": 680
+    },
+    {
+      "name": "006 · MW-EMPTY-STATE · English · Light · Sidebar Hidden",
+      "shapeId": "6a71d025-5932-8012-8008-c853c6374579",
+      "path": "screens/07-empty-en-light-hidden.png",
+      "sha256": "60376adc79406873d79a67f9495bb55f13eb87bf42d0218d88cb4e0ab4b3f8cd",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "006 · MW-EMPTY-STATE · English · Dark · Sidebar Hidden",
+      "shapeId": "6a71d025-5932-8012-8008-c853c7af1e17",
+      "path": "screens/08-empty-en-dark-hidden.png",
+      "sha256": "8eb37ef220b73b65614dfe9190eab41b612f52d43137235831ed16cd4940efbc",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "006 · MW-EMPTY-STATE · 简体中文 · Light · Sidebar Hidden",
+      "shapeId": "6a71d025-5932-8012-8008-c853c92be73d",
+      "path": "screens/09-empty-zh-light-hidden.png",
+      "sha256": "8dc2abd05bfa98dcfb52e8868e2018dd3911794f53183cd4860152e54c20fc83",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "006 · MW-EMPTY-STATE · 简体中文 · Dark · Sidebar Hidden",
+      "shapeId": "6a71d025-5932-8012-8008-c853caa94400",
+      "path": "screens/10-empty-zh-dark-hidden.png",
+      "sha256": "37ed2aae00de0ac9c3b78f1a718bc57c9c9ed3a82358d8fe429a8c4e7bc1ee94",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "006 · MW-EMPTY-STATE · English · Light · Sidebar Pinned",
+      "shapeId": "6a71d025-5932-8012-8008-c853e5cee732",
+      "path": "screens/11-empty-en-light-pinned.png",
+      "sha256": "ecd9798137e173e714c6c6adc3c77ba492a6a1191642d9511531b508904c1940",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "006 · Composition · New drawing over shell · English · Light",
+      "shapeId": "6a71d025-5932-8012-8008-c8543667f435",
+      "path": "screens/12-composition-new-drawing-en-light.png",
+      "sha256": "e1616edf0da95b4f6f81143f59e37b285e7ecb7c4df983d63ede167b9e3f3854",
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "name": "006 · Composition · Nested conflict over shell · English · Dark",
+      "shapeId": "6a71d025-5932-8012-8008-c8543b14ee39",
+      "path": "screens/13-composition-nested-conflict-en-dark.png",
+      "sha256": "927538cb4278544e8bea717fba169b2d42fea67b1c4c9d99e348bc467bf97f49",
+      "width": 1280,
+      "height": 760
+    }
+  ]
+}

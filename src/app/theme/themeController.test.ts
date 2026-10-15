@@ -103,6 +103,26 @@ describe("ThemeController", () => {
     },
   );
 
+  it("applies another window's mode without storing it", () => {
+    const { controller, root, storage } = createController({
+      stored: preference("light"),
+    });
+    let notified = 0;
+    controller.subscribe(() => {
+      notified += 1;
+    });
+
+    controller.applyExternalModePreference("dark");
+    controller.applyExternalModePreference("sepia");
+
+    expect(controller.getSnapshot().preference.modePreference).toBe("dark");
+    expect(root.dataset.colorScheme).toBe("dark");
+    expect(storage.values.get(THEME_PREFERENCE_STORAGE_KEY)).toBe(
+      preference("light"),
+    );
+    expect(notified).toBe(1);
+  });
+
   it("tracks runtime system changes while following the system", () => {
     const { controller, media, root } = createController({ systemDark: false });
     let updates = 0;

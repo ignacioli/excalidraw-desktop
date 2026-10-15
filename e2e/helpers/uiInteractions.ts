@@ -223,8 +223,8 @@ export type NativeTabCloseEvidence =
   | NativeTabCloseCheckpointFailureEvidence
   | NativeTabCloseWheelNotchEvidence;
 
-/** FR-045 / SC-011 titlebar choice A: exact native window title. */
-export const REQUIRED_NATIVE_WINDOW_TITLE = "Excalidraw Whiteboard";
+/** Titlebar choice A: the title of a new Welcome window. */
+export const REQUIRED_NATIVE_WINDOW_TITLE = "Excalidraw";
 
 export type NativeWindowTitleBarStyle = "Visible" | "Transparent" | "Overlay";
 

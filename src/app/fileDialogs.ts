@@ -61,7 +61,7 @@ export function createFileDialogActions(
       if (selectedPath === null) {
         return null;
       }
-      return manager.open(selectedPath);
+      return manager.openRouted(selectedPath);
     },
   };
 }

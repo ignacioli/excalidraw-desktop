@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import collapseAllIcon from "../../docs/design/desktop-shell/hf-2/icons/collapse-all.svg";
 import expandAllIcon from "../../docs/design/desktop-shell/hf-2/icons/expand-all.svg";
 import newDrawingIcon from "../../docs/design/desktop-shell/hf-2/icons/new-drawing.svg";
@@ -6,6 +13,8 @@ import newFolderIcon from "../../docs/design/desktop-shell/hf-2/icons/new-folder
 import refreshIcon from "../../docs/design/desktop-shell/hf-2/icons/refresh.svg";
 import {
   ApplicationDialog,
+  ApplicationDialogActions,
+  ApplicationDialogButton,
   ContextMenu,
   DirectoryNotEmptyDialog,
   EntryDeleteConfirmationDialog,
@@ -16,11 +25,13 @@ import {
   type EntryNamingMode,
   type MenuDismissalReason,
 } from "../app/interaction";
-import {
-  SHELL_PREFERENCES_STORAGE_KEY,
-  ShellPreferences,
-} from "../app/shellPreferences";
+import { ShellPreferences } from "../app/shellPreferences";
 import { documentManager, useDocumentStore } from "../documents/documentStore";
+import {
+  closeAllTabsForWorkspaceSwitch,
+  containsOpenError,
+  openWorkspaceInWindow,
+} from "../app/workspaceClaim";
 import type { BrowsingLocation } from "../app/browsingHistory";
 import type { CommandInvoker } from "../ipc/client";
 import {
@@ -43,6 +54,8 @@ import {
   LocalizedError,
 } from "../i18n/describeError";
 import { WorkspaceTree } from "./WorkspaceTree";
+import { abbreviateHome, useHomeDirectory } from "./displayPath";
+import type { CopyPathRequest } from "../app/clipboard";
 import {
   makeEntryRowKey,
   makeWorkspaceRowKey,
@@ -59,8 +72,38 @@ export interface WorkspacePanelProps {
   onBrowse?: (location: BrowsingLocation) => void;
   backLocation?: BrowsingLocation | null;
   onBackLocationApplied?: () => void;
+  /**
+   * A folder of this window's Workspace to show: the root row and every
+   * folder down to it are expanded, and the folder is selected.
+   */
+  revealLocation?: BrowsingLocation | null;
+  onRevealLocationApplied?: () => void;
+  /**
+   * An entry created outside the panel, such as by the empty state's New
+   * Drawing: its folder is listed again and expanded so the entry shows
+   * without a Refresh. Focus stays where it is.
+   */
+  createdEntry?: { workspaceId: string; relativePath: string } | null;
+  onCreatedEntryApplied?: () => void;
+  /**
+   * The chosen folder contains a Workspace open in another window. Without
+   * it the overlap is shown as an error.
+   */
+  onNestedConflict?: (
+    rootPath: string,
+    outcome: { label: string; workspaceId: string },
+  ) => Promise<void>;
   onWorkspacePresenceChange?: (hasAny: boolean) => void;
   onWorkspacesChange?: (workspaces: Workspace[]) => void;
+  /** Copy Path and Copy Relative Path from a row's menu. */
+  onCopyPath?: (request: CopyPathRequest) => void;
+  /**
+   * The folder the toolbar's New Drawing and New Folder create in: the
+   * selected folder, or `""` for the Workspace root.
+   */
+  onTargetFolderChange?: (
+    target: { workspaceId: string; relativePath: string } | null,
+  ) => void;
   preferences?: ShellPreferences;
   captureFocus?: boolean;
 }
@@ -110,9 +153,6 @@ interface TreeMenuState {
   anchor: { x: number; y: number };
 }
 
-const firstLaunchByStorage = new WeakMap<object, boolean>();
-const firstListAppliedByStorage = new WeakMap<object, boolean>();
-
 export function WorkspacePanel({
   invoker: providedInvoker,
   currentWorkspaceId: controlledCurrentWorkspaceId,
@@ -122,8 +162,15 @@ export function WorkspacePanel({
   onBrowse,
   backLocation = null,
   onBackLocationApplied,
+  revealLocation = null,
+  onRevealLocationApplied,
+  createdEntry = null,
+  onCreatedEntryApplied,
+  onNestedConflict,
   onWorkspacePresenceChange,
   onWorkspacesChange,
+  onCopyPath,
+  onTargetFolderChange,
   preferences: providedPreferences,
   captureFocus = true,
 }: WorkspacePanelProps) {
@@ -131,7 +178,6 @@ export function WorkspacePanel({
   const fallbackInvoker = useMemo(() => createTauriCommandInvoker(), []);
   const invoker = providedInvoker ?? fallbackInvoker;
   const selectDirectory = providedSelectDirectory ?? selectNativeDirectory;
-  const firstLaunch = storageIsFirstLaunch(globalThis.localStorage);
   const [ownedPreferences] = useState(
     () => providedPreferences ?? new ShellPreferences(),
   );
@@ -153,23 +199,16 @@ export function WorkspacePanel({
   const openMenu = useInteractionStore((state) => state.menu);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const workspacesRef = useRef(workspaces);
+  workspacesRef.current = workspaces;
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(
-    () =>
-      controlledCurrentWorkspaceId === undefined
-        ? preferences.getSnapshot().currentWorkspaceId
-        : controlledCurrentWorkspaceId,
+    () => controlledCurrentWorkspaceId ?? null,
   );
   const [entriesByWorkspace, setEntriesByWorkspace] = useState<
     Record<string, Record<string, WorkspaceEntry[]>>
   >({});
   const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<Set<string>>(
-    () => {
-      const initial = firstLaunch
-        ? new Set<string>()
-        : new Set(preferences.getSnapshot().expandedWorkspaceIds);
-      expandedWorkspaceIdsRef.current = initial;
-      return initial;
-    },
+    () => new Set(),
   );
   const [expandedDirectoryKeys, setExpandedDirectoryKeys] = useState<
     Set<string>
@@ -193,12 +232,8 @@ export function WorkspacePanel({
   useEffect(() => {
     if (controlledCurrentWorkspaceId !== undefined) {
       setCurrentWorkspaceId(controlledCurrentWorkspaceId);
-      return;
     }
-    return preferences.subscribe(() => {
-      setCurrentWorkspaceId(preferences.getSnapshot().currentWorkspaceId);
-    });
-  }, [controlledCurrentWorkspaceId, preferences]);
+  }, [controlledCurrentWorkspaceId]);
 
   const dismissMenu = useCallback((reason: MenuDismissalReason): void => {
     if (interactionStore.getState().menu !== null) {
@@ -295,50 +330,22 @@ export function WorkspacePanel({
   const applyWorkspaceList = useCallback(
     (items: Workspace[]) => {
       const liveIds = new Set(items.map((workspace) => workspace.id));
-      preferences.pruneWorkspaceIds(liveIds);
+      // The list holds this window's Workspace, if it has one; it wins over
+      // a Current Workspace the shell has not learned about yet.
       const nextCurrentWorkspaceId =
-        controlledCurrentWorkspaceId === undefined
-          ? preferences.resolveCurrentWorkspaceId(liveIds, items[0]?.id ?? null)
-          : controlledCurrentWorkspaceId !== null &&
-              liveIds.has(controlledCurrentWorkspaceId)
-            ? controlledCurrentWorkspaceId
-            : null;
-      if (controlledCurrentWorkspaceId === undefined) {
-        preferences.setCurrentWorkspaceId(nextCurrentWorkspaceId);
-      }
+        controlledCurrentWorkspaceId !== undefined &&
+        controlledCurrentWorkspaceId !== null &&
+        liveIds.has(controlledCurrentWorkspaceId)
+          ? controlledCurrentWorkspaceId
+          : (items[0]?.id ?? null);
       setCurrentWorkspaceId(nextCurrentWorkspaceId);
       onCurrentWorkspaceChange?.(
         items.find((workspace) => workspace.id === nextCurrentWorkspaceId) ??
           null,
       );
-      const known = knownWorkspaceIdsRef.current;
-      const next = new Set(expandedWorkspaceIdsRef.current);
-      if (known === null) {
-        const alreadyAppliedFirstLaunch =
-          firstListAppliedByStorage.get(globalThis.localStorage) === true;
-        if (firstLaunch && !alreadyAppliedFirstLaunch) {
-          for (const workspace of items) {
-            next.add(workspace.id);
-            preferences.setWorkspaceExpanded(workspace.id, true);
-          }
-          firstListAppliedByStorage.set(globalThis.localStorage, true);
-        } else {
-          next.clear();
-          for (const id of preferences.getSnapshot().expandedWorkspaceIds) {
-            if (liveIds.has(id)) next.add(id);
-          }
-        }
-      } else {
-        for (const workspace of items) {
-          if (!known.has(workspace.id)) {
-            next.add(workspace.id);
-            preferences.setWorkspaceExpanded(workspace.id, true);
-          }
-        }
-        for (const id of [...next]) {
-          if (!liveIds.has(id)) next.delete(id);
-        }
-      }
+      const next = preferences.isWorkspaceExpanded()
+        ? new Set(liveIds)
+        : new Set<string>();
       knownWorkspaceIdsRef.current = liveIds;
       expandedWorkspaceIdsRef.current = next;
       setExpandedWorkspaceIds(next);
@@ -359,11 +366,31 @@ export function WorkspacePanel({
     },
     [
       controlledCurrentWorkspaceId,
-      firstLaunch,
       loadEntries,
       onCurrentWorkspaceChange,
       preferences,
     ],
+  );
+
+  // Opening a Workspace loads its saved expansion.
+  useEffect(
+    () =>
+      preferences.subscribe(() => {
+        const next = preferences.isWorkspaceExpanded()
+          ? new Set(knownWorkspaceIdsRef.current ?? [])
+          : new Set<string>();
+        const current = expandedWorkspaceIdsRef.current;
+        if (
+          next.size === current.size &&
+          [...next].every((id) => current.has(id))
+        ) {
+          return;
+        }
+        expandedWorkspaceIdsRef.current = next;
+        setExpandedWorkspaceIds(next);
+        for (const id of next) void loadEntries(id, "");
+      }),
+    [loadEntries, preferences],
   );
 
   useEffect(() => {
@@ -487,6 +514,77 @@ export function WorkspacePanel({
   }, [backLocation, currentWorkspaceId, loadEntries, onBackLocationApplied]);
 
   useEffect(() => {
+    if (
+      revealLocation === null ||
+      revealLocation.workspaceId !== currentWorkspaceId
+    ) {
+      return;
+    }
+    const { workspaceId, directoryRelativePath } = revealLocation;
+    const segments = directoryRelativePath.split("/").filter(Boolean);
+    const folders = segments.map((_, index) =>
+      segments.slice(0, index + 1).join("/"),
+    );
+    preferences.setWorkspaceExpanded(true);
+    setExpandedWorkspaceIds((current) => {
+      const next = new Set(current).add(workspaceId);
+      expandedWorkspaceIdsRef.current = next;
+      return next;
+    });
+    setExpandedDirectoryKeys((current) => {
+      const next = new Set(current);
+      for (const folder of folders) {
+        next.add(makeEntryRowKey(workspaceId, folder));
+      }
+      return next;
+    });
+    for (const parent of ["", ...folders]) {
+      void loadEntries(workspaceId, parent);
+    }
+    const target = folders.at(-1) ?? null;
+    setSelectedDirectoryRelativePath(target);
+    setFocusRequestKey(
+      target === null
+        ? makeWorkspaceRowKey(workspaceId)
+        : makeEntryRowKey(workspaceId, target),
+    );
+    onRevealLocationApplied?.();
+  }, [
+    currentWorkspaceId,
+    loadEntries,
+    onRevealLocationApplied,
+    preferences,
+    revealLocation,
+  ]);
+
+  useEffect(() => {
+    if (createdEntry === null) return;
+    const { workspaceId, relativePath } = createdEntry;
+    const parentRelativePath = parentRelativePathOf(relativePath);
+    const segments = parentRelativePath.split("/").filter(Boolean);
+    const folders = segments.map((_, index) =>
+      segments.slice(0, index + 1).join("/"),
+    );
+    preferences.setWorkspaceExpanded(true);
+    setExpandedWorkspaceIds((current) => {
+      const next = new Set(current).add(workspaceId);
+      expandedWorkspaceIdsRef.current = next;
+      return next;
+    });
+    setExpandedDirectoryKeys((current) => {
+      const next = new Set(current);
+      for (const folder of folders) {
+        next.add(makeEntryRowKey(workspaceId, folder));
+      }
+      return next;
+    });
+    for (const parent of ["", ...folders]) {
+      void loadEntries(workspaceId, parent, parent === parentRelativePath);
+    }
+    onCreatedEntryApplied?.();
+  }, [createdEntry, loadEntries, onCreatedEntryApplied, preferences]);
+
+  useEffect(() => {
     if (treeMenu === null) return;
     if (
       !workspaces.some((workspace) => workspace.id === treeMenu.row.workspaceId)
@@ -498,21 +596,6 @@ export function WorkspacePanel({
       dismissMenu("triggerRemoved");
     }
   }, [dismissMenu, entriesByWorkspace, treeMenu, workspaces]);
-
-  const expandWorkspace = (workspaceId: string): void => {
-    preferences.setWorkspaceExpanded(workspaceId, true);
-    setExpandedWorkspaceIds((current) => {
-      const next = new Set(current);
-      next.add(workspaceId);
-      expandedWorkspaceIdsRef.current = next;
-      return next;
-    });
-    knownWorkspaceIdsRef.current = new Set([
-      ...(knownWorkspaceIdsRef.current ?? []),
-      workspaceId,
-    ]);
-    void loadEntries(workspaceId, "");
-  };
 
   const mountWorkspace = async () => {
     if (!selectDirectory) {
@@ -530,17 +613,33 @@ export function WorkspacePanel({
       const rootPath = await selectDirectory();
       if (rootPath) {
         workspaceListGenerationRef.current += 1;
-        const workspace = await invoker.invoke("workspace_add", { rootPath });
-        const next = [
-          ...workspaces.filter((item) => item.id !== workspace.id),
-          workspace,
-        ];
+        // A window shows one Workspace: opening another replaces it after
+        // every tab is closed, or brings the window that owns it forward.
+        const result = await openWorkspaceInWindow({
+          invoker,
+          target: { rootPath },
+          closeTabs: () => closeAllTabsForWorkspaceSwitch(documentManager),
+        });
+        if (result.status === "declined") {
+          if (result.outcome.kind === "containsOpen") {
+            if (onNestedConflict === undefined) throw containsOpenError();
+            await onNestedConflict(rootPath, result.outcome);
+          }
+          return;
+        }
+        const { workspace } = result;
+        const next = [workspace];
+        knownWorkspaceIdsRef.current = new Set([workspace.id]);
         setWorkspaces(next);
+        setEntriesByWorkspace((current) => {
+          const existing = current[workspace.id];
+          return existing === undefined ? {} : { [workspace.id]: existing };
+        });
         onWorkspacesChange?.(next);
-        preferences.setCurrentWorkspaceId(workspace.id);
         setCurrentWorkspaceId(workspace.id);
         onCurrentWorkspaceChange?.(workspace);
-        expandWorkspace(workspace.id);
+        // Shows the Workspace's saved pin, width and expansion.
+        preferences.loadWorkspace(result.shell);
         onWorkspacePresenceChange?.(true);
       }
     } catch (nextError) {
@@ -567,14 +666,14 @@ export function WorkspacePanel({
       if (closeOutcome.status !== "closed") {
         throw new LocalizedError("workspace.error.removeStillClosing");
       }
-      await invoker.invoke("workspace_remove", { workspaceId: workspace.id });
+      await invoker.invoke("window_release_workspace", {});
       workspaceListGenerationRef.current += 1;
       const next = workspaces.filter((item) => item.id !== workspace.id);
       const nextCurrentWorkspaceId =
         workspace.id === currentWorkspaceId
           ? (next[0]?.id ?? null)
           : currentWorkspaceId;
-      preferences.setCurrentWorkspaceId(nextCurrentWorkspaceId);
+      if (nextCurrentWorkspaceId === null) preferences.closeWorkspace();
       setCurrentWorkspaceId(nextCurrentWorkspaceId);
       onCurrentWorkspaceChange?.(
         next.find((item) => item.id === nextCurrentWorkspaceId) ?? null,
@@ -587,7 +686,6 @@ export function WorkspacePanel({
         expandedWorkspaceIdsRef.current = withoutRemoved;
         return withoutRemoved;
       });
-      preferences.pruneWorkspaceIds(new Set(next.map((item) => item.id)));
       knownWorkspaceIdsRef.current?.delete(workspace.id);
       setEntriesByWorkspace((current) => {
         const remaining = { ...current };
@@ -631,7 +729,10 @@ export function WorkspacePanel({
       return;
     }
     const rect = trigger.getBoundingClientRect();
-    returnFocusRef.current = trigger;
+    // Dialogs opened from the menu return focus to the row: its actions
+    // button is hidden unless the row is hovered or focused.
+    returnFocusRef.current =
+      trigger.closest<HTMLElement>('[role="treeitem"]') ?? trigger;
     menuTriggerRef.current = trigger;
     setTreeMenu({
       row,
@@ -698,6 +799,12 @@ export function WorkspacePanel({
           }),
       );
       forgetEntrySubtree(naming.workspaceId, entry.relativePath);
+      // A renamed selected folder, or one inside it, stays selected.
+      setSelectedDirectoryRelativePath((selected) =>
+        selected !== null && isWithinRelativePath(selected, entry.relativePath)
+          ? renamed.newRelativePath + selected.slice(entry.relativePath.length)
+          : selected,
+      );
       await loadEntries(naming.workspaceId, entry.parentRelativePath, true);
       returnFocusRef.current = null;
       setFocusRequestKey(
@@ -771,6 +878,15 @@ export function WorkspacePanel({
             }),
         );
       forgetEntrySubtree(workspaceId, entry.relativePath);
+      // A deleted selected folder, or one inside it, hands the selection
+      // to the deleted entry's parent.
+      setSelectedDirectoryRelativePath((selected) =>
+        selected !== null && isWithinRelativePath(selected, entry.relativePath)
+          ? entry.parentRelativePath.length > 0
+            ? entry.parentRelativePath
+            : null
+          : selected,
+      );
       await loadEntries(workspaceId, entry.parentRelativePath, true);
       returnFocusRef.current = null;
       setFocusRequestKey(
@@ -820,6 +936,58 @@ export function WorkspacePanel({
     }
   };
 
+  // Paths are read when the item is chosen, from the latest listing.
+  const currentEntry = (
+    workspaceId: string,
+    entry: WorkspaceEntry,
+  ): WorkspaceEntry | null =>
+    entriesRef.current[workspaceId]?.[entry.parentRelativePath]?.find(
+      (candidate) => candidate.relativePath === entry.relativePath,
+    ) ?? null;
+
+  const copyItems = (row: WorkspaceTreeRow): ContextMenuItem[] => {
+    if (row.kind === "workspace") {
+      return [
+        {
+          id: "copy-path",
+          label: t("workspace.menu.copyPath"),
+          separatorBefore: true,
+          onSelect: () =>
+            onCopyPath?.({
+              kind: "path",
+              resolve: () =>
+                workspacesRef.current.find(
+                  (workspace) => workspace.id === row.workspaceId,
+                )?.rootPath ?? null,
+            }),
+        },
+      ];
+    }
+    return [
+      {
+        id: "copy-path",
+        label: t("workspace.menu.copyPath"),
+        separatorBefore: true,
+        onSelect: () =>
+          onCopyPath?.({
+            kind: "path",
+            resolve: () =>
+              currentEntry(row.workspaceId, row.entry)?.canonicalPath ?? null,
+          }),
+      },
+      {
+        id: "copy-relative-path",
+        label: t("workspace.menu.copyRelativePath"),
+        onSelect: () =>
+          onCopyPath?.({
+            kind: "relativePath",
+            resolve: () =>
+              currentEntry(row.workspaceId, row.entry)?.relativePath ?? null,
+          }),
+      },
+    ];
+  };
+
   const menuItems = (row: WorkspaceTreeRow): ContextMenuItem[] => {
     if (row.kind === "workspace") {
       return [
@@ -833,9 +1001,11 @@ export function WorkspacePanel({
           label: t("workspace.newFolder"),
           onSelect: () => beginNaming("newDirectory", row.workspaceId, ""),
         },
+        ...copyItems(row),
         {
           id: "remove-workspace",
           label: t("workspace.menu.removeWorkspace"),
+          separatorBefore: true,
           onSelect: () => {
             openDialogMenu();
             setError(null);
@@ -862,9 +1032,11 @@ export function WorkspacePanel({
               row.entry.relativePath,
             ),
         },
+        ...copyItems(row),
         {
           id: "rename",
           label: t("workspace.menu.rename"),
+          separatorBefore: true,
           onSelect: () =>
             beginNaming(
               "renameDirectory",
@@ -895,6 +1067,7 @@ export function WorkspacePanel({
             row.entry,
           ),
       },
+      ...copyItems(row),
       {
         id: "delete",
         label: t("workspace.menu.delete"),
@@ -956,7 +1129,7 @@ export function WorkspacePanel({
   const toggleAllCurrentWorkspace = (): void => {
     if (currentWorkspaceId === null) return;
     const shouldExpand = !allCurrentDirectoriesExpanded;
-    preferences.setWorkspaceExpanded(currentWorkspaceId, shouldExpand);
+    preferences.setWorkspaceExpanded(shouldExpand);
     setExpandedWorkspaceIds((current) => {
       const next = new Set(current);
       if (shouldExpand) next.add(currentWorkspaceId);
@@ -984,6 +1157,13 @@ export function WorkspacePanel({
   };
 
   const targetRelativePath = selectedDirectoryRelativePath ?? "";
+  useEffect(() => {
+    onTargetFolderChange?.(
+      currentWorkspaceId === null
+        ? null
+        : { workspaceId: currentWorkspaceId, relativePath: targetRelativePath },
+    );
+  }, [currentWorkspaceId, onTargetFolderChange, targetRelativePath]);
 
   const treeEntries: WorkspaceTreeEntriesByWorkspace = entriesByWorkspace;
 
@@ -1008,14 +1188,15 @@ export function WorkspacePanel({
               aria-label={t("workspace.newDrawing")}
               className="icon-button"
               disabled={busy || currentWorkspaceId === null}
-              onClick={() =>
-                currentWorkspaceId !== null &&
+              onClick={(event) => {
+                if (currentWorkspaceId === null) return;
+                returnFocusRef.current = event.currentTarget;
                 beginNaming(
                   "newDrawing",
                   currentWorkspaceId,
                   targetRelativePath,
-                )
-              }
+                );
+              }}
               title={t("workspace.newDrawing")}
               type="button"
             >
@@ -1025,14 +1206,15 @@ export function WorkspacePanel({
               aria-label={t("workspace.newFolder")}
               className="icon-button"
               disabled={busy || currentWorkspaceId === null}
-              onClick={() =>
-                currentWorkspaceId !== null &&
+              onClick={(event) => {
+                if (currentWorkspaceId === null) return;
+                returnFocusRef.current = event.currentTarget;
                 beginNaming(
                   "newDirectory",
                   currentWorkspaceId,
                   targetRelativePath,
-                )
-              }
+                );
+              }}
               title={t("workspace.newFolder")}
               type="button"
             >
@@ -1112,7 +1294,7 @@ export function WorkspacePanel({
           activeDocumentPath={activeDocumentPath}
           captureFocus={captureFocus}
           onToggleWorkspace={(workspaceId, expanded) => {
-            preferences.setWorkspaceExpanded(workspaceId, expanded);
+            preferences.setWorkspaceExpanded(expanded);
             setExpandedWorkspaceIds((current) => {
               const next = new Set(current);
               if (expanded) next.add(workspaceId);
@@ -1192,6 +1374,7 @@ export function WorkspacePanel({
         <EntryDeleteConfirmationDialog
           busy={deleting.busy}
           displayName={deleting.entry.name}
+          path={deleting.entry.canonicalPath}
           errorMessage={
             deleting.error === null ? null : describeFailure(deleting.error)
           }
@@ -1205,6 +1388,7 @@ export function WorkspacePanel({
       {deleting?.phase === "nonEmpty" ? (
         <DirectoryNotEmptyDialog
           busy={deleting.busy}
+          path={deleting.entry.canonicalPath}
           errorMessage={
             deleting.error === null ? null : describeFailure(deleting.error)
           }
@@ -1216,50 +1400,80 @@ export function WorkspacePanel({
         />
       ) : null}
       {pendingRemoval ? (
-        <ApplicationDialog
+        <RemoveWorkspaceDialog
           busy={busy}
           errorMessage={error === null ? null : describeFailure(error)}
-          onDismiss={() => {
+          onCancel={() => {
             if (busy) return;
             setPendingRemoval(null);
             setError(null);
           }}
+          onRemove={() => void removeWorkspace(pendingRemoval)}
           returnFocusRef={returnFocusRef}
-          title={t("workspace.remove.title", { name: pendingRemoval.name })}
-        >
-          <p>{t("workspace.remove.description")}</p>
-          <div className="application-dialog-actions conflict-dialog-actions">
-            <button
-              disabled={busy}
-              onClick={() => {
-                if (busy) return;
-                setPendingRemoval(null);
-                setError(null);
-              }}
-              type="button"
-            >
-              {t("workspace.remove.cancel")}
-            </button>
-            <button
-              disabled={busy}
-              onClick={() => void removeWorkspace(pendingRemoval)}
-              type="button"
-            >
-              {t("workspace.remove.confirm")}
-            </button>
-          </div>
-        </ApplicationDialog>
+          workspace={pendingRemoval}
+        />
       ) : null}
     </section>
   );
 }
 
-function storageIsFirstLaunch(storage: Pick<Storage, "getItem">): boolean {
-  const cached = firstLaunchByStorage.get(storage);
-  if (cached !== undefined) return cached;
-  const first = storage.getItem(SHELL_PREFERENCES_STORAGE_KEY) === null;
-  firstLaunchByStorage.set(storage, first);
-  return first;
+/**
+ * Removing a Workspace from the list keeps its files, so the action uses the
+ * primary style. Sidebar confirmation anatomy with the root path; Cancel has
+ * the initial focus.
+ */
+function RemoveWorkspaceDialog({
+  workspace,
+  busy,
+  errorMessage,
+  returnFocusRef,
+  onCancel,
+  onRemove,
+}: {
+  workspace: Workspace;
+  busy: boolean;
+  errorMessage: string | null;
+  returnFocusRef: RefObject<HTMLElement | null>;
+  onCancel(): void;
+  onRemove(): void;
+}) {
+  const { t } = useI18n();
+  const home = useHomeDirectory();
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  return (
+    <ApplicationDialog
+      actions={
+        <ApplicationDialogActions>
+          <ApplicationDialogButton
+            buttonRef={cancelRef}
+            disabled={busy}
+            kind="secondary"
+            onClick={onCancel}
+          >
+            {t("workspace.remove.cancel")}
+          </ApplicationDialogButton>
+          <ApplicationDialogButton
+            disabled={busy}
+            kind="primary"
+            onClick={onRemove}
+          >
+            {t("workspace.remove.confirm")}
+          </ApplicationDialogButton>
+        </ApplicationDialogActions>
+      }
+      busy={busy}
+      description={t("workspace.remove.description")}
+      errorMessage={errorMessage}
+      initialFocusRef={cancelRef}
+      objectPath={abbreviateHome(workspace.rootPath, home)}
+      onDismiss={onCancel}
+      returnFocusRef={returnFocusRef}
+      title={t("workspace.remove.title", { name: workspace.name })}
+      variant="sidebar"
+    >
+      {null}
+    </ApplicationDialog>
+  );
 }
 
 function asFileEntry(entry: WorkspaceEntry): FileEntry {
@@ -1355,4 +1569,9 @@ async function selectNativeDirectory(): Promise<string | null> {
     title: t("workspace.mountDialogTitle"),
   });
   return typeof selected === "string" ? selected : null;
+}
+
+/** `path` is `ancestor` or lies below it (Workspace-relative, `/`-separated). */
+function isWithinRelativePath(path: string, ancestor: string): boolean {
+  return path === ancestor || path.startsWith(`${ancestor}/`);
 }

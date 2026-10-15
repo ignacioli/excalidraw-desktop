@@ -7,7 +7,9 @@
 import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { createInterface } from "node:readline";
+import { fileURLToPath } from "node:url";
 import { en } from "../src/i18n/messages/en.ts";
 import { zhCN } from "../src/i18n/messages/zh-CN.ts";
 import { resolveLanguage } from "../src/i18n/resolveLanguage.ts";
@@ -39,19 +41,20 @@ const osa = (script) =>
 const label = (lang, key) =>
   (lang === "zh-CN" ? zhCN : en)[key].replaceAll("{name}", "Excalidraw");
 
-if (languages === undefined) block("--languages is required");
-try {
-  execFileSync("pgrep", ["-x", "excalidraw-desktop"]);
-  block("an Excalidraw instance is already running");
-} catch (error) {
-  if (error.status !== 1) throw error;
+let appleLanguages;
+let root;
+
+/**
+ * Call `onRoute` with each validation record the app logs to `stream`.
+ * Records are read whole lines at a time, so a record split across stream
+ * chunks is parsed once complete.
+ */
+export function readValidationRoutes(stream, onRoute) {
+  createInterface({ input: stream, crlfDelay: Infinity }).on("line", (line) => {
+    if (line.startsWith(LOG_PREFIX))
+      onRoute(JSON.parse(line.slice(LOG_PREFIX.length)));
+  });
 }
-const appleLanguages = languages
-  .replace(/[()\s]/gu, "")
-  .split(",")
-  .filter(Boolean);
-const root = mkdtempSync(join(tmpdir(), "native-menu-check-"));
-cleanups.push(() => rmSync(root, { recursive: true, force: true }));
 
 function launch(files) {
   const child = spawn(binary, [...files, "-AppleLanguages", languages], {
@@ -65,12 +68,7 @@ function launch(files) {
   children.add(child);
   child.on("exit", () => children.delete(child));
   child.routes = [];
-  child.stderr.setEncoding("utf8").on("data", (chunk) => {
-    for (const line of chunk.split("\n")) {
-      if (line.startsWith(LOG_PREFIX))
-        child.routes.push(JSON.parse(line.slice(LOG_PREFIX.length)));
-    }
-  });
+  readValidationRoutes(child.stderr, (route) => child.routes.push(route));
   child.on("error", (error) =>
     block(`cannot launch ${binary}: ${error.message}`),
   );
@@ -262,6 +260,8 @@ function expectedMenu(lang, language, appearance, hasDocument) {
     [
       L("file"),
       [
+        { name: L("file.newWindow") },
+        { name: L("file.openWorkspace") },
         { name: L("file.save"), enabled: hasDocument },
         { name: L("file.exportImage") },
         { name: L("file.versionHistory") },
@@ -427,28 +427,51 @@ end tell`),
   }
 }
 
-try {
-  await round([], false);
-  const fixture = join(root, "native-menu-check.excalidraw");
-  writeFileSync(
-    fixture,
-    JSON.stringify({
-      type: "excalidraw",
-      version: 2,
-      source: "native-menu-check",
-      elements: [],
-      appState: {},
-      files: {},
-    }),
+async function main() {
+  if (languages === undefined) block("--languages is required");
+  try {
+    execFileSync("pgrep", ["-x", "excalidraw-desktop"]);
+    block("an Excalidraw instance is already running");
+  } catch (error) {
+    if (error.status !== 1) throw error;
+  }
+  appleLanguages = languages
+    .replace(/[()\s]/gu, "")
+    .split(",")
+    .filter(Boolean);
+  root = mkdtempSync(join(tmpdir(), "native-menu-check-"));
+  cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+
+  try {
+    await round([], false);
+    const fixture = join(root, "native-menu-check.excalidraw");
+    writeFileSync(
+      fixture,
+      JSON.stringify({
+        type: "excalidraw",
+        version: 2,
+        source: "native-menu-check",
+        elements: [],
+        appState: {},
+        files: {},
+      }),
+    );
+    await round([fixture], true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  const failed = results.filter((ok) => !ok).length;
+  console.log(
+    failed === 0
+      ? `PASS ${results.length} checks`
+      : `FAIL ${failed} of ${results.length} checks`,
   );
-  await round([fixture], true);
-} finally {
-  rmSync(root, { recursive: true, force: true });
+  process.exit(failed === 0 ? 0 : 1);
 }
-const failed = results.filter((ok) => !ok).length;
-console.log(
-  failed === 0
-    ? `PASS ${results.length} checks`
-    : `FAIL ${failed} of ${results.length} checks`,
-);
-process.exit(failed === 0 ? 0 : 1);
+
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  await main();
+}

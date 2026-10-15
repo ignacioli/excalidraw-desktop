@@ -114,6 +114,15 @@ export async function installExportHarness(
               appVersion: "0.2.0-e2e",
               abnormalExit: false,
               pendingOpenPaths: [],
+              // The launch window, as the per-window bootstrap reports it.
+              window: {
+                label: "window-1",
+                workspace: null,
+                unavailableWorkspace: null,
+                restore: null,
+                shell: null,
+                openWorkspaceNames: [],
+              },
               preferredLanguages: [],
             };
           }

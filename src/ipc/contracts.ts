@@ -1,4 +1,4 @@
-export const IPC_CONTRACT_VERSION = 4 as const;
+export const IPC_CONTRACT_VERSION = 5 as const;
 /** The activated history boundary; retained as an explicit version marker. */
 export const RESERVED_HISTORY_CONTRACT_VERSION = 3 as const;
 
@@ -15,6 +15,10 @@ export type ErrorCode =
   | "WORKSPACE_NOT_FOUND"
   | "WORKSPACE_MOUNTED"
   | "WORKSPACE_OVERLAP"
+  | "WORKSPACE_NOT_OWNED"
+  | "DOCUMENT_NOT_OWNED"
+  | "WINDOW_OWNERSHIP_CHANGED"
+  | "QUIT_CHECKPOINT_FAILED"
   | "INVALID_NAME"
   | "NAME_CONFLICT"
   | "ENTRY_PROTECTED"
@@ -56,10 +60,94 @@ export type CheckpointReason =
 export interface AppHandshakeResponse {
   contractVersion: number;
   appVersion: string;
+  /** True only for the window that presents Recovery after an abnormal exit. */
   abnormalExit: boolean;
+  /** Launch files routed to this window; handed out once per window. */
   pendingOpenPaths: string[];
   /** System UI languages (raw BCP-47 tags, at most 16), read once at startup. */
   preferredLanguages: string[];
+  /** What the calling window shows; ownership is decided by the backend. */
+  window: WindowBootstrap;
+}
+
+export interface WindowBootstrap {
+  label: string;
+  /** The Workspace this window owns; `null` is Welcome. */
+  workspace: Workspace | null;
+  /** A session Workspace that could not be opened again. */
+  unavailableWorkspace: Workspace | null;
+  restore: WindowRestoreBootstrap | null;
+  shell: WorkspaceShellState | null;
+  /** Workspaces open in any window, for window-title disambiguation. */
+  openWorkspaceNames: OpenWorkspaceName[];
+}
+
+export interface WindowRestoreBootstrap {
+  tabs: string[];
+  activePath: string | null;
+  skipped: number;
+}
+
+export interface WorkspaceShellState {
+  sidebarPinned: boolean;
+  sidebarWidth: number;
+  /** Expanded folders by relative path; `""` is the Workspace row itself. */
+  expanded: string[];
+}
+
+/** A Workspace to open, by folder or by retained Workspace id. */
+export type ClaimWorkspaceTarget =
+  | { rootPath: string; workspaceId?: never }
+  | { workspaceId: string; rootPath?: never };
+
+export interface SceneOpenPayload {
+  scene: SceneData;
+  baseHash: string;
+  hasNewerDraft: boolean;
+}
+
+export type DocOpenResponse =
+  | ({ kind: "opened" } & SceneOpenPayload)
+  /** The drawing is open in that window, which is now in front. */
+  | { kind: "ownedElsewhere"; label: string };
+
+/**
+ * Result of opening a Workspace in the calling window. `W` is `Workspace`
+ * for a claim; a probe reports `null` for a claimable folder that has never
+ * been opened.
+ */
+export type ClaimWorkspaceOutcome<W = Workspace> =
+  | {
+      kind: "claimed";
+      workspace: W;
+      replaced: string | null;
+      /**
+       * The sidebar state to show: the Workspace's own, else the most recent
+       * one. Always `null` from a probe.
+       */
+      shell: WorkspaceShellState | null;
+    }
+  /** The same Workspace is open in that window, now in front. */
+  | { kind: "ownedBy"; label: string; workspaceId: string }
+  /** The folder is inside a Workspace open in that window, now in front. */
+  | {
+      kind: "insideOpen";
+      label: string;
+      workspaceId: string;
+      relativePath: string;
+    }
+  /** The folder contains a Workspace open in that window. */
+  | { kind: "containsOpen"; label: string; workspaceId: string };
+
+export interface AppPreferencesChangedEvent {
+  appearance?: "system" | "light" | "dark";
+  language?: "system" | "en" | "zh-CN";
+}
+
+export interface OpenWorkspaceName {
+  workspaceId: string;
+  name: string;
+  rootPath: string;
 }
 
 export interface RecoveryCandidate {
@@ -337,6 +425,11 @@ export interface IpcCommands {
     request: NativeMenuSyncRequest;
     response: Record<string, never>;
   };
+  /** Open a Welcome window; the window is created in Rust. */
+  window_new: {
+    request: Record<string, never>;
+    response: { label: string };
+  };
   app_handshake: {
     request: Record<string, never>;
     response: AppHandshakeResponse;
@@ -353,6 +446,7 @@ export interface IpcCommands {
     };
     response: { scene?: SceneData; newPath?: string };
   };
+  /** Deprecated: use `window_claim_workspace`. */
   workspace_add: {
     request: { rootPath: string; name?: string };
     response: Workspace;
@@ -369,9 +463,76 @@ export interface IpcCommands {
     request: Record<string, never>;
     response: Workspace[];
   };
+  /** Deprecated: use `window_claim_workspace`. */
   workspace_remount: {
     request: { workspaceId: string };
     response: Workspace;
+  };
+  /** Read-only: what claiming the target in this window would decide. */
+  window_probe_workspace: {
+    request: ClaimWorkspaceTarget;
+    response: ClaimWorkspaceOutcome<Workspace | null>;
+  };
+  /** Open a Workspace in this window, replacing its current one. */
+  window_claim_workspace: {
+    request: ClaimWorkspaceTarget;
+    response: ClaimWorkspaceOutcome;
+  };
+  /**
+   * "Close it and open here": ask `targetLabel`, whose Workspace lies inside
+   * `rootPath`, to close. The result arrives as `window-claim-result`. This
+   * window's tabs are closed first.
+   */
+  window_close_other_and_claim: {
+    request: { targetLabel: string; rootPath: string };
+    /** `requestId` names the `window-claim-result` that answers this call. */
+    response: { status: "closing"; requestId: string };
+  };
+  /** This window was asked to close by another one and the close failed. */
+  window_peer_close_failed: {
+    request: { requestId: string };
+    response: Record<string, never>;
+  };
+  /** Close this window's Workspace; the window's tabs are closed first. */
+  window_release_workspace: {
+    request: Record<string, never>;
+    response: Record<string, never>;
+  };
+  /**
+   * Report this window's tabs for the Window Session. Paths the window does
+   * not own and that are outside its Workspace are ignored.
+   */
+  window_session_update: {
+    request: { tabs: string[]; activePath: string | null };
+    response: Record<string, never>;
+  };
+  /** Recovery is finished in the Recovery window; the other windows open. */
+  startup_recovery_done: {
+    request: Record<string, never>;
+    response: Record<string, never>;
+  };
+  /** This window's answer to `app-quit-requested`. */
+  app_quit_ready: {
+    request: { requestId: string; ok: boolean; message?: string };
+    response: Record<string, never>;
+  };
+  /** Save the calling window's sidebar state for its Workspace. */
+  workspace_shell_state_save: {
+    request: WorkspaceShellState;
+    response: Record<string, never>;
+  };
+  /**
+   * Import the legacy localStorage sidebar pin and width. Only the first
+   * call reports `migrated: true`.
+   */
+  shell_preferences_migrate: {
+    request: { sidebarPinned: boolean; sidebarWidth: number };
+    response: { migrated: boolean };
+  };
+  /** Tell the other windows that an app-wide preference changed here. */
+  app_preferences_broadcast: {
+    request: AppPreferencesChangedEvent;
+    response: Record<string, never>;
   };
   workspace_recent_remove: {
     request: { workspaceId: string };
@@ -415,9 +576,14 @@ export interface IpcCommands {
     request: { workspaceId: string; relativePath: string };
     response: Record<string, never>;
   };
+  /**
+   * Open a drawing in this window. A drawing open in another window, or
+   * inside another window's Workspace, is not read: that window is brought
+   * to the front and shows it.
+   */
   doc_open: {
     request: { path: string };
-    response: { scene: SceneData; baseHash: string; hasNewerDraft: boolean };
+    response: DocOpenResponse;
   };
   doc_save_draft: {
     request: { path: string; sceneJson: string };
@@ -512,6 +678,21 @@ export interface IpcEvents {
   "open-file-request": { paths: string[] };
   "history-changed": HistoryChangedEvent;
   "history-issue": HistoryIssueEvent;
+  /** Switch to this window's tab for a drawing it already has open. */
+  "window-activate-document": { path: string };
+  /** Reveal a folder inside this window's Workspace. */
+  "workspace-reveal-entry": { relativePath: string; name: string };
+  /** Another window asks this one to close through its normal close path. */
+  "window-close-requested-by-peer": { requestId: string };
+  "window-claim-result": {
+    requestId: string;
+    outcome: ClaimWorkspaceOutcome | { kind: "cancelled" };
+  };
+  "app-quit-requested": { requestId: string };
+  "app-quit-cancelled": { requestId: string; failedLabel: string };
+  /** An app-wide preference changed in another window. */
+  "app-preferences-changed": AppPreferencesChangedEvent;
+  "open-workspaces-changed": { workspaces: OpenWorkspaceName[] };
 }
 
 export interface WorkspaceEntriesChangedEvent {
@@ -537,7 +718,8 @@ export type NativeMenuCommand =
   | "toggleGrid"
   | "toggleSnap"
   | "toggleZen"
-  | "toggleViewMode";
+  | "toggleViewMode"
+  | "openWorkspace";
 
 /** Every localized native menu label, including predefined item text. */
 export type NativeMenuLabelId =
@@ -551,6 +733,8 @@ export type NativeMenuLabelId =
   | "app.hideOthers"
   | "app.quit"
   | "file"
+  | "file.newWindow"
+  | "file.openWorkspace"
   | "file.save"
   | "file.exportImage"
   | "file.versionHistory"

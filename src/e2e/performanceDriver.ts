@@ -3,6 +3,7 @@ import {
   type DocumentManager,
 } from "../documents/documentStore";
 import type { ExcalidrawAdapter } from "../editor/ExcalidrawAdapter";
+import { formatHistoryFrontendError } from "./historyFrontendError";
 
 const CONTRACT_SCHEMA_VERSION = "1.0.0" as const;
 const TEN_THOUSAND_ELEMENT_SCENARIOS = new Set<PerformanceScenario>([
@@ -272,7 +273,7 @@ function describeDriverError(error: unknown): string {
       ? stack
       : [error.message, stack].filter((part) => part.length > 0).join("\n");
   } else {
-    message = String(error);
+    message = formatHistoryFrontendError(error);
   }
   const nonEmpty = message.trim().length > 0 ? message : "unknown driver error";
   return [...nonEmpty].slice(0, MAXIMUM_ERROR_MESSAGE_CHARS).join("");

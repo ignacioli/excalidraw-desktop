@@ -33,7 +33,10 @@ test("shows a clear error after a failed export and leaves no partial file", asy
   await expect(dialog.getByRole("alert")).toHaveText(
     "The destination could not be written. No partial file was left behind.",
   );
-  await expect(dialog).toHaveAttribute("aria-describedby", "export-dialog-error");
+  await expect(dialog).toHaveAttribute(
+    "aria-describedby",
+    "export-dialog-error",
+  );
 
   let store = await exportStore(page);
   expect(store.tmp).toEqual([]);

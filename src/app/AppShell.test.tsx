@@ -20,6 +20,7 @@ import type { NativeMenuCommand } from "../ipc/contracts";
 import { LocaleController } from "../i18n";
 import { en } from "../i18n/messages/en.ts";
 import { AppShell } from "./AppShell";
+import { registerOpenFileHandler } from "./openFileHandler";
 import {
   SHELL_PREFERENCES_STORAGE_KEY,
   SHELL_PREFERENCES_VERSION,
@@ -113,6 +114,7 @@ vi.mock("./exitCheckpoint", async () => {
     ...actual,
     hasNativeWindowRuntime: () => nativeRuntimeHarness.enabled,
     registerExitCheckpoint: vi.fn(async () => () => undefined),
+    registerQuitCheckpoint: vi.fn(async () => () => undefined),
   };
 });
 
@@ -224,9 +226,12 @@ describe("AppShell", () => {
     const invoke = vi.fn(async (command: string) => {
       if (command === "workspace_list") return opened ? [workspace] : [];
       if (command === "workspace_recent_list") return opened ? [workspace] : [];
-      if (command === "workspace_add") {
-        opened = true;
-        return workspace;
+      if (
+        command === "window_probe_workspace" ||
+        command === "window_claim_workspace"
+      ) {
+        if (command === "window_claim_workspace") opened = true;
+        return { kind: "claimed", workspace, replaced: null, shell: null };
       }
       if (command === "workspace_entry_list") return [];
       throw new Error(`Unexpected command ${command}`);
@@ -288,9 +293,9 @@ describe("AppShell", () => {
         if (command === "workspace_recent_list") {
           return added ? [workspace] : [];
         }
-        if (command === "workspace_add") {
+        if (command === "window_claim_workspace") {
           added = true;
-          return workspace;
+          return { kind: "claimed", workspace, replaced: null, shell: null };
         }
         if (command === "workspace_entry_list") return [];
         if (command === "workspace_entry_create") {
@@ -356,7 +361,7 @@ describe("AppShell", () => {
       expect(documentManager.store.getState().activeDocumentId).not.toBeNull(),
     );
     const firstId = documentManager.store.getState().activeDocumentId ?? "";
-    expect(workspaceInvoke).toHaveBeenCalledWith("workspace_add", {
+    expect(workspaceInvoke).toHaveBeenCalledWith("window_claim_workspace", {
       rootPath: workspace.rootPath,
     });
     expect(
@@ -407,7 +412,10 @@ describe("AppShell", () => {
         .mock.calls.map(([command]) => command)
         .filter(
           (command) =>
-            command !== "workspace_list" && command !== "workspace_recent_list",
+            // Startup reads only.
+            command !== "workspace_list" &&
+            command !== "workspace_recent_list" &&
+            command !== "app_handshake",
         ),
     ).toEqual([]);
   });
@@ -435,8 +443,366 @@ describe("AppShell", () => {
     await user.click(screen.getByRole("button", { name: "Open Workspace" }));
 
     expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
-    expect(invoke).not.toHaveBeenCalledWith("workspace_add", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith(
+      "window_claim_workspace",
+      expect.anything(),
+    );
     expect(documentManager.store.getState().sessionsById).toEqual({});
+  });
+
+  it.each([
+    [
+      "ownedBy",
+      { kind: "ownedBy", label: "window-2", workspaceId: "workspace-a" },
+    ],
+    [
+      "insideOpen",
+      {
+        kind: "insideOpen",
+        label: "window-2",
+        workspaceId: "workspace-a",
+        relativePath: "sub",
+      },
+    ],
+  ])(
+    "leaves this window and its tabs alone when another window holds the folder (%s)",
+    async (_kind, outcome) => {
+      const user = userEvent.setup();
+      const invoke = vi.fn(async (command: string) => {
+        if (command === "workspace_list") return [];
+        if (command === "workspace_recent_list") return [];
+        if (
+          command === "window_probe_workspace" ||
+          command === "window_claim_workspace"
+        ) {
+          return outcome;
+        }
+        throw new Error(`Unexpected command ${command}`);
+      }) as CommandInvoker["invoke"];
+      const closeMany = vi.spyOn(documentManager, "closeMany");
+      vi.stubGlobal("__TAURI_INTERNALS__", {
+        invoke: vi.fn(async () => []),
+      });
+
+      render(
+        <AppShell
+          selectWorkspaceDirectory={async () => "/workspace/a"}
+          workspaceInvoker={{ invoke }}
+        />,
+      );
+      await user.click(
+        await screen.findByRole("button", { name: "Open Workspace" }),
+      );
+
+      await waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith("window_claim_workspace", {
+          rootPath: "/workspace/a",
+        }),
+      );
+      expect(invoke).toHaveBeenCalledWith("window_probe_workspace", {
+        rootPath: "/workspace/a",
+      });
+      expect(closeMany).not.toHaveBeenCalled();
+      expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    },
+  );
+
+  describe("a folder that contains another window's Workspace", () => {
+    const INNER = {
+      id: "workspace-a",
+      name: "Inner",
+      rootPath: "/workspace/inner",
+      createdAt: 1,
+    };
+    const OUTER = {
+      id: "workspace-outer",
+      name: "workspace",
+      rootPath: "/workspace",
+      createdAt: 2,
+    };
+
+    async function openConflict({
+      claimResult,
+      newDrawing = false,
+    }: {
+      claimResult?: unknown;
+      newDrawing?: boolean;
+    } = {}) {
+      const user = userEvent.setup();
+      let claimHandler:
+        | ((event: {
+            payload: { requestId: string; outcome: unknown };
+          }) => void)
+        | undefined;
+      const { defaultEventListener } = await import("../ipc/events");
+      vi.mocked(defaultEventListener).mockImplementation(
+        async (eventName, handler) => {
+          if (eventName === "window-claim-result") {
+            claimHandler = handler as typeof claimHandler;
+          }
+          return () => undefined;
+        },
+      );
+      let openedHere = false;
+      const invoke = vi.fn(
+        async (command: string, args?: Record<string, unknown>) => {
+          if (command === "workspace_list") return openedHere ? [OUTER] : [];
+          if (command === "workspace_entry_list") return [];
+          if (command === "workspace_recent_list") return [INNER];
+          if (command === "window_probe_workspace") {
+            return {
+              kind: "containsOpen",
+              label: "window-2",
+              workspaceId: INNER.id,
+            };
+          }
+          if (command === "window_claim_workspace") {
+            if (args?.workspaceId === INNER.id) {
+              return {
+                kind: "ownedBy",
+                label: "window-2",
+                workspaceId: INNER.id,
+              };
+            }
+            return {
+              kind: "containsOpen",
+              label: "window-2",
+              workspaceId: INNER.id,
+            };
+          }
+          if (command === "window_close_other_and_claim") {
+            if (claimResult !== undefined) {
+              openedHere = (claimResult as { kind: string }).kind === "claimed";
+              queueMicrotask(() =>
+                claimHandler?.({
+                  payload: { requestId: "request-1", outcome: claimResult },
+                }),
+              );
+            }
+            return { status: "closing", requestId: "request-1" };
+          }
+          if (command === "workspace_entry_create") {
+            return {
+              operationId: "operation-1",
+              entry: {
+                workspaceId: OUTER.id,
+                kind: "drawing",
+                canonicalPath: "/workspace/Untitled.excalidraw",
+                relativePath: "Untitled.excalidraw",
+                parentRelativePath: "",
+                name: "Untitled.excalidraw",
+                displayName: "Untitled",
+                mtime: 1,
+                fileSize: 10,
+              },
+            };
+          }
+          throw new Error(`Unexpected command ${command}`);
+        },
+      ) as CommandInvoker["invoke"];
+      const closeMany = vi.spyOn(documentManager, "closeMany");
+      const openRouted = vi
+        .spyOn(documentManager, "openRouted")
+        .mockResolvedValue("document-1");
+      vi.stubGlobal("__TAURI_INTERNALS__", {
+        invoke: vi.fn(async () => []),
+      });
+
+      render(
+        <AppShell
+          selectWorkspaceDirectory={async () => "/workspace"}
+          workspaceInvoker={{ invoke }}
+        />,
+      );
+      await user.click(
+        await screen.findByRole("button", {
+          name: newDrawing ? "New Drawing" : "Open Workspace",
+        }),
+      );
+      const dialog = await screen.findByRole("dialog", {
+        name: "“workspace” contains an open Workspace",
+      });
+      return { user, invoke, closeMany, openRouted, dialog };
+    }
+
+    it("asks without closing tabs or opening anything", async () => {
+      const { user, invoke, closeMany, dialog } = await openConflict();
+
+      expect(dialog).toHaveTextContent("/workspace ⊃ /workspace/inner");
+      expect(closeMany).not.toHaveBeenCalled();
+      expect(invoke).not.toHaveBeenCalledWith(
+        "window_claim_workspace",
+        expect.anything(),
+      );
+
+      await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
+    });
+
+    it("switches to the window that has the Workspace inside", async () => {
+      const { user, invoke, dialog } = await openConflict();
+
+      await user.click(
+        within(dialog).getByRole("button", { name: "Switch to that window" }),
+      );
+
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+      );
+      expect(invoke).toHaveBeenCalledWith("window_claim_workspace", {
+        workspaceId: INNER.id,
+      });
+      expect(invoke).not.toHaveBeenCalledWith(
+        "window_close_other_and_claim",
+        expect.anything(),
+      );
+    });
+
+    it("opens the folder here once the other window closed", async () => {
+      const { user, invoke, dialog } = await openConflict({
+        claimResult: {
+          kind: "claimed",
+          workspace: OUTER,
+          replaced: null,
+          shell: null,
+        },
+      });
+
+      await user.click(
+        within(dialog).getByRole("button", { name: "Close it and open here" }),
+      );
+
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+      );
+      expect(invoke).toHaveBeenCalledWith("window_close_other_and_claim", {
+        targetLabel: "window-2",
+        rootPath: "/workspace",
+      });
+      await user.click(
+        screen.getByRole("button", { name: /workspace sidebar/i }),
+      );
+      expect(
+        await screen.findByRole("treeitem", { name: OUTER.name }),
+      ).toBeInTheDocument();
+    });
+
+    it("opens nothing when the other window stayed open", async () => {
+      const { user, dialog } = await openConflict({
+        claimResult: { kind: "cancelled" },
+      });
+
+      await user.click(
+        within(dialog).getByRole("button", { name: "Close it and open here" }),
+      );
+
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+        "“Inner” was not closed, so “workspace” was not opened.",
+      );
+      expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
+    });
+
+    it("continues a New Drawing once the folder opened here", async () => {
+      const { user, invoke, openRouted, dialog } = await openConflict({
+        newDrawing: true,
+        claimResult: {
+          kind: "claimed",
+          workspace: OUTER,
+          replaced: null,
+          shell: null,
+        },
+      });
+
+      expect(invoke).not.toHaveBeenCalledWith(
+        "workspace_entry_create",
+        expect.anything(),
+      );
+      await user.click(
+        within(dialog).getByRole("button", { name: "Close it and open here" }),
+      );
+
+      await waitFor(() =>
+        expect(openRouted).toHaveBeenCalledWith(
+          "/workspace/Untitled.excalidraw",
+        ),
+      );
+      expect(invoke).toHaveBeenCalledWith("workspace_entry_create", {
+        workspaceId: OUTER.id,
+        parentRelativePath: "",
+        kind: "drawing",
+        baseName: "Untitled",
+      });
+    });
+  });
+
+  it("keeps the current Workspace when closing its tabs is cancelled", async () => {
+    const values = new Map<string, string>();
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key),
+        clear: () => values.clear(),
+      },
+    });
+    const current = {
+      id: "workspace-current",
+      name: "Current workspace",
+      rootPath: "/workspace/current",
+      createdAt: 1,
+    };
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [current];
+      if (command === "workspace_recent_list") return [current];
+      if (command === "workspace_entry_list") return [];
+      if (command === "window_probe_workspace") {
+        return {
+          kind: "claimed",
+          workspace: null,
+          replaced: current.id,
+        };
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.spyOn(documentManager, "closeMany").mockResolvedValue({
+      status: "cancelled",
+    });
+    nativeRuntimeHarness.enabled = true;
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(
+      <AppShell
+        selectWorkspaceDirectory={async () => "/workspace/next"}
+        workspaceInvoker={{ invoke }}
+      />,
+    );
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("workspace_list", {}),
+    );
+    await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
+    act(() => {
+      nativeMenuHarness.handler?.("openWorkspace");
+    });
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("window_probe_workspace", {
+        rootPath: "/workspace/next",
+      }),
+    );
+    await waitFor(() => expect(documentManager.closeMany).toHaveBeenCalled());
+    expect(invoke).not.toHaveBeenCalledWith(
+      "window_claim_workspace",
+      expect.anything(),
+    );
+    expect(invoke).not.toHaveBeenCalledWith(
+      "window_release_workspace",
+      expect.anything(),
+    );
   });
 
   it("keeps an inaccessible Recent Workspace and exposes a readable error", async () => {
@@ -457,7 +823,7 @@ describe("AppShell", () => {
       if (command === "workspace_list") return [];
       if (command === "workspace_recent_list")
         return [workspace, otherWorkspace];
-      if (command === "workspace_remount") {
+      if (command === "window_probe_workspace") {
         throw {
           code: "PATH_ACCESS_DENIED",
           message: "Workspace is no longer accessible.",
@@ -482,7 +848,7 @@ describe("AppShell", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     await user.click(recent);
 
-    expect(invoke).toHaveBeenCalledWith("workspace_remount", {
+    expect(invoke).toHaveBeenCalledWith("window_probe_workspace", {
       workspaceId: workspace.id,
     });
 
@@ -516,6 +882,111 @@ describe("AppShell", () => {
     expect(documentManager.store.getState().sessionsById).toEqual({});
   });
 
+  it("explains on Welcome that a Workspace of the previous session is unavailable", async () => {
+    const workspace = {
+      id: "workspace-moved",
+      name: "Moved workspace",
+      rootPath: "/workspace/moved",
+      createdAt: 1,
+    };
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list") return [];
+      if (command === "workspace_recent_list") return [workspace];
+      if (command === "app_handshake") {
+        return {
+          contractVersion: 5,
+          appVersion: "0.1.0",
+          abnormalExit: false,
+          pendingOpenPaths: [],
+          preferredLanguages: [],
+          window: {
+            label: "window-2",
+            workspace: null,
+            unavailableWorkspace: workspace,
+            restore: null,
+            shell: null,
+            openWorkspaceNames: [],
+          },
+        };
+      }
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "“Moved workspace” couldn’t be reopened.",
+    );
+    expect(await screen.findByText("Folder unavailable")).toBeInTheDocument();
+    expect(screen.getByTestId("welcome-screen")).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith(
+      "window_claim_workspace",
+      expect.anything(),
+    );
+  });
+
+  it("says briefly how many tabs of the previous session were skipped", async () => {
+    nativeRuntimeHarness.enabled = true;
+    render(<AppShell />);
+    await waitFor(() => expect(registerOpenFileHandler).toHaveBeenCalled());
+    const options = vi.mocked(registerOpenFileHandler).mock.calls.at(-1)?.[1];
+
+    act(() => options?.onRestoreSkipped?.(2));
+
+    expect(
+      await screen.findByText(
+        "2 drawings from last time couldn’t be reopened. They were moved, deleted, or can’t be read.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("reports the window's tabs for the next launch", async () => {
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "workspace_list" || command === "workspace_recent_list")
+        return [];
+      if (command === "window_session_update") return {};
+      throw new Error(`Unexpected command ${command}`);
+    }) as CommandInvoker["invoke"];
+    vi.stubGlobal("__TAURI_INTERNALS__", {
+      invoke: vi.fn(async () => []),
+    });
+    render(<AppShell workspaceInvoker={{ invoke }} />);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("workspace_list", {}),
+    );
+
+    act(() => {
+      documentManager.store.setState({
+        sessionsById: {
+          d1: {
+            id: "d1",
+            path: "/a/one.excalidraw",
+            title: "one",
+          } as DocumentSession,
+        },
+        tabOrder: ["d1"],
+        activeDocumentId: "d1",
+      });
+    });
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("window_session_update", {
+        tabs: ["/a/one.excalidraw"],
+        activePath: "/a/one.excalidraw",
+      }),
+    );
+    act(() => {
+      documentManager.store.setState({
+        sessionsById: {},
+        tabOrder: [],
+        activeDocumentId: null,
+      });
+    });
+  });
+
   it("clears the unavailable row state after a successful remount retry", async () => {
     const user = userEvent.setup();
     const workspace = {
@@ -528,7 +999,7 @@ describe("AppShell", () => {
     const invokeMock = vi.fn(async (command: string) => {
       if (command === "workspace_list") return [];
       if (command === "workspace_recent_list") return [workspace];
-      if (command === "workspace_remount") {
+      if (command === "window_probe_workspace") {
         attempts += 1;
         if (attempts === 1) {
           throw {
@@ -537,8 +1008,12 @@ describe("AppShell", () => {
             retriable: false,
           };
         }
-        return workspace;
+        return { kind: "claimed", workspace, replaced: null, shell: null };
       }
+      if (command === "window_claim_workspace") {
+        return { kind: "claimed", workspace, replaced: null, shell: null };
+      }
+      if (command === "workspace_entry_list") return [];
       throw new Error(`Unexpected command ${command}`);
     });
     const invoke = invokeMock as CommandInvoker["invoke"];
@@ -559,7 +1034,7 @@ describe("AppShell", () => {
     );
     expect(
       invokeMock.mock.calls.filter(
-        ([command]) => command === "workspace_remount",
+        ([command]) => command === "window_probe_workspace",
       ),
     ).toHaveLength(2);
   });
@@ -575,7 +1050,7 @@ describe("AppShell", () => {
     const invoke = vi.fn(async (command: string) => {
       if (command === "workspace_list") return [];
       if (command === "workspace_recent_list") return [workspace];
-      if (command === "workspace_remount") {
+      if (command === "window_probe_workspace") {
         throw {
           code: "PATH_ACCESS_DENIED",
           message: "Workspace is no longer accessible.",
@@ -627,7 +1102,7 @@ describe("AppShell", () => {
     const invoke = vi.fn(async (command: string) => {
       if (command === "workspace_list") return [];
       if (command === "workspace_recent_list") return [workspace];
-      if (command === "workspace_remount") {
+      if (command === "window_probe_workspace") {
         throw {
           code: "PATH_ACCESS_DENIED",
           message: "Workspace is no longer accessible.",
@@ -670,6 +1145,9 @@ describe("AppShell", () => {
     const invoke = vi.fn(async (command: string) => {
       if (command === "workspace_list") return [];
       if (command === "workspace_recent_list") return [workspace];
+      if (command === "window_probe_workspace") {
+        return { kind: "claimed", workspace, replaced: null, shell: null };
+      }
       throw new Error(`Unexpected command ${command}`);
     }) as CommandInvoker["invoke"];
     vi.spyOn(documentManager, "closeMany").mockResolvedValue({
@@ -691,7 +1169,7 @@ describe("AppShell", () => {
     );
     expect(screen.queryByText("Folder unavailable")).not.toBeInTheDocument();
     expect(invoke).not.toHaveBeenCalledWith(
-      "workspace_remount",
+      "window_claim_workspace",
       expect.anything(),
     );
   });
@@ -910,15 +1388,14 @@ describe("AppShell", () => {
 
   it("routes native version history to the active saved document only", async () => {
     const user = userEvent.setup();
-    seedShellPreferences({ sidebarPinned: true });
+    stubTauriCommandRuntime();
     nativeRuntimeHarness.enabled = true;
     setDocumentSessions([
       createSession("drawing", "Drawing", "/tmp/drawing.excalidraw", "clean"),
     ]);
     const invoke = vi.fn(async (command: string) => {
-      if (command === "workspace_list" || command === "workspace_recent_list") {
-        return [];
-      }
+      const sidebar = sidebarWorkspaceCommand({ sidebarPinned: true }, command);
+      if (sidebar !== undefined) return sidebar;
       if (
         command === "native_menu_set_enabled" ||
         command === "native_menu_sync"
@@ -935,6 +1412,7 @@ describe("AppShell", () => {
     }) as CommandInvoker["invoke"];
 
     render(<AppShell workspaceInvoker={{ invoke }} />);
+    await findPinnedShellBody();
     await waitFor(() => expect(nativeMenuHarness.handler).toBeDefined());
     nativeMenuHarness.handler?.("versionHistory");
 
@@ -1620,12 +2098,16 @@ describe("AppShell", () => {
       assertRetainedChrome();
     });
 
-    it("places a pinned sidebar in layout and keeps the canvas as the remaining column", () => {
-      seedShellPreferences({ sidebarPinned: true });
-      render(<AppShell />);
+    it("places a pinned sidebar in layout and keeps the canvas as the remaining column", async () => {
+      render(
+        <AppShell
+          workspaceInvoker={{
+            invoke: sidebarWorkspaceInvoker({ sidebarPinned: true }),
+          }}
+        />,
+      );
 
-      const body = getShellBody();
-      expect(body).toHaveAttribute("data-sidebar-mode", "pinned");
+      const body = await findPinnedShellBody();
       expect(body).toHaveClass("app-shell-body--pinned");
       expect(
         screen.getByRole("complementary", { name: "Files" }),
@@ -1703,9 +2185,10 @@ describe("AppShell", () => {
     });
 
     it("resizes a pinned Sidebar with the keyboard and persists the width", async () => {
-      seedShellPreferences({ sidebarPinned: true });
+      const invoke = sidebarWorkspaceInvoker({ sidebarPinned: true });
       const user = userEvent.setup();
-      render(<AppShell />);
+      render(<AppShell workspaceInvoker={{ invoke }} />);
+      await findPinnedShellBody();
       const separator = screen.getByRole("separator", {
         name: "Resize workspace sidebar",
       });
@@ -1714,38 +2197,54 @@ describe("AppShell", () => {
       await user.click(separator);
       await user.keyboard("{ArrowRight}");
       expect(separator).toHaveAttribute("aria-valuenow", "368");
-      expect(
-        JSON.parse(
-          globalThis.localStorage.getItem(SHELL_PREFERENCES_STORAGE_KEY) ??
-            "{}",
-        ).sidebarWidth,
-      ).toBe(368);
+      expect(invoke).toHaveBeenLastCalledWith("workspace_shell_state_save", {
+        sidebarPinned: true,
+        sidebarWidth: 368,
+        expanded: [""],
+      });
     });
 
-    it("resizes a pinned Sidebar with the pointer and persists the width", () => {
-      seedShellPreferences({ sidebarPinned: true });
-      render(<AppShell />);
+    it("resizes a pinned Sidebar with the pointer and persists the width", async () => {
+      const invoke = sidebarWorkspaceInvoker({ sidebarPinned: true });
+      render(<AppShell workspaceInvoker={{ invoke }} />);
+      await findPinnedShellBody();
       const separator = screen.getByRole("separator", {
         name: "Resize workspace sidebar",
       });
 
       fireEvent.pointerDown(separator, { clientX: 360, pointerId: 7 });
       fireEvent.pointerMove(separator, { clientX: 376, pointerId: 7 });
+      expect(invoke).not.toHaveBeenCalledWith(
+        "workspace_shell_state_save",
+        expect.anything(),
+      );
       fireEvent.pointerUp(separator, { clientX: 376, pointerId: 7 });
 
       expect(separator).toHaveAttribute("aria-valuenow", "376");
       expect(
-        JSON.parse(
-          globalThis.localStorage.getItem(SHELL_PREFERENCES_STORAGE_KEY) ??
-            "{}",
-        ).sidebarWidth,
-      ).toBe(376);
+        vi
+          .mocked(invoke)
+          .mock.calls.filter(
+            ([command]) => command === "workspace_shell_state_save",
+          ),
+      ).toEqual([
+        [
+          "workspace_shell_state_save",
+          { sidebarPinned: true, sidebarWidth: 376, expanded: [""] },
+        ],
+      ]);
     });
 
     it("caps Sidebar resizing so the canvas retains at least 70 percent at 1280px", async () => {
-      seedShellPreferences({ sidebarPinned: true });
       const user = userEvent.setup();
-      render(<AppShell />);
+      render(
+        <AppShell
+          workspaceInvoker={{
+            invoke: sidebarWorkspaceInvoker({ sidebarPinned: true }),
+          }}
+        />,
+      );
+      await findPinnedShellBody();
       const separator = screen.getByRole("separator", {
         name: "Resize workspace sidebar",
       });
@@ -1759,28 +2258,119 @@ describe("AppShell", () => {
       expect((1280 - cappedWidth) / 1280).toBeGreaterThanOrEqual(0.7);
     });
 
-    it("restores the pinned mode and chosen width after an AppShell restart", () => {
+    it("imports the earlier shell preferences once and reopens their Current Workspace", async () => {
+      globalThis.localStorage.setItem(
+        SHELL_PREFERENCES_STORAGE_KEY,
+        JSON.stringify({
+          version: SHELL_PREFERENCES_VERSION,
+          sidebarPinned: true,
+          sidebarWidth: 380,
+          expandedWorkspaceIds: [SIDEBAR_WORKSPACE.id],
+          currentWorkspaceId: SIDEBAR_WORKSPACE.id,
+        }),
+      );
+      stubTauriCommandRuntime();
+      let claimed = false;
+      const invoke = vi.fn(async (command: string) => {
+        if (command === "workspace_list")
+          return claimed ? [SIDEBAR_WORKSPACE] : [];
+        if (command === "workspace_recent_list") return [SIDEBAR_WORKSPACE];
+        if (command === "shell_preferences_migrate") return { migrated: true };
+        if (command === "app_handshake") {
+          return { window: { label: "window-1", shell: null } };
+        }
+        if (command === "window_claim_workspace") {
+          claimed = true;
+          return {
+            kind: "claimed",
+            workspace: SIDEBAR_WORKSPACE,
+            replaced: null,
+            shell: null,
+          };
+        }
+        return [];
+      }) as CommandInvoker["invoke"];
+
+      render(<AppShell workspaceInvoker={{ invoke }} />);
+
+      await findPinnedShellBody();
+      expect(
+        screen.getByRole("separator", { name: "Resize workspace sidebar" }),
+      ).toHaveAttribute("aria-valuenow", "380");
+      expect(invoke).toHaveBeenCalledWith("shell_preferences_migrate", {
+        sidebarPinned: true,
+        sidebarWidth: 380,
+      });
+      expect(invoke).toHaveBeenCalledWith("window_claim_workspace", {
+        workspaceId: SIDEBAR_WORKSPACE.id,
+      });
+      // The earlier key is read, never rewritten.
+      expect(
+        JSON.parse(
+          globalThis.localStorage.getItem(SHELL_PREFERENCES_STORAGE_KEY) ??
+            "{}",
+        ),
+      ).toMatchObject({ sidebarWidth: 380 });
+    });
+
+    it("ignores the earlier shell preferences once they were imported", async () => {
+      globalThis.localStorage.setItem(
+        SHELL_PREFERENCES_STORAGE_KEY,
+        JSON.stringify({
+          version: SHELL_PREFERENCES_VERSION,
+          sidebarPinned: true,
+          expandedWorkspaceIds: [],
+          currentWorkspaceId: SIDEBAR_WORKSPACE.id,
+        }),
+      );
+      stubTauriCommandRuntime();
+      const invoke = vi.fn(async (command: string) => {
+        if (command === "workspace_recent_list") return [SIDEBAR_WORKSPACE];
+        if (command === "shell_preferences_migrate") return { migrated: false };
+        return [];
+      }) as CommandInvoker["invoke"];
+
+      render(<AppShell workspaceInvoker={{ invoke }} />);
+
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith(
+          "shell_preferences_migrate",
+          expect.anything(),
+        );
+      });
+      expect(await screen.findByTestId("welcome-screen")).toBeInTheDocument();
+      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "hidden");
+      expect(invoke).not.toHaveBeenCalledWith(
+        "window_claim_workspace",
+        expect.anything(),
+      );
+    });
+
+    it("restores the pinned mode and chosen width after an AppShell restart", async () => {
       Object.defineProperty(window, "innerWidth", {
         configurable: true,
         value: 1600,
       });
-      seedShellPreferences({ sidebarPinned: true, sidebarWidth: 416 });
-      const first = render(<AppShell />);
-      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "pinned");
+      const invoke = sidebarWorkspaceInvoker({
+        sidebarPinned: true,
+        sidebarWidth: 416,
+      });
+      const first = render(<AppShell workspaceInvoker={{ invoke }} />);
+      await findPinnedShellBody();
       expect(
         screen.getByRole("separator", { name: "Resize workspace sidebar" }),
       ).toHaveAttribute("aria-valuenow", "416");
 
       first.unmount();
-      render(<AppShell />);
+      render(<AppShell workspaceInvoker={{ invoke }} />);
 
-      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "pinned");
+      await findPinnedShellBody();
       expect(
         screen.getByRole("separator", { name: "Resize workspace sidebar" }),
       ).toHaveAttribute("aria-valuenow", "416");
     });
 
-    it("keeps legacy command chrome out of the shell header", () => {
+    it("keeps legacy command chrome out of the shell header", async () => {
       setDocumentSessions([
         createSession(
           "drawing",
@@ -1798,9 +2388,14 @@ describe("AppShell", () => {
       assertRetainedChrome();
 
       first.unmount();
-      seedShellPreferences({ sidebarPinned: true });
-      render(<AppShell />);
-      expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "pinned");
+      render(
+        <AppShell
+          workspaceInvoker={{
+            invoke: sidebarWorkspaceInvoker({ sidebarPinned: true }),
+          }}
+        />,
+      );
+      await findPinnedShellBody();
       assertRetainedChrome();
     });
 
@@ -1872,19 +2467,65 @@ function setDocumentSessions(sessions: readonly DocumentSession[]): void {
   });
 }
 
-function seedShellPreferences(snapshot: {
+const SIDEBAR_WORKSPACE = {
+  id: "workspace-sidebar-state",
+  name: "Sidebar state",
+  rootPath: "/workspace/sidebar-state",
+  createdAt: 1,
+};
+
+/**
+ * Answer the commands that open `SIDEBAR_WORKSPACE` in this window with the
+ * given saved sidebar state; `undefined` for any other command.
+ */
+function sidebarWorkspaceCommand(
+  shell: { sidebarPinned: boolean; sidebarWidth?: number },
+  command: string,
+): unknown {
+  switch (command) {
+    case "workspace_list":
+    case "workspace_recent_list":
+      return [SIDEBAR_WORKSPACE];
+    case "app_handshake":
+      return {
+        window: {
+          label: "window-1",
+          shell: {
+            sidebarPinned: shell.sidebarPinned,
+            sidebarWidth: shell.sidebarWidth ?? 360,
+            expanded: [""],
+          },
+        },
+      };
+    case "workspace_entry_list":
+      return [];
+    case "workspace_shell_state_save":
+      return null;
+    default:
+      return undefined;
+  }
+}
+
+/** A native window whose Workspace was saved with `shell`. */
+function sidebarWorkspaceInvoker(shell: {
   sidebarPinned: boolean;
   sidebarWidth?: number;
-}): void {
-  globalThis.localStorage.setItem(
-    SHELL_PREFERENCES_STORAGE_KEY,
-    JSON.stringify({
-      version: SHELL_PREFERENCES_VERSION,
-      sidebarPinned: snapshot.sidebarPinned,
-      sidebarWidth: snapshot.sidebarWidth,
-      expandedWorkspaceIds: [],
-    }),
-  );
+}) {
+  stubTauriCommandRuntime();
+  return vi.fn(async (command: string) => {
+    return sidebarWorkspaceCommand(shell, command) ?? [];
+  }) as unknown as CommandInvoker["invoke"] & ReturnType<typeof vi.fn>;
+}
+
+function stubTauriCommandRuntime(): void {
+  vi.stubGlobal("__TAURI_INTERNALS__", { invoke: vi.fn(async () => []) });
+}
+
+async function findPinnedShellBody(): Promise<HTMLElement> {
+  await waitFor(() => {
+    expect(getShellBody()).toHaveAttribute("data-sidebar-mode", "pinned");
+  });
+  return getShellBody();
 }
 
 function getShellBody(): HTMLElement {

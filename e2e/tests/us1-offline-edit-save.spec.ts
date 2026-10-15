@@ -39,7 +39,10 @@ test("creates, checkpoints, and reopens a drawing with every asset local", async
   await page.goto("/");
 
   await openWorkspaceSidebar(page);
-  await page.getByRole("button", { name: "New Drawing", exact: true }).click();
+  await page
+    .getByRole("toolbar", { name: "Workspace actions" })
+    .getByRole("button", { name: "New Drawing" })
+    .click();
   const namingDialog = page.getByRole("dialog", { name: "New drawing" });
   await namingDialog.getByRole("textbox", { name: "Name" }).fill("us1-drawing");
   await namingDialog.getByRole("button", { name: "Create" }).click();
@@ -110,9 +113,8 @@ test("creates, checkpoints, and reopens a drawing with every asset local", async
   );
   expect(Object.keys(savedScene?.files ?? {})).toHaveLength(1);
 
+  // A restart reopens the Workspace and its tab from the Window Session.
   await page.reload();
-  await openWorkspaceSidebar(page);
-  await page.getByRole("treeitem", { name: "us1-drawing" }).click();
   await expect(
     page.getByRole("tab", { name: "us1-drawing.excalidraw" }),
   ).toBeVisible();

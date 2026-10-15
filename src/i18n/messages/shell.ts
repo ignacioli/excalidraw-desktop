@@ -8,8 +8,27 @@ export const shellEn = {
   "shell.files": "Files",
   "shell.resizeSidebar": "Resize workspace sidebar",
   "shell.canvas": "Drawing canvas",
-  "shell.emptyState": "Select a drawing to begin.",
+  "shell.emptyState.label": "Empty canvas area",
+  "shell.emptyState.title": "Pick a drawing from the sidebar",
+  "shell.emptyState.subtitle": "or start a new one",
+  "shell.emptyState.newDrawing": "New Drawing",
+  "shell.emptyState.showSidebar": "Show Sidebar",
+  "shell.emptyState.sidebarNote": "Your drawings live here",
   "shell.reloaded": "Reloaded from disk",
+  "shell.windowTitle.drawing": "{drawing} — {context}",
+  "shell.windowTitle.sameName": "{workspace} ({parent})",
+  "shell.feedback.dismiss": "Dismiss notification",
+  "shell.feedback.revealed":
+    "“{folder}” is inside {workspace}, already open in this window",
+  "shell.feedback.pathCopied": "Path copied",
+  "shell.feedback.relativePathCopied": "Relative path copied",
+  "shell.feedback.copyMissing": "Couldn't copy path: the item no longer exists",
+  "shell.feedback.copyFailed": "Couldn't copy path",
+  "shell.quit.cancelled": "Excalidraw didn’t quit. {reason}",
+  "shell.restore.skipped.one":
+    "1 drawing from last time couldn’t be reopened. It was moved, deleted, or can’t be read.",
+  "shell.restore.skipped.other":
+    "{count} drawings from last time couldn’t be reopened. They were moved, deleted, or can’t be read.",
   "shell.untitledDrawing": "Untitled drawing",
   "shell.exportUnavailable":
     "Export is unavailable until the active drawing is ready.",
@@ -51,6 +70,8 @@ export const shellEn = {
   "tabs.closeOthers": "Close Others",
   "tabs.closeToRight": "Close Tabs to the Right",
   "tabs.closeAll": "Close All",
+  "tabs.copyPath": "Copy Path",
+  "tabs.copyRelativePath": "Copy Relative Path",
   "tabs.openDrawings": "Open drawings",
   "tabs.drawingTabs": "Drawing tabs",
   "tabs.actions": "Tab actions",
@@ -72,6 +93,8 @@ export const shellEn = {
   "welcome.removeNamed": "Remove {name} from Recents",
   "welcome.removeFromRecents": "Remove from Recents",
   "welcome.folderUnavailable": "Folder unavailable",
+  "welcome.restoreUnavailable":
+    "“{name}” couldn’t be reopened. Its folder was moved, deleted, or is on a disk that isn’t connected.",
   "welcome.sessionNote":
     "No recoverable session · Welcome is a document state, not an extra permanent tab.",
 
@@ -140,8 +163,26 @@ export const shellZhCN: Record<keyof typeof shellEn, string> = {
   "shell.files": "文件",
   "shell.resizeSidebar": "调整工作区侧边栏宽度",
   "shell.canvas": "绘图画布",
-  "shell.emptyState": "选择一个绘图以开始。",
+  "shell.emptyState.label": "空白画布区域",
+  "shell.emptyState.title": "从左侧选择一个绘图",
+  "shell.emptyState.subtitle": "或者新建一个，开始画吧",
+  "shell.emptyState.newDrawing": "新建绘图",
+  "shell.emptyState.showSidebar": "显示侧边栏",
+  "shell.emptyState.sidebarNote": "绘图都在这里",
   "shell.reloaded": "已从磁盘重新载入",
+  "shell.windowTitle.drawing": "{drawing} — {context}",
+  "shell.windowTitle.sameName": "{workspace}（{parent}）",
+  "shell.feedback.dismiss": "关闭通知",
+  "shell.feedback.revealed": "“{folder}”位于已在此窗口打开的 {workspace} 中",
+  "shell.feedback.pathCopied": "已复制路径",
+  "shell.feedback.relativePathCopied": "已复制相对路径",
+  "shell.feedback.copyMissing": "无法复制路径：该条目已不存在",
+  "shell.feedback.copyFailed": "无法复制路径",
+  "shell.quit.cancelled": "Excalidraw 没有退出。{reason}",
+  "shell.restore.skipped.one":
+    "上次打开的 1 个绘图无法重新打开：已被移动、删除或无法读取。",
+  "shell.restore.skipped.other":
+    "上次打开的 {count} 个绘图无法重新打开：已被移动、删除或无法读取。",
   "shell.untitledDrawing": "未命名绘图",
   "shell.exportUnavailable": "当前绘图准备就绪后才能导出。",
   "shell.historySavedOnly": "仅已保存的绘图支持版本历史。",
@@ -175,6 +216,8 @@ export const shellZhCN: Record<keyof typeof shellEn, string> = {
   "tabs.closeOthers": "关闭其他标签页",
   "tabs.closeToRight": "关闭右侧标签页",
   "tabs.closeAll": "关闭全部标签页",
+  "tabs.copyPath": "复制路径",
+  "tabs.copyRelativePath": "复制相对路径",
   "tabs.openDrawings": "已打开的绘图",
   "tabs.drawingTabs": "绘图标签页",
   "tabs.actions": "标签页操作",
@@ -196,6 +239,8 @@ export const shellZhCN: Record<keyof typeof shellEn, string> = {
   "welcome.removeNamed": "从最近项目中移除 {name}",
   "welcome.removeFromRecents": "从最近项目中移除",
   "welcome.folderUnavailable": "文件夹不可用",
+  "welcome.restoreUnavailable":
+    "无法重新打开“{name}”：其文件夹已被移动、删除，或所在磁盘未连接。",
   "welcome.sessionNote":
     "没有可恢复的会话 · 欢迎页是一种文档状态，而不是额外的固定标签页。",
 

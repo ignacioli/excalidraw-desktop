@@ -20,6 +20,20 @@ const candidate = {
   snapshotNewer: true,
 };
 
+/** A manager double that opens the result through `adopt`, as the manager does. */
+function adopting<Decision, Response>(
+  apply: (decision: Decision) => Promise<Response>,
+) {
+  return async (
+    decision: Decision,
+    adopt?: (response: Response) => Promise<void> | void,
+  ): Promise<Response> => {
+    const response = await apply(decision);
+    await adopt?.(response);
+    return response;
+  };
+}
+
 describe("RecoveryStartup", () => {
   it("shows an accurate ephemeral Recovered count", () => {
     vi.useFakeTimers();
@@ -136,15 +150,17 @@ describe("RecoveryStartup", () => {
         candidates,
         dialogRequired: true,
       })),
-      apply: vi.fn(async (decision: { action: string }) => {
-        if (decision.action === "restore") {
-          return { scene: { type: "excalidraw", version: 2, elements: [] } };
-        }
-        if (decision.action === "saveAsNew") {
-          return { newPath: "/workspace/saved-as-new.excalidraw" };
-        }
-        return { scene: null, newPath: null };
-      }),
+      apply: vi.fn(
+        adopting(async (decision: { action: string }) => {
+          if (decision.action === "restore") {
+            return { scene: { type: "excalidraw", version: 2, elements: [] } };
+          }
+          if (decision.action === "saveAsNew") {
+            return { newPath: "/workspace/saved-as-new.excalidraw" };
+          }
+          return { scene: null, newPath: null };
+        }),
+      ),
     } as unknown as RecoveryManager;
     const documents = {
       open: vi.fn(async () => "opened"),
@@ -203,7 +219,7 @@ describe("RecoveryStartup", () => {
         candidates: [candidate],
         dialogRequired: true,
       })),
-      apply: vi.fn(async () => ({ scene })),
+      apply: vi.fn(adopting(async () => ({ scene }))),
     } as unknown as RecoveryManager;
     const documents = {
       open: vi.fn(async () => "opened"),
@@ -217,10 +233,13 @@ describe("RecoveryStartup", () => {
       }),
     );
 
-    expect(manager.apply).toHaveBeenCalledWith({
-      documentId: "document-1",
-      action: "restore",
-    });
+    expect(manager.apply).toHaveBeenCalledWith(
+      {
+        documentId: "document-1",
+        action: "restore",
+      },
+      expect.any(Function),
+    );
     expect(documents.restore).toHaveBeenCalledWith(
       "/workspace/drawing.excalidraw",
       scene,
@@ -247,9 +266,11 @@ describe("RecoveryStartup", () => {
         candidates: [missingCandidate],
         dialogRequired: true,
       })),
-      apply: vi.fn(async () => ({
-        newPath: "/workspace/recovered.excalidraw",
-      })),
+      apply: vi.fn(
+        adopting(async () => ({
+          newPath: "/workspace/recovered.excalidraw",
+        })),
+      ),
     } as unknown as RecoveryManager;
     const documents = {
       open: vi.fn(async () => "opened"),
@@ -270,11 +291,14 @@ describe("RecoveryStartup", () => {
       }),
     );
 
-    expect(manager.apply).toHaveBeenCalledWith({
-      documentId: "document-1",
-      action: "saveAsNew",
-      saveAsPath: "/workspace/recovered.excalidraw",
-    });
+    expect(manager.apply).toHaveBeenCalledWith(
+      {
+        documentId: "document-1",
+        action: "saveAsNew",
+        saveAsPath: "/workspace/recovered.excalidraw",
+      },
+      expect.any(Function),
+    );
     expect(documents.open).toHaveBeenCalledWith(
       "/workspace/recovered.excalidraw",
     );
@@ -292,7 +316,7 @@ describe("RecoveryStartup", () => {
         candidates: [candidate],
         dialogRequired: true,
       })),
-      apply: vi.fn(async () => ({ scene: null, newPath: null })),
+      apply: vi.fn(adopting(async () => ({ scene: null, newPath: null }))),
     } as unknown as RecoveryManager;
     const documents = {
       open: vi.fn(async () => "opened"),
@@ -328,7 +352,7 @@ describe("RecoveryStartup", () => {
         candidates: [candidate],
         dialogRequired: true,
       })),
-      apply: vi.fn(async () => ({ scene: null, newPath: null })),
+      apply: vi.fn(adopting(async () => ({ scene: null, newPath: null }))),
     } as unknown as RecoveryManager;
 
     render(

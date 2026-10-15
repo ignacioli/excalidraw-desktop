@@ -57,18 +57,47 @@ import {
   hasTauriCommandRuntime,
   type CommandInvoker,
 } from "../ipc/client";
-import type { Workspace } from "../ipc/contracts";
+import type { Workspace, WorkspaceShellState } from "../ipc/contracts";
 import { BrowsingHistory, type BrowsingLocation } from "./browsingHistory";
 import { WorkspacePanel } from "../workspaces/WorkspacePanel";
 import { ExportDialog } from "./ExportDialog";
 import {
   hasNativeWindowRuntime,
   registerExitCheckpoint,
+  registerQuitCheckpoint,
 } from "./exitCheckpoint";
 import { registerOpenFileHandler } from "./openFileHandler";
+import { reportWindowSession } from "./windowSession";
+import { FeedbackToast } from "./FeedbackToast";
+import {
+  copyPath,
+  systemClipboard,
+  type ClipboardPort,
+  type CopyPathRequest,
+} from "./clipboard";
+import {
+  FEEDBACK_TOAST_DURATION_MS,
+  useFeedbackToast,
+} from "./feedbackToastState";
+import { defaultEventListener } from "../ipc/events";
 import { TabBar } from "./TabBar";
 import { OrphanCloseDialog } from "./OrphanCloseDialog";
-import { createNewDrawingFile } from "./newDrawing";
+import { CanvasEmptyState } from "./CanvasEmptyState";
+import { createNewDrawingFile, createUntitledDrawing } from "./newDrawing";
+import {
+  closeOtherAndClaim,
+  describeNestedConflict,
+  type NestedWorkspaceConflict,
+} from "./nestedWorkspace";
+import {
+  NestedWorkspaceDialog,
+  type NestedWorkspaceDialogStatus,
+} from "../workspaces/NestedWorkspaceDialog";
+import { useWindowTitle } from "./useWindowTitle";
+import {
+  broadcastAppPreferences,
+  followAppPreferences,
+} from "./appPreferencesSync";
 import { WelcomeScreen } from "./WelcomeScreen";
 import backIcon from "../../docs/design/desktop-shell/hf-2/icons/back.svg";
 import sidebarIcon from "../../docs/design/desktop-shell/hf-2/icons/sidebar.svg";
@@ -79,8 +108,16 @@ import {
   SIDEBAR_WIDTH_MIN,
   ShellPreferences,
   clampSidebarWidth,
+  importLegacyShellPreferences,
+  legacyShellStateFor,
+  type LegacyShellPreferences,
 } from "./shellPreferences";
-import { deriveStartupRoute } from "./startupRoute";
+import {
+  bootstrapShellState,
+  deriveStartupRoute,
+  isLaunchWindow,
+  loadStartupHandshake,
+} from "./startupRoute";
 import { useAppStore } from "./store";
 import {
   createNativeMenuCommandHandler,
@@ -93,18 +130,21 @@ import {
   type ThemeController,
 } from "./theme/themeController";
 import { createNativeMenuSync } from "./nativeMenuSync";
+import { describeError, LocalizedError } from "../i18n/describeError";
 import {
-  DescribedError,
-  describeError,
-  LocalizedError,
-} from "../i18n/describeError";
+  closeAllTabsForWorkspaceSwitch,
+  openWorkspaceInWindow,
+  type OpenWorkspaceResult,
+} from "./workspaceClaim";
 import {
   initializeBrowserLocaleController,
   t as translateNow,
   useI18n,
+  type LanguagePreference,
   type LocaleController,
   type MessageKey,
 } from "../i18n";
+import type { ModePreference } from "./theme/types";
 
 /**
  * User-facing shell status kept in React state as data, so it re-translates
@@ -125,6 +165,17 @@ function renderShellMessage(message: ShellMessage): string {
   return describeError(message.error, message.fallback);
 }
 
+/** The nested-Workspace dialog: the conflict and what opening it continues. */
+interface NestedDialogState extends NestedWorkspaceConflict {
+  status: NestedWorkspaceDialogStatus;
+  errorMessage: string | null;
+  /** Runs once the folder opened in this window. */
+  onClaimed(
+    workspace: Workspace,
+    shell: WorkspaceShellState | null,
+  ): Promise<void>;
+}
+
 interface AppShellProps {
   onCreateDocument?: () => void | Promise<void>;
   onOpenWorkspace?: () => void | Promise<void>;
@@ -132,6 +183,7 @@ interface AppShellProps {
   selectWorkspaceDirectory?: () => Promise<string | null>;
   themeController?: ThemeController;
   localeController?: LocaleController;
+  clipboard?: ClipboardPort;
 }
 
 export function AppShell({
@@ -141,6 +193,7 @@ export function AppShell({
   selectWorkspaceDirectory = selectNativeWorkspaceDirectory,
   themeController = initializeBrowserThemeController(),
   localeController = initializeBrowserLocaleController([]),
+  clipboard = systemClipboard,
 }: AppShellProps) {
   useI18n();
   const [interactionError, setInteractionError] = useState<ShellMessage | null>(
@@ -164,6 +217,19 @@ export function AppShell({
       }
     | undefined
   >(undefined);
+  const multiWindowDriverRef = useRef<
+    | {
+        attachEditor(documentId: string, adapter: ExcalidrawAdapter): void;
+        attachShell(shell: {
+          openWorkspace(rootPath: string): Promise<void>;
+        }): void;
+        start(): void;
+      }
+    | undefined
+  >(undefined);
+  const driverOpenWorkspaceRef = useRef<(rootPath: string) => Promise<void>>(
+    async () => undefined,
+  );
   const editorAdaptersRef = useRef(new Map<string, ExcalidrawAdapter>());
   const editorControlsRef = useRef(new Map<string, EditorControls>());
   const [canvasPreferencesById, setCanvasPreferencesById] = useState<
@@ -262,7 +328,29 @@ export function AppShell({
     () => new Set(),
   );
   const [orphanCloseId, setOrphanCloseId] = useState<string | null>(null);
-  const [preferences] = useState(() => new ShellPreferences());
+  const [workspaceInvoker] = useState(
+    () => providedWorkspaceInvoker ?? createTauriCommandInvoker(),
+  );
+  // Imported once per window; both startup paths below share the result.
+  const legacyShellRef = useRef<Promise<LegacyShellPreferences | null> | null>(
+    null,
+  );
+  const legacyShellPreferences = useCallback(() => {
+    legacyShellRef.current ??= importLegacyShellPreferences(workspaceInvoker);
+    return legacyShellRef.current;
+  }, [workspaceInvoker]);
+  const [preferences] = useState(
+    () =>
+      new ShellPreferences((state) => {
+        // The state is a convenience for the next time the Workspace opens;
+        // a failed save never interrupts the window.
+        workspaceInvoker
+          .invoke("workspace_shell_state_save", state)
+          .catch((error: unknown) => {
+            console.error("Could not save the sidebar state.", error);
+          });
+      }),
+  );
   const [sidebarWidth, setSidebarWidth] = useState(
     () => preferences.getSnapshot().sidebarWidth,
   );
@@ -273,9 +361,6 @@ export function AppShell({
     startX: number;
     startWidth: number;
   } | null>(null);
-  const [workspaceInvoker] = useState(
-    () => providedWorkspaceInvoker ?? createTauriCommandInvoker(),
-  );
   const [historyClient] = useState(() => createHistoryClient(workspaceInvoker));
   const historyCoordinatorRef = useRef<HistoryCoordinator | null>(null);
   useEffect(() => {
@@ -301,10 +386,11 @@ export function AppShell({
     return coordinator;
   };
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(
-    () => preferences.getSnapshot().currentWorkspaceId,
+    null,
   );
   const [welcomeWorkspaces, setWelcomeWorkspaces] = useState<Workspace[]>([]);
   const [mountedWorkspaces, setMountedWorkspaces] = useState<Workspace[]>([]);
+  const mountedWorkspaceIdsRef = useRef("");
   const workspaceRevisionRef = useRef(0);
   const [welcomeBusy, setWelcomeBusy] = useState(false);
   const [welcomeError, setWelcomeError] = useState<ShellMessage | null>(null);
@@ -316,6 +402,43 @@ export function AppShell({
   const [browsingHistory] = useState(() => new BrowsingHistory());
   const currentBrowsingLocationRef = useRef<BrowsingLocation | null>(null);
   const [backLocation, setBackLocation] = useState<BrowsingLocation | null>(
+    null,
+  );
+  const [createdEntry, setCreatedEntry] = useState<{
+    workspaceId: string;
+    relativePath: string;
+  } | null>(null);
+  const [revealLocation, setRevealLocation] = useState<BrowsingLocation | null>(
+    null,
+  );
+  const { toast, showToast, dismissToast } = useFeedbackToast();
+  const copyPathWithFeedback = useCallback(
+    async (request: CopyPathRequest) => {
+      const result = await copyPath(clipboard, request);
+      if (result.status === "copied") {
+        showToast({
+          tone: "success",
+          message: translateNow(
+            result.kind === "path"
+              ? "shell.feedback.pathCopied"
+              : "shell.feedback.relativePathCopied",
+          ),
+          path: result.text,
+        });
+        return;
+      }
+      showToast({
+        tone: "failure",
+        message: translateNow(
+          result.status === "missing"
+            ? "shell.feedback.copyMissing"
+            : "shell.feedback.copyFailed",
+        ),
+      });
+    },
+    [clipboard, showToast],
+  );
+  const [nestedDialog, setNestedDialog] = useState<NestedDialogState | null>(
     null,
   );
   const [, setHistoryVersion] = useState(0);
@@ -334,6 +457,23 @@ export function AppShell({
     sidebarController.subscribe,
     sidebarController.getSnapshot,
     sidebarController.getSnapshot,
+  );
+  // Opening a Workspace shows its own sidebar pin and width.
+  useEffect(
+    () =>
+      preferences.subscribe(() => {
+        const { sidebarPinned, sidebarWidth: width } =
+          preferences.getSnapshot();
+        setSidebarWidth(width);
+        const pinned = sidebarController.getSnapshot().mode === "pinned";
+        if (sidebarPinned && !pinned) {
+          sidebarController.pin();
+        } else if (!sidebarPinned && pinned) {
+          sidebarController.unpin();
+          sidebarController.hide();
+        }
+      }),
+    [preferences, sidebarController],
   );
   const pointerLeaveTimerRef = useRef<number | undefined>(undefined);
 
@@ -388,15 +528,23 @@ export function AppShell({
   ) => {
     const resize = sidebarResizeRef.current;
     if (resize === null || resize.pointerId !== event.pointerId) return;
-    commitSidebarWidth(resize.startWidth + event.clientX - resize.startX);
+    // Preview while dragging; the width is stored once on release.
+    setSidebarWidth(
+      Math.min(
+        clampSidebarWidth(resize.startWidth + event.clientX - resize.startX),
+        getSidebarMaximum(),
+      ),
+    );
   };
 
   const handleSidebarResizePointerEnd = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
-    if (sidebarResizeRef.current?.pointerId !== event.pointerId) return;
+    const resize = sidebarResizeRef.current;
+    if (resize?.pointerId !== event.pointerId) return;
     sidebarResizeRef.current = null;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
+    commitSidebarWidth(resize.startWidth + event.clientX - resize.startX);
   };
   const setHasMountedWorkspace = useAppStore(
     (state) => state.setHasMountedWorkspace,
@@ -462,6 +610,11 @@ export function AppShell({
   });
   const showWelcome =
     startupState.status === "ready" && startupRoute.kind === "welcome";
+  useWindowTitle({
+    workspace: mountedWorkspaces[0] ?? null,
+    activeDrawing: activeSession?.title ?? null,
+    handshake: startupState.handshake,
+  });
   const themeSnapshot = useSyncExternalStore(
     themeController.subscribe,
     themeController.getSnapshot,
@@ -492,29 +645,27 @@ export function AppShell({
     }
   };
 
-  const closeOpenDocumentsForWorkspaceSwitch = async (): Promise<void> => {
-    const tabOrder = documentManager.store.getState().tabOrder;
-    const outcome = await documentManager.closeMany(tabOrder);
-    if (outcome.status !== "closed") {
-      throw outcome.status === "failed"
-        ? new DescribedError(outcome.message)
-        : new LocalizedError("error.closeBeforeWorkspaceSwitch");
-    }
-  };
+  const closeOpenDocumentsForWorkspaceSwitch = (): Promise<void> =>
+    closeAllTabsForWorkspaceSwitch(documentManager);
 
   const selectCurrentWorkspace = useCallback(
     (workspace: Workspace): void => {
-      preferences.setCurrentWorkspaceId(workspace.id);
       setCurrentWorkspaceId(workspace.id);
       setUnavailableWorkspaceId(null);
       clearWelcomeError();
     },
-    [clearWelcomeError, preferences],
+    [clearWelcomeError],
   );
 
   const handleMountedWorkspacesChange = useCallback(
     (items: Workspace[]): void => {
-      workspaceRevisionRef.current += 1;
+      // The sidebar reports its first load too; a list that names the same
+      // Workspaces carries nothing newer than the startup load in flight.
+      const ids = items.map((workspace) => workspace.id).join("\n");
+      if (ids !== mountedWorkspaceIdsRef.current) {
+        workspaceRevisionRef.current += 1;
+      }
+      mountedWorkspaceIdsRef.current = ids;
       setMountedWorkspaces(items);
       setUnavailableWorkspaceId((current) =>
         items.some((workspace) => workspace.id === current) ? null : current,
@@ -529,13 +680,118 @@ export function AppShell({
 
   const handleCurrentWorkspaceChange = useCallback(
     (workspace: Workspace | null): void => {
-      preferences.setCurrentWorkspaceId(workspace?.id ?? null);
+      if (workspace === null) preferences.closeWorkspace();
       setCurrentWorkspaceId(workspace?.id ?? null);
       setUnavailableWorkspaceId(null);
       clearWelcomeError();
     },
     [clearWelcomeError, preferences],
   );
+
+  /** This window now shows `workspace`, replacing any previous one. */
+  const showClaimedWorkspace = (
+    workspace: Workspace,
+    shell: WorkspaceShellState | null,
+  ): void => {
+    workspaceRevisionRef.current += 1;
+    preferences.loadWorkspace(shell);
+    selectCurrentWorkspace(workspace);
+    setWelcomeWorkspaces((current) => [
+      ...current.filter((item) => item.id !== workspace.id),
+      workspace,
+    ]);
+    mountedWorkspaceIdsRef.current = workspace.id;
+    setMountedWorkspaces([workspace]);
+  };
+
+  const showClaimedWorkspaceAsync = async (
+    workspace: Workspace,
+    shell: WorkspaceShellState | null,
+  ): Promise<void> => showClaimedWorkspace(workspace, shell);
+
+  /** `targetPath` contains a Workspace open in another window: ask. */
+  const showNestedConflict = async (
+    targetPath: string,
+    outcome: { label: string; workspaceId: string },
+    onClaimed: NestedDialogState["onClaimed"],
+  ): Promise<void> => {
+    const conflict = await describeNestedConflict(
+      workspaceInvoker,
+      targetPath,
+      outcome,
+    );
+    setNestedDialog({
+      ...conflict,
+      status: "idle",
+      errorMessage: null,
+      onClaimed,
+    });
+  };
+
+  /**
+   * Apply an open request's result. A Workspace held by another window has
+   * brought that window to the front; a folder that contains another
+   * window's Workspace opens the nested-Workspace dialog.
+   */
+  const applyOpenWorkspaceResult = async (
+    targetPath: string,
+    result: OpenWorkspaceResult,
+  ): Promise<void> => {
+    if (result.status === "claimed") {
+      showClaimedWorkspace(result.workspace, result.shell);
+    } else if (result.outcome.kind === "containsOpen") {
+      await showNestedConflict(
+        targetPath,
+        result.outcome,
+        showClaimedWorkspaceAsync,
+      );
+    }
+  };
+
+  /** Bring the window with the Workspace inside to the front. */
+  const switchToNestedWindow = async (): Promise<void> => {
+    const dialog = nestedDialog;
+    if (dialog === null) return;
+    try {
+      await workspaceInvoker.invoke("window_claim_workspace", {
+        workspaceId: dialog.workspaceId,
+      });
+      setNestedDialog(null);
+    } catch (error) {
+      setNestedDialog({ ...dialog, errorMessage: describeError(error) });
+    }
+  };
+
+  /** Close the window with the Workspace inside, then open the folder here. */
+  const closeNestedWindowAndOpen = async (): Promise<void> => {
+    const dialog = nestedDialog;
+    if (dialog === null) return;
+    setNestedDialog({ ...dialog, status: "closing", errorMessage: null });
+    try {
+      const outcome = await closeOtherAndClaim({
+        invoker: workspaceInvoker,
+        conflict: dialog,
+        closeTabs: closeOpenDocumentsForWorkspaceSwitch,
+      });
+      if (outcome.kind === "cancelled") {
+        setNestedDialog({ ...dialog, status: "notClosed" });
+        return;
+      }
+      setNestedDialog(null);
+      if (outcome.kind === "claimed") {
+        await dialog.onClaimed(outcome.workspace, outcome.shell);
+      } else if (outcome.kind === "containsOpen") {
+        // Another Workspace inside the folder opened meanwhile.
+        await showNestedConflict(dialog.targetPath, outcome, dialog.onClaimed);
+      }
+    } catch (error) {
+      setNestedDialog({
+        ...dialog,
+        status: "idle",
+        errorMessage: describeError(error),
+      });
+    }
+  };
 
   const openWorkspace = async (): Promise<void> => {
     if (onOpenWorkspace !== undefined) {
@@ -546,53 +802,62 @@ export function AppShell({
     }
     setWelcomeBusy(true);
     clearWelcomeError();
+    setInteractionError(null);
     try {
       const rootPath = await selectWorkspaceDirectory();
       if (rootPath === null) return;
-      await closeOpenDocumentsForWorkspaceSwitch();
-      const workspace = await workspaceInvoker.invoke("workspace_add", {
+      await applyOpenWorkspaceResult(
         rootPath,
-      });
-      workspaceRevisionRef.current += 1;
-      selectCurrentWorkspace(workspace);
-      setWelcomeWorkspaces((current) => [
-        ...current.filter((item) => item.id !== workspace.id),
-        workspace,
-      ]);
-      setMountedWorkspaces((current) => [
-        ...current.filter((item) => item.id !== workspace.id),
-        workspace,
-      ]);
+        await openWorkspaceInWindow({
+          invoker: workspaceInvoker,
+          target: { rootPath },
+          closeTabs: closeOpenDocumentsForWorkspaceSwitch,
+        }),
+      );
     } catch (error) {
-      reportWelcomeError(error);
+      // The native menu also opens a Workspace while tabs hide Welcome.
+      if (showWelcome) reportWelcomeError(error);
+      else setInteractionError(fileOperationError(error));
     } finally {
       setWelcomeBusy(false);
     }
   };
 
+  // The test-only multi-window driver opens a folder as the dialog would.
+  driverOpenWorkspaceRef.current = async (rootPath) =>
+    applyOpenWorkspaceResult(
+      rootPath,
+      await openWorkspaceInWindow({
+        invoker: workspaceInvoker,
+        target: { rootPath },
+        closeTabs: closeOpenDocumentsForWorkspaceSwitch,
+      }),
+    );
+
   const openRecentWorkspace = async (workspace: Workspace): Promise<void> => {
     setWelcomeBusy(true);
     clearWelcomeError();
+    let closingTabs = false;
     try {
-      await closeOpenDocumentsForWorkspaceSwitch();
+      await applyOpenWorkspaceResult(
+        workspace.rootPath,
+        await openWorkspaceInWindow({
+          invoker: workspaceInvoker,
+          target: { workspaceId: workspace.id },
+          closeTabs: async () => {
+            closingTabs = true;
+            await closeOpenDocumentsForWorkspaceSwitch();
+            closingTabs = false;
+          },
+        }),
+      );
     } catch (error) {
-      reportWelcomeError(error);
-      setWelcomeBusy(false);
-      return;
-    }
-    try {
-      const remounted = await workspaceInvoker.invoke("workspace_remount", {
-        workspaceId: workspace.id,
-      });
-      workspaceRevisionRef.current += 1;
-      selectCurrentWorkspace(remounted);
-      setMountedWorkspaces((current) => [
-        ...current.filter((item) => item.id !== remounted.id),
-        remounted,
-      ]);
-    } catch (error) {
-      reportWelcomeError(error, true);
-      setUnavailableWorkspaceId(workspace.id);
+      if (closingTabs) {
+        reportWelcomeError(error);
+      } else {
+        reportWelcomeError(error, true);
+        setUnavailableWorkspaceId(workspace.id);
+      }
     } finally {
       setWelcomeBusy(false);
     }
@@ -629,30 +894,80 @@ export function AppShell({
       }
       const result = await createNewDrawingFile({
         invoker: workspaceInvoker,
-        mountedWorkspaces,
         selectDirectory: selectWorkspaceDirectory,
         // Same default as the sidebar New Drawing naming dialog.
         untitledBaseName: "Untitled",
       });
       if (result.status === "cancelled") return;
-      const { workspace } = result;
-      if (result.mounted) {
-        workspaceRevisionRef.current += 1;
-        setMountedWorkspaces((current) => [
-          ...current.filter((item) => item.id !== workspace.id),
-          workspace,
-        ]);
-        setWelcomeWorkspaces((current) => [
-          ...current.filter((item) => item.id !== workspace.id),
-          workspace,
-        ]);
-        if (currentWorkspaceId === null) selectCurrentWorkspace(workspace);
+      if (result.status === "declined") {
+        if (result.outcome.kind === "containsOpen") {
+          await showNestedConflict(
+            result.rootPath,
+            result.outcome,
+            async (workspace, shell) => {
+              showClaimedWorkspace(workspace, shell);
+              const entry = await createUntitledDrawing(
+                workspaceInvoker,
+                workspace.id,
+                "Untitled",
+              );
+              await documentManager.openRouted(entry.canonicalPath);
+            },
+          );
+        }
+        return;
       }
-      await documentManager.open(result.entry.canonicalPath);
+      showClaimedWorkspace(result.workspace, result.shell);
+      await documentManager.openRouted(result.entry.canonicalPath);
     } catch (error) {
       reportWelcomeError(error);
     } finally {
       setWelcomeBusy(false);
+    }
+  };
+
+  // The empty canvas's New Drawing: the next free Untitled in the folder
+  // selected in the sidebar, or at the root of this window's Workspace when
+  // none is selected.
+  const sidebarTargetFolderRef = useRef<{
+    workspaceId: string;
+    relativePath: string;
+  } | null>(null);
+  const handleTargetFolderChange = useCallback(
+    (target: { workspaceId: string; relativePath: string } | null) => {
+      sidebarTargetFolderRef.current = target;
+    },
+    [],
+  );
+  const [emptyStateBusy, setEmptyStateBusy] = useState(false);
+  const handleCreatedEntryApplied = useCallback(
+    () => setCreatedEntry(null),
+    [],
+  );
+
+  const createEmptyStateDrawing = async (): Promise<void> => {
+    const workspace = currentWorkspaceRef.current;
+    if (workspace === null) return;
+    const target = sidebarTargetFolderRef.current;
+    const parentRelativePath =
+      target?.workspaceId === workspace.id ? target.relativePath : "";
+    setEmptyStateBusy(true);
+    try {
+      await runAction(async () => {
+        const entry = await createUntitledDrawing(
+          workspaceInvoker,
+          workspace.id,
+          "Untitled",
+          parentRelativePath,
+        );
+        setCreatedEntry({
+          workspaceId: entry.workspaceId,
+          relativePath: entry.relativePath,
+        });
+        await documentManager.openRouted(entry.canonicalPath);
+      });
+    } finally {
+      setEmptyStateBusy(false);
     }
   };
 
@@ -705,25 +1020,68 @@ export function AppShell({
     void Promise.all([
       workspaceInvoker.invoke("workspace_list", {}),
       workspaceInvoker.invoke("workspace_recent_list", {}),
+      // Earlier shell preferences still in effect open their Current
+      // Workspace in the launch window. Read together with the lists, so
+      // startup waits no longer than before for the sidebar to report.
+      legacyShellPreferences(),
     ])
-      .then(([items, recentItems]) => {
+      .then(async ([windowItems, recentItems, legacy]) => {
         if (disposed || workspaceRevisionRef.current !== requestedRevision)
           return;
-        setMountedWorkspaces(items);
         setWelcomeWorkspaces(recentItems);
-        const validIds = new Set(items.map((workspace) => workspace.id));
-        const nextCurrentWorkspaceId = preferences.resolveCurrentWorkspaceId(
-          validIds,
-          null,
-        );
-        const nextWorkspace = items.find(
-          (workspace) => workspace.id === nextCurrentWorkspaceId,
-        );
-        if (nextWorkspace === undefined) {
-          preferences.setCurrentWorkspaceId(null);
+        let items = windowItems;
+        let shell: WorkspaceShellState | null = null;
+        const retained =
+          legacy !== null
+            ? recentItems.find(
+                (workspace) => workspace.id === legacy.currentWorkspaceId,
+              )
+            : undefined;
+        if (
+          retained !== undefined &&
+          items.length === 0 &&
+          (await isLaunchWindow(providedWorkspaceInvoker))
+        ) {
+          try {
+            const outcome = await workspaceInvoker.invoke(
+              "window_claim_workspace",
+              { workspaceId: retained.id },
+            );
+            if (disposed || workspaceRevisionRef.current !== requestedRevision)
+              return;
+            if (outcome.kind === "claimed") {
+              items = [outcome.workspace];
+              shell = outcome.shell;
+            }
+          } catch (error) {
+            if (disposed || workspaceRevisionRef.current !== requestedRevision)
+              return;
+            reportWelcomeError(error, true);
+            setUnavailableWorkspaceId(retained.id);
+          }
+        }
+        mountedWorkspaceIdsRef.current = items
+          .map((workspace) => workspace.id)
+          .join("\n");
+        setMountedWorkspaces(items);
+        const workspace = items[0];
+        if (workspace === undefined) {
+          if (legacy !== null) {
+            preferences.showWithoutWorkspace(legacyShellStateFor(legacy, null));
+          }
+          preferences.closeWorkspace();
           setCurrentWorkspaceId(null);
         } else {
-          selectCurrentWorkspace(nextWorkspace);
+          if (shell === null) {
+            shell =
+              legacy !== null
+                ? legacyShellStateFor(legacy, workspace.id)
+                : await bootstrapShellState(providedWorkspaceInvoker);
+            if (disposed || workspaceRevisionRef.current !== requestedRevision)
+              return;
+          }
+          preferences.loadWorkspace(shell);
+          selectCurrentWorkspace(workspace);
         }
       })
       .catch((error: unknown) => {
@@ -733,10 +1091,40 @@ export function AppShell({
       disposed = true;
     };
   }, [
+    legacyShellPreferences,
     preferences,
+    providedWorkspaceInvoker,
     reportWelcomeError,
     selectCurrentWorkspace,
     workspaceInvoker,
+  ]);
+
+  // A Workspace the window starts with can arrive through the sidebar's own
+  // list before the startup load finishes; it then shows the sidebar state
+  // the backend handed this window. A claim loads its own state first.
+  const startingWorkspaceId = mountedWorkspaces[0]?.id ?? null;
+  useEffect(() => {
+    if (startingWorkspaceId === null || preferences.hasWorkspace()) return;
+    let disposed = false;
+    void legacyShellPreferences()
+      .then((legacy) =>
+        legacy !== null
+          ? legacyShellStateFor(legacy, startingWorkspaceId)
+          : bootstrapShellState(providedWorkspaceInvoker),
+      )
+      .then((shell) => {
+        if (!disposed && !preferences.hasWorkspace()) {
+          preferences.loadWorkspace(shell);
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [
+    legacyShellPreferences,
+    preferences,
+    providedWorkspaceInvoker,
+    startingWorkspaceId,
   ]);
 
   const saveDocument = () =>
@@ -1171,17 +1559,48 @@ export function AppShell({
     [activeDocumentId, historyClient, loadHistoryPanel],
   );
 
+  /** Change the appearance here and in every other window. */
+  const changeAppearance = (mode: ModePreference): void => {
+    themeController.setModePreference(mode);
+    void broadcastAppPreferences(workspaceInvoker, { appearance: mode });
+  };
+
+  /** Change the language here and in every other window. */
+  const changeLanguage = (preference: LanguagePreference): void => {
+    localeController.setPreference(preference);
+    void broadcastAppPreferences(workspaceInvoker, { language: preference });
+  };
+
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    followAppPreferences({ themeController, localeController }).then(
+      (nextUnlisten) => {
+        if (disposed) nextUnlisten();
+        else unlisten = nextUnlisten;
+      },
+      (error: unknown) => {
+        console.error("Could not follow preferences of other windows.", error);
+      },
+    );
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [themeController, localeController]);
+
   useEffect(() => {
     nativeMenuHandlerRef.current = createNativeMenuCommandHandler({
       onSave: () => void saveDocument(),
       onExportImage: openExportDialog,
       onVersionHistory: openVersionHistory,
-      onAppearance: (mode) =>
-        void runAction(() => themeController.setModePreference(mode)),
-      onLanguage: (preference) => localeController.setPreference(preference),
+      onAppearance: (mode) => void runAction(() => changeAppearance(mode)),
+      onLanguage: changeLanguage,
       onHelp: () => activeEditorControls()?.openHelp(),
       onTogglePreference: (preference) =>
         activeEditorControls()?.togglePreference(preference),
+      onOpenWorkspace: () => void openWorkspace(),
     });
   });
 
@@ -1278,6 +1697,7 @@ export function AppShell({
         container,
       );
       historyFrontendDriverRef.current?.attachEditor(documentId, adapter);
+      multiWindowDriverRef.current?.attachEditor(documentId, adapter);
       editorAdaptersRef.current.set(documentId, adapter);
       setReadyEditor({ documentId, adapter });
     },
@@ -1324,6 +1744,31 @@ export function AppShell({
             readyEditor.adapter,
           );
         }
+      })
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (import.meta.env.VITE_E2E_HARNESS !== "1") {
+      return;
+    }
+    let disposed = false;
+    void import("../e2e/multiWindowDriver")
+      .then(({ multiWindowDriver }) => {
+        if (disposed) return;
+        multiWindowDriverRef.current = multiWindowDriver;
+        multiWindowDriver.attachShell({
+          openWorkspace: (rootPath) => driverOpenWorkspaceRef.current(rootPath),
+        });
+        for (const [documentId, adapter] of editorAdaptersRef.current) {
+          multiWindowDriver.attachEditor(documentId, adapter);
+        }
+        multiWindowDriver.start();
       })
       .catch((error: unknown) =>
         setInteractionError(fileOperationError(error)),
@@ -1416,9 +1861,9 @@ export function AppShell({
     }
     let disposed = false;
     let unlisten: (() => void) | undefined;
-    void registerOpenFileHandler(documentManager, {
-      onError: (error) => setInteractionError(fileOperationError(error)),
-    })
+    void registerQuitCheckpoint(documentManager, (error) =>
+      setInteractionError(fileOperationError(error)),
+    )
       .then((nextUnlisten) => {
         if (disposed) {
           nextUnlisten();
@@ -1434,6 +1879,73 @@ export function AppShell({
       unlisten?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!hasTauriCommandRuntime()) return;
+    return reportWindowSession(
+      documentManager.store,
+      (report) => workspaceInvoker.invoke("window_session_update", report),
+      (error) => console.error("Failed to report the window's tabs.", error),
+    );
+  }, [workspaceInvoker]);
+
+  // A Workspace of the previous session that could not be reopened: this
+  // window stays on Welcome and says why.
+  useEffect(() => {
+    if (!hasTauriCommandRuntime()) return;
+    let disposed = false;
+    void loadStartupHandshake(providedWorkspaceInvoker)
+      .then((handshake) => {
+        // Handshake test doubles from before the per-window bootstrap omit it.
+        const unavailable = handshake.window?.unavailableWorkspace ?? null;
+        if (disposed || unavailable === null) return;
+        setUnavailableWorkspaceId(unavailable.id);
+        reportWelcomeError(
+          new LocalizedError("welcome.restoreUnavailable", {
+            name: unavailable.name,
+          }),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      disposed = true;
+    };
+  }, [providedWorkspaceInvoker, reportWelcomeError]);
+
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) {
+      return;
+    }
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void registerOpenFileHandler(documentManager, {
+      onError: (error) => setInteractionError(fileOperationError(error)),
+      onRestoreSkipped: (count) =>
+        showToast({
+          tone: "failure",
+          message: translateNow(
+            count === 1
+              ? "shell.restore.skipped.one"
+              : "shell.restore.skipped.other",
+            { count },
+          ),
+        }),
+    })
+      .then((nextUnlisten) => {
+        if (disposed) {
+          nextUnlisten();
+        } else {
+          unlisten = nextUnlisten;
+        }
+      })
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [showToast]);
 
   useEffect(() => {
     if (!hasNativeWindowRuntime()) {
@@ -1481,6 +1993,47 @@ export function AppShell({
       unlisten?.();
     };
   }, []);
+
+  const currentWorkspaceRef = useRef<Workspace | null>(null);
+  currentWorkspaceRef.current =
+    mountedWorkspaces.find(
+      (workspace) => workspace.id === currentWorkspaceId,
+    ) ?? null;
+
+  // Another window opened a folder inside this window's Workspace: show it.
+  useEffect(() => {
+    if (!hasNativeWindowRuntime()) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void defaultEventListener("workspace-reveal-entry", (event) => {
+      const workspace = currentWorkspaceRef.current;
+      if (workspace === null) return;
+      sidebarController.openOverlay();
+      setRevealLocation({
+        workspaceId: workspace.id,
+        directoryRelativePath: event.payload.relativePath,
+      });
+      showToast({
+        tone: "success",
+        message: translateNow("shell.feedback.revealed", {
+          folder: event.payload.name,
+          workspace: workspace.name,
+        }),
+        durationMs: FEEDBACK_TOAST_DURATION_MS.locate,
+      });
+    })
+      .then((nextUnlisten) => {
+        if (disposed) nextUnlisten();
+        else unlisten = nextUnlisten;
+      })
+      .catch((error: unknown) =>
+        setInteractionError(fileOperationError(error)),
+      );
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [showToast, sidebarController]);
 
   useEffect(() => {
     // The native File > Save accelerator owns Command-S in the desktop shell;
@@ -1608,6 +2161,8 @@ export function AppShell({
             onCloseOutcome={(_, outcome) => {
               applyCloseOutcome(outcome);
             }}
+            onCopyPath={(request) => void copyPathWithFeedback(request)}
+            workspaceRoot={currentWorkspaceRef.current?.rootPath ?? null}
           />
         </div>
         <div className="app-commands" aria-live="polite">
@@ -1716,14 +2271,25 @@ export function AppShell({
               preferences={preferences}
               captureFocus={sidebarSnapshot.mode === "overlay"}
               onOpenFile={(entry) => {
-                void runAction(() => documentManager.open(entry.canonicalPath));
+                void runAction(() =>
+                  documentManager.openRouted(entry.canonicalPath),
+                );
               }}
               onWorkspacePresenceChange={setHasMountedWorkspace}
               onWorkspacesChange={handleMountedWorkspacesChange}
+              onCopyPath={(request) => void copyPathWithFeedback(request)}
+              onTargetFolderChange={handleTargetFolderChange}
               onCurrentWorkspaceChange={handleCurrentWorkspaceChange}
               onBrowse={handleBrowse}
               backLocation={backLocation}
               onBackLocationApplied={() => setBackLocation(null)}
+              revealLocation={revealLocation}
+              onNestedConflict={(rootPath, outcome) =>
+                showNestedConflict(rootPath, outcome, showClaimedWorkspaceAsync)
+              }
+              onRevealLocationApplied={() => setRevealLocation(null)}
+              createdEntry={createdEntry}
+              onCreatedEntryApplied={handleCreatedEntryApplied}
             />
           ) : null}
           {sidebarSnapshot.mode === "pinned" ? (
@@ -1799,14 +2365,10 @@ export function AppShell({
                       documentManager.updateScene(session.id, scene)
                     }
                     onAppearanceChange={(mode) =>
-                      void runAction(() =>
-                        themeController.setModePreference(mode),
-                      )
+                      void runAction(() => changeAppearance(mode))
                     }
                     onControlsReady={handleEditorControlsReady}
-                    onLanguageChange={(preference) =>
-                      localeController.setPreference(preference)
-                    }
+                    onLanguageChange={changeLanguage}
                     onPreferencesChange={handleEditorPreferencesChange}
                     onReady={handleEditorReady}
                     readOnly={
@@ -1818,9 +2380,12 @@ export function AppShell({
                 </section>
               ))
             ) : (
-              <div className="canvas-empty-state">
-                <p>{translateNow("shell.emptyState")}</p>
-              </div>
+              <CanvasEmptyState
+                busy={emptyStateBusy}
+                onNewDrawing={() => void createEmptyStateDrawing()}
+                onShowSidebar={() => sidebarController.openOverlay()}
+                sidebarPinned={sidebarSnapshot.mode === "pinned"}
+              />
             )}
           </div>
           {historyOpen &&
@@ -1838,6 +2403,7 @@ export function AppShell({
           ) : null}
           <div className="history-preview-root" ref={setHistoryPreviewHost} />
         </main>
+        <FeedbackToast toast={toast} onDismiss={dismissToast} />
         {historyOpen && activeSession !== undefined ? (
           <HistoryPanel
             documentId={activeSession.id}
@@ -1890,6 +2456,19 @@ export function AppShell({
           documentPath={activeSession.path}
           documentTitle={activeSession.title}
           onClose={closeExportDialog}
+        />
+      ) : null}
+      {nestedDialog !== null ? (
+        <NestedWorkspaceDialog
+          errorMessage={nestedDialog.errorMessage}
+          onCancel={() => setNestedDialog(null)}
+          onCloseAndOpen={() => void closeNestedWindowAndOpen()}
+          onSwitch={() => void switchToNestedWindow()}
+          openWorkspaceName={nestedDialog.openWorkspaceName}
+          openWorkspacePath={nestedDialog.openWorkspacePath}
+          status={nestedDialog.status}
+          targetName={nestedDialog.targetName}
+          targetPath={nestedDialog.targetPath}
         />
       ) : null}
       {orphanCloseId !== null ? (

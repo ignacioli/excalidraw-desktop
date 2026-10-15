@@ -50,6 +50,20 @@ _Avoid_: Deleted tab, missing file
 The Open Document currently presented on the canvas.
 _Avoid_: Selected file, focused tab
 
+### Windows
+
+**Window**:
+One application window. It holds at most one Workspace and the Open Documents of its Drawings. The Welcome window holds neither. Rust creates every window and gives it a label that is not reused.
+_Avoid_: Tab, instance, session
+
+**Workspace Ownership**:
+The rule that a Workspace is open in at most one Window, and a Drawing in at most one Window. A Drawing inside another Window's Workspace belongs to that Window. A folder equal to, inside, or containing another Window's Workspace cannot be opened in a second Window. Rust decides ownership; a Window can only ask.
+_Avoid_: Lock, mount, sharing
+
+**Window Session**:
+The stored snapshot of the Windows to reopen after a normal quit: for each Window, its Workspace and its tabs with the active tab. Window position and size are not part of it; they are remembered per Workspace.
+_Avoid_: Layout, saved tabs, recovery
+
 ### Shell navigation
 
 **Workspace Sidebar**:

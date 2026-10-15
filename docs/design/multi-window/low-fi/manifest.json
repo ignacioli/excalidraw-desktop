@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "feature": "multi-window",
+  "carrier": "hand-written HTML",
+  "entryFile": "multi-window-low-fi.html",
+  "source": "low-fi/multi-window-low-fi.html",
+  "sourceSha256": "32f5fe54ffe819e6f8dcbab14529c4fece1dd0bac6b7407ac43d1a20a23fc42b",
+  "viewport": {
+    "width": 1280,
+    "height": 760
+  },
+  "states": [
+    {
+      "id": "empty-light",
+      "surface": "canvas-empty-state",
+      "theme": "light",
+      "language": "en"
+    },
+    {
+      "id": "empty-dark",
+      "surface": "canvas-empty-state",
+      "theme": "dark",
+      "language": "en"
+    },
+    {
+      "id": "empty-zh",
+      "surface": "canvas-empty-state",
+      "theme": "light",
+      "language": "zh-CN"
+    },
+    {
+      "id": "menu-drawing",
+      "surface": "sidebar-menu",
+      "target": "drawing"
+    },
+    {
+      "id": "menu-folder",
+      "surface": "sidebar-menu",
+      "target": "folder"
+    },
+    {
+      "id": "menu-root",
+      "surface": "sidebar-menu",
+      "target": "workspace-root"
+    },
+    {
+      "id": "menu-tab",
+      "surface": "tab-context-menu",
+      "target": "drawing-in-workspace"
+    },
+    {
+      "id": "toast-ok",
+      "surface": "copy-feedback",
+      "result": "success"
+    },
+    {
+      "id": "toast-err",
+      "surface": "copy-feedback",
+      "result": "failure"
+    },
+    {
+      "id": "dlg-new-drawing",
+      "surface": "naming-dialog"
+    },
+    {
+      "id": "dlg-new-folder",
+      "surface": "naming-dialog"
+    },
+    {
+      "id": "dlg-rename",
+      "surface": "naming-dialog"
+    },
+    {
+      "id": "dlg-error",
+      "surface": "naming-dialog",
+      "result": "validation-error"
+    },
+    {
+      "id": "dlg-delete",
+      "surface": "confirm-dialog",
+      "destructive": true
+    },
+    {
+      "id": "dlg-notempty",
+      "surface": "confirm-dialog",
+      "destructive": true
+    },
+    {
+      "id": "dlg-remove-ws",
+      "surface": "confirm-dialog",
+      "destructive": false
+    },
+    {
+      "id": "nested-parent",
+      "surface": "nested-conflict-dialog"
+    },
+    {
+      "id": "nested-child",
+      "surface": "reveal-entry-feedback"
+    },
+    {
+      "id": "titles",
+      "surface": "window-title-formats"
+    }
+  ],
+  "ownerDecision": {
+    "lowFidelity": "APPROVED",
+    "approvedAt": "2026-10-13",
+    "highFidelity": "APPROVED",
+    "highFidelityApprovedAt": "2026-10-13"
+  },
+  "notes": [
+    "Grayscale wireframe for structure and hierarchy only; tokens and geometry come from the approved design system at high fidelity.",
+    "The left state navigator is a review aid and is not part of the product UI.",
+    "The empty state does not mount an Excalidraw canvas.",
+    "Icons are placeholders; production keeps the existing hf-2 icons. The real shell has a single toolbar Sidebar button (hidden → overlay → pinned)."
+  ],
+  "resolvedDecisions": [
+    "Empty state: keep the hand-drawn arrow (points to the toolbar Sidebar button, hidden when the Sidebar is pinned) and the current grid density.",
+    "Subfolder reveal: no dialog; activate the owning window, select the folder, and show a non-blocking toast that auto-dismisses after about 3 s.",
+    "Window title format: '<drawing> — <workspace>', with a parent-folder suffix for duplicate workspace names.",
+    "Dialog anatomy: suffix inside the field box, Cancel-then-primary right-aligned order, non-destructive styling for Remove workspace."
+  ],
+  "highFidelitySource": {
+    "tool": "Penpot",
+    "file": "excalidraw-desktop-uxui-redesign",
+    "page": "07 · Multi-window · 006 hi-fi (pending approval)",
+    "snapshotBefore": "before-006 multi-window hi-fi 2026-10-13",
+    "snapshotAfter": "after-006 multi-window hi-fi draft 2026-10-13 (dialogs, menus/toasts, empty states, compositions; pending owner review)",
+    "manifest": "../high-fi/manifest.json"
+  }
+}

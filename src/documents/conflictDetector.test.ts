@@ -31,6 +31,7 @@ type EventHandler<Name extends EventName> = (event: {
 function createGateway(initialScene: unknown): DocumentGateway {
   return {
     open: vi.fn(async () => ({
+      kind: "opened" as const,
       scene: initialScene,
       baseHash: "external-hash",
       hasNewerDraft: false,
@@ -56,6 +57,7 @@ describe("ConflictDetector", () => {
     const manager = new DocumentManager(gateway);
     const documentId = await manager.open("/tmp/drawing.excalidraw");
     vi.mocked(gateway.open).mockResolvedValueOnce({
+      kind: "opened" as const,
       scene: {
         ...emptyScene,
         elements: [{ version: 9 }],

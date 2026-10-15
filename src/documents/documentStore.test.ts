@@ -33,6 +33,7 @@ vi.mock("@excalidraw/excalidraw", () => ({
 function createGateway(): DocumentGateway {
   return {
     open: vi.fn(async () => ({
+      kind: "opened" as const,
       scene: {
         type: "excalidraw",
         version: 2,
@@ -55,6 +56,34 @@ describe("DocumentManager", () => {
     vi.useFakeTimers();
     serializeAsJSON.mockClear();
     useAppStore.setState({ hasMountedWorkspace: false });
+  });
+
+  it("leaves a drawing another window has in that window", async () => {
+    const gateway = createGateway();
+    vi.mocked(gateway.open).mockResolvedValue({
+      kind: "ownedElsewhere",
+      label: "window-2",
+    });
+    const manager = new DocumentManager(gateway);
+
+    await expect(manager.openRouted("/b/note.excalidraw")).resolves.toBeNull();
+    expect(manager.store.getState().tabOrder).toEqual([]);
+    expect(manager.store.getState().activeDocumentId).toBeNull();
+    await expect(manager.open("/b/note.excalidraw")).rejects.toMatchObject({
+      key: "error.DOCUMENT_NOT_OWNED",
+    });
+    expect(manager.store.getState().tabOrder).toEqual([]);
+  });
+
+  it("switches to the existing tab without asking the backend again", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const first = await manager.openRouted("/a/note.excalidraw");
+    await manager.openRouted("/a/other.excalidraw");
+
+    await expect(manager.openRouted("/a/note.excalidraw")).resolves.toBe(first);
+    expect(gateway.open).toHaveBeenCalledTimes(2);
+    expect(manager.store.getState().activeDocumentId).toBe(first);
   });
 
   it("does not serialize high-frequency scene or viewport changes", async () => {
@@ -630,6 +659,7 @@ describe("DocumentManager", () => {
     const manager = new DocumentManager(gateway);
     const documentId = await manager.open("/tmp/drawing.excalidraw");
     vi.mocked(gateway.open).mockResolvedValueOnce({
+      kind: "opened" as const,
       scene: {
         type: "excalidraw",
         version: 2,
@@ -806,6 +836,37 @@ describe("DocumentManager", () => {
     manager.dispose();
   });
 
+  it("saves an orphaned document back to its own path without discarding it", async () => {
+    const gateway = createGateway();
+    const manager = new DocumentManager(gateway);
+    const documentId = await manager.open("/tmp/gone.excalidraw");
+    manager.handleFileRemoved("/tmp/gone.excalidraw");
+    vi.mocked(gateway.checkpoint).mockResolvedValueOnce({
+      newBaseHash: "restored",
+      mtime: 4,
+    });
+
+    await manager.saveOrphanedAs(documentId, "/tmp/gone.excalidraw");
+
+    expect(gateway.checkpoint).toHaveBeenCalledWith(
+      "/tmp/gone.excalidraw",
+      expect.any(String),
+      "saveAsNew",
+    );
+    expect(gateway.close).not.toHaveBeenCalled();
+    const session = manager.store.getState().sessionsById[documentId];
+    expect(session?.saveState).toBe("clean");
+    expect(session?.baseHash).toBe("restored");
+
+    const outcome = await manager.close(documentId);
+    expect(outcome).toEqual({ status: "closed" });
+    expect(gateway.close).toHaveBeenCalledWith(
+      "/tmp/gone.excalidraw",
+      "checkpointed",
+    );
+    manager.dispose();
+  });
+
   describe("US3 close and activation", () => {
     type CloseOutcome =
       | { status: "closed" }
@@ -928,6 +989,50 @@ describe("DocumentManager", () => {
       expect(gateway.close).not.toHaveBeenCalled();
       expect(manager.store.getState().sessionsById[documentId]).toBeDefined();
       expect(manager.store.getState().tabOrder).toEqual([documentId]);
+      expect(manager.store.getState().sessionsById[documentId]).toMatchObject({
+        saveState: "error",
+        errorMessage: en["error.DISK_FULL"],
+      });
+      manager.dispose();
+    });
+
+    it("marks a drawing whose quit checkpoint fails as a save error", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const documentId = await manager.open("/tmp/drawing.excalidraw");
+      markDirty(manager, documentId);
+      vi.mocked(gateway.checkpoint).mockRejectedValueOnce({
+        code: "DISK_FULL",
+        message: "disk is full",
+        retriable: false,
+      });
+
+      await expect(manager.checkpointAll("appExit")).rejects.toMatchObject({
+        code: "DISK_FULL",
+      });
+      expect(manager.store.getState().sessionsById[documentId]).toMatchObject({
+        saveState: "error",
+        errorMessage: en["error.DISK_FULL"],
+      });
+      manager.dispose();
+    });
+
+    it("keeps orphaned when the file disappears while its checkpoint fails", async () => {
+      const gateway = createGateway();
+      const manager = new DocumentManager(gateway);
+      const documentId = await manager.open("/tmp/gone.excalidraw");
+      markDirty(manager, documentId);
+      vi.mocked(gateway.checkpoint).mockImplementationOnce(async () => {
+        manager.handleFileRemoved("/tmp/gone.excalidraw");
+        throw { code: "NOT_FOUND", message: "gone", retriable: false };
+      });
+
+      await expect(manager.checkpoint(documentId)).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
+      expect(manager.store.getState().sessionsById[documentId]?.saveState).toBe(
+        "orphaned",
+      );
       manager.dispose();
     });
 

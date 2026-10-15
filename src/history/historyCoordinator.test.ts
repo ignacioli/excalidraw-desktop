@@ -255,6 +255,7 @@ describe("HistoryCoordinator", () => {
   it("uses the real DocumentManager commit seam and accepts its generation advance", async () => {
     const gateway: DocumentGateway = {
       open: vi.fn(async () => ({
+        kind: "opened" as const,
         scene,
         baseHash: "a".repeat(64),
         hasNewerDraft: false,
@@ -305,6 +306,7 @@ describe("HistoryCoordinator", () => {
   it("rejects an autosave callback captured before replacement adoption", async () => {
     const gateway: DocumentGateway = {
       open: vi.fn(async () => ({
+        kind: "opened" as const,
         scene,
         baseHash: "a".repeat(64),
         hasNewerDraft: false,

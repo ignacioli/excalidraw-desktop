@@ -1,14 +1,20 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { en } from "../../src/i18n/messages/en.ts";
 import { zhCN } from "../../src/i18n/messages/zh-CN.ts";
 import {
   emitBrowserTauriEvent,
   installBrowserTauriHarness,
+  setBrowserTauriClaimOutcome,
+  setBrowserTauriExtraEntries,
+  setBrowserTauriRecentExtra,
 } from "./browserTauriHarness";
 import {
+  emitUiInteractionEvent,
   emitUiInteractionFileChanged,
   installUiInteractionFileEvents,
   installUiInteractionHarness,
+  setUiInteractionHarnessFailure,
 } from "./uiInteractionHarness";
 import { emitFileChanged, installUs4Harness } from "./us4BrowserHarness";
 import {
@@ -188,6 +194,28 @@ async function installWorkspaceHarness(
         if (command === "workspace_recent_list") {
           return [];
         }
+        if (command === "window_probe_workspace") {
+          return {
+            kind: "claimed",
+            workspace: null,
+            replaced: null,
+            shell: null,
+          };
+        }
+        if (command === "window_claim_workspace") {
+          mounted = true;
+          return {
+            kind: "claimed",
+            workspace: {
+              id: "workspace-1",
+              name: "Workspace",
+              rootPath: "/workspace",
+              createdAt: 1,
+            },
+            replaced: null,
+            shell: null,
+          };
+        }
         if (command === "workspace_add") {
           mounted = true;
           return {
@@ -243,6 +271,15 @@ async function installRecoveryHarness(page: Page): Promise<void> {
             appVersion: "0.1.0",
             abnormalExit: true,
             pendingOpenPaths: [],
+            // The launch window, as the per-window bootstrap reports it.
+            window: {
+              label: "window-1",
+              workspace: null,
+              unavailableWorkspace: null,
+              restore: null,
+              shell: null,
+              openWorkspaceNames: [],
+            },
             preferredLanguages: [],
           };
         }
@@ -925,7 +962,10 @@ test("create dialog announces permission-denied as an alert", async ({
   );
   await page.goto("/");
   await ensureFilesSidebar(page);
-  await page.getByRole("button", { name: "New Drawing" }).click();
+  await page
+    .getByRole("toolbar", { name: "Workspace actions" })
+    .getByRole("button", { name: "New Drawing" })
+    .click();
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page.getByRole("alert")).toHaveText(
     "This location is outside the Workspace.",
@@ -1059,4 +1099,189 @@ test.describe("Simplified Chinese UI", () => {
       ".application-dialog-backdrop",
     ]);
   });
+});
+
+test.describe("multi-window surfaces", () => {
+  const COMBINATIONS = [
+    ["light", "en", en],
+    ["light", "zh-CN", zhCN],
+    ["dark", "en", en],
+    ["dark", "zh-CN", zhCN],
+  ] as const;
+
+  type Catalog = typeof en | typeof zhCN;
+
+  function commands(theme: "light" | "dark", language: "en" | "zh-CN") {
+    return [
+      theme === "light" ? "appearanceLight" : "appearanceDark",
+      language === "en" ? "languageEn" : "languageZhCn",
+    ];
+  }
+
+  const DIALOG = [".application-dialog-backdrop"];
+  const TOAST = [".feedback-toast"];
+
+  for (const [theme, language, catalog] of COMBINATIONS) {
+    const label = `${theme} / ${language}`;
+
+    test(`empty state, nested Workspace dialog and locate toast are axe-clean in ${label}`, async ({
+      page,
+    }) => {
+      await installBrowserTauriHarness(page);
+      await page.goto("/");
+      for (const command of commands(theme, language)) {
+        await emitBrowserTauriEvent(page, "native-menu-command", { command });
+      }
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-color-scheme",
+        theme,
+      );
+
+      // New Drawing, then close its tab: the empty Workspace state.
+      await page
+        .getByTestId("welcome-screen")
+        .getByRole("button", { name: catalog["welcome.newDrawing"] })
+        .click();
+      await expect(page.locator(".excalidraw-editor")).toBeVisible();
+      await page.locator(".tab-close").first().click();
+      const empty = page.getByRole("region", {
+        name: catalog["shell.emptyState.label"],
+      });
+      await expect(empty).toBeVisible();
+      await expectAxeClean(page, `empty Workspace state ${label}`, [
+        ".canvas-empty-state",
+      ]);
+
+      // A folder inside this window's Workspace: the locate toast.
+      await setBrowserTauriExtraEntries(page, [
+        {
+          workspaceId: "workspace-1",
+          kind: "directory",
+          canonicalPath: "/virtual/notes",
+          relativePath: "notes",
+          parentRelativePath: "",
+          name: "notes",
+          displayName: "notes",
+          mtime: 1,
+          fileSize: 0,
+        },
+      ]);
+      await emitBrowserTauriEvent(page, "workspace-reveal-entry", {
+        relativePath: "notes",
+        name: "notes",
+      });
+      await expect(page.locator(".feedback-toast")).toBeVisible();
+      await expectAxeClean(page, `locate toast ${label}`, TOAST);
+
+      // A folder containing another window's Workspace.
+      await setBrowserTauriRecentExtra(page, [
+        {
+          id: "workspace-child",
+          name: "Child",
+          rootPath: "/virtual/child",
+          createdAt: 2,
+        },
+      ]);
+      await setBrowserTauriClaimOutcome(page, {
+        kind: "containsOpen",
+        label: "window-2",
+        workspaceId: "workspace-child",
+      });
+      await emitBrowserTauriEvent(page, "native-menu-command", {
+        command: "openWorkspace",
+      });
+      const nested = page.getByRole("dialog");
+      await expect(nested).toBeVisible();
+      await expectAxeClean(page, `nested Workspace dialog ${label}`, DIALOG);
+      await page.keyboard.press("Escape");
+      await expect(nested).toHaveCount(0);
+    });
+
+    test(`sidebar confirmations and copy toasts are axe-clean in ${label}`, async ({
+      page,
+    }) => {
+      await installUiInteractionHarness(page, {
+        workspaces: [A11Y_WORKSPACE],
+        entries: [
+          a11yDrawing("drawing.excalidraw", "drawing"),
+          {
+            workspaceId: A11Y_WORKSPACE.id,
+            kind: "directory" as const,
+            canonicalPath: `${A11Y_WORKSPACE.rootPath}/folder`,
+            relativePath: "folder",
+            parentRelativePath: "",
+            name: "folder",
+            displayName: "folder",
+            mtime: 1,
+            fileSize: 0,
+          },
+          a11yDrawing("folder/child.excalidraw", "child", "folder"),
+        ],
+      });
+      await installUiInteractionFileEvents(page);
+      await persistPinnedWorkspaceSidebar(
+        page,
+        [A11Y_WORKSPACE.id],
+        A11Y_WORKSPACE.id,
+      );
+      await page.goto("/");
+      await ensureFilesSidebar(page);
+      for (const command of commands(theme, language)) {
+        await emitUiInteractionEvent(page, "native-menu-command", { command });
+      }
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-color-scheme",
+        theme,
+      );
+
+      const choose = async (
+        row: string,
+        item: keyof Catalog,
+      ): Promise<void> => {
+        await page.getByRole("treeitem", { name: row }).hover();
+        await page
+          .getByRole("button", {
+            name: catalog["workspace.menu.actionsFor"].replace("{name}", row),
+          })
+          .click();
+        await page
+          .getByRole("menuitem", { name: String(catalog[item]) })
+          .click();
+      };
+
+      for (const [row, item, what] of [
+        ["drawing", "workspace.menu.delete", "delete confirmation"],
+        ["folder", "workspace.menu.delete", "folder not empty"],
+        [
+          A11Y_WORKSPACE.name,
+          "workspace.menu.removeWorkspace",
+          "remove Workspace",
+        ],
+      ] as const) {
+        await choose(row, item);
+        const dialog = page.getByRole("dialog");
+        await expect(dialog).toBeVisible();
+        await expectAxeClean(page, `${what} dialog ${label}`, DIALOG);
+        await page.keyboard.press("Escape");
+        await expect(dialog).toHaveCount(0);
+      }
+
+      await choose("drawing", "workspace.menu.copyPath");
+      await expect(page.locator(".feedback-toast")).toBeVisible();
+      await expectAxeClean(page, `copy success toast ${label}`, TOAST);
+
+      await setUiInteractionHarnessFailure(
+        page,
+        "plugin:clipboard-manager|write_text",
+        { code: "CLIPBOARD", message: "unavailable", retriable: true },
+      );
+      await choose("drawing", "workspace.menu.copyPath");
+      await expect(
+        page
+          .locator(".feedback-toast")
+          .getByText(catalog["shell.feedback.copyFailed"]),
+      ).toBeVisible();
+      await expectAxeClean(page, `copy failure toast ${label}`, TOAST);
+    });
+  }
 });

@@ -24,8 +24,10 @@ describe("nativeMenuLabels", () => {
   it("localizes every label, including predefined item text", () => {
     const en = nativeMenuLabels("en");
     const zh = nativeMenuLabels("zh-CN");
-    expect(Object.keys(en)).toHaveLength(37);
+    expect(Object.keys(en)).toHaveLength(39);
     expect(en["app.quit"]).toBe("Quit Excalidraw");
+    expect(en["file.newWindow"]).toBe("New Window");
+    expect(zh["file.openWorkspace"]).toBe("打开工作区…");
     expect(zh["app.quit"]).toBe("退出 Excalidraw");
     expect(zh["edit.undo"]).toBe("撤销");
     expect(zh["app.languageEn"]).toBe("English");

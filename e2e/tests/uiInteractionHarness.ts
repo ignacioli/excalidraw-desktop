@@ -47,6 +47,8 @@ export interface UiInteractionHarnessOptions {
   latenciesMs?: Readonly<Record<string, number>>;
   responses?: Readonly<Record<string, unknown>>;
   dialogPaths?: readonly (string | null)[];
+  /** What the system clipboard holds before the test copies anything. */
+  clipboardText?: string;
   startup?: UiHarnessStartupOptions;
   tenThousandRows?: {
     workspaceId?: string;
@@ -63,6 +65,7 @@ export interface UiInteractionHarnessState {
   entryCountByParent: Record<string, number>;
   failures: Record<string, UiHarnessFailure>;
   errors: string[];
+  clipboardText: string;
 }
 
 const DEFAULT_WORKSPACE: UiHarnessWorkspace = {
@@ -137,12 +140,15 @@ export async function installUiInteractionHarness(
       latencySeeds,
       responseSeeds,
       pathSeeds,
+      clipboardSeed,
       emptyScene,
       startup,
     }) => {
       type HarnessState = {
         invocations: UiHarnessInvocation[];
+        /** The Workspace this window holds: zero or one. */
         workspaces: UiHarnessWorkspace[];
+        recent: UiHarnessWorkspace[];
         entries: UiHarnessWorkspaceEntry[];
         failures: Record<string, UiHarnessFailure>;
         latenciesMs: Record<string, number>;
@@ -150,6 +156,7 @@ export async function installUiInteractionHarness(
         dialogPaths: (string | null)[];
         nextDialogPath: number;
         errors: string[];
+        clipboardText: string;
       };
       type HarnessWindow = typeof globalThis & {
         __TAURI_INTERNALS__?: {
@@ -169,7 +176,10 @@ export async function installUiInteractionHarness(
 
       const state: HarnessState = {
         invocations: [],
-        workspaces: workspaceSeeds.map((workspace) => ({ ...workspace })),
+        // As at a normal launch, the window holds no Workspace until it
+        // claims one; the seeds are Recent Workspaces.
+        workspaces: [],
+        recent: workspaceSeeds.map((workspace) => ({ ...workspace })),
         entries: entrySeeds.map((entry) => ({ ...entry })),
         failures: { ...failureSeeds },
         latenciesMs: { ...latencySeeds },
@@ -177,8 +187,80 @@ export async function installUiInteractionHarness(
         dialogPaths: [...pathSeeds],
         nextDialogPath: 0,
         errors: [],
+        clipboardText: clipboardSeed,
       };
       const browser = globalThis as HarnessWindow;
+
+      // The Window Session as the backend stores it: the claimed Workspace
+      // and the reported tabs. A reload is a restart, which claims the
+      // Workspace again before the window loads and hands back the tabs.
+      type WindowSession = {
+        workspaceId: string | null;
+        tabs: string[];
+        activePath: string | null;
+      };
+      const windowSessionKey = "excalidraw-e2e:ui-window-session";
+      const readWindowSession = (): WindowSession => {
+        const stored = browser.localStorage.getItem(windowSessionKey);
+        return stored === null
+          ? { workspaceId: null, tabs: [], activePath: null }
+          : (JSON.parse(stored) as WindowSession);
+      };
+      const writeWindowSession = (next: Partial<WindowSession>) =>
+        browser.localStorage.setItem(
+          windowSessionKey,
+          JSON.stringify({ ...readWindowSession(), ...next }),
+        );
+      const restoredSession = readWindowSession();
+      const restoredWorkspace = state.recent.find(
+        (workspace) => workspace.id === restoredSession.workspaceId,
+      );
+      if (restoredWorkspace !== undefined) {
+        state.workspaces = [restoredWorkspace];
+      }
+
+      // Sidebar state as the backend keeps it: per Workspace, plus the
+      // one-time import of the earlier localStorage preferences. Stored in
+      // localStorage so it survives a reload, like the app database.
+      type ShellState = {
+        sidebarPinned: boolean;
+        sidebarWidth: number;
+        expanded: string[];
+      };
+      type ShellStore = {
+        migrated: boolean;
+        legacy: { sidebarPinned: boolean; sidebarWidth: number } | null;
+        byWorkspace: Record<string, ShellState>;
+        latest: string | null;
+      };
+      const shellStoreKey = "excalidraw-e2e:ui-shell-store";
+      const shellSavesKey = "excalidraw-e2e:ui-shell-saves";
+      const readShellStore = (): ShellStore => {
+        const stored = browser.localStorage.getItem(shellStoreKey);
+        return stored === null
+          ? { migrated: false, legacy: null, byWorkspace: {}, latest: null }
+          : (JSON.parse(stored) as ShellStore);
+      };
+      const writeShellStore = (store: ShellStore) =>
+        browser.localStorage.setItem(shellStoreKey, JSON.stringify(store));
+      // Own state, else the most recent pin and width, else the imported
+      // ones; a first-opened Workspace shows its root expanded.
+      const shellFor = (workspaceId: string | undefined): ShellState | null => {
+        if (workspaceId === undefined) return null;
+        const store = readShellStore();
+        const own = store.byWorkspace[workspaceId];
+        if (own !== undefined) return own;
+        const recent =
+          store.latest === null ? undefined : store.byWorkspace[store.latest];
+        const fallback = recent ?? store.legacy;
+        return fallback === null || fallback === undefined
+          ? null
+          : {
+              sidebarPinned: fallback.sidebarPinned,
+              sidebarWidth: fallback.sidebarWidth,
+              expanded: [""],
+            };
+      };
 
       const internals: NonNullable<HarnessWindow["__TAURI_INTERNALS__"]> = {
         async invoke(command, args = {}) {
@@ -229,6 +311,25 @@ export async function installUiInteractionHarness(
               appVersion: "0.2.0-e2e",
               abnormalExit: startup.abnormalExit,
               pendingOpenPaths: [],
+              // The launch window, as the per-window bootstrap reports it.
+              window: {
+                label: "window-1",
+                workspace:
+                  restoredWorkspace === undefined
+                    ? null
+                    : { ...restoredWorkspace },
+                unavailableWorkspace: null,
+                restore:
+                  restoredSession.tabs.length > 0
+                    ? {
+                        tabs: restoredSession.tabs,
+                        activePath: restoredSession.activePath,
+                        skipped: 0,
+                      }
+                    : null,
+                shell: shellFor(state.workspaces[0]?.id),
+                openWorkspaceNames: [],
+              },
               preferredLanguages: [],
             };
           }
@@ -241,26 +342,138 @@ export async function installUiInteractionHarness(
             return state.workspaces.map((workspace) => ({ ...workspace }));
           }
           if (command === "workspace_recent_list") {
-            return state.workspaces.map((workspace) => ({ ...workspace }));
+            return state.recent.map((workspace) => ({ ...workspace }));
           }
           if (command === "workspace_add") {
             const rootPath = String(
               args.rootPath ?? "/ui-interactions/mounted",
             );
             const workspace = {
-              id: `workspace-${state.workspaces.length + 1}`,
+              id: `workspace-${state.recent.length + 1}`,
               name: rootPath.split("/").filter(Boolean).at(-1) ?? "Workspace",
               rootPath,
-              createdAt: state.workspaces.length + 1,
+              createdAt: state.recent.length + 1,
             };
-            state.workspaces.push(workspace);
+            state.recent.push(workspace);
+            state.workspaces = [workspace];
+            writeWindowSession({ workspaceId: workspace.id });
             return { ...workspace };
+          }
+          if (command === "window_probe_workspace") {
+            return {
+              kind: "claimed",
+              workspace: null,
+              replaced: null,
+              shell: null,
+            };
+          }
+          if (command === "window_claim_workspace") {
+            const existing = state.recent.find(
+              (workspace) =>
+                workspace.id === args.workspaceId ||
+                (args.rootPath !== undefined &&
+                  workspace.rootPath === args.rootPath),
+            );
+            const rootPath = String(
+              args.rootPath ?? "/ui-interactions/mounted",
+            );
+            const workspace = existing ?? {
+              id: `workspace-${state.recent.length + 1}`,
+              name: rootPath.split("/").filter(Boolean).at(-1) ?? "Workspace",
+              rootPath,
+              createdAt: state.recent.length + 1,
+            };
+            if (existing === undefined) state.recent.push(workspace);
+            const replaced = state.workspaces[0]?.id ?? null;
+            state.workspaces = [workspace];
+            writeWindowSession({ workspaceId: workspace.id });
+            return {
+              kind: "claimed",
+              workspace: { ...workspace },
+              replaced,
+              shell: shellFor(workspace.id),
+            };
+          }
+          if (command === "shell_preferences_migrate") {
+            const store = readShellStore();
+            if (store.migrated) return { migrated: false };
+            writeShellStore({
+              ...store,
+              migrated: true,
+              legacy: {
+                sidebarPinned: args.sidebarPinned === true,
+                sidebarWidth: Number(args.sidebarWidth),
+              },
+            });
+            return { migrated: true };
+          }
+          if (command === "workspace_shell_state_save") {
+            const workspaceId = state.workspaces[0]?.id;
+            if (workspaceId === undefined) {
+              throw {
+                code: "WORKSPACE_NOT_OWNED",
+                message: "This window has no Workspace.",
+                retriable: false,
+              };
+            }
+            // Specs assert the payload the app sent, not the fallback above.
+            const saves = JSON.parse(
+              browser.localStorage.getItem(shellSavesKey) ?? "[]",
+            ) as unknown[];
+            browser.localStorage.setItem(
+              shellSavesKey,
+              JSON.stringify([...saves, { workspaceId, ...args }]),
+            );
+            const store = readShellStore();
+            writeShellStore({
+              ...store,
+              byWorkspace: {
+                ...store.byWorkspace,
+                [workspaceId]: {
+                  sidebarPinned: args.sidebarPinned === true,
+                  sidebarWidth: Number(args.sidebarWidth),
+                  expanded: Array.isArray(args.expanded)
+                    ? args.expanded.map(String)
+                    : [],
+                },
+              },
+              latest: workspaceId,
+            });
+            return {};
+          }
+          if (
+            command === "app_preferences_broadcast" ||
+            command === "plugin:window|set_title"
+          ) {
+            return {};
+          }
+          if (command === "window_release_workspace") {
+            state.workspaces = [];
+            writeWindowSession({ workspaceId: null });
+            return {};
           }
           if (command === "workspace_remove") {
             const workspaceId = String(args.workspaceId ?? "");
             state.workspaces = state.workspaces.filter(
               (workspace) => workspace.id !== workspaceId,
             );
+            writeWindowSession({
+              workspaceId: state.workspaces[0]?.id ?? null,
+            });
+            return {};
+          }
+          if (command === "window_session_update") {
+            writeWindowSession({
+              tabs: Array.isArray(args.tabs) ? args.tabs.map(String) : [],
+              activePath:
+                typeof args.activePath === "string" ? args.activePath : null,
+            });
+            return {};
+          }
+          if (
+            command === "app_quit_ready" ||
+            command === "startup_recovery_done"
+          ) {
             return {};
           }
           if (command === "workspace_entry_list") {
@@ -445,6 +658,11 @@ export async function installUiInteractionHarness(
             command === "native_menu_set_enabled"
           )
             return {};
+          // Copy Path: the clipboard plugin's only granted command.
+          if (command === "plugin:clipboard-manager|write_text") {
+            state.clipboardText = String(args.text ?? "");
+            return null;
+          }
           // `homeDir()` for the row path tooltips.
           if (command === "plugin:path|resolve_directory")
             return "/Users/tester";
@@ -474,6 +692,7 @@ export async function installUiInteractionHarness(
       latencySeeds: { ...(options.latenciesMs ?? {}) },
       responseSeeds: { ...(options.responses ?? {}) },
       pathSeeds: [...(options.dialogPaths ?? [])],
+      clipboardSeed: options.clipboardText ?? "",
       emptyScene: EMPTY_SCENE,
       startup: {
         abnormalExit: options.startup?.abnormalExit ?? false,
@@ -482,6 +701,38 @@ export async function installUiInteractionHarness(
       },
     },
   );
+}
+
+/**
+ * The last `workspace_shell_state_save` payload the app sent for
+ * `workspaceId`, or null when it sent none.
+ */
+export async function readUiHarnessLastShellSave(
+  page: Page,
+  workspaceId: string,
+): Promise<{
+  sidebarPinned: boolean;
+  sidebarWidth: number;
+  expanded: string[];
+} | null> {
+  return page.evaluate((id) => {
+    const saves = JSON.parse(
+      localStorage.getItem("excalidraw-e2e:ui-shell-saves") ?? "[]",
+    ) as Array<{
+      workspaceId: string;
+      sidebarPinned: boolean;
+      sidebarWidth: number;
+      expanded: string[];
+    }>;
+    const save = saves.filter((entry) => entry.workspaceId === id).at(-1);
+    return save === undefined
+      ? null
+      : {
+          sidebarPinned: save.sidebarPinned,
+          sidebarWidth: save.sidebarWidth,
+          expanded: save.expanded,
+        };
+  }, workspaceId);
 }
 
 export async function getUiInteractionHarnessState(
@@ -497,6 +748,7 @@ export async function getUiInteractionHarnessState(
             entries: UiHarnessWorkspaceEntry[];
             failures: Record<string, UiHarnessFailure>;
             errors: string[];
+            clipboardText: string;
           };
         };
       }
@@ -518,6 +770,7 @@ export async function getUiInteractionHarnessState(
       entryCountByParent,
       failures: { ...(state?.failures ?? {}) },
       errors: [...(state?.errors ?? [])],
+      clipboardText: state?.clipboardText ?? "",
     };
   });
 }
@@ -623,6 +876,28 @@ export async function installUiInteractionFileEvents(
       }
     };
   });
+}
+
+/** Emits any app event, e.g. `native-menu-command`; needs `installUiInteractionFileEvents`. */
+export async function emitUiInteractionEvent(
+  page: Page,
+  event: string,
+  payload: unknown,
+): Promise<void> {
+  await page.evaluate(
+    ({ event: eventName, payload: eventPayload }) => {
+      const emit = (
+        globalThis as typeof globalThis & {
+          __emitUiInteractionEvent?: (eventName: string, next: unknown) => void;
+        }
+      ).__emitUiInteractionEvent;
+      if (emit === undefined) {
+        throw new Error("UI interaction events are not installed.");
+      }
+      emit(eventName, eventPayload);
+    },
+    { event, payload },
+  );
 }
 
 export async function emitUiInteractionFileChanged(

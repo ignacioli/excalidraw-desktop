@@ -72,6 +72,16 @@ pub trait WorkspaceRepository: Send + Sync {
     fn workspace_list(&self) -> RepositoryFuture<'_, Vec<WorkspaceRecord>>;
     fn workspace_recent_list(&self) -> RepositoryFuture<'_, Vec<WorkspaceRecord>>;
     fn workspace_set_mounted(&self, id: String, mounted: bool) -> RepositoryFuture<'_, ()>;
+    /// Clear every `mounted` flag. `mounted` means "open in a window", so
+    /// startup resets it before windows claim their Workspaces again.
+    fn workspace_unmount_all(&self) -> RepositoryFuture<'_, ()>;
+    /// Mount one Workspace and unmount another in a single transaction, so
+    /// replacing a window's Workspace never leaves both or neither mounted.
+    fn workspace_mount_transition(
+        &self,
+        mount: Option<String>,
+        unmount: Option<String>,
+    ) -> RepositoryFuture<'_, ()>;
     fn workspace_delete(&self, id: String) -> RepositoryFuture<'_, ()>;
 }
 
@@ -113,6 +123,10 @@ impl SqliteRepository {
     pub async fn open(path: &Path) -> Result<Self, RepositoryError> {
         let writer = DatabaseWriter::open(path, DEFAULT_WRITER_QUEUE_CAPACITY).await?;
         Ok(Self { writer })
+    }
+
+    pub(crate) fn writer(&self) -> &DatabaseWriter {
+        &self.writer
     }
 
     /// Move all persisted observations for an entry after the filesystem
@@ -384,6 +398,40 @@ impl WorkspaceRepository for SqliteRepository {
                         params![id, mounted],
                     )?;
                     Ok(())
+                })
+                .await?;
+            Ok(())
+        })
+    }
+
+    fn workspace_unmount_all(&self) -> RepositoryFuture<'_, ()> {
+        Box::pin(async move {
+            self.writer
+                .execute(|connection| {
+                    connection.execute("UPDATE workspaces SET mounted=0 WHERE mounted=1", [])?;
+                    Ok(())
+                })
+                .await?;
+            Ok(())
+        })
+    }
+
+    fn workspace_mount_transition(
+        &self,
+        mount: Option<String>,
+        unmount: Option<String>,
+    ) -> RepositoryFuture<'_, ()> {
+        Box::pin(async move {
+            self.writer
+                .execute(move |connection| {
+                    let transaction = connection.transaction()?;
+                    if let Some(id) = unmount {
+                        transaction.execute("UPDATE workspaces SET mounted=0 WHERE id=?1", [id])?;
+                    }
+                    if let Some(id) = mount {
+                        transaction.execute("UPDATE workspaces SET mounted=1 WHERE id=?1", [id])?;
+                    }
+                    transaction.commit()
                 })
                 .await?;
             Ok(())
