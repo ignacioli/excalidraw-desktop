@@ -2,6 +2,28 @@
 
 User-visible changes to Excalidraw Desktop, newest first.
 
+## [0.6.0] - 2026-10-15
+
+### Added
+
+- Multiple windows, one Workspace each. File > New Window opens a Welcome window. Opening a Workspace that is already open in another window brings that window forward, including when it is minimized or on another desktop space, instead of opening it twice.
+- Opening a folder inside an open Workspace reveals it in that Workspace's window; opening a folder that contains an open Workspace asks whether to switch to that window or close it and open here.
+- Drawings opened from Finder go to the window whose Workspace holds them; a drawing in no Workspace opens in the most recent window, and a drawing already open is brought forward on its tab.
+- Quitting with unsaved edits in several windows exits promptly, and relaunching restores each window with its Workspace, tabs, active tab, size and position. Closing every window keeps the app running; clicking the Dock icon opens Welcome. The Window menu lists every open window.
+- A Workspace window with no open drawing shows an empty state with New Drawing and Show Sidebar. Its New Drawing creates `Untitled` in the folder selected in the sidebar, or at the Workspace root, and the sidebar shows it at once.
+- Copy Path and Copy Relative Path for drawings and folders, from the sidebar and from tabs.
+
+### Changed
+
+- Welcome's New Drawing asks for a folder, opens it as a Workspace and saves the drawing there as a real `.excalidraw` file, so it is protected by drafts, recovery and version history from the start.
+- New windows open at a size that suits the screen.
+- Naming, delete, folder-not-empty, remove-Workspace and nested-folder dialogs share one layout, with the name field's `.excalidraw` suffix shown inside the field.
+- Appearance and language changes apply to every open window at once.
+
+### Fixed
+
+- A drawing whose file was moved to the Trash and then saved back to its own path can be closed again.
+
 ## [0.5.0] - 2026-10-11
 
 ### Added
