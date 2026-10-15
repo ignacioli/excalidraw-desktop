@@ -911,19 +911,48 @@ the candidate set as the default app for `.excalidraw`:
   now lists created drawings under their own folder. A unit test and the
   browser test fail without the fix. To be repeated.
 
+Third pass by the owner, 2026-10-15, on the debug `.app` of `86bbe3d`
+(main binary SHA-256 `3f59dcf5…aa03`): a drawing made by the empty state's
+New Drawing shows in the selected folder at once, without Refresh. Passed.
+
 Owner conclusion (recorded by the owner, separately from the results
 above):
 
-- Date and build:
-- Failed items and what was seen:
-- Conclusion: accepted / accepted with conditions / not accepted
+- Date and build: 2026-10-15, the debug `.app` of `86bbe3d`.
+- Failed items and what was seen: none left open. Every walkthrough item
+  passed, the last three after the fixes and the default-app correction
+  above. The "Put Back" gap above remains open.
+- Conclusion: accepted.
+- The owner asked that the performance results be recorded as measured,
+  including the budgets that are not met; see "Performance results at
+  acceptance" below.
+
+Performance results at acceptance, as measured (see "Performance"):
+
+- Cold start does not meet its budget. The 2000 ms P95 budget fails on the
+  candidate (P95 2463 ms over 10 launches) and on `main` (2667 ms). The
+  slowest launch on each is the first one after the build; the other nine
+  take 0.59–0.63 s. The candidate's median is 26 ms (4%) slower than
+  `main`'s.
+- Idle memory meets its budget for one window: process-tree RSS P95
+  317.5 MiB against 500 MB, with no idle writes.
+- Each extra window adds about 135 MiB (one WebKit content process). With
+  three windows the process tree is about 588 MiB; no budget covers more
+  than one window.
+- Only a physical Mac (Apple M5 Pro, 48 GiB) was measured. The declared
+  reference VM was not measured, so there is no reference-gate verdict for
+  this work.
 
 ## Final summary
 
 - Automated: every gate in "Final regression" passes on the final
-  candidate. Performance shows no regression against `main`; the
-  cold-start budget fails on both binaries because of the first launch
-  after a build.
+  candidate.
+- Performance: the cold-start P95 budget is not met (2463 ms on the
+  candidate, 2667 ms on `main`, against 2000 ms), driven by the first
+  launch after a build; no regression against `main` was found; idle
+  memory and idle writes meet their budgets for one window; each extra
+  window adds about 135 MiB. Physical Mac only; the reference VM was not
+  measured.
 - Documented differences between the design notes and the code, where the
   code is what the documents describe: an event for a drawing or Workspace
   that no window holds is dropped rather than sent to another window; after
@@ -936,4 +965,5 @@ above):
   disconnected display, the Dock menu, the Window menu after a language
   switch, and other desktop spaces rest on the owner walkthrough; the
   empty state's shortcut hints wait for shortcuts to exist.
-- Owner conclusion: recorded in "Owner walkthrough", separately.
+- Owner conclusion: accepted on 2026-10-15; recorded in "Owner
+  walkthrough", separately.
