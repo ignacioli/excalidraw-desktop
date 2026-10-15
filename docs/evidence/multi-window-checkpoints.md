@@ -295,9 +295,9 @@ crash, then the windows, tabs and active tab of the last session.
 
 - Candidate: the commit that adds this section (parent `bcd512f`), on macOS
   26.6.2 (Darwin 25.6.0, arm64), 2026-10-14.
-- Result: PASS for the automated and native checks below, with one open
-  defect: a pasted element is not written to the file on Cmd+Q (see "Gaps
-  and owner decisions"). It is being investigated and fixed separately.
+- Result: PASS for the automated and native checks below. A suspected loss
+  of a pasted element on Cmd+Q was a fault in the reproduction, not in the
+  app (see "Follow-up: paste, then quit").
 
 | Command                                                                                                 | Result                        |
 | ------------------------------------------------------------------------------------------------------- | ----------------------------- |
@@ -371,19 +371,15 @@ Defects found and fixed by these checks:
 
 Gaps and owner decisions:
 
-- Open defect: after pasting an element into an empty drawing, Cmd+Q exits
-  with code 0 through the coordinated quit, but the file on disk still has
-  no elements. Reproduced twice on the native build. Moving an existing
-  element, by keyboard or by the test driver, is saved. Whether the pasted
-  element is kept in the recovery draft, and whether the defect predates
-  the coordinated quit, is not yet known. The process-level scenarios edit
-  existing elements only, so they do not cover this case.
 - The Window menu lists none of the open windows; it has Minimize, Zoom,
-  Close Window and Close All. Recorded as an observation, not fixed.
+  Close Window and Close All. Owner decision: a defect, fixed separately as
+  a small fix ahead of the remaining work.
 - A failed checkpoint leaves the drawing's save status at "checkpointing"
-  rather than an error state; the error is shown by the shell. Not fixed.
+  rather than an error state; the error is shown by the shell. Owner
+  decision: fixed with the final polish.
 - The test driver turns structured IPC errors into "[object Object]" in its
-  answers. This affects only test diagnostics.
+  answers. This affects only test diagnostics. Owner decision: fixed when
+  the driver is next changed.
 - When Recovery leaves its window empty and the session opens other
   windows, the Recovery window closes.
 - In the test-only build started by the history driver, closing the last
@@ -391,6 +387,23 @@ Gaps and owner decisions:
 - The `native:menu:check` was not re-run; the Quit item is checked by the
   Rust menu tests and by the native window check.
 - No new app-owned UI beyond the existing notices and error text.
+
+Follow-up: paste, then quit (2026-10-14):
+
+- The first two reproductions pasted with the canvas not focused and the
+  pointer at the editor's default position. The editor ignores such a paste
+  without an error, so the drawing stayed empty and the quit had nothing new
+  to save. A draft saved right after opening an empty drawing had been read
+  as evidence that the paste had landed; it was not.
+- A process-level scenario now pastes into an empty drawing with the editor
+  focused and quits: the file holds the pasted element (3 of 3 runs on the
+  test-only build, commit `ae1438d`).
+- The owner checked the real path by hand on the debug `.app`: copy a
+  rectangle from one drawing, click the canvas of an empty drawing, Cmd+V,
+  Cmd+Q. The empty drawing's file then held one rectangle with a new id, and
+  the source file was unchanged.
+- Owner review: no defect in this case; the Window menu is fixed separately;
+  the save status and driver error items are scheduled as noted above.
 
 ## Window size and placement
 
