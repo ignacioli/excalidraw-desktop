@@ -341,6 +341,10 @@ async function main() {
   const statuses = [];
   const children = new Set();
   const cleanups = [];
+  // An uncaught error ends the process too; never leave the app behind.
+  process.on("exit", () => {
+    for (const child of children) child.kill("SIGKILL");
+  });
   const finish = (code) => {
     // Never leave a launched app behind: it would capture the next launch.
     for (const child of children) child.kill("SIGKILL");

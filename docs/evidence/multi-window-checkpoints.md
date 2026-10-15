@@ -434,23 +434,24 @@ Workspace window remembers (position, size, maximized and full screen), the
 correction of a placement that is no longer on screen, and the shell at the
 minimum window size.
 
-- Candidate: the commit that adds this section (parent `06cda67`), on macOS
+- Candidate: the commit that adds this section, on a branch that also
+  carries the Window menu fix, on macOS
   26.6.2 (Darwin 25.6.0, arm64), 2026-10-14. Display: one built-in panel,
   work area 1352×848 points below the menu bar.
 - Result: PASS for the automated and native checks below. Maximized and full
   screen placement and a disconnected display are covered by Rust tests
   only; see the gaps.
 
-| Command                                                                                         | Result                     |
-| ----------------------------------------------------------------------------------------------- | -------------------------- |
-| `cargo fmt --manifest-path src-tauri/Cargo.toml --check`                                        | PASS                       |
-| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`                | PASS                       |
-| `cargo test --manifest-path src-tauri/Cargo.toml`                                               | PASS                       |
-| `pnpm typecheck`                                                                                | PASS                       |
-| `pnpm lint`                                                                                     | PASS                       |
-| `APP_E2E=1 pnpm e2e e2e/tests/multi-window-geometry.spec.ts`                                    | PASS, 2 tests              |
-| `pnpm native:window:test`                                                                       | PASS, 20 tests             |
-| `pnpm tauri build --debug --bundles app`, then `pnpm native:window:check -- --app <debug .app>` | PASS, every check (exit 0) |
+| Command                                                                                         | Result                                              |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check`                                        | PASS                                                |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`                | PASS                                                |
+| `cargo test --manifest-path src-tauri/Cargo.toml`                                               | PASS                                                |
+| `pnpm typecheck`                                                                                | PASS                                                |
+| `pnpm lint`                                                                                     | PASS                                                |
+| `APP_E2E=1 pnpm e2e e2e/tests/multi-window-geometry.spec.ts`                                    | PASS, 2 tests                                       |
+| `pnpm native:window:test`                                                                       | PASS, 24 tests                                      |
+| `pnpm tauri build --debug --bundles app`, then `pnpm native:window:check -- --app <debug .app>` | PASS, 20 checks; 1 of 3 runs interrupted (see gaps) |
 
 What the checks cover:
 
@@ -463,8 +464,8 @@ What the checks cover:
   - After Cmd+Q and a relaunch, a Workspace window comes back with the frame
     it had when the app quit.
   - The checks that were already in the script still pass with placement
-    applied (ownership, nested folders, file routing, closing, Reopen,
-    Cmd+Q).
+    applied (ownership, nested folders, file routing, the Window menu
+    listing every window by title, closing, Reopen, Cmd+Q): 20 checks.
 - Rust: placement follows a window only in its normal state, so leaving
   maximized or full screen returns to the remembered size; a restored
   maximized or full screen window is first given its normal bounds; a
@@ -501,8 +502,11 @@ Gaps:
   are in the owner walkthrough list.
 - The 1280×760 target for a work area of at least 1440×900 is checked by the
   geometry rules; this display is smaller, where the 90% rule applies.
-- The Window menu still lists no windows on this branch; its fix is on a
-  separate branch.
+- One of three native runs ended right after the nested-folder dialog with
+  an uncaught System Events error ("Invalid index") and left the app
+  running; the run before it and the run after it passed every check. The
+  script now stops the app it started when it ends on an error. The cause
+  of the error was not found.
 - No new app-owned UI.
 
 ## Empty Workspace state
