@@ -294,12 +294,289 @@ export const historyZhCN: Record<keyof typeof historyEn, string> = {
   "history.import.error.noScene": "所选 {format} 文件不包含 Excalidraw 场景。",
 };
 
-/** English placeholders until the Spanish translation lands. */
 export const historyEs: Record<keyof typeof historyEn, string> = {
-  ...historyEn,
+  "history.source.automatic": "Automática",
+  "history.source.manual": "Manual",
+  "history.source.protected": "Protegida",
+  "history.source.beforeRestore": "Antes de restaurar",
+  "history.source.beforeClear": "Antes de vaciar",
+  "history.source.beforeImport": "Antes de importar",
+  "history.deleteSource.manual": "manual",
+  "history.deleteSource.automatic": "automática",
+  "history.time.unknown": "Hora desconocida",
+  "history.time.today": "Hoy · {time}",
+  "history.time.yesterday": "Ayer · {time}",
+  "history.summary.canvasChanged": "El lienzo cambió",
+  "history.list.label": "Historial de versiones",
+  "history.status.unavailable": "No disponible",
+  "history.status.current": "Actual",
+  "history.status.preview": "Vista previa",
+  "history.status.marked": "Marcada",
+  "history.status.ready": "Lista",
+  "history.state.retry": "Intentar de nuevo",
+  "history.state.loading.title": "Cargando el historial de versiones",
+  "history.state.loading.message": "Recuperando las versiones guardadas…",
+  "history.state.empty.title": "No hay versiones guardadas",
+  "history.state.empty.message":
+    "Las versiones aparecerán aquí después de guardar este dibujo.",
+  "history.state.processing.title": "Actualizando el historial de versiones",
+  "history.state.processing.message":
+    "Esta operación aún se está procesando. El archivo actual no ha cambiado.",
+  "history.state.permissionDenied.title":
+    "Acceso denegado al historial de versiones",
+  "history.state.permissionDenied.message":
+    "Este archivo no permite acceder a su historial de versiones. Compruebe los permisos e inténtelo de nuevo.",
+  "history.state.conflict.title": "Conflicto del historial de versiones",
+  "history.state.conflict.message":
+    "El archivo cambió fuera de Excalidraw Desktop. Resuelva el conflicto antes de restaurar una versión.",
+  "history.state.resourceUnavailable.title":
+    "Recurso de la versión no disponible",
+  "history.state.resourceUnavailable.message":
+    "Una versión guardada o uno de sus recursos no está disponible. El archivo actual no ha cambiado.",
+  "history.state.error.title": "No se pudo cargar el historial de versiones",
+  "history.state.error.message":
+    "El archivo actual no ha cambiado. Intente cargar el historial de versiones de nuevo.",
+  "history.preview.label": "Vista previa de la versión",
+  "history.preview.title": "Vista previa · {version} · {summary}",
+  "history.preview.separation":
+    "Instantánea de solo lectura. El dibujo actual permanece aparte y sin cambios.",
+  "history.preview.exitLabel": "Salir de la vista previa de la versión",
+  "history.preview.exit": "Salir de la vista previa",
+  "history.preview.canvasRegion": "Vista previa del lienzo de solo lectura",
+  "history.preview.ready": "El contenido de la vista previa está listo.",
+  "history.preview.renderFailed":
+    "Esta versión no se pudo representar de forma segura.",
+  "history.preview.preparing": "Preparando la vista previa de la versión…",
+  "history.preview.imageAlt": "Lienzo de la versión de solo lectura",
+  "history.preview.staticLoadFailed":
+    "No se pudo cargar la vista previa estática de la versión.",
+  "history.input.dropMissingData":
+    "El contenido soltado no contiene datos de dibujo legibles.",
+  "history.input.dropCanvasUnavailable":
+    "El lienzo de la imagen soltada ya no está disponible.",
+  "history.panel.title": "Historial de versiones",
+  "history.panel.infoLabel": "Información del historial",
+  "history.panel.closeLabel": "Cerrar el historial de versiones",
+  "history.panel.close": "Cerrar",
+  "history.panel.resizeLabel":
+    "Cambiar el tamaño del panel del historial de versiones",
+  "history.panel.resizeHelp":
+    "Flecha izquierda mueve el divisor hacia la izquierda y aumenta el ancho en 10 píxeles; Flecha derecha lo mueve hacia la derecha y reduce el ancho en 10 píxeles. Inicio establece 300 píxeles; Fin establece 360 píxeles. Mantenga pulsado Mayúsculas para cambiar el tamaño de 20 en 20 píxeles.",
+  "history.panel.retention.title": "Conservación de versiones",
+  "history.panel.retention.body":
+    "Las versiones automáticas y las anteriores a una operación comparten las 20 entradas más recientes. No caducan por antigüedad. Las marcas manuales permanecen hasta que usted las elimine.",
+  "history.panel.current.region": "Dibujo actual",
+  "history.panel.current.title": "Dibujo actual",
+  "history.panel.current.canvas": "Lienzo abierto",
+  "history.panel.count.one": "{count} versión mostrada",
+  "history.panel.count.other": "{count} versiones mostradas",
+  "history.panel.markCurrent": "Marcar la versión actual",
+  "history.panel.markingCurrent": "Marcando la versión actual…",
+  "history.panel.moreActionsFor": "Más acciones para {target}",
+  "history.panel.moreActions": "Más acciones de la versión",
+  "history.panel.mark": "Marcar versión",
+  "history.panel.unmark": "Quitar la marca de la versión",
+  "history.panel.delete": "Eliminar versión",
+  "history.panel.feedback.marked": "Marcada",
+  "history.panel.feedback.alreadyMarked":
+    "Ya está marcada · no hay una versión nueva",
+  "history.panel.feedback.unmarked": "Marca quitada",
+  "history.panel.feedback.announce": "{message} · {identity}",
+  "history.panel.notice.markedTitle": "Versión marcada",
+  "history.panel.notice.markedMessage":
+    "Versión marcada y guardada en el historial.",
+  "history.panel.notice.unmarkedTitle": "Marca quitada de la versión",
+  "history.panel.notice.unmarkedRemoved":
+    "Se quitó la marca de la versión y la política de conservación la eliminó.",
+  "history.panel.notice.deletedTitle": "Versión eliminada",
+  "history.panel.notice.deletedMessage": "Versión eliminada del historial.",
+  "history.panel.selected.region": "Acciones de la versión seleccionada",
+  "history.panel.selected.eyebrowUnavailable":
+    "Versión seleccionada · no disponible",
+  "history.panel.selected.eyebrowReused":
+    "Versión seleccionada · destino reutilizado",
+  "history.panel.selected.eyebrowTarget":
+    "Versión seleccionada · destino de la acción",
+  "history.panel.selected.unavailableReason":
+    "{reason} El dibujo actual no ha cambiado.",
+  "history.panel.selected.preview": "Vista previa",
+  "history.panel.selected.restoreLabel": "Restaurar esta versión",
+  "history.panel.selected.restore": "Restaurar",
+  "history.panel.cancel": "Cancelar",
+  "history.panel.deleteDialog.title": "¿Eliminar {version}?",
+  "history.panel.deleteDialog.description":
+    "¿Eliminar del historial la versión {source}? Esta acción no se puede deshacer.",
+  "history.panel.deleteDialog.delete": "Eliminar",
+  "history.panel.deleteDialog.deleting": "Eliminando…",
+  "history.panel.restoreDialog.title": "¿Restaurar esta versión?",
+  "history.panel.restoreDialog.description":
+    "El dibujo actual se reemplazará después de crear una instantánea protegida.",
+  "history.panel.restoreDialog.target": "Destino: {version} · {summary}",
+  "history.panel.restoreDialog.restore": "Restaurar versión",
+  "history.panel.restoreDialog.restoring": "Restaurando…",
+  "history.panel.guard.documentChanged":
+    "El documento del historial cambió. Vuelva a abrir el menú de la versión antes de actuar.",
+  "history.panel.guard.menuVersionUnavailable":
+    "Esta versión ya no está disponible. Vuelva a abrir el menú del historial para elegir una versión disponible.",
+  "history.panel.guard.restoreChanging":
+    "El historial de versiones está cambiando. Cancele y vuelva a abrir Restaurar cuando la lista esté lista.",
+  "history.panel.guard.restorePreviewUnavailable":
+    "Ya no hay una vista previa segura de esta versión. Cancele y vuelva a previsualizarla antes de restaurar.",
+  "history.panel.guard.restoreVersionUnavailable":
+    "Esta versión ya no está disponible. Cancele y elija una versión disponible.",
+  "history.panel.error.markFailed": "No se pudo marcar la versión actual.",
+  "history.panel.error.updateFailed":
+    "No se pudo actualizar la versión seleccionada.",
+  "history.panel.error.deleteFailed":
+    "No se pudo eliminar la versión seleccionada.",
+  "history.panel.error.restoreFailed":
+    "No se pudo restaurar la versión seleccionada.",
+  "history.import.error.unsupported":
+    "Solo se admiten dibujos .excalidraw y archivos PNG/SVG.",
+  "history.import.error.invalidDrawing":
+    "El dibujo de Excalidraw seleccionado no es válido.",
+  "history.import.error.noScene":
+    "El {format} seleccionado no contiene una escena de Excalidraw.",
 };
 
-/** English placeholders until the Japanese translation lands. */
 export const historyJa: Record<keyof typeof historyEn, string> = {
-  ...historyEn,
+  "history.source.automatic": "自動",
+  "history.source.manual": "手動",
+  "history.source.protected": "保護済み",
+  "history.source.beforeRestore": "復元前",
+  "history.source.beforeClear": "消去前",
+  "history.source.beforeImport": "読み込み前",
+  "history.deleteSource.manual": "手動",
+  "history.deleteSource.automatic": "自動",
+  "history.time.unknown": "時刻不明",
+  "history.time.today": "今日 · {time}",
+  "history.time.yesterday": "昨日 · {time}",
+  "history.summary.canvasChanged": "キャンバスが変更されました",
+  "history.list.label": "バージョン履歴",
+  "history.status.unavailable": "利用できません",
+  "history.status.current": "現在",
+  "history.status.preview": "プレビュー",
+  "history.status.marked": "マーク済み",
+  "history.status.ready": "準備完了",
+  "history.state.retry": "再試行",
+  "history.state.loading.title": "バージョン履歴を読み込んでいます",
+  "history.state.loading.message": "保存済みのバージョンを取得しています…",
+  "history.state.empty.title": "保存済みのバージョンはありません",
+  "history.state.empty.message":
+    "この図を保存すると、バージョンがここに表示されます。",
+  "history.state.processing.title": "バージョン履歴を更新しています",
+  "history.state.processing.message":
+    "この操作はまだ処理中です。現在のファイルは変更されていません。",
+  "history.state.permissionDenied.title":
+    "バージョン履歴へのアクセスが拒否されました",
+  "history.state.permissionDenied.message":
+    "このファイルはバージョン履歴へのアクセスを許可していません。権限を確認して、もう一度お試しください。",
+  "history.state.conflict.title": "バージョン履歴の競合",
+  "history.state.conflict.message":
+    "ファイルが Excalidraw Desktop の外で変更されました。バージョンを復元する前に、競合を解決してください。",
+  "history.state.resourceUnavailable.title":
+    "バージョンのリソースを利用できません",
+  "history.state.resourceUnavailable.message":
+    "保存済みのバージョン、またはそのリソースの一部を利用できません。現在のファイルは変更されていません。",
+  "history.state.error.title": "バージョン履歴を読み込めませんでした",
+  "history.state.error.message":
+    "現在のファイルは変更されていません。バージョン履歴の読み込みを、もう一度お試しください。",
+  "history.preview.label": "バージョンのプレビュー",
+  "history.preview.title": "プレビュー · {version} · {summary}",
+  "history.preview.separation":
+    "読み取り専用のスナップショットです。現在の図は別のまま、変更されません。",
+  "history.preview.exitLabel": "バージョンのプレビューを終了",
+  "history.preview.exit": "プレビューを終了",
+  "history.preview.canvasRegion": "読み取り専用キャンバスのプレビュー",
+  "history.preview.ready": "プレビューの内容の準備ができました。",
+  "history.preview.renderFailed":
+    "このバージョンを安全に描画できませんでした。",
+  "history.preview.preparing": "バージョンのプレビューを準備しています…",
+  "history.preview.imageAlt": "読み取り専用のバージョンキャンバス",
+  "history.preview.staticLoadFailed":
+    "静的なバージョンプレビューを読み込めませんでした。",
+  "history.input.dropMissingData":
+    "ドロップした内容に、読み取れる図のデータがありません。",
+  "history.input.dropCanvasUnavailable":
+    "ドロップした画像のキャンバスは、もう利用できません。",
+  "history.panel.title": "バージョン履歴",
+  "history.panel.infoLabel": "履歴の情報",
+  "history.panel.closeLabel": "バージョン履歴を閉じる",
+  "history.panel.close": "閉じる",
+  "history.panel.resizeLabel": "バージョン履歴パネルのサイズを変更",
+  "history.panel.resizeHelp":
+    "左矢印キーは仕切りを左に動かし、幅を 10 ピクセル増やします。右矢印キーは右に動かし、幅を 10 ピクセル減らします。Home は 300 ピクセル、End は 360 ピクセルに設定します。Shift を押したままにすると、20 ピクセルずつ変更します。",
+  "history.panel.retention.title": "バージョンの保持",
+  "history.panel.retention.body":
+    "自動バージョンと操作前バージョンは、新しい 20 件を共有します。経過時間では期限切れになりません。手動マークは、削除するまで残ります。",
+  "history.panel.current.region": "現在の図",
+  "history.panel.current.title": "現在の図",
+  "history.panel.current.canvas": "開いているキャンバス",
+  "history.panel.count.one": "{count} 個のバージョンを表示",
+  "history.panel.count.other": "{count} 個のバージョンを表示",
+  "history.panel.markCurrent": "現在のバージョンをマーク",
+  "history.panel.markingCurrent": "現在のバージョンをマークしています…",
+  "history.panel.moreActionsFor": "{target} のその他の操作",
+  "history.panel.moreActions": "バージョンのその他の操作",
+  "history.panel.mark": "バージョンをマーク",
+  "history.panel.unmark": "バージョンのマークを外す",
+  "history.panel.delete": "バージョンを削除",
+  "history.panel.feedback.marked": "マークしました",
+  "history.panel.feedback.alreadyMarked":
+    "既にマーク済み · 新しいバージョンはありません",
+  "history.panel.feedback.unmarked": "マークを外しました",
+  "history.panel.feedback.announce": "{message} · {identity}",
+  "history.panel.notice.markedTitle": "バージョンをマークしました",
+  "history.panel.notice.markedMessage":
+    "バージョンをマークし、履歴に保存しました。",
+  "history.panel.notice.unmarkedTitle": "バージョンのマークを外しました",
+  "history.panel.notice.unmarkedRemoved":
+    "バージョンのマークを外し、保持方針によって削除しました。",
+  "history.panel.notice.deletedTitle": "バージョンを削除しました",
+  "history.panel.notice.deletedMessage": "バージョンを履歴から削除しました。",
+  "history.panel.selected.region": "選択したバージョンの操作",
+  "history.panel.selected.eyebrowUnavailable":
+    "選択したバージョン · 利用できません",
+  "history.panel.selected.eyebrowReused": "選択したバージョン · 対象を再利用",
+  "history.panel.selected.eyebrowTarget": "選択したバージョン · 操作の対象",
+  "history.panel.selected.unavailableReason":
+    "{reason} 現在の図は変更されていません。",
+  "history.panel.selected.preview": "プレビュー",
+  "history.panel.selected.restoreLabel": "このバージョンを復元",
+  "history.panel.selected.restore": "復元",
+  "history.panel.cancel": "キャンセル",
+  "history.panel.deleteDialog.title": "{version} を削除しますか？",
+  "history.panel.deleteDialog.description":
+    "履歴から {source} のバージョンを削除しますか？この操作は元に戻せません。",
+  "history.panel.deleteDialog.delete": "削除",
+  "history.panel.deleteDialog.deleting": "削除しています…",
+  "history.panel.restoreDialog.title": "このバージョンを復元しますか？",
+  "history.panel.restoreDialog.description":
+    "保護済みのスナップショットを作成したあと、現在の図を置き換えます。",
+  "history.panel.restoreDialog.target": "対象： {version} · {summary}",
+  "history.panel.restoreDialog.restore": "バージョンを復元",
+  "history.panel.restoreDialog.restoring": "復元しています…",
+  "history.panel.guard.documentChanged":
+    "履歴の文書が変更されました。操作する前に、バージョンのメニューを開き直してください。",
+  "history.panel.guard.menuVersionUnavailable":
+    "このバージョンはもう利用できません。履歴のメニューを開き直し、利用できるバージョンを選んでください。",
+  "history.panel.guard.restoreChanging":
+    "バージョン履歴が変化しています。キャンセルし、一覧の準備ができてから復元を開き直してください。",
+  "history.panel.guard.restorePreviewUnavailable":
+    "このバージョンの安全なプレビューは、もう利用できません。キャンセルし、復元する前にもう一度プレビューしてください。",
+  "history.panel.guard.restoreVersionUnavailable":
+    "このバージョンはもう利用できません。キャンセルし、利用できるバージョンを選んでください。",
+  "history.panel.error.markFailed":
+    "現在のバージョンをマークできませんでした。",
+  "history.panel.error.updateFailed":
+    "選択したバージョンを更新できませんでした。",
+  "history.panel.error.deleteFailed":
+    "選択したバージョンを削除できませんでした。",
+  "history.panel.error.restoreFailed":
+    "選択したバージョンを復元できませんでした。",
+  "history.import.error.unsupported":
+    ".excalidraw の図と PNG/SVG ファイルのみに対応しています。",
+  "history.import.error.invalidDrawing": "選択した Excalidraw の図は無効です。",
+  "history.import.error.noScene":
+    "選択した {format} には Excalidraw のシーンが含まれていません。",
 };

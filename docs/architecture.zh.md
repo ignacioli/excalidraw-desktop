@@ -224,21 +224,21 @@ sequenceDiagram
 
 ### 前端（src/）
 
-| 模块                           | 职责                                                                                                                                                     |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `app/AppShell.tsx`             | 画布优先壳层；overlay 覆盖画布且不改变画布盒；pinned 进入布局；无空右侧栏                                                                                |
-| `app/sidebarController.ts`     | 侧边栏 `hidden` / `overlay` / `pinned`；overlay 指针离开 500ms 延迟关闭；focus/menu/dialog/drag hold 暂停自动关闭                                        |
-| `app/interaction/`             | 全局唯一菜单与对话框、焦点返回；命名/删除/阻断对话框；不使用 `window.prompt` / `window.confirm`                                                          |
-| `app/theme/`                   | 主题类型、registry、偏好解析、语义 token 与启动前应用（DESIGN.md）；与系统标题栏颜色解耦                                                                 |
-| `editor/`                      | ExcalidrawAdapter + 画布组件、场景序列化、导出、离线字体、IME 桥接；只走锁定包的公开 API                                                                 |
-| `documents/`                   | DocumentManager：会话身份、标签顺序、dirty/orphan/conflict、关闭/激活队列、路径迁移、恢复 UI                                                             |
-| `workspaces/WorkspaceTree.tsx` | Current Workspace 及其后代的一棵连续虚拟化树；其他 workspace record 通过 Welcome/Recent 进入；无缩略图行                                                 |
+| 模块                           | 职责                                                                                                                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/AppShell.tsx`             | 画布优先壳层；overlay 覆盖画布且不改变画布盒；pinned 进入布局；无空右侧栏                                                                                              |
+| `app/sidebarController.ts`     | 侧边栏 `hidden` / `overlay` / `pinned`；overlay 指针离开 500ms 延迟关闭；focus/menu/dialog/drag hold 暂停自动关闭                                                      |
+| `app/interaction/`             | 全局唯一菜单与对话框、焦点返回；命名/删除/阻断对话框；不使用 `window.prompt` / `window.confirm`                                                                        |
+| `app/theme/`                   | 主题类型、registry、偏好解析、语义 token 与启动前应用（DESIGN.md）；与系统标题栏颜色解耦                                                                               |
+| `editor/`                      | ExcalidrawAdapter + 画布组件、场景序列化、导出、离线字体、IME 桥接；只走锁定包的公开 API                                                                               |
+| `documents/`                   | DocumentManager：会话身份、标签顺序、dirty/orphan/conflict、关闭/激活队列、路径迁移、恢复 UI                                                                           |
+| `workspaces/WorkspaceTree.tsx` | Current Workspace 及其后代的一棵连续虚拟化树；其他 workspace record 通过 Welcome/Recent 进入；无缩略图行                                                               |
 | `i18n/`                        | UI 语言：`resolveLanguage`（偏好 + 系统语言到 `en` / `zh-CN` / `es` / `ja` 的唯一规则）、`LocaleController`（偏好持久化）、文案目录、`readSystemLanguages`（握手读取） |
-| `app/nativeMenuSync.ts`        | 生成本地化原生菜单标签集，并发送去重后的 `native_menu_sync` 快照                                                                                         |
-| `app/clipboard.ts`             | 复制路径 / 复制相对路径：菜单项被选中时才读取路径，经剪贴板插件（只写）写入文本                                                                          |
-| `app/exitCheckpoint.ts`        | 每个窗口的关闭 checkpoint、对等关闭请求与退出 checkpoint 处理；checkpoint 失败则窗口保持打开                                                             |
-| `app/openFileHandler.ts`       | 打开被路由到本窗口的绘图（`open-file-request`、`window-activate-document`）及本窗口要恢复的标签                                                          |
-| `ipc/`                         | 强类型 v5 命令绑定与事件订阅（`IPC_CONTRACT_VERSION = 5`）                                                                                               |
+| `app/nativeMenuSync.ts`        | 生成本地化原生菜单标签集，并发送去重后的 `native_menu_sync` 快照                                                                                                       |
+| `app/clipboard.ts`             | 复制路径 / 复制相对路径：菜单项被选中时才读取路径，经剪贴板插件（只写）写入文本                                                                                        |
+| `app/exitCheckpoint.ts`        | 每个窗口的关闭 checkpoint、对等关闭请求与退出 checkpoint 处理；checkpoint 失败则窗口保持打开                                                                           |
+| `app/openFileHandler.ts`       | 打开被路由到本窗口的绘图（`open-file-request`、`window-activate-document`）及本窗口要恢复的标签                                                                        |
+| `ipc/`                         | 强类型 v5 命令绑定与事件订阅（`IPC_CONTRACT_VERSION = 5`）                                                                                                             |
 
 ### 后端（src-tauri/）
 

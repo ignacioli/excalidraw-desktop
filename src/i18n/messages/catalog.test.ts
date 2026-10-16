@@ -7,6 +7,94 @@ import { ja } from "./ja.ts";
 import { shellEn } from "./shell.ts";
 import { zhCN } from "./zh-CN.ts";
 
+// Strings that stay identical to English, each with the reason they are not a missed translation.
+const SAME_AS_ENGLISH: Record<"es" | "ja", ReadonlyMap<MessageKey, string>> = {
+  es: new Map([
+    [
+      "language.autonym.en",
+      "Language name, shown unchanged in every interface language.",
+    ],
+    [
+      "language.autonym.zhCN",
+      "Language name, shown unchanged in every interface language.",
+    ],
+    [
+      "language.autonym.es",
+      "Language name, shown unchanged in every interface language.",
+    ],
+    [
+      "language.autonym.ja",
+      "Language name, shown unchanged in every interface language.",
+    ],
+    [
+      "shell.windowTitle.drawing",
+      "Window-title pattern. The em dash is the separator, not a word.",
+    ],
+    [
+      "shell.windowTitle.sameName",
+      "Window-title pattern of a name and its parent. There is no word to translate.",
+    ],
+    [
+      "welcome.eyebrow",
+      "The product name Excalidraw Desktop is not translated.",
+    ],
+    [
+      "export.scaleOption",
+      "Scale notation. The x is a multiplier, not a word.",
+    ],
+    [
+      "history.source.manual",
+      "The Spanish adjective Manual is spelled the same as English.",
+    ],
+    [
+      "history.deleteSource.manual",
+      "The lowercase Spanish adjective manual is spelled the same as English.",
+    ],
+    [
+      "history.panel.feedback.announce",
+      "Two placeholders joined by a middle dot. There is no word to translate.",
+    ],
+    [
+      "menu.native.window.zoom",
+      "The macOS Spanish Window menu keeps the label Zoom.",
+    ],
+  ]),
+  ja: new Map([
+    [
+      "language.autonym.en",
+      "Language name, shown unchanged in every interface language.",
+    ],
+    [
+      "language.autonym.zhCN",
+      "Language name, shown unchanged in every interface language.",
+    ],
+    [
+      "language.autonym.es",
+      "Language name, shown unchanged in every interface language.",
+    ],
+    [
+      "language.autonym.ja",
+      "Language name, shown unchanged in every interface language.",
+    ],
+    [
+      "shell.windowTitle.drawing",
+      "Window-title pattern. The em dash is the separator, not a word.",
+    ],
+    [
+      "welcome.eyebrow",
+      "The product name Excalidraw Desktop is not translated.",
+    ],
+    [
+      "export.scaleOption",
+      "Scale notation. The x is a multiplier, not a word.",
+    ],
+    [
+      "history.panel.feedback.announce",
+      "Two placeholders joined by a middle dot. There is no word to translate.",
+    ],
+  ]),
+};
+
 // Proper nouns and symbols that read the same in English and Simplified Chinese.
 const SAME_IN_BOTH_LANGUAGES: ReadonlySet<MessageKey> = new Set([
   "language.autonym.en",
@@ -42,11 +130,50 @@ describe("message catalogs", () => {
     }
   });
 
-  it("keeps the same placeholders in both languages", () => {
+  it("keeps the same placeholders in every language", () => {
     const placeholders = (message: string) =>
       [...message.matchAll(/\{(\w+)\}/gu)].map((match) => match[1]).sort();
     for (const key of Object.keys(en) as MessageKey[]) {
-      expect(placeholders(zhCN[key]), key).toEqual(placeholders(en[key]));
+      const expected = placeholders(en[key]);
+      for (const [name, catalog] of [
+        ["zh-CN", zhCN],
+        ["es", es],
+        ["ja", ja],
+      ] as const) {
+        expect(placeholders(catalog[key]), `${name} ${key}`).toEqual(expected);
+      }
+    }
+  });
+
+  it("translates every English message into Spanish and Japanese", () => {
+    for (const [name, catalog, allowed] of [
+      ["es", es, SAME_AS_ENGLISH.es],
+      ["ja", ja, SAME_AS_ENGLISH.ja],
+    ] as const) {
+      const untranslated = (Object.keys(en) as MessageKey[]).filter(
+        (key) =>
+          !allowed.has(key) &&
+          (catalog[key].trim() === "" || catalog[key] === en[key]),
+      );
+      expect(untranslated, name).toEqual([]);
+      for (const [key, reason] of allowed) {
+        expect(reason.trim().length, key).toBeGreaterThan(0);
+        expect(catalog[key], `${name} ${key}`).toBe(en[key]);
+      }
+    }
+  });
+
+  it("keeps native menu labels and language names within 64 characters", () => {
+    for (const catalog of [en, zhCN, es, ja]) {
+      for (const key of Object.keys(catalog) as MessageKey[]) {
+        if (
+          !key.startsWith("menu.native.") &&
+          !key.startsWith("language.autonym.")
+        ) {
+          continue;
+        }
+        expect([...catalog[key]].length, key).toBeLessThanOrEqual(64);
+      }
     }
   });
 

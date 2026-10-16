@@ -280,7 +280,14 @@ async function openDrawing(page: Page, catalog: Catalog, name: string) {
 
 async function drawRectangle(page: Page): Promise<void> {
   await expect(activeEditor(page)).toBeVisible();
-  const box = await activeEditor(page).boundingBox();
+  let box: { x: number; y: number; width: number; height: number } | null =
+    null;
+  await expect
+    .poll(async () => {
+      box = await activeEditor(page).boundingBox();
+      return box !== null && box.width > 0 && box.height > 0;
+    })
+    .toBe(true);
   if (box === null) throw new Error("The canvas was not measurable.");
   await focusCanvas(page);
   await page.keyboard.press("r");

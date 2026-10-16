@@ -11,21 +11,21 @@
 
 ## 部件顺序与文案来源
 
-| #   | 部件              | SDK 组件                                    | 文案来源                                                                                                        | 快捷键提示 |
-| --- | ----------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------- |
-| 1   | Find on canvas    | `DefaultItems.SearchMenu`                   | SDK 语言包（`zh-CN` 由补丁提供「在画布上查找」）                                                                | SDK 自带   |
-| 2   | Help              | `DefaultItems.Help`                         | SDK                                                                                                             | SDK 自带   |
-| —   | 分隔              | `Separator`                                 | —                                                                                                               | —          |
-| 3   | 分组标题          | `Group title`                               | `menu.canvas.preferences`（Preferences / 偏好设置）                                                             | —          |
-| 3.1 | Tool lock         | `Item`                                      | `menu.canvas.toolLock`（工具锁定）                                                                              | Q          |
-| 3.2 | Toggle grid       | `Item`                                      | `menu.canvas.toggleGrid`（切换网格）                                                                            | Cmd+'      |
-| 3.3 | Snap to objects   | `Item`                                      | `menu.canvas.snapToObjects`（吸附至对象）                                                                       | Option+S   |
-| 3.4 | Zen mode          | `Item`                                      | `menu.canvas.zenMode`（禅模式）                                                                                 | Option+Z   |
-| 3.5 | View mode         | `Item`                                      | `menu.canvas.viewMode`（查看模式）                                                                              | Option+R   |
+| #   | 部件              | SDK 组件                                    | 文案来源                                                                                                                             | 快捷键提示 |
+| --- | ----------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| 1   | Find on canvas    | `DefaultItems.SearchMenu`                   | SDK 语言包（`zh-CN` 由补丁提供「在画布上查找」）                                                                                     | SDK 自带   |
+| 2   | Help              | `DefaultItems.Help`                         | SDK                                                                                                                                  | SDK 自带   |
+| —   | 分隔              | `Separator`                                 | —                                                                                                                                    | —          |
+| 3   | 分组标题          | `Group title`                               | `menu.canvas.preferences`（Preferences / 偏好设置）                                                                                  | —          |
+| 3.1 | Tool lock         | `Item`                                      | `menu.canvas.toolLock`（工具锁定）                                                                                                   | Q          |
+| 3.2 | Toggle grid       | `Item`                                      | `menu.canvas.toggleGrid`（切换网格）                                                                                                 | Cmd+'      |
+| 3.3 | Snap to objects   | `Item`                                      | `menu.canvas.snapToObjects`（吸附至对象）                                                                                            | Option+S   |
+| 3.4 | Zen mode          | `Item`                                      | `menu.canvas.zenMode`（禅模式）                                                                                                      | Option+Z   |
+| 3.5 | View mode         | `Item`                                      | `menu.canvas.viewMode`（查看模式）                                                                                                   | Option+R   |
 | 3.6 | Language          | `ItemCustom` 内的宿主 `<select>`            | 可访问名称 `menu.canvas.language`（语言）；选项 `menu.canvas.languageSystem`（跟随系统）、`English`、`简体中文`、`Español`、`日本語` | —          |
-| —   | 分隔              | `Separator`                                 | —                                                                                                               | —          |
-| 4   | Theme             | `DefaultItems.ToggleTheme allowSystemTheme` | SDK（`zh-CN` 由补丁提供「主题」及 System 按钮的可访问名称）                                                     | SDK 自带   |
-| 5   | Canvas background | `DefaultItems.ChangeCanvasBackground`       | SDK                                                                                                             | —          |
+| —   | 分隔              | `Separator`                                 | —                                                                                                                                    | —          |
+| 4   | Theme             | `DefaultItems.ToggleTheme allowSystemTheme` | SDK（`zh-CN` 由补丁提供「主题」及 System 按钮的可访问名称）                                                                          | SDK 自带   |
+| 5   | Canvas background | `DefaultItems.ChangeCanvasBackground`       | SDK                                                                                                                                  | —          |
 
 四个语言自称（`English`、`简体中文`、`Español`、`日本語`）在任何界面语言下保持原文，是 `catalog.test.ts` 的显式例外。
 

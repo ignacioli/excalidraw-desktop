@@ -23,17 +23,17 @@ except the language names Español and 日本語.
   (Darwin 25.6.0), 2026-10-16.
 - Result: PASS.
 
-| Command                                                                                                                                            | Result                         |
-| -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `pnpm typecheck`                                                                                                                                   | PASS                           |
-| `pnpm lint`                                                                                                                                        | PASS, 0 warnings               |
-| `pnpm test`                                                                                                                                        | PASS, 86 files / 752 tests     |
-| `cargo fmt --manifest-path src-tauri/Cargo.toml --check`                                                                                           | PASS                           |
-| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`                                                                   | PASS                           |
-| `cargo test --manifest-path src-tauri/Cargo.toml`                                                                                                  | PASS, 347 tests                |
-| `APP_E2E=1 pnpm e2e e2e/tests/preferences-i18n-language.spec.ts e2e/tests/preferences-i18n-menu-entries.spec.ts`                                    | PASS, 13 passed                |
-| `pnpm native:menu:test`                                                                                                                            | PASS, 1 test                   |
-| `pnpm native:window:test`                                                                                                                          | PASS, 24 tests                 |
+| Command                                                                                                          | Result                     |
+| ---------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `pnpm typecheck`                                                                                                 | PASS                       |
+| `pnpm lint`                                                                                                      | PASS, 0 warnings           |
+| `pnpm test`                                                                                                      | PASS, 86 files / 752 tests |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check`                                                         | PASS                       |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`                                 | PASS                       |
+| `cargo test --manifest-path src-tauri/Cargo.toml`                                                                | PASS, 347 tests            |
+| `APP_E2E=1 pnpm e2e e2e/tests/preferences-i18n-language.spec.ts e2e/tests/preferences-i18n-menu-entries.spec.ts` | PASS, 13 passed            |
+| `pnpm native:menu:test`                                                                                          | PASS, 1 test               |
+| `pnpm native:window:test`                                                                                        | PASS, 24 tests             |
 
 What the checks cover:
 
@@ -73,11 +73,85 @@ Gaps and open items:
 
 ## Translations
 
-Not run yet.
+Spanish and Japanese app copy, written key by key with no English spread.
+The first translation was produced by Grok 4.7.
+
+- Candidate: the commit that adds this section (parent `2b47d17`), on macOS
+  (Darwin 25.6.0), 2026-10-16.
+- Result: PASS.
+
+| Command                                                   | Result                     |
+| --------------------------------------------------------- | -------------------------- |
+| `pnpm test src/i18n src/history src/editor`               | PASS, 28 files / 242 tests |
+| `pnpm build`                                              | PASS                       |
+| `APP_E2E=1 pnpm e2e e2e/tests/preferences-i18n-*.spec.ts` | PASS, 33 passed            |
+
+What the checks cover:
+
+- Spanish and Japanese catalogs contain every English key. A missing key
+  fails the type check because the catalogs no longer spread English.
+- Strings that still match English are listed in the catalog test, each with
+  a reason: language names, the window-title patterns, the product name
+  Excalidraw Desktop, the `{value}x` scale notation, the Spanish adjective
+  Manual, the placeholder announcement pattern, and the macOS Spanish Zoom
+  label.
+- Placeholder names match across English, Simplified Chinese, Spanish, and
+  Japanese. Every `menu.native.*` label and every language name is at most
+  64 characters in all four languages.
+- History dates for Spanish and Japanese use that language's medium date and
+  differ from the English medium date. Panel titles and source labels follow
+  the selected language.
+- `es-MX` on first launch shows Spanish, including the welcome action, the
+  shell, the canvas rectangle and undo labels, and the native Save label.
+- Switching between Spanish and Japanese twenty times keeps the in-progress
+  text and the drawn shape. Undo still removes the text. The Japanese choice
+  is still selected after reload.
+
+Gaps and open items:
+
+- A non-interactive shell set `CI=true` so pnpm would not stop to confirm a
+  modules-directory refresh. The recorded commands and results are otherwise
+  the commands above.
+- While a drawing is open, the canvas editor sets the document language to
+  `es-ES` or `ja-JP`. The switch test therefore checks the app menu language
+  and the shell copy. The welcome screen still reports `es`.
+- An earlier layout case failed because the canvas box was briefly
+  unavailable. The helper waits until the box is measurable. The recorded
+  e2e result is the rerun, 33 passed.
+- `pnpm native:menu:check` was not run. No screenshots were taken. Independent
+  review of the wording is not part of this run.
 
 ## Canvas editor strings
 
-Not run yet.
+Missing SDK strings for es-ES (106) and ja-JP (132), in both the dev and
+prod locale files. Existing upstream translations, the Simplified Chinese
+fill, and the menu-button accessible name are unchanged.
+
+- Candidate: the same commit as Translations (parent `2b47d17`), on macOS
+  (Darwin 25.6.0), 2026-10-16.
+- Result: PASS.
+
+| Command                                     | Result                     |
+| ------------------------------------------- | -------------------------- |
+| `pnpm test src/i18n src/history src/editor` | PASS, 28 files / 242 tests |
+| `pnpm build`                                | PASS                       |
+
+What the checks cover:
+
+- The coverage test loads the dev and prod locale modules for zh-CN, es-ES,
+  and ja-JP and fails if any English key is missing or blank.
+- The patch adds only keys that were missing. A check before the patch was
+  written compared the previous non-empty values and rejected the edit if any
+  of them changed. es-ES kept 407 existing values and gained 106. ja-JP kept
+  381 and gained 132. Both totals are the 513 English keys.
+- SDK placeholders stay in `{{name}}` form. The Simplified Chinese fill and
+  the menu trigger `aria-label` remain in the same patch file.
+- The production build emits the patched es-ES and ja-JP locale chunks.
+
+Gaps and open items:
+
+- The same `CI=true` note as Translations applies. No screenshots were taken.
+- Upstream strings that were already translated were not reviewed or replaced.
 
 ## Code review
 
