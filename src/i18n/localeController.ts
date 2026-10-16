@@ -21,7 +21,13 @@ interface LocaleControllerOptions {
 }
 
 function isLanguagePreference(value: unknown): value is LanguagePreference {
-  return value === "system" || value === "en" || value === "zh-CN";
+  return (
+    value === "system" ||
+    value === "en" ||
+    value === "zh-CN" ||
+    value === "es" ||
+    value === "ja"
+  );
 }
 
 export class LocaleController {

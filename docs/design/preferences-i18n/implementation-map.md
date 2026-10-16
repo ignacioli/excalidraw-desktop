@@ -22,12 +22,12 @@
 | 3.3 | Snap to objects   | `Item`                                      | `menu.canvas.snapToObjects`（吸附至对象）                                                                       | Option+S   |
 | 3.4 | Zen mode          | `Item`                                      | `menu.canvas.zenMode`（禅模式）                                                                                 | Option+Z   |
 | 3.5 | View mode         | `Item`                                      | `menu.canvas.viewMode`（查看模式）                                                                              | Option+R   |
-| 3.6 | Language          | `ItemCustom` 内的宿主 `<select>`            | 可访问名称 `menu.canvas.language`（语言）；选项 `menu.canvas.languageSystem`（跟随系统）、`English`、`简体中文` | —          |
+| 3.6 | Language          | `ItemCustom` 内的宿主 `<select>`            | 可访问名称 `menu.canvas.language`（语言）；选项 `menu.canvas.languageSystem`（跟随系统）、`English`、`简体中文`、`Español`、`日本語` | —          |
 | —   | 分隔              | `Separator`                                 | —                                                                                                               | —          |
 | 4   | Theme             | `DefaultItems.ToggleTheme allowSystemTheme` | SDK（`zh-CN` 由补丁提供「主题」及 System 按钮的可访问名称）                                                     | SDK 自带   |
 | 5   | Canvas background | `DefaultItems.ChangeCanvasBackground`       | SDK                                                                                                             | —          |
 
-两个语言自称（`English`、`简体中文`）在两种界面语言下保持原文，是 `catalog.test.ts` 的显式例外。
+四个语言自称（`English`、`简体中文`、`Español`、`日本語`）在任何界面语言下保持原文，是 `catalog.test.ts` 的显式例外。
 
 ## 状态与优先级
 
@@ -69,6 +69,14 @@
 设计决定：沿用 SDK 菜单视觉与 HF-2 壳层；新增已批准的 selected 底色、单行语言下拉（上下双 chevron，宿主样式）、40% 不透明度不可用态、SDK zh-CN 语言包补丁；快捷键提示随 macOS 写作 Cmd / Option（2026-10-10）。
 实施与验证：条目集合/顺序按可访问名称断言（en/zh）；选中、互斥、强制只读真值表单测；浏览器 e2e 覆盖切换语言后的菜单文案；SDK 语言包覆盖率单测；不依赖私有 SDK DOM。
 结果：设计批准完成；2026-10-10 实现完成。条目顺序、选中、强制只读和语言文案由单测与浏览器 e2e 覆盖。
+```
+
+```text
+分类与依据：目标设计不改变画布主菜单 anatomy（宿主 `<select>`、批准方案 B 的尺寸与样式不变）。选项集合由 3 项扩展为 5 项；批准来源是 DESIGN「Interface language」与本 map。流程：先更新选项列与自称例外，再实现。不需要新设计稿。
+影响范围：CANVAS-MAIN-MENU（`DSC-SDK-001` 扩展）语言下拉，扩展选项数据，不改 anatomy。原生 Language 子菜单同步五个选项。消费者仍是 ExcalidrawEditor。
+设计决定：沿用批准的下拉几何与 SDK 菜单视觉。选项为跟随系统、English、简体中文、Español、日本語；自称在任何界面语言下保持原文。
+实施与验证：单测断言五个选项、语言判定和 SDK `langCode`（`es` → `es-ES`，`ja` → `ja-JP`）。浏览器 e2e 覆盖既有菜单入口。原生菜单实机检查不在本轮。
+结果：见 `docs/evidence/locales-es-ja-checkpoints.md` 的 Language set and matching。
 ```
 
 ## 验证记录

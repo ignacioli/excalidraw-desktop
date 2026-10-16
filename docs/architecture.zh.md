@@ -233,7 +233,7 @@ sequenceDiagram
 | `editor/`                      | ExcalidrawAdapter + 画布组件、场景序列化、导出、离线字体、IME 桥接；只走锁定包的公开 API                                                                 |
 | `documents/`                   | DocumentManager：会话身份、标签顺序、dirty/orphan/conflict、关闭/激活队列、路径迁移、恢复 UI                                                             |
 | `workspaces/WorkspaceTree.tsx` | Current Workspace 及其后代的一棵连续虚拟化树；其他 workspace record 通过 Welcome/Recent 进入；无缩略图行                                                 |
-| `i18n/`                        | UI 语言：`resolveLanguage`（偏好 + 系统语言到 `en` / `zh-CN` 的唯一规则）、`LocaleController`（偏好持久化）、文案目录、`readSystemLanguages`（握手读取） |
+| `i18n/`                        | UI 语言：`resolveLanguage`（偏好 + 系统语言到 `en` / `zh-CN` / `es` / `ja` 的唯一规则）、`LocaleController`（偏好持久化）、文案目录、`readSystemLanguages`（握手读取） |
 | `app/nativeMenuSync.ts`        | 生成本地化原生菜单标签集，并发送去重后的 `native_menu_sync` 快照                                                                                         |
 | `app/clipboard.ts`             | 复制路径 / 复制相对路径：菜单项被选中时才读取路径，经剪贴板插件（只写）写入文本                                                                          |
 | `app/exitCheckpoint.ts`        | 每个窗口的关闭 checkpoint、对等关闭请求与退出 checkpoint 处理；checkpoint 失败则窗口保持打开                                                             |
@@ -271,7 +271,7 @@ sequenceDiagram
 UI 语言只在前端决定。Rust 只报告事实并渲染原生菜单，不选择也不翻译文案。
 
 1. **启动。** Rust 启动时读取一次系统 UI 语言（`src-tauri/src/locale.rs`），经 `app_handshake` 的 `preferredLanguages` 返回；前端在首次渲染前读取该列表（`i18n/systemLanguages.ts`）。
-2. **解析。** `resolveLanguage(preference, preferredLanguages)` 返回 `en` 或 `zh-CN`。用户偏好（`system` / `en` / `zh-CN`）保存在 WebView `localStorage` 键 `excalidraw-desktop.language`，不经过 IPC。
+2. **解析。** `resolveLanguage(preference, preferredLanguages)` 返回 `en`、`zh-CN`、`es` 或 `ja`。用户偏好（`system` / `en` / `zh-CN` / `es` / `ja`）保存在 WebView `localStorage` 键 `excalidraw-desktop.language`，不经过 IPC。任意西班牙语标签匹配 `es`，任意日语标签匹配 `ja`。
 3. **菜单同步。** `AppShell` 发送 `native_menu_sync`，携带完整本地化标签集与菜单状态（语言、外观、是否有文档、强制只读及五项画布偏好）。与上次成功请求完全相同的请求会被前端跳过，因此普通画布编辑不会触达菜单。
 4. **Rust 侧。** 命令在信任边界校验标签与状态，标签变化则重建菜单，仅状态变化则原地更新 `checked` / `enabled`。非法输入被拒绝，菜单保持上一次有效状态。首次同步前安装的是内置英文菜单。
 5. **菜单命令。** New Window 与 Quit 由 Rust 自己处理；其余菜单项向前台窗口发出 `native-menu-command`，没有前台窗口时发给最近聚焦的窗口。菜单状态按窗口保存，窗口获得焦点时应用。前端路由该命令（语言、外观、画布偏好切换、帮助、保存、导出、版本历史），并在下一次 `native_menu_sync` 中回写新状态。

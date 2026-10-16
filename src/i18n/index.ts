@@ -1,6 +1,8 @@
 import { useSyncExternalStore } from "react";
 import { LocaleController, type LocaleSnapshot } from "./localeController";
 import { en, type MessageKey } from "./messages/en.ts";
+import { es } from "./messages/es.ts";
+import { ja } from "./messages/ja.ts";
 import { zhCN } from "./messages/zh-CN.ts";
 import type { ResolvedLanguage } from "./resolveLanguage";
 
@@ -16,7 +18,7 @@ export type MessageParams = Readonly<Record<string, string | number>>;
 
 const catalogs: Readonly<
   Record<ResolvedLanguage, Readonly<Record<MessageKey, string>>>
-> = { en, "zh-CN": zhCN };
+> = { en, "zh-CN": zhCN, es, ja };
 
 /** Look up and interpolate one message in an explicit language. */
 export function translate(

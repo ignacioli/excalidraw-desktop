@@ -32,5 +32,11 @@ describe("ExcalidrawEditor language", () => {
 
     act(() => locale.setPreference("en"));
     expect(editor).toHaveAttribute("data-lang-code", "en");
+
+    act(() => locale.setPreference("es"));
+    expect(editor).toHaveAttribute("data-lang-code", "es-ES");
+
+    act(() => locale.setPreference("ja"));
+    expect(editor).toHaveAttribute("data-lang-code", "ja-JP");
   });
 });

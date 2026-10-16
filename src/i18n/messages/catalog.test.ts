@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { documentsEn } from "./documents.ts";
 import { en, type MessageKey } from "./en.ts";
+import { es } from "./es.ts";
 import { historyEn } from "./history.ts";
+import { ja } from "./ja.ts";
 import { shellEn } from "./shell.ts";
 import { zhCN } from "./zh-CN.ts";
 
-// Proper nouns that read the same in both languages.
+// Proper nouns and symbols that read the same in English and Simplified Chinese.
 const SAME_IN_BOTH_LANGUAGES: ReadonlySet<MessageKey> = new Set([
   "language.autonym.en",
   "language.autonym.zhCN",
+  "language.autonym.es",
+  "language.autonym.ja",
   // The em dash separator is the macOS title convention in both languages.
   "shell.windowTitle.drawing",
 ]);
@@ -26,6 +30,15 @@ describe("message catalogs", () => {
   it("only lists proper nouns that exist and match", () => {
     for (const key of SAME_IN_BOTH_LANGUAGES) {
       expect(zhCN[key], key).toBe(en[key]);
+    }
+  });
+
+  it("keeps language autonyms in the Spanish and Japanese catalogs", () => {
+    for (const catalog of [es, ja]) {
+      expect(catalog["language.autonym.en"]).toBe("English");
+      expect(catalog["language.autonym.zhCN"]).toBe("简体中文");
+      expect(catalog["language.autonym.es"]).toBe("Español");
+      expect(catalog["language.autonym.ja"]).toBe("日本語");
     }
   });
 

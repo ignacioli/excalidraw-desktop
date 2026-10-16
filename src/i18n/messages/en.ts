@@ -11,6 +11,8 @@ export const en = {
 
   "language.autonym.en": "English",
   "language.autonym.zhCN": "简体中文",
+  "language.autonym.es": "Español",
+  "language.autonym.ja": "日本語",
 
   "menu.canvas.preferences": "Preferences",
   "menu.canvas.toolLock": "Tool lock",

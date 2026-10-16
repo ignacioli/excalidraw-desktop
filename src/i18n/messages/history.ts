@@ -1,4 +1,4 @@
-// History copy, merged into en.ts / zh-CN.ts. Keep this file to TypeScript
+// History copy, merged into en.ts / zh-CN.ts / es.ts / ja.ts. Keep this file to TypeScript
 // syntax that Node can strip directly: scripts/native-menu-check.mjs imports
 // the catalogs.
 export const historyEn = {
@@ -292,4 +292,14 @@ export const historyZhCN: Record<keyof typeof historyEn, string> = {
     "仅支持 .excalidraw 绘图和 PNG/SVG 文件。",
   "history.import.error.invalidDrawing": "所选 Excalidraw 绘图无效。",
   "history.import.error.noScene": "所选 {format} 文件不包含 Excalidraw 场景。",
+};
+
+/** English placeholders until the Spanish translation lands. */
+export const historyEs: Record<keyof typeof historyEn, string> = {
+  ...historyEn,
+};
+
+/** English placeholders until the Japanese translation lands. */
+export const historyJa: Record<keyof typeof historyEn, string> = {
+  ...historyEn,
 };

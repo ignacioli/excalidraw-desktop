@@ -1,4 +1,4 @@
-// Documents copy, merged into en.ts / zh-CN.ts. Keep this file to TypeScript
+// Documents copy, merged into en.ts / zh-CN.ts / es.ts / ja.ts. Keep this file to TypeScript
 // syntax that Node can strip directly: scripts/native-menu-check.mjs imports
 // the catalogs.
 export const documentsEn = {
@@ -184,4 +184,14 @@ export const documentsZhCN: Record<keyof typeof documentsEn, string> = {
     "绘图已删除。版本历史清理仍待完成，稍后会重试。",
   "workspace.notice.historyResourcesPending":
     "绘图已删除。部分版本历史资源暂未清理完成。",
+};
+
+/** English placeholders until the Spanish translation lands. */
+export const documentsEs: Record<keyof typeof documentsEn, string> = {
+  ...documentsEn,
+};
+
+/** English placeholders until the Japanese translation lands. */
+export const documentsJa: Record<keyof typeof documentsEn, string> = {
+  ...documentsEn,
 };

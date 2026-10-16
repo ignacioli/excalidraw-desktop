@@ -67,9 +67,9 @@ Accessible names, tooltips, keyboard operation, hidden semantic labels, and erro
 
 ### Interface language
 
-The application supports two interface languages: English and Simplified Chinese (简体中文). The language preference is `Follow system`, `English`, or `简体中文`, and first launch defaults to `Follow system`.
+The application supports four interface languages: English, Simplified Chinese (简体中文), Spanish (Español), and Japanese (日本語). The language preference is `Follow system`, `English`, `简体中文`, `Español`, or `日本語`, and first launch defaults to `Follow system`. Each option is shown under its own name in every interface language.
 
-- `Follow system` uses the first supported language in the macOS preferred-language list and falls back to English when the list has none. A change to the macOS preferred languages takes effect at the next launch.
+- `Follow system` uses the first supported language in the macOS preferred-language list and falls back to English when the list has none. Any Spanish tag matches Español, including regions and `es-419`. Any Japanese tag matches 日本語, including `ja-JP`. English and Simplified Chinese keep their existing matching rules. A change to the macOS preferred languages takes effect at the next launch.
 - A manual choice applies immediately to the application shell, the canvas editor, and the application-controlled native menus, and persists across restarts.
 - Language is application-local preference, never document content.
 - System-owned dialogs and panels (open/save panels, permission prompts) follow macOS and are not controlled by the application.

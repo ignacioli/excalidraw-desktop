@@ -1,4 +1,4 @@
-// Shell copy, merged into en.ts / zh-CN.ts. Keep this file to TypeScript
+// Shell copy, merged into en.ts / zh-CN.ts / es.ts / ja.ts. Keep this file to TypeScript
 // syntax that Node can strip directly: scripts/native-menu-check.mjs imports
 // the catalogs.
 export const shellEn = {
@@ -296,3 +296,9 @@ export const shellZhCN: Record<keyof typeof shellEn, string> = {
   "appearance.dark": "深色",
   "appearance.system": "跟随系统",
 };
+
+/** English placeholders until the Spanish translation lands. */
+export const shellEs: Record<keyof typeof shellEn, string> = { ...shellEn };
+
+/** English placeholders until the Japanese translation lands. */
+export const shellJa: Record<keyof typeof shellEn, string> = { ...shellEn };
