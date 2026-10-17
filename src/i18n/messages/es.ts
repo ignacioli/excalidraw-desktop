@@ -72,7 +72,7 @@ export const es: Record<MessageKey, string> = {
   "error.WINDOW_OWNERSHIP_CHANGED":
     "El espacio de trabajo se abrió o se cerró en otra ventana. Inténtelo de nuevo.",
   "error.QUIT_CHECKPOINT_FAILED":
-    "No se pudo guardar un dibujo de esta ventana, así que Excalidraw no salió.",
+    "No se pudo guardar un dibujo de esta ventana, por lo que Excalidraw no se cerró.",
   "error.INVALID_NAME": "Este nombre no es válido.",
   "error.NAME_CONFLICT": "Ya existe un elemento con este nombre.",
   "error.ENTRY_PROTECTED":
@@ -101,7 +101,7 @@ export const es: Record<MessageKey, string> = {
   "error.HISTORY_BUSY":
     "El historial de versiones está ocupado. Inténtelo de nuevo en un momento.",
   "error.INTERNAL": "Se produjo un error dentro de Excalidraw.",
-  "error.unknown": "Se produjo un error (error {code}).",
+  "error.unknown": "Se produjo un error (código {code}).",
   "error.saveLocationRequired": "Elija dónde guardar el dibujo.",
   "error.generic": "No se pudo completar la operación solicitada.",
   "error.fileOperationFailed":

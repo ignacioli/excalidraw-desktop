@@ -195,7 +195,7 @@ export const documentsEs: Record<keyof typeof documentsEn, string> = {
   "conflict.unknownTime": "en un momento desconocido",
   "conflict.useExternal": "Usar la versión externa",
   "conflict.keepLocal": "Conservar cambios locales",
-  "conflict.saveAsNew": "Guardar los cambios locales como nuevo…",
+  "conflict.saveAsNew": "Guardar los cambios locales como un dibujo nuevo…",
   "conflict.saveDialog.filterName": "Dibujo de Excalidraw",
   "conflict.saveDialog.title":
     "Guardar los cambios locales como un dibujo nuevo",
@@ -207,9 +207,9 @@ export const documentsEs: Record<keyof typeof documentsEn, string> = {
   "recovery.unknownTime": "en un momento desconocido",
   "recovery.untitled": "Dibujo sin título",
   "recovery.actionsFor": "Acciones para {name}",
-  "recovery.restore": "Restaurar {name}",
+  "recovery.restore": "Recuperar {name}",
   "recovery.keepDisk": "Conservar la versión del disco de {name}",
-  "recovery.saveAsNew": "Guardar {name} como nuevo",
+  "recovery.saveAsNew": "Guardar {name} como un dibujo nuevo",
   "recovery.discard": "Descartar la recuperación de {name}",
   "recovery.error.chooseDestination":
     "Elija un destino antes de guardar la recuperación como un dibujo nuevo.",
@@ -217,8 +217,8 @@ export const documentsEs: Record<keyof typeof documentsEn, string> = {
     "Resuelva los candidatos de recuperación antes de continuar.",
   "recovery.error.startupCheck":
     "No se pudieron comprobar las instantáneas de recuperación: {reason}",
-  "recovery.notice.one": "Recuperado · {count} dibujo restaurado",
-  "recovery.notice.other": "Recuperado · {count} dibujos restaurados",
+  "recovery.notice.one": "Recuperado · {count} dibujo recuperado",
+  "recovery.notice.other": "Recuperado · {count} dibujos recuperados",
   "recovery.saveDialog.filterName": "Dibujo de Excalidraw",
   "recovery.saveDialog.title": "Guardar el dibujo recuperado",
   "workspace.panelLabel": "Espacios de trabajo",
@@ -262,7 +262,7 @@ export const documentsEs: Record<keyof typeof documentsEn, string> = {
     "No se pueden cargar los espacios de trabajo.",
   "workspace.error.mount": "No se puede abrir este espacio de trabajo.",
   "workspace.error.mountNoDialog":
-    "Elija un directorio en el diálogo de archivos del sistema para abrir un espacio de trabajo.",
+    "Elija una carpeta en el diálogo de archivos del sistema para abrir un espacio de trabajo.",
   "workspace.error.remove": "No se puede quitar este espacio de trabajo.",
   "workspace.error.removeOrphaned":
     "Resuelva el dibujo abierto que no está disponible antes de quitar este espacio de trabajo.",
@@ -290,7 +290,7 @@ export const documentsJa: Record<keyof typeof documentsEn, string> = {
   "conflict.unknownTime": "時刻は不明です",
   "conflict.useExternal": "外部のバージョンを使う",
   "conflict.keepLocal": "ローカルの変更を保持",
-  "conflict.saveAsNew": "ローカルの変更を新規として保存…",
+  "conflict.saveAsNew": "ローカルの変更を新しい図として保存…",
   "conflict.saveDialog.filterName": "Excalidraw の図",
   "conflict.saveDialog.title": "ローカルの変更を新しい図として保存",
   "recovery.title": "未保存の図を復旧",
@@ -301,9 +301,9 @@ export const documentsJa: Record<keyof typeof documentsEn, string> = {
   "recovery.unknownTime": "時刻は不明です",
   "recovery.untitled": "無題の図",
   "recovery.actionsFor": "{name} の操作",
-  "recovery.restore": "{name} を復元",
+  "recovery.restore": "{name} を復旧する",
   "recovery.keepDisk": "{name} はディスク上のバージョンを保持",
-  "recovery.saveAsNew": "{name} を新規として保存",
+  "recovery.saveAsNew": "{name} を新しい図として保存",
   "recovery.discard": "{name} のリカバリを破棄",
   "recovery.error.chooseDestination":
     "リカバリを新しい図として保存する前に、保存先を選んでください。",
@@ -311,8 +311,8 @@ export const documentsJa: Record<keyof typeof documentsEn, string> = {
     "続ける前に、リカバリの候補を解決してください。",
   "recovery.error.startupCheck":
     "リカバリスナップショットを確認できませんでした： {reason}",
-  "recovery.notice.one": "復旧しました · 図 {count} 個を復元しました",
-  "recovery.notice.other": "復旧しました · 図 {count} 個を復元しました",
+  "recovery.notice.one": "復旧しました · 図 {count} 個を復旧しました",
+  "recovery.notice.other": "復旧しました · 図 {count} 個を復旧しました",
   "recovery.saveDialog.filterName": "Excalidraw の図",
   "recovery.saveDialog.title": "復旧した図を保存",
   "workspace.panelLabel": "ワークスペース",
@@ -356,7 +356,7 @@ export const documentsJa: Record<keyof typeof documentsEn, string> = {
   "workspace.error.loadWorkspaces": "ワークスペースを読み込めません。",
   "workspace.error.mount": "このワークスペースを開けません。",
   "workspace.error.mountNoDialog":
-    "ワークスペースを開くには、システムのファイルダイアログでディレクトリを選んでください。",
+    "ワークスペースを開くには、システムのファイルダイアログでフォルダを選んでください。",
   "workspace.error.remove": "このワークスペースを取り除けません。",
   "workspace.error.removeOrphaned":
     "このワークスペースを取り除く前に、利用できない開いている図を解決してください。",

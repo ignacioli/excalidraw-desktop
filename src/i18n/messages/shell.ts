@@ -321,7 +321,7 @@ export const shellEs: Record<keyof typeof shellEn, string> = {
   "shell.feedback.copyMissing":
     "No se pudo copiar la ruta: el elemento ya no existe",
   "shell.feedback.copyFailed": "No se pudo copiar la ruta",
-  "shell.quit.cancelled": "Excalidraw no salió. {reason}",
+  "shell.quit.cancelled": "Excalidraw no se cerró. {reason}",
   "shell.restore.skipped.one":
     "No se pudo volver a abrir 1 dibujo de la sesión anterior. Se movió, se eliminó o no se puede leer.",
   "shell.restore.skipped.other":
@@ -334,13 +334,13 @@ export const shellEs: Record<keyof typeof shellEn, string> = {
   "shell.history.replacementVerified":
     "Se confirmó el reemplazo y el lienzo está actualizado.",
   "shell.history.clearSaved":
-    "Se guardó una versión anterior a la acción y se vació el lienzo.",
+    "Se guardó una versión anterior a la acción y se borró el lienzo.",
   "shell.history.importSaved":
     "Se guardó una versión anterior a la acción y se importó el dibujo.",
   "shell.history.restored": "Se restauró la versión y se guardó en el archivo.",
   "shell.history.verifyReplacement": "Confirmar el reemplazo de la versión",
   "shell.history.beforeRestore": "Antes de restaurar",
-  "shell.history.beforeClear": "Antes de vaciar",
+  "shell.history.beforeClear": "Antes de borrar",
   "shell.history.beforeImport": "Antes de importar",
   "shell.history.automaticCheckpoint": "Punto de control automático",
   "shell.history.manualMark": "Marca manual",
@@ -363,9 +363,9 @@ export const shellEs: Record<keyof typeof shellEn, string> = {
   "shell.dialog.newDrawing": "Nuevo dibujo",
   "tabs.close": "Cerrar",
   "tabs.untitled": "Sin título",
-  "tabs.closeOthers": "Cerrar las demás",
+  "tabs.closeOthers": "Cerrar las demás pestañas",
   "tabs.closeToRight": "Cerrar las pestañas a la derecha",
-  "tabs.closeAll": "Cerrar todas",
+  "tabs.closeAll": "Cerrar todas las pestañas",
   "tabs.copyPath": "Copiar ruta",
   "tabs.copyRelativePath": "Copiar ruta relativa",
   "tabs.openDrawings": "Dibujos abiertos",
@@ -391,7 +391,7 @@ export const shellEs: Record<keyof typeof shellEn, string> = {
   "welcome.restoreUnavailable":
     "No se pudo volver a abrir “{name}”. Su carpeta se movió, se eliminó o está en un disco que no está conectado.",
   "welcome.sessionNote":
-    "No hay una sesión recuperable · Bienvenida es un estado del documento, no una pestaña permanente adicional.",
+    "No hay una sesión recuperable · “Bienvenida” es un estado del documento, no una pestaña permanente adicional.",
   "export.title": "Exportar dibujo",
   "export.description":
     "Elija el formato y la apariencia y, a continuación, elija un destino.",
@@ -515,9 +515,9 @@ export const shellJa: Record<keyof typeof shellEn, string> = {
   "shell.dialog.newDrawing": "新規の図",
   "tabs.close": "閉じる",
   "tabs.untitled": "無題",
-  "tabs.closeOthers": "ほかを閉じる",
+  "tabs.closeOthers": "ほかのタブを閉じる",
   "tabs.closeToRight": "右のタブを閉じる",
-  "tabs.closeAll": "すべて閉じる",
+  "tabs.closeAll": "すべてのタブを閉じる",
   "tabs.copyPath": "パスをコピー",
   "tabs.copyRelativePath": "相対パスをコピー",
   "tabs.openDrawings": "開いている図",
@@ -543,7 +543,7 @@ export const shellJa: Record<keyof typeof shellEn, string> = {
   "welcome.restoreUnavailable":
     "「{name}」を開き直せませんでした。フォルダが移動または削除されたか、接続されていないディスクにあります。",
   "welcome.sessionNote":
-    "復旧できるセッションはありません · ようこそは文書の状態であり、常設の追加タブではありません。",
+    "復旧できるセッションはありません · 「ようこそ」は画面の状態であり、常設の追加タブではありません。",
   "export.title": "図をエクスポート",
   "export.description": "形式と外観を選び、保存先を選んでください。",
   "export.format": "形式",

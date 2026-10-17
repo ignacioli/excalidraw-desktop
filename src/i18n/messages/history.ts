@@ -299,7 +299,7 @@ export const historyEs: Record<keyof typeof historyEn, string> = {
   "history.source.manual": "Manual",
   "history.source.protected": "Protegida",
   "history.source.beforeRestore": "Antes de restaurar",
-  "history.source.beforeClear": "Antes de vaciar",
+  "history.source.beforeClear": "Antes de borrar",
   "history.source.beforeImport": "Antes de importar",
   "history.deleteSource.manual": "manual",
   "history.deleteSource.automatic": "automática",
@@ -415,7 +415,7 @@ export const historyEs: Record<keyof typeof historyEn, string> = {
   "history.panel.restoreDialog.restore": "Restaurar versión",
   "history.panel.restoreDialog.restoring": "Restaurando…",
   "history.panel.guard.documentChanged":
-    "El documento del historial cambió. Vuelva a abrir el menú de la versión antes de actuar.",
+    "El dibujo del historial cambió. Vuelva a abrir el menú de la versión antes de actuar.",
   "history.panel.guard.menuVersionUnavailable":
     "Esta versión ya no está disponible. Vuelva a abrir el menú del historial para elegir una versión disponible.",
   "history.panel.guard.restoreChanging":
@@ -490,7 +490,7 @@ export const historyJa: Record<keyof typeof historyEn, string> = {
   "history.preview.canvasRegion": "読み取り専用キャンバスのプレビュー",
   "history.preview.ready": "プレビューの内容の準備ができました。",
   "history.preview.renderFailed":
-    "このバージョンを安全に描画できませんでした。",
+    "このバージョンを安全に表示できませんでした。",
   "history.preview.preparing": "バージョンのプレビューを準備しています…",
   "history.preview.imageAlt": "読み取り専用のバージョンキャンバス",
   "history.preview.staticLoadFailed":
@@ -508,7 +508,7 @@ export const historyJa: Record<keyof typeof historyEn, string> = {
     "左矢印キーは仕切りを左に動かし、幅を 10 ピクセル増やします。右矢印キーは右に動かし、幅を 10 ピクセル減らします。Home は 300 ピクセル、End は 360 ピクセルに設定します。Shift を押したままにすると、20 ピクセルずつ変更します。",
   "history.panel.retention.title": "バージョンの保持",
   "history.panel.retention.body":
-    "自動バージョンと操作前バージョンは、新しい 20 件を共有します。経過時間では期限切れになりません。手動マークは、削除するまで残ります。",
+    "自動バージョンと操作前バージョンは、合わせて最新 20 件まで保持され、時間の経過では消えません。手動マークは、削除するまで残ります。",
   "history.panel.current.region": "現在の図",
   "history.panel.current.title": "現在の図",
   "history.panel.current.canvas": "開いているキャンバス",
@@ -557,7 +557,7 @@ export const historyJa: Record<keyof typeof historyEn, string> = {
   "history.panel.restoreDialog.restore": "バージョンを復元",
   "history.panel.restoreDialog.restoring": "復元しています…",
   "history.panel.guard.documentChanged":
-    "履歴の文書が変更されました。操作する前に、バージョンのメニューを開き直してください。",
+    "履歴の対象の図が変更されました。操作する前に、バージョンのメニューを開き直してください。",
   "history.panel.guard.menuVersionUnavailable":
     "このバージョンはもう利用できません。履歴のメニューを開き直し、利用できるバージョンを選んでください。",
   "history.panel.guard.restoreChanging":
