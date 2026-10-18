@@ -374,7 +374,37 @@ flake under parallel load, not a regression from this change.
 
 ## Native menu
 
-Not run yet.
+Run on 2026-10-17 on macOS 26.6.2 (physical Mac) with
+`pnpm native:menu:check`, against the debug binary from
+`pnpm tauri build --debug --no-bundle` at `f56dbf6` (SHA-256
+`61733740d3eacab17713b11d51c10910cef34cb89425a12e0fa6f62cc343a8ca`). Each run
+launches the app twice (without and with a document), reads the menu tree,
+labels, enabled and checked state through System Events, then drives every
+managed item and Command-S and confirms each is routed exactly once.
+
+| `--languages`        | Resolved | Result         |
+| -------------------- | -------- | -------------- |
+| `(es-MX, en-US)`     | `es`     | PASS, 105 checks |
+| `(ja-JP)`            | `ja`     | PASS, 105 checks |
+| `(en-US, zh-Hans)`   | `en`     | PASS, 105 checks |
+
+- All three runs started from the Follow System preference, so the label
+  checks ran in the resolved language: for example `App > Idioma > Según el
+  sistema`, `App > 言語 > システムに合わせる`, and `ウインドウ > 拡大/縮小`.
+- Each run routed all five language items (`system`, `en`, `zh-CN`, `es`,
+  `ja`) once, then restored the starting preference.
+- `src-tauri/Info.plist` lists `CFBundleLocalizations` `en`, `zh-Hans`, `es`,
+  `ja`. The `.app` bundle itself is checked during the visual spot-check.
+
+Isolation gap found: the script points `HOME` at a temporary directory, but
+the language preference lives in WebKit storage, which is keyed by bundle id
+(`~/Library/WebKit/excalidraw-desktop`) and shared with any installed copy of
+the app. A first `(es-MX, en-US)` run started from a stored Simplified Chinese
+preference, so it resolved to `zh-CN` and checked Chinese labels while still
+reporting PASS. That run is not counted. The preference was set to Follow
+System in the installed app before the three runs above. A later change
+should make the script fail or warn when the starting preference is not
+Follow System, because `--languages` then has no effect.
 
 ## Visual spot-check
 
