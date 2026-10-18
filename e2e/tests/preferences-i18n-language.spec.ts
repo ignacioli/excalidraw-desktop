@@ -296,9 +296,6 @@ test("switches between Spanish and Japanese without losing the edit", async ({
   await expect
     .poll(async () => (await nativeMenuState(page))?.language)
     .toBe("ja");
-  await expect
-    .poll(async () => (await nativeMenuState(page))?.language)
-    .toBe("ja");
   await expect(
     page.getByRole("button", { name: ja["shell.toggleSidebar"] }),
   ).toBeVisible();
@@ -348,9 +345,32 @@ const ALLOWED_LATIN = new Set([
 test("leaves no English in app-owned UI under Simplified Chinese", async ({
   page,
 }) => {
-  await startWithSystemLanguages(page, ["zh-Hans"]);
-  await openDrawing(page, zhCN);
-  await expectShellLanguage(page, zhCN);
+  await expectNoEnglishResidue(page, ["zh-Hans"], zhCN);
+});
+
+test("leaves no English in app-owned UI under Spanish", async ({ page }) => {
+  await expectNoEnglishResidue(page, ["es-ES"], es);
+});
+
+test("leaves no English in app-owned UI under Japanese", async ({ page }) => {
+  await expectNoEnglishResidue(page, ["ja-JP"], ja);
+});
+
+// Spanish copy is Latin script, so a word is residue only when it is neither a
+// proper noun nor part of the Spanish catalog. Chinese and Japanese still
+// reject every other Latin word.
+const SPANISH_CATALOG_WORDS = new Set(
+  Object.values(es).flatMap((value) => value.match(/[A-Za-z]{3,}/gu) ?? []),
+);
+
+async function expectNoEnglishResidue(
+  page: Page,
+  preferredLanguages: readonly string[],
+  catalog: Catalog,
+): Promise<void> {
+  await startWithSystemLanguages(page, preferredLanguages);
+  await openDrawing(page, catalog);
+  await expectShellLanguage(page, catalog);
 
   const residue = await page.evaluate(() => {
     // The SDK editor container owns its own localization.
@@ -386,12 +406,14 @@ test("leaves no English in app-owned UI under Simplified Chinese", async ({
     return found;
   });
   // The scan must actually reach app-owned copy.
-  expect(residue).toContain(zhCN["shell.toggleSidebar"]);
+  expect(residue).toContain(catalog["shell.toggleSidebar"]);
   expect(residue).toContain("first.excalidraw");
+  const catalogWords =
+    catalog === es ? SPANISH_CATALOG_WORDS : new Set<string>();
   const english = residue.filter((text) =>
     (text.match(/[A-Za-z]{3,}/gu) ?? []).some(
-      (word) => !ALLOWED_LATIN.has(word),
+      (word) => !ALLOWED_LATIN.has(word) && !catalogWords.has(word),
     ),
   );
   expect(english).toEqual([]);
-});
+}

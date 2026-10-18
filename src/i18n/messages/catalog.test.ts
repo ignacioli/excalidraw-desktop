@@ -188,3 +188,134 @@ describe("message catalogs", () => {
     expect(duplicated).toEqual([]);
   });
 });
+
+// Glossary entry names sit on each rule. Punctuation rules have no term-table
+// entry; the label says which general rule they enforce.
+const GLOSSARY_RULES: readonly {
+  language: "es" | "ja";
+  entry: string;
+  matches: (key: MessageKey, value: string) => boolean;
+}[] = [
+  // folder
+  {
+    language: "es",
+    entry: "folder",
+    matches: (_key, value) => value.includes("directorio"),
+  },
+  // Recovery
+  {
+    language: "es",
+    entry: "Recovery",
+    matches: (key, value) =>
+      key.startsWith("recovery.") && value.includes("restaur"),
+  },
+  // file. ordenador is banned with fichero and has no separate term entry.
+  {
+    language: "es",
+    entry: "file",
+    matches: (_key, value) =>
+      value.includes("ordenador") || value.includes("fichero"),
+  },
+  // Spanish questions require an opening ¿. No term-table entry.
+  {
+    language: "es",
+    entry: "question punctuation",
+    matches: (_key, value) => value.includes("?") && !value.includes("¿"),
+  },
+  // folder
+  {
+    language: "ja",
+    entry: "folder",
+    matches: (_key, value) => value.includes("ディレクトリ"),
+  },
+  // Export
+  {
+    language: "ja",
+    entry: "Export",
+    matches: (_key, value) => value.includes("書き出"),
+  },
+  // Recovery. 復元 belongs to Restore.
+  {
+    language: "ja",
+    entry: "Recovery",
+    matches: (key, value) =>
+      key.startsWith("recovery.") && value.includes("復元"),
+  },
+  // Restore. 復旧 belongs to Recovery.
+  {
+    language: "ja",
+    entry: "Restore",
+    matches: (key, value) =>
+      key.startsWith("history.") && value.includes("復旧"),
+  },
+  // Japanese quotations use 「」. No term-table entry.
+  {
+    language: "ja",
+    entry: "quotation marks",
+    matches: (_key, value) => value.includes("“") || value.includes("”"),
+  },
+  // Japanese parentheses are full-width. No term-table entry.
+  {
+    language: "ja",
+    entry: "parentheses",
+    matches: (_key, value) => value.includes("("),
+  },
+  // Full-width ：「（ already include space, so no extra half-width space.
+  {
+    language: "ja",
+    entry: "punctuation spacing",
+    matches: (_key, value) => /[：「（] /u.test(value),
+  },
+];
+
+// Keys that match a rule on purpose. Each reason says why the hit is kept.
+const GLOSSARY_EXCEPTIONS: readonly {
+  language: "es" | "ja";
+  key: MessageKey;
+  entry: string;
+  reason: string;
+}[] = [];
+
+describe("glossary terminology", () => {
+  it("rejects banned Spanish and Japanese wording", () => {
+    const catalogs = { es, ja } as const;
+    const violations: string[] = [];
+    for (const rule of GLOSSARY_RULES) {
+      const catalog = catalogs[rule.language];
+      for (const key of Object.keys(catalog) as MessageKey[]) {
+        if (!rule.matches(key, catalog[key])) continue;
+        const allowed = GLOSSARY_EXCEPTIONS.some(
+          (exception) =>
+            exception.language === rule.language &&
+            exception.key === key &&
+            exception.entry === rule.entry &&
+            exception.reason.trim().length > 0,
+        );
+        if (!allowed) {
+          violations.push(`${rule.language} ${rule.entry} ${key}`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("keeps glossary exceptions tied to a live rule and a reason", () => {
+    const catalogs = { es, ja } as const;
+    for (const exception of GLOSSARY_EXCEPTIONS) {
+      expect(exception.reason.trim().length, exception.key).toBeGreaterThan(0);
+      const rule = GLOSSARY_RULES.find(
+        (candidate) =>
+          candidate.language === exception.language &&
+          candidate.entry === exception.entry,
+      );
+      expect(rule, `${exception.language} ${exception.entry}`).toBeDefined();
+      expect(
+        rule?.matches(
+          exception.key,
+          catalogs[exception.language][exception.key],
+        ),
+        exception.key,
+      ).toBe(true);
+    }
+  });
+});

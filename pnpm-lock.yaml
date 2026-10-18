@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@excalidraw/excalidraw@0.18.1': ad25d2a3e6b75b654f6c2eef530fefb1090b0c4268a2e04192fd73126fde5ee8
+  '@excalidraw/excalidraw@0.18.1': 12f42b83d613b1154f643f5a12dfe93994ac5f4b244076e8d22cebd7d2f952d1
 
 importers:
 
@@ -13,7 +13,7 @@ importers:
     dependencies:
       '@excalidraw/excalidraw':
         specifier: 0.18.1
-        version: 0.18.1(patch_hash=ad25d2a3e6b75b654f6c2eef530fefb1090b0c4268a2e04192fd73126fde5ee8)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 0.18.1(patch_hash=12f42b83d613b1154f643f5a12dfe93994ac5f4b244076e8d22cebd7d2f952d1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@tanstack/react-virtual':
         specifier: 3.14.9
         version: 3.14.9(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -2705,7 +2705,7 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@excalidraw/excalidraw@0.18.1(patch_hash=ad25d2a3e6b75b654f6c2eef530fefb1090b0c4268a2e04192fd73126fde5ee8)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@excalidraw/excalidraw@0.18.1(patch_hash=12f42b83d613b1154f643f5a12dfe93994ac5f4b244076e8d22cebd7d2f952d1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@braintree/sanitize-url': 6.0.2
       '@excalidraw/laser-pointer': 1.3.1

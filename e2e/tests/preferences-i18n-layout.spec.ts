@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { en } from "../../src/i18n/messages/en.ts";
+import { en, type MessageKey } from "../../src/i18n/messages/en.ts";
+import { es } from "../../src/i18n/messages/es.ts";
+import { ja } from "../../src/i18n/messages/ja.ts";
 import { zhCN } from "../../src/i18n/messages/zh-CN.ts";
 import {
   emitBrowserTauriEvent,
@@ -54,9 +56,14 @@ const TRUNCATION_ALLOWED: readonly { selector: string; rule: string }[] = [
   },
 ];
 
-type Language = "en" | "zh-CN";
-type Catalog = typeof en | typeof zhCN;
-const CATALOGS: Readonly<Record<Language, Catalog>> = { en, "zh-CN": zhCN };
+type Language = "en" | "zh-CN" | "es" | "ja";
+type Catalog = Record<MessageKey, string>;
+const CATALOGS: Readonly<Record<Language, Catalog>> = {
+  en,
+  "zh-CN": zhCN,
+  es,
+  ja,
+};
 
 async function start(
   page: Page,
@@ -300,7 +307,7 @@ async function drawRectangle(page: Page): Promise<void> {
     .toContain('"rectangle"');
 }
 
-for (const language of ["en", "zh-CN"] as const) {
+for (const language of ["en", "zh-CN", "es", "ja"] as const) {
   const catalog = CATALOGS[language];
   for (const theme of ["light", "dark"] as const) {
     test(`${language} ${theme}: shell surfaces fit at 1280×760`, async ({

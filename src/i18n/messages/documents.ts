@@ -217,8 +217,8 @@ export const documentsEs: Record<keyof typeof documentsEn, string> = {
     "Resuelva los candidatos de recuperación antes de continuar.",
   "recovery.error.startupCheck":
     "No se pudieron comprobar las instantáneas de recuperación: {reason}",
-  "recovery.notice.one": "Recuperado · {count} dibujo recuperado",
-  "recovery.notice.other": "Recuperado · {count} dibujos recuperados",
+  "recovery.notice.one": "Se recuperó {count} dibujo",
+  "recovery.notice.other": "Se recuperaron {count} dibujos",
   "recovery.saveDialog.filterName": "Dibujo de Excalidraw",
   "recovery.saveDialog.title": "Guardar el dibujo recuperado",
   "workspace.panelLabel": "Espacios de trabajo",
@@ -302,7 +302,7 @@ export const documentsJa: Record<keyof typeof documentsEn, string> = {
   "recovery.untitled": "無題の図",
   "recovery.actionsFor": "{name} の操作",
   "recovery.restore": "{name} を復旧する",
-  "recovery.keepDisk": "{name} はディスク上のバージョンを保持",
+  "recovery.keepDisk": "{name} のディスク上のバージョンを保持",
   "recovery.saveAsNew": "{name} を新しい図として保存",
   "recovery.discard": "{name} のリカバリを破棄",
   "recovery.error.chooseDestination":
@@ -310,9 +310,9 @@ export const documentsJa: Record<keyof typeof documentsEn, string> = {
   "recovery.error.resolveFirst":
     "続ける前に、リカバリの候補を解決してください。",
   "recovery.error.startupCheck":
-    "リカバリスナップショットを確認できませんでした： {reason}",
-  "recovery.notice.one": "復旧しました · 図 {count} 個を復旧しました",
-  "recovery.notice.other": "復旧しました · 図 {count} 個を復旧しました",
+    "リカバリスナップショットを確認できませんでした：{reason}",
+  "recovery.notice.one": "{count} 個の図を復旧しました",
+  "recovery.notice.other": "{count} 個の図を復旧しました",
   "recovery.saveDialog.filterName": "Excalidraw の図",
   "recovery.saveDialog.title": "復旧した図を保存",
   "workspace.panelLabel": "ワークスペース",
