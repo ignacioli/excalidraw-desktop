@@ -310,9 +310,22 @@ Product-manager verification (2026-10-17):
 The follow-up round applied the seven SDK must-fix strings in both dev and prod builds, the
 three code-review items above, and glossary rulings 8, 10, and 11. Extending
 the 1280×760 layout check then showed that `history.panel.count` overflowed
-at the 300px drawer in Spanish and Japanese. The product owner kept the
-layout and shortened that label to `{count} versión` / `{count} versiones`
-and `{count} バージョン`.
+at the 300px drawer in Spanish and Japanese; English and Simplified Chinese
+fit.
+
+Product owner decision on the history count:
+
+- The panel layout stays unchanged. A layout change would affect the whole
+  panel component and need broad regression testing, while only this one
+  label overflows.
+- The label is shortened instead. The panel already says that these are the
+  versions shown, so dropping "shown" keeps the meaning. Spanish:
+  `{count} versión` / `{count} versiones` (for example `6 versiones`).
+  Japanese: `{count} バージョン` for both forms (for example `6 バージョン`),
+  a common, unambiguous form in business software.
+- If copy overflows the panel again and product or translation review does
+  not accept dropping the verb, the fallback is `overflow: hidden` with a
+  tooltip that shows the full text on hover.
 
 | Command                                                            | Result                    |
 | ------------------------------------------------------------------ | ------------------------- |
