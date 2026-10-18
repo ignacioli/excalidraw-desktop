@@ -59,6 +59,19 @@ export function readValidationRoutes(stream, onRoute) {
   });
 }
 
+/**
+ * Why a run cannot start from `language`, the Language item checked when the
+ * app opens, or `null` when it can. The preference lives in WKWebView storage
+ * outside the temporary HOME, so any value but Follow System would override
+ * `--languages` and check the wrong labels.
+ */
+export function startingLanguageProblem(language) {
+  return language === "system"
+    ? null
+    : `the app's Language preference is ${JSON.stringify(language)}, so --languages has no effect; ` +
+        "choose Language > Follow System in the app's menu, quit it, and run the check again";
+}
+
 function launch(files) {
   const child = spawn(binary, [...files, "-AppleLanguages", languages], {
     env: {
@@ -322,6 +335,8 @@ async function round(files, hasDocument) {
     );
     const language = LANGUAGES[marked(languageItems(menus))];
     const appearance = APPEARANCES[marked(menus[4].items[0].children)];
+    const problem = startingLanguageProblem(language);
+    if (problem) block(problem);
     const lang = resolveLanguage(language, appleLanguages);
     console.log(
       `INFO ${hasDocument ? "document" : "no-document"} round: preference ${language} → ${lang}, appearance ${appearance}`,

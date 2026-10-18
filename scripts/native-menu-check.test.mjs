@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { PassThrough } from "node:stream";
 import { describe, it } from "node:test";
-import { readValidationRoutes } from "./native-menu-check.mjs";
+import {
+  readValidationRoutes,
+  startingLanguageProblem,
+} from "./native-menu-check.mjs";
 
 const PREFIX = "EXCALIDRAW_NATIVE_MENU_VALIDATION ";
 
@@ -21,5 +24,20 @@ describe("readValidationRoutes", () => {
       { stage: "nativeEntry", command: "save" },
       { stage: "applicationRoute", command: "save" },
     ]);
+  });
+});
+
+describe("startingLanguageProblem", () => {
+  it("lets a run start when the Language preference follows the system", () => {
+    assert.equal(startingLanguageProblem("system"), null);
+  });
+
+  it("blocks an explicit preference, which would override --languages", () => {
+    for (const language of ["en", "zh-CN", "es", "ja"]) {
+      const problem = startingLanguageProblem(language);
+      assert.match(problem, new RegExp(`"${language}"`));
+      assert.match(problem, /--languages has no effect/);
+      assert.match(problem, /Follow System/);
+    }
   });
 });
