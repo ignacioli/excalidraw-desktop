@@ -307,7 +307,7 @@ Product-manager verification (2026-10-17):
 
 ## Review follow-up
 
-T032 applied the seven SDK must-fix strings in both dev and prod builds, the
+The follow-up round applied the seven SDK must-fix strings in both dev and prod builds, the
 three code-review items above, and glossary rulings 8, 10, and 11. Extending
 the 1280×760 layout check then showed that `history.panel.count` overflowed
 at the 300px drawer in Spanish and Japanese. The product owner kept the
