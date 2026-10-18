@@ -340,6 +340,38 @@ Chromium was taken from the installed Playwright cache
 (`PLAYWRIGHT_BROWSERS_PATH`) because the shell's default cache path was
 empty. `pnpm native:menu:check` was not run.
 
+### Maintainer check of the follow-up
+
+A second read-only cross-layer review of `origin/main` to `7933930` was run
+on 2026-10-17 (Claude Sonnet 5, full-stack reviewer profile; it wrote no
+files). It found no must-fix items. The five values, their order in the
+native and canvas menus, the Rust boundary, and the 41 label ids agree, and no
+production panic path was added. The installed SDK strings were read back from
+both the dev and prod builds; the seven corrected strings are present and
+upstream translations are unchanged.
+
+| Finding                                                                                                                                                                            | Severity   | Handling                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The Spanish residue check allowed every word found in the Spanish catalog, including placeholder names such as `{drawing}`, so an untranslated `Excalidraw drawing` would pass | should-fix | Fixed in `a5c1827`: placeholders are removed first, whole words are matched with accents, a word is allowed only when the Spanish catalog has it and the English catalog does not, and `e2e/helpers/englishResidue.test.ts` proves the untranslated case fails |
+| The glossary exception list is empty, so its consistency test loops over nothing                                                                                                  | note       | Kept: it starts checking once an exception is added                                                                                                                                                                                                       |
+| The Japanese quotation and parenthesis rules and the Spanish question-mark rule are narrow                                                                                         | note       | Kept: they guard the observed mistakes, not every variant                                                                                                                                                                                                 |
+| `CanvasMainMenu.tsx` lists the language options both in an array and in JSX                                                                                                       | note       | Kept: both lists are updated; a future drift risk only                                                                                                                                                                                                    |
+
+Gates after `a5c1827`, rerun by the maintainer:
+
+| Command                                                      | Result                                     |
+| ------------------------------------------------------------ | ------------------------------------------ |
+| `pnpm typecheck`, `pnpm lint`                                | PASS                                       |
+| `CI=true pnpm vitest run e2e/helpers/englishResidue.test.ts` | PASS, 3 tests                              |
+| `APP_E2E=1 pnpm e2e e2e/tests/preferences-i18n-*.spec.ts`    | PASS, 47 tests (default browser cache)     |
+
+One run of the same suite had a single failure in
+`e2e/tests/preferences-i18n-tab-state.spec.ts`, an English-only file this
+change does not touch. The file passed 32 of 32 when run alone with
+`--repeat-each=8`, and `origin/main` (`7c5416b`) under the same load
+(`--repeat-each=4`) also failed once in that file. It is an existing timing
+flake under parallel load, not a regression from this change.
+
 ## Native menu
 
 Not run yet.
