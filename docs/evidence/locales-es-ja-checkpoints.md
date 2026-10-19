@@ -408,4 +408,27 @@ Follow System, because `--languages` then has no effect.
 
 ## Visual spot-check
 
-Not run yet.
+The product owner checked the Spanish and Japanese interfaces by hand on
+2026-10-19, on macOS 26.6.2 (physical Mac, system language `en-US`), using
+the debug `.app` built at `b19a7fe` (main binary SHA-256
+`f3789df59201f9656509b820a86625278ceba59180b92ebf2770dc4b847d46b1`) and a
+seeded folder with two Workspaces, a long file name, a non-empty folder, and
+drawings prepared for the conflict, recovery, and version history states. No
+screenshots were taken by automation; the owner judged truncation, wrapping,
+button width, glyphs, and tone.
+
+Screens checked in each language: the Welcome window and recent list, the
+Workspace empty state (Japanese also in the dark theme), the canvas main menu
+and its language list, the native app and File menus, the sidebar and tab
+menus, the new, rename, and delete dialogs, the external-change conflict
+dialog, the recovery prompt and notice, the version history panel, and the
+canvas help dialog.
+
+Result: **accepted** for Spanish and Japanese.
+
+Known issues, not caused by this change and not blocking it:
+
+| Issue | Cause | Handling |
+| --- | --- | --- |
+| `?` does not open the canvas help dialog once focus has left the canvas, and Command-/ never opens the command palette | The app does not render the SDK `CommandPalette`, and the SDK handles keys only while focus is inside the editor | Fixed separately on `fix/canvas-help-and-command-palette-shortcuts`; the help button works |
+| In the Edit and Window menus, items that macOS adds itself (AutoFill, Start Dictation…, Emoji & Symbols, Fill, Center, Move & Resize, Full Screen Tile, Remove Window from Set, and the Option alternates) stay in English in every app language | macOS localizes these items from the system language, not from the in-app language preference | Under investigation separately; the app-owned menu items are localized and verified by the native menu check |
