@@ -2,7 +2,7 @@
 
 **Recorded**: 2026-09-03
 **Tasks**: T005, T006, T007 complete
-**Authoritative inputs**: `docs/ux-ui-redesign-brief.md` decisions D-007, D-012, D-015, D-017, D-019 through D-027, and D-032; frozen HF-2 `README.md`, `manifest.json`, `components.md`, and `tokens.json`; corrective 003 specification and UI-shell contract.
+**Authoritative inputs**: UX/UI redesign brief decisions D-007, D-012, D-015, D-017, D-019 through D-027, and D-032 (the brief later moved out of this repository into the private specifications); frozen HF-2 `README.md`, `manifest.json`, `components.md`, and `tokens.json`; corrective 003 specification and UI-shell contract.
 
 ## Baseline conflict inventory
 
