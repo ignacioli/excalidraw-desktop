@@ -2,6 +2,16 @@
 
 User-visible changes to Excalidraw Desktop, newest first.
 
+## [0.7.0] - 2026-10-19
+
+### Added
+
+- Spanish (Español) and Japanese (日本語) interface. First launch follows the macOS preferred languages and falls back to English. The Language choice (Follow system, English, 简体中文, Español, 日本語) is available from the app menu and the canvas main menu, applies immediately to the app, the canvas editor, and the native menus, and is remembered across restarts.
+
+### Fixed
+
+- `?` opens the canvas help dialog when focus has left the editor, including from the page and the Workspace Sidebar. It still does not fire from a text field or while a dialog or menu is open.
+
 ## [0.6.0] - 2026-10-15
 
 ### Added
