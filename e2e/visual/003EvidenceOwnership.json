@@ -234,8 +234,7 @@
         "docs/architecture.zh.md",
         "docs/quickstart.md",
         "docs/quickstart.zh.md",
-        "docs/release-notes-footer.md",
-        "docs/ux-ui-redesign-brief.md"
+        "docs/release-notes-footer.md"
       ],
       "owners": ["documentation-contract"],
       "claimIds": ["documentation-check"]

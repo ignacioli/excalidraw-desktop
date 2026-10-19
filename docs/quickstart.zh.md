@@ -242,7 +242,7 @@ pnpm e2e e2e/tests/local-version-history-lifecycle.spec.ts \
 
 参考环境冷启动 / 画布 I/O / soak 测量在声明的 Parallels Desktop Pro 26.4.1、macOS 26.5.2、4 vCPU / 8GB 参考 VM 上完整执行；工作流仍使用 `self-hosted`、`macOS`、`ARM64`、`excalidraw-perf` 标签。报告记录宿主硬件、虚拟化软件/版本、客体 OS、WebView、vCPU 与内存并输出真实 `pass`/`fail`；预算失败不阻断合并或开源发布。参考配置变化时必须建立新的独立测量序列并更新 ADR，禁止把不可比结果混合或静默放宽预算。未跑完的测量不得写成已通过。
 
-夹具输出 JSON 报告，包含 schema 版本、commit、硬件型号、内存、准确 OS/WebView 版本、样本、统计量、预算与 verdict，不得包含机器唯一标识或秘密。聚合口径必须覆盖 Tauri 主进程和关联 WebView/GPU 进程，并在报告中写明任何无法归属的排除项；性能回归 = 缺陷（宪法原则 IV）。
+夹具输出 JSON 报告，包含 schema 版本、commit、硬件型号、内存、准确 OS/WebView 版本、样本、统计量、预算与 verdict，不得包含机器唯一标识或秘密。聚合口径必须覆盖 Tauri 主进程和关联 WebView/GPU 进程，并在报告中写明任何无法归属的排除项；性能回归是缺陷。
 
 ## 5. 中文 IME 验证（Linux 目标 OS 矩阵项）
 

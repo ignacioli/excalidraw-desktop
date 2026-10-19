@@ -247,7 +247,7 @@ Earlier native-capture and evidence-aggregation procedures are retained in [the 
 
 Reference-environment cold-start / canvas I/O / soak measurements run in full on the declared Parallels Desktop Pro 26.4.1, macOS 26.5.2, 4 vCPU / 8GB reference VM. The workflow still uses the `self-hosted`, `macOS`, `ARM64`, and `excalidraw-perf` labels. Reports record host hardware, virtualization product/version, guest OS, WebView, vCPU, and memory, and emit a real `pass`/`fail`. Budget failure does not block merge or open-source release. A change to the reference configuration requires a new independent measurement series and an ADR update. Do not mix incomparable results or silently relax budgets. Incomplete measurements must not be written as passed.
 
-Fixtures emit JSON reports with schema version, commit, hardware model, memory, exact OS/WebView versions, samples, statistics, budget, and verdict. They must not include machine-unique identifiers or secrets. Aggregation must cover the Tauri main process and related WebView/GPU processes, and the report must name any exclusion that could not be attributed. A performance regression is a defect (constitution principle IV).
+Fixtures emit JSON reports with schema version, commit, hardware model, memory, exact OS/WebView versions, samples, statistics, budget, and verdict. They must not include machine-unique identifiers or secrets. Aggregation must cover the Tauri main process and related WebView/GPU processes, and the report must name any exclusion that could not be attributed. A performance regression is a defect.
 
 ## 5. Chinese IME verification (Linux target-OS matrix item)
 

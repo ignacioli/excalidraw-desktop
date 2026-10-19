@@ -8,7 +8,7 @@
 
 **适用范围**：应用壳层、桌面专属界面与内嵌 Excalidraw 编辑器
 
-本文档是仓库内供人类与 Coding Agent 共同遵守的视觉和交互事实来源。产品行为以项目规格为准。桌面壳层术语遵循 [CONTEXT.zh.md](CONTEXT.zh.md)。
+本文档是仓库内供人类与 Coding Agent 共同遵守的视觉和交互事实来源。桌面壳层术语遵循 [CONTEXT.zh.md](CONTEXT.zh.md)。
 
 ## 产品气质
 
@@ -156,7 +156,7 @@ accessible name、tooltip、键盘操作、隐藏语义标签和错误文案仍�
 
 ## 验证契约
 
-以下六屏合同记录初始 desktop-shell 重设计的验收。后续视觉 feature 遵循[共享组件目录](docs/design/components.md)：实现前定义 component anatomy，先验收变更组件，再按风险抽检代表页面组合。未变组件复用适用证据；功能、平台与 owner 接受仍遵守各自 feature 合同。该流程不重开或改写历史 shell gate 结果。
+以下六屏合同记录初始桌面壳层重设计的核对范围。后续视觉工作遵循[共享组件目录](docs/design/components.md)：实现前定义组件结构，先核对变更组件，再按风险抽检代表页面组合。未变组件复用适用证据。功能、平台与产品负责人接受对每次变更仍然有效。该流程不重开或改写历史壳层审查结果。
 
 初始实现必须提供以下证据：
 
