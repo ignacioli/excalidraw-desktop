@@ -241,6 +241,49 @@ export function ExcalidrawEditor({
     return () => document.removeEventListener("keydown", handleKeyDown, true);
   }, [togglePreference]);
 
+  // "?" opens the SDK help dialog. The SDK only listens on its own container,
+  // so focus resting on <body> or the sidebar would lose the shortcut. Mirror
+  // the SDK's handling on the document and leave "?" inside the editor, an
+  // input, or an open dialog/menu to its owner.
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      const container = containerRef.current;
+      if (
+        container === null ||
+        event.key !== "?" ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        container.closest("[hidden]") !== null
+      ) {
+        return;
+      }
+      const target = event.target;
+      // The SDK's container handler owns "?" while focus is inside the editor;
+      // its help dialog is portaled to <body>, so open dialogs are excluded
+      // below instead.
+      if (target instanceof Node && container.contains(target)) {
+        return;
+      }
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLSelectElement ||
+          target.closest(
+            '[role="dialog"], [aria-modal="true"], [role="menu"]',
+          ) !== null)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      adapterRef.current?.openHelp();
+    };
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const documentPath =
