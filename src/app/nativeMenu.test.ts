@@ -33,6 +33,8 @@ describe("registerNativeMenuCommand", () => {
     handler("languageSystem");
     handler("languageEn");
     handler("languageZhCn");
+    handler("languageEs");
+    handler("languageJa");
     handler("help");
     handler("toggleToolLock");
     handler("toggleGrid");
@@ -44,7 +46,13 @@ describe("registerNativeMenuCommand", () => {
     expect(onExportImage).toHaveBeenCalledOnce();
     expect(onVersionHistory).toHaveBeenCalledOnce();
     expect(onAppearance.mock.calls).toEqual([["system"], ["light"], ["dark"]]);
-    expect(onLanguage.mock.calls).toEqual([["system"], ["en"], ["zh-CN"]]);
+    expect(onLanguage.mock.calls).toEqual([
+      ["system"],
+      ["en"],
+      ["zh-CN"],
+      ["es"],
+      ["ja"],
+    ]);
     expect(onHelp).toHaveBeenCalledOnce();
     expect(onTogglePreference.mock.calls).toEqual([
       ["toolLock"],

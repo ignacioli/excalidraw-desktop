@@ -18,6 +18,8 @@ pub const APPEARANCE_DARK_MENU_ID: &str = "native-menu.appearance.dark";
 pub const LANGUAGE_SYSTEM_MENU_ID: &str = "native-menu.language.system";
 pub const LANGUAGE_EN_MENU_ID: &str = "native-menu.language.en";
 pub const LANGUAGE_ZH_CN_MENU_ID: &str = "native-menu.language.zh-CN";
+pub const LANGUAGE_ES_MENU_ID: &str = "native-menu.language.es";
+pub const LANGUAGE_JA_MENU_ID: &str = "native-menu.language.ja";
 pub const TOOL_LOCK_MENU_ID: &str = "native-menu.pref.tool-lock";
 pub const GRID_MENU_ID: &str = "native-menu.pref.grid";
 pub const SNAP_MENU_ID: &str = "native-menu.pref.snap";
@@ -49,14 +51,16 @@ pub const WINDOW_SUBMENU_ID: &str = "native-menu.window";
 const HELP_SUBMENU_ID: &str = "native-menu.help-menu";
 
 /// Every label the frontend must supply, including predefined item text.
-/// Each id `x` corresponds to the message key `menu.native.x`, except the two
+/// Each id `x` corresponds to the message key `menu.native.x`, except the
 /// language autonyms, which come from `language.autonym.*`.
-pub const LABEL_IDS: [&str; 39] = [
+pub const LABEL_IDS: [&str; 41] = [
     "app.about",
     "app.language",
     "app.languageSystem",
     "app.languageEn",
     "app.languageZhCn",
+    "app.languageEs",
+    "app.languageJa",
     "app.services",
     "app.hide",
     "app.hideOthers",
@@ -124,12 +128,14 @@ impl NativeMenuLabels {
 
     /// Built-in English labels used until the frontend sends its first set.
     pub fn english(app_name: &str) -> Self {
-        let pairs: [(&str, String); 39] = [
+        let pairs: [(&str, String); 41] = [
             ("app.about", format!("About {app_name}")),
             ("app.language", "Language".to_owned()),
             ("app.languageSystem", "Follow System".to_owned()),
             ("app.languageEn", "English".to_owned()),
             ("app.languageZhCn", "简体中文".to_owned()),
+            ("app.languageEs", "Español".to_owned()),
+            ("app.languageJa", "日本語".to_owned()),
             ("app.services", "Services".to_owned()),
             ("app.hide", format!("Hide {app_name}")),
             ("app.hideOthers", "Hide Others".to_owned()),
@@ -186,6 +192,8 @@ pub enum LanguagePreference {
     En,
     #[serde(rename = "zh-CN")]
     ZhCn,
+    Es,
+    Ja,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -252,6 +260,8 @@ pub fn item_state(
         LANGUAGE_SYSTEM_MENU_ID => check(true, state.language == LanguagePreference::System),
         LANGUAGE_EN_MENU_ID => check(true, state.language == LanguagePreference::En),
         LANGUAGE_ZH_CN_MENU_ID => check(true, state.language == LanguagePreference::ZhCn),
+        LANGUAGE_ES_MENU_ID => check(true, state.language == LanguagePreference::Es),
+        LANGUAGE_JA_MENU_ID => check(true, state.language == LanguagePreference::Ja),
         TOOL_LOCK_MENU_ID => check(editable, state.tool_lock),
         GRID_MENU_ID => check(document, state.grid),
         SNAP_MENU_ID => check(editable, state.snap),
@@ -354,6 +364,8 @@ fn language_submenu() -> MenuEntry {
             check(LANGUAGE_SYSTEM_MENU_ID, "app.languageSystem"),
             check(LANGUAGE_EN_MENU_ID, "app.languageEn"),
             check(LANGUAGE_ZH_CN_MENU_ID, "app.languageZhCn"),
+            check(LANGUAGE_ES_MENU_ID, "app.languageEs"),
+            check(LANGUAGE_JA_MENU_ID, "app.languageJa"),
         ],
     )
 }
@@ -534,6 +546,8 @@ mod tests {
             LANGUAGE_SYSTEM_MENU_ID,
             LANGUAGE_EN_MENU_ID,
             LANGUAGE_ZH_CN_MENU_ID,
+            LANGUAGE_ES_MENU_ID,
+            LANGUAGE_JA_MENU_ID,
             TOOL_LOCK_MENU_ID,
             GRID_MENU_ID,
             SNAP_MENU_ID,
@@ -555,9 +569,11 @@ mod tests {
             .filter(|(_, check)| *check)
             .map(|(id, _)| id)
             .collect();
-        assert_eq!(checks.len(), 11);
+        assert_eq!(checks.len(), 13);
         for id in [
             LANGUAGE_SYSTEM_MENU_ID,
+            LANGUAGE_ES_MENU_ID,
+            LANGUAGE_JA_MENU_ID,
             APPEARANCE_DARK_MENU_ID,
             TOOL_LOCK_MENU_ID,
             VIEW_MODE_MENU_ID,
@@ -671,6 +687,8 @@ mod tests {
             let key = match id {
                 "app.languageEn" => "language.autonym.en".to_owned(),
                 "app.languageZhCn" => "language.autonym.zhCN".to_owned(),
+                "app.languageEs" => "language.autonym.es".to_owned(),
+                "app.languageJa" => "language.autonym.ja".to_owned(),
                 other => format!("menu.native.{other}"),
             };
             assert!(catalog.contains(&format!("\"{key}\":")), "missing {key}");
@@ -725,6 +743,26 @@ mod tests {
         }))
         .unwrap_or_else(|error| panic!("parse sync state: {error}"));
         assert_eq!(state.language, LanguagePreference::ZhCn);
+        for (value, expected) in [
+            ("es", LanguagePreference::Es),
+            ("ja", LanguagePreference::Ja),
+        ] {
+            let mut payload = serde_json::json!({
+                "language": "zh-CN",
+                "appearance": "dark",
+                "hasDocument": true,
+                "forcedReadOnly": false,
+                "toolLock": true,
+                "grid": false,
+                "snap": true,
+                "zen": false,
+                "viewMode": false
+            });
+            payload["language"] = serde_json::Value::String(value.to_owned());
+            let parsed: NativeMenuSyncState = serde_json::from_value(payload)
+                .unwrap_or_else(|error| panic!("parse {value} sync state: {error}"));
+            assert_eq!(parsed.language, expected);
+        }
         assert_eq!(state.appearance, AppearancePreference::Dark);
         assert!(state.tool_lock && state.snap);
         assert!(
@@ -794,6 +832,8 @@ mod tests {
         assert_eq!(checked(LANGUAGE_SYSTEM_MENU_ID), Some(false));
         assert_eq!(checked(LANGUAGE_EN_MENU_ID), Some(true));
         assert_eq!(checked(LANGUAGE_ZH_CN_MENU_ID), Some(false));
+        assert_eq!(checked(LANGUAGE_ES_MENU_ID), Some(false));
+        assert_eq!(checked(LANGUAGE_JA_MENU_ID), Some(false));
         assert_eq!(checked(APPEARANCE_SYSTEM_MENU_ID), Some(false));
         assert_eq!(checked(APPEARANCE_LIGHT_MENU_ID), Some(true));
         assert_eq!(checked(APPEARANCE_DARK_MENU_ID), Some(false));

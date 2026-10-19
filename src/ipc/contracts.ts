@@ -141,7 +141,7 @@ export type ClaimWorkspaceOutcome<W = Workspace> =
 
 export interface AppPreferencesChangedEvent {
   appearance?: "system" | "light" | "dark";
-  language?: "system" | "en" | "zh-CN";
+  language?: "system" | "en" | "zh-CN" | "es" | "ja";
 }
 
 export interface OpenWorkspaceName {
@@ -713,6 +713,8 @@ export type NativeMenuCommand =
   | "languageSystem"
   | "languageEn"
   | "languageZhCn"
+  | "languageEs"
+  | "languageJa"
   | "help"
   | "toggleToolLock"
   | "toggleGrid"
@@ -728,6 +730,8 @@ export type NativeMenuLabelId =
   | "app.languageSystem"
   | "app.languageEn"
   | "app.languageZhCn"
+  | "app.languageEs"
+  | "app.languageJa"
   | "app.services"
   | "app.hide"
   | "app.hideOthers"
@@ -764,7 +768,7 @@ export type NativeMenuLabelId =
   | "help.excalidrawHelp";
 
 export interface NativeMenuSyncState {
-  language: "system" | "en" | "zh-CN";
+  language: "system" | "en" | "zh-CN" | "es" | "ja";
   appearance: "system" | "light" | "dark";
   hasDocument: boolean;
   forcedReadOnly: boolean;

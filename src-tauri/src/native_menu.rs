@@ -41,6 +41,8 @@ pub enum NativeMenuCommand {
     LanguageSystem,
     LanguageEn,
     LanguageZhCn,
+    LanguageEs,
+    LanguageJa,
     Help,
     ToggleToolLock,
     ToggleGrid,
@@ -51,7 +53,7 @@ pub enum NativeMenuCommand {
 }
 
 impl NativeMenuCommand {
-    const ALL: [Self; 16] = [
+    const ALL: [Self; 18] = [
         Self::Save,
         Self::ExportImage,
         Self::VersionHistory,
@@ -61,6 +63,8 @@ impl NativeMenuCommand {
         Self::LanguageSystem,
         Self::LanguageEn,
         Self::LanguageZhCn,
+        Self::LanguageEs,
+        Self::LanguageJa,
         Self::Help,
         Self::ToggleToolLock,
         Self::ToggleGrid,
@@ -87,6 +91,8 @@ impl NativeMenuCommand {
             Self::LanguageSystem => LANGUAGE_SYSTEM_MENU_ID,
             Self::LanguageEn => LANGUAGE_EN_MENU_ID,
             Self::LanguageZhCn => LANGUAGE_ZH_CN_MENU_ID,
+            Self::LanguageEs => LANGUAGE_ES_MENU_ID,
+            Self::LanguageJa => LANGUAGE_JA_MENU_ID,
             Self::Help => HELP_MENU_ID,
             Self::ToggleToolLock => TOOL_LOCK_MENU_ID,
             Self::ToggleGrid => GRID_MENU_ID,
@@ -680,6 +686,8 @@ mod tests {
             (LANGUAGE_SYSTEM_MENU_ID, NativeMenuCommand::LanguageSystem),
             (LANGUAGE_EN_MENU_ID, NativeMenuCommand::LanguageEn),
             (LANGUAGE_ZH_CN_MENU_ID, NativeMenuCommand::LanguageZhCn),
+            (LANGUAGE_ES_MENU_ID, NativeMenuCommand::LanguageEs),
+            (LANGUAGE_JA_MENU_ID, NativeMenuCommand::LanguageJa),
             (HELP_MENU_ID, NativeMenuCommand::Help),
             (TOOL_LOCK_MENU_ID, NativeMenuCommand::ToggleToolLock),
             (GRID_MENU_ID, NativeMenuCommand::ToggleGrid),
@@ -706,6 +714,16 @@ mod tests {
             serde_json::to_value(NativeMenuCommand::LanguageZhCn)
                 .unwrap_or_else(|error| panic!("serialize command: {error}")),
             serde_json::json!("languageZhCn")
+        );
+        assert_eq!(
+            serde_json::to_value(NativeMenuCommand::LanguageEs)
+                .unwrap_or_else(|error| panic!("serialize command: {error}")),
+            serde_json::json!("languageEs")
+        );
+        assert_eq!(
+            serde_json::to_value(NativeMenuCommand::LanguageJa)
+                .unwrap_or_else(|error| panic!("serialize command: {error}")),
+            serde_json::json!("languageJa")
         );
     }
 

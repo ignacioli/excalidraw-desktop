@@ -169,6 +169,8 @@ describe("IPC v3 history contract", () => {
         | "languageSystem"
         | "languageEn"
         | "languageZhCn"
+        | "languageEs"
+        | "languageJa"
         | "help"
         | "toggleToolLock"
         | "toggleGrid"

@@ -1,5 +1,5 @@
-export type LanguagePreference = "system" | "en" | "zh-CN";
-export type ResolvedLanguage = "en" | "zh-CN";
+export type LanguagePreference = "system" | "en" | "zh-CN" | "es" | "ja";
+export type ResolvedLanguage = "en" | "zh-CN" | "es" | "ja";
 
 const SIMPLIFIED_CHINESE_REGIONS = new Set(["CN", "SG"]);
 
@@ -7,6 +7,9 @@ function matchTag(tag: string): ResolvedLanguage | undefined {
   const [language = "", ...subtags] = tag.split(/[-_]/u);
   const primary = language.toLowerCase();
   if (primary === "en") return "en";
+  // Any Spanish or Japanese tag matches, including regions and `es-419`.
+  if (primary === "es") return "es";
+  if (primary === "ja") return "ja";
   if (primary !== "zh") return undefined;
 
   const script = subtags.find((part) => part.length === 4)?.toLowerCase();

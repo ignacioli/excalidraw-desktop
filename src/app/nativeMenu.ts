@@ -1,3 +1,4 @@
+import type { LanguagePreference } from "../i18n/resolveLanguage";
 import { defaultEventListener, type EventListener } from "../ipc/events";
 import type { CommandInvoker } from "../ipc/client";
 import type { EventPayload, NativeMenuCommand } from "../ipc/contracts";
@@ -16,7 +17,7 @@ export interface NativeMenuCommandActions {
   onExportImage: () => void;
   onVersionHistory: () => void;
   onAppearance: (mode: "system" | "light" | "dark") => void;
-  onLanguage: (preference: "system" | "en" | "zh-CN") => void;
+  onLanguage: (preference: LanguagePreference) => void;
   /** Help and the canvas preference toggles act on the active editor. */
   onHelp?: () => void;
   onTogglePreference?: (
@@ -36,6 +37,8 @@ const nativeMenuCommands: readonly NativeMenuCommand[] = [
   "languageSystem",
   "languageEn",
   "languageZhCn",
+  "languageEs",
+  "languageJa",
   "help",
   "toggleToolLock",
   "toggleGrid",
@@ -102,6 +105,12 @@ export function createNativeMenuCommandHandler({
         break;
       case "languageZhCn":
         onLanguage("zh-CN");
+        break;
+      case "languageEs":
+        onLanguage("es");
+        break;
+      case "languageJa":
+        onLanguage("ja");
         break;
       case "help":
         onHelp?.();

@@ -56,6 +56,8 @@ const LANGUAGE_OPTIONS: readonly LanguagePreference[] = [
   "system",
   "en",
   "zh-CN",
+  "es",
+  "ja",
 ];
 
 function isLanguagePreference(value: string): value is LanguagePreference {
@@ -121,9 +123,11 @@ export function CanvasMainMenu({
               value={language}
             >
               <option value="system">{t("menu.canvas.languageSystem")}</option>
-              {/* Language self-names stay untranslated in both UI languages. */}
+              {/* Language self-names stay untranslated in every UI language. */}
               <option value="en">{t("language.autonym.en")}</option>
               <option value="zh-CN">{t("language.autonym.zhCN")}</option>
+              <option value="es">{t("language.autonym.es")}</option>
+              <option value="ja">{t("language.autonym.ja")}</option>
             </select>
             <svg
               aria-hidden="true"

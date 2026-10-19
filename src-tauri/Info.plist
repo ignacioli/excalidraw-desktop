@@ -8,6 +8,8 @@
   <array>
     <string>en</string>
     <string>zh-Hans</string>
+    <string>es</string>
+    <string>ja</string>
   </array>
   <key>CFBundleDocumentTypes</key>
   <array>

@@ -1,4 +1,4 @@
-// Documents copy, merged into en.ts / zh-CN.ts. Keep this file to TypeScript
+// Documents copy, merged into en.ts / zh-CN.ts / es.ts / ja.ts. Keep this file to TypeScript
 // syntax that Node can strip directly: scripts/native-menu-check.mjs imports
 // the catalogs.
 export const documentsEn = {
@@ -184,4 +184,192 @@ export const documentsZhCN: Record<keyof typeof documentsEn, string> = {
     "绘图已删除。版本历史清理仍待完成，稍后会重试。",
   "workspace.notice.historyResourcesPending":
     "绘图已删除。部分版本历史资源暂未清理完成。",
+};
+
+export const documentsEs: Record<keyof typeof documentsEn, string> = {
+  "conflict.title": "El archivo cambió en el disco",
+  "conflict.description":
+    "El archivo se modificó fuera de esta aplicación mientras tenía cambios sin guardar. No se escribe nada en el archivo hasta que usted elija qué hacer.",
+  "conflict.externalChanged": "La versión externa cambió",
+  "conflict.localSaved": "Último guardado del borrador local",
+  "conflict.unknownTime": "en un momento desconocido",
+  "conflict.useExternal": "Usar la versión externa",
+  "conflict.keepLocal": "Conservar cambios locales",
+  "conflict.saveAsNew": "Guardar los cambios locales como un dibujo nuevo…",
+  "conflict.saveDialog.filterName": "Dibujo de Excalidraw",
+  "conflict.saveDialog.title":
+    "Guardar los cambios locales como un dibujo nuevo",
+  "recovery.title": "Recuperar dibujos sin guardar",
+  "recovery.description":
+    "Excalidraw Desktop encontró instantáneas de recuperación de una sesión interrumpida. Elija qué hacer con cada dibujo.",
+  "recovery.candidatesLabel": "Candidatos de recuperación",
+  "recovery.snapshotSaved": "Instantánea guardada {time}",
+  "recovery.unknownTime": "en un momento desconocido",
+  "recovery.untitled": "Dibujo sin título",
+  "recovery.actionsFor": "Acciones para {name}",
+  "recovery.restore": "Recuperar {name}",
+  "recovery.keepDisk": "Conservar la versión del disco de {name}",
+  "recovery.saveAsNew": "Guardar {name} como un dibujo nuevo",
+  "recovery.discard": "Descartar la recuperación de {name}",
+  "recovery.error.chooseDestination":
+    "Elija un destino antes de guardar la recuperación como un dibujo nuevo.",
+  "recovery.error.resolveFirst":
+    "Resuelva los candidatos de recuperación antes de continuar.",
+  "recovery.error.startupCheck":
+    "No se pudieron comprobar las instantáneas de recuperación: {reason}",
+  "recovery.notice.one": "Se recuperó {count} dibujo",
+  "recovery.notice.other": "Se recuperaron {count} dibujos",
+  "recovery.saveDialog.filterName": "Dibujo de Excalidraw",
+  "recovery.saveDialog.title": "Guardar el dibujo recuperado",
+  "workspace.panelLabel": "Espacios de trabajo",
+  "workspace.eyebrow": "Espacio de trabajo",
+  "workspace.defaultTitle": "Espacio de trabajo",
+  "workspace.actionsLabel": "Acciones del espacio de trabajo",
+  "workspace.newDrawing": "Nuevo dibujo",
+  "workspace.newFolder": "Nueva carpeta",
+  "workspace.collapseAll": "Contraer todo",
+  "workspace.expandAll": "Expandir todo",
+  "workspace.refresh": "Actualizar",
+  "workspace.loadingFolder": "Cargando la carpeta…",
+  "workspace.empty": "No hay ningún espacio de trabajo abierto.",
+  "workspace.mountFolder": "Abrir carpeta…",
+  "workspace.mountDialogTitle": "Abrir carpeta del espacio de trabajo",
+  "workspace.menu.actionsFor": "Acciones para {name}",
+  "workspace.menu.filesNotDeleted": "Los archivos del disco no se eliminarán",
+  "workspace.menu.rename": "Cambiar nombre",
+  "workspace.menu.delete": "Eliminar",
+  "workspace.menu.copyPath": "Copiar ruta",
+  "workspace.menu.copyRelativePath": "Copiar ruta relativa",
+  "workspace.menu.removeWorkspace": "Quitar espacio de trabajo",
+  "workspace.remove.title": "¿Quitar {name}?",
+  "workspace.remove.description":
+    "Los dibujos abiertos de este espacio de trabajo se guardarán y se cerrarán. Los archivos del disco no se eliminarán.",
+  "workspace.remove.cancel": "Cancelar",
+  "workspace.remove.confirm": "Quitar espacio de trabajo",
+  "workspace.nested.title": "“{target}” contiene un espacio de trabajo abierto",
+  "workspace.nested.description":
+    "“{workspace}” ya está abierto en otra ventana. Un espacio de trabajo no se puede abrir dentro de otro.",
+  "workspace.nested.switch": "Cambiar a esa ventana",
+  "workspace.nested.closeAndOpen": "Cerrarla y abrir aquí",
+  "workspace.nested.closing": "Cerrando esa ventana…",
+  "workspace.nested.cancel": "Cancelar",
+  "workspace.nested.notClosed":
+    "“{workspace}” no se cerró, así que “{target}” no se abrió.",
+  "workspace.tree.label": "Archivos del espacio de trabajo",
+  "workspace.tree.activeDrawing": "Dibujo activo",
+  "workspace.error.loadFolder": "No se puede cargar esta carpeta.",
+  "workspace.error.loadWorkspaces":
+    "No se pueden cargar los espacios de trabajo.",
+  "workspace.error.mount": "No se puede abrir este espacio de trabajo.",
+  "workspace.error.mountNoDialog":
+    "Elija una carpeta en el diálogo de archivos del sistema para abrir un espacio de trabajo.",
+  "workspace.error.remove": "No se puede quitar este espacio de trabajo.",
+  "workspace.error.removeOrphaned":
+    "Resuelva el dibujo abierto que no está disponible antes de quitar este espacio de trabajo.",
+  "workspace.error.removeStillClosing":
+    "Los dibujos abiertos aún se están cerrando. Intente quitar el espacio de trabajo de nuevo.",
+  "workspace.error.saveBeforeDelete":
+    "Guarde el dibujo abierto antes de eliminarlo.",
+  "workspace.error.fileOperation": "La operación de archivo falló.",
+  "workspace.error.deleteEntry": "No se pudo eliminar el elemento.",
+  "workspace.error.revealFolder": "El Finder no pudo abrir esta carpeta.",
+  "workspace.error.outsideWorkspace":
+    "Esta ubicación está fuera del espacio de trabajo.",
+  "workspace.notice.historyCleanupPending":
+    "El dibujo se eliminó. La limpieza del historial de versiones sigue pendiente y se reintentará más tarde.",
+  "workspace.notice.historyResourcesPending":
+    "El dibujo se eliminó. Algunos datos del historial de versiones aún no se han limpiado.",
+};
+
+export const documentsJa: Record<keyof typeof documentsEn, string> = {
+  "conflict.title": "ファイルがディスク上で変更されました",
+  "conflict.description":
+    "未保存の変更があるあいだに、このアプリの外でファイルが変更されました。どうするかを選ぶまで、ファイルには何も書き込まれません。",
+  "conflict.externalChanged": "外部のバージョンが変更されました",
+  "conflict.localSaved": "ローカルの下書きの最終保存",
+  "conflict.unknownTime": "時刻は不明です",
+  "conflict.useExternal": "外部のバージョンを使う",
+  "conflict.keepLocal": "ローカルの変更を保持",
+  "conflict.saveAsNew": "ローカルの変更を新しい図として保存…",
+  "conflict.saveDialog.filterName": "Excalidraw の図",
+  "conflict.saveDialog.title": "ローカルの変更を新しい図として保存",
+  "recovery.title": "未保存の図を復旧",
+  "recovery.description":
+    "Excalidraw Desktop は、中断したセッションのリカバリスナップショットを見つけました。図ごとに行う操作を選んでください。",
+  "recovery.candidatesLabel": "リカバリの候補",
+  "recovery.snapshotSaved": "スナップショットの保存時刻 {time}",
+  "recovery.unknownTime": "時刻は不明です",
+  "recovery.untitled": "無題の図",
+  "recovery.actionsFor": "{name} の操作",
+  "recovery.restore": "{name} を復旧する",
+  "recovery.keepDisk": "{name} のディスク上のバージョンを保持",
+  "recovery.saveAsNew": "{name} を新しい図として保存",
+  "recovery.discard": "{name} のリカバリを破棄",
+  "recovery.error.chooseDestination":
+    "リカバリを新しい図として保存する前に、保存先を選んでください。",
+  "recovery.error.resolveFirst":
+    "続ける前に、リカバリの候補を解決してください。",
+  "recovery.error.startupCheck":
+    "リカバリスナップショットを確認できませんでした：{reason}",
+  "recovery.notice.one": "{count} 個の図を復旧しました",
+  "recovery.notice.other": "{count} 個の図を復旧しました",
+  "recovery.saveDialog.filterName": "Excalidraw の図",
+  "recovery.saveDialog.title": "復旧した図を保存",
+  "workspace.panelLabel": "ワークスペース",
+  "workspace.eyebrow": "ワークスペース",
+  "workspace.defaultTitle": "ワークスペース",
+  "workspace.actionsLabel": "ワークスペースの操作",
+  "workspace.newDrawing": "新規の図",
+  "workspace.newFolder": "新規フォルダ",
+  "workspace.collapseAll": "すべて折りたたむ",
+  "workspace.expandAll": "すべて展開",
+  "workspace.refresh": "更新",
+  "workspace.loadingFolder": "フォルダを読み込んでいます…",
+  "workspace.empty": "開いているワークスペースはありません。",
+  "workspace.mountFolder": "フォルダを開く…",
+  "workspace.mountDialogTitle": "ワークスペースのフォルダを開く",
+  "workspace.menu.actionsFor": "{name} の操作",
+  "workspace.menu.filesNotDeleted": "ディスク上のファイルは削除されません",
+  "workspace.menu.rename": "名前を変更",
+  "workspace.menu.delete": "削除",
+  "workspace.menu.copyPath": "パスをコピー",
+  "workspace.menu.copyRelativePath": "相対パスをコピー",
+  "workspace.menu.removeWorkspace": "ワークスペースを取り除く",
+  "workspace.remove.title": "{name} を取り除きますか？",
+  "workspace.remove.description":
+    "このワークスペースで開いている図は保存して閉じます。ディスク上のファイルは削除されません。",
+  "workspace.remove.cancel": "キャンセル",
+  "workspace.remove.confirm": "ワークスペースを取り除く",
+  "workspace.nested.title":
+    "「{target}」には、開いているワークスペースが含まれています",
+  "workspace.nested.description":
+    "「{workspace}」は別のウインドウで既に開いています。ワークスペースを別のワークスペースの中で開くことはできません。",
+  "workspace.nested.switch": "そのウインドウに切り替える",
+  "workspace.nested.closeAndOpen": "閉じてここで開く",
+  "workspace.nested.closing": "そのウインドウを閉じています…",
+  "workspace.nested.cancel": "キャンセル",
+  "workspace.nested.notClosed":
+    "「{workspace}」は閉じられなかったため、「{target}」は開きませんでした。",
+  "workspace.tree.label": "ワークスペースのファイル",
+  "workspace.tree.activeDrawing": "作業中の図",
+  "workspace.error.loadFolder": "このフォルダを読み込めません。",
+  "workspace.error.loadWorkspaces": "ワークスペースを読み込めません。",
+  "workspace.error.mount": "このワークスペースを開けません。",
+  "workspace.error.mountNoDialog":
+    "ワークスペースを開くには、システムのファイルダイアログでフォルダを選んでください。",
+  "workspace.error.remove": "このワークスペースを取り除けません。",
+  "workspace.error.removeOrphaned":
+    "このワークスペースを取り除く前に、利用できない開いている図を解決してください。",
+  "workspace.error.removeStillClosing":
+    "開いている図をまだ閉じています。もう一度、ワークスペースを取り除いてください。",
+  "workspace.error.saveBeforeDelete":
+    "削除する前に、開いている図を保存してください。",
+  "workspace.error.fileOperation": "ファイル操作に失敗しました。",
+  "workspace.error.deleteEntry": "項目を削除できませんでした。",
+  "workspace.error.revealFolder": "Finder でこのフォルダを開けませんでした。",
+  "workspace.error.outsideWorkspace": "この場所はワークスペースの外です。",
+  "workspace.notice.historyCleanupPending":
+    "図を削除しました。バージョン履歴のクリーンアップはまだ保留で、後で再試行します。",
+  "workspace.notice.historyResourcesPending":
+    "図を削除しました。バージョン履歴のデータの一部は、まだクリーンアップされていません。",
 };

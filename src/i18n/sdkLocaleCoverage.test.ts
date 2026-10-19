@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-// Guards the pnpm patch that completes the SDK's zh-CN catalog. When the SDK
-// is upgraded, a renamed locale file or a new English key fails here, which
-// means the patch must be redone (or dropped once upstream has the strings).
+// Guards the pnpm patch that completes the SDK's zh-CN, es-ES, and ja-JP
+// catalogs. When the SDK is upgraded, a renamed locale file or a new English
+// key fails here, which means the patch must be redone (or dropped once
+// upstream has the strings).
 const localeModules = import.meta.glob<Record<string, LocaleTree>>(
-  "/node_modules/@excalidraw/excalidraw/dist/{dev,prod}/locales/{en,zh-CN}-*.js",
+  "/node_modules/@excalidraw/excalidraw/dist/{dev,prod}/locales/{en,zh-CN,es-ES,ja-JP}-*.js",
 );
 
 // Keys the app never renders may be listed here, each with a reason.
@@ -43,18 +44,21 @@ async function loadLocale(build: string, code: string) {
   );
 }
 
-describe.each(["dev", "prod"])("SDK zh-CN locale (%s build)", (build) => {
-  it("translates every English key", async () => {
-    const english = await loadLocale(build, "en");
-    const chinese = await loadLocale(build, "zh-CN");
+describe.each(["dev", "prod"])("SDK locale coverage (%s build)", (build) => {
+  it.each(["zh-CN", "es-ES", "ja-JP"])(
+    "translates every English key into %s",
+    async (code) => {
+      const english = await loadLocale(build, "en");
+      const translated = await loadLocale(build, code);
 
-    const missing = [...english.keys()].filter(
-      (key) =>
-        !UNRENDERED_KEY_EXCEPTIONS.has(key) &&
-        (chinese.get(key) ?? "").trim() === "",
-    );
+      const missing = [...english.keys()].filter(
+        (key) =>
+          !UNRENDERED_KEY_EXCEPTIONS.has(key) &&
+          (translated.get(key) ?? "").trim() === "",
+      );
 
-    expect(english.size).toBeGreaterThan(0);
-    expect(missing).toEqual([]);
-  });
+      expect(english.size).toBeGreaterThan(0);
+      expect(missing).toEqual([]);
+    },
+  );
 });

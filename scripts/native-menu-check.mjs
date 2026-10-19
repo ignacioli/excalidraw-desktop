@@ -11,6 +11,8 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { en } from "../src/i18n/messages/en.ts";
+import { es } from "../src/i18n/messages/es.ts";
+import { ja } from "../src/i18n/messages/ja.ts";
 import { zhCN } from "../src/i18n/messages/zh-CN.ts";
 import { resolveLanguage } from "../src/i18n/resolveLanguage.ts";
 
@@ -38,8 +40,9 @@ const block = (reason) => {
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 const osa = (script) =>
   execFileSync("osascript", ["-e", script], { encoding: "utf8" }).trim();
+const CATALOGS = { en, "zh-CN": zhCN, es, ja };
 const label = (lang, key) =>
-  (lang === "zh-CN" ? zhCN : en)[key].replaceAll("{name}", "Excalidraw");
+  (CATALOGS[lang] ?? en)[key].replaceAll("{name}", "Excalidraw");
 
 let appleLanguages;
 let root;
@@ -199,7 +202,7 @@ function compare(scope, actual, expected) {
     console.log(`NOTE ${scope}: unmanaged items ${JSON.stringify(trailing)}`);
 }
 
-const LANGUAGES = ["system", "en", "zh-CN"];
+const LANGUAGES = ["system", "en", "zh-CN", "es", "ja"];
 const APPEARANCES = ["system", "light", "dark"];
 const PREFS = ["toolLock", "grid", "snap", "zen", "viewMode"];
 const COMMAND = {
@@ -213,6 +216,8 @@ const COMMAND = {
   dark: "Dark",
   en: "En",
   "zh-CN": "ZhCn",
+  es: "Es",
+  ja: "Ja",
 };
 const langLabel = (lang, value) =>
   label(
@@ -221,6 +226,8 @@ const langLabel = (lang, value) =>
       system: "menu.native.app.languageSystem",
       en: "language.autonym.en",
       "zh-CN": "language.autonym.zhCN",
+      es: "language.autonym.es",
+      ja: "language.autonym.ja",
     }[value],
   );
 const appearanceLabel = (lang, value) =>
@@ -230,7 +237,8 @@ const appearanceLabel = (lang, value) =>
   );
 const marked = (items) => items.findIndex((item) => item.checked);
 const languageItems = (menus) =>
-  menus[1].items.find((item) => item.children.length === 3)?.children ?? [];
+  menus[1].items.find((item) => item.children.length === LANGUAGES.length)
+    ?.children ?? [];
 
 function expectedMenu(lang, language, appearance, hasDocument) {
   const L = (key) => label(lang, `menu.native.${key}`);

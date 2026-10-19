@@ -12,6 +12,8 @@ export const zhCN: Record<MessageKey, string> = {
 
   "language.autonym.en": "English",
   "language.autonym.zhCN": "简体中文",
+  "language.autonym.es": "Español",
+  "language.autonym.ja": "日本語",
 
   "menu.canvas.preferences": "偏好设置",
   "menu.canvas.toolLock": "工具锁定",

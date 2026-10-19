@@ -16,6 +16,8 @@ const LABEL_KEYS: Readonly<Record<NativeMenuLabelId, MessageKey>> = {
   "app.languageSystem": "menu.native.app.languageSystem",
   "app.languageEn": "language.autonym.en",
   "app.languageZhCn": "language.autonym.zhCN",
+  "app.languageEs": "language.autonym.es",
+  "app.languageJa": "language.autonym.ja",
   "app.services": "menu.native.app.services",
   "app.hide": "menu.native.app.hide",
   "app.hideOthers": "menu.native.app.hideOthers",

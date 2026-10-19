@@ -15,7 +15,10 @@ import "@excalidraw/excalidraw/index.css";
 import type { ModePreference, ResolvedColorScheme } from "../app/theme/types";
 import { documentManager } from "../documents/documentStore";
 import { useI18n } from "../i18n";
-import type { LanguagePreference } from "../i18n/resolveLanguage";
+import type {
+  LanguagePreference,
+  ResolvedLanguage,
+} from "../i18n/resolveLanguage";
 import {
   CanvasMainMenu,
   type EditorPreference,
@@ -26,6 +29,14 @@ import { resolveAssetFiles } from "./assetResolver";
 import { ImeBridge } from "./imeBridge";
 import type { SceneSnapshot } from "./sceneSerializer";
 import type { ProtectedInputHandlers } from "../history/protectedInput";
+
+/** SDK locale packages: one Spanish catalog and one Japanese catalog. */
+const SDK_LANG_CODE: Record<ResolvedLanguage, string> = {
+  en: "en",
+  "zh-CN": "zh-CN",
+  es: "es-ES",
+  ja: "ja-JP",
+};
 
 /** Per-editor entry points shared by the canvas menu and the native menu. */
 export interface EditorControls {
@@ -419,7 +430,7 @@ export function ExcalidrawEditor({
         autoFocus
         excalidrawAPI={receiveApi}
         initialData={initialData}
-        langCode={resolvedLanguage}
+        langCode={SDK_LANG_CODE[resolvedLanguage]}
         onChange={handleSceneChange}
         theme={theme}
         validateEmbeddable={false}

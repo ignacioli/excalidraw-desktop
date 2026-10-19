@@ -16,6 +16,7 @@ v1 的 `dir_list` / `file_create` / `file_rename` / `file_delete` / `thumb_looku
 - v3 当前公开 history command 为 `history_list`、`history_preview`、`history_mark`、`history_set_marked`、`history_replace`、`history_operation_status` 和 `history_delete`。v2 客户端不兼容此握手版本。
 - v4 新增：`app_handshake` 响应字段 `preferredLanguages`（系统 UI 语言原始 BCP-47 标签）；命令 `native_menu_sync`（前端向 Rust 同步本地化菜单标签与菜单状态）；`native-menu-command` 事件新增语言、外观、画布偏好与帮助命令值。既有命令 `native_menu_set_enabled` 保留。详见 §1.1、§1.7 与 §2。
 - v5 多窗口：`app_handshake` 按调用窗口返回 `window`（`WindowBootstrap`）；`workspace_list` 改为只返回调用窗口持有的 Workspace（0 或 1 项）；新增窗口归属、侧栏状态与偏好广播命令（§1.8）及窗口定向事件（§2）、原生菜单路由与窗口生命周期（§1.9）；新增错误码 `WORKSPACE_NOT_OWNED`。`workspace_add`、`workspace_remount` 保留为 deprecated，前端改用 `window_claim_workspace`。同一绘图至多由一个窗口打开：`doc_open` 响应改为带 `kind` 的联合（§1.4），写命令与 `doc_close` 检查调用窗口的归属；新增错误码 `DOCUMENT_NOT_OWNED`、`WINDOW_OWNERSHIP_CHANGED` 与嵌套 Workspace 的“关闭该窗口后在此打开”（§1.8）。
+- v5 取值扩展（`IPC_CONTRACT_VERSION` 仍为 5）：`language` 增加 `es`、`ja`；`native-menu-command` 增加 `languageEs`、`languageJa`；`NativeMenuLabelId` 增加 `app.languageEs`、`app.languageJa`（共 41 个）。既有字段、既有取值及其语义不变，因此不递增版本。未知语言值仍被拒绝。
 
 ### 信任边界规则（所有命令统一执行）
 
@@ -110,7 +111,7 @@ interface RecoveryCandidate {
 
 `preferredLanguages` 在应用启动时由 Rust 读取一次（`src-tauri/src/locale.rs`）：macOS 取 `NSLocale.preferredLanguages`；其他平台取 `LC_ALL`，为空时取 `LANG`，转换为 BCP-47 后至多一项（`C`/`POSIX` 或畸形值不产出标签）。Rust 只转发原始标签，不决定 UI 语言；前端 `readSystemLanguages` 在首次渲染前读取，过滤非字符串项并截断到 16 项，握手失败或不在桌面壳内则为空列表。
 
-UI 语言只由前端 `resolveLanguage` 决定：用户偏好为 `en` 或 `zh-CN` 时直接采用；偏好为 `system` 时按 `preferredLanguages` 顺序取第一个可识别标签——`en*` 解析为 English；`zh` 在无脚本且无地区、脚本为 `Hans`、或地区为 `CN`/`SG` 时解析为简体中文，其他 `zh` 标签（如 `zh-TW`、`zh-Hant`）与其他语言被跳过；无匹配时为 English。用户偏好 `system | en | zh-CN` 持久化在 WebView `localStorage` 键 `excalidraw-desktop.language`（版本化记录 `{ version: 1, preference }`），不经过 Rust。
+UI 语言只由前端 `resolveLanguage` 决定：用户偏好为 `en`、`zh-CN`、`es` 或 `ja` 时直接采用；偏好为 `system` 时按 `preferredLanguages` 顺序取第一个可识别标签——`en*` 解析为 English；主语言子标签为 `es` 的任意标签（含地区与 `419`，如 `es-ES`、`es-MX`、`es-419`）解析为 Español；主语言子标签为 `ja` 的任意标签（如 `ja`、`ja-JP`）解析为 日本語；`zh` 在无脚本且无地区、脚本为 `Hans`、或地区为 `CN`/`SG` 时解析为简体中文，其他 `zh` 标签（如 `zh-TW`、`zh-Hant`）与其他语言被跳过；无匹配时为 English。用户偏好 `system | en | zh-CN | es | ja` 持久化在 WebView `localStorage` 键 `excalidraw-desktop.language`（版本化记录 `{ version: 1, preference }`），不经过 Rust。未知或无效偏好回退为跟随系统。画布编辑器的 SDK `langCode` 把 `es` 映射为 `es-ES`、把 `ja` 映射为 `ja-JP`，`en` 与 `zh-CN` 不变。
 
 ### 1.2 工作区挂载
 
@@ -330,7 +331,7 @@ interface NativeMenuSyncRequest {
 }
 
 interface NativeMenuSyncState {
-  language: "system" | "en" | "zh-CN";
+  language: "system" | "en" | "zh-CN" | "es" | "ja";
   appearance: "system" | "light" | "dark";
   hasDocument: boolean;
   forcedReadOnly: boolean;
@@ -342,7 +343,7 @@ interface NativeMenuSyncState {
 }
 ```
 
-`NativeMenuLabelId` 共 39 个，类型见 `src/ipc/contracts.ts`，Rust 侧权威列表为 `native_menu_spec.rs` 的 `LABEL_IDS`。每个 ID `x` 对应前端语言资源键 `menu.native.x`，仅 `app.languageEn`、`app.languageZhCn` 取自 `language.autonym.*`。
+`NativeMenuLabelId` 共 41 个，类型见 `src/ipc/contracts.ts`，Rust 侧权威列表为 `native_menu_spec.rs` 的 `LABEL_IDS`。每个 ID `x` 对应前端语言资源键 `menu.native.x`，仅 `app.languageEn`、`app.languageZhCn`、`app.languageEs`、`app.languageJa` 取自 `language.autonym.*`。
 
 **Rust 信任边界校验**
 
@@ -364,7 +365,7 @@ interface NativeMenuSyncState {
 | Save、Help | D | — |
 | Export Image | 始终 | — |
 | Version History | 由 `native_menu_set_enabled` 设置（前端在存在带路径的活动文档时启用） | — |
-| Language ×3、Appearance ×3 | 始终 | 等于 `state.language` / `state.appearance` |
+| Language ×5、Appearance ×3 | 始终 | 等于 `state.language` / `state.appearance` |
 | Grid、Zen | D | `grid` / `zen` |
 | Tool Lock、Snap | D 且非 R | `toolLock` / `snap` |
 | View Mode | D 且非 R | `forcedReadOnly \|\| viewMode` |
@@ -507,13 +508,13 @@ interface WorkspaceEntriesChangedEvent {
 type NativeMenuCommand =
   | "save" | "exportImage" | "versionHistory"
   | "appearanceSystem" | "appearanceLight" | "appearanceDark"
-  | "languageSystem" | "languageEn" | "languageZhCn"
+  | "languageSystem" | "languageEn" | "languageZhCn" | "languageEs" | "languageJa"
   | "help"
   | "toggleToolLock" | "toggleGrid" | "toggleSnap" | "toggleZen" | "toggleViewMode"
   | "openWorkspace";
 ```
 
-v4 之前的值为 `save`、`exportImage`、`versionHistory`、`appearanceSystem`、`appearanceLight`、`appearanceDark`；v4 新增 `languageSystem`、`languageEn`、`languageZhCn`、`help` 与五个 `toggle*`；多窗口新增 `openWorkspace`（File > Open Workspace…）。前端处理：语言/外观命令写入各自的偏好控制器；`toggle*` 命令作用于活动编辑器；`help` 打开活动编辑器的帮助。`validationId` 仅在原生 macOS 验收 harness 启动的包中出现，用于关联原生事件与前端路由，不是产品 IPC 命令；生产路径不依赖它。事件只表达“用户激活了哪个菜单项”，状态变更由前端裁决后经 `native_menu_sync` 回写。
+v4 之前的值为 `save`、`exportImage`、`versionHistory`、`appearanceSystem`、`appearanceLight`、`appearanceDark`；v4 新增 `languageSystem`、`languageEn`、`languageZhCn`、`help` 与五个 `toggle*`；多窗口新增 `openWorkspace`（File > Open Workspace…）。v5 取值扩展（版本号不变）新增 `languageEs`、`languageJa`。前端处理：语言/外观命令写入各自的偏好控制器；`toggle*` 命令作用于活动编辑器；`help` 打开活动编辑器的帮助。`validationId` 仅在原生 macOS 验收 harness 启动的包中出现，用于关联原生事件与前端路由，不是产品 IPC 命令；生产路径不依赖它。事件只表达“用户激活了哪个菜单项”，状态变更由前端裁决后经 `native_menu_sync` 回写。
 
 ### 2.1 v3 版本历史事件结构
 

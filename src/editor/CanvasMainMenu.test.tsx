@@ -166,10 +166,14 @@ describe("CanvasMainMenu", () => {
         select.querySelectorAll("option"),
         (option) => option.textContent,
       ),
-    ).toEqual(["跟随系统", "English", "简体中文"]);
+    ).toEqual(["跟随系统", "English", "简体中文", "Español", "日本語"]);
 
     fireEvent.change(select, { target: { value: "system" } });
+    fireEvent.change(select, { target: { value: "es" } });
+    fireEvent.change(select, { target: { value: "ja" } });
     expect(onLanguageChange).toHaveBeenCalledWith("system");
+    expect(onLanguageChange).toHaveBeenCalledWith("es");
+    expect(onLanguageChange).toHaveBeenCalledWith("ja");
     act(() => locale.setPreference("en"));
   });
 });

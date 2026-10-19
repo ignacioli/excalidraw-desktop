@@ -66,6 +66,21 @@ describe("LocaleController", () => {
     });
   });
 
+  it.each(["es", "ja"] as const)(
+    "restores a stored %s preference",
+    (preference) => {
+      const controller = new LocaleController({
+        storage: memoryStorage(JSON.stringify({ version: 1, preference })),
+        preferredLanguages: ["en-US"],
+      });
+
+      expect(controller.getSnapshot()).toEqual({
+        preference,
+        resolvedLanguage: preference,
+      });
+    },
+  );
+
   it.each([
     ["malformed JSON", "{"],
     ["a future version", JSON.stringify({ version: 2, preference: "en" })],

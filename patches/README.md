@@ -2,15 +2,23 @@
 
 ## `@excalidraw/excalidraw@0.18.1`
 
-One patch file carries two independent changes.
+One patch file carries three independent changes.
 
 ### Complete the zh-CN catalog
 
 - **Why**: the SDK's zh-CN catalog lacks 91 of the 513 English keys (canvas search, command palette, help dialog, stats, font list, and others). Those strings fell back to English inside an otherwise Simplified Chinese UI. The SDK has no public API for supplying translations.
 - **What**: `dist/dev/locales/zh-CN-*.js` and `dist/prod/locales/zh-CN-*.js` gain only the missing strings. Existing upstream translations are never overwritten. Sections the file lacked entirely are added as named exports, because the SDK reads the module namespace rather than its default export.
-- **Guard**: `src/i18n/sdkLocaleCoverage.test.ts` loads both builds and fails if any English key has no zh-CN value. An SDK upgrade that renames the locale files or adds keys fails it, and the patch must be regenerated.
+- **Guard**: `src/i18n/sdkLocaleCoverage.test.ts` loads both builds and fails if any English key has no zh-CN, es-ES, or ja-JP value. An SDK upgrade that renames the locale files or adds keys fails it, and the patch must be regenerated.
 - **Upstream**: the strings are to be contributed through the Excalidraw translation project (Crowdin). Not yet submitted.
-- **Removal**: drop this patch once the locked SDK version ships a zh-CN catalog that passes the guard test without it.
+- **Removal**: drop the zh-CN hunks once the locked SDK version ships a zh-CN catalog that passes the guard test without them.
+
+### Complete the es-ES and ja-JP catalogs
+
+- **Why**: the SDK's es-ES catalog lacks 106 of the 513 English keys, and ja-JP lacks 132. Those strings fell back to English inside an otherwise Spanish or Japanese UI. The SDK has no public API for supplying translations.
+- **What**: `dist/dev/locales/{es-ES,ja-JP}-*.js` and `dist/prod/locales/{es-ES,ja-JP}-*.js` gain only the missing strings. Existing upstream translations are never overwritten. Sections the file lacked entirely are added as named exports, because the SDK reads the module namespace rather than its default export. Placeholders stay in the SDK's `{{name}}` form.
+- **Guard**: the same `src/i18n/sdkLocaleCoverage.test.ts` check covers es-ES and ja-JP in both builds.
+- **Upstream**: the strings are to be contributed through the Excalidraw translation project (Crowdin). Not yet submitted.
+- **Removal**: drop these hunks once the locked SDK version ships es-ES and ja-JP catalogs that pass the guard test without them.
 
 ### Name the canvas menu trigger
 

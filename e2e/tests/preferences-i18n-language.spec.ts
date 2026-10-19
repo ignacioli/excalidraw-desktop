@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { en } from "../../src/i18n/messages/en.ts";
+import { en, type MessageKey } from "../../src/i18n/messages/en.ts";
+import { es } from "../../src/i18n/messages/es.ts";
+import { ja } from "../../src/i18n/messages/ja.ts";
 import { zhCN } from "../../src/i18n/messages/zh-CN.ts";
+import { englishResidue, SPANISH_UI_WORDS } from "../helpers/englishResidue";
 import {
   installBrowserTauriHarness,
   readHarnessDraft,
@@ -20,10 +23,12 @@ import {
 const LANGUAGE_KEY = "excalidraw-desktop.language";
 const DRAWING = "/virtual/first.excalidraw";
 const SECOND = "/virtual/second.excalidraw";
-// The SDK's own Simplified Chinese toolbar and history labels.
+// The SDK's own toolbar labels. Japanese reuses the upstream 矩形 label.
 const SDK_ZH = { rectangle: "矩形", undo: "撤销" };
+const SDK_ES = { rectangle: "Rectángulo", undo: "Deshacer" };
+const SDK_JA = { rectangle: "矩形", undo: "元に戻す" };
 
-type Catalog = typeof en | typeof zhCN;
+type Catalog = Record<MessageKey, string>;
 
 async function startWithSystemLanguages(
   page: Page,
@@ -121,6 +126,28 @@ test("follows a Simplified Chinese system language on first launch", async ({
   await expectNativeMenuLabels(page, zhCN);
 });
 
+test("follows a Spanish system language on first launch", async ({ page }) => {
+  await startWithSystemLanguages(page, ["es-MX", "en-US"]);
+  await expect(
+    page
+      .getByTestId("welcome-screen")
+      .getByRole("button", { name: es["welcome.newDrawing"], exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", "es");
+
+  await openDrawing(page, es);
+  await expectShellLanguage(page, es);
+  await expect(
+    activeEditor(page).getByRole("radio", {
+      name: new RegExp(SDK_ES.rectangle),
+    }),
+  ).toBeAttached();
+  await expect(
+    activeEditor(page).getByRole("button", { name: SDK_ES.undo, exact: true }),
+  ).toBeAttached();
+  await expectNativeMenuLabels(page, es);
+});
+
 test("falls back to English for an unsupported system language", async ({
   page,
 }) => {
@@ -208,6 +235,76 @@ test("switches from the native menu, keeps editing state, and persists the choic
   ).toBeVisible();
 });
 
+test("switches between Spanish and Japanese without losing the edit", async ({
+  page,
+}) => {
+  await startWithSystemLanguages(page, ["en-US"]);
+  await openDrawing(page, en);
+  await emitNativeCommand(page, "languageEs");
+  await expectShellLanguage(page, es);
+  await expect
+    .poll(async () => (await nativeMenuState(page))?.language)
+    .toBe("es");
+
+  const box = await activeEditor(page).boundingBox();
+  if (box === null) throw new Error("The canvas was not measurable.");
+  await focusCanvas(page);
+  await page.keyboard.press("r");
+  await page.mouse.move(box.x + 300, box.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 420, box.y + 280, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(() => liveElementCount(page)).toBe(1);
+  await page.keyboard.press("t");
+  await page.mouse.click(box.x + 600, box.y + 300);
+  const editor = activeEditor(page).locator("textarea");
+  await expect(editor).toBeFocused();
+  await page.keyboard.type("hello");
+
+  for (let index = 0; index < 20; index += 1) {
+    const [command, language, catalog] =
+      index % 2 === 0
+        ? (["languageJa", "ja", ja] as const)
+        : (["languageEs", "es", es] as const);
+    const startedAt = Date.now();
+    await emitNativeCommand(page, command);
+    await expect
+      .poll(async () => (await nativeMenuState(page))?.language)
+      .toBe(language);
+    await expect(
+      page.getByRole("button", { name: catalog["shell.toggleSidebar"] }),
+    ).toBeVisible();
+    expect(Date.now() - startedAt).toBeLessThanOrEqual(1_000);
+    await expect(editor).toBeFocused();
+    await expect(editor).toHaveValue("hello");
+  }
+
+  await page.keyboard.press("Escape");
+  await expect.poll(() => liveElementCount(page)).toBe(2);
+  const undo = activeEditor(page).getByRole("button", {
+    name: SDK_ES.undo,
+    exact: true,
+  });
+  await expect(undo).toBeEnabled();
+  await undo.click();
+  await expect.poll(() => liveElementCount(page)).toBe(1);
+
+  await emitNativeCommand(page, "languageJa");
+  await expect
+    .poll(async () => (await nativeMenuState(page))?.language)
+    .toBe("ja");
+  await page.reload();
+  await expect
+    .poll(async () => (await nativeMenuState(page))?.language)
+    .toBe("ja");
+  await expect(
+    page.getByRole("button", { name: ja["shell.toggleSidebar"] }),
+  ).toBeVisible();
+  await expect(
+    activeEditor(page).getByRole("button", { name: SDK_JA.undo, exact: true }),
+  ).toBeAttached();
+});
+
 test("the canvas menu Language item shows the same preference as the native menu", async ({
   page,
 }) => {
@@ -230,28 +327,28 @@ test("the canvas menu Language item shows the same preference as the native menu
   }
 });
 
-// Proper nouns, fixture data, and shortcut notation allowed in Chinese UI.
-const ALLOWED_LATIN = new Set([
-  "Excalidraw",
-  "Virtual",
-  "Workspace",
-  "first",
-  "second",
-  "excalidraw",
-  "json",
-  "Cmd",
-  "Option",
-  "Shift",
-  "PNG",
-  "SVG",
-]);
-
 test("leaves no English in app-owned UI under Simplified Chinese", async ({
   page,
 }) => {
-  await startWithSystemLanguages(page, ["zh-Hans"]);
-  await openDrawing(page, zhCN);
-  await expectShellLanguage(page, zhCN);
+  await expectNoEnglishResidue(page, ["zh-Hans"], zhCN);
+});
+
+test("leaves no English in app-owned UI under Spanish", async ({ page }) => {
+  await expectNoEnglishResidue(page, ["es-ES"], es);
+});
+
+test("leaves no English in app-owned UI under Japanese", async ({ page }) => {
+  await expectNoEnglishResidue(page, ["ja-JP"], ja);
+});
+
+async function expectNoEnglishResidue(
+  page: Page,
+  preferredLanguages: readonly string[],
+  catalog: Catalog,
+): Promise<void> {
+  await startWithSystemLanguages(page, preferredLanguages);
+  await openDrawing(page, catalog);
+  await expectShellLanguage(page, catalog);
 
   const residue = await page.evaluate(() => {
     // The SDK editor container owns its own localization.
@@ -287,12 +384,13 @@ test("leaves no English in app-owned UI under Simplified Chinese", async ({
     return found;
   });
   // The scan must actually reach app-owned copy.
-  expect(residue).toContain(zhCN["shell.toggleSidebar"]);
+  expect(residue).toContain(catalog["shell.toggleSidebar"]);
   expect(residue).toContain("first.excalidraw");
-  const english = residue.filter((text) =>
-    (text.match(/[A-Za-z]{3,}/gu) ?? []).some(
-      (word) => !ALLOWED_LATIN.has(word),
-    ),
+  const english = englishResidue(
+    residue,
+    catalog === es
+      ? { catalogWords: SPANISH_UI_WORDS, matchLetters: true }
+      : {},
   );
   expect(english).toEqual([]);
-});
+}
