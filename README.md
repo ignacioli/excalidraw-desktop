@@ -2,7 +2,7 @@
 
 # Excalidraw Desktop
 
-<a href="https://deepwiki.com/ignacioli/excalidraw-desktop"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+<a href="https://deepwiki.com/ignacioli/excalidraw-desktop"><img src="docs/assets/ask-deepwiki-badge.png" width="109" height="20" alt="Ask DeepWiki"></a>
 
 A macOS-first desktop home for the official Excalidraw canvas. Draw offline and keep your work as ordinary `.excalidraw` files on disk—without an account, cloud sync, or collaboration service in the middle.
 
