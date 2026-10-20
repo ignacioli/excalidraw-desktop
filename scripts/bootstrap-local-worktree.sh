@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Link this machine's primary-checkout agent toolchain into the current
-# git worktree. Editor skills, SpecKit scripts, Codex project agents, the
-# private specs symlink, and local handoff notes stay gitignored and out of
-# the public repository; worktrees inherit them here.
+# git worktree. Editor skills and rules, SpecKit scripts, Codex project
+# agents, the private specs symlink, and local handoff notes stay gitignored
+# and out of the public repository; worktrees inherit them here.
 #
 # Usage (cwd must be the product worktree to bootstrap):
 #   scripts/bootstrap-local-worktree.sh [--dry-run] [--force]
@@ -146,6 +146,7 @@ link_one "$primary/.handoff" "$current/.handoff" || failures=$((failures + 1))
 link_one "$primary/.agents/skills" "$current/.agents/skills" || failures=$((failures + 1))
 link_one "$primary/.cursor/skills" "$current/.cursor/skills" || failures=$((failures + 1))
 link_one "$primary/.cursor/agents" "$current/.cursor/agents" || failures=$((failures + 1))
+link_one "$primary/.cursor/rules" "$current/.cursor/rules" || failures=$((failures + 1))
 link_one "$primary/.claude/skills" "$current/.claude/skills" || failures=$((failures + 1))
 link_one "$primary/.codex/agents" "$current/.codex/agents" || failures=$((failures + 1))
 link_one "$primary/specs" "$current/specs" || failures=$((failures + 1))
