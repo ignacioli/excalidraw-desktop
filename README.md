@@ -2,6 +2,8 @@
 
 # Excalidraw Desktop
 
+<a href="https://deepwiki.com/ignacioli/excalidraw-desktop"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+
 A macOS-first desktop home for the official Excalidraw canvas. Draw offline and keep your work as ordinary `.excalidraw` files on disk—without an account, cloud sync, or collaboration service in the middle.
 
 The editor is the official [@excalidraw/excalidraw](https://www.npmjs.com/package/@excalidraw/excalidraw) package, not a fork. Excalidraw Desktop adds a dependable local file workflow around that canvas: workspace browsing, safe saving, recovery after interruption, and clear handling when another program changes a file.

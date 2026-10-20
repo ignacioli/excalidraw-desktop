@@ -2,6 +2,8 @@
 
 # Excalidraw Desktop
 
+<a href="https://deepwiki.com/ignacioli/excalidraw-desktop"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+
 面向 macOS、围绕官方 Excalidraw 画布打造的桌面工作空间。完全离线绘图，并把作品保留为磁盘上的普通 `.excalidraw` 文件——中间没有账号、云同步或协作服务。
 
 编辑器使用官方 `[@excalidraw/excalidraw](https://www.npmjs.com/package/@excalidraw/excalidraw)` 包，不是 Fork。Excalidraw Desktop 在画布周围补上可靠的本地文件工作流：工作区浏览、安全保存、异常中断后的恢复，以及其他程序修改文件时的明确处理方式。
